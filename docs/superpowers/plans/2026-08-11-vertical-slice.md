@@ -21,7 +21,10 @@
 - **表示は有効数字 10 桁、丸めは round-half-to-even。** 指数表記への切替は `|x| >= 1e10` または `0 < |x| < 1e-9`。
 - **目標表示文字列は `5 ∠ 53.13010235`。** `∠` は U+2220、前後に半角スペース1つずつ。
 - **直交形式の表示は `3+j4` 形式。** `j` は数の前。演算子の前後にスペースを入れない。
-- **許容誤差は `testdata/*.json` の `tolerance` に置く。** 既定は `abs: 1e-12`, `rel: 1e-12`。Rust テストコードに誤差値をハードコードしない（§36）。
+- **許容誤差は 2 層に分ける（§36「散在させない」）。**
+  - 言語間検証（golden）の誤差は `testdata/*.json` の `tolerance` から読む。既定は `abs: 1e-12`, `rel: 1e-12`。
+  - Rust のユニットテストの誤差は `calcarc_core::TEST_EPSILON` に集約する。
+  - どちらの層でも、個々のテストに誤差値を直書きしない。
 - **`calcarc-core` は panic しない。** `reduce` は常に有効な状態を返す。`unwrap()` / `expect()` / 添字アクセスによる panic を書かない。
 - **WASM 境界は JavaScript 例外を投げない**（§27）。計算エラーは戻り値の一部。
 - **`calcarc-core` は WASM に依存しない。** `wasm-bindgen` を依存に加えない。
@@ -186,6 +189,7 @@ __pycache__/
 .pytest_cache/
 test-results/
 playwright-report/
+.superpowers/
 ```
 
 `LICENSE` は Apache License 2.0 の全文を入れる。取得元: <https://www.apache.org/licenses/LICENSE-2.0.txt>
@@ -407,8 +411,8 @@ mod tests {
     fn divides_complex_numbers() {
         // (-5+j10) / (1+j2) = 3+j4
         let r = div(Value::new(-5.0, 10.0), Value::new(1.0, 2.0)).unwrap();
-        assert!((r.re - 3.0).abs() < 1e-12);
-        assert!((r.im - 4.0).abs() < 1e-12);
+        crate::assert_close(r.re, 3.0);
+        crate::assert_close(r.im, 4.0);
     }
 
     #[test]
@@ -452,7 +456,28 @@ mod tests {
 Run: `cargo test -p calcarc-core`
 Expected: FAIL。`cannot find function add in this scope` などのコンパイルエラー。
 
-- [ ] **Step 3: 四則演算を実装する**
+- [ ] **Step 3: 共通のテスト許容誤差を用意する**
+
+`crates/calcarc-core/src/lib.rs` に追記する。誤差値をテストに散在させないための唯一の置き場になる（base-spec §36）。
+
+```rust
+/// ユニットテストの既定許容誤差。
+///
+/// 言語間検証（golden）の許容誤差はこれとは別で、
+/// `testdata/*.json` の `tolerance` から読む。混同しないこと。
+pub const TEST_EPSILON: f64 = 1e-12;
+
+/// 浮動小数点の近似比較。個々のテストに誤差値を書かないためのヘルパー。
+#[cfg(test)]
+pub(crate) fn assert_close(actual: f64, expected: f64) {
+    assert!(
+        (actual - expected).abs() < TEST_EPSILON,
+        "expected {expected}, got {actual}"
+    );
+}
+```
+
+- [ ] **Step 4: 四則演算を実装する**
 
 `crates/calcarc-core/src/complex/arith.rs` の先頭に置く。
 
@@ -499,18 +524,18 @@ pub fn div(a: Value, b: Value) -> CalcResult<Value> {
 }
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cargo test -p calcarc-core`
 Expected: PASS（12 テスト）
 
-Run: `cargo clippy -p calcarc-core -- -D warnings`
+Run: `cargo clippy -p calcarc-core --all-targets -- -D warnings`
 Expected: 出力なし
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
-git add crates/calcarc-core/src/complex/
+git add crates/calcarc-core/
 git commit -F - <<'EOF'
 Add complex arithmetic to calcarc-core
 
@@ -552,11 +577,8 @@ EOF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_close as close;
     use std::f64::consts::PI;
-
-    fn close(a: f64, b: f64) {
-        assert!((a - b).abs() < 1e-12, "expected {b}, got {a}");
-    }
 
     #[test]
     fn converts_the_headline_case() {
@@ -601,7 +623,7 @@ mod tests {
 
 ```rust
 use calcarc_core::complex::polar::{from_polar, to_polar};
-use calcarc_core::Value;
+use calcarc_core::{Value, ROUNDTRIP_EPSILON};
 use proptest::prelude::*;
 
 proptest! {
@@ -612,8 +634,8 @@ proptest! {
         let v = Value::new(re, im);
         let back = from_polar(to_polar(v));
         let scale = v.re.abs().max(v.im.abs()).max(1.0);
-        prop_assert!((back.re - v.re).abs() <= 1e-9 * scale);
-        prop_assert!((back.im - v.im).abs() <= 1e-9 * scale);
+        prop_assert!((back.re - v.re).abs() <= ROUNDTRIP_EPSILON * scale);
+        prop_assert!((back.im - v.im).abs() <= ROUNDTRIP_EPSILON * scale);
     }
 
     /// 半径は常に非負。
@@ -671,6 +693,15 @@ pub fn from_polar(p: Polar) -> Value {
 ```
 
 `hypot` を使うのは、`(re*re + im*im).sqrt()` が中間の二乗で溢れる入力（例: `re = 1e200`）でも正しく動くため。
+
+`crates/calcarc-core/src/lib.rs` に往復誤差の定数を追記する。`tests/roundtrip.rs` は結合テストなので `#[cfg(test)]` の `assert_close` を使えず、公開定数を参照する。
+
+```rust
+/// rect → polar → rect の往復で許す相対誤差。
+///
+/// 三角関数と平方根を経由するぶん、TEST_EPSILON より緩い。
+pub const ROUNDTRIP_EPSILON: f64 = 1e-9;
+```
 
 - [ ] **Step 4: テストが通ることを確認する**
 
@@ -733,7 +764,7 @@ mod tests {
 
     #[test]
     fn deg_converts_to_radians() {
-        assert!((AngleMode::Deg.to_radians(180.0) - PI).abs() < 1e-15);
+        crate::assert_close(AngleMode::Deg.to_radians(180.0), PI);
     }
 
     #[test]
@@ -744,7 +775,7 @@ mod tests {
 
     #[test]
     fn deg_converts_from_radians() {
-        assert!((AngleMode::Deg.from_radians(PI) - 180.0).abs() < 1e-13);
+        crate::assert_close(AngleMode::Deg.from_radians(PI), 180.0);
     }
 
     #[test]
@@ -1031,11 +1062,8 @@ EOF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_close as close;
     use std::f64::consts::PI;
-
-    fn close(a: f64, b: f64) {
-        assert!((a - b).abs() < 1e-12, "expected {b}, got {a}");
-    }
 
     #[test]
     fn square_root_of_a_positive_real() {
@@ -2686,11 +2714,21 @@ Expected: PASS
 
 - [ ] **Step 5: フェーズ 2 の全体確認**
 
-Run: `cargo test -p calcarc-core && cargo fmt --check && cargo clippy -p calcarc-core -- -D warnings`
+Run: `cargo test -p calcarc-core && cargo fmt --check && cargo clippy -p calcarc-core --all-targets -- -D warnings`
 Expected: すべて成功
 
-Run: `grep -rn "unwrap()\|expect(" crates/calcarc-core/src/`
-Expected: 出力なし。`src/` 配下に panic しうる呼び出しが残っていないことを確認する（テストコードは対象外）。
+- [ ] **Step 5b: panic しないことを lint で強制する**
+
+`crates/calcarc-core/src/lib.rs` の先頭（`//!` コメントの直後）に追記する。
+
+```rust
+// 本番経路で panic しないことをコンパイラに守らせる(base-spec §27)。
+// テストコードでは unwrap を使うため、not(test) で限定する。
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+```
+
+Run: `cargo clippy -p calcarc-core -- -D warnings`
+Expected: 成功。失敗する場合、`src/` 配下の本番経路に `unwrap()` か `expect()` が残っている。`Result` を返すか、既定値にフォールバックする形に直すこと。grep ではなくこの lint が唯一の判定基準になる。
 
 - [ ] **Step 6: コミット**
 
