@@ -1,0 +1,11 @@
+/target
+node_modules/
+web/dist/
+web/src/wasm/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+test-results/
+playwright-report/
+.superpowers/

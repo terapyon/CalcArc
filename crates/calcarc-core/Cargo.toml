@@ -1,0 +1,10 @@
+[package]
+name = "calcarc-core"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Calculation core for CalcArc. No WASM or UI dependencies."
+
+[dependencies]
+serde = { workspace = true }
