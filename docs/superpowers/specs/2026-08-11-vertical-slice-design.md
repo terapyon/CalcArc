@@ -25,6 +25,7 @@ base-spec §52 が定める最初の Vertical Slice を成立させる。
 - 即時実行方式の電卓状態機械
 - WASM 境界
 - スマートフォン縦持ちを第一とした電卓 UI（キーパッド + ディスプレイ）
+- デザイントークンによるテーマ基盤と、§43 の最低限のアクセシビリティ（物理キーボード入力、`aria-label`、フォーカス表示、タッチターゲット）
 - Golden ファイルによる Python Reference Validation
 
 ### スコープに含まないもの
@@ -53,6 +54,7 @@ base-spec §52 が定める最初の Vertical Slice を成立させる。
 | D10 | プロジェクト名 | CalcArc（正式決定） | §46 を解決 |
 | D11 | ライセンス | Apache-2.0 | §44 の有力候補 |
 | D12 | 公開先 | Cloudflare Pages | 利用者指定 |
+| D13 | スタイリング | CSS Modules + CSS カスタムプロパティ | 追加依存ゼロ。ハイコントラストとタッチターゲットをトークン差し替えで満たせる（§43） |
 
 ---
 
@@ -109,6 +111,66 @@ web/src/ui/                 React
    ← EngineState + DisplayState
    → React 再描画
 ```
+
+### 3.4 UI のスタイリングとデザイントークン
+
+**CSS Modules（Vite 標準機能）+ CSS カスタムプロパティ**を用いる。スタイリングのための追加依存は導入しない。
+
+UI は電卓という特注の一品物であり、汎用ユーティリティやコンポーネントライブラリの出番が乏しい。一方 §43 が求めるタッチターゲットの最小サイズ、フォーカス表示、ハイコントラストは、いずれも「値を 1 か所で定義して全体に効かせる」性質を持つ。これはカスタムプロパティが直接表現できる形である。
+
+#### デザイントークン
+
+`web/src/ui/tokens.css` の `:root` に集約する。
+
+```css
+:root {
+  /* タッチターゲットとレイアウト（§43） */
+  --touch-target-min: 44px;
+  --key-gap: 8px;
+
+  /* 配色 */
+  --surface-bg;      --display-bg;    --display-fg;
+  --key-bg;          --key-fg;
+  --key-accent-bg;   /* 演算子キー */
+  --key-danger-bg;   /* AC */
+  --error-fg;
+
+  /* タイポグラフィ */
+  --display-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display-size-main;   --display-size-status;
+
+  /* フォーカス（§43） */
+  --focus-ring;
+}
+```
+
+テーマの切り替えは **トークンの差し替えのみ** で行い、コンポーネント側の CSS は書き換えない。
+
+- `prefers-color-scheme: dark` — ダークテーマ
+- `prefers-contrast: more` — ハイコントラスト（§43）
+- `[data-theme]` — 利用者による明示指定（設定 UI は本スライス外）
+
+#### コンポーネント
+
+CSS Modules をコンポーネント単位で置く。ローカルクラス名は JS 側からのアクセスに合わせて lowerCamelCase とする。
+
+```
+web/src/ui/
+  tokens.css
+  Display/Display.module.css
+  Keypad/Keypad.module.css
+  Key/Key.module.css
+```
+
+キーパッドは CSS Grid で組む。各キーは `min-width` / `min-height` に `--touch-target-min` を敷く。
+
+#### アクセシビリティ（§43）
+
+- キーは `<button type="button">` とする。`div` にクリックハンドラを付けない。
+- 記号キーには読み上げ用の `aria-label` を与える（`▸∠` → 「極形式に切り替え」、`√` → 「平方根」、`j` → 「虚数単位」）。
+- メイン表示は `aria-live="polite"` とし、結果の変化を読み上げる。
+- フォーカスリングは `:focus-visible` で表示する。マウス操作時には出さない。
+- **物理キーボード入力に対応する。** `0`–`9` `.` `+` `-` `*` `/` `Enter` `Backspace` `Escape` を `Key` enum に写像する。押下経路がクリックとキーボードの 2 つになるだけで、写像先は同一の `Key` 値であり、`reduce` から見た挙動は変わらない。§50 が Desktop での利用可能性を求めているため本スライスに含める。
 
 ---
 
@@ -268,7 +330,11 @@ CalcArc/
 │   │   ├── _headers
 │   │   └── _redirects
 │   ├── src/calc/                    Framework 非依存
-│   ├── src/ui/                      React
+│   ├── src/ui/                      React + CSS Modules
+│   │   ├── tokens.css               デザイントークン
+│   │   ├── Display/
+│   │   ├── Keypad/
+│   │   └── Key/
 │   └── tests/e2e/                   Playwright
 ├── reference/                       uv + Python 3.14
 │   ├── pyproject.toml
@@ -406,11 +472,13 @@ Python が必要なのは `reference` ジョブのみである。
 
 1. スマートフォンのブラウザで電卓が操作でき、`3` `+` `j` `4` `=` `▸∠` が `5 ∠ 53.13010235` を表示する
 2. 上記が Rust → WASM → TypeScript → React を実際に経由している
-3. Layer 1–6 のテストがすべて CI で通る
-4. `testdata/*.json` が Python によって生成され、Rust がそれを検証している
-5. `docs/numerical-policy.md` に丸め規則と許容誤差が記述されている
-6. `README.md` にプロジェクト概要と Numerical Policy への導線がある
-7. `LICENSE` に Apache-2.0 が明記されている
+3. デスクトップで物理キーボードからも同じ計算が行える
+4. すべてのキーが `<button>` であり、記号キーに `aria-label` が付いている
+5. Layer 1–6 のテストがすべて CI で通る
+6. `testdata/*.json` が Python によって生成され、Rust がそれを検証している
+7. `docs/numerical-policy.md` に丸め規則と許容誤差が記述されている
+8. `README.md` にプロジェクト概要と Numerical Policy への導線がある
+9. `LICENSE` に Apache-2.0 が明記されている
 
 ---
 
