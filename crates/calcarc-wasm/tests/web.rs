@@ -110,3 +110,19 @@ fn data_scale_errors_are_returned_not_thrown() {
     let bytes = get(&result, "bytes");
     assert!(bytes.is_null(), "error results carry null, not undefined");
 }
+
+#[wasm_bindgen_test]
+fn data_scale_sub_unit_success_carries_null_lines() {
+    // 999 bytes: 成功だが最小単位未満なので単位行は無い。
+    // undefined ではなく null で渡ること(TypeScript 側は `X | null` を宣言
+    // しており、undefined だと null チェックがすり抜ける)。
+    let result = calcarc_wasm::data_scale("999", "1", "uint8");
+    let bytes = get(&result, "bytes");
+    assert_eq!(bytes.as_string().as_deref(), Some("999"));
+    let decimal = get(&result, "decimal");
+    assert!(decimal.is_null(), "decimal must be null, not undefined");
+    let binary = get(&result, "binary");
+    assert!(binary.is_null(), "binary must be null, not undefined");
+    let error = get(&result, "error");
+    assert!(error.is_null());
+}
