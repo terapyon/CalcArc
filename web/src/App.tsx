@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./App.module.css";
 import { type Calc, initCalc, type KeyToken, type Step } from "./calc";
 import { Display } from "./ui/Display/Display";
@@ -11,11 +11,18 @@ export function App() {
   const [version, setVersion] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // press が calc の state を読むと、読み込み完了で press が作り直され、
+  // useKeyboard がリスナを貼り直すことになる。貼り直しは描画の後に走るので、
+  // "0" が表示されてから新しいリスナが付くまでの打鍵が失われる。
+  // ref なら読み込みと同時に、つまり再描画より前に埋まる。
+  const calcRef = useRef<Calc | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     initCalc().then(
       (loaded) => {
         if (cancelled) return;
+        calcRef.current = loaded;
         setCalc(loaded);
         setStep(loaded.initial());
         setVersion(loaded.version());
@@ -31,15 +38,15 @@ export function App() {
     };
   }, []);
 
-  const press = useCallback(
-    (token: KeyToken) => {
-      // 状態は不変値なので、直前の状態から次を作るだけでよい。
-      setStep((previous) =>
-        calc && previous ? calc.dispatch(previous.state, token) : previous,
-      );
-    },
-    [calc],
-  );
+  // 依存を空にして同一性を固定する。ここが変わると useKeyboard が
+  // リスナを貼り直し、その隙間の打鍵が落ちる。
+  const press = useCallback((token: KeyToken) => {
+    const ready = calcRef.current;
+    // 状態は不変値なので、直前の状態から次を作るだけでよい。
+    setStep((previous) =>
+      ready && previous ? ready.dispatch(previous.state, token) : previous,
+    );
+  }, []);
 
   useKeyboard(press);
 

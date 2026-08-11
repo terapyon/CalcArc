@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { KeyToken } from "../calc";
 
 /**
@@ -37,6 +37,17 @@ export const KEYBOARD_MAP: Readonly<Record<string, KeyToken>> = {
  * 物理キーボードからの入力を受け付ける(base-spec §43、§50)。
  */
 export function useKeyboard(onPress: (token: KeyToken) => void): void {
+  // コールバックを ref 越しに呼び、リスナ自体は一度しか貼らない。
+  //
+  // 依存に onPress を置いて貼り直すと、貼り直しが走るのは描画の「後」なので、
+  // 画面が更新されてから新しいリスナが付くまでのあいだ、打鍵が古い
+  // コールバックに流れる。CI で実際にこれが起き、WASM の読み込み直後に
+  // 打った先頭 2 文字が preventDefault されたうえ握り潰された。
+  const latest = useRef(onPress);
+  useEffect(() => {
+    latest.current = onPress;
+  });
+
   useEffect(() => {
     function handle(event: KeyboardEvent) {
       // ブラウザのショートカットを奪わない。
@@ -64,10 +75,10 @@ export function useKeyboard(onPress: (token: KeyToken) => void): void {
       }
       // "/" のクイック検索や Backspace の戻るを抑える。
       event.preventDefault();
-      onPress(token);
+      latest.current(token);
     }
 
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [onPress]);
+  }, []);
 }

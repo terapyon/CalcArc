@@ -94,6 +94,35 @@ describe("useKeyboard", () => {
     expect(onPress).toHaveBeenCalledExactlyOnceWith("3");
   });
 
+  it("registers its listener once, not again when the callback changes", () => {
+    // 貼り直しは描画の後に走るので、貼り直すたびに打鍵を取りこぼす隙間ができる。
+    // CI で実際に起き、WASM 読み込み直後の先頭 2 文字が失われた。
+    const spy = vi.spyOn(window, "addEventListener");
+    const keydowns = () =>
+      spy.mock.calls.filter(([type]) => type === "keydown").length;
+
+    const { rerender } = render(<Harness onPress={() => {}} />);
+    const afterMount = keydowns();
+
+    // 毎回新しい関数を渡す。依存に置いていれば、ここで貼り直しが起きる。
+    rerender(<Harness onPress={() => {}} />);
+    rerender(<Harness onPress={() => {}} />);
+
+    expect(keydowns()).toBe(afterMount);
+    spy.mockRestore();
+  });
+
+  it("calls the newest callback, not the one it was mounted with", async () => {
+    // リスナを貼り直さない代わりに、最新のコールバックへ届く必要がある。
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<Harness onPress={first} />);
+    rerender(<Harness onPress={second} />);
+    await userEvent.keyboard("3");
+    expect(second).toHaveBeenCalledExactlyOnceWith("3");
+    expect(first).not.toHaveBeenCalled();
+  });
+
   it("stops listening once unmounted", async () => {
     const onPress = vi.fn();
     const { unmount } = render(<Harness onPress={onPress} />);
