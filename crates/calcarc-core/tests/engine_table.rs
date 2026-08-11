@@ -158,3 +158,67 @@ fn reports_the_pending_operator() {
     assert_eq!(run(&["3", "add"]).pending_op, Some(BinOp::Add));
     assert_eq!(run(&["3", "add", "4", "eq"]).pending_op, None);
 }
+
+#[test]
+fn parentheses_override_precedence() {
+    assert_eq!(
+        main_of(&["2", "mul", "lparen", "3", "add", "4", "rparen", "eq"]),
+        "14"
+    );
+    assert_eq!(
+        main_of(&["lparen", "2", "add", "3", "rparen", "mul", "4", "eq"]),
+        "20"
+    );
+}
+
+#[test]
+fn nested_parentheses() {
+    assert_eq!(
+        main_of(&[
+            "2", "mul", "lparen", "1", "add", "lparen", "3", "mul", "4", "rparen", "rparen", "eq"
+        ]),
+        "26"
+    );
+}
+
+#[test]
+fn equals_closes_unclosed_parentheses() {
+    assert_eq!(
+        main_of(&["2", "mul", "lparen", "3", "add", "4", "eq"]),
+        "14"
+    );
+}
+
+#[test]
+fn an_unmatched_closing_paren_is_a_syntax_error() {
+    assert_eq!(main_of(&["rparen"]), "Math ERROR");
+    assert_eq!(main_of(&["3", "add", "4", "rparen"]), "Math ERROR");
+}
+
+#[test]
+fn reports_the_parenthesis_depth() {
+    assert_eq!(run(&["lparen", "lparen"]).pending_depth, 2);
+    assert_eq!(run(&["lparen", "1", "rparen"]).pending_depth, 0);
+}
+
+#[test]
+fn the_pending_operator_shown_inside_parens_is_the_enclosing_one() {
+    use calcarc_core::engine::state::BinOp;
+    // `3 + (` の時点で、深さは 1 で、表示する保留演算子は外側の + とする。
+    // display は開き括弧を読み飛ばして直近の演算子を探すので、括弧の中に
+    // 入っても「何の計算の途中か」が見えたままになる。
+    let shown = run(&["3", "add", "lparen"]);
+    assert_eq!(shown.pending_depth, 1);
+    assert_eq!(shown.pending_op, Some(BinOp::Add));
+}
+
+#[test]
+fn parentheses_carry_complex_values() {
+    assert_eq!(
+        main_of(&[
+            "lparen", "3", "add", "j", "4", "rparen", "mul", "lparen", "1", "add", "j", "2",
+            "rparen", "eq"
+        ]),
+        "-5+j10"
+    );
+}

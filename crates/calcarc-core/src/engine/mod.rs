@@ -104,6 +104,35 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
     Ok(())
 }
 
+/// `(` が押されたときの遷移。
+///
+/// 新しい被演算数の文脈を開く。入力途中の数値があっても破棄する。
+/// `3 (` のような打鍵は意味を持たないため、暗黙の乗算にはしない。
+fn open_paren(state: &mut EngineState) {
+    state.buffer = None;
+    state.current = Value::ZERO;
+    state.operators.push(OpToken::OpenParen);
+}
+
+/// `)` が押されたときの遷移。対応する `(` まで畳む。
+fn close_paren(state: &mut EngineState) -> CalcResult<()> {
+    commit_entry(state);
+    state.operands.push(state.current);
+    loop {
+        // copied() で借用を切らないと、分岐の中で state を可変借用できない。
+        match state.operators.last().copied() {
+            Some(OpToken::Op(_)) => reduce_top(state)?,
+            Some(OpToken::OpenParen) => {
+                state.operators.pop();
+                break;
+            }
+            None => return Err(CalcError::SyntaxError),
+        }
+    }
+    state.current = state.operands.pop().ok_or(CalcError::SyntaxError)?;
+    Ok(())
+}
+
 /// キー 1 つ分の遷移。Err を返した場合、呼び出し側がエラー状態にする。
 fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
     match key {
@@ -135,7 +164,9 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Mul => push_binop(state, BinOp::Mul)?,
         Key::Div => push_binop(state, BinOp::Div)?,
         Key::Eq => finish(state)?,
-        // 残りのキーは Task 8 以降で実装する。
+        Key::LParen => open_paren(state),
+        Key::RParen => close_paren(state)?,
+        // 残りのキーは Task 9 以降で実装する。
         _ => {}
     }
     Ok(())
