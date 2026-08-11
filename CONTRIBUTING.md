@@ -31,3 +31,26 @@
 
 `reference/scripts/generate.py` を実行して `testdata/` を再生成し、
 差分を確認してからコミットする。CI が再生成の差分を検査する。
+
+## Python の依存を更新するとき
+
+`reference/uv.lock` を作り直すときは `--no-config` を付ける。
+
+```bash
+cd reference && uv lock --no-config
+```
+
+付けないと、手元の `~/.config/uv/uv.toml` の設定がロックファイルに
+書き込まれる。とくに `exclude-newer` を設定している場合、その制約が
+`[options]` に残り、設定を持たない CI では
+
+```
+error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.
+```
+
+で落ちる。ロックファイルはバージョンを固定するためのものなので、
+解決時の制約を持ち越す必要はない。
+
+**`uv sync` も同じことをする。** 依存を入れ直しただけのつもりでも
+ロックファイルが書き換わるので、`git diff reference/uv.lock` を見て
+`exclude-newer` が入っていないか確認すること。
