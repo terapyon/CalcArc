@@ -2758,6 +2758,74 @@ fn ac_keeps_the_user_set_modes() {
 
 `std::iter::repeat_n` は Rust 1.82 以降。使えない場合は `vec!["sqr"; 10]` に置き換える。
 
+- [ ] **Step 1b: エラー中は保留状態を表示しない**
+
+エラーが起きた時点で `operators` には途中の演算子が残る。`2` `+` `1` `÷` `0` `=` は `operators = [Op(Add)]` を残したままエラーになるため、`display` はそのまま読むと `Math ERROR` の横に `+` を出してしまう。エラー中に「何かの計算の途中である」と示すのは誤りなので、保留状態は伏せる。
+
+まずテストを `crates/calcarc-core/tests/engine_table.rs` に追記する。
+
+```rust
+#[test]
+fn an_error_hides_the_pending_state() {
+    // エラー時点で operators には Add が残っているが、
+    // Math ERROR の横に保留中の演算子を出すのは誤解を招く。
+    let shown = run(&["2", "add", "1", "div", "0", "eq"]);
+    assert_eq!(shown.main, "Math ERROR");
+    assert_eq!(shown.pending_op, None);
+    assert_eq!(shown.pending_depth, 0);
+}
+```
+
+Run: `cargo test -p calcarc-core --test engine_table an_error_hides`
+Expected: FAIL。`pending_op` が `Some(Add)` になる。
+
+`crates/calcarc-core/src/engine/display.rs` の `display` を直す。`main` を決める分岐でエラーを見ているので、保留状態も同じ判断に揃える。
+
+```rust
+pub fn display(state: &EngineState) -> DisplayState {
+    let has_error = state.error.is_some();
+    let main = if has_error {
+        ERROR_TEXT.to_string()
+    } else if let Some(buffer) = &state.buffer {
+        buffer.text()
+    } else {
+        match state.form {
+            DisplayForm::Rect => format_rect(state.current),
+            DisplayForm::Polar => format_polar(state.current, state.angle),
+        }
+    };
+
+    DisplayState {
+        main,
+        angle: state.angle,
+        form: state.form,
+        // エラー中は保留状態を伏せる。スタックには途中の演算子が
+        // 残っているが、それを見せても利用者にできることはない。
+        pending_op: if has_error {
+            None
+        } else {
+            state.operators.iter().rev().find_map(|t| match t {
+                OpToken::Op(op) => Some(*op),
+                OpToken::OpenParen => None,
+            })
+        },
+        pending_depth: if has_error {
+            0
+        } else {
+            state
+                .operators
+                .iter()
+                .filter(|t| matches!(t, OpToken::OpenParen))
+                .count()
+        },
+        error: state.error,
+    }
+}
+```
+
+Run: `cargo test -p calcarc-core --test engine_table`
+Expected: PASS
+
 - [ ] **Step 2: 無 panic の proptest を書く**
 
 `crates/calcarc-core/tests/engine_robustness.rs`:
