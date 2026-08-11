@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CalcError;
 use crate::numeric::angle::AngleMode;
-use crate::numeric::format::{format_polar, format_rect};
+use crate::numeric::format::{format_rect, try_format_polar};
 
 use super::state::{BinOp, DisplayForm, EngineState, OpToken};
 
@@ -34,7 +34,8 @@ pub fn display(state: &EngineState) -> DisplayState {
     } else {
         match state.form {
             DisplayForm::Rect => format_rect(state.current),
-            DisplayForm::Polar => format_polar(state.current, state.angle),
+            DisplayForm::Polar => try_format_polar(state.current, state.angle)
+                .unwrap_or_else(|| ERROR_TEXT.to_string()),
         }
     };
 

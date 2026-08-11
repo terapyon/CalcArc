@@ -7,7 +7,7 @@ use crate::numeric::angle::AngleMode;
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
 /// 最初から持たせておく（設計書 §4.4）。
-pub const STATE_SCHEMA: u32 = 1;
+pub const STATE_SCHEMA: u32 = 2;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
@@ -96,6 +96,12 @@ impl Buffer {
     }
 
     pub fn push_digit(&mut self, d: u8) {
+        if d > 9 {
+            // Key::Digit は pub なので範囲外の値を構築できる。from_token は
+            // 0..=9 しか作らないが、直接渡されると (b'0' + d) が桁上がりして
+            // panic する。このクレートは panic しないと約束している。
+            return;
+        }
         if self.digits.len() >= MAX_ENTRY_LEN {
             return;
         }
@@ -144,6 +150,9 @@ pub struct EngineState {
     pub form: DisplayForm,
     /// Some のあいだは AC 以外のキーを受け付けない。
     pub error: Option<CalcError>,
+    /// 直前のキーが二項演算子だったか。演算子を続けて押したときに
+    /// 差し替えるための判定に使う。
+    pub operator_pending: bool,
 }
 
 impl EngineState {
@@ -157,6 +166,7 @@ impl EngineState {
             angle: AngleMode::Deg,
             form: DisplayForm::Rect,
             error: None,
+            operator_pending: false,
         }
     }
 
@@ -171,5 +181,19 @@ impl EngineState {
 
     pub fn is_valid(&self) -> bool {
         self.schema == STATE_SCHEMA
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_digit_ignores_an_out_of_range_digit() {
+        // Key::Digit は pub なので範囲外の値を構築できる。(b'0' + d) が
+        // 桁上がりして panic しないことを確認する。
+        let mut buffer = Buffer::default();
+        buffer.push_digit(250);
+        assert_eq!(buffer, Buffer::default());
     }
 }

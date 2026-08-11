@@ -124,4 +124,6 @@ jobs:
       - run: uv run python scripts/generate.py
         working-directory: reference
       - name: The committed golden files must match a fresh generation
-        run: git diff --exit-code testdata/
+        run: |
+          git add --intent-to-add testdata/
+          git diff --exit-code testdata/

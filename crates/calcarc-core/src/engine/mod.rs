@@ -30,8 +30,12 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         next = next.cleared();
     } else if next.error.is_some() {
         // エラー中は AC 以外を受け付けない。
-    } else if let Err(err) = apply(&mut next, key) {
-        next.error = Some(err);
+    } else {
+        if let Err(err) = apply(&mut next, key) {
+            next.error = Some(err);
+        }
+        next.operator_pending =
+            next.error.is_none() && matches!(key, Key::Add | Key::Sub | Key::Mul | Key::Div);
     }
 
     let shown = display::display(&next);
@@ -71,6 +75,16 @@ fn reduce_top(state: &mut EngineState) -> CalcResult<()> {
 /// 同じか高い優先順位の演算子が保留されていれば先に畳む。これにより
 /// `2 + 3 +` の時点で 5 が表示され、`2 + 3 ×` では畳まれない。
 fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
+    // 演算子を続けて押したときは、直前の演算子を差し替える。押し直しは
+    // 打ち間違いの訂正であって、もう一度計算しろという意味ではない。
+    // 差し替えないと accumulator 自身が右辺として積まれ、3 + + 4 = が
+    // 10 になる。
+    if state.operator_pending
+        && let Some(last) = state.operators.last_mut()
+    {
+        *last = OpToken::Op(op);
+        return Ok(());
+    }
     commit_entry(state);
     state.operands.push(state.current);
     // `state.operators.last()` の借用を while の条件式で終わらせてから

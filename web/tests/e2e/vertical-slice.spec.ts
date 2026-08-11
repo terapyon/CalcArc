@@ -153,10 +153,11 @@ test("high contrast keeps the destructive key distinguishable", async ({
     page.getByRole("button", { name: "7", exact: true }),
   );
 
-  // 高コントラストでは背景が白か黒に振り切る。通常テーマの淡い色が
-  // 残っていればここで落ちる。
-  expect(digit).toContain("rgb(255, 255, 255)");
+  // 高コントラストでのみ成り立つ値に固定する。--key-accent-bg は
+  // #d8e6ff から #000000 に、--key-fg は #1c1c1e から #000000 に変わる。
+  // 背景が両テーマとも白の --key-bg は判別に使えない。
   expect(add).toContain("rgb(0, 0, 0)");
+  expect(digit).toContain("rgb(0, 0, 0)");
 
   // AC と数字キーは配色が同じで、太い二重枠だけが違う。
   // この 3 つが互いに異なることが、押し間違いの手がかりが

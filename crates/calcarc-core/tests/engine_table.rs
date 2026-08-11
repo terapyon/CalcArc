@@ -392,6 +392,30 @@ fn ac_keeps_the_user_set_modes() {
 }
 
 #[test]
+fn a_second_operator_replaces_the_first() {
+    // 押し直しは打ち間違いの訂正。もう一度計算しろという意味ではない。
+    assert_eq!(main_of(&["3", "add", "add", "4", "eq"]), "7");
+    assert_eq!(main_of(&["5", "sub", "sub", "3", "eq"]), "2");
+    assert_eq!(main_of(&["6", "mul", "mul", "2", "eq"]), "12");
+    assert_eq!(main_of(&["3", "add", "mul", "4", "eq"]), "12");
+    assert_eq!(main_of(&["3", "mul", "add", "4", "eq"]), "7");
+    // 3 つ以上続けても、残るのは最後の 1 つだけ。
+    assert_eq!(main_of(&["3", "add", "sub", "mul", "4", "eq"]), "12");
+}
+
+#[test]
+fn equals_after_an_operator_repeats_the_operand() {
+    // 3 + = は 3 + 3。CASIO の慣習に合わせる。演算子の押し直しとは別の話。
+    assert_eq!(main_of(&["3", "add", "eq"]), "6");
+}
+
+#[test]
+fn the_polar_angle_does_not_depend_on_how_a_negative_was_reached() {
+    assert_eq!(main_of(&["1", "neg", "polar_toggle"]), "1 ∠ 180");
+    assert_eq!(main_of(&["0", "sub", "1", "eq", "polar_toggle"]), "1 ∠ 180");
+}
+
+#[test]
 fn an_error_hides_the_pending_state() {
     // エラー時点で operators には Add が残っているが、
     // Math ERROR の横に保留中の演算子を出すのは誤解を招く。

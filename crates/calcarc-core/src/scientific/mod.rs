@@ -28,7 +28,16 @@ pub fn sqr(v: Value) -> CalcResult<Value> {
 }
 
 pub fn neg(v: Value) -> Value {
-    Value::new(-v.re, -v.im)
+    Value::new(negated(v.re), negated(v.im))
+}
+
+/// 符号を反転する。ただし -0.0 は作らない。
+///
+/// atan2 は第一引数の零の符号で ±π を返し分けるため、-0.0 が虚部に
+/// 残ると `1 +/−` が `1 ∠ -180`、`0 − 1 =` が `1 ∠ 180` と食い違う。
+/// 同じ値が到達経路で違う角度になるのを防ぐ。
+fn negated(x: f64) -> f64 {
+    if x == 0.0 { 0.0 } else { -x }
 }
 
 /// 角度モードに従って引数をラジアンに直す。
@@ -111,6 +120,12 @@ mod tests {
     #[test]
     fn negates() {
         assert_eq!(neg(Value::new(3.0, -4.0)), Value::new(-3.0, 4.0));
+    }
+
+    #[test]
+    fn negation_never_produces_a_negative_zero() {
+        // -0.0 が残ると atan2 が符号違いの角度を返す。
+        assert!(neg(Value::real(1.0)).im.is_sign_positive());
     }
 
     #[test]
