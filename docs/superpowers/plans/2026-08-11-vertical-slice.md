@@ -5543,6 +5543,13 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Use the runner's ChromeDriver
+        # wasm-pack は既定で自前の ChromeDriver を取りに行くが、それが
+        # ランナーの Chrome とバージョン不一致になると起動に失敗する。
+        # Task 14 の実装中に実際にこれが起きた（Chrome 135 に対して
+        # ChromeDriver 151 が降ってきた）。ランナー同梱の対になっている
+        # ものを使わせる。
+        run: echo "CHROMEDRIVER=$(which chromedriver)" >> "$GITHUB_ENV"
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       # Layer 5
       - run: wasm-pack test --headless --chrome crates/calcarc-wasm
