@@ -434,7 +434,7 @@ fn without_negative_zero(x: f64) -> f64 {
 
 `value.rs` の先頭に `use crate::{CalcError, CalcResult};` を足す（移した本体が使う）。
 
-`arith.rs` のテスト 12 件を `value.rs` の `mod tests` に移し、呼び出しをメソッド形に
+`arith.rs` のテスト 11 件を `value.rs` の `mod tests` に移し、呼び出しをメソッド形に
 追従（`add(a, b)` → `a.checked_add(b)`、`finite(v)` → `v.finalize()`）。
 **アサーションの期待値は一切変えない。** 移し終えたら `arith.rs` を削除し、
 `complex/mod.rs` から `pub mod arith;` を消す。

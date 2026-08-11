@@ -65,10 +65,10 @@ impl Value {
 
     /// 複素数の除算。
     ///
-    /// 素朴な `(b.re² + b.im²)` を分母にすると、中間の二乗で溢れるか潰れる。
-    /// `b = (1e-200, 1e-200)` ではゼロでない除数の分母が 0 になって
-    /// DivisionByZero を返し、`b = (1e200, 0)` では分母が inf になって
-    /// 結果が 0 に潰れる。後者は最終値が有限なので `finite()` も捕まえられない。
+    /// 素朴な `(rhs.re² + rhs.im²)` を分母にすると、中間の二乗で溢れるか潰れる。
+    /// `rhs = (1e-200, 1e-200)` ではゼロでない除数の分母が 0 になって
+    /// DivisionByZero を返し、`rhs = (1e200, 0)` では分母が inf になって
+    /// 結果が 0 に潰れる。後者は最終値が有限なので `finalize()` も捕まえられない。
     /// base-spec §25 が禁じる「暗黙の overflow」がここで起きる。
     ///
     /// そこで大きい方の成分で規格化してから割る（Smith 法）。
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn finite_rejects_nan_and_infinity() {
+    fn finalize_rejects_nan_and_infinity() {
         assert_eq!(Value::real(f64::NAN).finalize(), Err(CalcError::Overflow));
         assert_eq!(
             Value::new(1.0, f64::INFINITY).finalize(),
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn multiplication_never_produces_a_negative_zero() {
         // 1 × -1 × 0 のような経路は素朴な IEEE 754 の乗算では -0.0 を
-        // 生む。atan2 が符号違いの角度を返すのを防ぐため、finite() で
+        // 生む。atan2 が符号違いの角度を返すのを防ぐため、finalize() で
         // 均す。
         assert!(
             Value::real(-1.0)

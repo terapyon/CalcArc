@@ -78,7 +78,7 @@ pub fn format_polar(v: Value, mode: AngleMode) -> String {
 /// 極形式で表示する。半径が有限でなければ None を返す。
 ///
 /// to_polar の hypot は両成分が f64::MAX に近いと溢れる。engine の
-/// finite() は表示経路を通らないので、ここで捕まえないと "inf ∠ 45"
+/// finalize() は表示経路を通らないので、ここで捕まえないと "inf ∠ 45"
 /// が画面に出る。
 pub fn try_format_polar(v: Value, mode: AngleMode) -> Option<String> {
     let p = to_polar(v);
