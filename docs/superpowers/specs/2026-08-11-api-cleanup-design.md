@@ -62,7 +62,9 @@ CONTRIBUTING.md からリンクする。
 `web/src/calc/types.ts:21` と `crates/calcarc-core/src/engine/key.rs:113` は
 同じ 30 トークンを別言語で二重管理している。未知トークンは黙って no-op に
 なる設計（WASM 境界は例外を投げない）なので、ずれても**どのテストも落ちずに
-キーが 1 つ死ぬ**。wasm テストか E2E で、両者の集合一致を機械検査する。
+キーが 1 つ死ぬ**。ホストで走る native テスト（`include_str!` で TS 側の実リストを
+読み込む）で両者の一致を機械検査する。ブラウザ不要で `cargo test --workspace` に
+入り、TS 側のファイル移動はコンパイルエラーとして露見する。
 
 ### 8. 台帳の残件: 到達しない腕の整理
 
