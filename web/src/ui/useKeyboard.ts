@@ -43,6 +43,21 @@ export function useKeyboard(onPress: (token: KeyToken) => void): void {
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // ボタンにフォーカスがある状態の Enter は、そのボタン自身の起動に譲る。
+      // window で捕まえて preventDefault すると、Tab で ▸∠ に移動して
+      // Enter を押した人に = が実行されてしまい、キーボードだけでは
+      // 極形式に切り替えられなくなる(base-spec §43 の Focus handling)。
+      //
+      // Enter に限定するのが要点。「ボタンにフォーカスがあれば全部無視」に
+      // すると、マウスでキーを押した直後(フォーカスがそのボタンに残る)に
+      // 数字が打てなくなり、操作が途切れる。
+      if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLElement &&
+        event.target.closest("button")
+      ) {
+        return;
+      }
       const token = KEYBOARD_MAP[event.key];
       if (!token) {
         return;
