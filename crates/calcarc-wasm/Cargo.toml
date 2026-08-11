@@ -1,0 +1,25 @@
+[package]
+name = "calcarc-wasm"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WebAssembly adapter for calcarc-core. Holds no calculation logic."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+calcarc-core = { path = "../calcarc-core" }
+serde = { workspace = true }
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2"
+console_error_panic_hook = { version = "0.1", optional = true }
+
+[features]
+default = ["console_error_panic_hook"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
+
+[dev-dependencies]
+js-sys = "0.3"
+wasm-bindgen-test = "0.3"

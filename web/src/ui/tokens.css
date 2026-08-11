@@ -1,0 +1,112 @@
+/*
+ * デザイントークン。色・寸法・書体をここに集約する。
+ *
+ * テーマの切り替えはトークンの差し替えだけで行い、コンポーネント側の
+ * CSS は変更しない(設計書 §3.4)。
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* タッチターゲットとレイアウト(base-spec §43) */
+  --touch-target-min: 44px;
+  --key-gap: 8px;
+  --shell-max-width: 480px;
+  --radius: 12px;
+
+  /* 配色 */
+  --surface-bg: #f2f2f7;
+  --display-bg: #ffffff;
+  --display-fg: #1c1c1e;
+  --display-status-fg: #6c6c70;
+  --key-bg: #ffffff;
+  --key-fg: #1c1c1e;
+  --key-accent-bg: #d8e6ff;
+  --key-accent-fg: #0b3d91;
+  --key-function-bg: #e8e8ed;
+  --key-function-fg: #1c1c1e;
+  --key-danger-bg: #ffd8d8;
+  --key-danger-fg: #8b1a1a;
+  --error-fg: #b00020;
+
+  /* タイポグラフィ */
+  --display-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display-size-main: clamp(1.75rem, 8vw, 2.5rem);
+  --display-size-status: 0.75rem;
+  --key-font-size: 1.125rem;
+  /* 関数キーは "sin" のように文字数が多いので少し小さくする。 */
+  --key-font-size-function: 1rem;
+  --key-font-weight-emphasis: 600;
+  /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
+  --key-border: none;
+  --key-danger-border: none;
+
+  /* フォーカス(base-spec §43) */
+  --focus-ring: 3px solid #0b57d0;
+  --focus-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-bg: #000000;
+    --display-bg: #1c1c1e;
+    --display-fg: #f2f2f7;
+    --display-status-fg: #98989d;
+    --key-bg: #2c2c2e;
+    --key-fg: #f2f2f7;
+    --key-accent-bg: #143a75;
+    --key-accent-fg: #cfe0ff;
+    --key-function-bg: #3a3a3c;
+    --key-function-fg: #f2f2f7;
+    --key-danger-bg: #5c1a1a;
+    --key-danger-fg: #ffd8d8;
+    --error-fg: #ff6b6b;
+    --focus-ring: 3px solid #8ab4f8;
+  }
+}
+
+/* ハイコントラスト(base-spec §43)
+ *
+ * 背景をすべて白に潰すとキーの種類が区別できなくなる。とくに AC が
+ * 演算子と同じ見た目になるのは、押し間違いが起きて困る箇所で手がかりを
+ * 失うということなので避ける。色相ではなく明暗の反転と枠線で区別する。
+ *
+ *   数字・関数キー  白地に黒
+ *   演算子キー      黒地に白（反転）
+ *   AC / DEL        白地に黒＋太い枠線
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --surface-bg: #ffffff;
+    --display-bg: #ffffff;
+    --display-fg: #000000;
+    --display-status-fg: #000000;
+    --key-bg: #ffffff;
+    --key-fg: #000000;
+    --key-accent-bg: #000000;
+    --key-accent-fg: #ffffff;
+    --key-function-bg: #ffffff;
+    --key-function-fg: #000000;
+    --key-danger-bg: #ffffff;
+    --key-danger-fg: #000000;
+    --error-fg: #000000;
+    --focus-ring: 4px solid #000000;
+    --key-border: 2px solid currentColor;
+    --key-danger-border: 4px double currentColor;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-bg);
+  color: var(--display-fg);
+  font-family: system-ui, sans-serif;
+  /* スマートフォンでのダブルタップ拡大を抑える。 */
+  touch-action: manipulation;
+}

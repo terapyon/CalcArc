@@ -21,7 +21,10 @@
 - **表示は有効数字 10 桁、丸めは round-half-to-even。** 指数表記への切替は `|x| >= 1e10` または `0 < |x| < 1e-9`。
 - **目標表示文字列は `5 ∠ 53.13010235`。** `∠` は U+2220、前後に半角スペース1つずつ。
 - **直交形式の表示は `3+j4` 形式。** `j` は数の前。演算子の前後にスペースを入れない。
-- **許容誤差は `testdata/*.json` の `tolerance` に置く。** 既定は `abs: 1e-12`, `rel: 1e-12`。Rust テストコードに誤差値をハードコードしない（§36）。
+- **許容誤差は 2 層に分ける（§36「散在させない」）。**
+  - 言語間検証（golden）の誤差は `testdata/*.json` の `tolerance` から読む。既定は `abs: 1e-12`, `rel: 1e-12`。
+  - Rust のユニットテストの誤差は `calcarc_core::TEST_EPSILON` に集約する。
+  - どちらの層でも、個々のテストに誤差値を直書きしない。
 - **`calcarc-core` は panic しない。** `reduce` は常に有効な状態を返す。`unwrap()` / `expect()` / 添字アクセスによる panic を書かない。
 - **WASM 境界は JavaScript 例外を投げない**（§27）。計算エラーは戻り値の一部。
 - **`calcarc-core` は WASM に依存しない。** `wasm-bindgen` を依存に加えない。
@@ -29,6 +32,8 @@
 - **ライセンスは Apache-2.0。**
 - **Vite の `base` は `/`。** Cloudflare Pages のルート配信のため。
 - **タッチターゲットは最小 44px。** `--touch-target-min` として定義する。
+- **コミット前に `cargo fmt` を実行する。** この計画中の Rust コードブロックは rustfmt で整形されていないため、そのまま転記すると `cargo fmt --check` が落ちる。各タスクは検証の最後に `cargo fmt` を走らせ、整形結果を同じコミットに含めること。`--check` だけでは直らない。
+- **`Cargo.lock` をリポジトリに追跡させる。** ワークスペースの再現性と CI のため。生成物ではあるが `.gitignore` に入れない。
 - **git commit の末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` を付ける。**
 - **`git push` と PR 作成は行わない。** ブランチ作成とコミットのみ。
 
@@ -186,6 +191,7 @@ __pycache__/
 .pytest_cache/
 test-results/
 playwright-report/
+.superpowers/
 ```
 
 `LICENSE` は Apache License 2.0 の全文を入れる。取得元: <https://www.apache.org/licenses/LICENSE-2.0.txt>
@@ -407,8 +413,8 @@ mod tests {
     fn divides_complex_numbers() {
         // (-5+j10) / (1+j2) = 3+j4
         let r = div(Value::new(-5.0, 10.0), Value::new(1.0, 2.0)).unwrap();
-        assert!((r.re - 3.0).abs() < 1e-12);
-        assert!((r.im - 4.0).abs() < 1e-12);
+        crate::assert_close(r.re, 3.0);
+        crate::assert_close(r.im, 4.0);
     }
 
     #[test]
@@ -437,6 +443,25 @@ mod tests {
     }
 
     #[test]
+    fn a_tiny_but_nonzero_divisor_is_not_treated_as_zero() {
+        // b.re^2 は f64 の最小非正規数を下回って 0 に潰れるが、b はゼロではない。
+        // 1e-200 / (1e-200 + j1e-200) = 1/(1+j) = 0.5 - j0.5
+        let r = div(Value::real(1e-200), Value::new(1e-200, 1e-200)).unwrap();
+        crate::assert_close(r.re, 0.5);
+        crate::assert_close(r.im, -0.5);
+    }
+
+    #[test]
+    fn a_huge_divisor_does_not_collapse_to_zero() {
+        // 素朴な式では分母が inf になり、結果が 0 に潰れる。
+        let r = div(Value::real(1.0), Value::real(1e200)).unwrap();
+        assert!(r.re > 0.0, "expected a tiny positive value, got {}", r.re);
+        // 相対誤差で見る。絶対誤差では 1e-200 と 0 の区別がつかない。
+        crate::assert_close(r.re / 1e-200, 1.0);
+        assert_eq!(r.im, 0.0);
+    }
+
+    #[test]
     fn finite_rejects_nan_and_infinity() {
         assert_eq!(finite(Value::real(f64::NAN)), Err(CalcError::Overflow));
         assert_eq!(finite(Value::new(1.0, f64::INFINITY)), Err(CalcError::Overflow));
@@ -452,7 +477,28 @@ mod tests {
 Run: `cargo test -p calcarc-core`
 Expected: FAIL。`cannot find function add in this scope` などのコンパイルエラー。
 
-- [ ] **Step 3: 四則演算を実装する**
+- [ ] **Step 3: 共通のテスト許容誤差を用意する**
+
+`crates/calcarc-core/src/lib.rs` に追記する。誤差値をテストに散在させないための唯一の置き場になる（base-spec §36）。
+
+```rust
+/// ユニットテストの既定許容誤差。
+///
+/// 言語間検証（golden）の許容誤差はこれとは別で、
+/// `testdata/*.json` の `tolerance` から読む。混同しないこと。
+pub const TEST_EPSILON: f64 = 1e-12;
+
+/// 浮動小数点の近似比較。個々のテストに誤差値を書かないためのヘルパー。
+#[cfg(test)]
+pub(crate) fn assert_close(actual: f64, expected: f64) {
+    assert!(
+        (actual - expected).abs() < TEST_EPSILON,
+        "expected {expected}, got {actual}"
+    );
+}
+```
+
+- [ ] **Step 4: 四則演算を実装する**
 
 `crates/calcarc-core/src/complex/arith.rs` の先頭に置く。
 
@@ -487,30 +533,49 @@ pub fn mul(a: Value, b: Value) -> CalcResult<Value> {
     ))
 }
 
+/// 複素数の除算。
+///
+/// 素朴な `(b.re² + b.im²)` を分母にすると、中間の二乗で溢れるか潰れる。
+/// `b = (1e-200, 1e-200)` ではゼロでない除数の分母が 0 になって
+/// DivisionByZero を返し、`b = (1e200, 0)` では分母が inf になって
+/// 結果が 0 に潰れる。後者は最終値が有限なので `finite()` も捕まえられない。
+/// base-spec §25 が禁じる「暗黙の overflow」がここで起きる。
+///
+/// そこで大きい方の成分で規格化してから割る（Smith 法）。
 pub fn div(a: Value, b: Value) -> CalcResult<Value> {
-    let denom = b.re * b.re + b.im * b.im;
-    if denom == 0.0 {
+    if b.re == 0.0 && b.im == 0.0 {
         return Err(CalcError::DivisionByZero);
     }
-    finite(Value::new(
-        (a.re * b.re + a.im * b.im) / denom,
-        (a.im * b.re - a.re * b.im) / denom,
-    ))
+    if b.re.abs() >= b.im.abs() {
+        let t = b.im / b.re;
+        let d = b.re + b.im * t;
+        finite(Value::new(
+            (a.re + a.im * t) / d,
+            (a.im - a.re * t) / d,
+        ))
+    } else {
+        let t = b.re / b.im;
+        let d = b.re * t + b.im;
+        finite(Value::new(
+            (a.re * t + a.im) / d,
+            (a.im * t - a.re) / d,
+        ))
+    }
 }
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cargo test -p calcarc-core`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
-Run: `cargo clippy -p calcarc-core -- -D warnings`
+Run: `cargo clippy -p calcarc-core --all-targets -- -D warnings`
 Expected: 出力なし
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
-git add crates/calcarc-core/src/complex/
+git add crates/calcarc-core/
 git commit -F - <<'EOF'
 Add complex arithmetic to calcarc-core
 
@@ -552,11 +617,8 @@ EOF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_close as close;
     use std::f64::consts::PI;
-
-    fn close(a: f64, b: f64) {
-        assert!((a - b).abs() < 1e-12, "expected {b}, got {a}");
-    }
 
     #[test]
     fn converts_the_headline_case() {
@@ -586,6 +648,19 @@ mod tests {
     fn zero_has_zero_magnitude() {
         let p = to_polar(Value::ZERO);
         close(p.r, 0.0);
+        // atan2(0, 0) は 0 を返す。NaN にならないことを固定しておく。
+        close(p.theta_rad, 0.0);
+    }
+
+    #[test]
+    fn magnitude_survives_inputs_that_would_overflow_naive_squaring() {
+        // (re² + im²).sqrt() ならここで中間の二乗が inf になり r も inf になる。
+        // hypot は溢れない。これが hypot を選んだ理由そのもの。
+        let p = to_polar(Value::new(3e200, 4e200));
+        assert!(p.r.is_finite(), "magnitude overflowed: {}", p.r);
+        // 5e200 との比で見る。絶対誤差はこの桁では意味を持たない。
+        close(p.r / 5e200, 1.0);
+        close(p.theta_rad.to_degrees(), 53.13010235415598);
     }
 
     #[test]
@@ -601,7 +676,7 @@ mod tests {
 
 ```rust
 use calcarc_core::complex::polar::{from_polar, to_polar};
-use calcarc_core::Value;
+use calcarc_core::{Value, ROUNDTRIP_EPSILON};
 use proptest::prelude::*;
 
 proptest! {
@@ -612,8 +687,8 @@ proptest! {
         let v = Value::new(re, im);
         let back = from_polar(to_polar(v));
         let scale = v.re.abs().max(v.im.abs()).max(1.0);
-        prop_assert!((back.re - v.re).abs() <= 1e-9 * scale);
-        prop_assert!((back.im - v.im).abs() <= 1e-9 * scale);
+        prop_assert!((back.re - v.re).abs() <= ROUNDTRIP_EPSILON * scale);
+        prop_assert!((back.im - v.im).abs() <= ROUNDTRIP_EPSILON * scale);
     }
 
     /// 半径は常に非負。
@@ -671,6 +746,18 @@ pub fn from_polar(p: Polar) -> Value {
 ```
 
 `hypot` を使うのは、`(re*re + im*im).sqrt()` が中間の二乗で溢れる入力（例: `re = 1e200`）でも正しく動くため。
+
+`crates/calcarc-core/src/lib.rs` に往復誤差の定数を追記する。`tests/roundtrip.rs` は結合テストなので `#[cfg(test)]` の `assert_close` を使えず、公開定数を参照する。
+
+```rust
+/// rect → polar → rect の往復で許す相対誤差。
+///
+/// 三角関数と平方根を経由するぶん TEST_EPSILON より緩いが、
+/// 実際の往復誤差は 1 ULP 程度（相対 2e-16）なので 4 桁の余裕がある。
+/// これ以上緩めると、f32 相当（相対 1e-7）まで精度が落ちても
+/// テストが通ってしまい、往復テストが精度を見張らなくなる。
+pub const ROUNDTRIP_EPSILON: f64 = 1e-12;
+```
 
 - [ ] **Step 4: テストが通ることを確認する**
 
@@ -733,7 +820,7 @@ mod tests {
 
     #[test]
     fn deg_converts_to_radians() {
-        assert!((AngleMode::Deg.to_radians(180.0) - PI).abs() < 1e-15);
+        crate::assert_close(AngleMode::Deg.to_radians(180.0), PI);
     }
 
     #[test]
@@ -744,7 +831,7 @@ mod tests {
 
     #[test]
     fn deg_converts_from_radians() {
-        assert!((AngleMode::Deg.from_radians(PI) - 180.0).abs() < 1e-13);
+        crate::assert_close(AngleMode::Deg.from_radians(PI), 180.0);
     }
 
     #[test]
@@ -845,6 +932,37 @@ mod tests {
     }
 
     #[test]
+    fn keeps_ten_significant_digits_below_one() {
+        // 小数は先頭の 0 を有効数字に数えない。1 未満でも 10 桁出す。
+        assert_eq!(format_real(1.0 / 3.0), "0.3333333333");
+        assert_eq!(format_real(0.0123456789012), "0.0123456789");
+        assert_eq!(format_real(0.00123456789012), "0.00123456789");
+    }
+
+    #[test]
+    fn rounding_that_carries_into_a_new_digit_switches_notation() {
+        // 丸めると 1e10 に繰り上がる。表記の判断は丸めた後の値で行うので、
+        // 11 桁の "10000000000" ではなく "1e10" になる。
+        assert_eq!(format_real(9999999999.6), "1e10");
+        assert_eq!(format_real(9999999999.4), "9999999999");
+    }
+
+    #[test]
+    fn rounds_half_to_even_at_the_carry_boundary() {
+        // 9999999999.5 は f64 でちょうど表現できる真のタイ。有効数字 10 桁目が
+        // 奇数の 9 なので round-half-to-even は繰り上げを選び、指数表記に移る。
+        assert_eq!(format_real(9999999999.5), "1e10");
+
+        // 一方 0.99999999995 は 10 進の見た目こそタイだが、f64 にすると
+        // 0.99999999994999999586 でタイより僅かに小さい。丸めの判定は
+        // 書かれた 10 進表記ではなく f64 の実際の値で決まる。
+        assert_eq!(format_real(0.99999999995), "0.9999999999");
+
+        assert_eq!(format_real(0.99999999996), "1");
+        assert_eq!(format_real(0.99999999994), "0.9999999999");
+    }
+
+    #[test]
     fn formats_rectangular_form() {
         assert_eq!(format_rect(Value::new(3.0, 4.0)), "3+j4");
         assert_eq!(format_rect(Value::new(3.0, -4.0)), "3-j4");
@@ -894,34 +1012,40 @@ use crate::numeric::angle::AngleMode;
 /// 表示する有効数字の桁数。
 pub const DISPLAY_DIGITS: usize = 10;
 
-/// この絶対値以上で指数表記に切り替える。
-const EXP_HIGH: f64 = 1e10;
-/// この絶対値未満（かつ 0 でない）で指数表記に切り替える。
-const EXP_LOW: f64 = 1e-9;
+/// この 10 の冪以上で指数表記にする。`|x| >= 1e10` に対応する。
+const EXP_HIGH_EXPONENT: i32 = 10;
+/// この 10 の冪未満で指数表記にする。`|x| < 1e-9` に対応する。
+const EXP_LOW_EXPONENT: i32 = -9;
 
 /// 実数 1 つを表示文字列にする。
 ///
 /// 丸めは Rust の書式化に従い round-half-to-even となる。
 /// ここで丸めた結果を計算に戻さないことは engine 側で保証する（base-spec §26）。
+///
+/// 桁の数え方に log10 を使わない。`log10` は 10 の冪の近くで 1 桁ずれることがあり、
+/// また丸めによる繰り上がり（`9999999999.6` → `1e10`）を先読みできない。
+/// 代わりに Rust の指数表記書式に有効数字 10 桁で 1 度整形させ、そこから
+/// 指数を読む。この指数は丸めた後の値のものなので、表記の選択も桁数の計算も
+/// これ 1 つで決まる。
 pub fn format_real(x: f64) -> String {
     if x == 0.0 {
         // -0.0 も "0" として表示する。
         return "0".to_string();
     }
-    let a = x.abs();
-    if a >= EXP_HIGH || a < EXP_LOW {
-        let s = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
-        return match s.split_once('e') {
-            Some((mantissa, exp)) => format!("{}e{}", trim_zeros(mantissa), exp),
-            None => s,
-        };
-    }
-    let int_digits = if a >= 1.0 {
-        a.log10().floor() as i32 + 1
-    } else {
-        1
+    let scientific = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
+    let (mantissa, exponent_text) = match scientific.split_once('e') {
+        Some(parts) => parts,
+        // Rust の LowerExp は必ず 'e' を含むため、ここには来ない。
+        None => return scientific,
     };
-    let decimals = (DISPLAY_DIGITS as i32 - int_digits).max(0) as usize;
+    let exponent: i32 = exponent_text.parse().unwrap_or(0);
+
+    if !(EXP_LOW_EXPONENT..EXP_HIGH_EXPONENT).contains(&exponent) {
+        return format!("{}e{}", trim_zeros(mantissa), exponent_text);
+    }
+    // 小数点以下の桁数 = 有効数字 10 桁 - 整数部の桁数。
+    // 指数が -1 なら 0.ddd… なので 10 桁ぶん小数が要る。
+    let decimals = (DISPLAY_DIGITS as i32 - 1 - exponent).max(0) as usize;
     trim_zeros(&format!("{:.*}", decimals, x))
 }
 
@@ -1031,11 +1155,8 @@ EOF
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_close as close;
     use std::f64::consts::PI;
-
-    fn close(a: f64, b: f64) {
-        assert!((a - b).abs() < 1e-12, "expected {b}, got {a}");
-    }
 
     #[test]
     fn square_root_of_a_positive_real() {
@@ -1953,10 +2074,20 @@ fn builds_a_complex_number() {
 }
 
 #[test]
-fn multiplies_complex_numbers() {
+fn multiplies_a_complex_number_by_a_real() {
+    // = で 3+j4 が確定したあと、その値がそのまま次の演算に入る。
+    assert_eq!(main_of(&["3", "add", "j", "4", "eq", "mul", "2", "eq"]), "6+j8");
+}
+
+#[test]
+fn an_operator_folds_the_pending_product_before_the_next_term_is_typed() {
+    // 3+j4 = × 1 + j2 = は (3+j4)×(1+j2) にならない。
+    // + を押した時点で優先順位の高い × が畳まれ、(3+j4)×1 が確定してから
+    // j2 が足されるので 3+j6 になる。CASIO の代数方式として正しい挙動で、
+    // 2 つの複素数の積を書くには括弧が要る（Task 8 で扱う）。
     assert_eq!(
         main_of(&["3", "add", "j", "4", "eq", "mul", "1", "add", "j", "2", "eq"]),
-        "-5+j10"
+        "3+j6"
     );
 }
 
@@ -2104,9 +2235,13 @@ precedence before pushing its own, so 2 + 3 + shows 5 the way a CASIO
 does, while 2 + 3 × leaves the addition pending and 2 + 3 × 4 = gives 14
 rather than 20.
 
-The same path carries complex values without any special casing, which
-is what makes (3+j4) × (1+j2) = -5+j10 work through the ordinary
-operator keys.
+The same path carries complex values with no special casing, so a
+complex value settled by = flows into the next operation unchanged and
+3 + j4 = × 2 = gives 6+j8.
+
+That folding is also why 3 + j4 = × 1 + j2 = gives 3+j6 rather than the
+product of the two complex numbers: the × is folded when + is pressed.
+Writing that product needs parentheses, which the next task adds.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
@@ -2167,6 +2302,17 @@ fn an_unmatched_closing_paren_is_a_syntax_error() {
 fn reports_the_parenthesis_depth() {
     assert_eq!(run(&["lparen", "lparen"]).pending_depth, 2);
     assert_eq!(run(&["lparen", "1", "rparen"]).pending_depth, 0);
+}
+
+#[test]
+fn the_pending_operator_shown_inside_parens_is_the_enclosing_one() {
+    use calcarc_core::engine::state::BinOp;
+    // `3 + (` の時点で、深さは 1 で、表示する保留演算子は外側の + とする。
+    // display は開き括弧を読み飛ばして直近の演算子を探すので、括弧の中に
+    // 入っても「何の計算の途中か」が見えたままになる。
+    let shown = run(&["3", "add", "lparen"]);
+    assert_eq!(shown.pending_depth, 1);
+    assert_eq!(shown.pending_op, Some(BinOp::Add));
 }
 
 #[test]
@@ -2591,6 +2737,16 @@ fn ac_restores_a_usable_calculator() {
 }
 
 #[test]
+fn the_entry_buffer_stops_accepting_digits_at_its_limit() {
+    // MAX_ENTRY_LEN は 12。超えた打鍵は無視され、エラーにはしない。
+    // 打ち過ぎで電卓が止まるより、入らないほうが電卓らしい。
+    let keys = vec!["7"; 20];
+    let shown = run(&keys);
+    assert_eq!(shown.main, "777777777777");
+    assert!(shown.error.is_none());
+}
+
+#[test]
 fn ac_keeps_the_user_set_modes() {
     use calcarc_core::engine::state::DisplayForm;
     use calcarc_core::AngleMode;
@@ -2601,6 +2757,74 @@ fn ac_keeps_the_user_set_modes() {
 ```
 
 `std::iter::repeat_n` は Rust 1.82 以降。使えない場合は `vec!["sqr"; 10]` に置き換える。
+
+- [ ] **Step 1b: エラー中は保留状態を表示しない**
+
+エラーが起きた時点で `operators` には途中の演算子が残る。`2` `+` `1` `÷` `0` `=` は `operators = [Op(Add)]` を残したままエラーになるため、`display` はそのまま読むと `Math ERROR` の横に `+` を出してしまう。エラー中に「何かの計算の途中である」と示すのは誤りなので、保留状態は伏せる。
+
+まずテストを `crates/calcarc-core/tests/engine_table.rs` に追記する。
+
+```rust
+#[test]
+fn an_error_hides_the_pending_state() {
+    // エラー時点で operators には Add が残っているが、
+    // Math ERROR の横に保留中の演算子を出すのは誤解を招く。
+    let shown = run(&["2", "add", "1", "div", "0", "eq"]);
+    assert_eq!(shown.main, "Math ERROR");
+    assert_eq!(shown.pending_op, None);
+    assert_eq!(shown.pending_depth, 0);
+}
+```
+
+Run: `cargo test -p calcarc-core --test engine_table an_error_hides`
+Expected: FAIL。`pending_op` が `Some(Add)` になる。
+
+`crates/calcarc-core/src/engine/display.rs` の `display` を直す。`main` を決める分岐でエラーを見ているので、保留状態も同じ判断に揃える。
+
+```rust
+pub fn display(state: &EngineState) -> DisplayState {
+    let has_error = state.error.is_some();
+    let main = if has_error {
+        ERROR_TEXT.to_string()
+    } else if let Some(buffer) = &state.buffer {
+        buffer.text()
+    } else {
+        match state.form {
+            DisplayForm::Rect => format_rect(state.current),
+            DisplayForm::Polar => format_polar(state.current, state.angle),
+        }
+    };
+
+    DisplayState {
+        main,
+        angle: state.angle,
+        form: state.form,
+        // エラー中は保留状態を伏せる。スタックには途中の演算子が
+        // 残っているが、それを見せても利用者にできることはない。
+        pending_op: if has_error {
+            None
+        } else {
+            state.operators.iter().rev().find_map(|t| match t {
+                OpToken::Op(op) => Some(*op),
+                OpToken::OpenParen => None,
+            })
+        },
+        pending_depth: if has_error {
+            0
+        } else {
+            state
+                .operators
+                .iter()
+                .filter(|t| matches!(t, OpToken::OpenParen))
+                .count()
+        },
+        error: state.error,
+    }
+}
+```
+
+Run: `cargo test -p calcarc-core --test engine_table`
+Expected: PASS
 
 - [ ] **Step 2: 無 panic の proptest を書く**
 
@@ -2615,7 +2839,7 @@ fn ac_keeps_the_user_set_modes() {
 use calcarc_core::engine::display::display;
 use calcarc_core::engine::key::Key;
 use calcarc_core::engine::reduce;
-use calcarc_core::engine::state::{EngineState, STATE_SCHEMA};
+use calcarc_core::engine::state::{EngineState, OpToken, STATE_SCHEMA};
 use proptest::prelude::*;
 
 const TOKENS: &[&str] = &[
@@ -2637,6 +2861,20 @@ proptest! {
             let (next, shown) = reduce(&state, key);
             prop_assert!(!shown.main.is_empty());
             prop_assert_eq!(next.schema, STATE_SCHEMA);
+
+            // 構造の健全性も見る。panic の有無だけを見ていると、
+            // スタックがずれたまま Ok を返す退行を見逃す。
+            // エラーが立っていない限り、被演算数の数は保留中の
+            // 二項演算子の数と一致していなければならない。
+            if next.error.is_none() {
+                let pending_ops = next
+                    .operators
+                    .iter()
+                    .filter(|t| matches!(t, OpToken::Op(_)))
+                    .count();
+                prop_assert_eq!(next.operands.len(), pending_ops);
+            }
+
             state = next;
         }
         prop_assert!(!display(&state).main.is_empty());
@@ -2686,11 +2924,21 @@ Expected: PASS
 
 - [ ] **Step 5: フェーズ 2 の全体確認**
 
-Run: `cargo test -p calcarc-core && cargo fmt --check && cargo clippy -p calcarc-core -- -D warnings`
+Run: `cargo test -p calcarc-core && cargo fmt --check && cargo clippy -p calcarc-core --all-targets -- -D warnings`
 Expected: すべて成功
 
-Run: `grep -rn "unwrap()\|expect(" crates/calcarc-core/src/`
-Expected: 出力なし。`src/` 配下に panic しうる呼び出しが残っていないことを確認する（テストコードは対象外）。
+- [ ] **Step 5b: panic しないことを lint で強制する**
+
+`crates/calcarc-core/src/lib.rs` の先頭（`//!` コメントの直後）に追記する。
+
+```rust
+// 本番経路で panic しないことをコンパイラに守らせる(base-spec §27)。
+// テストコードでは unwrap を使うため、not(test) で限定する。
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+```
+
+Run: `cargo clippy -p calcarc-core -- -D warnings`
+Expected: 成功。失敗する場合、`src/` 配下の本番経路に `unwrap()` か `expect()` が残っている。`Result` を返すか、既定値にフォールバックする形に直すこと。grep ではなくこの lint が唯一の判定基準になる。
 
 - [ ] **Step 6: コミット**
 
@@ -2813,6 +3061,16 @@ def test_round_trip() -> None:
     re, im = polar_to_rect(5.0, 53.13010235415598)
     assert math.isclose(re, 3.0, abs_tol=1e-12)
     assert math.isclose(im, 4.0, abs_tol=1e-12)
+
+
+def test_the_origin_has_a_defined_angle() -> None:
+    """原点の偏角は数学的には未定義だが、約束として 0 に固定する。
+
+    SymPy の atan2(0, 0) は nan を返す。Rust の f64::atan2 は IEEE 754 に
+    従って +0 を返す。両者が食い違ったままでは golden 検証が成立しないので、
+    参照実装も IEEE 754 の約束に合わせる。nan は JSON としても不正である。
+    """
+    assert rect_to_polar(0.0, 0.0) == (0.0, 0.0)
 ```
 
 `reference/tests/test_scientific_ref.py`:
@@ -2886,6 +3144,15 @@ def _exact(x: float) -> sp.Rational:
 def rect_to_polar(re: float, im: float) -> tuple[float, float]:
     """直交形式から極形式へ。角度は度で返す。"""
     a, b = _exact(re), _exact(im)
+    if a == 0 and b == 0:
+        # 原点の偏角は数学的には未定義で、SymPy の atan2(0, 0) は nan を返す。
+        # IEEE 754 は atan2(+0, +0) = +0 と定めており、Rust の f64::atan2 は
+        # それに従う。参照実装も同じ約束を採る。
+        #
+        # これはアルゴリズムの共有ではなく、未定義値に対する約束の統一である。
+        # 約束が食い違ったままでは突き合わせ自体が成立しない。また nan は
+        # RFC 8259 の JSON として不正なので、書き出す前にここで潰す。
+        return 0.0, 0.0
     r_expr = sp.sqrt(a**2 + b**2)
     theta_expr = sp.atan2(b, a) * 180 / sp.pi
     return float(sp.N(r_expr, PRECISION)), float(sp.N(theta_expr, PRECISION))
@@ -2997,6 +3264,7 @@ POLAR_INPUTS: list[tuple[float, float]] = [
     (2.0, -135.0),
     (0.0, 30.0),
     (1e6, 1.0),
+    (1e-8, 45.0),
 ]
 
 # (関数名, 引数, 角度モード)
@@ -3015,6 +3283,20 @@ UNARY_INPUTS: list[tuple[str, float, str]] = [
     ("tan", 45.0, "Deg"),
     ("tan", -45.0, "Deg"),
     ("tan", 89.0, "Deg"),
+    # 極めて大きい値・小さい値（base-spec §33）。
+    #
+    # ラジアンは f64 の値をそのまま使うので、libm の引数削減と mpmath の
+    # 任意精度評価は全桁一致する（1e6 まで測定して差 0）。
+    # 度は f64 で π/180 を掛ける段階で誤差が入り、角度が大きいほど増幅する。
+    # 実測した差は 1e5 度で 9.1e-15、1e6 度で 3.3e-13、1e7 度で 1.8e-12。
+    # 許容誤差 1e-12 を超えるのは 1e6 と 1e7 のあいだなので、golden には
+    # 余裕のある 1e5 を使う。この限界は numerical-policy.md に記録する。
+    ("sin", 100000.0, "Deg"),
+    ("sin", 1e-8, "Deg"),
+    ("cos", 1e-8, "Deg"),
+    ("sin", 1000000.0, "Rad"),
+    ("cos", 1e-8, "Rad"),
+    ("tan", 100000.0, "Rad"),
 ]
 
 # sqrt の入力（実数のみ）
@@ -3120,7 +3402,13 @@ def write(name: str, payload: dict) -> None:
     path = TESTDATA / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # 差分が安定するよう整形して書く。末尾改行を付ける。
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # allow_nan=False にするのは、nan / inf が RFC 8259 の JSON として
+    # 不正であり、serde_json が解析できないため。黙って不正な golden を
+    # 書き出すより、生成時に ValueError で落ちるほうがよい。
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 
@@ -3269,7 +3557,13 @@ fn close(actual: f64, expected: f64, tol: Tolerance, id: &str, what: &str) {
 fn angle_mode(case: &Case) -> AngleMode {
     match case.mode.as_deref() {
         Some("Rad") => AngleMode::Rad,
-        _ => AngleMode::Deg,
+        // mode を持たないケースは度として扱う。
+        Some("Deg") | None => AngleMode::Deg,
+        // 綴り違いを黙って度に倒さない。ラジアンのケースが誤ったモードで
+        // 評価されると「差が大きい」という分かりにくい失敗になり、
+        // golden ファイルの不備が数値の不一致に化けてしまう。
+        // このファイルの他の箇所（field / load）と同じく、不備は不備として落とす。
+        Some(other) => panic!("{}: unknown angle mode {other:?}", case.id),
     }
 }
 
@@ -3611,7 +3905,6 @@ EOF
 **Files:**
 - Create: `web/package.json`
 - Create: `web/tsconfig.json`
-- Create: `web/tsconfig.node.json`
 - Create: `web/vite.config.ts`
 - Create: `web/biome.json`
 - Create: `web/playwright.config.ts`
@@ -3728,13 +4021,13 @@ export default defineConfig({
 ```json
 {
   "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
-  "files": { "includes": ["src/**", "tests/**", "*.ts"] },
+  "files": { "includes": ["src/**", "tests/**", "*.ts", "!src/wasm"] },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
   "linter": { "enabled": true, "rules": { "recommended": true } }
 }
 ```
 
-`src/wasm` は `files.includes` に入れていないので lint 対象外になる。
+`!src/wasm` で `wasm-pack` の生成物を lint 対象から外す。除外しないと生成された bindings が 15 件のエラーを出す。
 
 `web/playwright.config.ts`:
 
@@ -3905,11 +4198,22 @@ let ready: Promise<Calc> | null = null;
  * WASM を読み込んで Calc を返す。複数回呼んでも初期化は 1 度だけ。
  */
 export function initCalc(): Promise<Calc> {
-  ready ??= init().then(() => ({
-    initial: () => asStep(initial_state()),
-    dispatch: (state: EngineState, key: KeyToken) => asStep(reduce(state, key)),
-    version: () => core_version(),
-  }));
+  ready ??= init()
+    .then(
+      (): Calc => ({
+        initial: () => asStep(initial_state()),
+        dispatch: (state: EngineState, key: KeyToken) => asStep(reduce(state, key)),
+        version: () => core_version(),
+      }),
+    )
+    .catch((cause: unknown) => {
+      // 失敗した Promise を握ったままにしない。握ると以後の呼び出しが
+      // すべて同じ失敗を返し、ページを再読み込みする以外に回復手段が
+      // なくなる。キャッシュを捨ててから投げ直し、次の呼び出しで
+      // やり直せるようにする。
+      ready = null;
+      throw cause;
+    });
   return ready;
 }
 
@@ -4080,6 +4384,12 @@ export default defineConfig({
 import "@testing-library/jest-dom/vitest";
 ```
 
+`web/tsconfig.json` の `compilerOptions.types` に jest-dom を足す。`tests/` は `include` に入っていないため、`setup.ts` の import だけでは `toBeInTheDocument` などの型が見えず `pnpm typecheck` が落ちる。この依存は本タスクで初めて入るので、追記もここで行う。
+
+```json
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"]
+```
+
 Run: `cd web && pnpm install`
 Expected: 成功
 
@@ -4124,6 +4434,12 @@ Expected: 成功
   --display-size-main: clamp(1.75rem, 8vw, 2.5rem);
   --display-size-status: 0.75rem;
   --key-font-size: 1.125rem;
+  /* 関数キーは "sin" のように文字数が多いので少し小さくする。 */
+  --key-font-size-function: 1rem;
+  --key-font-weight-emphasis: 600;
+  /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
+  --key-border: none;
+  --key-danger-border: none;
 
   /* フォーカス(base-spec §43) */
   --focus-ring: 3px solid #0b57d0;
@@ -4149,7 +4465,16 @@ Expected: 成功
   }
 }
 
-/* ハイコントラスト(base-spec §43) */
+/* ハイコントラスト(base-spec §43)
+ *
+ * 背景をすべて白に潰すとキーの種類が区別できなくなる。とくに AC が
+ * 演算子と同じ見た目になるのは、押し間違いが起きて困る箇所で手がかりを
+ * 失うということなので避ける。色相ではなく明暗の反転と枠線で区別する。
+ *
+ *   数字・関数キー  白地に黒
+ *   演算子キー      黒地に白（反転）
+ *   AC / DEL        白地に黒＋太い枠線
+ */
 @media (prefers-contrast: more) {
   :root {
     --surface-bg: #ffffff;
@@ -4158,14 +4483,16 @@ Expected: 成功
     --display-status-fg: #000000;
     --key-bg: #ffffff;
     --key-fg: #000000;
-    --key-accent-bg: #ffffff;
-    --key-accent-fg: #000000;
+    --key-accent-bg: #000000;
+    --key-accent-fg: #ffffff;
     --key-function-bg: #ffffff;
     --key-function-fg: #000000;
     --key-danger-bg: #ffffff;
     --key-danger-fg: #000000;
     --error-fg: #000000;
     --focus-ring: 4px solid #000000;
+    --key-border: 2px solid currentColor;
+    --key-danger-border: 4px double currentColor;
   }
 }
 
@@ -4198,8 +4525,12 @@ import { Key } from "./Key";
 describe("Key", () => {
   it("renders a real button element", () => {
     render(<Key token="7" label="7" onPress={() => {}} />);
-    // div にクリックハンドラを付けない(base-spec §43)。
-    expect(screen.getByRole("button", { name: "7" })).toBeInTheDocument();
+    const key = screen.getByRole("button", { name: "7" });
+    // getByRole は <div role="button"> にも当たるので、それだけでは
+    // 「div にクリックハンドラを付けない」(base-spec §43) を守れない。
+    // タグそのものを確かめる。
+    expect(key.tagName).toBe("BUTTON");
+    expect(key).toHaveAttribute("type", "button");
   });
 
   it("uses the accessible label when the visible label is a symbol", () => {
@@ -4235,7 +4566,8 @@ Expected: FAIL。`Failed to resolve import "./Key"`。
   min-width: var(--touch-target-min);
   min-height: var(--touch-target-min);
   padding: 0;
-  border: none;
+  /* 通常テーマでは none。高コントラストでのみ枠線が出る。 */
+  border: var(--key-border);
   border-radius: var(--radius);
   background: var(--key-bg);
   color: var(--key-fg);
@@ -4264,19 +4596,21 @@ Expected: FAIL。`Failed to resolve import "./Key"`。
 .operator {
   background: var(--key-accent-bg);
   color: var(--key-accent-fg);
-  font-weight: 600;
+  font-weight: var(--key-font-weight-emphasis);
 }
 
 .function {
   background: var(--key-function-bg);
   color: var(--key-function-fg);
-  font-size: 1rem;
+  font-size: var(--key-font-size-function);
 }
 
 .danger {
   background: var(--key-danger-bg);
   color: var(--key-danger-fg);
-  font-weight: 600;
+  font-weight: var(--key-font-weight-emphasis);
+  /* 高コントラストでのみ太い枠線が出て、演算子キーと区別できる。 */
+  border: var(--key-danger-border);
 }
 ```
 
@@ -4518,7 +4852,7 @@ export function Display({ display }: DisplayProps) {
 - [ ] **Step 4: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
 Run: `cd web && pnpm typecheck && pnpm lint`
 Expected: 出力なし
@@ -4561,6 +4895,63 @@ EOF
 - Produces:
   - `web/src/ui/Keypad/layout.ts`: `KeyDef { token, label, ariaLabel, variant }`, `KEYPAD_LAYOUT: KeyDef[]`
   - `web/src/ui/Keypad/Keypad.tsx`: `Keypad`, `KeypadProps { onPress: (token: KeyToken) => void }`
+
+- [ ] **Step 0: 状態表示に読み上げ用の名前を与える**
+
+Task 17 の `Display` は状態を素の `<span>` で出しているため、読み上げでは「DEG」「((」だけが読まれ、それが何を指すのか分からない。さらに角度モードは切替ボタンのラベルが「角度の単位を切り替え」で固定なので、押した結果が何になったかを画面以外から知る手段がない。
+
+`web/src/ui/Display/Display.test.tsx` に追記する。
+
+```tsx
+it("names the status indicators for a screen reader", () => {
+  render(<Display display={state({ angle: "Rad", pendingOp: "Mul", pendingDepth: 2 })} />);
+  expect(screen.getByLabelText("角度の単位")).toHaveTextContent("RAD");
+  expect(screen.getByLabelText("計算の途中経過")).toHaveTextContent("×");
+});
+
+it("announces a change of angle mode", () => {
+  // 切替ボタンのラベルは固定なので、切り替えた結果はここでしか伝わらない。
+  render(<Display display={state({ angle: "Rad" })} />);
+  expect(screen.getByTestId("display-angle")).toHaveAttribute("aria-live", "polite");
+});
+```
+
+`web/src/ui/Display/Display.tsx` の status 行を差し替える。
+
+```tsx
+      <div className={styles.status}>
+        <span
+          data-testid="display-angle"
+          role="status"
+          aria-label="角度の単位"
+          aria-live="polite"
+        >
+          {display.angle === "Deg" ? "DEG" : "RAD"}
+        </span>
+        <span
+          data-testid="display-pending"
+          role="status"
+          aria-label="計算の途中経過"
+          aria-live="off"
+        >
+          {pending}
+        </span>
+        <span data-testid="display-form" role="status" aria-label="表示形式" aria-live="off">
+          {display.form === "Polar" ? "∠" : ""}
+        </span>
+      </div>
+```
+
+3 点、意図があるので変えないこと。
+
+**`role="status"` を付ける。** 素の `<span>` に `aria-label` を書いても、暗黙の `generic` ロールは名前付けを支持しないため多くの支援技術に無視される。lint がこれを弾くのは正しい。
+
+**`role="img"` を使わない。** `role="img"` は名前を与えると子のテキストを支援技術から隠す。`<span role="img" aria-label="計算の途中経過">((×</span>` は「計算の途中経過」としか読まれず、肝心の `((×` が消える。素の span より悪くなる。
+
+**角度モードだけを `aria-live="polite"` にし、他は `off` にする。** `role="status"` は既定で polite な live region になるので、明示的に切らないと保留演算子が打鍵のたびに読み上げられて邪魔になる。角度モードは明示的な切替でしか変わらないので読み上げてよい。
+
+Run: `cd web && pnpm test`
+Expected: PASS
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -4750,14 +5141,22 @@ import { Keypad } from "./ui/Keypad/Keypad";
 export function App() {
   const [calc, setCalc] = useState<Calc | null>(null);
   const [step, setStep] = useState<Step | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    initCalc().then((loaded) => {
-      if (cancelled) return;
-      setCalc(loaded);
-      setStep(loaded.initial());
-    });
+    initCalc().then(
+      (loaded) => {
+        if (cancelled) return;
+        setCalc(loaded);
+        setStep(loaded.initial());
+      },
+      () => {
+        // WASM が読めなければ電卓は何もできない。読み込み中の表示のまま
+        // 固まらせず、起きたことを伝える。
+        if (!cancelled) setFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -4770,6 +5169,14 @@ export function App() {
     },
     [calc],
   );
+
+  if (failed) {
+    return (
+      <p role="alert" data-testid="load-error">
+        計算エンジンを読み込めませんでした。ページを再読み込みしてください。
+      </p>
+    );
+  }
 
   if (!calc || !step) {
     return <p>Loading…</p>;
@@ -4793,6 +5200,36 @@ export function App() {
 import "./ui/tokens.css";
 ```
 
+- [ ] **Step 5b: 読み込み失敗時の表示をテストする**
+
+`web/src/App.test.tsx`:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+// jsdom では WASM を読み込めないので、計算層ごと差し替える。
+// ここで確かめたいのは App の分岐であって計算ではない。
+vi.mock("./calc", () => ({ initCalc: vi.fn() }));
+
+import { App } from "./App";
+import { initCalc } from "./calc";
+
+describe("App", () => {
+  it("says so when the calculation engine cannot be loaded", async () => {
+    // 読み込みに失敗したまま Loading の表示で固まると、利用者には
+    // 「遅い」のか「壊れた」のか区別がつかない。
+    vi.mocked(initCalc).mockRejectedValue(new Error("wasm unavailable"));
+    render(<App />);
+    const alert = await screen.findByTestId("load-error");
+    expect(alert).toHaveAttribute("role", "alert");
+  });
+});
+```
+
+Run: `cd web && pnpm test`
+Expected: PASS
+
 - [ ] **Step 6: E2E に打鍵の確認を足す**
 
 `web/tests/e2e/smoke.spec.ts` の末尾に追記する。
@@ -4808,7 +5245,7 @@ test("a pressed key reaches the calculation core", async ({ page }) => {
 - [ ] **Step 7: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（16 テスト）
+Expected: PASS（19 テスト。Task 17 までの 12 件に、Keypad 4 件、Step 0 の Display 2 件、App の失敗表示 1 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint && pnpm e2e`
 Expected: すべて成功（E2E 3 テスト）
@@ -4850,7 +5287,7 @@ EOF
 `web/src/ui/useKeyboard.test.tsx`:
 
 ```tsx
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { KeyToken } from "../calc";
@@ -4910,6 +5347,40 @@ describe("useKeyboard", () => {
     render(<Harness onPress={onPress} />);
     await userEvent.keyboard("{Control>}3{/Control}");
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("lets a focused button handle its own Enter", async () => {
+    // Tab で ▸∠ に移動して Enter を押した人に = が実行されると、
+    // キーボードだけでは極形式に切り替えられない。
+    const onPress = vi.fn();
+    render(
+      <>
+        <button type="button" data-testid="other">
+          other
+        </button>
+        <Harness onPress={onPress} />
+      </>,
+    );
+    screen.getByTestId("other").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("still accepts digits while a button holds focus", async () => {
+    // マウスでキーを押した直後はそのボタンにフォーカスが残る。
+    // そこから数字を打てなくなると操作が途切れるので、譲るのは Enter だけ。
+    const onPress = vi.fn();
+    render(
+      <>
+        <button type="button" data-testid="other">
+          other
+        </button>
+        <Harness onPress={onPress} />
+      </>,
+    );
+    screen.getByTestId("other").focus();
+    await userEvent.keyboard("3");
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("3");
   });
 
   it("stops listening once unmounted", async () => {
@@ -4977,6 +5448,21 @@ export function useKeyboard(onPress: (token: KeyToken) => void): void {
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // ボタンにフォーカスがある状態の Enter は、そのボタン自身の起動に譲る。
+      // window で捕まえて preventDefault すると、Tab で ▸∠ に移動して
+      // Enter を押した人に = が実行されてしまい、キーボードだけでは
+      // 極形式に切り替えられなくなる（base-spec §43 の Focus handling）。
+      //
+      // Enter に限定するのが要点。「ボタンにフォーカスがあれば全部無視」に
+      // すると、マウスでキーを押した直後（フォーカスがそのボタンに残る）に
+      // 数字が打てなくなり、操作が途切れる。
+      if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLElement &&
+        event.target.closest("button")
+      ) {
+        return;
+      }
       const token = KEYBOARD_MAP[event.key];
       if (!token) {
         return;
@@ -5011,7 +5497,7 @@ import { useKeyboard } from "./ui/useKeyboard";
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（24 テスト）
+Expected: PASS（29 テスト。Task 18 までの 19 件に useKeyboard の 10 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint`
 Expected: 出力なし
@@ -5052,7 +5538,7 @@ EOF
 `web/tests/e2e/vertical-slice.spec.ts`:
 
 ```ts
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /** 画面のボタンを順に押す。 */
 async function press(page: Page, labels: string[]): Promise<void> {
@@ -5141,6 +5627,53 @@ test("every key is a button with an accessible name", async ({ page }) => {
   }
 });
 
+test("the status indicators are exposed as named status regions", async ({ page }) => {
+  // jsdom はアクセシビリティツリーを組み立てないので、role が img のような
+  // 「子要素を刈る」ロールに戻っても vitest では気づけない。実際に一度
+  // それが起きている。実ブラウザでロールと名前から引き当てて防ぐ。
+  await press(page, ["3", "足す", "開き括弧"]);
+  await expect(page.getByRole("status", { name: "計算の途中経過" })).toContainText("+");
+  await expect(page.getByRole("status", { name: "角度の単位" })).toHaveText("DEG");
+});
+
+test("high contrast keeps the destructive key distinguishable", async ({ page }) => {
+  // 高コントラストは色相を奪うので、明暗の反転と枠線で区別している。
+  // ここが戻ると AC が演算子と同じ見た目になり、押し間違いが起きて
+  // 困る箇所で手がかりが消える(base-spec §43)。
+  await page.emulateMedia({ contrast: "more" });
+
+  // 高コントラストが本当に効いていることを先に確かめる。これがないと
+  // テストが通る理由を取り違える。通常テーマでも 3 種類のキーは
+  // 背景色で区別できる（#ffffff / #d8e6ff / #ffd8d8）ので、
+  // 「互いに異なる」という判定だけでは @media ブロックを丸ごと
+  // 消しても通ってしまう。
+  await expect
+    .poll(() => page.evaluate(() => matchMedia("(prefers-contrast: more)").matches))
+    .toBe(true);
+
+  const appearance = (key: Locator) =>
+    key.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return [s.backgroundColor, s.color, s.borderTopWidth, s.borderTopStyle].join("|");
+    });
+
+  const ac = await appearance(page.getByRole("button", { name: "全消去" }));
+  const add = await appearance(page.getByRole("button", { name: "足す" }));
+  const digit = await appearance(page.getByRole("button", { name: "7", exact: true }));
+
+  // 高コントラストでは背景が白か黒に振り切る。通常テーマの淡い色が
+  // 残っていればここで落ちる。
+  expect(digit).toContain("rgb(255, 255, 255)");
+  expect(add).toContain("rgb(0, 0, 0)");
+
+  // AC と数字キーは配色が同じで、太い二重枠だけが違う。
+  // この 3 つが互いに異なることが、押し間違いの手がかりが
+  // 残っているということ。
+  expect(ac).not.toBe(add);
+  expect(ac).not.toBe(digit);
+  expect(add).not.toBe(digit);
+});
+
 test("touch targets are large enough", async ({ page }) => {
   // --touch-target-min は 44px。
   const key = page.getByRole("button", { name: "7", exact: true });
@@ -5157,7 +5690,7 @@ test("touch targets are large enough", async ({ page }) => {
 - [ ] **Step 3: E2E を実行する**
 
 Run: `cd web && pnpm e2e`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
 `the physical keyboard` のテストが落ちる場合、`page.keyboard.type("3+j4")` が `j` を `Key::J` に写像できているか確認する。`useKeyboard` が `window` に登録しているので、フォーカスが body にあれば届く。
 
@@ -5249,6 +5782,13 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Use the runner's ChromeDriver
+        # wasm-pack は既定で自前の ChromeDriver を取りに行くが、それが
+        # ランナーの Chrome とバージョン不一致になると起動に失敗する。
+        # Task 14 の実装中に実際にこれが起きた（Chrome 135 に対して
+        # ChromeDriver 151 が降ってきた）。ランナー同梱の対になっている
+        # ものを使わせる。
+        run: echo "CHROMEDRIVER=$(which chromedriver)" >> "$GITHUB_ENV"
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       # Layer 5
       - run: wasm-pack test --headless --chrome crates/calcarc-wasm
