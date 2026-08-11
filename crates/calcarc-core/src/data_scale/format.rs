@@ -36,15 +36,22 @@ pub fn group_digits(bytes: u128) -> String {
 }
 
 pub fn format_decimal(bytes: u128) -> Option<String> {
-    scaled(bytes, &DECIMAL_UNITS, 1_000)
+    scaled(bytes, &DECIMAL_UNITS)
 }
 
 pub fn format_binary(bytes: u128) -> Option<String> {
-    scaled(bytes, &BINARY_UNITS, 1_024)
+    scaled(bytes, &BINARY_UNITS)
 }
 
 /// 値が 1 以上になる最大の単位で `"307.2 GB"` の形にする。最小単位未満は None。
-fn scaled(bytes: u128, units: &[(&str, u128); 4], base: u128) -> Option<String> {
+///
+/// 繰り上がりで単位を再選択する基数(1000 / 1024)は、その単位系の最小単位
+/// (`units[0]`)の除数そのもの——1 つ上の単位への切り替わり点だから。
+/// 独立した第 3 引数として渡すと、2 か所の呼び出しで値がずれる余地が生まれる
+/// (`format_decimal` に 1024 を渡す、等)。`units[0]` から導けば、その余地自体
+/// が消える。
+fn scaled(bytes: u128, units: &[(&str, u128); 4]) -> Option<String> {
+    let base = units[0].1;
     let mut index = units.iter().rposition(|(_, d)| bytes >= *d)?;
     loop {
         let (unit, divisor) = units[index];

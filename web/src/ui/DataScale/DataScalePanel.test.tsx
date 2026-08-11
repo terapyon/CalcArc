@@ -35,7 +35,7 @@ function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
     bytes: "307200000000",
     bytesGrouped: "307,200,000,000",
     decimal: "307.2 GB",
-    binary: "286.10 GiB",
+    binary: "286.1 GiB",
     error: null,
     ...overrides,
   };
@@ -107,7 +107,7 @@ describe("DataScalePanel", () => {
     });
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("307.2 GB");
-    expect(status).toHaveTextContent("286.10 GiB");
+    expect(status).toHaveTextContent("286.1 GiB");
     expect(compute).toHaveBeenLastCalledWith("100000000", "768", "float32");
   });
 

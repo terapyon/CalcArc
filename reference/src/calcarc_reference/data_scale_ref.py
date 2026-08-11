@@ -44,7 +44,12 @@ def _round_tenth(size: int, divisor: int) -> tuple[int, int]:
     return whole, tenth
 
 
-def _scaled(size: int, units: list[tuple[str, int]], base: int) -> str | None:
+def _scaled(size: int, units: list[tuple[str, int]]) -> str | None:
+    # 繰り上がりで単位を再選択する基数は、その単位系の最小単位(units[0])の
+    # 除数そのもの。丸め規則(小数第1位・half-to-even・繰り上がり時の単位
+    # 再選択)は公開契約であり(設計書 §5)、Rust の format.rs の scaled() と
+    # 同形にしてよい——ここが一致しているかどうかは golden が検査する。
+    base = units[0][1]
     candidates = [i for i, (_, d) in enumerate(units) if size >= d]
     if not candidates:
         return None
@@ -70,6 +75,6 @@ def compute(count: str, dimensions: str, dtype: str) -> dict:
     return {
         "bytes": str(size),
         "bytes_grouped": f"{size:,}",
-        "decimal": _scaled(size, DECIMAL_UNITS, 1000),
-        "binary": _scaled(size, BINARY_UNITS, 1024),
+        "decimal": _scaled(size, DECIMAL_UNITS),
+        "binary": _scaled(size, BINARY_UNITS),
     }

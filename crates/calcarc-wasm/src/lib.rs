@@ -22,14 +22,21 @@ pub fn start() {
     console_error_panic_hook::set_once();
 }
 
+/// serde_wasm_bindgen のシリアライザ生成点を一本化する。
+///
+/// None を undefined ではなく null にする。TypeScript 側の型は `X | null`
+/// を宣言しており、undefined が来ると `!== null` が常に真になって、
+/// 成功した計算がすべてエラー扱いになる。
+///
 /// 開発時に panic を可視化するためのフック以外では、panic は起きない想定。
 /// 万一シリアライズに失敗したら null を返し、呼び出し側が初期化し直す。
-fn to_js(step: &Step) -> JsValue {
-    // None を undefined ではなく null にする。TypeScript 側の型は
-    // `X | null` を宣言しており、undefined が来ると `!== null` が
-    // 常に真になって、成功した計算がすべてエラー扱いになる。
+fn to_js_value<T: Serialize>(value: &T) -> JsValue {
     let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
-    step.serialize(&serializer).unwrap_or(JsValue::NULL)
+    value.serialize(&serializer).unwrap_or(JsValue::NULL)
+}
+
+fn to_js(step: &Step) -> JsValue {
+    to_js_value(step)
 }
 
 fn step_of(state: EngineState) -> Step {
@@ -114,6 +121,5 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             error: Some(e),
         },
     };
-    let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
-    result.serialize(&serializer).unwrap_or(JsValue::NULL)
+    to_js_value(&result)
 }
