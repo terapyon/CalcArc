@@ -13,7 +13,7 @@ import sys
 import mpmath
 import sympy
 
-from calcarc_reference import cases, complex_ref, scientific_ref
+from calcarc_reference import cases, complex_ref, data_scale_ref, scientific_ref
 
 SCHEMA = 1
 TOLERANCE = {"abs": 1e-12, "rel": 1e-12}
@@ -91,6 +91,26 @@ def build_scientific() -> dict:
     return _envelope(entries)
 
 
+def build_data_scale() -> dict:
+    entries = []
+    for count, dimensions, dtype in cases.DATA_SCALE_INPUTS:
+        result = data_scale_ref.compute(count, dimensions, dtype)
+        entries.append(
+            {
+                "id": f"data_scale/{count}x{dimensions}x{dtype}",
+                "op": "data_scale",
+                "input": {"count": count, "dimensions": dimensions, "dtype": dtype},
+                "expect": result,
+            }
+        )
+    # 整数の完全一致なので tolerance を持たない(設計書 §5)。
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _envelope(entries: list[dict]) -> dict:
     return {
         "schema": SCHEMA,
@@ -117,6 +137,7 @@ def write(name: str, payload: dict) -> None:
 def main() -> None:
     write("complex.json", build_complex())
     write("scientific.json", build_scientific())
+    write("data_scale.json", build_data_scale())
 
 
 if __name__ == "__main__":
