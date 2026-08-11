@@ -567,7 +567,7 @@ pub fn div(a: Value, b: Value) -> CalcResult<Value> {
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cargo test -p calcarc-core`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
 Run: `cargo clippy -p calcarc-core --all-targets -- -D warnings`
 Expected: 出力なし
@@ -4852,7 +4852,7 @@ export function Display({ display }: DisplayProps) {
 - [ ] **Step 4: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
 Run: `cd web && pnpm typecheck && pnpm lint`
 Expected: 出力なし
@@ -5674,7 +5674,7 @@ test("touch targets are large enough", async ({ page }) => {
 - [ ] **Step 3: E2E を実行する**
 
 Run: `cd web && pnpm e2e`
-Expected: PASS（12 テスト）
+Expected: PASS（vertical-slice.spec.ts の 12 件と smoke.spec.ts の 2 件で計 14 件）
 
 `the physical keyboard` のテストが落ちる場合、`page.keyboard.type("3+j4")` が `j` を `Key::J` に写像できているか確認する。`useKeyboard` が `window` に登録しているので、フォーカスが body にあれば届く。
 
