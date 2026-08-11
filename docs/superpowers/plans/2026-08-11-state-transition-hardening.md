@@ -607,15 +607,18 @@ fn walk(state: &EngineState, keys: &[Key], depth: usize, max: usize, trail: &mut
         return;
     }
     for &key in keys {
-        if state.error.is_some() && key != Key::Ac {
-            continue;
-        }
         let (next, _) = reduce(state, key);
         trail.push(key.token());
         if let Err(why) = invariants::check(state, key, &next) {
             panic!("{why}\n  key sequence: {trail:?}");
         }
-        walk(&next, keys, depth + 1, max, trail);
+        // エラー状態からは AC 以外で新しい状態に届かないので、ここから
+        // **先を辿らない**。遷移そのものは上で必ず検査する。枝刈りの根拠が
+        // I5（エラーは AC でしか解けない）である以上、I5 を検査せずに
+        // 枝刈りしては循環で、I5 だけが網羅から漏れる。
+        if state.error.is_none() || key == Key::Ac {
+            walk(&next, keys, depth + 1, max, trail);
+        }
         trail.pop();
     }
 }
