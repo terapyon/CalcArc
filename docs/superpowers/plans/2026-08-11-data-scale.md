@@ -378,7 +378,7 @@ join）。テストが仕様である。
 - [ ] **Step 6: 検証してコミット**
 
 Run: `cargo fmt && cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
-Expected: 125 + 新規（mod 7 件 + format 8 件 = 15 件）= **140 件** PASS
+Expected: 125 + 新規（mod 6 件 + format 8 件 = 14 件）= **139 件** PASS
 
 ```bash
 git add crates/calcarc-core/
@@ -721,7 +721,7 @@ fn data_scale_matches_the_reference() {
 
 Run: `cd reference && uv run --no-config python scripts/generate.py`（2 回、2 回目差分ゼロ）
 Run: `cargo test --workspace`
-Expected: 140 + 1 = **141 件** PASS。data_scale.json は 28 ケース。
+Expected: 139 + 1 = **140 件** PASS。data_scale.json は 28 ケース。
 
 - [ ] **Step 6: 赤の実証 2 種（設計書 §5。新設検査なので必須）**
 
@@ -736,7 +736,7 @@ Expected: 140 + 1 = **141 件** PASS。data_scale.json は 28 ケース。
 - [ ] **Step 7: 検証してコミット**
 
 Run: `cargo fmt && cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && cd reference && uv run --no-config pytest`
-Expected: Rust 141 / Python 17。`git status` で uv.lock 差分なし。
+Expected: Rust 140 / Python 17。`git status` で uv.lock 差分なし。
 
 ```bash
 git add reference/ testdata/data_scale.json crates/calcarc-core/tests/data_scale_golden.rs
@@ -874,7 +874,7 @@ fn data_scale_errors_are_returned_not_thrown() {
 - [ ] **Step 3: 検証してコミット**
 
 Run: `cargo fmt && cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
-Expected: 141 件 PASS
+Expected: 140 件 PASS
 Run: `wasm-pack test --headless --chrome crates/calcarc-wasm`
 Expected: 6 + 3 = **9 件** PASS
 
@@ -1018,7 +1018,7 @@ wasm-bindgen は module キャッシュで早期 return する。**もし再イ�
 Run: `cd web && pnpm wasm && pnpm test`
 Expected: 31 + 新規（5 件前後）≈ 36 件 PASS
 Run: `cargo test --workspace`（Rust 不触の確認）
-Expected: 141 件 PASS
+Expected: 140 件 PASS
 
 ```bash
 git add web/src/datascale/ web/src/ui/DataScale/
@@ -1172,7 +1172,7 @@ EOF
 ```
 cargo fmt && cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace                                   # 141
+cargo test --workspace                                   # 140
 wasm-pack test --headless --chrome crates/calcarc-wasm   # 9
 cd web && pnpm wasm && pnpm test && pnpm e2e             # ~40 + 22 前後
 cd reference && uv run --no-config pytest                # 17
@@ -1204,8 +1204,8 @@ EOF
 
 | タスク | 成果物 | 検証段 | close |
 |---|---|---|---|
-| 1 | data_scale コア（u128・整数丸め・単位再選択） | cargo（140 件） | — |
-| 2 | Python 参照・data_scale.json・golden リーダー | cargo + pytest + 再生成（141/17） | — |
+| 1 | data_scale コア（u128・整数丸め・単位再選択） | cargo（139 件） | — |
+| 2 | Python 参照・data_scale.json・golden リーダー | cargo + pytest + 再生成（140/17） | — |
 | 3 | wasm 純関数（文字列境界） | + wasm-pack（9 件） | — |
 | 4 | TS ラッパーとフォーム | + vitest（~36 件） | — |
 | 5 | ナビと App シェル化 | + vitest + build | — |
