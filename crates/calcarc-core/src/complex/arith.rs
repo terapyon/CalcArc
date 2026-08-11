@@ -7,10 +7,20 @@ use crate::error::{CalcError, CalcResult};
 /// 表示に到達する前にここで捕まえる（base-spec §25、§27）。
 pub fn finite(v: Value) -> CalcResult<Value> {
     if v.re.is_finite() && v.im.is_finite() {
-        Ok(v)
+        // -0.0 を残さない。atan2 は零の符号で ±π を返し分けるため、
+        // 同じ値でも到達経路によって極形式の角度が変わってしまう。
+        Ok(Value::new(
+            without_negative_zero(v.re),
+            without_negative_zero(v.im),
+        ))
     } else {
         Err(CalcError::Overflow)
     }
+}
+
+/// -0.0 を +0.0 に均す。それ以外はそのまま返す。
+fn without_negative_zero(x: f64) -> f64 {
+    if x == 0.0 { 0.0 } else { x }
 }
 
 pub fn add(a: Value, b: Value) -> CalcResult<Value> {
@@ -135,5 +145,18 @@ mod tests {
             Err(CalcError::Overflow)
         );
         assert_eq!(finite(Value::real(1.0)), Ok(Value::real(1.0)));
+    }
+
+    #[test]
+    fn multiplication_never_produces_a_negative_zero() {
+        // 1 × -1 × 0 のような経路は素朴な IEEE 754 の乗算では -0.0 を
+        // 生む。atan2 が符号違いの角度を返すのを防ぐため、finite() で
+        // 均す。
+        assert!(
+            mul(Value::real(-1.0), Value::ZERO)
+                .unwrap()
+                .re
+                .is_sign_positive()
+        );
     }
 }

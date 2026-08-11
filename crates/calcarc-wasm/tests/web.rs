@@ -56,6 +56,16 @@ fn an_unusable_state_falls_back_to_the_initial_one() {
 }
 
 #[wasm_bindgen_test]
+fn a_successful_display_reports_error_as_null_not_undefined() {
+    // TypeScript 側の型は `error: CalcErrorCode | null` を宣言している。
+    // serde の既定は None を undefined にシリアライズするため、
+    // `display.error !== null` は成功時にも真になってしまう。
+    let step = calcarc_wasm::initial_state();
+    let error = get(&get(&step, "display"), "error");
+    assert!(error.is_null(), "expected null, got {error:?}");
+}
+
+#[wasm_bindgen_test]
 fn errors_are_returned_not_thrown() {
     let step = press(calcarc_wasm::initial_state(), &["1", "div", "0", "eq"]);
     assert_eq!(main_text(&step), "Math ERROR");

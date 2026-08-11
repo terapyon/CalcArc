@@ -126,11 +126,17 @@ impl Buffer {
         Ok(())
     }
 
-    /// 末尾 1 文字を削る。空になったら true を返し、呼び出し側が
-    /// Buffer 自体を破棄する。
+    /// 末尾 1 文字を削る。バッファごと破棄してよいときに true を返す。
+    ///
+    /// 虚数入力では数字が尽きても j マーカーを残す。ここで一緒に捨てると
+    /// `3 + j4 DEL 5 =` が 3+j5 ではなく 3+5 になり、何を計算しているかが
+    /// 黙って変わる。j を消すにはもう一度 DEL を押す。
     pub fn pop(&mut self) -> bool {
-        self.digits.pop();
-        self.digits.is_empty()
+        if self.digits.pop().is_some() {
+            return self.digits.is_empty() && !self.imaginary;
+        }
+        // 数字はもう無い。残っているのは j だけなので、これで破棄してよい。
+        true
     }
 }
 

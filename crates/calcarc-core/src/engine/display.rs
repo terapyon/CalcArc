@@ -26,7 +26,21 @@ pub struct DisplayState {
 /// 丸めはここでしか起きない。`EngineState` に書き戻さないため、
 /// 表示された値が次の計算の入力になることはない（base-spec §26）。
 pub fn display(state: &EngineState) -> DisplayState {
-    let has_error = state.error.is_some();
+    // 極形式の半径が溢れることがある。hypot は engine の finite() を
+    // 通らないので、ここで初めて分かる。値そのものは直交形式では
+    // 表示できるので、engine の状態はエラーにしない。▸∠ で戻れる。
+    let polar_overflow = state.error.is_none()
+        && state.buffer.is_none()
+        && state.form == DisplayForm::Polar
+        && try_format_polar(state.current, state.angle).is_none();
+
+    let error = state.error.or(if polar_overflow {
+        Some(CalcError::Overflow)
+    } else {
+        None
+    });
+    let has_error = error.is_some();
+
     let main = if has_error {
         ERROR_TEXT.to_string()
     } else if let Some(buffer) = &state.buffer {
@@ -62,6 +76,29 @@ pub fn display(state: &EngineState) -> DisplayState {
                 .filter(|t| matches!(t, OpToken::OpenParen))
                 .count()
         },
-        error: state.error,
+        error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::complex::value::Value;
+
+    #[test]
+    fn a_polar_overflow_reports_an_error_consistently() {
+        // hypot(f64::MAX, f64::MAX) は f64 の範囲を超える。値そのものは
+        // 有限で engine の状態はエラーではないが、表示できない以上、
+        // 表示された DisplayState は自己矛盾してはいけない。
+        let mut state = EngineState::initial();
+        state.current = Value::new(f64::MAX, f64::MAX);
+        state.form = DisplayForm::Polar;
+
+        let shown = display(&state);
+
+        assert_eq!(shown.main, ERROR_TEXT);
+        assert_eq!(shown.error, Some(CalcError::Overflow));
+        assert!(shown.pending_op.is_none());
+        assert_eq!(shown.pending_depth, 0);
     }
 }

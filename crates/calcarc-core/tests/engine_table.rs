@@ -63,6 +63,16 @@ fn del_removes_the_last_character() {
 }
 
 #[test]
+fn del_on_an_imaginary_entry_keeps_the_j() {
+    // 数字だけ消える。j まで消えると、続きを打った人は自分が虚部を
+    // 入力しているつもりのまま実部を入力してしまう。
+    assert_eq!(main_of(&["3", "add", "j", "4", "del"]), "j");
+    assert_eq!(main_of(&["3", "add", "j", "4", "del", "5", "eq"]), "3+j5");
+    // もう一度押すと j も消える。
+    assert_eq!(main_of(&["3", "add", "j", "4", "del", "del"]), "3");
+}
+
+#[test]
 fn ac_clears_everything() {
     assert_eq!(main_of(&["3", "1", "ac"]), "0");
 }
@@ -404,6 +414,26 @@ fn a_second_operator_replaces_the_first() {
 }
 
 #[test]
+fn a_key_that_changes_nothing_does_not_defeat_operator_replacement() {
+    // 演算子を押し直す前に、何も起きないキーを挟んでも意味は変わらない。
+    assert_eq!(main_of(&["3", "add", "del", "add", "4", "eq"]), "7");
+    assert_eq!(
+        main_of(&["3", "add", "angle_toggle", "add", "4", "eq"]),
+        "7"
+    );
+    // polar_toggle は以後の表示形式も切り替えるので、確定値そのものは
+    // 3+4=7 のまま極形式で "7 ∠ 0" になる（"the_entry_text_wins_over_
+    // the_display_form" と同じ規則）。差し替えが効かず 3+3+4=10 に
+    // なっていれば "10 ∠ 0" になるはずだった。
+    assert_eq!(
+        main_of(&["3", "add", "polar_toggle", "add", "4", "eq"]),
+        "7 ∠ 0"
+    );
+    // 一方、実際に値が入ったら差し替えではなく通常の演算に戻る。
+    assert_eq!(main_of(&["3", "add", "4", "add", "5", "eq"]), "12");
+}
+
+#[test]
 fn equals_after_an_operator_repeats_the_operand() {
     // 3 + = は 3 + 3。CASIO の慣習に合わせる。演算子の押し直しとは別の話。
     assert_eq!(main_of(&["3", "add", "eq"]), "6");
@@ -413,6 +443,15 @@ fn equals_after_an_operator_repeats_the_operand() {
 fn the_polar_angle_does_not_depend_on_how_a_negative_was_reached() {
     assert_eq!(main_of(&["1", "neg", "polar_toggle"]), "1 ∠ 180");
     assert_eq!(main_of(&["0", "sub", "1", "eq", "polar_toggle"]), "1 ∠ 180");
+}
+
+#[test]
+fn a_zero_result_has_one_polar_angle_whatever_produced_it() {
+    assert_eq!(
+        main_of(&["1", "neg", "mul", "0", "eq", "polar_toggle"]),
+        "0 ∠ 0"
+    );
+    assert_eq!(main_of(&["0", "mul", "5", "eq", "polar_toggle"]), "0 ∠ 0");
 }
 
 #[test]

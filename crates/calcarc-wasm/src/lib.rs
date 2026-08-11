@@ -26,7 +26,11 @@ pub fn start() {
 /// 開発時に panic を可視化するためのフック以外では、panic は起きない想定。
 /// 万一シリアライズに失敗したら null を返し、呼び出し側が初期化し直す。
 fn to_js(step: &Step) -> JsValue {
-    serde_wasm_bindgen::to_value(step).unwrap_or(JsValue::NULL)
+    // None を undefined ではなく null にする。TypeScript 側の型は
+    // `X | null` を宣言しており、undefined が来ると `!== null` が
+    // 常に真になって、成功した計算がすべてエラー扱いになる。
+    let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
+    step.serialize(&serializer).unwrap_or(JsValue::NULL)
 }
 
 fn step_of(state: EngineState) -> Step {

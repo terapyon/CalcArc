@@ -31,11 +31,21 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     } else if next.error.is_some() {
         // エラー中は AC 以外を受け付けない。
     } else {
+        let had_buffer = next.buffer.is_some();
+        let was_pending = next.operator_pending;
         if let Err(err) = apply(&mut next, key) {
             next.error = Some(err);
         }
-        next.operator_pending =
-            next.error.is_none() && matches!(key, Key::Add | Key::Sub | Key::Mul | Key::Div);
+        next.operator_pending = next.error.is_none()
+            && match key {
+                Key::Add | Key::Sub | Key::Mul | Key::Div => true,
+                // 表示だけを変えるキーは「直前が演算子だった」事実を消さない。
+                // 消さないと 3 + DRG + が差し替えではなく累算になる。
+                Key::AngleToggle | Key::PolarToggle => was_pending,
+                // 消すものが無かった DEL も同じ。
+                Key::Del if !had_buffer => was_pending,
+                _ => false,
+            };
     }
 
     let shown = display::display(&next);
