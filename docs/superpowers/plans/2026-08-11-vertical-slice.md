@@ -2291,6 +2291,17 @@ fn reports_the_parenthesis_depth() {
 }
 
 #[test]
+fn the_pending_operator_shown_inside_parens_is_the_enclosing_one() {
+    use calcarc_core::engine::state::BinOp;
+    // `3 + (` の時点で、深さは 1 で、表示する保留演算子は外側の + とする。
+    // display は開き括弧を読み飛ばして直近の演算子を探すので、括弧の中に
+    // 入っても「何の計算の途中か」が見えたままになる。
+    let shown = run(&["3", "add", "lparen"]);
+    assert_eq!(shown.pending_depth, 1);
+    assert_eq!(shown.pending_op, Some(BinOp::Add));
+}
+
+#[test]
 fn parentheses_carry_complex_values() {
     assert_eq!(
         main_of(&[
@@ -2709,6 +2720,16 @@ fn every_error_kind_reaches_the_display() {
 fn ac_restores_a_usable_calculator() {
     // エラー後に AC を押したら、保留中の演算も一緒に消える。
     assert_eq!(main_of(&["2", "mul", "1", "div", "0", "eq", "ac", "7", "eq"]), "7");
+}
+
+#[test]
+fn the_entry_buffer_stops_accepting_digits_at_its_limit() {
+    // MAX_ENTRY_LEN は 12。超えた打鍵は無視され、エラーにはしない。
+    // 打ち過ぎで電卓が止まるより、入らないほうが電卓らしい。
+    let keys = vec!["7"; 20];
+    let shown = run(&keys);
+    assert_eq!(shown.main, "777777777777");
+    assert!(shown.error.is_none());
 }
 
 #[test]
