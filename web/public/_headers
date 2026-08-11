@@ -1,2 +1,11 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# sw.js と manifest.webmanifest は固定ファイル名(assets/* と違い
+# コンテンツハッシュが付かない)。ブラウザは SW スクリプトの更新チェックに
+# HTTP キャッシュを尊重しうるため、長期キャッシュだと新しいデプロイが
+# 届かない。manifest も同様にインストール情報の鮮度を優先する。
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache

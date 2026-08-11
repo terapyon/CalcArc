@@ -14,7 +14,8 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "check:sw": "node scripts/check-sw.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

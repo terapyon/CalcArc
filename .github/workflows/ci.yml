@@ -84,6 +84,7 @@ jobs:
       - run: pnpm test
       # wasm は artifact から取得済みなので、ビルドだけ行う。
       - run: pnpm exec vite build
+      - run: pnpm check:sw
 
   e2e:
     name: End-to-end
