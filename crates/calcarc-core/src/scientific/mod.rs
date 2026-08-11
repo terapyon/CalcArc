@@ -46,7 +46,7 @@ fn negated(x: f64) -> f64 {
 /// これは z を単位付きの量とみなす解釈で、実数のときに
 /// 通常の度数法と一致する。
 fn to_rad(v: Value, mode: AngleMode) -> Value {
-    Value::new(mode.to_radians(v.re), mode.to_radians(v.im))
+    Value::new(mode.radians_of(v.re), mode.radians_of(v.im))
 }
 
 pub fn sin(v: Value, mode: AngleMode) -> CalcResult<Value> {

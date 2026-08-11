@@ -3,7 +3,7 @@
 //! 計算ロジックを持たない。責務は型変換と export のみ(base-spec §6.2)。
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
-use calcarc_core::engine::display::{DisplayState, display};
+use calcarc_core::engine::display::{DisplayState, render};
 use calcarc_core::engine::key::Key;
 use calcarc_core::engine::reduce;
 use calcarc_core::engine::state::EngineState;
@@ -34,7 +34,7 @@ fn to_js(step: &Step) -> JsValue {
 }
 
 fn step_of(state: EngineState) -> Step {
-    let shown = display(&state);
+    let shown = render(&state);
     Step {
         state,
         display: shown,

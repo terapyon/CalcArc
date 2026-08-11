@@ -2,9 +2,7 @@ pub mod display;
 pub mod key;
 pub mod state;
 
-// 関数 `display` は再エクスポートしない。モジュール名と衝突して
-// 呼び出し側の import が曖昧になるため、`engine::display::display` で使う。
-pub use display::DisplayState;
+pub use display::{DisplayState, render};
 
 use crate::complex::arith::{add, div, mul, sub};
 use crate::complex::value::Value;
@@ -12,7 +10,7 @@ use crate::error::CalcError;
 use crate::error::CalcResult;
 use crate::scientific;
 use key::Key;
-use state::{BinOp, Buffer, EngineState, OpToken};
+use state::{Backspace, BinOp, Buffer, EngineState, OpToken};
 
 /// 電卓の唯一の遷移関数。
 ///
@@ -60,6 +58,8 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 | Key::Sin
                 | Key::Cos
                 | Key::Tan
+                // Key::Ac はここに到達しない（reduce の冒頭で先に処理される）が、
+                // match の網羅性のために腕は残す。値はどちらでも同じ。
                 | Key::Ac => false,
                 // 入力中の文字・開き括弧・表示トグル・DEL は場所を動かさない。
                 // 括弧を開いた先はまだ何も入力されていないので、`(` を DEL で
@@ -74,7 +74,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
             };
     }
 
-    let shown = display::display(&next);
+    let shown = display::render(&next);
     (next, shown)
 }
 
@@ -168,9 +168,8 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
 /// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
 fn delete_one(state: &mut EngineState) {
     if let Some(buffer) = &mut state.buffer {
-        // 1 段目と 2 段目は Buffer::pop が担う。数字が残っていれば末尾を
-        // 消し、数字が尽きていれば j ごとバッファを捨てる。
-        if buffer.pop() {
+        // 1 段目と 2 段目は Buffer::backspace が担う。
+        if buffer.backspace() == Backspace::Exhausted {
             state.buffer = None;
         }
         return;

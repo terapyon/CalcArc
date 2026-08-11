@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 /// 全体でも成り立ち、反例が出たときにどの 1 手が壊したかがすぐ分かる。
 mod invariants {
     use calcarc_core::Value;
-    use calcarc_core::engine::display::{DisplayState, ERROR_TEXT, display};
+    use calcarc_core::engine::display::{DisplayState, ERROR_TEXT, render};
     use calcarc_core::engine::key::Key;
     use calcarc_core::engine::state::{BinOp, Buffer, EngineState, OpToken};
 
@@ -66,10 +66,10 @@ mod invariants {
 
     /// 遷移 1 回が満たすべき条件をすべて検査する。
     ///
-    /// **表示の検査は `reduce` が返したものに掛ける。** `display(after)` を
+    /// **表示の検査は `reduce` が返したものに掛ける。** `render(after)` を
     /// 組み直して検査すると、WASM 境界に実際に渡る第 2 要素だけがどこ
     /// からも見られない。組み直しは無料ではなく、網羅列挙では毎遷移で
-    /// もう 1 回 `display` を呼ぶことになる（実測で全等価類の網が
+    /// もう 1 回 `render` を呼ぶことになる（実測で全等価類の網が
     /// 4.3s → 6.7s）。返り値を使えば I1 がそのまま境界の値の検査になる。
     pub fn check(step: &Step<'_>) -> Result<(), String> {
         check_state_with(step.after, step.shown)?;
@@ -80,7 +80,7 @@ mod invariants {
         Ok(())
     }
 
-    /// `check` に加えて、返された表示が `display(次の状態)` と一致する
+    /// `check` に加えて、返された表示が `render(次の状態)` と一致する
     /// ことまで見る。
     ///
     /// 呼ぶのは乱択 2 本だけである。これは `reduce` の最終行 1 行の性質で
@@ -88,10 +88,10 @@ mod invariants {
     /// 網羅列挙の 1,350 万遷移で毎回組み直すと壁時計が 2.4 秒伸び、その
     /// ぶんで買えるものが無い。
     pub fn check_with_the_returned_display(step: &Step<'_>) -> Result<(), String> {
-        let recomputed = display(step.after);
+        let recomputed = render(step.after);
         if *step.shown != recomputed {
             return Err(format!(
-                "I1b: reduce returned {:?} but display(state) gives {:?}",
+                "I1b: reduce returned {:?} but render(state) gives {:?}",
                 step.shown, recomputed
             ));
         }
@@ -101,7 +101,7 @@ mod invariants {
     /// 状態だけで判定できる条件。打鍵が 1 度も起きない列（長さ 0）でも
     /// 初期状態を検査できるように、遷移とは別に呼べる形にしておく。
     pub fn check_state(state: &EngineState) -> Result<(), String> {
-        check_state_with(state, &display(state))
+        check_state_with(state, &render(state))
     }
 
     fn check_state_with(state: &EngineState, shown: &DisplayState) -> Result<(), String> {

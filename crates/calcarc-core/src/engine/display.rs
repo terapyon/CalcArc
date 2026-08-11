@@ -25,7 +25,7 @@ pub struct DisplayState {
 ///
 /// 丸めはここでしか起きない。`EngineState` に書き戻さないため、
 /// 表示された値が次の計算の入力になることはない（base-spec §26）。
-pub fn display(state: &EngineState) -> DisplayState {
+pub fn render(state: &EngineState) -> DisplayState {
     // 極形式の半径が溢れることがある。hypot は engine の finite() を
     // 通らないので、ここで初めて分かる。値そのものは直交形式では
     // 表示できるので、engine の状態はエラーにしない。▸∠ で戻れる。
@@ -94,7 +94,7 @@ mod tests {
         state.current = Value::new(f64::MAX, f64::MAX);
         state.form = DisplayForm::Polar;
 
-        let shown = display(&state);
+        let shown = render(&state);
 
         assert_eq!(shown.main, ERROR_TEXT);
         assert_eq!(shown.error, Some(CalcError::Overflow));

@@ -72,7 +72,7 @@ pub fn format_polar(v: Value, mode: AngleMode) -> String {
     format!(
         "{} ∠ {}",
         format_real(p.r),
-        format_real(mode.from_radians(p.theta_rad))
+        format_real(mode.angle_of(p.theta_rad))
     )
 }
 
@@ -89,7 +89,7 @@ pub fn try_format_polar(v: Value, mode: AngleMode) -> Option<String> {
     Some(format!(
         "{} ∠ {}",
         format_real(p.r),
-        format_real(mode.from_radians(p.theta_rad))
+        format_real(mode.angle_of(p.theta_rad))
     ))
 }
 

@@ -3,7 +3,7 @@
 //! このファイルの各行が仕様そのものである。挙動を変えるときは
 //! まずここを変えること。
 
-use calcarc_core::engine::display::{DisplayState, display};
+use calcarc_core::engine::display::{DisplayState, render};
 use calcarc_core::engine::key::Key;
 use calcarc_core::engine::reduce;
 use calcarc_core::engine::state::EngineState;
@@ -15,7 +15,7 @@ fn run(keys: &[&str]) -> DisplayState {
         let key = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
         state = reduce(&state, key).0;
     }
-    display(&state)
+    render(&state)
 }
 
 fn main_of(keys: &[&str]) -> String {
