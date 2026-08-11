@@ -11,13 +11,15 @@ pub struct Polar {
     pub theta_rad: f64,
 }
 
-/// 直交形式から極形式へ。
-///
-/// atan2 を使うので四象限が正しく区別される（base-spec §33）。
-pub fn to_polar(v: Value) -> Polar {
-    Polar {
-        r: v.re.hypot(v.im),
-        theta_rad: v.im.atan2(v.re),
+impl Value {
+    /// 直交形式から極形式へ。
+    ///
+    /// atan2 を使うので四象限が正しく区別される（base-spec §33）。
+    pub fn to_polar(self) -> Polar {
+        Polar {
+            r: self.re.hypot(self.im),
+            theta_rad: self.im.atan2(self.re),
+        }
     }
 }
 
@@ -35,39 +37,39 @@ mod tests {
     #[test]
     fn converts_the_headline_case() {
         // 3 + j4 -> 5 ∠ 53.13010235...°
-        let p = to_polar(Value::new(3.0, 4.0));
+        let p = Value::new(3.0, 4.0).to_polar();
         close(p.r, 5.0);
         close(p.theta_rad.to_degrees(), 53.13010235415598);
     }
 
     #[test]
     fn covers_all_four_quadrants() {
-        close(to_polar(Value::new(1.0, 1.0)).theta_rad.to_degrees(), 45.0);
+        close(Value::new(1.0, 1.0).to_polar().theta_rad.to_degrees(), 45.0);
         close(
-            to_polar(Value::new(-1.0, 1.0)).theta_rad.to_degrees(),
+            Value::new(-1.0, 1.0).to_polar().theta_rad.to_degrees(),
             135.0,
         );
         close(
-            to_polar(Value::new(-1.0, -1.0)).theta_rad.to_degrees(),
+            Value::new(-1.0, -1.0).to_polar().theta_rad.to_degrees(),
             -135.0,
         );
         close(
-            to_polar(Value::new(1.0, -1.0)).theta_rad.to_degrees(),
+            Value::new(1.0, -1.0).to_polar().theta_rad.to_degrees(),
             -45.0,
         );
     }
 
     #[test]
     fn covers_the_axes() {
-        close(to_polar(Value::new(1.0, 0.0)).theta_rad, 0.0);
-        close(to_polar(Value::new(0.0, 1.0)).theta_rad, PI / 2.0);
-        close(to_polar(Value::new(-1.0, 0.0)).theta_rad, PI);
-        close(to_polar(Value::new(0.0, -1.0)).theta_rad, -PI / 2.0);
+        close(Value::new(1.0, 0.0).to_polar().theta_rad, 0.0);
+        close(Value::new(0.0, 1.0).to_polar().theta_rad, PI / 2.0);
+        close(Value::new(-1.0, 0.0).to_polar().theta_rad, PI);
+        close(Value::new(0.0, -1.0).to_polar().theta_rad, -PI / 2.0);
     }
 
     #[test]
     fn zero_has_zero_magnitude() {
-        let p = to_polar(Value::ZERO);
+        let p = Value::ZERO.to_polar();
         close(p.r, 0.0);
         // atan2(0, 0) は 0 を返す。NaN にならないことを固定しておく。
         close(p.theta_rad, 0.0);
@@ -77,7 +79,7 @@ mod tests {
     fn magnitude_survives_inputs_that_would_overflow_naive_squaring() {
         // (re² + im²).sqrt() ならここで中間の二乗が inf になり r も inf になる。
         // hypot は溢れない。これが hypot を選んだ理由そのもの。
-        let p = to_polar(Value::new(3e200, 4e200));
+        let p = Value::new(3e200, 4e200).to_polar();
         assert!(p.r.is_finite(), "magnitude overflowed: {}", p.r);
         // 5e200 との比で見る。絶対誤差はこの桁では意味を持たない。
         close(p.r / 5e200, 1.0);

@@ -1,4 +1,3 @@
-use crate::complex::polar::to_polar;
 use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 平方根の主値。
@@ -14,7 +13,7 @@ pub fn sqrt(v: Value) -> CalcResult<Value> {
             Value::imag((-v.re).sqrt()).finalize()
         };
     }
-    let p = to_polar(v);
+    let p = v.to_polar();
     let r = p.r.sqrt();
     let half = p.theta_rad / 2.0;
     Value::new(r * half.cos(), r * half.sin()).finalize()

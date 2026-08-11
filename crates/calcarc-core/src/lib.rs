@@ -4,15 +4,16 @@
 // テストコードでは unwrap を使うため、not(test) で限定する。
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
-pub mod complex;
 pub mod engine;
 pub mod error;
 pub mod numeric;
+pub mod polar;
 pub mod scientific;
+pub mod value;
 
-pub use complex::value::Value;
 pub use error::{CalcError, CalcResult};
 pub use numeric::angle::AngleMode;
+pub use value::Value;
 
 pub use engine::{DisplayState, EngineState, Key, reduce, render};
 

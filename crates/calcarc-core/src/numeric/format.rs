@@ -1,4 +1,3 @@
-use crate::complex::polar::to_polar;
 use crate::{AngleMode, Value};
 
 /// 表示する有効数字の桁数。
@@ -67,7 +66,7 @@ pub fn format_rect(v: Value) -> String {
 /// 半径が有限であることが呼び出し側で保証されている場合に使う。
 /// 保証がない場合は `try_format_polar` を使うこと。
 pub fn format_polar(v: Value, mode: AngleMode) -> String {
-    let p = to_polar(v);
+    let p = v.to_polar();
     format!(
         "{} ∠ {}",
         format_real(p.r),
@@ -81,7 +80,7 @@ pub fn format_polar(v: Value, mode: AngleMode) -> String {
 /// finalize() は表示経路を通らないので、ここで捕まえないと "inf ∠ 45"
 /// が画面に出る。
 pub fn try_format_polar(v: Value, mode: AngleMode) -> Option<String> {
-    let p = to_polar(v);
+    let p = v.to_polar();
     if !p.r.is_finite() {
         return None;
     }
