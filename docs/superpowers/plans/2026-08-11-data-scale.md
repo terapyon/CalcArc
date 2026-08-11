@@ -1175,6 +1175,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                                   # 140
 wasm-pack test --headless --chrome crates/calcarc-wasm   # 9
 cd web && pnpm wasm && pnpm test && pnpm e2e             # ~40 + 22 前後
+cd web && pnpm lint                                       # biome check（CI: ci.yml:83）
 cd reference && uv run --no-config pytest                # 17
 uv run --no-config python scripts/generate.py && git diff --exit-code testdata/
 git status

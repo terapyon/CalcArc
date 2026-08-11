@@ -87,9 +87,7 @@ test("the form fields are reachable by their accessible labels", async ({
   await expect(page.getByLabel("データ型")).toBeVisible();
 });
 
-test("a partly-filled form stays neutral, no error shown", async ({
-  page,
-}) => {
+test("a partly-filled form stays neutral, no error shown", async ({ page }) => {
   await nav(page, "Data Scale").click();
 
   // 次元数は空のまま。
@@ -122,6 +120,11 @@ test("typing into the data-scale form does not touch the scientific state", asyn
   // useKeyboard は ScientificPanel が unmount されると外れる(App.tsx の
   // 条件レンダリング)。data-scale で打った "3" が Scientific の window
   // リスナに漏れないことを、実際のキー入力で確かめる(Task 4/5 の申し送り)。
+  //
+  // 検出器は toHaveValue("3")(下の行): リスナが漏れていれば useKeyboard
+  // 側の preventDefault() が入力欄への文字挿入自体を止める。最後の "0"
+  // 確認は ScientificPanel が毎回新規マウントされるため常に真になり、
+  // 単体では非リークの証拠にならない(再マウント後の健全性確認)。
   await nav(page, "Data Scale").click();
   await page.getByLabel("件数").pressSequentially("3");
   await expect(page.getByLabel("件数")).toHaveValue("3");
