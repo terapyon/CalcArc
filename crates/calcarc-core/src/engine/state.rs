@@ -7,7 +7,7 @@ use crate::numeric::angle::AngleMode;
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
 /// 最初から持たせておく（設計書 §4.4）。
-pub const STATE_SCHEMA: u32 = 2;
+pub const STATE_SCHEMA: u32 = 3;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
