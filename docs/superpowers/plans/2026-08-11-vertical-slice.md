@@ -3557,7 +3557,13 @@ fn close(actual: f64, expected: f64, tol: Tolerance, id: &str, what: &str) {
 fn angle_mode(case: &Case) -> AngleMode {
     match case.mode.as_deref() {
         Some("Rad") => AngleMode::Rad,
-        _ => AngleMode::Deg,
+        // mode を持たないケースは度として扱う。
+        Some("Deg") | None => AngleMode::Deg,
+        // 綴り違いを黙って度に倒さない。ラジアンのケースが誤ったモードで
+        // 評価されると「差が大きい」という分かりにくい失敗になり、
+        // golden ファイルの不備が数値の不一致に化けてしまう。
+        // このファイルの他の箇所（field / load）と同じく、不備は不備として落とす。
+        Some(other) => panic!("{}: unknown angle mode {other:?}", case.id),
     }
 }
 
