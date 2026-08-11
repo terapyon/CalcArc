@@ -35,6 +35,11 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          # バージョンを指定しないと実行ごとに入るものが変わる。
+          # 実際に main で v0.9.1 が降ってきて、license.workspace を
+          # 解釈できずマニフェストの解析に失敗した。手元と揃える。
+          version: 'v0.15.0'
       - name: Use the runner's ChromeDriver
         # wasm-pack は既定で自前の ChromeDriver を取りに行くが、それが
         # ランナーの Chrome とバージョン不一致になると起動に失敗する。

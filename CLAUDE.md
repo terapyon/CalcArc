@@ -58,6 +58,9 @@ cd reference && uv run python scripts/generate.py   # golden の再生成
   `uv sync --locked` が落ちる。
 - **pnpm のバージョンは `web/package.json` の `packageManager` が持つ。** CI の
   `pnpm/action-setup` はそこを見る。
+- **CI の `wasm-pack` はバージョンを固定する。** 指定しないと実行ごとに違うものが
+  入る。実際に `v0.9.1` が降ってきて、`license.workspace = true` を解釈できず
+  マニフェストの解析に失敗した。手元と同じ版に揃えること。
 - **jsdom はアクセシビリティツリーを組み立てない。** ロールの意味論に関わる回帰は
   vitest では捕まらないので、E2E で実ブラウザに確認させる。
 
