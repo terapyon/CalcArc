@@ -21,7 +21,7 @@
 - 電卓の挙動を変えるときは `crates/calcarc-core/tests/engine_table.rs` を先に変える。
 - 毎コミットの末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` を付ける。
 - **`git push` と PR 作成は行わない。**
-- ブランチは切らない。`main` で作業する。
+- **作業ブランチを切る。** `main` に直接コミットしない。前回と同じく、PR でレビューの関門を通してからマージする。
 
 ---
 
