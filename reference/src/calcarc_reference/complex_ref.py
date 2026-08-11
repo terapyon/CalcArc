@@ -58,16 +58,22 @@ def _to_floats(re_expr, im_expr) -> tuple[float, float]:
 
 
 def add(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
     ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
     return _to_floats(ar + br, ai + bi)
 
 
 def sub(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
     ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
     return _to_floats(ar - br, ai - bi)
 
 
 def mul(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
     ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
     return _to_floats(ar * br - ai * bi, ar * bi + ai * br)
 
