@@ -28,15 +28,34 @@ pub fn mul(a: Value, b: Value) -> CalcResult<Value> {
     ))
 }
 
+/// 複素数の除算。
+///
+/// 素朴な `(b.re² + b.im²)` を分母にすると、中間の二乗で溢れるか潰れる。
+/// `b = (1e-200, 1e-200)` ではゼロでない除数の分母が 0 になって
+/// DivisionByZero を返し、`b = (1e200, 0)` では分母が inf になって
+/// 結果が 0 に潰れる。後者は最終値が有限なので `finite()` も捕まえられない。
+/// base-spec §25 が禁じる「暗黙の overflow」がここで起きる。
+///
+/// そこで大きい方の成分で規格化してから割る（Smith 法）。
 pub fn div(a: Value, b: Value) -> CalcResult<Value> {
-    let denom = b.re * b.re + b.im * b.im;
-    if denom == 0.0 {
+    if b.re == 0.0 && b.im == 0.0 {
         return Err(CalcError::DivisionByZero);
     }
-    finite(Value::new(
-        (a.re * b.re + a.im * b.im) / denom,
-        (a.im * b.re - a.re * b.im) / denom,
-    ))
+    if b.re.abs() >= b.im.abs() {
+        let t = b.im / b.re;
+        let d = b.re + b.im * t;
+        finite(Value::new(
+            (a.re + a.im * t) / d,
+            (a.im - a.re * t) / d,
+        ))
+    } else {
+        let t = b.re / b.im;
+        let d = b.re * t + b.im;
+        finite(Value::new(
+            (a.re * t + a.im) / d,
+            (a.im * t - a.re) / d,
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -93,6 +112,25 @@ mod tests {
     fn overflow_is_an_error() {
         let big = Value::real(f64::MAX);
         assert_eq!(mul(big, Value::real(10.0)), Err(CalcError::Overflow));
+    }
+
+    #[test]
+    fn a_tiny_but_nonzero_divisor_is_not_treated_as_zero() {
+        // b.re^2 は f64 の最小非正規数を下回って 0 に潰れるが、b はゼロではない。
+        // 1e-200 / (1e-200 + j1e-200) = 1/(1+j) = 0.5 - j0.5
+        let r = div(Value::real(1e-200), Value::new(1e-200, 1e-200)).unwrap();
+        crate::assert_close(r.re, 0.5);
+        crate::assert_close(r.im, -0.5);
+    }
+
+    #[test]
+    fn a_huge_divisor_does_not_collapse_to_zero() {
+        // 素朴な式では分母が inf になり、結果が 0 に潰れる。
+        let r = div(Value::real(1.0), Value::real(1e200)).unwrap();
+        assert!(r.re > 0.0, "expected a tiny positive value, got {}", r.re);
+        // 相対誤差で見る。絶対誤差では 1e-200 と 0 の区別がつかない。
+        crate::assert_close(r.re / 1e-200, 1.0);
+        assert_eq!(r.im, 0.0);
     }
 
     #[test]
