@@ -36,11 +36,23 @@ let ready: Promise<Calc> | null = null;
  * WASM を読み込んで Calc を返す。複数回呼んでも初期化は 1 度だけ。
  */
 export function initCalc(): Promise<Calc> {
-  ready ??= init().then(() => ({
-    initial: () => asStep(initial_state()),
-    dispatch: (state: EngineState, key: KeyToken) => asStep(reduce(state, key)),
-    version: () => core_version(),
-  }));
+  ready ??= init()
+    .then(
+      (): Calc => ({
+        initial: () => asStep(initial_state()),
+        dispatch: (state: EngineState, key: KeyToken) =>
+          asStep(reduce(state, key)),
+        version: () => core_version(),
+      }),
+    )
+    .catch((cause: unknown) => {
+      // 失敗した Promise を握ったままにしない。握ると以後の呼び出しが
+      // すべて同じ失敗を返し、ページを再読み込みする以外に回復手段が
+      // なくなる。キャッシュを捨ててから投げ直し、次の呼び出しで
+      // やり直せるようにする。
+      ready = null;
+      throw cause;
+    });
   return ready;
 }
 
