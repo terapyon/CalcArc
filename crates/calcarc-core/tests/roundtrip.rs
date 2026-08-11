@@ -1,5 +1,5 @@
 use calcarc_core::complex::polar::{from_polar, to_polar};
-use calcarc_core::{Value, ROUNDTRIP_EPSILON};
+use calcarc_core::{ROUNDTRIP_EPSILON, Value};
 use proptest::prelude::*;
 
 proptest! {

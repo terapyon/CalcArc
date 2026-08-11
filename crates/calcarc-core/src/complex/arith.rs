@@ -44,17 +44,11 @@ pub fn div(a: Value, b: Value) -> CalcResult<Value> {
     if b.re.abs() >= b.im.abs() {
         let t = b.im / b.re;
         let d = b.re + b.im * t;
-        finite(Value::new(
-            (a.re + a.im * t) / d,
-            (a.im - a.re * t) / d,
-        ))
+        finite(Value::new((a.re + a.im * t) / d, (a.im - a.re * t) / d))
     } else {
         let t = b.re / b.im;
         let d = b.re * t + b.im;
-        finite(Value::new(
-            (a.re * t + a.im) / d,
-            (a.im * t - a.re) / d,
-        ))
+        finite(Value::new((a.re * t + a.im) / d, (a.im * t - a.re) / d))
     }
 }
 
@@ -136,7 +130,10 @@ mod tests {
     #[test]
     fn finite_rejects_nan_and_infinity() {
         assert_eq!(finite(Value::real(f64::NAN)), Err(CalcError::Overflow));
-        assert_eq!(finite(Value::new(1.0, f64::INFINITY)), Err(CalcError::Overflow));
+        assert_eq!(
+            finite(Value::new(1.0, f64::INFINITY)),
+            Err(CalcError::Overflow)
+        );
         assert_eq!(finite(Value::real(1.0)), Ok(Value::real(1.0)));
     }
 }

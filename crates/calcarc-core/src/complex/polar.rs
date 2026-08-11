@@ -43,9 +43,18 @@ mod tests {
     #[test]
     fn covers_all_four_quadrants() {
         close(to_polar(Value::new(1.0, 1.0)).theta_rad.to_degrees(), 45.0);
-        close(to_polar(Value::new(-1.0, 1.0)).theta_rad.to_degrees(), 135.0);
-        close(to_polar(Value::new(-1.0, -1.0)).theta_rad.to_degrees(), -135.0);
-        close(to_polar(Value::new(1.0, -1.0)).theta_rad.to_degrees(), -45.0);
+        close(
+            to_polar(Value::new(-1.0, 1.0)).theta_rad.to_degrees(),
+            135.0,
+        );
+        close(
+            to_polar(Value::new(-1.0, -1.0)).theta_rad.to_degrees(),
+            -135.0,
+        );
+        close(
+            to_polar(Value::new(1.0, -1.0)).theta_rad.to_degrees(),
+            -45.0,
+        );
     }
 
     #[test]
@@ -77,7 +86,10 @@ mod tests {
 
     #[test]
     fn converts_back() {
-        let v = from_polar(Polar { r: 5.0, theta_rad: 53.13010235415598_f64.to_radians() });
+        let v = from_polar(Polar {
+            r: 5.0,
+            theta_rad: 53.13010235415598_f64.to_radians(),
+        });
         close(v.re, 3.0);
         close(v.im, 4.0);
     }
