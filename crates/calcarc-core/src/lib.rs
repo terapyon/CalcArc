@@ -1,6 +1,7 @@
 //! CalcArc の計算コア。WASM と UI に依存しない。
 
 pub mod complex;
+pub mod engine;
 pub mod error;
 pub mod numeric;
 pub mod scientific;
