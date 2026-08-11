@@ -3905,7 +3905,6 @@ EOF
 **Files:**
 - Create: `web/package.json`
 - Create: `web/tsconfig.json`
-- Create: `web/tsconfig.node.json`
 - Create: `web/vite.config.ts`
 - Create: `web/biome.json`
 - Create: `web/playwright.config.ts`
@@ -4022,13 +4021,13 @@ export default defineConfig({
 ```json
 {
   "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
-  "files": { "includes": ["src/**", "tests/**", "*.ts"] },
+  "files": { "includes": ["src/**", "tests/**", "*.ts", "!src/wasm"] },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
   "linter": { "enabled": true, "rules": { "recommended": true } }
 }
 ```
 
-`src/wasm` は `files.includes` に入れていないので lint 対象外になる。
+`!src/wasm` で `wasm-pack` の生成物を lint 対象から外す。除外しないと生成された bindings が 15 件のエラーを出す。
 
 `web/playwright.config.ts`:
 
