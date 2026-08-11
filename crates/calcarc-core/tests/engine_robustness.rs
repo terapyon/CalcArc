@@ -54,7 +54,7 @@ mod invariants {
             .count()
     }
 
-    fn count_parens(state: &EngineState) -> usize {
+    pub(crate) fn count_parens(state: &EngineState) -> usize {
         state
             .operators
             .iter()
@@ -398,21 +398,76 @@ proptest! {
         keys in prop::collection::vec(weighted_key(), 0..120)
     ) {
         let mut state = EngineState::initial();
+        // 実際に reduce に渡した順序をそのまま残す。proptest が出す縮小結果は
+        // Vec<Key> の Debug 表示で、しかも下で挟む AC を含まない。つまりそれ
+        // だけでは再現できない。engine_table.rs の main_of(&[...]) にそのまま
+        // 貼れる形で持っておく。
+        let mut trail: Vec<&'static str> = Vec::new();
         for key in keys {
             if state.error.is_some() {
+                trail.push(Key::Ac.token());
                 let (cleared, _) = reduce(&state, Key::Ac);
                 if let Err(why) = invariants::check(&state, Key::Ac, &cleared) {
-                    return Err(TestCaseError::fail(why));
+                    return Err(TestCaseError::fail(format!(
+                        "{why}\n  key sequence: {trail:?}"
+                    )));
                 }
                 state = cleared;
             }
+            trail.push(key.token());
             let (next, _) = reduce(&state, key);
             if let Err(why) = invariants::check(&state, key, &next) {
-                return Err(TestCaseError::fail(format!("{why} (key {})", key.token())));
+                return Err(TestCaseError::fail(format!(
+                    "{why}\n  key sequence: {trail:?}"
+                )));
             }
             state = next;
         }
     }
+}
+
+/// 重みが崩れたことに気づけるようにする。
+///
+/// 深い入れ子・長い畳み込み・復帰の繰り返しに届くテストはこれ 1 つで、
+/// 網羅列挙は費用の都合で届かない（長さ 8 で 51 秒）。重みを触った誰かが
+/// 到達距離を潰しても、不変条件は静かに通り続ける。到達距離そのものを
+/// 表明しておかないと、この領域の網は音もなく消える。
+///
+/// 種を固定するので結果は揺れない。実測は深さ 9・復帰 1159 回で、
+/// 下限にはどちらも十分な余裕がある。
+#[test]
+fn the_weighted_search_still_reaches_deep_states() {
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
+
+    let mut runner = TestRunner::new_with_rng(
+        Config::default(),
+        TestRng::deterministic_rng(RngAlgorithm::ChaCha),
+    );
+    let strategy = prop::collection::vec(weighted_key(), 0..120);
+
+    let (mut deepest, mut recoveries) = (0usize, 0usize);
+    for _ in 0..300 {
+        let keys = strategy.new_tree(&mut runner).unwrap().current();
+        let mut state = EngineState::initial();
+        for key in keys {
+            if state.error.is_some() {
+                state = reduce(&state, Key::Ac).0;
+                recoveries += 1;
+            }
+            state = reduce(&state, key).0;
+            deepest = deepest.max(invariants::count_parens(&state));
+        }
+    }
+
+    assert!(
+        deepest >= 5,
+        "入れ子が深さ {deepest} までしか届いていない。weighted_key の重みを確認すること"
+    );
+    assert!(
+        recoveries >= 100,
+        "エラーからの復帰が {recoveries} 回しかない。weighted_key の重みを確認すること"
+    );
 }
 
 #[test]
