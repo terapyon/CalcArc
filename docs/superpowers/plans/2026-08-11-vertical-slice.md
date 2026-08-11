@@ -4920,19 +4920,35 @@ it("announces a change of angle mode", () => {
 
 ```tsx
       <div className={styles.status}>
-        <span data-testid="display-angle" aria-label="角度の単位" aria-live="polite">
+        <span
+          data-testid="display-angle"
+          role="status"
+          aria-label="角度の単位"
+          aria-live="polite"
+        >
           {display.angle === "Deg" ? "DEG" : "RAD"}
         </span>
-        <span data-testid="display-pending" aria-label="計算の途中経過">
+        <span
+          data-testid="display-pending"
+          role="status"
+          aria-label="計算の途中経過"
+          aria-live="off"
+        >
           {pending}
         </span>
-        <span data-testid="display-form" aria-label="表示形式">
+        <span data-testid="display-form" role="status" aria-label="表示形式" aria-live="off">
           {display.form === "Polar" ? "∠" : ""}
         </span>
       </div>
 ```
 
-角度モードだけを `aria-live` にする。保留演算子と括弧の深さは打鍵のたびに変わるため、読み上げ続けると邪魔になる。角度モードは明示的な切替でしか変わらない。
+3 点、意図があるので変えないこと。
+
+**`role="status"` を付ける。** 素の `<span>` に `aria-label` を書いても、暗黙の `generic` ロールは名前付けを支持しないため多くの支援技術に無視される。lint がこれを弾くのは正しい。
+
+**`role="img"` を使わない。** `role="img"` は名前を与えると子のテキストを支援技術から隠す。`<span role="img" aria-label="計算の途中経過">((×</span>` は「計算の途中経過」としか読まれず、肝心の `((×` が消える。素の span より悪くなる。
+
+**角度モードだけを `aria-live="polite"` にし、他は `off` にする。** `role="status"` は既定で polite な live region になるので、明示的に切らないと保留演算子が打鍵のたびに読み上げられて邪魔になる。角度モードは明示的な切替でしか変わらないので読み上げてよい。
 
 Run: `cd web && pnpm test`
 Expected: PASS
@@ -5229,7 +5245,7 @@ test("a pressed key reaches the calculation core", async ({ page }) => {
 - [ ] **Step 7: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（16 テスト）
+Expected: PASS（21 テスト。Task 17 までの 12 件に、本タスクの Keypad 4 件、Display の status 2 件、App の失敗表示 1 件、Step 0 の追加分 2 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint && pnpm e2e`
 Expected: すべて成功（E2E 3 テスト）
