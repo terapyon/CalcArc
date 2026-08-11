@@ -1,8 +1,6 @@
 use crate::complex::arith::{div, finite, mul};
 use crate::complex::polar::to_polar;
-use crate::complex::value::Value;
-use crate::error::{CalcError, CalcResult};
-use crate::numeric::angle::AngleMode;
+use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 平方根の主値。
 ///

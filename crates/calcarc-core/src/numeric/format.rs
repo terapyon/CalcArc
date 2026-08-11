@@ -1,6 +1,5 @@
 use crate::complex::polar::to_polar;
-use crate::complex::value::Value;
-use crate::numeric::angle::AngleMode;
+use crate::{AngleMode, Value};
 
 /// 表示する有効数字の桁数。
 pub const DISPLAY_DIGITS: usize = 10;

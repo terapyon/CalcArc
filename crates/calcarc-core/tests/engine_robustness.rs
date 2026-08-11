@@ -4,9 +4,8 @@
 //! UI に panic を露出させないという要求（base-spec §27）は、
 //! 個別のテストケースでは保証しきれないため無作為な打鍵列で検査する。
 
-use calcarc_core::engine::key::Key;
-use calcarc_core::engine::reduce;
-use calcarc_core::engine::state::{EngineState, STATE_SCHEMA};
+use calcarc_core::engine::state::STATE_SCHEMA;
+use calcarc_core::{EngineState, Key, reduce};
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 
@@ -16,10 +15,9 @@ use proptest::test_runner::TestCaseError;
 /// 「1 回の遷移」に対する局所的な条件として書く。局所的に成り立てば列
 /// 全体でも成り立ち、反例が出たときにどの 1 手が壊したかがすぐ分かる。
 mod invariants {
-    use calcarc_core::Value;
-    use calcarc_core::engine::display::{DisplayState, ERROR_TEXT, render};
-    use calcarc_core::engine::key::Key;
-    use calcarc_core::engine::state::{BinOp, Buffer, EngineState, OpToken};
+    use calcarc_core::engine::display::ERROR_TEXT;
+    use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
+    use calcarc_core::{DisplayState, EngineState, Key, Value, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {

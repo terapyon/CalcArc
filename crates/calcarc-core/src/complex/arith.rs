@@ -1,5 +1,4 @@
-use crate::complex::value::Value;
-use crate::error::{CalcError, CalcResult};
+use crate::{CalcError, CalcResult, Value};
 
 /// 非有限な結果を Overflow として弾く。
 ///

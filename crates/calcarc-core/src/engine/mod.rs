@@ -3,14 +3,13 @@ pub mod key;
 pub mod state;
 
 pub use display::{DisplayState, render};
+pub use key::Key;
+pub use state::EngineState;
 
 use crate::complex::arith::{add, div, mul, sub};
-use crate::complex::value::Value;
-use crate::error::CalcError;
-use crate::error::CalcResult;
 use crate::scientific;
-use key::Key;
-use state::{Backspace, BinOp, Buffer, EngineState, OpToken};
+use crate::{CalcError, CalcResult, Value};
+use state::{Backspace, BinOp, Buffer, OpToken};
 
 /// 電卓の唯一の遷移関数。
 ///

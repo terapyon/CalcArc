@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::error::CalcError;
-use crate::numeric::angle::AngleMode;
 use crate::numeric::format::{format_rect, try_format_polar};
+use crate::{AngleMode, CalcError, EngineState};
 
-use super::state::{BinOp, DisplayForm, EngineState, OpToken};
+use super::state::{BinOp, DisplayForm, OpToken};
 
 /// エラー時にメイン表示に出す文字列。
 pub const ERROR_TEXT: &str = "Math ERROR";

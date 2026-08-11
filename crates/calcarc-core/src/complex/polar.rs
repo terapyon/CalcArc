@@ -1,4 +1,4 @@
-use crate::complex::value::Value;
+use crate::Value;
 
 /// 極形式。角度は常にラジアンで保持する。
 ///

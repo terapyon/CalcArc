@@ -14,6 +14,8 @@ pub use complex::value::Value;
 pub use error::{CalcError, CalcResult};
 pub use numeric::angle::AngleMode;
 
+pub use engine::{DisplayState, EngineState, Key, reduce, render};
+
 /// ユニットテストの既定許容誤差。
 ///
 /// 言語間検証（golden）の許容誤差はこれとは別で、

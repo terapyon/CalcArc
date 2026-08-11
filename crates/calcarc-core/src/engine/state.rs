@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::complex::value::Value;
-use crate::error::{CalcError, CalcResult};
-use crate::numeric::angle::AngleMode;
+use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため

@@ -3,10 +3,7 @@
 //! このファイルの各行が仕様そのものである。挙動を変えるときは
 //! まずここを変えること。
 
-use calcarc_core::engine::display::{DisplayState, render};
-use calcarc_core::engine::key::Key;
-use calcarc_core::engine::reduce;
-use calcarc_core::engine::state::EngineState;
+use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 
 /// キー列を打鍵した結果の表示を返す。
 fn run(keys: &[&str]) -> DisplayState {
