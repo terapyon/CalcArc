@@ -17,7 +17,7 @@ use calcarc_core::Key;
 fn tokens_in_types_ts() -> Vec<String> {
     let src = include_str!("../../../web/src/calc/types.ts");
     let after = src
-        .split("KEY_TOKENS = [")
+        .split("export const KEY_TOKENS = [")
         .nth(1)
         .expect("types.ts に KEY_TOKENS の配列リテラルが見つからない");
     let body = after

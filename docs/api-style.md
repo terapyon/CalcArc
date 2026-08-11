@@ -8,7 +8,8 @@
 
 - 名前の嘘 = 名前が std の契約や意味を偽っているもの。直す。
   例: Option を返さない `pop()`、述語に見える関門 `finite()`、
-  `f64::to_radians` と同名で別動作のメソッド。
+  `f64::to_radians` と同名で別動作のメソッド
+  （いずれも 2026-08 の API 整理で解消済み。歴史的例）。
 - ドメイン語彙 = 設計書・base-spec が定義した概念を指す名前。守る。
   例: `token`（境界トークン）、`sqr`（x² キー）、`CalcError`、
   `to_polar`/`from_polar`、`Buffer::text`（打鍵エコー）。
@@ -23,9 +24,19 @@
   UI エコーや文脈依存の文字列化は名前付きメソッド（`text()` など）。
 - **import 方針**: flat import（`format_real` を直接 use）を維持する。
   モジュール修飾呼び出しへの寄せ替え（`format::real()`）はしない。
+  この帰結として `format_*` の接頭辞は残す（flat import で使う以上、
+  接頭辞が無いと `real()` だけでは何の実数か読めない）。
 - **述語**: `is_` / `has_` で始める。検査して返す関門は動詞で始める。
 - **スタッター**: `module::module()` の形を避ける（関数名の変更で解消する。
   From 化は上の規約により不採用）。
+- **コンストラクタ / `Default`**: ドメイン語彙の生成関数（`EngineState::initial()`
+  = 電源投入時の状態）があるとき、`Default` を重ねない。生成点が 2 つになるうえ、
+  `Default` の不在は名前の嘘ではない。`mem::take` 等で実需が生じたら再考する。
+- **玄関（crate root の再エクスポート）**: 利用側が状態機械を回すのに要る一式
+  （`Value` `CalcError` `CalcResult` `AngleMode` `Key` `EngineState`
+  `DisplayState` `reduce` `render`）だけを置く。最上位モジュールの型
+  （`polar::Polar` など）は上げない——モジュール名が既に玄関である。
+  ネストが実装都合であるもの（`engine::` の中身）だけを引き上げる。
 
 ## 運用
 

@@ -82,7 +82,7 @@ pub fn render(state: &EngineState) -> DisplayState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::Value;
+    use crate::Value;
 
     #[test]
     fn a_polar_overflow_reports_an_error_consistently() {

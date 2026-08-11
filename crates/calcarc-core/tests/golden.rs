@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use calcarc_core::numeric::angle::AngleMode;
+use calcarc_core::AngleMode;
 use calcarc_core::polar::{Polar, from_polar};
 use calcarc_core::{Value, scientific};
 use serde::Deserialize;
