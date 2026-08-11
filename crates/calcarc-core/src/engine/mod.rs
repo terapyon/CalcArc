@@ -10,6 +10,7 @@ use crate::complex::arith::{add, div, mul, sub};
 use crate::complex::value::Value;
 use crate::error::CalcError;
 use crate::error::CalcResult;
+use crate::scientific;
 use key::Key;
 use state::{BinOp, Buffer, EngineState, OpToken};
 
@@ -133,6 +134,18 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
     Ok(())
 }
 
+/// 後置関数の遷移。入力中の値を確定してから、その値に即座に適用する。
+///
+/// 式には積まれない。`30` `sin` は打鍵した瞬間に 0.5 になる（設計書 D6）。
+fn apply_unary<F>(state: &mut EngineState, f: F) -> CalcResult<()>
+where
+    F: FnOnce(Value) -> CalcResult<Value>,
+{
+    commit_entry(state);
+    state.current = f(state.current)?;
+    Ok(())
+}
+
 /// キー 1 つ分の遷移。Err を返した場合、呼び出し側がエラー状態にする。
 fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
     match key {
@@ -166,8 +179,34 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
-        // 残りのキーは Task 9 以降で実装する。
-        _ => {}
+        Key::Sqrt => apply_unary(state, scientific::sqrt)?,
+        Key::Sqr => apply_unary(state, scientific::sqr)?,
+        Key::Neg => apply_unary(state, |v| Ok(scientific::neg(v)))?,
+        Key::Sin => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::sin(v, mode))?;
+        }
+        Key::Cos => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::cos(v, mode))?;
+        }
+        Key::Tan => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::tan(v, mode))?;
+        }
+        Key::Pi => {
+            state.buffer = None;
+            state.current = Value::real(std::f64::consts::PI);
+        }
+        Key::AngleToggle => {
+            // 保持している値は変えない。表示と以後の三角関数にだけ効く。
+            state.angle = state.angle.toggled();
+        }
+        // Task 10 で実装する。
+        Key::PolarToggle => {}
+        // AC は reduce 側で処理済みなので、ここでは何もしない。
+        // 網羅性のために腕だけ置く。
+        Key::Ac => {}
     }
     Ok(())
 }

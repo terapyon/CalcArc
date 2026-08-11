@@ -222,3 +222,54 @@ fn parentheses_carry_complex_values() {
         "-5+j10"
     );
 }
+
+#[test]
+fn functions_apply_immediately_to_the_displayed_value() {
+    // 関数は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["3", "0", "sin"]), "0.5");
+    assert_eq!(main_of(&["6", "0", "cos"]), "0.5");
+    assert_eq!(main_of(&["4", "5", "tan"]), "1");
+    assert_eq!(main_of(&["4", "sqrt"]), "2");
+    assert_eq!(main_of(&["3", "sqr"]), "9");
+}
+
+#[test]
+fn square_root_of_a_negative_gives_an_imaginary_result() {
+    // 従来機が Math ERROR を返す入力に、複素数対応の電卓は答えられる。
+    assert_eq!(main_of(&["4", "neg", "sqrt"]), "j2");
+}
+
+#[test]
+fn negation_applies_to_the_committed_value() {
+    assert_eq!(main_of(&["4", "neg"]), "-4");
+    assert_eq!(main_of(&["4", "neg", "neg"]), "4");
+}
+
+#[test]
+fn functions_compose_with_operators() {
+    assert_eq!(main_of(&["3", "add", "4", "sqrt", "eq"]), "5");
+}
+
+#[test]
+fn pi_is_a_value_not_an_entry() {
+    assert_eq!(main_of(&["pi"]), "3.141592654");
+    assert_eq!(main_of(&["pi", "sqr"]), "9.869604401");
+}
+
+#[test]
+fn the_angle_mode_toggles() {
+    use calcarc_core::AngleMode;
+    assert_eq!(run(&[]).angle, AngleMode::Deg);
+    assert_eq!(run(&["angle_toggle"]).angle, AngleMode::Rad);
+    assert_eq!(run(&["angle_toggle", "angle_toggle"]).angle, AngleMode::Deg);
+}
+
+#[test]
+fn trig_follows_the_angle_mode() {
+    assert_eq!(main_of(&["angle_toggle", "pi", "cos"]), "-1");
+}
+
+#[test]
+fn tangent_at_a_pole_is_an_error() {
+    assert_eq!(main_of(&["9", "0", "tan"]), "Math ERROR");
+}
