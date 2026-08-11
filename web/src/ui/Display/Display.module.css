@@ -1,0 +1,31 @@
+.display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  font-family: var(--display-font);
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 1.2em;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+  letter-spacing: 0.08em;
+}
+
+.main {
+  overflow-x: auto;
+  font-size: var(--display-size-main);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.main[data-error] {
+  color: var(--error-fg);
+}
