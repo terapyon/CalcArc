@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"]
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["src/wasm", "tests/e2e"]

@@ -1,0 +1,47 @@
+.key {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--key-fg);
+  font-family: inherit;
+  font-size: var(--key-font-size);
+  cursor: pointer;
+  /* 長押しの選択・コンテキストメニューを抑える。 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.key:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.key:active {
+  filter: brightness(0.92);
+}
+
+.digit {
+  background: var(--key-bg);
+  color: var(--key-fg);
+}
+
+.operator {
+  background: var(--key-accent-bg);
+  color: var(--key-accent-fg);
+  font-weight: 600;
+}
+
+.function {
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+  font-size: 1rem;
+}
+
+.danger {
+  background: var(--key-danger-bg);
+  color: var(--key-danger-fg);
+  font-weight: 600;
+}
