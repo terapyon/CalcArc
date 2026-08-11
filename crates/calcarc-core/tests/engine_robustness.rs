@@ -3,11 +3,206 @@
 //! UI に panic を露出させないという要求（base-spec §27）は、
 //! 個別のテストケースでは保証しきれないため無作為な打鍵列で検査する。
 
-use calcarc_core::engine::display::display;
 use calcarc_core::engine::key::Key;
 use calcarc_core::engine::reduce;
-use calcarc_core::engine::state::{EngineState, OpToken, STATE_SCHEMA};
+use calcarc_core::engine::state::{EngineState, STATE_SCHEMA};
 use proptest::prelude::*;
+use proptest::test_runner::TestCaseError;
+
+/// 不変条件。網羅列挙とランダム探索の両方がここだけを呼ぶ。
+///
+/// 同じ性質を 2 か所に書くと、片方だけ直されて食い違う。検査はすべて
+/// 「1 回の遷移」に対する局所的な条件として書く。局所的に成り立てば列
+/// 全体でも成り立ち、反例が出たときにどの 1 手が壊したかがすぐ分かる。
+mod invariants {
+    use calcarc_core::Value;
+    use calcarc_core::engine::display::display;
+    use calcarc_core::engine::key::Key;
+    use calcarc_core::engine::state::{EngineState, OpToken};
+
+    /// 遷移 1 回が満たすべき条件をすべて検査する。
+    pub fn check(before: &EngineState, key: Key, after: &EngineState) -> Result<(), String> {
+        renderable(after)?;
+        operand_count_matches(after)?;
+        error_is_latched(before, key, after)?;
+        real_axis_is_closed(before, key, after)?;
+        operator_press_replaces(before, key, after)?;
+        del_removes_at_most_one_thing(before, key, after)?;
+        Ok(())
+    }
+
+    /// I1: 表示は常に作れる。
+    fn renderable(after: &EngineState) -> Result<(), String> {
+        if display(after).main.is_empty() {
+            return Err("I1: display is empty".to_string());
+        }
+        Ok(())
+    }
+
+    fn count_ops(state: &EngineState) -> usize {
+        state
+            .operators
+            .iter()
+            .filter(|t| matches!(t, OpToken::Op(_)))
+            .count()
+    }
+
+    fn count_parens(state: &EngineState) -> usize {
+        state
+            .operators
+            .iter()
+            .filter(|t| matches!(t, OpToken::OpenParen))
+            .count()
+    }
+
+    /// I2: 被演算数の数 = 保留中の二項演算子の数。
+    fn operand_count_matches(after: &EngineState) -> Result<(), String> {
+        if after.error.is_some() {
+            return Ok(());
+        }
+        let ops = count_ops(after);
+        if after.operands.len() != ops {
+            return Err(format!(
+                "I2: {} operands against {} pending operators",
+                after.operands.len(),
+                ops
+            ));
+        }
+        Ok(())
+    }
+
+    /// I5: エラー中は AC 以外のどのキーでも状態が変わらない。
+    fn error_is_latched(before: &EngineState, key: Key, after: &EngineState) -> Result<(), String> {
+        if before.error.is_none() || key == Key::Ac {
+            return Ok(());
+        }
+        if after != before {
+            return Err(format!(
+                "I5: {} changed the state while an error was showing",
+                key.token()
+            ));
+        }
+        Ok(())
+    }
+
+    /// 状態が実数だけで構成されているか。
+    fn all_real(state: &EngineState) -> bool {
+        state.current.im == 0.0
+            && state.operands.iter().all(|v| v.im == 0.0)
+            && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
+    }
+
+    /// この打鍵が作用する値。入力中なら確定前のバッファの値。
+    fn acting_on(state: &EngineState) -> Value {
+        state.buffer.as_ref().map_or(state.current, |b| b.value())
+    }
+
+    /// I3 / I3b: 実軸は演算で閉じており、虚軸への出口は 2 つだけ。
+    ///
+    /// 出口 1 は `j` キーで、これは入力なので「実数のみの入力」という
+    /// 前提から外れる。出口 2 は負の実数の sqrt で、`sqrt(-4) = j2` を
+    /// 返すのは設計上の機能である（Vertical Slice 設計書 §4.1）。
+    /// この 2 つを例外として認めないと、網羅列挙が `+/−` `√` を踏んだ
+    /// 瞬間にバグでないものが落ちるテストになる。
+    fn real_axis_is_closed(
+        before: &EngineState,
+        key: Key,
+        after: &EngineState,
+    ) -> Result<(), String> {
+        if !all_real(before) || after.error.is_some() {
+            return Ok(());
+        }
+        if key == Key::J {
+            return Ok(());
+        }
+        if key == Key::Sqrt && acting_on(before).re < 0.0 {
+            // I3b: 純虚数でなければならない。極形式を経由する実装だと
+            // 実部に 1.2e-16 が残り、j2 が 1.224646799e-16+j2 になる。
+            return if after.current.re == 0.0 {
+                Ok(())
+            } else {
+                Err(format!(
+                    "I3b: sqrt of a negative real left re={}",
+                    after.current.re
+                ))
+            };
+        }
+        if !all_real(after) {
+            return Err(format!(
+                "I3: a real-only state produced im={} after {}",
+                after.current.im,
+                key.token()
+            ));
+        }
+        Ok(())
+    }
+
+    fn is_binop(key: Key) -> bool {
+        matches!(key, Key::Add | Key::Sub | Key::Mul | Key::Div)
+    }
+
+    /// I4: 二項演算子を続けて押したら、最後の 1 つだけが残る。
+    ///
+    /// 局所的に言い換える。直前が二項演算子だったなら、次の二項演算子は
+    /// 積むのではなく差し替えでなければならず、被演算数も演算子も増えては
+    /// ならない。累算すると 3 + + 4 = が 10 になる。
+    ///
+    /// 同種・異種を問わない。また表示だけを変えるキーや、何も消さない DEL を
+    /// 挟んでも operator_pending は落ちないので、この検査はその形も覆う。
+    /// 実際に起きたバグは `3 + × 4 =` と `3 + DEL + 4 =` であって、
+    /// 同種の連打ではなかった。
+    fn operator_press_replaces(
+        before: &EngineState,
+        key: Key,
+        after: &EngineState,
+    ) -> Result<(), String> {
+        if !before.operator_pending || !is_binop(key) || after.error.is_some() {
+            return Ok(());
+        }
+        if after.operands.len() != before.operands.len()
+            || after.operators.len() != before.operators.len()
+        {
+            return Err(format!(
+                "I4: {} after a pending operator grew the stacks \
+                 ({} -> {} operands, {} -> {} operators)",
+                key.token(),
+                before.operands.len(),
+                after.operands.len(),
+                before.operators.len(),
+                after.operators.len()
+            ));
+        }
+        Ok(())
+    }
+
+    /// I7: DEL は 3 段のうち 1 つだけを消す。演算子と被演算数は動かさない。
+    fn del_removes_at_most_one_thing(
+        before: &EngineState,
+        key: Key,
+        after: &EngineState,
+    ) -> Result<(), String> {
+        if key != Key::Del || before.error.is_some() {
+            return Ok(());
+        }
+        if after.operands != before.operands {
+            return Err("I7: DEL moved the operand stack".to_string());
+        }
+        if count_ops(after) != count_ops(before) {
+            return Err("I7: DEL removed an operator".to_string());
+        }
+        let (open_before, open_after) = (count_parens(before), count_parens(after));
+        if open_after > open_before {
+            return Err("I7: DEL added a parenthesis".to_string());
+        }
+        if open_before - open_after > 1 {
+            return Err(format!(
+                "I7: DEL removed {} parentheses at once",
+                open_before - open_after
+            ));
+        }
+        Ok(())
+    }
+}
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(500))]
@@ -18,26 +213,13 @@ proptest! {
         let mut state = EngineState::initial();
         for i in indices {
             let key = Key::ALL[i];
-            let (next, shown) = reduce(&state, key);
-            prop_assert!(!shown.main.is_empty());
+            let (next, _) = reduce(&state, key);
             prop_assert_eq!(next.schema, STATE_SCHEMA);
-
-            // 構造の健全性も見る。panic の有無だけを見ていると、
-            // スタックがずれたまま Ok を返す退行を見逃す。
-            // エラーが立っていない限り、被演算数の数は保留中の
-            // 二項演算子の数と一致していなければならない。
-            if next.error.is_none() {
-                let pending_ops = next
-                    .operators
-                    .iter()
-                    .filter(|t| matches!(t, OpToken::Op(_)))
-                    .count();
-                prop_assert_eq!(next.operands.len(), pending_ops);
+            if let Err(why) = invariants::check(&state, key, &next) {
+                return Err(TestCaseError::fail(why));
             }
-
             state = next;
         }
-        prop_assert!(!display(&state).main.is_empty());
     }
 
     /// AC はどんな状態からでも初期表示に戻す。
