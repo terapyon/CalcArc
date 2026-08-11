@@ -646,6 +646,19 @@ mod tests {
     fn zero_has_zero_magnitude() {
         let p = to_polar(Value::ZERO);
         close(p.r, 0.0);
+        // atan2(0, 0) は 0 を返す。NaN にならないことを固定しておく。
+        close(p.theta_rad, 0.0);
+    }
+
+    #[test]
+    fn magnitude_survives_inputs_that_would_overflow_naive_squaring() {
+        // (re² + im²).sqrt() ならここで中間の二乗が inf になり r も inf になる。
+        // hypot は溢れない。これが hypot を選んだ理由そのもの。
+        let p = to_polar(Value::new(3e200, 4e200));
+        assert!(p.r.is_finite(), "magnitude overflowed: {}", p.r);
+        // 5e200 との比で見る。絶対誤差はこの桁では意味を持たない。
+        close(p.r / 5e200, 1.0);
+        close(p.theta_rad.to_degrees(), 53.13010235415598);
     }
 
     #[test]
@@ -737,8 +750,11 @@ pub fn from_polar(p: Polar) -> Value {
 ```rust
 /// rect → polar → rect の往復で許す相対誤差。
 ///
-/// 三角関数と平方根を経由するぶん、TEST_EPSILON より緩い。
-pub const ROUNDTRIP_EPSILON: f64 = 1e-9;
+/// 三角関数と平方根を経由するぶん TEST_EPSILON より緩いが、
+/// 実際の往復誤差は 1 ULP 程度（相対 2e-16）なので 4 桁の余裕がある。
+/// これ以上緩めると、f32 相当（相対 1e-7）まで精度が落ちても
+/// テストが通ってしまい、往復テストが精度を見張らなくなる。
+pub const ROUNDTRIP_EPSILON: f64 = 1e-12;
 ```
 
 - [ ] **Step 4: テストが通ることを確認する**
