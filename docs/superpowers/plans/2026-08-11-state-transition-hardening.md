@@ -234,12 +234,19 @@ mod invariants {
 
     /// 遷移 1 回が満たすべき条件をすべて検査する。
     pub fn check(before: &EngineState, key: Key, after: &EngineState) -> Result<(), String> {
-        renderable(after)?;
-        operand_count_matches(after)?;
+        check_state(after)?;
         error_is_latched(before, key, after)?;
         real_axis_is_closed(before, key, after)?;
         operator_press_replaces(before, key, after)?;
         del_removes_at_most_one_thing(before, key, after)?;
+        Ok(())
+    }
+
+    /// 状態だけで判定できる条件。打鍵が 1 度も起きない列（長さ 0）でも
+    /// 初期状態を検査できるように、遷移とは別に呼べる形にしておく。
+    pub fn check_state(state: &EngineState) -> Result<(), String> {
+        renderable(state)?;
+        operand_count_matches(state)?;
         Ok(())
     }
 
@@ -329,7 +336,16 @@ mod invariants {
             return Ok(());
         }
         if key == Key::J {
-            return Ok(());
+            // j は入力を始めるだけで、確定済みの値には触れない。免除を
+            // 「何をしても素通し」にしないため、そこだけ確かめる。
+            return if after.current == before.current {
+                Ok(())
+            } else {
+                Err(format!(
+                    "I3: j changed the committed value ({:?} -> {:?})",
+                    before.current, after.current
+                ))
+            };
         }
         if key == Key::Sqrt && acting_on(before).re < 0.0 {
             // I3b: 純虚数でなければならない。極形式を経由する実装だと
@@ -375,15 +391,31 @@ mod invariants {
         if !before.operator_pending || !is_binop(key) || after.error.is_some() {
             return Ok(());
         }
-        if after.operands.len() != before.operands.len()
-            || after.operators.len() != before.operators.len()
-        {
+        // **長さで比べてはならない。** 優先順位が同じか降順のときは、
+        // 誤って積んだ被演算数が直後の畳み込みで戻されるため長さが変わらない。
+        // 3 + + 4 = が 10 になるバグはまさにこの経路で、長さ比較では
+        // 素通りする（operands も operators も 1 -> 1 のまま）。
+        // 積まれたかどうかは内容にしか現れない。
+        if after.operands != before.operands {
             return Err(format!(
-                "I4: {} after a pending operator grew the stacks \
-                 ({} -> {} operands, {} -> {} operators)",
+                "I4: {} after a pending operator changed the operands ({:?} -> {:?})",
                 key.token(),
-                before.operands.len(),
-                after.operands.len(),
+                before.operands,
+                after.operands
+            ));
+        }
+        if after.current != before.current {
+            return Err(format!(
+                "I4: {} after a pending operator changed the value ({:?} -> {:?})",
+                key.token(),
+                before.current,
+                after.current
+            ));
+        }
+        if after.operators.len() != before.operators.len() {
+            return Err(format!(
+                "I4: {} after a pending operator grew the operator stack ({} -> {})",
+                key.token(),
                 before.operators.len(),
                 after.operators.len()
             ));
@@ -429,6 +461,10 @@ mod invariants {
     #[test]
     fn never_panics(indices in prop::collection::vec(0usize..Key::ALL.len(), 0..40)) {
         let mut state = EngineState::initial();
+        // 長さ 0 の列ではループが 1 度も回らない。初期状態だけは見ておく。
+        if let Err(why) = invariants::check_state(&state) {
+            return Err(TestCaseError::fail(why));
+        }
         for i in indices {
             let key = Key::ALL[i];
             let (next, _) = reduce(&state, key);
