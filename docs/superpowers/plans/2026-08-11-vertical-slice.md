@@ -2074,10 +2074,20 @@ fn builds_a_complex_number() {
 }
 
 #[test]
-fn multiplies_complex_numbers() {
+fn multiplies_a_complex_number_by_a_real() {
+    // = で 3+j4 が確定したあと、その値がそのまま次の演算に入る。
+    assert_eq!(main_of(&["3", "add", "j", "4", "eq", "mul", "2", "eq"]), "6+j8");
+}
+
+#[test]
+fn an_operator_folds_the_pending_product_before_the_next_term_is_typed() {
+    // 3+j4 = × 1 + j2 = は (3+j4)×(1+j2) にならない。
+    // + を押した時点で優先順位の高い × が畳まれ、(3+j4)×1 が確定してから
+    // j2 が足されるので 3+j6 になる。CASIO の代数方式として正しい挙動で、
+    // 2 つの複素数の積を書くには括弧が要る（Task 8 で扱う）。
     assert_eq!(
         main_of(&["3", "add", "j", "4", "eq", "mul", "1", "add", "j", "2", "eq"]),
-        "-5+j10"
+        "3+j6"
     );
 }
 
