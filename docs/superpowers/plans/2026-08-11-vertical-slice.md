@@ -32,6 +32,8 @@
 - **ライセンスは Apache-2.0。**
 - **Vite の `base` は `/`。** Cloudflare Pages のルート配信のため。
 - **タッチターゲットは最小 44px。** `--touch-target-min` として定義する。
+- **コミット前に `cargo fmt` を実行する。** この計画中の Rust コードブロックは rustfmt で整形されていないため、そのまま転記すると `cargo fmt --check` が落ちる。各タスクは検証の最後に `cargo fmt` を走らせ、整形結果を同じコミットに含めること。`--check` だけでは直らない。
+- **`Cargo.lock` をリポジトリに追跡させる。** ワークスペースの再現性と CI のため。生成物ではあるが `.gitignore` に入れない。
 - **git commit の末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` を付ける。**
 - **`git push` と PR 作成は行わない。** ブランチ作成とコミットのみ。
 
@@ -930,6 +932,22 @@ mod tests {
     }
 
     #[test]
+    fn keeps_ten_significant_digits_below_one() {
+        // 小数は先頭の 0 を有効数字に数えない。1 未満でも 10 桁出す。
+        assert_eq!(format_real(1.0 / 3.0), "0.3333333333");
+        assert_eq!(format_real(0.0123456789012), "0.0123456789");
+        assert_eq!(format_real(0.00123456789012), "0.00123456789");
+    }
+
+    #[test]
+    fn rounding_that_carries_into_a_new_digit_switches_notation() {
+        // 丸めると 1e10 に繰り上がる。表記の判断は丸めた後の値で行うので、
+        // 11 桁の "10000000000" ではなく "1e10" になる。
+        assert_eq!(format_real(9999999999.6), "1e10");
+        assert_eq!(format_real(9999999999.4), "9999999999");
+    }
+
+    #[test]
     fn formats_rectangular_form() {
         assert_eq!(format_rect(Value::new(3.0, 4.0)), "3+j4");
         assert_eq!(format_rect(Value::new(3.0, -4.0)), "3-j4");
@@ -979,34 +997,40 @@ use crate::numeric::angle::AngleMode;
 /// 表示する有効数字の桁数。
 pub const DISPLAY_DIGITS: usize = 10;
 
-/// この絶対値以上で指数表記に切り替える。
-const EXP_HIGH: f64 = 1e10;
-/// この絶対値未満（かつ 0 でない）で指数表記に切り替える。
-const EXP_LOW: f64 = 1e-9;
+/// この 10 の冪以上で指数表記にする。`|x| >= 1e10` に対応する。
+const EXP_HIGH_EXPONENT: i32 = 10;
+/// この 10 の冪未満で指数表記にする。`|x| < 1e-9` に対応する。
+const EXP_LOW_EXPONENT: i32 = -9;
 
 /// 実数 1 つを表示文字列にする。
 ///
 /// 丸めは Rust の書式化に従い round-half-to-even となる。
 /// ここで丸めた結果を計算に戻さないことは engine 側で保証する（base-spec §26）。
+///
+/// 桁の数え方に log10 を使わない。`log10` は 10 の冪の近くで 1 桁ずれることがあり、
+/// また丸めによる繰り上がり（`9999999999.6` → `1e10`）を先読みできない。
+/// 代わりに Rust の指数表記書式に有効数字 10 桁で 1 度整形させ、そこから
+/// 指数を読む。この指数は丸めた後の値のものなので、表記の選択も桁数の計算も
+/// これ 1 つで決まる。
 pub fn format_real(x: f64) -> String {
     if x == 0.0 {
         // -0.0 も "0" として表示する。
         return "0".to_string();
     }
-    let a = x.abs();
-    if a >= EXP_HIGH || a < EXP_LOW {
-        let s = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
-        return match s.split_once('e') {
-            Some((mantissa, exp)) => format!("{}e{}", trim_zeros(mantissa), exp),
-            None => s,
-        };
-    }
-    let int_digits = if a >= 1.0 {
-        a.log10().floor() as i32 + 1
-    } else {
-        1
+    let scientific = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
+    let (mantissa, exponent_text) = match scientific.split_once('e') {
+        Some(parts) => parts,
+        // Rust の LowerExp は必ず 'e' を含むため、ここには来ない。
+        None => return scientific,
     };
-    let decimals = (DISPLAY_DIGITS as i32 - int_digits).max(0) as usize;
+    let exponent: i32 = exponent_text.parse().unwrap_or(0);
+
+    if !(EXP_LOW_EXPONENT..EXP_HIGH_EXPONENT).contains(&exponent) {
+        return format!("{}e{}", trim_zeros(mantissa), exponent_text);
+    }
+    // 小数点以下の桁数 = 有効数字 10 桁 - 整数部の桁数。
+    // 指数が -1 なら 0.ddd… なので 10 桁ぶん小数が要る。
+    let decimals = (DISPLAY_DIGITS as i32 - 1 - exponent).max(0) as usize;
     trim_zeros(&format!("{:.*}", decimals, x))
 }
 
