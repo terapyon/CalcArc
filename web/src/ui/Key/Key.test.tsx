@@ -6,8 +6,12 @@ import { Key } from "./Key";
 describe("Key", () => {
   it("renders a real button element", () => {
     render(<Key token="7" label="7" onPress={() => {}} />);
-    // div にクリックハンドラを付けない(base-spec §43)。
-    expect(screen.getByRole("button", { name: "7" })).toBeInTheDocument();
+    const key = screen.getByRole("button", { name: "7" });
+    // getByRole は <div role="button"> にも当たるので、それだけでは
+    // 「div にクリックハンドラを付けない」(base-spec §43) を守れない。
+    // タグそのものを確かめる。
+    expect(key.tagName).toBe("BUTTON");
+    expect(key).toHaveAttribute("type", "button");
   });
 
   it("uses the accessible label when the visible label is a symbol", () => {

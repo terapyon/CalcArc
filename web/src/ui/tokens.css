@@ -34,6 +34,12 @@
   --display-size-main: clamp(1.75rem, 8vw, 2.5rem);
   --display-size-status: 0.75rem;
   --key-font-size: 1.125rem;
+  /* 関数キーは "sin" のように文字数が多いので少し小さくする。 */
+  --key-font-size-function: 1rem;
+  --key-font-weight-emphasis: 600;
+  /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
+  --key-border: none;
+  --key-danger-border: none;
 
   /* フォーカス(base-spec §43) */
   --focus-ring: 3px solid #0b57d0;
@@ -59,7 +65,16 @@
   }
 }
 
-/* ハイコントラスト(base-spec §43) */
+/* ハイコントラスト(base-spec §43)
+ *
+ * 背景をすべて白に潰すとキーの種類が区別できなくなる。とくに AC が
+ * 演算子と同じ見た目になるのは、押し間違いが起きて困る箇所で手がかりを
+ * 失うということなので避ける。色相ではなく明暗の反転と枠線で区別する。
+ *
+ *   数字・関数キー  白地に黒
+ *   演算子キー      黒地に白（反転）
+ *   AC / DEL        白地に黒＋太い枠線
+ */
 @media (prefers-contrast: more) {
   :root {
     --surface-bg: #ffffff;
@@ -68,14 +83,16 @@
     --display-status-fg: #000000;
     --key-bg: #ffffff;
     --key-fg: #000000;
-    --key-accent-bg: #ffffff;
-    --key-accent-fg: #000000;
+    --key-accent-bg: #000000;
+    --key-accent-fg: #ffffff;
     --key-function-bg: #ffffff;
     --key-function-fg: #000000;
     --key-danger-bg: #ffffff;
     --key-danger-fg: #000000;
     --error-fg: #000000;
     --focus-ring: 4px solid #000000;
+    --key-border: 2px solid currentColor;
+    --key-danger-border: 4px double currentColor;
   }
 }
 
