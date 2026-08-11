@@ -1,0 +1,37 @@
+.nav {
+  display: flex;
+  gap: var(--key-gap);
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+  font-family: inherit;
+  font-size: var(--key-font-size);
+  text-decoration: none;
+  /* 長押しの選択・コンテキストメニューを抑える(Key.module.css と同じ)。 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.tab[aria-current="page"] {
+  background: var(--key-accent-bg);
+  color: var(--key-accent-fg);
+  font-weight: var(--key-font-weight-emphasis);
+}

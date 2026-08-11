@@ -74,3 +74,55 @@ fn errors_are_returned_not_thrown() {
         Some("DivisionByZero")
     );
 }
+
+#[wasm_bindgen_test]
+fn data_scale_crosses_the_boundary() {
+    // 基準例。値はすべて文字列で往復する。
+    let result = calcarc_wasm::data_scale("100000000", "768", "float32");
+    let bytes = get(&result, "bytes");
+    assert_eq!(bytes.as_string().as_deref(), Some("307200000000"));
+    let decimal = get(&result, "decimal");
+    assert_eq!(decimal.as_string().as_deref(), Some("307.2 GB"));
+    // group_digits の消費経路。桁区切りが往復することを確かめる。
+    let bytes_grouped = get(&result, "bytesGrouped");
+    assert_eq!(
+        bytes_grouped.as_string().as_deref(),
+        Some("307,200,000,000")
+    );
+}
+
+#[wasm_bindgen_test]
+fn data_scale_survives_values_beyond_js_numbers() {
+    // 2^127 - 1。JS の number では表現できない桁が文字列で往復する。
+    let result = calcarc_wasm::data_scale("170141183460469231731687303715884105727", "1", "uint8");
+    let bytes = get(&result, "bytes");
+    assert_eq!(
+        bytes.as_string().as_deref(),
+        Some("170141183460469231731687303715884105727")
+    );
+}
+
+#[wasm_bindgen_test]
+fn data_scale_errors_are_returned_not_thrown() {
+    let result = calcarc_wasm::data_scale("170141183460469231731687303715884105728", "2", "uint8");
+    let error = get(&result, "error");
+    assert_eq!(error.as_string().as_deref(), Some("Overflow"));
+    let bytes = get(&result, "bytes");
+    assert!(bytes.is_null(), "error results carry null, not undefined");
+}
+
+#[wasm_bindgen_test]
+fn data_scale_sub_unit_success_carries_null_lines() {
+    // 999 bytes: 成功だが最小単位未満なので単位行は無い。
+    // undefined ではなく null で渡ること(TypeScript 側は `X | null` を宣言
+    // しており、undefined だと null チェックがすり抜ける)。
+    let result = calcarc_wasm::data_scale("999", "1", "uint8");
+    let bytes = get(&result, "bytes");
+    assert_eq!(bytes.as_string().as_deref(), Some("999"));
+    let decimal = get(&result, "decimal");
+    assert!(decimal.is_null(), "decimal must be null, not undefined");
+    let binary = get(&result, "binary");
+    assert!(binary.is_null(), "binary must be null, not undefined");
+    let error = get(&result, "error");
+    assert!(error.is_null());
+}
