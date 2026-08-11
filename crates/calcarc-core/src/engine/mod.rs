@@ -6,7 +6,6 @@ pub use display::{DisplayState, render};
 pub use key::Key;
 pub use state::EngineState;
 
-use crate::complex::arith::{add, div, mul, sub};
 use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
 use state::{Backspace, BinOp, Buffer, OpToken};
@@ -79,10 +78,10 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 
 fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
     match op {
-        BinOp::Add => add(lhs, rhs),
-        BinOp::Sub => sub(lhs, rhs),
-        BinOp::Mul => mul(lhs, rhs),
-        BinOp::Div => div(lhs, rhs),
+        BinOp::Add => lhs.checked_add(rhs),
+        BinOp::Sub => lhs.checked_sub(rhs),
+        BinOp::Mul => lhs.checked_mul(rhs),
+        BinOp::Div => lhs.checked_div(rhs),
     }
 }
 

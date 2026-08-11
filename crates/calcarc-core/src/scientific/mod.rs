@@ -1,4 +1,3 @@
-use crate::complex::arith::{div, finite, mul};
 use crate::complex::polar::to_polar;
 use crate::{AngleMode, CalcError, CalcResult, Value};
 
@@ -10,19 +9,19 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 pub fn sqrt(v: Value) -> CalcResult<Value> {
     if v.is_real() {
         return if v.re >= 0.0 {
-            finite(Value::real(v.re.sqrt()))
+            Value::real(v.re.sqrt()).finalize()
         } else {
-            finite(Value::imag((-v.re).sqrt()))
+            Value::imag((-v.re).sqrt()).finalize()
         };
     }
     let p = to_polar(v);
     let r = p.r.sqrt();
     let half = p.theta_rad / 2.0;
-    finite(Value::new(r * half.cos(), r * half.sin()))
+    Value::new(r * half.cos(), r * half.sin()).finalize()
 }
 
 pub fn sqr(v: Value) -> CalcResult<Value> {
-    mul(v, v)
+    v.checked_mul(v)
 }
 
 pub fn neg(v: Value) -> Value {
@@ -49,18 +48,12 @@ fn to_rad(v: Value, mode: AngleMode) -> Value {
 
 pub fn sin(v: Value, mode: AngleMode) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    finite(Value::new(
-        z.re.sin() * z.im.cosh(),
-        z.re.cos() * z.im.sinh(),
-    ))
+    Value::new(z.re.sin() * z.im.cosh(), z.re.cos() * z.im.sinh()).finalize()
 }
 
 pub fn cos(v: Value, mode: AngleMode) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    finite(Value::new(
-        z.re.cos() * z.im.cosh(),
-        -z.re.sin() * z.im.sinh(),
-    ))
+    Value::new(z.re.cos() * z.im.cosh(), -z.re.sin() * z.im.sinh()).finalize()
 }
 
 /// tan は sin / cos として求める。
@@ -72,7 +65,7 @@ pub fn tan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     if is_tan_pole(v, mode) {
         return Err(CalcError::TrigPole);
     }
-    div(sin(v, mode)?, cos(v, mode)?)
+    sin(v, mode)?.checked_div(cos(v, mode)?)
 }
 
 fn is_tan_pole(v: Value, mode: AngleMode) -> bool {
