@@ -5245,7 +5245,7 @@ test("a pressed key reaches the calculation core", async ({ page }) => {
 - [ ] **Step 7: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（21 テスト。Task 17 までの 12 件に、本タスクの Keypad 4 件、Display の status 2 件、App の失敗表示 1 件、Step 0 の追加分 2 件が加わる）
+Expected: PASS（19 テスト。Task 17 までの 12 件に、Keypad 4 件、Step 0 の Display 2 件、App の失敗表示 1 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint && pnpm e2e`
 Expected: すべて成功（E2E 3 テスト）
