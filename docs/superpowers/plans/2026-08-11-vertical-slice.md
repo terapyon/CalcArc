@@ -4198,11 +4198,22 @@ let ready: Promise<Calc> | null = null;
  * WASM を読み込んで Calc を返す。複数回呼んでも初期化は 1 度だけ。
  */
 export function initCalc(): Promise<Calc> {
-  ready ??= init().then(() => ({
-    initial: () => asStep(initial_state()),
-    dispatch: (state: EngineState, key: KeyToken) => asStep(reduce(state, key)),
-    version: () => core_version(),
-  }));
+  ready ??= init()
+    .then(
+      (): Calc => ({
+        initial: () => asStep(initial_state()),
+        dispatch: (state: EngineState, key: KeyToken) => asStep(reduce(state, key)),
+        version: () => core_version(),
+      }),
+    )
+    .catch((cause: unknown) => {
+      // 失敗した Promise を握ったままにしない。握ると以後の呼び出しが
+      // すべて同じ失敗を返し、ページを再読み込みする以外に回復手段が
+      // なくなる。キャッシュを捨ててから投げ直し、次の呼び出しで
+      // やり直せるようにする。
+      ready = null;
+      throw cause;
+    });
   return ready;
 }
 
@@ -5043,14 +5054,22 @@ import { Keypad } from "./ui/Keypad/Keypad";
 export function App() {
   const [calc, setCalc] = useState<Calc | null>(null);
   const [step, setStep] = useState<Step | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    initCalc().then((loaded) => {
-      if (cancelled) return;
-      setCalc(loaded);
-      setStep(loaded.initial());
-    });
+    initCalc().then(
+      (loaded) => {
+        if (cancelled) return;
+        setCalc(loaded);
+        setStep(loaded.initial());
+      },
+      () => {
+        // WASM が読めなければ電卓は何もできない。読み込み中の表示のまま
+        // 固まらせず、起きたことを伝える。
+        if (!cancelled) setFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -5063,6 +5082,14 @@ export function App() {
     },
     [calc],
   );
+
+  if (failed) {
+    return (
+      <p role="alert" data-testid="load-error">
+        計算エンジンを読み込めませんでした。ページを再読み込みしてください。
+      </p>
+    );
+  }
 
   if (!calc || !step) {
     return <p>Loading…</p>;
