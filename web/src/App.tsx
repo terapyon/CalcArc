@@ -3,6 +3,7 @@ import styles from "./App.module.css";
 import { type Calc, initCalc, type KeyToken, type Step } from "./calc";
 import { Display } from "./ui/Display/Display";
 import { Keypad } from "./ui/Keypad/Keypad";
+import { useKeyboard } from "./ui/useKeyboard";
 
 export function App() {
   const [calc, setCalc] = useState<Calc | null>(null);
@@ -37,6 +38,8 @@ export function App() {
     },
     [calc],
   );
+
+  useKeyboard(press);
 
   if (failed) {
     return (
