@@ -6,9 +6,12 @@ pub mod state;
 // 呼び出し側の import が曖昧になるため、`engine::display::display` で使う。
 pub use display::DisplayState;
 
+use crate::complex::arith::{add, div, mul, sub};
+use crate::complex::value::Value;
+use crate::error::CalcError;
 use crate::error::CalcResult;
 use key::Key;
-use state::{Buffer, EngineState};
+use state::{BinOp, Buffer, EngineState, OpToken};
 
 /// 電卓の唯一の遷移関数。
 ///
@@ -32,6 +35,73 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 
     let shown = display::display(&next);
     (next, shown)
+}
+
+fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
+    match op {
+        BinOp::Add => add(lhs, rhs),
+        BinOp::Sub => sub(lhs, rhs),
+        BinOp::Mul => mul(lhs, rhs),
+        BinOp::Div => div(lhs, rhs),
+    }
+}
+
+/// 入力中のバッファを確定して `current` に移す。
+fn commit_entry(state: &mut EngineState) {
+    if let Some(buffer) = state.buffer.take() {
+        state.current = buffer.value();
+    }
+}
+
+/// 演算子スタックの先頭 1 つを適用する。
+fn reduce_top(state: &mut EngineState) -> CalcResult<()> {
+    let op = match state.operators.pop() {
+        Some(OpToken::Op(op)) => op,
+        _ => return Err(CalcError::SyntaxError),
+    };
+    let rhs = state.operands.pop().ok_or(CalcError::SyntaxError)?;
+    let lhs = state.operands.pop().ok_or(CalcError::SyntaxError)?;
+    state.operands.push(apply_binop(op, lhs, rhs)?);
+    Ok(())
+}
+
+/// 二項演算子が押されたときの遷移。
+///
+/// 同じか高い優先順位の演算子が保留されていれば先に畳む。これにより
+/// `2 + 3 +` の時点で 5 が表示され、`2 + 3 ×` では畳まれない。
+fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
+    commit_entry(state);
+    state.operands.push(state.current);
+    // `state.operators.last()` の借用を while の条件式で終わらせてから
+    // `reduce_top(&mut state)` を呼ぶ。matches! の中に閉じ込めるのがその手段。
+    while matches!(
+        state.operators.last(),
+        Some(OpToken::Op(top)) if top.precedence() >= op.precedence()
+    ) {
+        reduce_top(state)?;
+    }
+    state.operators.push(OpToken::Op(op));
+    state.current = *state.operands.last().ok_or(CalcError::SyntaxError)?;
+    Ok(())
+}
+
+/// `=` が押されたときの遷移。保留中のものをすべて畳む。
+fn finish(state: &mut EngineState) -> CalcResult<()> {
+    commit_entry(state);
+    state.operands.push(state.current);
+    // OpToken は Copy なので copied() で借用を切ってから分岐する。
+    while let Some(top) = state.operators.last().copied() {
+        match top {
+            OpToken::Op(_) => reduce_top(state)?,
+            // 閉じ忘れた括弧は自動的に閉じる。
+            OpToken::OpenParen => {
+                state.operators.pop();
+            }
+        }
+    }
+    state.current = state.operands.pop().ok_or(CalcError::SyntaxError)?;
+    state.operands.clear();
+    Ok(())
 }
 
 /// キー 1 つ分の遷移。Err を返した場合、呼び出し側がエラー状態にする。
@@ -60,7 +130,12 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
                 state.buffer = None;
             }
         }
-        // 残りのキーは Task 7 以降で実装する。
+        Key::Add => push_binop(state, BinOp::Add)?,
+        Key::Sub => push_binop(state, BinOp::Sub)?,
+        Key::Mul => push_binop(state, BinOp::Mul)?,
+        Key::Div => push_binop(state, BinOp::Div)?,
+        Key::Eq => finish(state)?,
+        // 残りのキーは Task 8 以降で実装する。
         _ => {}
     }
     Ok(())
