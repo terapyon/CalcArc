@@ -4434,6 +4434,12 @@ Expected: 成功
   --display-size-main: clamp(1.75rem, 8vw, 2.5rem);
   --display-size-status: 0.75rem;
   --key-font-size: 1.125rem;
+  /* 関数キーは "sin" のように文字数が多いので少し小さくする。 */
+  --key-font-size-function: 1rem;
+  --key-font-weight-emphasis: 600;
+  /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
+  --key-border: none;
+  --key-danger-border: none;
 
   /* フォーカス(base-spec §43) */
   --focus-ring: 3px solid #0b57d0;
@@ -4459,7 +4465,16 @@ Expected: 成功
   }
 }
 
-/* ハイコントラスト(base-spec §43) */
+/* ハイコントラスト(base-spec §43)
+ *
+ * 背景をすべて白に潰すとキーの種類が区別できなくなる。とくに AC が
+ * 演算子と同じ見た目になるのは、押し間違いが起きて困る箇所で手がかりを
+ * 失うということなので避ける。色相ではなく明暗の反転と枠線で区別する。
+ *
+ *   数字・関数キー  白地に黒
+ *   演算子キー      黒地に白（反転）
+ *   AC / DEL        白地に黒＋太い枠線
+ */
 @media (prefers-contrast: more) {
   :root {
     --surface-bg: #ffffff;
@@ -4468,14 +4483,16 @@ Expected: 成功
     --display-status-fg: #000000;
     --key-bg: #ffffff;
     --key-fg: #000000;
-    --key-accent-bg: #ffffff;
-    --key-accent-fg: #000000;
+    --key-accent-bg: #000000;
+    --key-accent-fg: #ffffff;
     --key-function-bg: #ffffff;
     --key-function-fg: #000000;
     --key-danger-bg: #ffffff;
     --key-danger-fg: #000000;
     --error-fg: #000000;
     --focus-ring: 4px solid #000000;
+    --key-border: 2px solid currentColor;
+    --key-danger-border: 4px double currentColor;
   }
 }
 
@@ -4508,8 +4525,12 @@ import { Key } from "./Key";
 describe("Key", () => {
   it("renders a real button element", () => {
     render(<Key token="7" label="7" onPress={() => {}} />);
-    // div にクリックハンドラを付けない(base-spec §43)。
-    expect(screen.getByRole("button", { name: "7" })).toBeInTheDocument();
+    const key = screen.getByRole("button", { name: "7" });
+    // getByRole は <div role="button"> にも当たるので、それだけでは
+    // 「div にクリックハンドラを付けない」(base-spec §43) を守れない。
+    // タグそのものを確かめる。
+    expect(key.tagName).toBe("BUTTON");
+    expect(key).toHaveAttribute("type", "button");
   });
 
   it("uses the accessible label when the visible label is a symbol", () => {
@@ -4545,7 +4566,8 @@ Expected: FAIL。`Failed to resolve import "./Key"`。
   min-width: var(--touch-target-min);
   min-height: var(--touch-target-min);
   padding: 0;
-  border: none;
+  /* 通常テーマでは none。高コントラストでのみ枠線が出る。 */
+  border: var(--key-border);
   border-radius: var(--radius);
   background: var(--key-bg);
   color: var(--key-fg);
@@ -4574,19 +4596,21 @@ Expected: FAIL。`Failed to resolve import "./Key"`。
 .operator {
   background: var(--key-accent-bg);
   color: var(--key-accent-fg);
-  font-weight: 600;
+  font-weight: var(--key-font-weight-emphasis);
 }
 
 .function {
   background: var(--key-function-bg);
   color: var(--key-function-fg);
-  font-size: 1rem;
+  font-size: var(--key-font-size-function);
 }
 
 .danger {
   background: var(--key-danger-bg);
   color: var(--key-danger-fg);
-  font-weight: 600;
+  font-weight: var(--key-font-weight-emphasis);
+  /* 高コントラストでのみ太い枠線が出て、演算子キーと区別できる。 */
+  border: var(--key-danger-border);
 }
 ```
 
