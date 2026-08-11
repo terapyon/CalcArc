@@ -5287,7 +5287,7 @@ EOF
 `web/src/ui/useKeyboard.test.tsx`:
 
 ```tsx
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { KeyToken } from "../calc";
@@ -5347,6 +5347,40 @@ describe("useKeyboard", () => {
     render(<Harness onPress={onPress} />);
     await userEvent.keyboard("{Control>}3{/Control}");
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("lets a focused button handle its own Enter", async () => {
+    // Tab で ▸∠ に移動して Enter を押した人に = が実行されると、
+    // キーボードだけでは極形式に切り替えられない。
+    const onPress = vi.fn();
+    render(
+      <>
+        <button type="button" data-testid="other">
+          other
+        </button>
+        <Harness onPress={onPress} />
+      </>,
+    );
+    screen.getByTestId("other").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("still accepts digits while a button holds focus", async () => {
+    // マウスでキーを押した直後はそのボタンにフォーカスが残る。
+    // そこから数字を打てなくなると操作が途切れるので、譲るのは Enter だけ。
+    const onPress = vi.fn();
+    render(
+      <>
+        <button type="button" data-testid="other">
+          other
+        </button>
+        <Harness onPress={onPress} />
+      </>,
+    );
+    screen.getByTestId("other").focus();
+    await userEvent.keyboard("3");
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("3");
   });
 
   it("stops listening once unmounted", async () => {
@@ -5414,6 +5448,21 @@ export function useKeyboard(onPress: (token: KeyToken) => void): void {
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // ボタンにフォーカスがある状態の Enter は、そのボタン自身の起動に譲る。
+      // window で捕まえて preventDefault すると、Tab で ▸∠ に移動して
+      // Enter を押した人に = が実行されてしまい、キーボードだけでは
+      // 極形式に切り替えられなくなる（base-spec §43 の Focus handling）。
+      //
+      // Enter に限定するのが要点。「ボタンにフォーカスがあれば全部無視」に
+      // すると、マウスでキーを押した直後（フォーカスがそのボタンに残る）に
+      // 数字が打てなくなり、操作が途切れる。
+      if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLElement &&
+        event.target.closest("button")
+      ) {
+        return;
+      }
       const token = KEYBOARD_MAP[event.key];
       if (!token) {
         return;
@@ -5448,7 +5497,7 @@ import { useKeyboard } from "./ui/useKeyboard";
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（27 テスト。Task 18 までの 19 件に useKeyboard の 8 件が加わる）
+Expected: PASS（29 テスト。Task 18 までの 19 件に useKeyboard の 10 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint`
 Expected: 出力なし
