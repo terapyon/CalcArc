@@ -2235,9 +2235,13 @@ precedence before pushing its own, so 2 + 3 + shows 5 the way a CASIO
 does, while 2 + 3 × leaves the addition pending and 2 + 3 × 4 = gives 14
 rather than 20.
 
-The same path carries complex values without any special casing, which
-is what makes (3+j4) × (1+j2) = -5+j10 work through the ordinary
-operator keys.
+The same path carries complex values with no special casing, so a
+complex value settled by = flows into the next operation unchanged and
+3 + j4 = × 2 = gives 6+j8.
+
+That folding is also why 3 + j4 = × 1 + j2 = gives 3+j6 rather than the
+product of the two complex numbers: the × is folded when + is pressed.
+Writing that product needs parentheses, which the next task adds.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
