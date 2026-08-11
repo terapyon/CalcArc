@@ -2,9 +2,11 @@
 
 pub mod complex;
 pub mod error;
+pub mod numeric;
 
 pub use complex::value::Value;
 pub use error::{CalcError, CalcResult};
+pub use numeric::angle::AngleMode;
 
 /// ユニットテストの既定許容誤差。
 ///
