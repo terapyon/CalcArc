@@ -3061,6 +3061,16 @@ def test_round_trip() -> None:
     re, im = polar_to_rect(5.0, 53.13010235415598)
     assert math.isclose(re, 3.0, abs_tol=1e-12)
     assert math.isclose(im, 4.0, abs_tol=1e-12)
+
+
+def test_the_origin_has_a_defined_angle() -> None:
+    """原点の偏角は数学的には未定義だが、約束として 0 に固定する。
+
+    SymPy の atan2(0, 0) は nan を返す。Rust の f64::atan2 は IEEE 754 に
+    従って +0 を返す。両者が食い違ったままでは golden 検証が成立しないので、
+    参照実装も IEEE 754 の約束に合わせる。nan は JSON としても不正である。
+    """
+    assert rect_to_polar(0.0, 0.0) == (0.0, 0.0)
 ```
 
 `reference/tests/test_scientific_ref.py`:
@@ -3134,6 +3144,15 @@ def _exact(x: float) -> sp.Rational:
 def rect_to_polar(re: float, im: float) -> tuple[float, float]:
     """直交形式から極形式へ。角度は度で返す。"""
     a, b = _exact(re), _exact(im)
+    if a == 0 and b == 0:
+        # 原点の偏角は数学的には未定義で、SymPy の atan2(0, 0) は nan を返す。
+        # IEEE 754 は atan2(+0, +0) = +0 と定めており、Rust の f64::atan2 は
+        # それに従う。参照実装も同じ約束を採る。
+        #
+        # これはアルゴリズムの共有ではなく、未定義値に対する約束の統一である。
+        # 約束が食い違ったままでは突き合わせ自体が成立しない。また nan は
+        # RFC 8259 の JSON として不正なので、書き出す前にここで潰す。
+        return 0.0, 0.0
     r_expr = sp.sqrt(a**2 + b**2)
     theta_expr = sp.atan2(b, a) * 180 / sp.pi
     return float(sp.N(r_expr, PRECISION)), float(sp.N(theta_expr, PRECISION))
@@ -3368,7 +3387,13 @@ def write(name: str, payload: dict) -> None:
     path = TESTDATA / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # 差分が安定するよう整形して書く。末尾改行を付ける。
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # allow_nan=False にするのは、nan / inf が RFC 8259 の JSON として
+    # 不正であり、serde_json が解析できないため。黙って不正な golden を
+    # 書き出すより、生成時に ValueError で落ちるほうがよい。
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 
