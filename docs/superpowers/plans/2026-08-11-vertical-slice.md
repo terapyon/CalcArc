@@ -4896,6 +4896,47 @@ EOF
   - `web/src/ui/Keypad/layout.ts`: `KeyDef { token, label, ariaLabel, variant }`, `KEYPAD_LAYOUT: KeyDef[]`
   - `web/src/ui/Keypad/Keypad.tsx`: `Keypad`, `KeypadProps { onPress: (token: KeyToken) => void }`
 
+- [ ] **Step 0: 状態表示に読み上げ用の名前を与える**
+
+Task 17 の `Display` は状態を素の `<span>` で出しているため、読み上げでは「DEG」「((」だけが読まれ、それが何を指すのか分からない。さらに角度モードは切替ボタンのラベルが「角度の単位を切り替え」で固定なので、押した結果が何になったかを画面以外から知る手段がない。
+
+`web/src/ui/Display/Display.test.tsx` に追記する。
+
+```tsx
+it("names the status indicators for a screen reader", () => {
+  render(<Display display={state({ angle: "Rad", pendingOp: "Mul", pendingDepth: 2 })} />);
+  expect(screen.getByLabelText("角度の単位")).toHaveTextContent("RAD");
+  expect(screen.getByLabelText("計算の途中経過")).toHaveTextContent("×");
+});
+
+it("announces a change of angle mode", () => {
+  // 切替ボタンのラベルは固定なので、切り替えた結果はここでしか伝わらない。
+  render(<Display display={state({ angle: "Rad" })} />);
+  expect(screen.getByTestId("display-angle")).toHaveAttribute("aria-live", "polite");
+});
+```
+
+`web/src/ui/Display/Display.tsx` の status 行を差し替える。
+
+```tsx
+      <div className={styles.status}>
+        <span data-testid="display-angle" aria-label="角度の単位" aria-live="polite">
+          {display.angle === "Deg" ? "DEG" : "RAD"}
+        </span>
+        <span data-testid="display-pending" aria-label="計算の途中経過">
+          {pending}
+        </span>
+        <span data-testid="display-form" aria-label="表示形式">
+          {display.form === "Polar" ? "∠" : ""}
+        </span>
+      </div>
+```
+
+角度モードだけを `aria-live` にする。保留演算子と括弧の深さは打鍵のたびに変わるため、読み上げ続けると邪魔になる。角度モードは明示的な切替でしか変わらない。
+
+Run: `cd web && pnpm test`
+Expected: PASS
+
 - [ ] **Step 1: 失敗するテストを書く**
 
 `web/src/ui/Keypad/Keypad.test.tsx`:
