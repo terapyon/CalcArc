@@ -31,20 +31,46 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     } else if next.error.is_some() {
         // エラー中は AC 以外を受け付けない。
     } else {
-        let had_buffer = next.buffer.is_some();
         let was_pending = next.operator_pending;
+
         if let Err(err) = apply(&mut next, key) {
             next.error = Some(err);
         }
+        // `operator_pending` は「今いる場所が二項演算子の直後か」であって
+        // 「直前の 1 打鍵が演算子だったか」ではない。入力中の文字は場所を
+        // 動かさない。3 と打ってから DEL で消せば元の場所に戻るのだから、
+        // その間ずっと真のままでよく、差し替えるかどうかは push_binop が
+        // 「入力中のバッファが無い」ことと併せて判断する。
+        //
+        // 場所を動かさないキーで事実を落とすと、落とした側が黙って計算を
+        // 変える。実際 3 × 4 DEL × 5 = は 15 ではなく 45 になっていた。
+        // 網羅列挙に射程がありながら見えなかったのは、表の DEL の行が
+        // 加算経路しか持っていなかったためである（engine_table.rs の
+        // `del_returns_to_the_pending_operator`）。
         next.operator_pending = next.error.is_none()
             && match key {
                 Key::Add | Key::Sub | Key::Mul | Key::Div => true,
-                // 表示だけを変えるキーは「直前が演算子だった」事実を消さない。
-                // 消さないと 3 + DRG + が差し替えではなく累算になる。
-                Key::AngleToggle | Key::PolarToggle => was_pending,
-                // 消すものが無かった DEL も同じ。
-                Key::Del if !had_buffer => was_pending,
-                _ => false,
+                // 値を確定させるキーは、その場を演算子の直後ではなくす。
+                Key::Eq
+                | Key::RParen
+                | Key::Pi
+                | Key::Sqrt
+                | Key::Sqr
+                | Key::Neg
+                | Key::Sin
+                | Key::Cos
+                | Key::Tan
+                | Key::Ac => false,
+                // 入力中の文字・開き括弧・表示トグル・DEL は場所を動かさない。
+                // 括弧を開いた先はまだ何も入力されていないので、`(` を DEL で
+                // 消せば演算子の直後に戻る。
+                Key::Digit(_)
+                | Key::Dot
+                | Key::J
+                | Key::LParen
+                | Key::Del
+                | Key::AngleToggle
+                | Key::PolarToggle => was_pending,
             };
     }
 
@@ -89,8 +115,13 @@ fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
     // 打ち間違いの訂正であって、もう一度計算しろという意味ではない。
     // 差し替えないと accumulator 自身が右辺として積まれ、3 + + 4 = が
     // 10 になる。
+    //
+    // 差し替えてよいのは、演算子の直後から一歩も動いていないときだけである。
+    // 入力中のバッファがあれば 3 + 4 + の 4 が消えるし、スタックの先頭が
+    // 開き括弧なら 3 + ( + がその括弧を演算子で上書きしてしまう。
     if state.operator_pending
-        && let Some(last) = state.operators.last_mut()
+        && state.buffer.is_none()
+        && let Some(last @ OpToken::Op(_)) = state.operators.last_mut()
     {
         *last = OpToken::Op(op);
         return Ok(());
@@ -127,6 +158,28 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
     state.current = state.operands.pop().ok_or(CalcError::SyntaxError)?;
     state.operands.clear();
     Ok(())
+}
+
+/// DEL の 1 回分。数字 → `j` マーカー → 閉じられていない開き括弧の順に、
+/// ひとつだけ消す。どれも無ければ何もしない（設計書 I7）。
+///
+/// 演算子は消さない。消せるようにすると、確定済みの入力を復元する必要が
+/// 生じて undo になる。undo は状態に履歴スタックを要求し、EngineState が
+/// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
+fn delete_one(state: &mut EngineState) {
+    if let Some(buffer) = &mut state.buffer {
+        // 1 段目と 2 段目は Buffer::pop が担う。数字が残っていれば末尾を
+        // 消し、数字が尽きていれば j ごとバッファを捨てる。
+        if buffer.pop() {
+            state.buffer = None;
+        }
+        return;
+    }
+    // 3 段目。消せるのは先頭の開き括弧だけで、先頭が演算子ならこの分岐には
+    // 入らない。括弧を演算子の下から抜くことはない。
+    if matches!(state.operators.last(), Some(OpToken::OpenParen)) {
+        state.operators.pop();
+    }
 }
 
 /// `(` が押されたときの遷移。
@@ -189,13 +242,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // j は常に新しい虚部入力を開始する。
             state.buffer = Some(Buffer::imaginary());
         }
-        Key::Del => {
-            if let Some(buffer) = &mut state.buffer
-                && buffer.pop()
-            {
-                state.buffer = None;
-            }
-        }
+        Key::Del => delete_one(state),
         Key::Add => push_binop(state, BinOp::Add)?,
         Key::Sub => push_binop(state, BinOp::Sub)?,
         Key::Mul => push_binop(state, BinOp::Mul)?,

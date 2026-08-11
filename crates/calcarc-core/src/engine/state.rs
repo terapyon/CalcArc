@@ -7,7 +7,7 @@ use crate::numeric::angle::AngleMode;
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
 /// 最初から持たせておく（設計書 §4.4）。
-pub const STATE_SCHEMA: u32 = 2;
+pub const STATE_SCHEMA: u32 = 3;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
@@ -156,8 +156,14 @@ pub struct EngineState {
     pub form: DisplayForm,
     /// Some のあいだは AC 以外のキーを受け付けない。
     pub error: Option<CalcError>,
-    /// 直前のキーが二項演算子だったか。演算子を続けて押したときに
-    /// 差し替えるための判定に使う。
+    /// 二項演算子の直後に居るか。演算子を続けて押したときに差し替える
+    /// ための判定に使う。
+    ///
+    /// 「直前のキーが演算子だったか」ではない。入力中の文字や `(` は
+    /// 居場所を動かさないので、この旗を落とさない。DEL で入力を消せば
+    /// 演算子の直後に戻るのだから、落としてはいけない。差し替えてよい
+    /// 状態かどうかは、この旗と `buffer` / `operators` の形を併せて
+    /// `push_binop` が決める。
     pub operator_pending: bool,
 }
 

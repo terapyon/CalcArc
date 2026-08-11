@@ -17,7 +17,7 @@
 - **成立していない性質を不変条件として書かない。** 落ちたら、まず実装のバグか期待の誤りかを切り分ける。期待の誤りなら計画を直し、実装を歪めない。
 - **反例が出たら `engine_table.rs` に固定テストとして書いてから直す。** 反例を捨てない。
 - **既存の 114 件の Rust テストはすべて通り続ける。**
-- **網羅列挙 2 種の合計は 6 秒以内**（debug）。
+- **網羅列挙 2 種は壁時計で 6 秒以内**（debug）。逐次に 1 本ずつ測った時間の和ではない。cargo は既定でテストを並列に走らせるので、予算に照らすのは `time cargo test -p calcarc-core --test engine_robustness` の実測である。`--test-threads=1` で測って足し上げると予算超過だと誤報する（一度やった）。
 - 電卓の挙動を変えるときは `crates/calcarc-core/tests/engine_table.rs` を先に変える。
 - 毎コミットの末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` を付ける。
 - **`git push` と PR 作成は行わない。**
@@ -234,12 +234,19 @@ mod invariants {
 
     /// 遷移 1 回が満たすべき条件をすべて検査する。
     pub fn check(before: &EngineState, key: Key, after: &EngineState) -> Result<(), String> {
-        renderable(after)?;
-        operand_count_matches(after)?;
+        check_state(after)?;
         error_is_latched(before, key, after)?;
         real_axis_is_closed(before, key, after)?;
         operator_press_replaces(before, key, after)?;
         del_removes_at_most_one_thing(before, key, after)?;
+        Ok(())
+    }
+
+    /// 状態だけで判定できる条件。打鍵が 1 度も起きない列（長さ 0）でも
+    /// 初期状態を検査できるように、遷移とは別に呼べる形にしておく。
+    pub fn check_state(state: &EngineState) -> Result<(), String> {
+        renderable(state)?;
+        operand_count_matches(state)?;
         Ok(())
     }
 
@@ -329,7 +336,16 @@ mod invariants {
             return Ok(());
         }
         if key == Key::J {
-            return Ok(());
+            // j は入力を始めるだけで、確定済みの値には触れない。免除を
+            // 「何をしても素通し」にしないため、そこだけ確かめる。
+            return if after.current == before.current {
+                Ok(())
+            } else {
+                Err(format!(
+                    "I3: j changed the committed value ({:?} -> {:?})",
+                    before.current, after.current
+                ))
+            };
         }
         if key == Key::Sqrt && acting_on(before).re < 0.0 {
             // I3b: 純虚数でなければならない。極形式を経由する実装だと
@@ -375,15 +391,31 @@ mod invariants {
         if !before.operator_pending || !is_binop(key) || after.error.is_some() {
             return Ok(());
         }
-        if after.operands.len() != before.operands.len()
-            || after.operators.len() != before.operators.len()
-        {
+        // **長さで比べてはならない。** 優先順位が同じか降順のときは、
+        // 誤って積んだ被演算数が直後の畳み込みで戻されるため長さが変わらない。
+        // 3 + + 4 = が 10 になるバグはまさにこの経路で、長さ比較では
+        // 素通りする（operands も operators も 1 -> 1 のまま）。
+        // 積まれたかどうかは内容にしか現れない。
+        if after.operands != before.operands {
             return Err(format!(
-                "I4: {} after a pending operator grew the stacks \
-                 ({} -> {} operands, {} -> {} operators)",
+                "I4: {} after a pending operator changed the operands ({:?} -> {:?})",
                 key.token(),
-                before.operands.len(),
-                after.operands.len(),
+                before.operands,
+                after.operands
+            ));
+        }
+        if after.current != before.current {
+            return Err(format!(
+                "I4: {} after a pending operator changed the value ({:?} -> {:?})",
+                key.token(),
+                before.current,
+                after.current
+            ));
+        }
+        if after.operators.len() != before.operators.len() {
+            return Err(format!(
+                "I4: {} after a pending operator grew the operator stack ({} -> {})",
+                key.token(),
                 before.operators.len(),
                 after.operators.len()
             ));
@@ -429,6 +461,10 @@ mod invariants {
     #[test]
     fn never_panics(indices in prop::collection::vec(0usize..Key::ALL.len(), 0..40)) {
         let mut state = EngineState::initial();
+        // 長さ 0 の列ではループが 1 度も回らない。初期状態だけは見ておく。
+        if let Err(why) = invariants::check_state(&state) {
+            return Err(TestCaseError::fail(why));
+        }
         for i in indices {
             let key = Key::ALL[i];
             let (next, _) = reduce(&state, key);
@@ -571,15 +607,18 @@ fn walk(state: &EngineState, keys: &[Key], depth: usize, max: usize, trail: &mut
         return;
     }
     for &key in keys {
-        if state.error.is_some() && key != Key::Ac {
-            continue;
-        }
         let (next, _) = reduce(state, key);
         trail.push(key.token());
         if let Err(why) = invariants::check(state, key, &next) {
             panic!("{why}\n  key sequence: {trail:?}");
         }
-        walk(&next, keys, depth + 1, max, trail);
+        // エラー状態からは AC 以外で新しい状態に届かないので、ここから
+        // **先を辿らない**。遷移そのものは上で必ず検査する。枝刈りの根拠が
+        // I5（エラーは AC でしか解けない）である以上、I5 を検査せずに
+        // 枝刈りしては循環で、I5 だけが網羅から漏れる。
+        if state.error.is_none() || key == Key::Ac {
+            walk(&next, keys, depth + 1, max, trail);
+        }
         trail.pop();
     }
 }
@@ -609,12 +648,14 @@ fn every_sequence_over_all_classes_up_to_six_keys_holds_the_invariants() {
 
 - [ ] **Step 3: 実行して時間を測る**
 
-Run: `cargo test -p calcarc-core --test engine_robustness -- --nocapture --test-threads=1`
-Expected: PASS。2 つの網の合計が 6 秒以内であること。
+Run: `time cargo test -p calcarc-core --test engine_robustness`
+Expected: PASS。壁時計で 6 秒以内であること。**`--test-threads=1` で測って足し上げないこと。**
 
 **落ちた場合。** 表示された `key sequence` をそのまま `engine_table.rs` の固定テストに書き写し、期待値を手で決めてから実装を直す。反例を捨てて網を緩めない。
 
-計測が 6 秒を超えた場合は、実装が遅くなったか環境が違う。設計書 §5.4 の実測（構造 3.1s、全等価類 2.8s）と比べ、どちらが伸びたかを報告する。網の大きさを勝手に縮めない。
+計測が壁時計で 6 秒を超えた場合は、実装が遅くなったか環境が違う。設計書 §5.4 の実測（構造 3.7s、全等価類 4.2s、並列の壁時計 4.3s）と比べ、どちらが伸びたかを報告する。網の大きさを勝手に縮めない。
+
+CI の `cargo test --workspace` は同じバイナリ内で proptest 3 本も同時に走るため、網 2 本だけを測った値より伸びる（手元で 4.7 秒）。コア数の少ない runner ではさらに逐次に近づく。
 
 - [ ] **Step 4: 整形して全体を確認する**
 
@@ -709,21 +750,76 @@ proptest! {
         keys in prop::collection::vec(weighted_key(), 0..120)
     ) {
         let mut state = EngineState::initial();
+        // 実際に reduce に渡した順序をそのまま残す。proptest が出す縮小結果は
+        // Vec<Key> の Debug 表示で、しかも下で挟む AC を含まない。つまりそれ
+        // だけでは再現できない。engine_table.rs の main_of(&[...]) にそのまま
+        // 貼れる形で持っておく。
+        let mut trail: Vec<&'static str> = Vec::new();
         for key in keys {
             if state.error.is_some() {
+                trail.push(Key::Ac.token());
                 let (cleared, _) = reduce(&state, Key::Ac);
                 if let Err(why) = invariants::check(&state, Key::Ac, &cleared) {
-                    return Err(TestCaseError::fail(why));
+                    return Err(TestCaseError::fail(format!(
+                        "{why}\n  key sequence: {trail:?}"
+                    )));
                 }
                 state = cleared;
             }
+            trail.push(key.token());
             let (next, _) = reduce(&state, key);
             if let Err(why) = invariants::check(&state, key, &next) {
-                return Err(TestCaseError::fail(format!("{why} (key {})", key.token())));
+                return Err(TestCaseError::fail(format!(
+                    "{why}\n  key sequence: {trail:?}"
+                )));
             }
             state = next;
         }
     }
+}
+
+/// 重みが崩れたことに気づけるようにする。
+///
+/// 深い入れ子・長い畳み込み・復帰の繰り返しに届くテストはこれ 1 つで、
+/// 網羅列挙は費用の都合で届かない（長さ 8 で 51 秒）。重みを触った誰かが
+/// 到達距離を潰しても、不変条件は静かに通り続ける。到達距離そのものを
+/// 表明しておかないと、この領域の網は音もなく消える。
+///
+/// 種を固定するので結果は揺れない。実測は深さ 9・復帰 1159 回で、
+/// 下限にはどちらも十分な余裕がある。
+#[test]
+fn the_weighted_search_still_reaches_deep_states() {
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
+
+    let mut runner = TestRunner::new_with_rng(
+        Config::default(),
+        TestRng::deterministic_rng(RngAlgorithm::ChaCha),
+    );
+    let strategy = prop::collection::vec(weighted_key(), 0..120);
+
+    let (mut deepest, mut recoveries) = (0usize, 0usize);
+    for _ in 0..300 {
+        let keys = strategy.new_tree(&mut runner).unwrap().current();
+        let mut state = EngineState::initial();
+        for key in keys {
+            if state.error.is_some() {
+                state = reduce(&state, Key::Ac).0;
+                recoveries += 1;
+            }
+            state = reduce(&state, key).0;
+            deepest = deepest.max(invariants::count_parens(&state));
+        }
+    }
+
+    assert!(
+        deepest >= 5,
+        "入れ子が深さ {deepest} までしか届いていない。weighted_key の重みを確認すること"
+    );
+    assert!(
+        recoveries >= 100,
+        "エラーからの復帰が {recoveries} 回しかない。weighted_key の重みを確認すること"
+    );
 }
 ```
 
@@ -808,5 +904,5 @@ EOF
 |---|---|---|
 | 1 | DEL の 3 段化と括弧削除（I7） | `engine_table.rs` の固定テスト 3 件 |
 | 2 | 不変条件 I1〜I7 の集約、`numerical-policy.md` | 既存 proptest から呼んで通ること |
-| 3 | 網羅列挙 2 種 | 合計 6 秒以内で PASS |
+| 3 | 網羅列挙 2 種 | 壁時計 6 秒以内で PASS |
 | 4 | 重みつき生成器とエラー復帰 | 括弧の深さ 5 以上に到達 |
