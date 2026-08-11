@@ -236,6 +236,90 @@ mod invariants {
     }
 }
 
+/// 等価類に畳んだ代表キー。畳んでよい根拠は設計書 §5.2 の表にある。
+/// 判断基準は「状態機械に対する作用が同じか」であって、表示上の違いではない。
+///
+/// 構造の網。表示トグルと定数を外すぶん、長さ 7 まで届く。
+const STRUCTURE: [Key; 10] = [
+    Key::Digit(3),
+    Key::Dot,
+    Key::J,
+    Key::Add,
+    Key::Mul,
+    Key::Eq,
+    Key::LParen,
+    Key::RParen,
+    Key::Del,
+    Key::Ac,
+];
+
+/// 全等価類の網。表示トグル・後置関数・定数・ゼロを足すぶん長さ 6 まで。
+///
+/// `√` を後置関数の代表にするのは、sqrt だけが負の実数用の専用経路を持ち
+/// （I3b）、他の単項関数と違う分岐を通るためである。
+/// `DRG` と `▸∠` は互いに等価なので代表 1 つでよい。どちらも angle / form
+/// しか変えず、buffer / current / operands / operators に触れない。
+const ALL_CLASSES: [Key; 14] = [
+    Key::Digit(3),
+    Key::Digit(0),
+    Key::Dot,
+    Key::J,
+    Key::Add,
+    Key::Mul,
+    Key::Eq,
+    Key::LParen,
+    Key::RParen,
+    Key::Del,
+    Key::Ac,
+    Key::AngleToggle,
+    Key::Sqrt,
+    Key::Pi,
+];
+
+/// 深さ優先で全列を辿り、遷移ごとに不変条件を検査する。
+///
+/// エラー状態に落ちた列は AC 以外が無効なので（I5）、そこから先を辿っても
+/// 新しい状態には届かない。枝刈りする。
+fn walk(
+    state: &EngineState,
+    keys: &[Key],
+    depth: usize,
+    max: usize,
+    trail: &mut Vec<&'static str>,
+) {
+    if depth == max {
+        return;
+    }
+    for &key in keys {
+        if state.error.is_some() && key != Key::Ac {
+            continue;
+        }
+        let (next, _) = reduce(state, key);
+        trail.push(key.token());
+        if let Err(why) = invariants::check(state, key, &next) {
+            panic!("{why}\n  key sequence: {trail:?}");
+        }
+        walk(&next, keys, depth + 1, max, trail);
+        trail.pop();
+    }
+}
+
+/// 構造に関わるキーだけで、長さ 7 までのすべての打鍵列を検査する。
+///
+/// Vertical Slice で見つかったキー列バグは最長で 7 打鍵だった
+/// （`3 + j 4 DEL 5 =`）。ランダム探索はこの領域をたまたましか踏まない。
+#[test]
+fn every_structural_sequence_up_to_seven_keys_holds_the_invariants() {
+    walk(&EngineState::initial(), &STRUCTURE, 0, 7, &mut Vec::new());
+}
+
+/// 全等価類で長さ 6 まで。表示トグルを挟んだ形（`3 + DRG + 4 =`）は
+/// こちらの網にかかる。
+#[test]
+fn every_sequence_over_all_classes_up_to_six_keys_holds_the_invariants() {
+    walk(&EngineState::initial(), &ALL_CLASSES, 0, 6, &mut Vec::new());
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(500))]
 
