@@ -1,0 +1,15 @@
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--key-gap);
+  /* <fieldset> の既定枠線・余白を打ち消す。role=group な <div> だと
+     WAI-ARIA の推奨要素チェックに引っかかるため、意味の合う <fieldset>
+     を使い、見た目だけリセットする。 */
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.keypad > button {
+  aspect-ratio: 1 / 1;
+}

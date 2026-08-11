@@ -20,11 +20,22 @@ export function Display({ display }: DisplayProps) {
   return (
     <section className={styles.display}>
       <div className={styles.status}>
-        <span data-testid="display-angle">
+        <span
+          data-testid="display-angle"
+          role="status"
+          aria-label="角度の単位"
+          aria-live="polite"
+        >
           {display.angle === "Deg" ? "DEG" : "RAD"}
         </span>
-        <span data-testid="display-pending">{pending}</span>
-        <span data-testid="display-form">
+        <span
+          data-testid="display-pending"
+          role="img"
+          aria-label="計算の途中経過"
+        >
+          {pending}
+        </span>
+        <span data-testid="display-form" role="img" aria-label="表示形式">
           {display.form === "Polar" ? "∠" : ""}
         </span>
       </div>

@@ -72,4 +72,23 @@ describe("Display", () => {
       "data-error",
     );
   });
+
+  it("names the status indicators for a screen reader", () => {
+    render(
+      <Display
+        display={state({ angle: "Rad", pendingOp: "Mul", pendingDepth: 2 })}
+      />,
+    );
+    expect(screen.getByLabelText("角度の単位")).toHaveTextContent("RAD");
+    expect(screen.getByLabelText("計算の途中経過")).toHaveTextContent("×");
+  });
+
+  it("announces a change of angle mode", () => {
+    // 切替ボタンのラベルは固定なので、切り替えた結果はここでしか伝わらない。
+    render(<Display display={state({ angle: "Rad" })} />);
+    expect(screen.getByTestId("display-angle")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
+  });
 });
