@@ -3,6 +3,7 @@
 pub mod complex;
 pub mod error;
 pub mod numeric;
+pub mod scientific;
 
 pub use complex::value::Value;
 pub use error::{CalcError, CalcResult};
