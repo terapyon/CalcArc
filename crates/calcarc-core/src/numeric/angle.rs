@@ -9,7 +9,7 @@ pub enum AngleMode {
 
 impl AngleMode {
     /// このモードでの数値をラジアンに直す。
-    pub fn to_radians(self, v: f64) -> f64 {
+    pub fn radians_of(self, v: f64) -> f64 {
         match self {
             AngleMode::Deg => v.to_radians(),
             AngleMode::Rad => v,
@@ -17,7 +17,7 @@ impl AngleMode {
     }
 
     /// ラジアンをこのモードでの数値に直す。
-    pub fn from_radians(self, rad: f64) -> f64 {
+    pub fn angle_of(self, rad: f64) -> f64 {
         match self {
             AngleMode::Deg => rad.to_degrees(),
             AngleMode::Rad => rad,
@@ -39,18 +39,18 @@ mod tests {
 
     #[test]
     fn deg_converts_to_radians() {
-        crate::assert_close(AngleMode::Deg.to_radians(180.0), PI);
+        crate::assert_close(AngleMode::Deg.radians_of(180.0), PI);
     }
 
     #[test]
     fn rad_passes_through() {
-        assert_eq!(AngleMode::Rad.to_radians(1.5), 1.5);
-        assert_eq!(AngleMode::Rad.from_radians(1.5), 1.5);
+        assert_eq!(AngleMode::Rad.radians_of(1.5), 1.5);
+        assert_eq!(AngleMode::Rad.angle_of(1.5), 1.5);
     }
 
     #[test]
     fn deg_converts_from_radians() {
-        crate::assert_close(AngleMode::Deg.from_radians(PI), 180.0);
+        crate::assert_close(AngleMode::Deg.angle_of(PI), 180.0);
     }
 
     #[test]

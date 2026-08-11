@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
-use calcarc_core::complex::polar::{Polar, from_polar, to_polar};
-use calcarc_core::numeric::angle::AngleMode;
+use calcarc_core::AngleMode;
+use calcarc_core::polar::{Polar, from_polar};
 use calcarc_core::{Value, scientific};
 use serde::Deserialize;
 
@@ -96,7 +96,7 @@ fn complex_conversions_match_the_reference() {
         match case.op.as_str() {
             "rect_to_polar" => {
                 let v = Value::new(field(&case.input, "re"), field(&case.input, "im"));
-                let p = to_polar(v);
+                let p = v.to_polar();
                 close(
                     p.r,
                     field(&case.expect, "r"),

@@ -1,6 +1,4 @@
-use crate::complex::polar::to_polar;
-use crate::complex::value::Value;
-use crate::numeric::angle::AngleMode;
+use crate::{AngleMode, Value};
 
 /// 表示する有効数字の桁数。
 pub const DISPLAY_DIGITS: usize = 10;
@@ -68,28 +66,28 @@ pub fn format_rect(v: Value) -> String {
 /// 半径が有限であることが呼び出し側で保証されている場合に使う。
 /// 保証がない場合は `try_format_polar` を使うこと。
 pub fn format_polar(v: Value, mode: AngleMode) -> String {
-    let p = to_polar(v);
+    let p = v.to_polar();
     format!(
         "{} ∠ {}",
         format_real(p.r),
-        format_real(mode.from_radians(p.theta_rad))
+        format_real(mode.angle_of(p.theta_rad))
     )
 }
 
 /// 極形式で表示する。半径が有限でなければ None を返す。
 ///
 /// to_polar の hypot は両成分が f64::MAX に近いと溢れる。engine の
-/// finite() は表示経路を通らないので、ここで捕まえないと "inf ∠ 45"
+/// finalize() は表示経路を通らないので、ここで捕まえないと "inf ∠ 45"
 /// が画面に出る。
 pub fn try_format_polar(v: Value, mode: AngleMode) -> Option<String> {
-    let p = to_polar(v);
+    let p = v.to_polar();
     if !p.r.is_finite() {
         return None;
     }
     Some(format!(
         "{} ∠ {}",
         format_real(p.r),
-        format_real(mode.from_radians(p.theta_rad))
+        format_real(mode.angle_of(p.theta_rad))
     ))
 }
 

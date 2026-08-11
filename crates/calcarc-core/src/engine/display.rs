@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::error::CalcError;
-use crate::numeric::angle::AngleMode;
 use crate::numeric::format::{format_rect, try_format_polar};
+use crate::{AngleMode, CalcError, EngineState};
 
-use super::state::{BinOp, DisplayForm, EngineState, OpToken};
+use super::state::{BinOp, DisplayForm, OpToken};
 
 /// エラー時にメイン表示に出す文字列。
 pub const ERROR_TEXT: &str = "Math ERROR";
@@ -25,8 +24,8 @@ pub struct DisplayState {
 ///
 /// 丸めはここでしか起きない。`EngineState` に書き戻さないため、
 /// 表示された値が次の計算の入力になることはない（base-spec §26）。
-pub fn display(state: &EngineState) -> DisplayState {
-    // 極形式の半径が溢れることがある。hypot は engine の finite() を
+pub fn render(state: &EngineState) -> DisplayState {
+    // 極形式の半径が溢れることがある。hypot は engine の finalize() を
     // 通らないので、ここで初めて分かる。値そのものは直交形式では
     // 表示できるので、engine の状態はエラーにしない。▸∠ で戻れる。
     let polar_overflow = state.error.is_none()
@@ -83,7 +82,7 @@ pub fn display(state: &EngineState) -> DisplayState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::complex::value::Value;
+    use crate::Value;
 
     #[test]
     fn a_polar_overflow_reports_an_error_consistently() {
@@ -94,7 +93,7 @@ mod tests {
         state.current = Value::new(f64::MAX, f64::MAX);
         state.form = DisplayForm::Polar;
 
-        let shown = display(&state);
+        let shown = render(&state);
 
         assert_eq!(shown.main, ERROR_TEXT);
         assert_eq!(shown.error, Some(CalcError::Overflow));

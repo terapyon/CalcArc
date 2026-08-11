@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::complex::value::Value;
-use crate::error::{CalcError, CalcResult};
-use crate::numeric::angle::AngleMode;
+use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
@@ -60,6 +58,15 @@ pub struct Buffer {
     pub digits: String,
     /// `j` が押されて虚部として入力中か。
     pub imaginary: bool,
+}
+
+/// `backspace` が何を消したか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backspace {
+    /// 1 文字消した。バッファはまだ生きている。
+    Removed,
+    /// 消すものが尽きた。呼び出し側はバッファごと破棄してよい。
+    Exhausted,
 }
 
 impl Buffer {
@@ -126,17 +133,20 @@ impl Buffer {
         Ok(())
     }
 
-    /// 末尾 1 文字を削る。バッファごと破棄してよいときに true を返す。
+    /// 末尾 1 文字を削る。
     ///
     /// 虚数入力では数字が尽きても j マーカーを残す。ここで一緒に捨てると
     /// `3 + j4 DEL 5 =` が 3+j5 ではなく 3+5 になり、何を計算しているかが
     /// 黙って変わる。j を消すにはもう一度 DEL を押す。
-    pub fn pop(&mut self) -> bool {
+    pub fn backspace(&mut self) -> Backspace {
         if self.digits.pop().is_some() {
-            return self.digits.is_empty() && !self.imaginary;
+            if self.digits.is_empty() && !self.imaginary {
+                return Backspace::Exhausted;
+            }
+            return Backspace::Removed;
         }
         // 数字はもう無い。残っているのは j だけなので、これで破棄してよい。
-        true
+        Backspace::Exhausted
     }
 }
 

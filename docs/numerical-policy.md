@@ -88,8 +88,9 @@ proptest だけである。`ln` などを足すときは、まず個別の固定
   複素数の引数を「角度の単位を持つ量」として読む、意図的な解釈である。
 - 値そのものが有限でも、極形式の絶対値だけが f64 の範囲を超えることがある。
   `hypot(f64::MAX, f64::MAX)` は inf になるが、実部・虚部それぞれは有限で
-  `finite()` を通り抜ける。この溢れは engine の `finite()` では捕まえられず、
-  表示層の `try_format_polar` で初めて分かる。engine の状態はエラーにせず
+  `Value::finalize()` を通り抜ける。この溢れは engine の
+  `Value::finalize()` では捕まえられず、表示層の `try_format_polar` で
+  初めて分かる。engine の状態はエラーにせず
   （直交形式では表示できるため）、表示された `DisplayState` の側で
   `error = Some(Overflow)` を報告して自己矛盾を防ぐ。`▸∠` で直交形式に
   戻れば通常どおり使える。
