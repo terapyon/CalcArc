@@ -5641,7 +5641,15 @@ test("high contrast keeps the destructive key distinguishable", async ({ page })
   // ここが戻ると AC が演算子と同じ見た目になり、押し間違いが起きて
   // 困る箇所で手がかりが消える(base-spec §43)。
   await page.emulateMedia({ contrast: "more" });
-  await page.reload();
+
+  // 高コントラストが本当に効いていることを先に確かめる。これがないと
+  // テストが通る理由を取り違える。通常テーマでも 3 種類のキーは
+  // 背景色で区別できる（#ffffff / #d8e6ff / #ffd8d8）ので、
+  // 「互いに異なる」という判定だけでは @media ブロックを丸ごと
+  // 消しても通ってしまう。
+  await expect
+    .poll(() => page.evaluate(() => matchMedia("(prefers-contrast: more)").matches))
+    .toBe(true);
 
   const appearance = (key: Locator) =>
     key.evaluate((el) => {
@@ -5653,6 +5661,14 @@ test("high contrast keeps the destructive key distinguishable", async ({ page })
   const add = await appearance(page.getByRole("button", { name: "足す" }));
   const digit = await appearance(page.getByRole("button", { name: "7", exact: true }));
 
+  // 高コントラストでは背景が白か黒に振り切る。通常テーマの淡い色が
+  // 残っていればここで落ちる。
+  expect(digit).toContain("rgb(255, 255, 255)");
+  expect(add).toContain("rgb(0, 0, 0)");
+
+  // AC と数字キーは配色が同じで、太い二重枠だけが違う。
+  // この 3 つが互いに異なることが、押し間違いの手がかりが
+  // 残っているということ。
   expect(ac).not.toBe(add);
   expect(ac).not.toBe(digit);
   expect(add).not.toBe(digit);
