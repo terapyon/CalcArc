@@ -4384,6 +4384,12 @@ export default defineConfig({
 import "@testing-library/jest-dom/vitest";
 ```
 
+`web/tsconfig.json` の `compilerOptions.types` に jest-dom を足す。`tests/` は `include` に入っていないため、`setup.ts` の import だけでは `toBeInTheDocument` などの型が見えず `pnpm typecheck` が落ちる。この依存は本タスクで初めて入るので、追記もここで行う。
+
+```json
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"]
+```
+
 Run: `cd web && pnpm install`
 Expected: 成功
 
