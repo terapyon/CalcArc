@@ -273,3 +273,70 @@ fn trig_follows_the_angle_mode() {
 fn tangent_at_a_pole_is_an_error() {
     assert_eq!(main_of(&["9", "0", "tan"]), "Math ERROR");
 }
+
+#[test]
+fn the_headline_case() {
+    // このスライスが成立したことを示す 1 行。
+    assert_eq!(
+        main_of(&["3", "add", "j", "4", "eq", "polar_toggle"]),
+        "5 ∠ 53.13010235"
+    );
+}
+
+#[test]
+fn the_polar_toggle_is_idempotent_in_pairs() {
+    // 2 回押すと元の表示に戻る。表示の切替であって計算ではないため。
+    assert_eq!(
+        main_of(&["3", "add", "j", "4", "eq", "polar_toggle", "polar_toggle"]),
+        "3+j4"
+    );
+}
+
+#[test]
+fn the_polar_toggle_does_not_feed_rounded_values_forward() {
+    // 極形式で表示すると角度は 53.13010235 に丸められるが、保持している
+    // 値は 3+j4 のままなので、続く乗算は丸めの影響を受けない
+    // （base-spec §26、設計書 D5）。
+    assert_eq!(
+        main_of(&[
+            "3",
+            "add",
+            "j",
+            "4",
+            "eq",
+            "polar_toggle",
+            "mul",
+            "lparen",
+            "1",
+            "add",
+            "j",
+            "2",
+            "rparen",
+            "eq",
+            "polar_toggle"
+        ]),
+        "-5+j10"
+    );
+}
+
+#[test]
+fn the_polar_form_follows_the_angle_mode() {
+    assert_eq!(
+        main_of(&["angle_toggle", "3", "add", "j", "4", "eq", "polar_toggle"]),
+        "5 ∠ 0.927295218"
+    );
+}
+
+#[test]
+fn the_entry_text_wins_over_the_display_form() {
+    // 入力中は打鍵した通りに見せる。極形式は確定値にのみ適用する。
+    assert_eq!(main_of(&["polar_toggle", "3"]), "3");
+    assert_eq!(main_of(&["polar_toggle", "3", "eq"]), "3 ∠ 0");
+}
+
+#[test]
+fn reports_the_display_form() {
+    use calcarc_core::engine::state::DisplayForm;
+    assert_eq!(run(&[]).form, DisplayForm::Rect);
+    assert_eq!(run(&["polar_toggle"]).form, DisplayForm::Polar);
+}

@@ -202,8 +202,11 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // 保持している値は変えない。表示と以後の三角関数にだけ効く。
             state.angle = state.angle.toggled();
         }
-        // Task 10 で実装する。
-        Key::PolarToggle => {}
+        Key::PolarToggle => {
+            // 表示形式だけを入れ替える。current には触れない。
+            // これがあるから丸めた値が次の計算に流れ込まない。
+            state.form = state.form.toggled();
+        }
         // AC は reduce 側で処理済みなので、ここでは何もしない。
         // 網羅性のために腕だけ置く。
         Key::Ac => {}
