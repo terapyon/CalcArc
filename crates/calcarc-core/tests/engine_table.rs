@@ -340,3 +340,63 @@ fn reports_the_display_form() {
     assert_eq!(run(&[]).form, DisplayForm::Rect);
     assert_eq!(run(&["polar_toggle"]).form, DisplayForm::Polar);
 }
+
+#[test]
+fn overflow_becomes_an_error() {
+    // 9 を繰り返し二乗すると f64 の範囲を出る。
+    let mut keys = vec!["9"];
+    keys.extend(std::iter::repeat_n("sqr", 10));
+    assert_eq!(main_of(&keys), "Math ERROR");
+}
+
+#[test]
+fn every_error_kind_reaches_the_display() {
+    use calcarc_core::CalcError;
+    assert_eq!(
+        run(&["1", "div", "0", "eq"]).error,
+        Some(CalcError::DivisionByZero)
+    );
+    assert_eq!(run(&["9", "0", "tan"]).error, Some(CalcError::TrigPole));
+    assert_eq!(run(&["rparen"]).error, Some(CalcError::SyntaxError));
+    let mut keys = vec!["9"];
+    keys.extend(std::iter::repeat_n("sqr", 10));
+    assert_eq!(run(&keys).error, Some(CalcError::Overflow));
+}
+
+#[test]
+fn ac_restores_a_usable_calculator() {
+    // エラー後に AC を押したら、保留中の演算も一緒に消える。
+    assert_eq!(
+        main_of(&["2", "mul", "1", "div", "0", "eq", "ac", "7", "eq"]),
+        "7"
+    );
+}
+
+#[test]
+fn the_entry_buffer_stops_accepting_digits_at_its_limit() {
+    // MAX_ENTRY_LEN は 12。超えた打鍵は無視され、エラーにはしない。
+    // 打ち過ぎで電卓が止まるより、入らないほうが電卓らしい。
+    let keys = vec!["7"; 20];
+    let shown = run(&keys);
+    assert_eq!(shown.main, "777777777777");
+    assert!(shown.error.is_none());
+}
+
+#[test]
+fn ac_keeps_the_user_set_modes() {
+    use calcarc_core::AngleMode;
+    use calcarc_core::engine::state::DisplayForm;
+    let state = run(&["angle_toggle", "polar_toggle", "3", "ac"]);
+    assert_eq!(state.angle, AngleMode::Rad);
+    assert_eq!(state.form, DisplayForm::Polar);
+}
+
+#[test]
+fn an_error_hides_the_pending_state() {
+    // エラー時点で operators には Add が残っているが、
+    // Math ERROR の横に保留中の演算子を出すのは誤解を招く。
+    let shown = run(&["2", "add", "1", "div", "0", "eq"]);
+    assert_eq!(shown.main, "Math ERROR");
+    assert_eq!(shown.pending_op, None);
+    assert_eq!(shown.pending_depth, 0);
+}

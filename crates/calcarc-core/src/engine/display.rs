@@ -26,7 +26,8 @@ pub struct DisplayState {
 /// 丸めはここでしか起きない。`EngineState` に書き戻さないため、
 /// 表示された値が次の計算の入力になることはない（base-spec §26）。
 pub fn display(state: &EngineState) -> DisplayState {
-    let main = if state.error.is_some() {
+    let has_error = state.error.is_some();
+    let main = if has_error {
         ERROR_TEXT.to_string()
     } else if let Some(buffer) = &state.buffer {
         buffer.text()
@@ -41,15 +42,25 @@ pub fn display(state: &EngineState) -> DisplayState {
         main,
         angle: state.angle,
         form: state.form,
-        pending_op: state.operators.iter().rev().find_map(|t| match t {
-            OpToken::Op(op) => Some(*op),
-            OpToken::OpenParen => None,
-        }),
-        pending_depth: state
-            .operators
-            .iter()
-            .filter(|t| matches!(t, OpToken::OpenParen))
-            .count(),
+        // エラー中は保留状態を伏せる。スタックには途中の演算子が
+        // 残っているが、それを見せても利用者にできることはない。
+        pending_op: if has_error {
+            None
+        } else {
+            state.operators.iter().rev().find_map(|t| match t {
+                OpToken::Op(op) => Some(*op),
+                OpToken::OpenParen => None,
+            })
+        },
+        pending_depth: if has_error {
+            0
+        } else {
+            state
+                .operators
+                .iter()
+                .filter(|t| matches!(t, OpToken::OpenParen))
+                .count()
+        },
         error: state.error,
     }
 }

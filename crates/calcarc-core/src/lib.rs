@@ -1,5 +1,9 @@
 //! CalcArc の計算コア。WASM と UI に依存しない。
 
+// 本番経路で panic しないことをコンパイラに守らせる(base-spec §27)。
+// テストコードでは unwrap を使うため、not(test) で限定する。
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+
 pub mod complex;
 pub mod engine;
 pub mod error;
