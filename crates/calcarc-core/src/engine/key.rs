@@ -104,40 +104,59 @@ impl Key {
     }
 }
 
+impl Key {
+    /// このエンジンが受け取るキーの全体。
+    ///
+    /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
+    /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
+    /// 新しいキーを黙って生成しなくなる事故を防げる。
+    pub const ALL: [Key; 30] = [
+        Key::Digit(0),
+        Key::Digit(1),
+        Key::Digit(2),
+        Key::Digit(3),
+        Key::Digit(4),
+        Key::Digit(5),
+        Key::Digit(6),
+        Key::Digit(7),
+        Key::Digit(8),
+        Key::Digit(9),
+        Key::Dot,
+        Key::Pi,
+        Key::Add,
+        Key::Sub,
+        Key::Mul,
+        Key::Div,
+        Key::Eq,
+        Key::LParen,
+        Key::RParen,
+        Key::J,
+        Key::PolarToggle,
+        Key::Sqrt,
+        Key::Sqr,
+        Key::Sin,
+        Key::Cos,
+        Key::Tan,
+        Key::Neg,
+        Key::Ac,
+        Key::Del,
+        Key::AngleToggle,
+    ];
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn tokens_round_trip() {
-        let all = [
-            Key::Digit(0),
-            Key::Digit(7),
-            Key::Digit(9),
-            Key::Dot,
-            Key::Pi,
-            Key::Add,
-            Key::Sub,
-            Key::Mul,
-            Key::Div,
-            Key::Eq,
-            Key::LParen,
-            Key::RParen,
-            Key::J,
-            Key::PolarToggle,
-            Key::Sqrt,
-            Key::Sqr,
-            Key::Sin,
-            Key::Cos,
-            Key::Tan,
-            Key::Neg,
-            Key::Ac,
-            Key::Del,
-            Key::AngleToggle,
-        ];
-        for key in all {
+        for key in Key::ALL {
             assert_eq!(Key::from_token(key.token()), Some(key), "{:?}", key);
         }
+
+        let unique_tokens: std::collections::HashSet<&str> =
+            Key::ALL.iter().map(|key| key.token()).collect();
+        assert_eq!(unique_tokens.len(), Key::ALL.len());
     }
 
     #[test]

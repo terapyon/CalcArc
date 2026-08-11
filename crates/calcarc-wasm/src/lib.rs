@@ -53,10 +53,10 @@ pub fn initial_state() -> JsValue {
 /// どちらの場合も例外にしない。
 #[wasm_bindgen(js_name = reduce)]
 pub fn reduce_key(state: JsValue, key: &str) -> JsValue {
+    // スキーマ不一致の扱いは reduce() が持つ。ここで判断すると
+    // 同じ方針が二か所に増えて、いずれ食い違う。
     let current = serde_wasm_bindgen::from_value::<EngineState>(state)
-        .ok()
-        .filter(EngineState::is_valid)
-        .unwrap_or_else(EngineState::initial);
+        .unwrap_or_else(|_| EngineState::initial());
 
     let Some(parsed) = Key::from_token(key) else {
         return to_js(&step_of(current));

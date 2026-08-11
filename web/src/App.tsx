@@ -8,6 +8,7 @@ import { useKeyboard } from "./ui/useKeyboard";
 export function App() {
   const [calc, setCalc] = useState<Calc | null>(null);
   const [step, setStep] = useState<Step | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -17,6 +18,7 @@ export function App() {
         if (cancelled) return;
         setCalc(loaded);
         setStep(loaded.initial());
+        setVersion(loaded.version());
       },
       () => {
         // WASM が読めなければ電卓は何もできない。読み込み中の表示のまま
@@ -49,7 +51,7 @@ export function App() {
     );
   }
 
-  if (!calc || !step) {
+  if (!calc || !step || version === null) {
     return <p>Loading…</p>;
   }
 
@@ -58,7 +60,7 @@ export function App() {
       <Display display={step.display} />
       <Keypad onPress={press} />
       <p className={styles.version} data-testid="core-version">
-        calcarc-core {calc.version()}
+        calcarc-core {version}
       </p>
     </main>
   );

@@ -9,48 +9,15 @@ use calcarc_core::engine::reduce;
 use calcarc_core::engine::state::{EngineState, OpToken, STATE_SCHEMA};
 use proptest::prelude::*;
 
-const TOKENS: &[&str] = &[
-    "0",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "dot",
-    "pi",
-    "add",
-    "sub",
-    "mul",
-    "div",
-    "eq",
-    "lparen",
-    "rparen",
-    "j",
-    "polar_toggle",
-    "sqrt",
-    "sqr",
-    "sin",
-    "cos",
-    "tan",
-    "neg",
-    "ac",
-    "del",
-    "angle_toggle",
-];
-
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(500))]
 
     /// 任意の打鍵列を与えても panic せず、常に表示可能な状態が返る。
     #[test]
-    fn never_panics(indices in prop::collection::vec(0usize..TOKENS.len(), 0..40)) {
+    fn never_panics(indices in prop::collection::vec(0usize..Key::ALL.len(), 0..40)) {
         let mut state = EngineState::initial();
         for i in indices {
-            let key = Key::from_token(TOKENS[i]).expect("token table is out of sync");
+            let key = Key::ALL[i];
             let (next, shown) = reduce(&state, key);
             prop_assert!(!shown.main.is_empty());
             prop_assert_eq!(next.schema, STATE_SCHEMA);
@@ -75,10 +42,10 @@ proptest! {
 
     /// AC はどんな状態からでも初期表示に戻す。
     #[test]
-    fn ac_always_recovers(indices in prop::collection::vec(0usize..TOKENS.len(), 0..40)) {
+    fn ac_always_recovers(indices in prop::collection::vec(0usize..Key::ALL.len(), 0..40)) {
         let mut state = EngineState::initial();
         for i in indices {
-            state = reduce(&state, Key::from_token(TOKENS[i]).unwrap()).0;
+            state = reduce(&state, Key::ALL[i]).0;
         }
         let (cleared, shown) = reduce(&state, Key::Ac);
         prop_assert!(cleared.error.is_none());
