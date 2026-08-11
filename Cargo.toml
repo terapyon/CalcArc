@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/calcarc-core"]
+members = ["crates/calcarc-core", "crates/calcarc-wasm"]
 
 [workspace.package]
 edition = "2024"
