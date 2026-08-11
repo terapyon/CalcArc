@@ -492,6 +492,58 @@ fn del_walks_the_three_tiers_in_order() {
 }
 
 #[test]
+fn del_returns_to_the_pending_operator() {
+    // DEL が実際に何かを消して「演算子の直後」に戻ったなら、次に押した
+    // 演算子は差し替えでなければならない。加算だけで書くと差が出ない
+    // （3+3+4 も 3+4 も 7）ので、乗算で固定する。この穴が表から見えて
+    // いなかったのは、DEL の行が加算経路しか持っていなかったためである。
+    assert_eq!(
+        main_of(&["3", "mul", "lparen", "del", "mul", "4", "eq"]),
+        "12"
+    );
+    assert_eq!(main_of(&["3", "mul", "4", "del", "mul", "5", "eq"]), "15");
+    assert_eq!(main_of(&["3", "mul", "j", "del", "mul", "5", "eq"]), "15");
+    // 数字を続けたときは従来どおり。
+    assert_eq!(main_of(&["3", "mul", "lparen", "del", "4", "eq"]), "12");
+    assert_eq!(
+        main_of(&["3", "add", "lparen", "del", "add", "4", "eq"]),
+        "7"
+    );
+}
+
+#[test]
+fn del_does_not_restore_the_value_a_paren_discarded() {
+    // `(` は入力中の値を捨てて current を 0 にする。DEL は括弧を消すが
+    // 0 は戻さない。したがって押し間違いが綺麗に戻るのは、続けて打つのが
+    // 数字のときと、加法の単位元 0 が答えを変えない `+` `−` のときだけで、
+    // `×` `=` では 0 が残る。DEL は undo ではないという境界（設計書 §4）が
+    // ここに出る。
+    assert_eq!(main_of(&["3", "mul", "lparen", "del", "eq"]), "0");
+    assert_eq!(main_of(&["3", "add", "lparen", "del", "eq"]), "3");
+}
+
+#[test]
+fn del_after_a_closing_paren_does_not_fake_a_pending_operator() {
+    // `)` の直後は「演算子の直後」ではない。入力した 5 を DEL で消しても
+    // 戻るのはそこであって、次の `+` は差し替えではなく通常の演算になる。
+    //
+    // この形は状態だけを見ると `3 + 4 DEL` と区別がつかない。どちらも
+    // バッファが消えて演算子スタックの先頭が `+` になる。だから
+    // operator_pending は DEL 後の状態から導き直すのではなく、DEL が
+    // 落とさないもの（引き継ぐ事実）として扱う。
+    assert_eq!(
+        main_of(&[
+            "3", "add", "lparen", "4", "rparen", "5", "del", "add", "6", "eq"
+        ]),
+        "13"
+    );
+    assert_eq!(
+        main_of(&["3", "add", "lparen", "4", "rparen", "del", "add", "5", "eq"]),
+        "12"
+    );
+}
+
+#[test]
 fn del_does_not_remove_an_operator() {
     use calcarc_core::engine::state::BinOp;
     // 演算子を消せるようにすると、確定済みの入力を復元する必要が生じて
