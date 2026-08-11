@@ -323,6 +323,30 @@ fn every_sequence_over_all_classes_up_to_six_keys_holds_the_invariants() {
     walk(&EngineState::initial(), &ALL_CLASSES, 0, 6, &mut Vec::new());
 }
 
+/// 重みつきのキー生成。演算子と括弧を厚くして、深い入れ子と長い畳み込みに
+/// 届かせる。一様に引くと `)` を早々に踏んで大半の列が死ぬ。
+fn weighted_key() -> impl Strategy<Value = Key> {
+    prop_oneof![
+        5 => prop::sample::select(vec![
+            Key::Digit(0), Key::Digit(3), Key::Digit(7),
+        ]),
+        4 => prop::sample::select(vec![
+            Key::Add, Key::Sub, Key::Mul, Key::Div,
+        ]),
+        3 => Just(Key::LParen),
+        2 => Just(Key::RParen),
+        2 => Just(Key::Eq),
+        1 => Just(Key::J),
+        1 => Just(Key::Dot),
+        1 => prop::sample::select(vec![
+            Key::Sqrt, Key::Sqr, Key::Neg, Key::Sin, Key::Cos, Key::Tan, Key::Pi,
+        ]),
+        1 => prop::sample::select(vec![
+            Key::Del, Key::AngleToggle, Key::PolarToggle, Key::Ac,
+        ]),
+    ]
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(500))]
 
@@ -358,6 +382,36 @@ proptest! {
         prop_assert!(cleared.operators.is_empty());
         // 表示形式が Polar のままなら "0 ∠ 0"、Rect なら "0"。
         prop_assert!(shown.main == "0" || shown.main == "0 ∠ 0");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(300))]
+
+    /// 長い打鍵列を辿る。エラーに落ちたら AC を挟んで続ける。
+    ///
+    /// 挟まないと、一度落ちた列は残り全部が無効打鍵になり探索に寄与しない。
+    /// 網羅列挙が短い列を保証するので、こちらは深い入れ子・長い畳み込み・
+    /// エラーからの復帰を繰り返す領域を担当する。
+    #[test]
+    fn long_sequences_hold_the_invariants(
+        keys in prop::collection::vec(weighted_key(), 0..120)
+    ) {
+        let mut state = EngineState::initial();
+        for key in keys {
+            if state.error.is_some() {
+                let (cleared, _) = reduce(&state, Key::Ac);
+                if let Err(why) = invariants::check(&state, Key::Ac, &cleared) {
+                    return Err(TestCaseError::fail(why));
+                }
+                state = cleared;
+            }
+            let (next, _) = reduce(&state, key);
+            if let Err(why) = invariants::check(&state, key, &next) {
+                return Err(TestCaseError::fail(format!("{why} (key {})", key.token())));
+            }
+            state = next;
+        }
     }
 }
 
