@@ -287,6 +287,18 @@
         "theta_deg": 1.0
       },
       "op": "polar_to_rect"
+    },
+    {
+      "expect": {
+        "im": 7.071067811865475e-09,
+        "re": 7.071067811865475e-09
+      },
+      "id": "polar_to_rect/1e-08/45.0",
+      "input": {
+        "r": 1e-08,
+        "theta_deg": 45.0
+      },
+      "op": "polar_to_rect"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
