@@ -433,6 +433,10 @@ TB
 TiB
 ```
 
+この列挙は候補単位の集合である。MVP は各系（10 進・2 進）から、値が
+1 以上になる最大の単位を 1 行ずつ自動選択する（Milestone 4 の例と整合。
+規則は docs/superpowers/specs/2026-08-11-data-scale-design.md §3）。
+
 ---
 
 # 16. Data Types

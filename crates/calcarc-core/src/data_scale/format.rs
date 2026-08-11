@@ -35,10 +35,14 @@ pub fn group_digits(bytes: u128) -> String {
     out
 }
 
+/// 10 進(KB/MB/GB/TB)で `"307.2 GB"` の形にする。最小単位(1000 bytes)未満は
+/// None。この None が WASM 境界で null になり、UI はその行ごと隠す。
 pub fn format_decimal(bytes: u128) -> Option<String> {
     scaled(bytes, &DECIMAL_UNITS)
 }
 
+/// 2 進(KiB/MiB/GiB/TiB)で `"286.1 GiB"` の形にする。最小単位(1024 bytes)
+/// 未満は None。この None が WASM 境界で null になり、UI はその行ごと隠す。
 pub fn format_binary(bytes: u128) -> Option<String> {
     scaled(bytes, &BINARY_UNITS)
 }

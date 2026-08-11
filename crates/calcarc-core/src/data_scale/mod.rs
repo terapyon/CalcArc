@@ -52,6 +52,7 @@ impl DataType {
         })
     }
 
+    /// 境界（WASM / JS）へ渡す文字列トークン。`from_token` の逆写像。
     pub fn token(self) -> &'static str {
         match self {
             DataType::Int8 => "int8",
