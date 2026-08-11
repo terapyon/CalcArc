@@ -170,9 +170,14 @@ pytest / ruff check / ruff format --check / golden 再生成 diff。
 2. オフライン E2E が緑で、**かつ**オフラインエミュレーションの実在確認
    （初回訪問がオフラインで失敗する）も緑。
 3. 既存 E2E 全件が SW 有効環境で緑のまま。
-3b. ビルド成果物の `sw.js` に `skipWaiting` 呼び出しが含まれないこと、
-   および precache 一覧に `.wasm` エントリが含まれることが機械検査されて
-   いる（§2・§7 の恒久テスト）。
+3b. ビルド成果物の `sw.js` が**無条件の即時活性化を含まない**ことが機械検査
+   されている。注意: workbox は prompt モードでも `SKIP_WAITING` メッセージ
+   への応答として `skipWaiting` を**ガード付きで**含むため、「skipWaiting
+   という文字列が無い」は検査にならない。検査の実体は
+   「`clientsClaim` が現れない（autoUpdate 注入の痕跡）かつ
+   `SKIP_WAITING` メッセージガードが現れる（prompt の形）」。
+   あわせて precache 一覧に `.wasm` エントリが含まれることも機械検査する
+   （§2・§7 の恒久テスト）。
 4. `rust-version = "1.87"` がワークスペースに宣言され、両クレートが継承、
    CONTRIBUTING に追従方針が 1 行。`cargo test --workspace` 緑のまま。
 5. フルスイープ（ci.yml の全コマンド）がブランチ末尾で緑。
