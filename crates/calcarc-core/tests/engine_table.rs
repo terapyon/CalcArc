@@ -463,3 +463,41 @@ fn an_error_hides_the_pending_state() {
     assert_eq!(shown.pending_op, None);
     assert_eq!(shown.pending_depth, 0);
 }
+
+#[test]
+fn del_removes_an_unclosed_paren() {
+    // ( が入力中の 3 を捨てたうえ、閉じていない括弧だけが残る。
+    // その状態を DEL で片付けられるようにする。
+    assert_eq!(main_of(&["3", "lparen", "del"]), "0");
+    assert_eq!(run(&["3", "lparen", "del"]).pending_depth, 0);
+
+    // 押し間違いが綺麗に戻る。
+    assert_eq!(main_of(&["3", "add", "lparen", "del", "4", "eq"]), "7");
+}
+
+#[test]
+fn del_walks_the_three_tiers_in_order() {
+    // 数字 → j マーカー → 開き括弧（設計書 I7）。
+    assert_eq!(main_of(&["3", "add", "lparen", "j", "4", "del"]), "j");
+    assert_eq!(
+        run(&["3", "add", "lparen", "j", "4", "del", "del"]).pending_depth,
+        1,
+        "2 段目では括弧はまだ残る"
+    );
+    assert_eq!(
+        run(&["3", "add", "lparen", "j", "4", "del", "del", "del"]).pending_depth,
+        0,
+        "3 段目で括弧が消える"
+    );
+}
+
+#[test]
+fn del_does_not_remove_an_operator() {
+    use calcarc_core::engine::state::BinOp;
+    // 演算子を消せるようにすると、確定済みの入力を復元する必要が生じて
+    // undo になる。境界はここ。
+    assert_eq!(run(&["3", "add", "del"]).pending_op, Some(BinOp::Add));
+
+    // 括弧の内側で演算子が保留中なら、その括弧も消さない。
+    assert_eq!(run(&["lparen", "3", "add", "del"]).pending_depth, 1);
+}

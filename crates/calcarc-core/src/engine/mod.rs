@@ -31,8 +31,12 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     } else if next.error.is_some() {
         // エラー中は AC 以外を受け付けない。
     } else {
-        let had_buffer = next.buffer.is_some();
         let was_pending = next.operator_pending;
+        // DEL が何も消さないかどうかは、適用の前に見ておく必要がある。
+        // 消さなかったなら「直前が二項演算子だった」という事実は残る。
+        let del_changes_nothing =
+            next.buffer.is_none() && !matches!(next.operators.last(), Some(OpToken::OpenParen));
+
         if let Err(err) = apply(&mut next, key) {
             next.error = Some(err);
         }
@@ -42,8 +46,8 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // 表示だけを変えるキーは「直前が演算子だった」事実を消さない。
                 // 消さないと 3 + DRG + が差し替えではなく累算になる。
                 Key::AngleToggle | Key::PolarToggle => was_pending,
-                // 消すものが無かった DEL も同じ。
-                Key::Del if !had_buffer => was_pending,
+                // 何も消さなかった DEL も同じ。
+                Key::Del if del_changes_nothing => was_pending,
                 _ => false,
             };
     }
@@ -129,6 +133,28 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
     Ok(())
 }
 
+/// DEL の 1 回分。数字 → `j` マーカー → 閉じられていない開き括弧の順に、
+/// ひとつだけ消す。どれも無ければ何もしない（設計書 I7）。
+///
+/// 演算子は消さない。消せるようにすると、確定済みの入力を復元する必要が
+/// 生じて undo になる。undo は状態に履歴スタックを要求し、EngineState が
+/// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
+fn delete_one(state: &mut EngineState) {
+    if let Some(buffer) = &mut state.buffer {
+        // 1 段目と 2 段目は Buffer::pop が担う。数字が残っていれば末尾を
+        // 消し、数字が尽きていれば j ごとバッファを捨てる。
+        if buffer.pop() {
+            state.buffer = None;
+        }
+        return;
+    }
+    // 3 段目。演算子が保留されていれば last は Op なので、この分岐には
+    // 入らない。括弧を演算子の下から抜くことはない。
+    if matches!(state.operators.last(), Some(OpToken::OpenParen)) {
+        state.operators.pop();
+    }
+}
+
 /// `(` が押されたときの遷移。
 ///
 /// 新しい被演算数の文脈を開く。入力途中の数値があっても破棄する。
@@ -189,13 +215,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // j は常に新しい虚部入力を開始する。
             state.buffer = Some(Buffer::imaginary());
         }
-        Key::Del => {
-            if let Some(buffer) = &mut state.buffer
-                && buffer.pop()
-            {
-                state.buffer = None;
-            }
-        }
+        Key::Del => delete_one(state),
         Key::Add => push_binop(state, BinOp::Add)?,
         Key::Sub => push_binop(state, BinOp::Sub)?,
         Key::Mul => push_binop(state, BinOp::Mul)?,
