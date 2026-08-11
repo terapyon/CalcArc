@@ -60,6 +60,19 @@ mod tests {
     fn zero_has_zero_magnitude() {
         let p = to_polar(Value::ZERO);
         close(p.r, 0.0);
+        // atan2(0, 0) は 0 を返す。NaN にならないことを固定しておく。
+        close(p.theta_rad, 0.0);
+    }
+
+    #[test]
+    fn magnitude_survives_inputs_that_would_overflow_naive_squaring() {
+        // (re² + im²).sqrt() ならここで中間の二乗が inf になり r も inf になる。
+        // hypot は溢れない。これが hypot を選んだ理由そのもの。
+        let p = to_polar(Value::new(3e200, 4e200));
+        assert!(p.r.is_finite(), "magnitude overflowed: {}", p.r);
+        // 5e200 との比で見る。絶対誤差はこの桁では意味を持たない。
+        close(p.r / 5e200, 1.0);
+        close(p.theta_rad.to_degrees(), 53.13010235415598);
     }
 
     #[test]
