@@ -46,3 +46,49 @@ def polar_to_rect(r: float, theta_deg: float) -> tuple[float, float]:
         float(sp.N(radius * sp.cos(theta), PRECISION)),
         float(sp.N(radius * sp.sin(theta), PRECISION)),
     )
+
+
+def _binary(a_re: float, a_im: float, b_re: float, b_im: float):
+    """4 つの f64 を厳密有理数の組にする。"""
+    return _exact(a_re), _exact(a_im), _exact(b_re), _exact(b_im)
+
+
+def _to_floats(re_expr, im_expr) -> tuple[float, float]:
+    return float(sp.N(re_expr, PRECISION)), float(sp.N(im_expr, PRECISION))
+
+
+def add(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
+    ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
+    return _to_floats(ar + br, ai + bi)
+
+
+def sub(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
+    ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
+    return _to_floats(ar - br, ai - bi)
+
+
+def mul(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """式は Rust と同形(定義そのもの)。独立性は厳密有理数で計算して最後に
+    1 回だけ丸めることにある。"""
+    ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
+    return _to_floats(ar * br - ai * bi, ar * bi + ai * br)
+
+
+def div(a_re: float, a_im: float, b_re: float, b_im: float) -> tuple[float, float]:
+    """複素数の除算。教科書どおりの式を厳密有理数で計算する。
+
+    素朴な分母 (b_re² + b_im²) は f64 では禁じ手(アンダーフローで 0 に
+    潰れ、オーバーフローで inf になる)であり、Rust はそのために Smith 法を
+    使う。厳密有理数にはその問題が存在しないので、教科書の式のまま正しい。
+    同じ結論に別の道で着くこと自体が検証の独立性である(base-spec §30)。
+    ゼロ除数は golden の対象外(エラー系は engine_table の領域)なので、
+    ここでは検査しない —— 渡せば SymPy が ZeroDivisionError を投げ、
+    生成が音を立てて止まる。それでよい。
+    """
+    ar, ai, br, bi = _binary(a_re, a_im, b_re, b_im)
+    den = br * br + bi * bi
+    return _to_floats((ar * br + ai * bi) / den, (ai * br - ar * bi) / den)

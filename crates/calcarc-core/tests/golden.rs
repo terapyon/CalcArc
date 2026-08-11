@@ -74,6 +74,25 @@ fn close(actual: f64, expected: f64, tol: Tolerance, id: &str, what: &str) {
     );
 }
 
+/// 複素数の結果は差ベクトルのノルムで比べる。
+///
+/// 乗除算は成分ごとの相対精度を保証しない。小さい成分は大きな積の差として
+/// 復元されるため、成分比が偏るほど桁が落ちる（実装の不備ではなく複素数
+/// 演算の性質。実測は docs/numerical-policy.md の「許容誤差」節）。
+/// 保証されるのはノルムの相対精度であり、それを検査する。
+/// 差ベクトルのノルムなので、成分の取り違え・符号違いも捕まる。
+fn close_complex(actual: Value, expected_re: f64, expected_im: f64, tol: Tolerance, id: &str) {
+    let diff = (actual.re - expected_re).hypot(actual.im - expected_im);
+    let norm = expected_re.hypot(expected_im);
+    let ok = diff <= tol.abs || diff <= tol.rel * norm;
+    assert!(
+        ok,
+        "{id}: got ({}, {}), expected ({expected_re}, {expected_im}) \
+         (norm diff {diff}, abs tol {}, rel tol {})",
+        actual.re, actual.im, tol.abs, tol.rel
+    );
+}
+
 fn angle_mode(case: &Case) -> AngleMode {
     match case.mode.as_deref() {
         Some("Rad") => AngleMode::Rad,
@@ -118,19 +137,30 @@ fn complex_conversions_match_the_reference() {
                     theta_rad: field(&case.input, "theta_deg").to_radians(),
                 };
                 let v = from_polar(p);
-                close(
-                    v.re,
+                close_complex(
+                    v,
                     field(&case.expect, "re"),
-                    golden.tolerance,
-                    &case.id,
-                    "re",
-                );
-                close(
-                    v.im,
                     field(&case.expect, "im"),
                     golden.tolerance,
                     &case.id,
-                    "im",
+                );
+            }
+            "add" | "sub" | "mul" | "div" => {
+                let a = Value::new(field(&case.input, "a_re"), field(&case.input, "a_im"));
+                let b = Value::new(field(&case.input, "b_re"), field(&case.input, "b_im"));
+                let actual = match case.op.as_str() {
+                    "add" => a.checked_add(b),
+                    "sub" => a.checked_sub(b),
+                    "mul" => a.checked_mul(b),
+                    _ => a.checked_div(b),
+                }
+                .unwrap_or_else(|e| panic!("{}: unexpected error {e:?}", case.id));
+                close_complex(
+                    actual,
+                    field(&case.expect, "re"),
+                    field(&case.expect, "im"),
+                    golden.tolerance,
+                    &case.id,
                 );
             }
             other => panic!("{}: unknown op {other}", case.id),
@@ -155,19 +185,12 @@ fn scientific_functions_match_the_reference() {
         }
         .unwrap_or_else(|e| panic!("{}: unexpected error {e:?}", case.id));
 
-        close(
-            actual.re,
+        close_complex(
+            actual,
             field(&case.expect, "re"),
-            golden.tolerance,
-            &case.id,
-            "re",
-        );
-        close(
-            actual.im,
             field(&case.expect, "im"),
             golden.tolerance,
             &case.id,
-            "im",
         );
     }
 }
