@@ -29,6 +29,22 @@
 `crates/calcarc-core/tests/engine_table.rs` が挙動の仕様書である。
 キー列と期待される表示の対応を先に変えてから実装を直すこと。
 
+## テストをどこまで回すか
+
+変更の影響範囲に合わせて段を選ぶ。全部を毎回回さない。
+
+| 変更の場所 | 回すもの |
+|---|---|
+| calcarc-core 内部(境界・挙動不変) | fmt + clippy + `cargo test --workspace` |
+| `reduce`/表示の挙動、DisplayState、トークン | 上記 + `wasm-pack test` |
+| `web/src/calc`・UI | 上記 + `pnpm wasm && pnpm test` |
+| ロール意味論・a11y・境界契約 | 上記 + `pnpm e2e`(jsdom は a11y ツリーを組まない) |
+| 数値・アルゴリズム | `cargo test --workspace`。testdata を変えるときだけ Python 再生成 |
+
+フルスイープ(全レイヤー + golden 再生成の差分ゼロ確認)はブランチの
+最終コミット前に 1 回。新設・変更した検査は、対応する壊し方で赤くなる
+ことを確認してから信じる(機械的リネームには不要)。
+
 ## 数値を変えるとき
 
 `reference/scripts/generate.py` を実行して `testdata/` を再生成し、
