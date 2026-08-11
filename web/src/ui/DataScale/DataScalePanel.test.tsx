@@ -57,6 +57,17 @@ describe("DataScalePanel", () => {
     expect(screen.getByLabelText("データ型")).toBeInstanceOf(HTMLSelectElement);
   });
 
+  it("names the panel in Japanese, matching the rest of the UI", async () => {
+    // Display/Keypad のアクセシブルネームはすべて日本語(「角度の単位」
+    // 「電卓キーパッド」等)。ここだけ英語だと読み上げの言語が揃わない。
+    vi.mocked(initDataScale).mockResolvedValue(stubCalc(vi.fn()));
+    render(<DataScalePanel />);
+    await screen.findByLabelText("件数");
+    expect(
+      screen.getByRole("region", { name: "データスケール計算" }),
+    ).toBeInTheDocument();
+  });
+
   it("lists every dtype token, in order, as an option", async () => {
     vi.mocked(initDataScale).mockResolvedValue(stubCalc(vi.fn()));
     render(<DataScalePanel />);
@@ -98,6 +109,38 @@ describe("DataScalePanel", () => {
     expect(status).toHaveTextContent("307.2 GB");
     expect(status).toHaveTextContent("286.10 GiB");
     expect(compute).toHaveBeenLastCalledWith("100000000", "768", "float32");
+  });
+
+  it("hides only the null lines on a sub-unit success (bytes but no decimal/binary)", async () => {
+    // count=1, dimensions=1, int8 → 1 byte: 成功(error: null)だが最小単位
+    // 未満なので decimal/binary は null(Task 3 の追補テストが保証する
+    // 実際の境界)。null の行だけが消え、bytes 行は出て、エラーは出ない
+    // ことを検査する — 全 null(エラー)/全非 null(単位あり)の中間形。
+    const compute = vi.fn().mockReturnValue(
+      result({
+        bytes: "1",
+        bytesGrouped: "1",
+        decimal: null,
+        binary: null,
+        error: null,
+      }),
+    );
+    vi.mocked(initDataScale).mockResolvedValue(stubCalc(compute));
+    render(<DataScalePanel />);
+
+    await userEvent.type(screen.getByLabelText("件数"), "1");
+    await userEvent.type(screen.getByLabelText("次元数"), "1");
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("1 bytes");
+    });
+    const status = screen.getByRole("status");
+    expect(status).not.toHaveTextContent("Math ERROR");
+    expect(status.querySelector("[data-error]")).toBeNull();
+    // "307.2 GB" のような単位付き表記が紛れ込んでいないこと(null の行は
+    // 出ない)。GB/GiB 系の文字列が一切現れないことで確かめる。
+    expect(status).not.toHaveTextContent("GB");
+    expect(status).not.toHaveTextContent("GiB");
   });
 
   it("shows an error when the core reports one", async () => {

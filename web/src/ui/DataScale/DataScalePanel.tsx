@@ -52,7 +52,7 @@ export function DataScalePanel() {
       : null;
 
   return (
-    <section className={styles.panel} aria-label="Data Scale Calculator">
+    <section className={styles.panel} aria-label="データスケール計算">
       <div className={styles.field}>
         <label htmlFor="datascale-count">件数</label>
         <input
