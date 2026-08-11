@@ -30,12 +30,18 @@ export function Display({ display }: DisplayProps) {
         </span>
         <span
           data-testid="display-pending"
-          role="img"
+          role="status"
           aria-label="計算の途中経過"
+          aria-live="off"
         >
           {pending}
         </span>
-        <span data-testid="display-form" role="img" aria-label="表示形式">
+        <span
+          data-testid="display-form"
+          role="status"
+          aria-label="表示形式"
+          aria-live="off"
+        >
           {display.form === "Polar" ? "∠" : ""}
         </span>
       </div>
