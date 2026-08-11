@@ -5578,6 +5578,15 @@ test("every key is a button with an accessible name", async ({ page }) => {
   }
 });
 
+test("the status indicators are exposed as named status regions", async ({ page }) => {
+  // jsdom はアクセシビリティツリーを組み立てないので、role が img のような
+  // 「子要素を刈る」ロールに戻っても vitest では気づけない。実際に一度
+  // それが起きている。実ブラウザでロールと名前から引き当てて防ぐ。
+  await press(page, ["3", "足す", "開き括弧"]);
+  await expect(page.getByRole("status", { name: "計算の途中経過" })).toContainText("+");
+  await expect(page.getByRole("status", { name: "角度の単位" })).toHaveText("DEG");
+});
+
 test("high contrast keeps the destructive key distinguishable", async ({ page }) => {
   // 高コントラストは色相を奪うので、明暗の反転と枠線で区別している。
   // ここが戻ると AC が演算子と同じ見た目になり、押し間違いが起きて
