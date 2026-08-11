@@ -3,6 +3,8 @@
 //! 計算ロジックを持たない。責務は型変換と export のみ(base-spec §6.2)。
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
+use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
+use calcarc_core::data_scale::{self, DataType};
 use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -69,4 +71,49 @@ pub fn reduce_key(state: JsValue, key: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Data Scale の 1 回の計算結果。TypeScript 側の `DataScaleResult` に対応する。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DataScaleResult {
+    bytes: Option<String>,
+    bytes_grouped: Option<String>,
+    decimal: Option<String>,
+    binary: Option<String>,
+    error: Option<calcarc_core::CalcError>,
+}
+
+/// count × dimensions × dtype を計算する。純関数で、状態を持たない。
+///
+/// Scientific の reduce と違いキーストローク状態機械ではないので、
+/// 状態の受け渡しをしない(設計書 §4)。入出力が文字列なのは、JS の
+/// number が 2^53 を超えると u128 の定義域を境界で殺すため。
+/// 例外は投げない。エラーは戻り値の一部である。
+#[wasm_bindgen]
+pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
+    let outcome = data_scale::parse_count(count)
+        .and_then(|c| Ok((c, data_scale::parse_count(dimensions)?)))
+        .and_then(|(c, d)| {
+            let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
+            data_scale::size_in_bytes(c, d, t)
+        });
+    let result = match outcome {
+        Ok(bytes) => DataScaleResult {
+            bytes: Some(bytes.to_string()),
+            bytes_grouped: Some(group_digits(bytes)),
+            decimal: format_decimal(bytes),
+            binary: format_binary(bytes),
+            error: None,
+        },
+        Err(e) => DataScaleResult {
+            bytes: None,
+            bytes_grouped: None,
+            decimal: None,
+            binary: None,
+            error: Some(e),
+        },
+    };
+    let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
+    result.serialize(&serializer).unwrap_or(JsValue::NULL)
 }
