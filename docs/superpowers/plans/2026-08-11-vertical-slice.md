@@ -5432,7 +5432,7 @@ EOF
 `web/tests/e2e/vertical-slice.spec.ts`:
 
 ```ts
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /** 画面のボタンを順に押す。 */
 async function press(page: Page, labels: string[]): Promise<void> {
@@ -5519,6 +5519,28 @@ test("every key is a button with an accessible name", async ({ page }) => {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);
   }
+});
+
+test("high contrast keeps the destructive key distinguishable", async ({ page }) => {
+  // 高コントラストは色相を奪うので、明暗の反転と枠線で区別している。
+  // ここが戻ると AC が演算子と同じ見た目になり、押し間違いが起きて
+  // 困る箇所で手がかりが消える(base-spec §43)。
+  await page.emulateMedia({ contrast: "more" });
+  await page.reload();
+
+  const appearance = (key: Locator) =>
+    key.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return [s.backgroundColor, s.color, s.borderTopWidth, s.borderTopStyle].join("|");
+    });
+
+  const ac = await appearance(page.getByRole("button", { name: "全消去" }));
+  const add = await appearance(page.getByRole("button", { name: "足す" }));
+  const digit = await appearance(page.getByRole("button", { name: "7", exact: true }));
+
+  expect(ac).not.toBe(add);
+  expect(ac).not.toBe(digit);
+  expect(add).not.toBe(digit);
 });
 
 test("touch targets are large enough", async ({ page }) => {
