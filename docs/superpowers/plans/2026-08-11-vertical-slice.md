@@ -948,6 +948,21 @@ mod tests {
     }
 
     #[test]
+    fn rounds_half_to_even_at_the_carry_boundary() {
+        // 9999999999.5 は f64 でちょうど表現できる真のタイ。有効数字 10 桁目が
+        // 奇数の 9 なので round-half-to-even は繰り上げを選び、指数表記に移る。
+        assert_eq!(format_real(9999999999.5), "1e10");
+
+        // 一方 0.99999999995 は 10 進の見た目こそタイだが、f64 にすると
+        // 0.99999999994999999586 でタイより僅かに小さい。丸めの判定は
+        // 書かれた 10 進表記ではなく f64 の実際の値で決まる。
+        assert_eq!(format_real(0.99999999995), "0.9999999999");
+
+        assert_eq!(format_real(0.99999999996), "1");
+        assert_eq!(format_real(0.99999999994), "0.9999999999");
+    }
+
+    #[test]
     fn formats_rectangular_form() {
         assert_eq!(format_rect(Value::new(3.0, 4.0)), "3+j4");
         assert_eq!(format_rect(Value::new(3.0, -4.0)), "3-j4");
