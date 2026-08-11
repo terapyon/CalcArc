@@ -25,7 +25,9 @@ export function App() {
   return (
     <>
       <Nav current={module} />
-      {module === "scientific" ? <ScientificPanel /> : <DataScalePanel />}
+      <main>
+        {module === "scientific" ? <ScientificPanel /> : <DataScalePanel />}
+      </main>
     </>
   );
 }

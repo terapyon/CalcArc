@@ -141,6 +141,10 @@ describe("DataScalePanel", () => {
     // 出ない)。GB/GiB 系の文字列が一切現れないことで確かめる。
     expect(status).not.toHaveTextContent("GB");
     expect(status).not.toHaveTextContent("GiB");
+    // 文字列の不在だけでは、null 判定を外して空の `<p></p>` を描画する
+    // 退行を捕まえられない(文字列としては何も足されないため)。行数を
+    // 直接数えて、bytes の 1 行だけが存在することを確かめる。
+    expect(status.querySelectorAll("p")).toHaveLength(1);
   });
 
   it("shows an error when the core reports one", async () => {

@@ -63,12 +63,12 @@ export function ScientificPanel() {
   }
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <Display display={step.display} />
       <Keypad onPress={press} />
       <p className={styles.version} data-testid="core-version">
         calcarc-core {version}
       </p>
-    </main>
+    </div>
   );
 }

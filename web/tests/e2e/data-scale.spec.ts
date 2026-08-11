@@ -29,8 +29,48 @@ test("the nav switches modules both ways and aria-current follows", async ({
   await expect(nav(page, "Data Scale")).toHaveAttribute("aria-current", "page");
   await expect(nav(page, "Scientific")).not.toHaveAttribute("aria-current");
   await expect(panel(page)).toBeVisible();
+  await expect(page.getByRole("main")).toBeVisible();
 
   await nav(page, "Scientific").click();
+  await expect(page).toHaveURL(/#scientific$/);
+  await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
+  await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
+  await expect(main(page)).toBeVisible();
+});
+
+test("a direct link to #data-scale shows the panel immediately", async ({
+  page,
+}) => {
+  // ハッシュルーティング採用理由の検査(a): ディープリンク。
+  await page.goto("/#data-scale");
+  await expect(panel(page)).toBeVisible();
+});
+
+test("reloading a #data-scale deep link keeps the panel visible", async ({
+  page,
+}) => {
+  // ハッシュルーティング採用理由の検査(b): リロード後も同じ画面。
+  await page.goto("/#data-scale");
+  await expect(panel(page)).toBeVisible();
+
+  await page.reload();
+  await expect(panel(page)).toBeVisible();
+});
+
+test("browser back returns to Scientific and aria-current follows", async ({
+  page,
+}) => {
+  // ハッシュルーティング採用理由の検査(c): 履歴操作(戻る)にブラウザの
+  // 標準動作がそのまま乗る。前の履歴エントリを明示するため、まず
+  // #scientific へ明示的に遷移してから Data Scale へ移る。
+  await page.goto("/#scientific");
+  await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
+
+  await nav(page, "Data Scale").click();
+  await expect(page).toHaveURL(/#data-scale$/);
+  await expect(nav(page, "Data Scale")).toHaveAttribute("aria-current", "page");
+
+  await page.goBack();
   await expect(page).toHaveURL(/#scientific$/);
   await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
   await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
@@ -110,8 +150,10 @@ test("a sub-unit success shows bytes without GB/GiB lines", async ({
 
   await expect(status(page)).toContainText("1 bytes");
   await expect(status(page)).not.toContainText("Math ERROR");
-  await expect(status(page)).not.toContainText("GB");
-  await expect(status(page)).not.toContainText("GiB");
+  // 1 byte で実際に混入しうるのは KB/KiB(次に小さい単位)。GB の否定は
+  // KB を含意しない——境界を検査するなら最寄りの単位を否定する。
+  await expect(status(page)).not.toContainText("KB");
+  await expect(status(page)).not.toContainText("KiB");
 });
 
 test("typing into the data-scale form does not touch the scientific state", async ({

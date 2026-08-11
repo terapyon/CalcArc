@@ -2,6 +2,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+  /* iOS のホームインジケータを避ける。ScientificPanel の .shell と同形。 */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
 .field {
