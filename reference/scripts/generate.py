@@ -49,6 +49,18 @@ def build_complex() -> dict:
                 "expect": {"re": re, "im": im},
             }
         )
+    for (a_re, a_im), (b_re, b_im) in cases.BINARY_INPUTS:
+        for op in ("add", "sub", "mul", "div"):
+            fn = getattr(complex_ref, op)
+            re, im = fn(a_re, a_im, b_re, b_im)
+            entries.append(
+                {
+                    "id": f"{op}/({a_re},{a_im})/({b_re},{b_im})",
+                    "op": op,
+                    "input": {"a_re": a_re, "a_im": a_im, "b_re": b_re, "b_im": b_im},
+                    "expect": {"re": re, "im": im},
+                }
+            )
     return _envelope(entries)
 
 

@@ -145,6 +145,24 @@ fn complex_conversions_match_the_reference() {
                     &case.id,
                 );
             }
+            "add" | "sub" | "mul" | "div" => {
+                let a = Value::new(field(&case.input, "a_re"), field(&case.input, "a_im"));
+                let b = Value::new(field(&case.input, "b_re"), field(&case.input, "b_im"));
+                let actual = match case.op.as_str() {
+                    "add" => a.checked_add(b),
+                    "sub" => a.checked_sub(b),
+                    "mul" => a.checked_mul(b),
+                    _ => a.checked_div(b),
+                }
+                .unwrap_or_else(|e| panic!("{}: unexpected error {e:?}", case.id));
+                close_complex(
+                    actual,
+                    field(&case.expect, "re"),
+                    field(&case.expect, "im"),
+                    golden.tolerance,
+                    &case.id,
+                );
+            }
             other => panic!("{}: unknown op {other}", case.id),
         }
     }
