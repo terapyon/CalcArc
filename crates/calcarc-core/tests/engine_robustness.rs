@@ -6,7 +6,7 @@
 use calcarc_core::engine::display::display;
 use calcarc_core::engine::key::Key;
 use calcarc_core::engine::reduce;
-use calcarc_core::engine::state::{EngineState, STATE_SCHEMA};
+use calcarc_core::engine::state::{EngineState, OpToken, STATE_SCHEMA};
 use proptest::prelude::*;
 
 const TOKENS: &[&str] = &[
@@ -54,6 +54,20 @@ proptest! {
             let (next, shown) = reduce(&state, key);
             prop_assert!(!shown.main.is_empty());
             prop_assert_eq!(next.schema, STATE_SCHEMA);
+
+            // 構造の健全性も見る。panic の有無だけを見ていると、
+            // スタックがずれたまま Ok を返す退行を見逃す。
+            // エラーが立っていない限り、被演算数の数は保留中の
+            // 二項演算子の数と一致していなければならない。
+            if next.error.is_none() {
+                let pending_ops = next
+                    .operators
+                    .iter()
+                    .filter(|t| matches!(t, OpToken::Op(_)))
+                    .count();
+                prop_assert_eq!(next.operands.len(), pending_ops);
+            }
+
             state = next;
         }
         prop_assert!(!display(&state).main.is_empty());
