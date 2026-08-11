@@ -1,6 +1,6 @@
 """Data Scale 参照実装の健全性テスト。突き合わせ本番は golden の仕事。"""
 
-from calcarc_reference.data_scale_ref import U128_MAX, compute
+from calcarc_reference.data_scale_ref import compute
 
 
 def test_headline_case() -> None:

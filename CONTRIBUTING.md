@@ -40,6 +40,7 @@
 | `web/src/calc`・UI | 上記 + `pnpm wasm && pnpm typecheck && pnpm lint && pnpm test` |
 | ロール意味論・a11y・境界契約 | 上記 + `pnpm e2e`(jsdom は a11y ツリーを組まない) |
 | 数値・アルゴリズム | fmt + clippy + `cargo test --workspace`。testdata を変えるときは `uv run --no-config pytest` と再生成の差分確認も |
+| `reference/` の Python | 上記 + `uv run --no-config ruff check .` と `uv run --no-config ruff format --check .`(CI が回す) |
 
 フルスイープ(全レイヤー + golden 再生成の差分ゼロ確認)はブランチの
 最終コミット前に 1 回。新設・変更した検査は、対応する壊し方で赤くなる

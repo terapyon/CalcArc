@@ -1177,6 +1177,7 @@ wasm-pack test --headless --chrome crates/calcarc-wasm   # 9
 cd web && pnpm wasm && pnpm test && pnpm e2e             # ~40 + 22 前後
 cd web && pnpm lint                                       # biome check（CI: ci.yml:83）
 cd reference && uv run --no-config pytest                # 17
+uv run --no-config ruff check . && uv run --no-config ruff format --check .   # CI: ci.yml:131-133
 uv run --no-config python scripts/generate.py && git diff --exit-code testdata/
 git status
 ```
