@@ -92,7 +92,13 @@ def write(name: str, payload: dict) -> None:
     path = TESTDATA / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # 差分が安定するよう整形して書く。末尾改行を付ける。
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # allow_nan=False にするのは、nan / inf が RFC 8259 の JSON として
+    # 不正であり、serde_json が解析できないため。黙って不正な golden を
+    # 書き出すより、生成時に ValueError で落ちるほうがよい。
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 

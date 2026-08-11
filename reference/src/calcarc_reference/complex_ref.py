@@ -24,6 +24,15 @@ def _exact(x: float) -> sp.Rational:
 def rect_to_polar(re: float, im: float) -> tuple[float, float]:
     """直交形式から極形式へ。角度は度で返す。"""
     a, b = _exact(re), _exact(im)
+    if a == 0 and b == 0:
+        # 原点の偏角は数学的には未定義で、SymPy の atan2(0, 0) は nan を返す。
+        # IEEE 754 は atan2(+0, +0) = +0 と定めており、Rust の f64::atan2 は
+        # それに従う。参照実装も同じ約束を採る。
+        #
+        # これはアルゴリズムの共有ではなく、未定義値に対する約束の統一である。
+        # 約束が食い違ったままでは突き合わせ自体が成立しない。また nan は
+        # RFC 8259 の JSON として不正なので、書き出す前にここで潰す。
+        return 0.0, 0.0
     r_expr = sp.sqrt(a**2 + b**2)
     theta_expr = sp.atan2(b, a) * 180 / sp.pi
     return float(sp.N(r_expr, PRECISION)), float(sp.N(theta_expr, PRECISION))
