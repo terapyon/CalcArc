@@ -12,6 +12,11 @@ pub use error::{CalcError, CalcResult};
 /// `testdata/*.json` の `tolerance` から読む。混同しないこと。
 pub const TEST_EPSILON: f64 = 1e-12;
 
+/// rect → polar → rect の往復で許す相対誤差。
+///
+/// 三角関数と平方根を経由するぶん、TEST_EPSILON より緩い。
+pub const ROUNDTRIP_EPSILON: f64 = 1e-9;
+
 /// 浮動小数点の近似比較。個々のテストに誤差値を書かないためのヘルパー。
 #[cfg(test)]
 pub(crate) fn assert_close(actual: f64, expected: f64) {

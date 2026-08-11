@@ -8,3 +8,6 @@ description = "Calculation core for CalcArc. No WASM or UI dependencies."
 
 [dependencies]
 serde = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"
