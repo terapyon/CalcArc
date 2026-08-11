@@ -5448,7 +5448,7 @@ import { useKeyboard } from "./ui/useKeyboard";
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `cd web && pnpm test`
-Expected: PASS（24 テスト）
+Expected: PASS（27 テスト。Task 18 までの 19 件に useKeyboard の 8 件が加わる）
 
 Run: `cd web && pnpm typecheck && pnpm lint`
 Expected: 出力なし
