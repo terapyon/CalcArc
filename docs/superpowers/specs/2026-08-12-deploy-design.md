@@ -133,8 +133,9 @@ M5 の更新経路の安全性証明は「CF Pages が `_headers` を尊重す�
 - カスタムドメイン、PR ごとのプレビューデプロイ、CF 側の設定変更
   （production branch の確認はユーザー作業として §5 手順に含めない——
   §0 の前提に含まれる）。
-- デプロイ通知（Slack 等）、ロールバック自動化（Direct Upload の再実行 =
-  workflow_dispatch で旧コミットから、で足りる。手順として §5 に 1 行）。
+- デプロイ通知（Slack 等）、ロールバック自動化（revert コミットを main に
+  積む方式で足りる——手順は docs/deploy.md。旧コミットからの
+  workflow_dispatch は main と配信物の刻印を食い違わせるので**使わない**）。
 - README への DoD 反映（Loan 完成後の §50 総点検で）。
 
 ## §7 完了条件
