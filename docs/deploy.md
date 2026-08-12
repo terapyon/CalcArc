@@ -67,16 +67,16 @@ revert コミットを main に積んで通常の push 経路でデプロイす�
 デプロイ後スモークは 3 ステップで、赤になったステップがそのままどの前提が
 破れたかを示す。
 
-1. **ヘッダ検査**（`sw.js` / `manifest.webmanifest` の `no-cache`、
-   `/assets/` 配下の `immutable`）が赤 → Cloudflare Pages が `_headers` を
-   尊重していない、または `web/public/_headers` の内容が設定退行している。
-   デプロイそのものは成功している可能性があるので、まず `_headers` の中身と
-   CF Pages 側の設定を疑う。
-2. **刻印照合**（`/build-info.json` の `commit` と `GITHUB_SHA` の一致、
+1. **刻印照合**（`/build-info.json` の `commit` と `GITHUB_SHA` の一致、
    リトライつき）が赤 → ビルドは成功しデプロイもキックされているが、
    エッジへの伝播が遅い（リトライ回数を使い切っただけなら再実行で消える
    一過性）か、配信されている版が最新デプロイと食い違っている（配信不整合、
    一過性でなければ深刻）。
+2. **ヘッダ検査**（`sw.js` / `manifest.webmanifest` の `no-cache`、
+   `/assets/` 配下の `immutable`）が赤 → Cloudflare Pages が `_headers` を
+   尊重していない、または `web/public/_headers` の内容が設定退行している。
+   デプロイそのものは成功している可能性があるので、まず `_headers` の中身と
+   CF Pages 側の設定を疑う。
 3. **生存確認**（この版のバンドルを指す HTML が配られている——`web/dist/index.html`
    が参照する `/assets/index-*.js` の名前を配信された `/` の HTML から
    grep する）が赤 → デプロイ自体が失敗している、ビルドが壊れている、
