@@ -23,6 +23,9 @@
   同じバグが両方に入って検証の意味がなくなる。別のライブラリや別の手法を使う。
 - **命名と API 形状の判断は [docs/api-style.md](docs/api-style.md) に従う。**
   基準で説明できない変更提案は「好み」であり、現状維持とする。
+- **MSRV は現行 stable 追従**(`rust-version` はワークスペースで宣言)。
+  上げるときは理由をコミットメッセージに書く。CI に専用ジョブは置かない——
+  追従方針の下では `rust-toolchain.toml` の stable と同義になるため。
 
 ## 電卓の挙動を変えるとき
 
@@ -37,7 +40,7 @@
 |---|---|
 | calcarc-core 内部(境界・挙動不変) | fmt + clippy + `cargo test --workspace` |
 | `reduce`/表示の挙動、DisplayState、トークン | 上記 + `wasm-pack test` |
-| `web/src/calc`・UI | 上記 + `pnpm wasm && pnpm typecheck && pnpm lint && pnpm test` |
+| `web/src/calc`・UI | 上記 + `pnpm wasm && pnpm typecheck && pnpm lint && pnpm test && pnpm check:sw` |
 | ロール意味論・a11y・境界契約 | 上記 + `pnpm e2e`(jsdom は a11y ツリーを組まない) |
 | 数値・アルゴリズム | fmt + clippy + `cargo test --workspace`。testdata を変えるときは `uv run --no-config pytest` と再生成の差分確認も |
 | `reference/` の Python | 上記 + `uv run --no-config ruff check .` と `uv run --no-config ruff format --check .`(CI が回す) |
