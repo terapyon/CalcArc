@@ -1,0 +1,18 @@
+name: Setup wasm-pack
+description: >
+  Rust(wasm32) + rust-cache + wasm-pack。バージョン固定はここに一本化する。
+  ci.yml と deploy.yml の両方がこれを使う——写しで持つと片方だけ更新される
+  (スイープ一覧の lint 欠落と同じ、手写しリストの宿命)。
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v2
+    - uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        # バージョンを指定しないと実行ごとに入るものが変わる。
+        # 実際に main で v0.9.1 が降ってきて、license.workspace を
+        # 解釈できずマニフェストの解析に失敗した。手元と揃える。
+        version: 'v0.15.0'

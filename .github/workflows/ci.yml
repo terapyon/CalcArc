@@ -30,16 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          # バージョンを指定しないと実行ごとに入るものが変わる。
-          # 実際に main で v0.9.1 が降ってきて、license.workspace を
-          # 解釈できずマニフェストの解析に失敗した。手元と揃える。
-          version: 'v0.15.0'
+      - uses: ./.github/actions/setup-wasm-pack
       - name: Use the runner's ChromeDriver
         # wasm-pack は既定で自前の ChromeDriver を取りに行くが、それが
         # ランナーの Chrome とバージョン不一致になると起動に失敗する。
@@ -64,21 +55,11 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          # package.json はリポジトリ直下ではなく web/ にある。
-          # 既定の探索先には無いので明示する。
-          package_json_file: web/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: ./.github/actions/setup-web
       - uses: actions/download-artifact@v4
         with:
           name: wasm-pkg
           path: web/src/wasm/
-      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -95,21 +76,11 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          # package.json はリポジトリ直下ではなく web/ にある。
-          # 既定の探索先には無いので明示する。
-          package_json_file: web/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: ./.github/actions/setup-web
       - uses: actions/download-artifact@v4
         with:
           name: wasm-pkg
           path: web/src/wasm/
-      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       # Layer 6
       - run: pnpm exec playwright test

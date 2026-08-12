@@ -1,0 +1,18 @@
+name: Setup web toolchain
+description: >
+  pnpm + node + 依存インストール。バージョンと cache 設定はここに一本化。
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        # package.json はリポジトリ直下ではなく web/ にある。
+        package_json_file: web/package.json
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        cache-dependency-path: web/pnpm-lock.yaml
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+      working-directory: web
