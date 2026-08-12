@@ -40,7 +40,7 @@
 |---|---|
 | calcarc-core 内部(境界・挙動不変) | fmt + clippy + `cargo test --workspace` |
 | `reduce`/表示の挙動、DisplayState、トークン | 上記 + `wasm-pack test` |
-| `web/src/calc`・UI | 上記 + `pnpm wasm && pnpm typecheck && pnpm lint && pnpm test && pnpm check:sw` |
+| `web/src/calc`・UI | 上記 + `pnpm build && pnpm typecheck && pnpm lint && pnpm test && pnpm check:sw` |
 | ロール意味論・a11y・境界契約 | 上記 + `pnpm e2e`(jsdom は a11y ツリーを組まない) |
 | 数値・アルゴリズム | fmt + clippy + `cargo test --workspace`。testdata を変えるときは `uv run --no-config pytest` と再生成の差分確認も |
 | `reference/` の Python | 上記 + `uv run --no-config ruff check .` と `uv run --no-config ruff format --check .`(CI が回す) |

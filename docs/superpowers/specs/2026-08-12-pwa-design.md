@@ -43,7 +43,9 @@ WASM のキャッシュ（§38）。**一度ロードした後は Scientific と
   新しいデプロイを検知したらバックグラウンドで install し、標準の SW
   ライフサイクルどおり**制御中のページがある間は waiting に留まる**。
   次の全タブ閉鎖→再訪で新世代に切り替わる。更新トーストの類は MVP に
-  入れない（§8）。
+  入れない（§8）。インストール済み standalone ウィンドウもクライアントに
+  数える。常駐ユーザーは旧世代に留まりうる——更新 UI を持たない設計（§8）
+  が引き受けたコスト。
   - **`"prompt"` という名前だが UI の有無ではなく登録戦略の名前である**
     （名前の意味のズレはこのリポジトリの流儀で書き残す）。対になる
     `"autoUpdate"` は skipWaiting + clientsClaim を注入し controllerchange で
@@ -137,9 +139,9 @@ pytest / ruff check / ruff format --check / golden 再生成 diff。
 - **Playwright の SW 分離**: 登録は browser context 単位なので test 間の漏れは
   無いが、**preview の `reuseExistingServer: !CI`** は手元で古いビルドを
   掴みうる。SW を疑う前に build の鮮度を疑うこと。
-- **workbox の `maximumFileSizeToCacheInBytes` 既定 2MB**: 現在の wasm は
-  約 130KB で問題ないが、将来 wasm が肥えたとき precache から**黙って**
-  外れる。上限を明示設定し、超過をビルドエラーにする側に倒す。
+- **workbox の `maximumFileSizeToCacheInBytes` 既定 2MB**。現在の wasm は
+  約 130KB。上限は明示する——超過時の実挙動と番人はこの節の最後の
+  bullet を見よ。
 - **Cloudflare Pages の `_headers`** と SW のキャッシュヘッダが重ならないか
   確認（`public/_headers` が既存）。SW の precache はブラウザキャッシュと
   独立だが、`sw.js` 自体が長期キャッシュされると更新が届かない——
