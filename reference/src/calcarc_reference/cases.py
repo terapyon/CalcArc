@@ -186,6 +186,11 @@ LOAN_INPUTS: list[dict] = [
     {"op": "loan_forward", "principal": "30000000", "rate": "1.5", "n": 600, "residual": "0"},
     # 車例(300 万・5 年・残価 40% 級)
     {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "1200000"},
+    # 残価を階段が飛ばす組。最終回の支払 X + floor(X×月利) は 1 か 2 ずつしか
+    # 増えないので、残価そのものが像に無いことがある。車例と同じ 300 万・5 年・
+    # 年 3.9% で、残価 1,200,195 円は飛ばされ、最終回は B−1 = 1,200,194 円になる
+    # (切り捨てに揃える規約。numerical-policy の既知の制約)。
+    {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "1200195"},
     # B=0 の残価退化恒等式(上と同じ入力で残価だけ 0)
     {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "0"},
     # B = P−1 近傍

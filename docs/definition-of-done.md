@@ -17,7 +17,7 @@ base-spec §50 の 14 項目に、根拠を 1 つずつ付ける。Loan Calculat
 | 7 | Scientific Calculator 動作 | `tests/engine_table.rs`（キー列と表示の仕様表）、`scientific.json` の言語間検証、E2E | テスト |
 | 8 | Polar / Rectangular 変換動作 | `tests/roundtrip.rs`、`complex.json`、E2E の `▸∠` | テスト |
 | 9 | Data Scale Calculator 動作 | `data_scale.json` 28 件、vitest、E2E | テスト |
-| 10 | Loan Calculator 動作 | `finance.json` 35 件（完全一致）、コア単体 41 件、wasm 5 件、vitest 12 件、E2E 11 件 | テスト |
+| 10 | Loan Calculator 動作 | `finance.json` 36 件（完全一致）、コア単体 41 件、wasm 5 件、vitest 12 件、E2E 11 件 | テスト |
 | 11 | Python Reference Validation あり | `reference/` の 4 実装が `complex/scientific/data_scale/finance` の期待値を生成。再生成の byte 一致を CI が検査 | 実装 + テスト |
 | 12 | CI ですべてのテストが成功 | `.github/workflows/ci.yml` の 5 ジョブ。ローカルのフルスイープは下記のとおり全段緑（wasm 境界のみ Firefox。ローカルの Chrome 135 と wasm-pack が持つ chromedriver 151 が噛み合わないため。CI は自前の組を固定している） | テスト |
 | 13 | README に Numerical Policy を説明 | `README.md` の Numerical Policy 節と `docs/numerical-policy.md`（Loan の第 3 分類を追記済み） | 実装 |

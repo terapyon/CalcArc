@@ -53,6 +53,23 @@
     },
     {
       "expect": {
+        "final_payment": "1200194",
+        "monthly_payment": "37533",
+        "rows_paid": 60,
+        "total_interest": "414620",
+        "total_payment": "3414620"
+      },
+      "id": "loan_forward/3000000/3.9/60/1200195",
+      "input": {
+        "n": 60,
+        "principal": "3000000",
+        "rate": "3.9",
+        "residual": "1200195"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
         "final_payment": "55102",
         "monthly_payment": "55114",
         "rows_paid": 60,
