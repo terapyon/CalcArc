@@ -13,7 +13,7 @@ import sys
 import mpmath
 import sympy
 
-from calcarc_reference import cases, complex_ref, data_scale_ref, scientific_ref
+from calcarc_reference import cases, complex_ref, data_scale_ref, loan_ref, scientific_ref
 
 SCHEMA = 1
 TOLERANCE = {"abs": 1e-12, "rel": 1e-12}
@@ -111,6 +111,49 @@ def build_data_scale() -> dict:
     }
 
 
+def _resolve_placeholders(params: dict) -> dict:
+    """期間逆算の境界に使う元本を、参照実装に解かせて埋める。
+
+    「ちょうど割り切れる n」の元本は手で書ける数ではない——その月額・その回数で
+    借りられる最大額そのものだからである(設計書 §7)。+1 円が繰り上がりの相方。
+    """
+    resolved = dict(params)
+    placeholder = resolved.get("principal")
+    if isinstance(placeholder, str) and placeholder.startswith("EXACT_TERM_PRINCIPAL"):
+        num, den = loan_ref.rate_fraction(resolved["rate"])
+        payment = int(resolved["payment"])
+        # 24 回ちょうどで完済する最大の元本(loan_principal のケースと同じ入力)。
+        exact = loan_ref.principal_for(payment, num, den, 24)["principal"]
+        offset = 1 if placeholder.endswith("+1") else 0
+        resolved["principal"] = str(exact + offset)
+    return resolved
+
+
+def build_finance() -> dict:
+    entries = []
+    for case in cases.LOAN_INPUTS:
+        op = case["op"]
+        params = _resolve_placeholders({k: v for k, v in case.items() if k != "op"})
+        result = loan_ref.compute(op, params)
+        entries.append(
+            {
+                "id": f"{op}/" + "/".join(str(v) for v in params.values()),
+                "op": op,
+                "input": params,
+                "expect": result,
+            }
+        )
+    ids = [entry["id"] for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise ValueError("duplicate case id in LOAN_INPUTS")
+    # 整数円の完全一致なので tolerance を持たない(設計書 §7)。
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _envelope(entries: list[dict]) -> dict:
     return {
         "schema": SCHEMA,
@@ -138,6 +181,7 @@ def main() -> None:
     write("complex.json", build_complex())
     write("scientific.json", build_scientific())
     write("data_scale.json", build_data_scale())
+    write("finance.json", build_finance())
 
 
 if __name__ == "__main__":

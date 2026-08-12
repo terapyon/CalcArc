@@ -102,7 +102,7 @@ pub fn principal_for(payment: u64, rate: &Rate, n: u32) -> CalcResult<PrincipalR
         if !candidate.is_finite() || candidate >= u64::MAX as f64 {
             return Err(CalcError::Overflow);
         }
-        largest_principal_that_clears(rate, n, payment, (candidate as u64).max(1))?
+        largest_principal_that_clears(rate, n, payment, (candidate as u64).max(1))
     };
     let s = run_schedule(principal, rate, n, payment, 0)?;
     Ok(PrincipalResult {
@@ -125,9 +125,9 @@ fn smallest_term_that_clears(
     payment: u64,
     seed: u32,
 ) -> CalcResult<u32> {
-    if clears_within(principal, rate, seed, payment)? {
+    if probe(principal, rate, seed, payment) {
         let mut n = seed;
-        while n > 1 && clears_within(principal, rate, n - 1, payment)? {
+        while n > 1 && probe(principal, rate, n - 1, payment) {
             n -= 1;
         }
         return Ok(n);
@@ -135,7 +135,7 @@ fn smallest_term_that_clears(
     let mut n = seed;
     while n < MAX_TERM_MONTHS {
         n += 1;
-        if clears_within(principal, rate, n, payment)? {
+        if probe(principal, rate, n, payment) {
             return Ok(n);
         }
     }
@@ -143,26 +143,36 @@ fn smallest_term_that_clears(
     Err(CalcError::SyntaxError)
 }
 
+/// 探索中の一手。**u64 に収まらない元本は「完済しない側」として扱う**——
+/// 探索を u64 の定義域で閉じるためで、選ばれた答は最後に必ず表を走り切る
+/// (走り切れないなら、そのとき Overflow が出る)。
+fn probe(principal: u64, rate: &Rate, n: u32, payment: u64) -> bool {
+    matches!(clears_within(principal, rate, n, payment), Ok(true))
+}
+
 /// 種を挟んで「n 回で完済する最大の元本」を二分探索で確定する。
 ///
 /// `clears_within` は元本について単調(元本が増えて完済しやすくなることは
 /// ない)。元本 1 は必ず完済するので下限に使える。上限は種の倍々で作る。
-fn largest_principal_that_clears(rate: &Rate, n: u32, payment: u64, seed: u64) -> CalcResult<u64> {
+fn largest_principal_that_clears(rate: &Rate, n: u32, payment: u64, seed: u64) -> u64 {
     let mut low = 1u64; // 完済する側
     let mut high = seed; // これから「完済しない側」にする
-    while clears_within(high, rate, n, payment)? {
+    while probe(high, rate, n, payment) {
         low = high;
-        high = high.checked_mul(2).ok_or(CalcError::Overflow)?;
+        if high == u64::MAX {
+            return u64::MAX;
+        }
+        high = high.saturating_mul(2);
     }
     while high - low > 1 {
         let mid = low + (high - low) / 2;
-        if clears_within(mid, rate, n, payment)? {
+        if probe(mid, rate, n, payment) {
             low = mid;
         } else {
             high = mid;
         }
     }
-    Ok(low)
+    low
 }
 
 #[cfg(test)]
