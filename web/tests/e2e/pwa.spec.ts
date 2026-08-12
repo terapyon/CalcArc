@@ -57,11 +57,15 @@ test("Scientific and Data Scale keep working once the network drops, after one c
   await page.evaluate(() => navigator.serviceWorker.ready);
 
   // 設計上 clientsClaim を使わない(Task 2 の check:sw がこれを固定している)。
-  // そのため最初のロードは SW の「制御下」に無い——SW 自体は active でも、
-  // 現在のページを掴むのは次のナビゲーションから。ここで reload を挟まないと
-  // 次の setOffline(true) 後の reload がまだ制御外のページを再取得する形に
-  // なり、「SW の precache から動いた」ではなく「たまたま何かが動いた」に
-  // なってしまう。1 回 reload して controlled にしてから電源を切る。
+  // そのため最初のロードは SW の「制御下」に無い。実測(赤確認)では、この
+  // reload-1 を省いても直後の setOffline(true) → reload はそのまま成功
+  // した——SW のナビゲーション捕捉は「ページが controlled か」ではなく
+  // 「そのナビゲーション時点で scope に active worker が居るか」で決まり、
+  // sw.ready を待った後ならそれだけで足りるため、reload-1 は必要条件では
+  // ない。それでも残すのは、切断前に「オンラインでの reload が普通に
+  // 機能する」ことを単独の検査点として確認しておくため
+  // (offline reload が失敗したとき、そもそも reload という操作自体が
+  // 壊れていたのか、offline 固有の問題なのかを切り分けられる)。
   await page.reload();
   await expect(main(page)).toHaveText("0");
 
