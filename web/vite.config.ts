@@ -22,8 +22,9 @@ export default defineConfig({
         // 既定の glob は {js,css,html} だけで .wasm が precache に載らない。
         // wasm が落ちると「オフラインで開くが計算できない」抜け殻になる。
         globPatterns: ["**/*.{js,css,html,wasm,svg,png,webmanifest}"],
-        // 既定 2MB。超過は警告どまりで precache から黙って外れるため、
-        // 余裕を持って明示する。番人は scripts/check-sw.mjs(設計書 §7)。
+        // 既定 2MB。v1.3.0 の実測では超過はビルドエラーになる(劣化した
+        // sw.js を書き出してから落ちる)。上限の明示は将来の挙動変化への
+        // 備えで、成果物側の番人は scripts/check-sw.mjs(設計書 §7)。
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: "index.html",
       },

@@ -25,6 +25,9 @@ if (!sw.includes("SKIP_WAITING")) {
 }
 
 // 2. precache に wasm が載っていること(設計書 §7。2MB 上限ドリフトの番人)。
+//    ビルドが失敗しても劣化した sw.js が書き出されるのは vite-plugin-pwa
+//    v1.3.0 の実装詳細であり、この検査はそれに依存しない——どの経路であれ
+//    dist の実物を検査するのが役目。
 if (!/\.wasm/.test(sw)) {
   fail("precache に .wasm が無い(glob か上限を確認。オフラインで計算不能になる)");
 }
