@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: ${{ github.workflow }}-deploy
   # デプロイは途中中断より直列完走(設計書 §1)。
   cancel-in-progress: false
 
@@ -14,7 +14,14 @@ jobs:
   deploy:
     name: Build and deploy to Cloudflare Pages
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      - name: Guard — deploy runs only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "deploy は main からのみ。旧コミットへ戻すときは revert を main に積む(docs/deploy.md)" >&2
+          exit 1
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-wasm-pack
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
@@ -36,22 +43,17 @@ jobs:
       - uses: cloudflare/wrangler-action@v3.14.1
         # バージョンを指定しないと実行ごとに入るものが変わる(wasm-pack
         # v0.9 事件と同じ穴)。上げるときは意図して上げる。
-        # 実装時: このタグの実在を gh-ro release list -R cloudflare/wrangler-action
-        # で確認し、無ければ最新の v3 系タグに固定して報告に記すこと。
+        # v3.14.1 は wrangler 3.90.0 を固定する(実在・既定値ともに確認済み
+        # 2026-08-13)。action を v4 系に上げると既定がレンジ("4")に変わり、
+        # この pin が塞いだ穴が復活する——上げるときは wranglerVersion: の
+        # 明示が必須。
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Direct Upload は --branch が本番/プレビューを決める。
           command: pages deploy web/dist --project-name=calcarc --branch=main
-      - name: Smoke — _headers are respected
-        run: |
-          set -eu
-          base="https://calcarc.pages.dev"
-          # ヘッダ名の大文字小文字は不定なので -i。
-          curl -fsSI "$base/sw.js" | grep -i "cache-control:.*no-cache"
-          curl -fsSI "$base/manifest.webmanifest" | grep -i "cache-control:.*no-cache"
-          asset="$(ls web/dist/assets | head -1)"
-          curl -fsSI "$base/assets/$asset" | grep -i "cache-control:.*immutable"
+      # 刻印一致 = 新デプロイの配信が証明済み。この後のヘッダ検査は必ず新しいアセットに当たり、伝播遅延の赤がヘッダの診断に化けない。
+      # 逆順だと docs のみのコミットで 3 脚とも旧デプロイに対して緑になりうる。
       - name: Smoke — the latest deploy is being served
         run: |
           set -eu
@@ -69,6 +71,22 @@ jobs:
           done
           echo "deploy did not converge to $GITHUB_SHA" >&2
           exit 1
-      - name: Smoke — the app answers
+      - name: Smoke — _headers are respected
         run: |
-          curl -fsS "https://calcarc.pages.dev/" | grep -q 'id="root"'
+          set -eu
+          base="https://calcarc.pages.dev"
+          # ヘッダ名の大文字小文字は不定なので -i。
+          curl -fsSI "$base/sw.js" | grep -i "cache-control:.*no-cache"
+          curl -fsSI "$base/manifest.webmanifest" | grep -i "cache-control:.*no-cache"
+          asset="$(ls web/dist/assets | head -1)"
+          [ -n "$asset" ]
+          curl -fsSI "$base/assets/$asset" | grep -i "cache-control:.*immutable"
+      - name: Smoke — the served HTML is this build
+        run: |
+          set -eu
+          base="https://calcarc.pages.dev"
+          # id="root" だけの検査は壊れたバンドルでも緑になる。この版の
+          # index-*.js を指す HTML が配られているかまで見る(設計書 §7-2)。
+          bundle="$(grep -o '/assets/index-[A-Za-z0-9_-]*\.js' web/dist/index.html | head -1)"
+          [ -n "$bundle" ]
+          curl -fsS "$base/" | grep -qF "$bundle"
