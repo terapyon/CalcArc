@@ -44,5 +44,17 @@ for (const need of ["192x192", "512x512"]) {
 for (const icon of manifest.icons) {
   if (!existsSync(resolve(dist, icon.src))) fail(`${icon.src} が dist に無い`);
 }
+// 設計書 §3 の固定値。名乗りと更新境界・配色トークンの重複(vite.config.ts の
+// コメント参照)がビルド成果物まで届いているかを見る。
+if (manifest.name !== "CalcArc") fail(`name が ${manifest.name}`);
+if (manifest.short_name !== "CalcArc") fail(`short_name が ${manifest.short_name}`);
+if (manifest.lang !== "ja") fail(`lang が ${manifest.lang}`);
+if (manifest.start_url !== "/") fail(`start_url が ${manifest.start_url}`);
+if (manifest.scope !== "/") fail(`scope が ${manifest.scope}`);
+if (manifest.theme_color !== "#f2f2f7") fail(`theme_color が ${manifest.theme_color}`);
+if (manifest.background_color !== "#f2f2f7")
+  fail(`background_color が ${manifest.background_color}`);
+if (!manifest.icons.some((i) => i.sizes === "512x512" && i.purpose === "maskable"))
+  fail("512x512 の maskable アイコン(purpose)が無い");
 
 console.log("check:sw OK — prompt 形 / wasm precache / manifest 完備");

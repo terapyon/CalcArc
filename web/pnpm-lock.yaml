@@ -14,6 +14,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      workbox-window:
+        specifier: ^7.4.1
+        version: 7.4.1
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.0.0
@@ -63,9 +66,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(jsdom@26.1.0)(terser@5.49.0)
-      workbox-window:
-        specifier: ^7.4.1
-        version: 7.4.1
 
 packages:
 

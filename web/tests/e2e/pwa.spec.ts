@@ -54,6 +54,8 @@ test("Scientific and Data Scale keep working once the network drops, after one c
   context,
 }) => {
   await page.goto("/");
+  // workbox の precache 充填は install の waitUntil 内で完了するため、
+  // ready(=activated) は precache 充填済みを含意する——この待機 1 つで足りる。
   await page.evaluate(() => navigator.serviceWorker.ready);
 
   // 設計上 clientsClaim を使わない(Task 2 の check:sw がこれを固定している)。

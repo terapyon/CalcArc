@@ -21,7 +21,9 @@ export default defineConfig({
       workbox: {
         // 既定の glob は {js,css,html} だけで .wasm が precache に載らない。
         // wasm が落ちると「オフラインで開くが計算できない」抜け殻になる。
-        globPatterns: ["**/*.{js,css,html,wasm,svg,png,webmanifest}"],
+        // png と webmanifest は入れない: プラグインが manifest とその
+        // アイコンを自動で precache に注入するため、加えると重複して載る。
+        globPatterns: ["**/*.{js,css,html,wasm,svg}"],
         // 既定 2MB。v1.3.0 の実測では超過はビルドエラーになる(劣化した
         // sw.js を書き出してから落ちる)。上限の明示は将来の挙動変化への
         // 備えで、成果物側の番人は scripts/check-sw.mjs(設計書 §7)。
