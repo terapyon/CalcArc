@@ -485,6 +485,36 @@
     },
     {
       "expect": {
+        "bonus_principal": "26128151",
+        "monthly_principal": "26128204",
+        "total_interest": "15023440",
+        "total_payment": "67279795",
+        "total_principal": "52256355"
+      },
+      "id": "loan_bonus_principal/80000/481140/1.5/420",
+      "input": {
+        "bonus_payment": "481140",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_bonus_principal/80000/481141/1.5/420",
+      "input": {
+        "bonus_payment": "481141",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
         "error": "SyntaxError"
       },
       "id": "loan_bonus_principal/10000/500000/1.5/60",

@@ -271,7 +271,23 @@ LOAN_INPUTS: list[dict] = [
         "rate": "1.5",
         "n": 420,
     },
-    # ≤50% 境界を解後に踏む(エラー)
+    # ≤50% 境界の両側。ボーナス回 481,140 円までは通り、481,141 円で
+    # ボーナス分が元本の半分を越える(境界は解いた後にしか分からない)。
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "481140",
+        "rate": "1.5",
+        "n": 420,
+    },
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "481141",
+        "rate": "1.5",
+        "n": 420,
+    },
+    # ≤50% を大きく踏み外す(エラー)
     {
         "op": "loan_bonus_principal",
         "monthly_payment": "10000",

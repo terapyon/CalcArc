@@ -8,8 +8,13 @@
 
 ## 現状
 
-最初の Vertical Slice を実装中。Scientific Calculator の複素数と極座標変換が
-動く段階にある。Data Scale Calculator と Loan Calculator は未着手。
+3 つのモジュールが動く。ナビのタブで切り替える。
+
+- **Scientific Calculator** — 複素数と極座標変換。
+- **Data Scale Calculator** — 要素数 × 次元 × データ型のメモリ量。
+- **Loan Calculator** — 元利均等の月額（残価つきも可）、借入可能額と返済期間の
+  逆算、ボーナス併用。実額の機関一致は目標にせず、**決定的な概算**を返す
+  （画面に免責を常設している）。
 
 ## 構成
 
@@ -27,6 +32,8 @@
 数値の扱いは [docs/numerical-policy.md](docs/numerical-policy.md) に定める。
 要点は次のとおり。
 
+- モジュールごとに数値の扱いが違う。Scientific は浮動小数点、Data Scale は
+  厳密整数、Loan は決定的概算（月額の決定だけが f64 で、償還表は厳密整数）。
 - すべての値を複素数として保持する。実数は虚部 0 の複素数である。
 - 表示は有効数字 10 桁、丸めは round-half-to-even。
 - 表示のための丸めは保持している値に書き戻さない。極形式への切り替えは
