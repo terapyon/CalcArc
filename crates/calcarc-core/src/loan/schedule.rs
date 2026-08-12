@@ -113,6 +113,22 @@ pub fn run_schedule(
     Ok(run.finish(due))
 }
 
+/// **逆算の確定規則**(設計書 §5)。Python 参照と共有する公開契約であり、
+/// 候補の出し方(f64 か Decimal か)は独立でよいが、この判定は同一でなければ
+/// golden が一致しない。
+///
+/// 「n 回で完済する」= 定例 `payment` を n−1 回払ったあと、最終回の
+/// 残高 + 利息が `payment` 以下に収まること。表が途中で払い切る(縮退)場合も
+/// 完済である。月額が利息を覆わないなどで表が組めない入力は「完済しない」
+/// (Overflow だけは伝播させる——それは入力の外にある事故)。
+pub fn clears_within(principal: u64, rate: &Rate, n: u32, payment: u64) -> CalcResult<bool> {
+    match run_schedule(principal, rate, n, payment, 0) {
+        Ok(s) => Ok(s.final_payment <= payment),
+        Err(CalcError::SyntaxError) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 /// 走行中の状態。checked 演算を 1 か所に閉じる。
 struct Run {
     balance: u64,
