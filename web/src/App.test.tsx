@@ -10,6 +10,9 @@ vi.mock("./ui/ScientificPanel", () => ({
 vi.mock("./ui/DataScale/DataScalePanel", () => ({
   DataScalePanel: () => <p data-testid="datascale-panel" />,
 }));
+vi.mock("./ui/Loan/LoanPanel", () => ({
+  LoanPanel: () => <p data-testid="loan-panel" />,
+}));
 
 import { App } from "./App";
 
@@ -28,5 +31,20 @@ describe("App", () => {
     window.location.hash = "#data-scale";
     render(<App />);
     expect(screen.getByTestId("datascale-panel")).toBeInTheDocument();
+  });
+
+  it("shows Loan when the hash says so", () => {
+    window.location.hash = "#loan";
+    render(<App />);
+    expect(screen.getByTestId("loan-panel")).toBeInTheDocument();
+    // 1 モジュールだけが <main> に居ること(出し分けの取りこぼしを防ぐ)。
+    expect(screen.queryByTestId("scientific-panel")).toBeNull();
+    expect(screen.queryByTestId("datascale-panel")).toBeNull();
+  });
+
+  it("falls back to Scientific for a hash it does not know", () => {
+    window.location.hash = "#nope";
+    render(<App />);
+    expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
   });
 });

@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { DataScalePanel } from "./ui/DataScale/DataScalePanel";
+import { LoanPanel } from "./ui/Loan/LoanPanel";
 import { type ModuleId, Nav } from "./ui/Nav/Nav";
 import { ScientificPanel } from "./ui/ScientificPanel";
 
 // 不明・空ハッシュは "scientific" に倒す(base-spec §6 のデフォルト規定)。
 function moduleFromHash(hash: string): ModuleId {
-  return hash === "#data-scale" ? "data-scale" : "scientific";
+  if (hash === "#data-scale") return "data-scale";
+  if (hash === "#loan") return "loan";
+  return "scientific";
 }
 
 export function App() {
@@ -26,7 +29,9 @@ export function App() {
     <>
       <Nav current={module} />
       <main>
-        {module === "scientific" ? <ScientificPanel /> : <DataScalePanel />}
+        {module === "scientific" && <ScientificPanel />}
+        {module === "data-scale" && <DataScalePanel />}
+        {module === "loan" && <LoanPanel />}
       </main>
     </>
   );
