@@ -1,0 +1,77 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+  /* iOS のホームインジケータを避ける。DataScalePanel の .panel と同形。 */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.field input,
+.field select {
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--key-fg);
+  font-family: inherit;
+  font-size: var(--key-font-size);
+}
+
+.field input:disabled {
+  /* モードが決める「求める値の欄」。押せないことを色でも示す。 */
+  opacity: 0.5;
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: var(--touch-target-min);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  font-family: var(--display-font);
+}
+
+.result p {
+  margin: 0;
+}
+
+.resultLabel {
+  display: inline-block;
+  min-width: 9em;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.result [data-error] {
+  color: var(--error-fg);
+}
+
+.disclaimer {
+  margin: 0;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
