@@ -73,7 +73,9 @@ revert コミットを main に積んで通常の push 経路でデプロイす�
    一過性）か、配信されている版が最新デプロイと食い違っている（配信不整合、
    一過性でなければ深刻）。
 2. **ヘッダ検査**（`sw.js` / `manifest.webmanifest` の `no-cache`、
-   `/assets/` 配下の `immutable`）が赤 → Cloudflare Pages が `_headers` を
+   `/assets/` 配下の `immutable`。リトライつき——初回実行の実測で、
+   `_headers` の規則は内容の伝播より遅れて効き始めることが分かっている）が
+   **リトライ後も**赤 → Cloudflare Pages が `_headers` を
    尊重していない、または `web/public/_headers` の内容が設定退行している。
    デプロイそのものは成功している可能性があるので、まず `_headers` の中身と
    CF Pages 側の設定を疑う。
