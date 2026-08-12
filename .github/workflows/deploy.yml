@@ -22,7 +22,7 @@ jobs:
         run: |
           echo "deploy は main からのみ。旧コミットへ戻すときは revert を main に積む(docs/deploy.md)" >&2
           exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup-wasm-pack
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       - uses: ./.github/actions/setup-web
@@ -40,16 +40,16 @@ jobs:
       # 検査した物を配るには、配る物を検査するしかない(設計書 §2)。
       - run: pnpm check:sw
         working-directory: web
-      - uses: cloudflare/wrangler-action@v3.14.1
+      - uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
         # バージョンを指定しないと実行ごとに入るものが変わる(wasm-pack
         # v0.9 事件と同じ穴)。上げるときは意図して上げる。
-        # v3.14.1 は wrangler 3.90.0 を固定する(実在・既定値ともに確認済み
-        # 2026-08-13)。action を v4 系に上げると既定がレンジ("4")に変わり、
-        # この pin が塞いだ穴が復活する——上げるときは wranglerVersion: の
-        # 明示が必須。
+        # wrangler 本体は wranglerVersion で明示固定する(v3.14.1 の既定も
+        # 3.90.0 だが、action の既定への暗黙依存を残さない。v4 系は既定が
+        # レンジ"4"に変わるため、この明示が将来の穴も塞ぐ)。
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "3.90.0"
           # Direct Upload は --branch が本番/プレビューを決める。
           command: pages deploy web/dist --project-name=calcarc --branch=main
       # 刻印一致 = 新デプロイの配信が証明済み。この後のヘッダ検査は必ず新しいアセットに当たり、伝播遅延の赤がヘッダの診断に化けない。
