@@ -468,7 +468,7 @@ Python が必要なのは `reference` ジョブのみである。
 /*    /index.html   200
 ```
 
-ビルド出力は `web/dist`。Cloudflare Pages の Git 連携を用いる想定だが、接続設定は利用者が行う。本スライスでは CI でビルドが通ることまでを担保する。
+ビルド出力は `web/dist`。Cloudflare Pages の Git 連携を用いる想定だが、接続設定は利用者が行う（→ 2026-08-12-deploy-design.md §0 で Actions ビルド + Direct Upload に変更）。本スライスでは CI でビルドが通ることまでを担保する。
 
 ---
 

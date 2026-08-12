@@ -9,3 +9,8 @@
   Cache-Control: no-cache
 /manifest.webmanifest
   Cache-Control: no-cache
+
+# 刻印は「いまサーバが何を配っているか」に答えるファイル。エッジに
+# キャッシュされたら照合の意味が消える(sw.js と同じ理由)。
+/build-info.json
+  Cache-Control: no-cache

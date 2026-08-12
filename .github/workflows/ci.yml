@@ -15,11 +15,14 @@ jobs:
     name: Rust core
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable ブランチ 2026-08-13 時点
         with:
+          # SHA 固定により ref からのツールチェーン選択が効かないため明示する。
+          # stable 追従の方針は CONTRIBUTING の MSRV 節のとおり。
+          toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # Layer 1-4: unit / engine table / proptest / golden
@@ -29,17 +32,8 @@ jobs:
     name: WASM boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          # バージョンを指定しないと実行ごとに入るものが変わる。
-          # 実際に main で v0.9.1 が降ってきて、license.workspace を
-          # 解釈できずマニフェストの解析に失敗した。手元と揃える。
-          version: 'v0.15.0'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-wasm-pack
       - name: Use the runner's ChromeDriver
         # wasm-pack は既定で自前の ChromeDriver を取りに行くが、それが
         # ランナーの Chrome とバージョン不一致になると起動に失敗する。
@@ -50,7 +44,7 @@ jobs:
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       # Layer 5
       - run: wasm-pack test --headless --chrome crates/calcarc-wasm
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wasm-pkg
           path: web/src/wasm/
@@ -63,22 +57,12 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          # package.json はリポジトリ直下ではなく web/ にある。
-          # 既定の探索先には無いので明示する。
-          package_json_file: web/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wasm-pkg
           path: web/src/wasm/
-      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -94,26 +78,16 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          # package.json はリポジトリ直下ではなく web/ にある。
-          # 既定の探索先には無いので明示する。
-          package_json_file: web/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wasm-pkg
           path: web/src/wasm/
-      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       # Layer 6
       - run: pnpm exec playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-report
@@ -123,9 +97,12 @@ jobs:
     name: Python reference
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
+          # uv 本体も固定する。指定しないと action が最新を入れ、実行ごとに
+          # 変わりうる(依存解決は uv.lock が守るが、uv 自身の挙動は守らない)。
+          version: "0.12.3"
           python-version: "3.14"
       - run: uv sync --locked
         working-directory: reference
