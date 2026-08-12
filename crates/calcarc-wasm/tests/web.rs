@@ -126,3 +126,83 @@ fn data_scale_sub_unit_success_carries_null_lines() {
     let error = get(&result, "error");
     assert!(error.is_null());
 }
+
+#[wasm_bindgen_test]
+fn loan_forward_crosses_the_boundary() {
+    // 住宅基準例。golden(finance.json)と同じ値が境界を越えて出る。
+    let result = calcarc_wasm::loan_forward("30000000", "1.5", 420, "0");
+    assert_eq!(
+        get(&result, "monthlyPayment").as_string().as_deref(),
+        Some("91855")
+    );
+    assert_eq!(
+        get(&result, "finalPayment").as_string().as_deref(),
+        Some("91762")
+    );
+    assert_eq!(get(&result, "rowsPaid").as_f64(), Some(420.0));
+    assert!(
+        get(&result, "error").is_null(),
+        "success carries null error"
+    );
+}
+
+#[wasm_bindgen_test]
+fn loan_term_and_principal_cross_the_boundary() {
+    // 借入可能額 → その元本で期間逆算 → 同じ回数に戻る(境界越しの往復)。
+    let borrowed = calcarc_wasm::loan_principal("85000", "1.5", 420);
+    let principal = get(&borrowed, "principal")
+        .as_string()
+        .expect("principal is a string");
+    assert_eq!(principal, "27761211");
+    let term = calcarc_wasm::loan_term(&principal, "1.5", "85000");
+    assert_eq!(get(&term, "months").as_f64(), Some(420.0));
+}
+
+#[wasm_bindgen_test]
+fn loan_bonus_crosses_the_boundary() {
+    let result = calcarc_wasm::loan_bonus_forward("30000000", "6000000", "1.5", 420);
+    assert_eq!(get(&result, "bonusRows").as_f64(), Some(70.0));
+    assert!(get(&result, "bonusPayment").as_string().is_some());
+    let inverted = calcarc_wasm::loan_bonus_principal("80000", "100000", "1.5", 420);
+    assert!(get(&inverted, "totalPrincipal").as_string().is_some());
+    assert!(get(&inverted, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn loan_survives_values_beyond_js_numbers() {
+    // u64 域(2^64 − 1)は JS の number では表せない。文字列で往復する。
+    let result = calcarc_wasm::loan_forward("18446744073709551615", "0", 600, "0");
+    assert_eq!(
+        get(&result, "monthlyPayment").as_string().as_deref(),
+        Some("30744573456182586")
+    );
+    assert_eq!(
+        get(&result, "totalPayment").as_string().as_deref(),
+        Some("18446744073709551615")
+    );
+}
+
+#[wasm_bindgen_test]
+fn loan_errors_are_returned_not_thrown() {
+    // 残価 ≥ 元本 は SyntaxError。金額の欄は undefined ではなく null。
+    let result = calcarc_wasm::loan_forward("1000000", "1.5", 12, "1000000");
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    let monthly = get(&result, "monthlyPayment");
+    assert!(monthly.is_null(), "error results carry null, not undefined");
+    assert!(get(&result, "rowsPaid").is_null());
+    // 1 回払いで P + 利息があふれる入力は Overflow。
+    let overflowed = calcarc_wasm::loan_forward("18446744073709551615", "1.5", 1, "0");
+    assert_eq!(
+        get(&overflowed, "error").as_string().as_deref(),
+        Some("Overflow")
+    );
+    // 金利文字列が読めないのも戻り値のエラー。
+    let bad_rate = calcarc_wasm::loan_term("1000000", "abc", "50000");
+    assert_eq!(
+        get(&bad_rate, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
