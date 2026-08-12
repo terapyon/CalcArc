@@ -75,18 +75,42 @@ jobs:
         run: |
           set -eu
           base="https://calcarc.pages.dev"
-          # ヘッダ名の大文字小文字は不定なので -i。
-          curl -fsSI "$base/sw.js" | grep -i "cache-control:.*no-cache"
-          curl -fsSI "$base/manifest.webmanifest" | grep -i "cache-control:.*no-cache"
+          # 初回実行の実測(run 31646329769): _headers の規則は内容の伝播より
+          # 遅れて効き始める。刻印(内容)が一致した直後でもヘッダはまだ既定の
+          # まま、という 10 秒台のレースが実在した。刻印照合と同じリトライで
+          # 吸収する——リトライ後も赤なら、それが本物の「_headers 不尊重」。
           asset="$(ls web/dist/assets | head -1)"
           [ -n "$asset" ]
-          curl -fsSI "$base/assets/$asset" | grep -i "cache-control:.*immutable"
+          for i in $(seq 1 12); do
+            # ヘッダ名の大文字小文字は不定なので -i。
+            if curl -fsSI "$base/sw.js" | grep -qi "cache-control:.*no-cache" \
+              && curl -fsSI "$base/manifest.webmanifest" | grep -qi "cache-control:.*no-cache" \
+              && curl -fsSI "$base/assets/$asset" | grep -qi "cache-control:.*immutable"; then
+              echo "headers OK (attempt $i)"
+              exit 0
+            fi
+            echo "attempt $i: headers not yet as declared"
+            sleep 10
+          done
+          echo "_headers is not being respected after retries" >&2
+          exit 1
       - name: Smoke — the served HTML is this build
         run: |
           set -eu
           base="https://calcarc.pages.dev"
           # id="root" だけの検査は壊れたバンドルでも緑になる。この版の
           # index-*.js を指す HTML が配られているかまで見る(設計書 §7-2)。
+          # ヘッダ検査と同じ理由でリトライを持つ(ファイル単位の伝播は
+          # 非アトミック——刻印の一致は他ファイルの到達を含意しない)。
           bundle="$(grep -o '/assets/index-[A-Za-z0-9_-]*\.js' web/dist/index.html | head -1)"
           [ -n "$bundle" ]
-          curl -fsS "$base/" | grep -qF "$bundle"
+          for i in $(seq 1 12); do
+            if curl -fsS "$base/" | grep -qF "$bundle"; then
+              echo "served HTML references $bundle (attempt $i)"
+              exit 0
+            fi
+            echo "attempt $i: HTML does not reference this build yet"
+            sleep 10
+          done
+          echo "served HTML never referenced $bundle" >&2
+          exit 1
