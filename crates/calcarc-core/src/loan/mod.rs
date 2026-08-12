@@ -11,5 +11,7 @@
 //! `Value`/`engine`/`data_scale` とは相互 import しない(設計書 §9)。
 //! 共有するのはエラー分類(`CalcError`)だけ。
 
+pub mod closed_form;
+pub mod forward;
 pub mod rate;
 pub mod schedule;
