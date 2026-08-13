@@ -14,7 +14,14 @@
 - `calcarc-core` は panic しない。`unwrap`/`expect` は本番経路で禁止（`deny` 済み）。
 - **境界は例外を投げない。** エラーは戻り値の一部（`Overflow` は確定時に返す）。
 - 新トークンは `zeros3`・`exp`。`crates/calcarc-wasm/tests/token_parity.rs` が Rust と TypeScript の両方への追加を強制する。
-- **`STATE_SCHEMA` は据え置き**（3 のまま）。エコーは導出であって状態ではない（spec §4）。
+- **`STATE_SCHEMA` を 3 → 4 に上げる**（Task 2）。spec §4 の「据え置き」はエコーの
+  話であって、§2 の `Buffer.exponent` は **`EngineState` の直列化形状そのものの
+  変更**——この定数が番をしている当のものである。実害の比較: 旧い形の状態が
+  新しい wasm に届く経路（Service Worker 更新で旧タブが残った窓）では、bump
+  しなければ serde の解析失敗で初期状態に戻り、bump すれば `is_valid()` が
+  偽で初期状態に戻る。**結果は同じだが、後者は意図した挙動で前者は事故**であり、
+  base-spec §40 の永続化が入った時点で差が実害になる。エコー（導出）は
+  この理由に含まれない。
 - **網羅列挙の予算は実測して記録する。** 長さ 6 のままか、長さ 5 + 重点列挙かを、壁時計とともに報告に書く（spec §6）。
 - コミットはブランチガード付き（`test "$(git branch --show-current)" = feature/scientific-entry || exit 1`）。**`git push` と PR 作成は行わない**。Co-Authored-By を付ける。
 - ベースライン（S1 完了時点）: Rust 185 / wasm 15 / vitest 71 / e2e 50 / Python 30。
@@ -47,6 +54,7 @@ fn j_after_digits_turns_the_entry_imaginary() {
     assert_eq!(main_of(&["j", "j", "4"]), "j4");
     // DEL の段構成は変わらない(数字だけ消え、j マーカーが残る)。
     assert_eq!(main_of(&["3", "j", "del"]), "j");
+    assert_eq!(main_of(&["3", "j", "del", "del"]), "0");
     // 式の中でも同じ。
     assert_eq!(main_of(&["3", "add", "4", "j", "eq"]), "3+j4");
     assert_eq!(main_of(&["3", "j", "add", "2", "j", "eq"]), "j5");
@@ -117,7 +125,7 @@ git commit  # 件名の趣旨:「数字のあとの j は、その数字を虚�
 
 **Files:**
 - Modify: `crates/calcarc-core/tests/engine_table.rs`
-- Modify: `crates/calcarc-core/src/engine/state.rs`（`Exponent`、`Buffer` の各メソッド）
+- Modify: `crates/calcarc-core/src/engine/state.rs`（`Exponent`、`Buffer` の各メソッド、`STATE_SCHEMA` を 4 へ）
 - Modify: `crates/calcarc-core/src/engine/key.rs`（`Key::Exp` とトークン）
 - Modify: `crates/calcarc-core/src/engine/mod.rs`（`Key::Exp`、`Key::Neg`、`commit_entry`）
 - Modify: `crates/calcarc-core/tests/engine_robustness.rs`（`entry_after_del` が `Buffer` を構築しているのでコンパイルが通らなくなる）
@@ -150,6 +158,8 @@ fn exp_enters_an_exponent() {
     assert_eq!(main_of(&["1", "exp", "3", "0", "9", "9"]), "1e309");
     // 先頭ゼロは仮数と同じ規則。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "0", "0", "3"]), "1.5e3");
+    // 指数入力中でも後置 j は効く(設計書 §1 の表の最後の行)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "j"]), "j1.5e3");
 }
 
 #[test]
@@ -362,6 +372,20 @@ pub struct Buffer {
         })
     }
 ```
+
+- [ ] **Step 3b: `STATE_SCHEMA` を 4 に上げる**
+
+`state.rs`:
+
+```rust
+/// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
+/// 4: `Buffer` に指数部が入った(設計書 §2)。直列化の形が変わるので上げる。
+pub const STATE_SCHEMA: u32 = 4;
+```
+
+版を持つ意味は「形が変わったことを検出できる」ことであり、形を変えたら
+上げる。上げないと、旧い形の状態が届いたときの初期化が serde の解析失敗
+という**事故**として起き、意図した挙動と区別できなくなる。
 
 - [ ] **Step 4: `Key::Exp` を足す**
 
@@ -712,7 +736,9 @@ git commit  # 件名の趣旨:「エコーはスタックの形であって、�
 - Modify: `web/src/ui/Keypad/scientific.ts`（予約解除）
 - Modify: `web/src/ui/Keypad/Keypad.test.tsx`（予約スロットの前提が変わる）
 - Modify: `web/src/ui/Display/Display.tsx`（echo を流す）
-- Modify: `web/tests/e2e/keypad-shell.spec.ts`（予約スロットの検査を実挙動に）
+- Modify: `web/tests/e2e/keypad-shell.spec.ts`（予約スロットの検査を実挙動に。
+  **π の Shift 経路テストが `"指数入力（準備中）"` を 3 箇所参照している**ので、
+  有効化後の aria 名 `"指数入力"` に直す——直さないと赤になる）
 - Create: `web/tests/e2e/entry.spec.ts`
 
 - [ ] **Step 1: TypeScript 側にトークンと echo を足す**
@@ -828,7 +854,9 @@ test("the echo line shows the pending expression", async ({ page }) => {
 Run:
 ```bash
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
-wasm-pack test --headless --firefox crates/calcarc-wasm
+wasm-pack test --headless --chrome crates/calcarc-wasm
+# 手元の Chrome と wasm-pack の chromedriver が噛み合わない場合(M6 で実際に
+# 起きた)は --firefox で代替し、**代替したことを報告に書く**。CI は chrome。
 cd web && pnpm wasm && pnpm typecheck && pnpm lint && pnpm test && pnpm exec vite build && pnpm check:sw && pnpm e2e
 ```
 Python は触っていないので回さない（tiering）。件数はすべて実測して報告に書く。
