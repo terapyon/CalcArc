@@ -184,6 +184,14 @@ impl Buffer {
         self.digits.push(digit);
     }
 
+    /// `000`。0 を 3 つ入れる。字数制限に収まるぶんだけ入り、先頭ゼロの
+    /// 規則も 1 つずつ押したときと同じになる(設計書 §3)。
+    pub fn push_zeros(&mut self) {
+        for _ in 0..3 {
+            self.push_digit(0);
+        }
+    }
+
     /// `Exp`。すでに指数入力中なら何もしない(連打は無視)。
     pub fn push_exponent(&mut self) {
         self.exponent.get_or_insert_with(Exponent::default);

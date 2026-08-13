@@ -129,6 +129,25 @@ fn an_exponent_out_of_range_is_an_error_when_it_is_committed() {
 }
 
 #[test]
+fn the_triple_zero_key_adds_three_zeros_at_most() {
+    // 設計書 §3。押した回数と消える回数が食い違わないよう、Digit(0) の
+    // 3 連ではなく 1 打鍵として扱う。
+    assert_eq!(main_of(&["1", "zeros3"]), "1000");
+    // 先頭ゼロは増えない(現行の規則をそのまま適用)。
+    assert_eq!(main_of(&["zeros3"]), "0");
+    assert_eq!(main_of(&["0", "zeros3"]), "0");
+    // 残り字数に収まるぶんだけ入る(MAX_ENTRY_LEN は 12)。
+    assert_eq!(
+        main_of(&["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "zeros3"]),
+        "123456789000"
+    );
+    // DEL は 1 文字ずつ。
+    assert_eq!(main_of(&["1", "zeros3", "del"]), "100");
+    // 指数入力中は指数へ入る(3 桁上限、先頭ゼロ規則も同じ)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "zeros3"]), "1.5e0");
+}
+
+#[test]
 fn del_on_an_imaginary_entry_keeps_the_j() {
     // 数字だけ消える。j まで消えると、続きを打った人は自分が虚部を
     // 入力しているつもりのまま実部を入力してしまう。

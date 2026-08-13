@@ -66,6 +66,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // 消えるので、この後判定で自然に落ちる(設計書 §2)。
                 Key::Neg => next.buffer.is_some() && was_pending,
                 Key::Digit(_)
+                | Key::Zeros3
                 | Key::Dot
                 | Key::Exp
                 | Key::J
@@ -258,6 +259,12 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             } else {
                 state.buffer = Some(Buffer::imaginary());
             }
+        }
+        Key::Zeros3 => {
+            state
+                .buffer
+                .get_or_insert_with(Buffer::default)
+                .push_zeros();
         }
         Key::Exp => {
             state
