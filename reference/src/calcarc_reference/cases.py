@@ -170,3 +170,142 @@ DATA_SCALE_INPUTS: list[tuple[str, str, str]] = [
     ("abc", "1", "float32"),
     ("100", "1", "float128"),  # 未知のデータ型
 ]
+
+# Loan(M6)。設計書 §7 の必須ケース列挙と 1:1 で対応させる——各項に spec の
+# 項目名をコメントで書く(植え漏れ検査が読む)。金額は文字列(u64 は JSON
+# number の 2^53 を超える)。回数は整数。
+#
+# 期間逆算の境界に使う元本は「その月額・その回数で借りられる最大額」であり、
+# 生成時に参照実装が解く(下の EXACT_TERM_PRINCIPAL)。手で書いた数字ではない。
+U64_MAX_TEXT = str((1 << 64) - 1)
+
+LOAN_INPUTS: list[dict] = [
+    # 住宅基準例(3,000 万・35 年・1.5% 級)
+    {"op": "loan_forward", "principal": "30000000", "rate": "1.5", "n": 420, "residual": "0"},
+    # 最長 600 回
+    {"op": "loan_forward", "principal": "30000000", "rate": "1.5", "n": 600, "residual": "0"},
+    # 車例(300 万・5 年・残価 40% 級)
+    {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "1200000"},
+    # 残価を階段が飛ばす組。最終回の支払 X + floor(X×月利) は 1 か 2 ずつしか
+    # 増えないので、残価そのものが像に無いことがある。車例と同じ 300 万・5 年・
+    # 年 3.9% で、残価 1,200,195 円は飛ばされ、最終回は B−1 = 1,200,194 円になる
+    # (切り捨てに揃える規約。numerical-policy の既知の制約)。
+    {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "1200195"},
+    # B=0 の残価退化恒等式(上と同じ入力で残価だけ 0)
+    {"op": "loan_forward", "principal": "3000000", "rate": "3.9", "n": 60, "residual": "0"},
+    # B = P−1 近傍
+    {"op": "loan_forward", "principal": "3000000", "rate": "2.0", "n": 36, "residual": "2999999"},
+    # 最終回調整が大きい組(短期・高金利・端数元本)
+    {"op": "loan_forward", "principal": "999999", "rate": "7.5", "n": 13, "residual": "0"},
+    # 金利 0%(正算の 0 割分岐)。端数元本で採る(設計書 §1-4)
+    {"op": "loan_forward", "principal": "2999999", "rate": "0", "n": 12, "residual": "0"},
+    # 金利 0% × 残価(均等部分が (P−B)/(n−1) になる分岐)
+    {"op": "loan_forward", "principal": "2999999", "rate": "0", "n": 12, "residual": "1000000"},
+    # 1 回払い(端数元本で。設計書 §1-4 の注意)
+    {"op": "loan_forward", "principal": "2999999", "rate": "2.4", "n": 1, "residual": "0"},
+    # u64 域境界(0% の厳密経路なら f64 を通らないので採録できる)
+    {"op": "loan_forward", "principal": U64_MAX_TEXT, "rate": "0", "n": 600, "residual": "0"},
+    # u64 越え → Overflow(1 回払いで P + 利息があふれる)
+    {"op": "loan_forward", "principal": U64_MAX_TEXT, "rate": "1.5", "n": 1, "residual": "0"},
+    # 縮退入力(極小元本 × 長期間。残高が n 回より前に 0 になる)
+    {"op": "loan_forward", "principal": "10000", "rate": "1.0", "n": 600, "residual": "0"},
+    # 元本 0 / 回数 0 / 残価 ≥ 元本(設計書 §2 のエラー表)
+    {"op": "loan_forward", "principal": "0", "rate": "1.5", "n": 12, "residual": "0"},
+    {"op": "loan_forward", "principal": "1000000", "rate": "1.5", "n": 0, "residual": "0"},
+    {"op": "loan_forward", "principal": "1000000", "rate": "1.5", "n": 12, "residual": "1000000"},
+    # 借入可能額逆算(正算との往復一致は単体テストが見る)
+    {"op": "loan_principal", "payment": "85000", "rate": "1.5", "n": 420},
+    {"op": "loan_principal", "payment": "50000", "rate": "2.0", "n": 24},
+    # 金利 0%(借入可能額の r=0 分岐)
+    {"op": "loan_principal", "payment": "100000", "rate": "0", "n": 12},
+    # 月額 0(エラー)
+    {"op": "loan_principal", "payment": "0", "rate": "1.5", "n": 12},
+    # 期間逆算: ちょうど割り切れる n と、+1 円で繰り上がる境界(元本は生成時に解く)
+    {"op": "loan_term", "principal": "EXACT_TERM_PRINCIPAL", "rate": "2.0", "payment": "50000"},
+    {"op": "loan_term", "principal": "EXACT_TERM_PRINCIPAL+1", "rate": "2.0", "payment": "50000"},
+    # 金利 0%(期間逆算の log(1+r)=0 割 分岐)。割り切れる回と +1 円
+    {"op": "loan_term", "principal": "1200000", "rate": "0", "payment": "100000"},
+    {"op": "loan_term", "principal": "1200001", "rate": "0", "payment": "100000"},
+    # 月額 ≤ 初回利息(発散)と、100 年でも終わらない入力
+    {"op": "loan_term", "principal": "1000000", "rate": "12.0", "payment": "10000"},
+    {"op": "loan_term", "principal": "100000000", "rate": "12.0", "payment": "1000001"},
+    # ボーナス併用(半年利の丸めが効く 7 年・14 回)
+    {
+        "op": "loan_bonus_forward",
+        "principal": "5000000",
+        "bonus_principal": "2000000",
+        "rate": "2.7",
+        "n": 84,
+    },
+    # ボーナス割合 50% ちょうど(境界)
+    {
+        "op": "loan_bonus_forward",
+        "principal": "30000000",
+        "bonus_principal": "15000000",
+        "rate": "1.5",
+        "n": 420,
+    },
+    # ボーナス 0 円 = 通常式一致(回帰恒等式。上の住宅基準例と同じ答になる)
+    {
+        "op": "loan_bonus_forward",
+        "principal": "30000000",
+        "bonus_principal": "0",
+        "rate": "1.5",
+        "n": 420,
+    },
+    # 50% 超(エラー)と、ボーナス回が 1 度も来ない n<6(エラー)
+    {
+        "op": "loan_bonus_forward",
+        "principal": "3000000",
+        "bonus_principal": "1500001",
+        "rate": "1.5",
+        "n": 60,
+    },
+    {
+        "op": "loan_bonus_forward",
+        "principal": "1000000",
+        "bonus_principal": "100000",
+        "rate": "1.5",
+        "n": 5,
+    },
+    # 借入可能額 × ボーナス(2 本の独立逆算 → 合算)
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "100000",
+        "rate": "1.5",
+        "n": 420,
+    },
+    # ≤50% 境界の両側。ボーナス回 481,140 円までは通り、481,141 円で
+    # ボーナス分が元本の半分を越える(境界は解いた後にしか分からない)。
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "481140",
+        "rate": "1.5",
+        "n": 420,
+    },
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "481141",
+        "rate": "1.5",
+        "n": 420,
+    },
+    # ≤50% を大きく踏み外す(エラー)
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "10000",
+        "bonus_payment": "500000",
+        "rate": "1.5",
+        "n": 60,
+    },
+    # ボーナス 0 円 = 通常の借入可能額に退化
+    {
+        "op": "loan_bonus_principal",
+        "monthly_payment": "80000",
+        "bonus_payment": "0",
+        "rate": "1.5",
+        "n": 420,
+    },
+]

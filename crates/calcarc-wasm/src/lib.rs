@@ -5,7 +5,9 @@
 
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::{self, DataType};
-use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
+use calcarc_core::loan::rate::Rate;
+use calcarc_core::loan::{bonus, forward, inverse, parse_yen};
+use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -119,6 +121,219 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             decimal: None,
             binary: None,
             error: Some(e),
+        },
+    };
+    to_js_value(&result)
+}
+
+// ---- Loan(base-spec §20〜§21、設計書 §9)-------------------------------
+//
+// data_scale と同じ**純関数**だが、モードで引数が違うので **1 本の文字列
+// mode で分岐させず、モードごとに 1 本ずつ export する**(TypeScript 側の型が
+// 素直になる。境界に分岐を持ち込むと、モードと引数の対応が型から消える)。
+// 金額はすべて文字列で往復する(円は JS の number の 2^53 を超えうる)。
+// 例外は投げない。エラーは戻り値の一部である。
+
+/// 正算(月額を求める)の結果。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct LoanForwardResult {
+    monthly_payment: Option<String>,
+    total_payment: Option<String>,
+    total_interest: Option<String>,
+    final_payment: Option<String>,
+    rows_paid: Option<u32>,
+    error: Option<CalcError>,
+}
+
+/// 借入可能額逆算の結果。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct LoanPrincipalResult {
+    principal: Option<String>,
+    total_payment: Option<String>,
+    total_interest: Option<String>,
+    final_payment: Option<String>,
+    rows_paid: Option<u32>,
+    error: Option<CalcError>,
+}
+
+/// 期間逆算の結果。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct LoanTermResult {
+    months: Option<u32>,
+    total_payment: Option<String>,
+    total_interest: Option<String>,
+    final_payment: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// ボーナス併用の正算の結果。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct LoanBonusForwardResult {
+    monthly_payment: Option<String>,
+    bonus_payment: Option<String>,
+    bonus_rows: Option<u32>,
+    total_payment: Option<String>,
+    total_interest: Option<String>,
+    monthly_final_payment: Option<String>,
+    bonus_final_payment: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// ボーナス併用の借入可能額逆算の結果。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct LoanBonusPrincipalResult {
+    monthly_principal: Option<String>,
+    bonus_principal: Option<String>,
+    total_principal: Option<String>,
+    total_payment: Option<String>,
+    total_interest: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// 元利均等の正算。`residual` は残価(既定は "0")。
+#[wasm_bindgen]
+pub fn loan_forward(principal: &str, rate: &str, months: u32, residual: &str) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        forward::compute(
+            parse_yen(principal)?,
+            &Rate::from_percent(rate)?,
+            months,
+            parse_yen(residual)?,
+        )
+    })();
+    let result = match outcome {
+        Ok(r) => LoanForwardResult {
+            monthly_payment: Some(r.monthly_payment.to_string()),
+            total_payment: Some(r.total_payment.to_string()),
+            total_interest: Some(r.total_interest.to_string()),
+            final_payment: Some(r.final_payment.to_string()),
+            rows_paid: Some(r.rows_paid),
+            error: None,
+        },
+        Err(e) => LoanForwardResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 借入可能額(月額から)。
+#[wasm_bindgen]
+pub fn loan_principal(payment: &str, rate: &str, months: u32) -> JsValue {
+    let outcome: CalcResult<_> =
+        (|| inverse::principal_for(parse_yen(payment)?, &Rate::from_percent(rate)?, months))();
+    let result = match outcome {
+        Ok(r) => LoanPrincipalResult {
+            principal: Some(r.principal.to_string()),
+            total_payment: Some(r.total_payment.to_string()),
+            total_interest: Some(r.total_interest.to_string()),
+            final_payment: Some(r.final_payment.to_string()),
+            rows_paid: Some(r.rows_paid),
+            error: None,
+        },
+        Err(e) => LoanPrincipalResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 期間(月額から)。
+#[wasm_bindgen]
+pub fn loan_term(principal: &str, rate: &str, payment: &str) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        inverse::term_for(
+            parse_yen(principal)?,
+            &Rate::from_percent(rate)?,
+            parse_yen(payment)?,
+        )
+    })();
+    let result = match outcome {
+        Ok(r) => LoanTermResult {
+            months: Some(r.n),
+            total_payment: Some(r.total_payment.to_string()),
+            total_interest: Some(r.total_interest.to_string()),
+            final_payment: Some(r.final_payment.to_string()),
+            error: None,
+        },
+        Err(e) => LoanTermResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// ボーナス併用の正算。
+#[wasm_bindgen]
+pub fn loan_bonus_forward(
+    principal: &str,
+    bonus_principal: &str,
+    rate: &str,
+    months: u32,
+) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        bonus::compute_forward(
+            parse_yen(principal)?,
+            parse_yen(bonus_principal)?,
+            &Rate::from_percent(rate)?,
+            months,
+        )
+    })();
+    let result = match outcome {
+        Ok(r) => LoanBonusForwardResult {
+            monthly_payment: Some(r.monthly_payment.to_string()),
+            bonus_payment: Some(r.bonus_payment.to_string()),
+            bonus_rows: Some(r.bonus_rows),
+            total_payment: Some(r.total_payment.to_string()),
+            total_interest: Some(r.total_interest.to_string()),
+            monthly_final_payment: Some(r.monthly_final_payment.to_string()),
+            bonus_final_payment: Some(r.bonus_final_payment.to_string()),
+            error: None,
+        },
+        Err(e) => LoanBonusForwardResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// ボーナス併用の借入可能額逆算。
+#[wasm_bindgen]
+pub fn loan_bonus_principal(
+    monthly_payment: &str,
+    bonus_payment: &str,
+    rate: &str,
+    months: u32,
+) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        bonus::principal_for(
+            parse_yen(monthly_payment)?,
+            parse_yen(bonus_payment)?,
+            &Rate::from_percent(rate)?,
+            months,
+        )
+    })();
+    let result = match outcome {
+        Ok(r) => LoanBonusPrincipalResult {
+            monthly_principal: Some(r.monthly_principal.to_string()),
+            bonus_principal: Some(r.bonus_principal.to_string()),
+            total_principal: Some(r.total_principal.to_string()),
+            total_payment: Some(r.total_payment.to_string()),
+            total_interest: Some(r.total_interest.to_string()),
+            error: None,
+        },
+        Err(e) => LoanBonusPrincipalResult {
+            error: Some(e),
+            ..Default::default()
         },
     };
     to_js_value(&result)

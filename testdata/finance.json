@@ -1,0 +1,566 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "final_payment": "91762",
+        "monthly_payment": "91855",
+        "rows_paid": 420,
+        "total_interest": "8579007",
+        "total_payment": "38579007"
+      },
+      "id": "loan_forward/30000000/1.5/420/0",
+      "input": {
+        "n": 420,
+        "principal": "30000000",
+        "rate": "1.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "71458",
+        "monthly_payment": "71101",
+        "rows_paid": 600,
+        "total_interest": "12660957",
+        "total_payment": "42660957"
+      },
+      "id": "loan_forward/30000000/1.5/600/0",
+      "input": {
+        "n": 600,
+        "principal": "30000000",
+        "rate": "1.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "1200000",
+        "monthly_payment": "37536",
+        "rows_paid": 60,
+        "total_interest": "414605",
+        "total_payment": "3414605"
+      },
+      "id": "loan_forward/3000000/3.9/60/1200000",
+      "input": {
+        "n": 60,
+        "principal": "3000000",
+        "rate": "3.9",
+        "residual": "1200000"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "1200194",
+        "monthly_payment": "37533",
+        "rows_paid": 60,
+        "total_interest": "414620",
+        "total_payment": "3414620"
+      },
+      "id": "loan_forward/3000000/3.9/60/1200195",
+      "input": {
+        "n": 60,
+        "principal": "3000000",
+        "rate": "3.9",
+        "residual": "1200195"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "55102",
+        "monthly_payment": "55114",
+        "rows_paid": 60,
+        "total_interest": "306828",
+        "total_payment": "3306828"
+      },
+      "id": "loan_forward/3000000/3.9/60/0",
+      "input": {
+        "n": 60,
+        "principal": "3000000",
+        "rate": "3.9",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "2999999",
+        "monthly_payment": "5138",
+        "rows_paid": 36,
+        "total_interest": "179834",
+        "total_payment": "3179834"
+      },
+      "id": "loan_forward/3000000/2.0/36/2999999",
+      "input": {
+        "n": 36,
+        "principal": "3000000",
+        "rate": "2.0",
+        "residual": "2999999"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "80326",
+        "monthly_payment": "80330",
+        "rows_paid": 13,
+        "total_interest": "44287",
+        "total_payment": "1044286"
+      },
+      "id": "loan_forward/999999/7.5/13/0",
+      "input": {
+        "n": 13,
+        "principal": "999999",
+        "rate": "7.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "250010",
+        "monthly_payment": "249999",
+        "rows_paid": 12,
+        "total_interest": "0",
+        "total_payment": "2999999"
+      },
+      "id": "loan_forward/2999999/0/12/0",
+      "input": {
+        "n": 12,
+        "principal": "2999999",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "1000000",
+        "monthly_payment": "181818",
+        "rows_paid": 12,
+        "total_interest": "0",
+        "total_payment": "2999999"
+      },
+      "id": "loan_forward/2999999/0/12/1000000",
+      "input": {
+        "n": 12,
+        "principal": "2999999",
+        "rate": "0",
+        "residual": "1000000"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "3005998",
+        "monthly_payment": "3005998",
+        "rows_paid": 1,
+        "total_interest": "5999",
+        "total_payment": "3005998"
+      },
+      "id": "loan_forward/2999999/2.4/1/0",
+      "input": {
+        "n": 1,
+        "principal": "2999999",
+        "rate": "2.4",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "30744573456182601",
+        "monthly_payment": "30744573456182586",
+        "rows_paid": 600,
+        "total_interest": "0",
+        "total_payment": "18446744073709551615"
+      },
+      "id": "loan_forward/18446744073709551615/0/600/0",
+      "input": {
+        "n": 600,
+        "principal": "18446744073709551615",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "loan_forward/18446744073709551615/1.5/1/0",
+      "input": {
+        "n": 1,
+        "principal": "18446744073709551615",
+        "rate": "1.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "6",
+        "monthly_payment": "21",
+        "rows_paid": 590,
+        "total_interest": "2375",
+        "total_payment": "12375"
+      },
+      "id": "loan_forward/10000/1.0/600/0",
+      "input": {
+        "n": 600,
+        "principal": "10000",
+        "rate": "1.0",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_forward/0/1.5/12/0",
+      "input": {
+        "n": 12,
+        "principal": "0",
+        "rate": "1.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_forward/1000000/1.5/0/0",
+      "input": {
+        "n": 0,
+        "principal": "1000000",
+        "rate": "1.5",
+        "residual": "0"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_forward/1000000/1.5/12/1000000",
+      "input": {
+        "n": 12,
+        "principal": "1000000",
+        "rate": "1.5",
+        "residual": "1000000"
+      },
+      "op": "loan_forward"
+    },
+    {
+      "expect": {
+        "final_payment": "84999",
+        "principal": "27761211",
+        "rows_paid": 420,
+        "total_interest": "7938788",
+        "total_payment": "35699999"
+      },
+      "id": "loan_principal/85000/1.5/420",
+      "input": {
+        "n": 420,
+        "payment": "85000",
+        "rate": "1.5"
+      },
+      "op": "loan_principal"
+    },
+    {
+      "expect": {
+        "final_payment": "50000",
+        "principal": "1175370",
+        "rows_paid": 24,
+        "total_interest": "24630",
+        "total_payment": "1200000"
+      },
+      "id": "loan_principal/50000/2.0/24",
+      "input": {
+        "n": 24,
+        "payment": "50000",
+        "rate": "2.0"
+      },
+      "op": "loan_principal"
+    },
+    {
+      "expect": {
+        "final_payment": "100000",
+        "principal": "1200000",
+        "rows_paid": 12,
+        "total_interest": "0",
+        "total_payment": "1200000"
+      },
+      "id": "loan_principal/100000/0/12",
+      "input": {
+        "n": 12,
+        "payment": "100000",
+        "rate": "0"
+      },
+      "op": "loan_principal"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_principal/0/1.5/12",
+      "input": {
+        "n": 12,
+        "payment": "0",
+        "rate": "1.5"
+      },
+      "op": "loan_principal"
+    },
+    {
+      "expect": {
+        "final_payment": "50000",
+        "n": 24,
+        "total_interest": "24630",
+        "total_payment": "1200000"
+      },
+      "id": "loan_term/1175370/2.0/50000",
+      "input": {
+        "payment": "50000",
+        "principal": "1175370",
+        "rate": "2.0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "final_payment": "1",
+        "n": 25,
+        "total_interest": "24630",
+        "total_payment": "1200001"
+      },
+      "id": "loan_term/1175371/2.0/50000",
+      "input": {
+        "payment": "50000",
+        "principal": "1175371",
+        "rate": "2.0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "final_payment": "100000",
+        "n": 12,
+        "total_interest": "0",
+        "total_payment": "1200000"
+      },
+      "id": "loan_term/1200000/0/100000",
+      "input": {
+        "payment": "100000",
+        "principal": "1200000",
+        "rate": "0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "final_payment": "1",
+        "n": 13,
+        "total_interest": "0",
+        "total_payment": "1200001"
+      },
+      "id": "loan_term/1200001/0/100000",
+      "input": {
+        "payment": "100000",
+        "principal": "1200001",
+        "rate": "0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_term/1000000/12.0/10000",
+      "input": {
+        "payment": "10000",
+        "principal": "1000000",
+        "rate": "12.0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_term/100000000/12.0/1000001",
+      "input": {
+        "payment": "1000001",
+        "principal": "100000000",
+        "rate": "12.0"
+      },
+      "op": "loan_term"
+    },
+    {
+      "expect": {
+        "bonus_final_payment": "157742",
+        "bonus_payment": "157741",
+        "bonus_rows": 14,
+        "monthly_final_payment": "39241",
+        "monthly_payment": "39235",
+        "total_interest": "504121",
+        "total_payment": "5504121"
+      },
+      "id": "loan_bonus_forward/5000000/2000000/2.7/84",
+      "input": {
+        "bonus_principal": "2000000",
+        "n": 84,
+        "principal": "5000000",
+        "rate": "2.7"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
+        "bonus_final_payment": "276227",
+        "bonus_payment": "276219",
+        "bonus_rows": 70,
+        "monthly_final_payment": "46013",
+        "monthly_payment": "45927",
+        "total_interest": "8624764",
+        "total_payment": "38624764"
+      },
+      "id": "loan_bonus_forward/30000000/15000000/1.5/420",
+      "input": {
+        "bonus_principal": "15000000",
+        "n": 420,
+        "principal": "30000000",
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
+        "bonus_final_payment": "0",
+        "bonus_payment": "0",
+        "bonus_rows": 0,
+        "monthly_final_payment": "91762",
+        "monthly_payment": "91855",
+        "total_interest": "8579007",
+        "total_payment": "38579007"
+      },
+      "id": "loan_bonus_forward/30000000/0/1.5/420",
+      "input": {
+        "bonus_principal": "0",
+        "n": 420,
+        "principal": "30000000",
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_bonus_forward/3000000/1500001/1.5/60",
+      "input": {
+        "bonus_principal": "1500001",
+        "n": 60,
+        "principal": "3000000",
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_bonus_forward/1000000/100000/1.5/5",
+      "input": {
+        "bonus_principal": "100000",
+        "n": 5,
+        "principal": "1000000",
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
+        "bonus_principal": "5430487",
+        "monthly_principal": "26128204",
+        "total_interest": "9041302",
+        "total_payment": "40599993",
+        "total_principal": "31558691"
+      },
+      "id": "loan_bonus_principal/80000/100000/1.5/420",
+      "input": {
+        "bonus_payment": "100000",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
+        "bonus_principal": "26128151",
+        "monthly_principal": "26128204",
+        "total_interest": "15023440",
+        "total_payment": "67279795",
+        "total_principal": "52256355"
+      },
+      "id": "loan_bonus_principal/80000/481140/1.5/420",
+      "input": {
+        "bonus_payment": "481140",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_bonus_principal/80000/481141/1.5/420",
+      "input": {
+        "bonus_payment": "481141",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "loan_bonus_principal/10000/500000/1.5/60",
+      "input": {
+        "bonus_payment": "500000",
+        "monthly_payment": "10000",
+        "n": 60,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    },
+    {
+      "expect": {
+        "bonus_principal": "0",
+        "monthly_principal": "26128204",
+        "total_interest": "7471792",
+        "total_payment": "33599996",
+        "total_principal": "26128204"
+      },
+      "id": "loan_bonus_principal/80000/0/1.5/420",
+      "input": {
+        "bonus_payment": "0",
+        "monthly_payment": "80000",
+        "n": 420,
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_principal"
+    }
+  ],
+  "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
+  "schema": 1
+}

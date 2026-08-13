@@ -13,7 +13,7 @@ describe("Nav", () => {
     ).toBeInTheDocument();
   });
 
-  it("links to both modules by hash", () => {
+  it("links to every module by hash", () => {
     render(<Nav current="scientific" />);
     expect(screen.getByRole("link", { name: "Scientific" })).toHaveAttribute(
       "href",
@@ -23,9 +23,27 @@ describe("Nav", () => {
       "href",
       "#data-scale",
     );
+    expect(screen.getByRole("link", { name: "Loan" })).toHaveAttribute(
+      "href",
+      "#loan",
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
   it("marks only the current tab with aria-current", () => {
+    render(<Nav current="loan" />);
+    expect(screen.getByRole("link", { name: "Loan" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    for (const name of ["Scientific", "Data Scale"]) {
+      expect(screen.getByRole("link", { name })).not.toHaveAttribute(
+        "aria-current",
+      );
+    }
+  });
+
+  it("marks the data scale tab when that is the current one", () => {
     render(<Nav current="data-scale" />);
     expect(screen.getByRole("link", { name: "Data Scale" })).toHaveAttribute(
       "aria-current",
