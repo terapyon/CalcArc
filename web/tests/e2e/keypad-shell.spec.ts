@@ -59,10 +59,25 @@ test("the empty second-face slots are reserved, not missing", async ({
   }
 });
 
-test("the reserved slots do nothing when pressed", async ({ page }) => {
+test("the reserved slots do nothing, and look like it", async ({ page }) => {
   const zeros = page.getByRole("button", { name: "3桁のゼロ（準備中）" });
   await expect(zeros).toBeDisabled();
   await expect(page.getByTestId("display-main")).toHaveText("0");
+  // 無効なことは見た目にも出す(設計書 §5 の「無効表示」)。属性だけだと
+  // 押せる見た目のキーが押せない、という一番いらだつ形になる。
+  const opacity = await zeros.evaluate((el) => getComputedStyle(el).opacity);
+  expect(Number(opacity)).toBeLessThan(1);
+});
+
+test("Shift shows its face is on, not just to the accessibility tree", async ({
+  page,
+}) => {
+  const shift = page.getByRole("button", { name: "第2面に切り替え" });
+  const background = (el: HTMLElement) => getComputedStyle(el).backgroundColor;
+  const before = await shift.evaluate(background);
+  await shift.click();
+  await expect(shift).toHaveAttribute("aria-pressed", "true");
+  expect(await shift.evaluate(background)).not.toBe(before);
 });
 
 test("the echo line is present and empty", async ({ page }) => {

@@ -140,13 +140,15 @@ describe("Keypad の Shift", () => {
     for (const slot of empty) expect(slot).toBeDisabled();
   });
 
-  it("keeps keys without a second face unchanged", async () => {
+  it("keeps keys without a second face unchanged, and still releases", async () => {
+    // 第 2 面を持たないキーを押しても、面は 1 打鍵で解除される。
+    // 解除されないと、次の打鍵が意図しない第 2 面のキーになる。
     const onPress = vi.fn();
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "第2面に切り替え" }),
-    );
+    const shift = screen.getByRole("button", { name: "第2面に切り替え" });
+    await userEvent.click(shift);
     await userEvent.click(screen.getByRole("button", { name: "7" }));
     expect(onPress).toHaveBeenCalledExactlyOnceWith("7");
+    expect(shift).toHaveAttribute("aria-pressed", "false");
   });
 });
