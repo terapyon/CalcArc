@@ -236,8 +236,20 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
                 .push_dot()?;
         }
         Key::J => {
-            // j は常に新しい虚部入力を開始する。
-            state.buffer = Some(Buffer::imaginary());
+            // 数字があれば実部⇄虚部の切り替え、無ければ新しい虚部入力
+            // (設計書 §1)。数字が無いときに切り替えると「実部で数字なし」
+            // という無意味な状態になるので、そこは従来どおりにする。
+            //
+            // 借用を 2 段に分けているのは、match の腕の中で state.buffer を
+            // 差し替えると走査中の借用と衝突するため。
+            let toggles = state.buffer.as_ref().is_some_and(Buffer::has_digits);
+            if toggles {
+                if let Some(buffer) = state.buffer.as_mut() {
+                    buffer.toggle_imaginary();
+                }
+            } else {
+                state.buffer = Some(Buffer::imaginary());
+            }
         }
         Key::Del => delete_one(state),
         Key::Add => push_binop(state, BinOp::Add)?,

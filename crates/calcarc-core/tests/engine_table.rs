@@ -60,6 +60,23 @@ fn del_removes_the_last_character() {
 }
 
 #[test]
+fn j_after_digits_turns_the_entry_imaginary() {
+    // 設計書 §1: 数字があれば j は実部と虚部を切り替える。
+    assert_eq!(main_of(&["3", "j"]), "j3");
+    assert_eq!(main_of(&["3", "j", "j"]), "3");
+    assert_eq!(main_of(&["3", "j", "4"]), "j34");
+    assert_eq!(main_of(&["3", "dot", "5", "j"]), "j3.5");
+    // 数字が無い j は従来どおり新しい虚部入力を開始する。
+    assert_eq!(main_of(&["j", "j", "4"]), "j4");
+    // DEL の段構成は変わらない(数字だけ消え、j マーカーが残る)。
+    assert_eq!(main_of(&["3", "j", "del"]), "j");
+    assert_eq!(main_of(&["3", "j", "del", "del"]), "0");
+    // 式の中でも同じ。
+    assert_eq!(main_of(&["3", "add", "4", "j", "eq"]), "3+j4");
+    assert_eq!(main_of(&["3", "j", "add", "2", "j", "eq"]), "j5");
+}
+
+#[test]
 fn del_on_an_imaginary_entry_keeps_the_j() {
     // 数字だけ消える。j まで消えると、続きを打った人は自分が虚部を
     // 入力しているつもりのまま実部を入力してしまう。

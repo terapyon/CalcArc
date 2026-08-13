@@ -102,6 +102,16 @@ impl Buffer {
         }
     }
 
+    /// 打鍵された数字があるか。j の切り替え条件(設計書 §1)。
+    pub fn has_digits(&self) -> bool {
+        !self.digits.is_empty()
+    }
+
+    /// 実部と虚部を切り替える。数字はそのまま残す。
+    pub fn toggle_imaginary(&mut self) {
+        self.imaginary = !self.imaginary;
+    }
+
     pub fn push_digit(&mut self, d: u8) {
         if d > 9 {
             // Key::Digit は pub なので範囲外の値を構築できる。from_token は
