@@ -19,6 +19,29 @@ fn main_of(keys: &[&str]) -> String {
     run(keys).main
 }
 
+/// 上部のエコー行。保留中の式を見せる(設計書 §4)。
+fn echo_of(keys: &[&str]) -> String {
+    run(keys).echo
+}
+
+#[test]
+fn the_echo_shows_the_pending_expression() {
+    // 設計書 §4: 保留中の式を状態から導出する。打鍵履歴は持たない。
+    assert_eq!(echo_of(&["3", "add"]), "3 +");
+    assert_eq!(echo_of(&["3", "add", "4", "mul"]), "3 + 4 ×");
+    assert_eq!(echo_of(&["3", "add", "lparen", "4"]), "3 + ( 4");
+    assert_eq!(echo_of(&["j", "4", "mul"]), "j4 ×");
+    // = で確定するとスタックが空になり、echo も空になる。
+    assert_eq!(echo_of(&["3", "add", "4", "eq"]), "");
+    // 保留式が無いあいだは空(main が値を見せている)。
+    assert_eq!(echo_of(&["1", "dot", "5", "exp", "3"]), "");
+    // 畳まれたものは畳まれた姿で見える(設計書 §4 の制限)。
+    assert_eq!(echo_of(&["3", "0", "sin", "add"]), "0.5 +");
+    assert_eq!(echo_of(&["2", "mul", "3", "add"]), "6 +");
+    // エラー中は保留を伏せる(pending_op と同じ扱い)。
+    assert_eq!(echo_of(&["1", "div", "0", "eq"]), "");
+}
+
 #[test]
 fn starts_at_zero() {
     assert_eq!(main_of(&[]), "0");

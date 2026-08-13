@@ -12,6 +12,8 @@ pub const ERROR_TEXT: &str = "Math ERROR";
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DisplayState {
+    /// 保留中の式(設計書 §4)。保留が無いあいだは空。
+    pub echo: String,
     pub main: String,
     pub angle: AngleMode,
     pub form: DisplayForm,
@@ -53,6 +55,12 @@ pub fn render(state: &EngineState) -> DisplayState {
     };
 
     DisplayState {
+        echo: if has_error {
+            // エラー中は保留を伏せる。pending_op と同じ扱い。
+            String::new()
+        } else {
+            echo_of(state)
+        },
         main,
         angle: state.angle,
         form: state.form,
@@ -76,6 +84,52 @@ pub fn render(state: &EngineState) -> DisplayState {
                 .count()
         },
         error,
+    }
+}
+
+/// 保留中の式を組み立てる(設計書 §4)。
+///
+/// 打鍵履歴ではなく**スタックの形**を見せる。後置関数は押した瞬間に値へ
+/// 畳まれ(`30 sin` は `0.5`)、優先順位でも畳まれる(`2 × 3 +` は `6 +`)。
+/// 打った通りを見せるには状態に履歴が要る——それは要望が残ったときの
+/// 別の設計であり、ここでは導出できる範囲に留める。
+fn echo_of(state: &EngineState) -> String {
+    if state.operators.is_empty() {
+        // 保留が無いなら main が値を見せている。二重に出さない。
+        return String::new();
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut operands = state.operands.iter();
+    for token in &state.operators {
+        match token {
+            OpToken::Op(op) => {
+                // 二項演算子の左側にはオペランドが 1 つ立っている。
+                if let Some(value) = operands.next() {
+                    parts.push(format_rect(*value));
+                }
+                parts.push(op_symbol(*op).to_string());
+            }
+            // 開き括弧はオペランドを消費しない。
+            OpToken::OpenParen => parts.push("(".to_string()),
+        }
+    }
+    // まだ演算子が来ていないオペランドと、入力中の値。
+    for value in operands {
+        parts.push(format_rect(*value));
+    }
+    if let Some(buffer) = &state.buffer {
+        parts.push(buffer.text());
+    }
+    parts.join(" ")
+}
+
+/// 演算子の記号。UI が `pending_op` を記号にしているのと同じ対応。
+fn op_symbol(op: BinOp) -> &'static str {
+    match op {
+        BinOp::Add => "+",
+        BinOp::Sub => "−",
+        BinOp::Mul => "×",
+        BinOp::Div => "÷",
     }
 }
 
