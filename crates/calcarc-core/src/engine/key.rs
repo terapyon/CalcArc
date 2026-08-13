@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 pub enum Key {
     Digit(u8),
     Dot,
+    /// 指数入力(設計書 §2)。仮数と指数を分ける唯一のキー。
+    Exp,
     Pi,
     Add,
     Sub,
@@ -44,6 +46,7 @@ impl Key {
             "8" => Key::Digit(8),
             "9" => Key::Digit(9),
             "dot" => Key::Dot,
+            "exp" => Key::Exp,
             "pi" => Key::Pi,
             "add" => Key::Add,
             "sub" => Key::Sub,
@@ -81,6 +84,7 @@ impl Key {
             Key::Digit(9) => "9",
             Key::Digit(_) => "0",
             Key::Dot => "dot",
+            Key::Exp => "exp",
             Key::Pi => "pi",
             Key::Add => "add",
             Key::Sub => "sub",

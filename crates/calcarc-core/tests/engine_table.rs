@@ -77,6 +77,58 @@ fn j_after_digits_turns_the_entry_imaginary() {
 }
 
 #[test]
+fn exp_enters_an_exponent() {
+    // 設計書 §2。1.5 Exp 3 = 1500。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3"]), "1.5e3");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1500");
+    // 仮数なしの Exp は仮数 1。表示にも 1 が出る(空の "e3" にはしない)。
+    assert_eq!(main_of(&["exp", "3"]), "1e3");
+    assert_eq!(main_of(&["exp", "3", "eq"]), "1000");
+    // 連打は無視。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "exp"]), "1.5e");
+    // 指数は整数。小数点は無視する。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "dot"]), "1.5e3");
+    // 指数は 3 桁で頭打ち(4 桁目は無視)。
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9", "9"]), "1e309");
+    // 先頭ゼロは仮数と同じ規則。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "0", "0", "3"]), "1.5e3");
+    // 指数入力中でも後置 j は効く(設計書 §1 の表の最後の行)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "j"]), "j1.5e3");
+}
+
+#[test]
+fn the_sign_key_follows_the_exponent_while_one_is_open() {
+    // 設計書 §2: 指数入力中は指数の符号、それ以外は確定値の符号。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "neg"]), "1.5e-3");
+    assert_eq!(
+        main_of(&["1", "dot", "5", "exp", "3", "neg", "neg"]),
+        "1.5e3"
+    );
+    // 桁が無くても押せる。順序を変えても同じ値になる。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "neg", "3"]), "1.5e-3");
+    // Exp 中でなければ従来どおり確定値の符号。
+    assert_eq!(main_of(&["4", "neg"]), "-4");
+}
+
+#[test]
+fn del_walks_out_of_the_exponent_one_stage_at_a_time() {
+    // 段は 指数の桁 → e マーカー → 仮数の文字(設計書 §2)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "del"]), "1.5e");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "del", "del"]), "1.5");
+    assert_eq!(
+        main_of(&["1", "dot", "5", "exp", "3", "del", "del", "del"]),
+        "1."
+    );
+}
+
+#[test]
+fn an_exponent_out_of_range_is_an_error_when_it_is_committed() {
+    // 打鍵の途中はエラーにしない。値になる瞬間に Overflow(設計書 §2)。
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9"]), "1e309");
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9", "eq"]), "Math ERROR");
+}
+
+#[test]
 fn del_on_an_imaginary_entry_keeps_the_j() {
     // 数字だけ消える。j まで消えると、続きを打った人は自分が虚部を
     // 入力しているつもりのまま実部を入力してしまう。

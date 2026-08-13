@@ -5,10 +5,17 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
 /// 最初から持たせておく（設計書 §4.4）。
-pub const STATE_SCHEMA: u32 = 3;
+/// 4: `Buffer` に指数部が入った(設計書 §2)。直列化の形が変わったので上げた。
+/// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
+/// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
+pub const STATE_SCHEMA: u32 = 4;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
+
+/// 指数部に打てる桁数。f64 の定義域(約 1e±308)を打鍵で覆える 3 桁にする
+/// (設計書 §2)。2 桁だと golden の境界ケースを手で再現できない。
+const MAX_EXPONENT_LEN: usize = 3;
 
 /// 表示形式。`▸∠` で切り替わる。値そのものには影響しない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +58,13 @@ pub enum OpToken {
     OpenParen,
 }
 
+/// 入力中の指数部。`Exp` を押した時点で、桁が無いまま存在する。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Exponent {
+    pub digits: String,
+    pub negative: bool,
+}
+
 /// 入力中の数値。確定するまで Value にならない。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Buffer {
@@ -58,6 +72,8 @@ pub struct Buffer {
     pub digits: String,
     /// `j` が押されて虚部として入力中か。
     pub imaginary: bool,
+    /// `Exp` を押してから確定するまでの指数部(設計書 §2)。
+    pub exponent: Option<Exponent>,
 }
 
 /// `backspace` が何を消したか。
@@ -72,34 +88,61 @@ pub enum Backspace {
 impl Buffer {
     pub fn imaginary() -> Buffer {
         Buffer {
-            digits: String::new(),
             imaginary: true,
+            ..Buffer::default()
         }
     }
 
     /// 確定値。`j` だけで数字がなければ j1 と解釈する（設計書 §4.3）。
-    pub fn value(&self) -> Value {
-        let n = if self.digits.is_empty() {
-            1.0
+    /// `Exp` だけの場合も仮数 1 とする(実機と同じ)。
+    ///
+    /// 指数を付けた結果が f64 の範囲を超えたら Overflow(設計書 §2)。
+    /// **打鍵の途中ではなく、値になる瞬間に返す**——`1e30` を打つ途中に
+    /// `1e3` を経由するのと同じで、途中経過をエラーにはしない。
+    pub fn value(&self) -> CalcResult<Value> {
+        let mantissa = if self.digits.is_empty() {
+            "1".to_string()
         } else {
-            self.digits.parse::<f64>().unwrap_or(0.0)
+            self.digits.clone()
         };
-        if self.imaginary {
+        let text = match &self.exponent {
+            // 桁の無い指数は指数なしと同じ。
+            Some(e) if !e.digits.is_empty() => format!(
+                "{mantissa}e{}{}",
+                if e.negative { "-" } else { "" },
+                e.digits
+            ),
+            _ => mantissa,
+        };
+        let n: f64 = text.parse().map_err(|_| CalcError::SyntaxError)?;
+        if !n.is_finite() {
+            return Err(CalcError::Overflow);
+        }
+        Ok(if self.imaginary {
             Value::imag(n)
         } else {
             Value::real(n)
-        }
+        })
     }
 
     /// 入力中に表示する文字列。打鍵した通りに見せる。
     pub fn text(&self) -> String {
-        if self.imaginary {
-            format!("j{}", self.digits)
-        } else if self.digits.is_empty() {
-            "0".to_string()
-        } else {
+        let mantissa = if !self.digits.is_empty() {
             self.digits.clone()
-        }
+        } else if self.exponent.is_some() {
+            // 仮数なしの Exp は仮数 1(実機と同じ)。値と表示を揃える。
+            "1".to_string()
+        } else if self.imaginary {
+            String::new()
+        } else {
+            "0".to_string()
+        };
+        let exponent = match &self.exponent {
+            Some(e) => format!("e{}{}", if e.negative { "-" } else { "" }, e.digits),
+            None => String::new(),
+        };
+        let head = if self.imaginary { "j" } else { "" };
+        format!("{head}{mantissa}{exponent}")
     }
 
     /// 打鍵された数字があるか。j の切り替え条件(設計書 §1)。
@@ -119,6 +162,18 @@ impl Buffer {
             // panic する。このクレートは panic しないと約束している。
             return;
         }
+        let digit = (b'0' + d) as char;
+        // 指数入力中は指数へ入る(設計書 §2)。先頭ゼロの規則は仮数と共通。
+        if let Some(exponent) = self.exponent.as_mut() {
+            if exponent.digits.len() >= MAX_EXPONENT_LEN {
+                return;
+            }
+            if exponent.digits == "0" {
+                exponent.digits.clear();
+            }
+            exponent.digits.push(digit);
+            return;
+        }
         if self.digits.len() >= MAX_ENTRY_LEN {
             return;
         }
@@ -126,10 +181,31 @@ impl Buffer {
         if self.digits == "0" {
             self.digits.clear();
         }
-        self.digits.push((b'0' + d) as char);
+        self.digits.push(digit);
+    }
+
+    /// `Exp`。すでに指数入力中なら何もしない(連打は無視)。
+    pub fn push_exponent(&mut self) {
+        self.exponent.get_or_insert_with(Exponent::default);
+    }
+
+    /// `+/−`。指数入力中なら指数の符号を反転して true を返す。そうでなければ
+    /// 何もせず false——呼び出し側が確定値の符号を反転する(設計書 §2)。
+    pub fn toggle_exponent_sign(&mut self) -> bool {
+        match self.exponent.as_mut() {
+            Some(exponent) => {
+                exponent.negative = !exponent.negative;
+                true
+            }
+            None => false,
+        }
     }
 
     pub fn push_dot(&mut self) -> CalcResult<()> {
+        if self.exponent.is_some() {
+            // 指数は整数。小数点は無視する(打ち間違いで計算を止めない)。
+            return Ok(());
+        }
         if self.digits.contains('.') {
             return Err(CalcError::SyntaxError);
         }
@@ -149,6 +225,15 @@ impl Buffer {
     /// `3 + j4 DEL 5 =` が 3+j5 ではなく 3+5 になり、何を計算しているかが
     /// 黙って変わる。j を消すにはもう一度 DEL を押す。
     pub fn backspace(&mut self) -> Backspace {
+        // 段は 指数の桁 → e マーカー → 仮数の文字 → j マーカー の順
+        // (設計書 §2)。一度に 1 段だけ戻す。
+        if let Some(exponent) = self.exponent.as_mut() {
+            if exponent.digits.pop().is_some() {
+                return Backspace::Removed;
+            }
+            self.exponent = None;
+            return Backspace::Removed;
+        }
         if self.digits.pop().is_some() {
             if self.digits.is_empty() && !self.imaginary {
                 return Backspace::Exhausted;
