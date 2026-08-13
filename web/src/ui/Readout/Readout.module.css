@@ -1,4 +1,4 @@
-.display {
+.readout {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -7,6 +7,17 @@
   background: var(--display-bg);
   color: var(--display-fg);
   font-family: var(--display-font);
+}
+
+/* 入力中の式。S1 では常に空だが、行の場所は確保する(設計書 §5)。 */
+.echo {
+  min-height: 1.2em;
+  overflow-x: auto;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+  /* 長い式は右端(いま打っている側)を見せる。 */
+  text-align: right;
+  white-space: nowrap;
 }
 
 .status {
