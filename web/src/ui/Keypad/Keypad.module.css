@@ -1,6 +1,12 @@
 .keypad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--key-gap);
+}
+
+.section {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--keypad-columns), 1fr);
   gap: var(--key-gap);
   /* <fieldset> の既定枠線・余白を打ち消す。role=group な <div> だと
      WAI-ARIA の推奨要素チェックに引っかかるため、意味の合う <fieldset>
@@ -10,6 +16,14 @@
   border: none;
 }
 
-.keypad > button {
+/* 正方のキー(メイングリッド)。44px はここで守る。 */
+.square > button {
   aspect-ratio: 1 / 1;
+}
+
+/* 半高の関数列。縦だけ詰め、横は 44px 以上を保つ(設計書 §4)。 */
+.half > button {
+  height: var(--function-row-height);
+  min-height: var(--function-row-height);
+  font-size: var(--key-font-size-function);
 }

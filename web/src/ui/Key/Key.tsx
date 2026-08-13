@@ -4,8 +4,8 @@ import styles from "./Key.module.css";
 export type KeyVariant = "digit" | "operator" | "function" | "danger";
 
 export interface KeyProps {
-  /** calcarc-core に渡すトークン。 */
-  token: KeyToken;
+  /** calcarc-core に渡すトークン。null は予約スロット(何も送らない)。 */
+  token: KeyToken | null;
   /** 画面に出す文字。記号でよい。 */
   label: string;
   /**
@@ -24,13 +24,19 @@ export function Key({
   variant = "digit",
   onPress,
 }: KeyProps) {
+  // 予約スロット(設計書 §5)。S2 が埋めるまで場所だけ確保する。
+  const reserved = token === null;
   return (
     <button
       type="button"
       className={`${styles.key} ${styles[variant]}`}
       aria-label={ariaLabel ?? label}
-      data-token={token}
-      onClick={() => onPress(token)}
+      data-token={token ?? undefined}
+      disabled={reserved}
+      aria-disabled={reserved || undefined}
+      onClick={() => {
+        if (token !== null) onPress(token);
+      }}
     >
       {label}
     </button>
