@@ -118,7 +118,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 30] = [
+    pub const ALL: [Key; 32] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -130,6 +130,8 @@ impl Key {
         Key::Digit(8),
         Key::Digit(9),
         Key::Dot,
+        Key::Zeros3,
+        Key::Exp,
         Key::Pi,
         Key::Add,
         Key::Sub,

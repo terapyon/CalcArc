@@ -25,10 +25,10 @@ describe("Keypad", () => {
     expect(laidOut).toEqual([...KEY_TOKENS].sort());
   });
 
-  it("reserves the slots S2 fills, carrying no token", () => {
-    // 000 と Exp は場所だけ確保する(設計書 §5)。押しても何も起きない。
+  it("has no reserved slots left on the first face", () => {
+    // S2 で 000 と Exp が有効になった。残る予約は第 2 面の空きだけ。
     const reserved = allKeys.filter((k) => k.token === null && !k.kind);
-    expect(reserved.map((k) => k.label).sort()).toEqual(["000", "Exp"]);
+    expect(reserved).toEqual([]);
   });
 
   it("gives every key an accessible label", () => {
@@ -82,14 +82,18 @@ describe("Keypad", () => {
   });
 
   it("does not send anything from a reserved slot", async () => {
+    // 第 1 面の予約は S2 で消えた。残る予約は第 2 面の空きスロット。
     const onPress = vi.fn();
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
-    const reserved = screen.getByRole("button", {
-      name: "3桁のゼロ（準備中）",
-    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    const reserved = screen.getAllByRole("button", {
+      name: "第2面（準備中）",
+    })[0];
     expect(reserved).toBeDisabled();
     expect(reserved).toHaveAttribute("aria-disabled", "true");
-    await userEvent.click(reserved);
+    await userEvent.click(reserved as HTMLElement);
     expect(onPress).not.toHaveBeenCalled();
   });
 });
@@ -106,17 +110,13 @@ describe("Keypad の Shift", () => {
     expect(shift).toHaveAttribute("aria-pressed", "true");
 
     // 第 1 面の Exp が π に変わっている。
-    expect(
-      screen.queryByRole("button", { name: "指数入力（準備中）" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "指数入力" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "円周率" }));
     expect(onPress).toHaveBeenCalledExactlyOnceWith("pi");
 
-    // 1 キーで戻る。
+    // 1 キーで戻る。第 1 面の Exp は S2 で有効になっている。
     expect(shift).toHaveAttribute("aria-pressed", "false");
-    expect(
-      screen.getByRole("button", { name: "指数入力（準備中）" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "指数入力" })).toBeEnabled();
   });
 
   it("releases the face when Shift is pressed twice, sending nothing", async () => {

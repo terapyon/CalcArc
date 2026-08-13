@@ -23,8 +23,7 @@ export function Display({ display }: DisplayProps) {
 
   return (
     <Readout
-      // S1 では常に空。S2 が DisplayState から中身を渡す(設計書 §5)。
-      echo=""
+      echo={display.echo}
       main={display.main}
       error={display.error}
       status={[

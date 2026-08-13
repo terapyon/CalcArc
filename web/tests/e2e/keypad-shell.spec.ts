@@ -32,20 +32,16 @@ test("the function row is half height but still 44px wide", async ({
 test("pi is reachable through the Shift face and reaches the core", async ({
   page,
 }) => {
-  // メイングリッドのキーが第 2 面を持つことの検査(設計書 §3)。第 1 面の
-  // Exp は S2 まで無効だが、π は Shift 経由で従来どおり入力できる(§5)。
-  await expect(
-    page.getByRole("button", { name: "指数入力（準備中）" }),
-  ).toBeDisabled();
+  // メイングリッドのキーが第 2 面を持つことの検査(設計書 §3)。第 1 面は
+  // Exp(S2 で有効化済み)、第 2 面が π。
+  await expect(page.getByRole("button", { name: "指数入力" })).toBeEnabled();
 
   await page.getByRole("button", { name: "第2面に切り替え" }).click();
   await page.getByRole("button", { name: "円周率" }).click();
   await expect(page.getByTestId("display-main")).toHaveText("3.141592654");
 
   // ワンショット: 面は戻っている。
-  await expect(
-    page.getByRole("button", { name: "指数入力（準備中）" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "指数入力" })).toBeEnabled();
 });
 
 test("the empty second-face slots are reserved, not missing", async ({
@@ -59,13 +55,16 @@ test("the empty second-face slots are reserved, not missing", async ({
   }
 });
 
-test("the reserved slots do nothing, and look like it", async ({ page }) => {
-  const zeros = page.getByRole("button", { name: "3桁のゼロ（準備中）" });
-  await expect(zeros).toBeDisabled();
-  await expect(page.getByTestId("display-main")).toHaveText("0");
+test("the remaining reserved slots do nothing, and look like it", async ({
+  page,
+}) => {
+  // 第 1 面の予約は S2 で解けた。残るのは第 2 面の空きスロット。
+  await page.getByRole("button", { name: "第2面に切り替え" }).click();
+  const empty = page.getByRole("button", { name: "第2面（準備中）" }).first();
+  await expect(empty).toBeDisabled();
   // 無効なことは見た目にも出す(設計書 §5 の「無効表示」)。属性だけだと
   // 押せる見た目のキーが押せない、という一番いらだつ形になる。
-  const opacity = await zeros.evaluate((el) => getComputedStyle(el).opacity);
+  const opacity = await empty.evaluate((el) => getComputedStyle(el).opacity);
   expect(Number(opacity)).toBeLessThan(1);
 });
 
@@ -80,8 +79,7 @@ test("Shift shows its face is on, not just to the accessibility tree", async ({
   expect(await shift.evaluate(background)).not.toBe(before);
 });
 
-test("the echo line is present and empty", async ({ page }) => {
-  // S2 が埋める場所。S1 では空であること自体を固定する(設計書 §5)。
+test("the echo line is empty until something is pending", async ({ page }) => {
   await expect(page.getByTestId("display-echo")).toBeEmpty();
 });
 

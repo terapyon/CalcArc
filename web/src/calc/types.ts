@@ -30,6 +30,8 @@ export const KEY_TOKENS = [
   "8",
   "9",
   "dot",
+  "zeros3",
+  "exp",
   "pi",
   "add",
   "sub",
@@ -55,6 +57,8 @@ export type KeyToken = (typeof KEY_TOKENS)[number];
 
 /** calcarc-core の engine::display::DisplayState に対応。 */
 export interface DisplayState {
+  /** 保留中の式。保留が無いあいだは空(設計書 §4)。 */
+  echo: string;
   main: string;
   angle: AngleMode;
   form: DisplayForm;
