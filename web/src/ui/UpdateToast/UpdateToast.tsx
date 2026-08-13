@@ -67,7 +67,11 @@ export function UpdateToast() {
         新しいバージョンがあります。再読み込みすると入力中の内容は消えます。
       </p>
       <div className={styles.actions}>
-        <button type="button" onClick={() => apply?.()}>
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={() => apply?.()}
+        >
           再読み込み
         </button>
         <button type="button" onClick={() => setWaiting(false)}>

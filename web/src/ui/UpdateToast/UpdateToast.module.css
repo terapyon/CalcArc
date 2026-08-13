@@ -11,8 +11,12 @@
   margin: 0 auto;
   padding: 12px 16px;
   border-radius: var(--radius);
+  /* 重なっていることを見せる。背景と同じ色のまま影も枠も無いと、ページの
+     一部に見えて「上に出てきたもの」として読めない。 */
+  border: 1px solid var(--display-status-fg);
   background: var(--display-bg);
   color: var(--display-fg);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 25%);
 }
 
 .message {
@@ -31,12 +35,21 @@
   min-height: var(--touch-target-min);
   flex: 1;
   padding: 8px 12px;
-  border: var(--key-border);
+  /* 枠が無いと、白いトーストの上の白いボタンが文字だけになる。 */
+  border: 1px solid var(--display-status-fg);
   border-radius: var(--radius);
   background: var(--key-bg);
   color: var(--key-fg);
   font-family: inherit;
   font-size: var(--key-font-size-function);
+}
+
+/* 主たる操作。押す先が一目で分かるように、演算子キーと同じ色を使う。 */
+.actions button.primary {
+  border-color: transparent;
+  background: var(--key-accent-bg);
+  color: var(--key-accent-fg);
+  font-weight: var(--key-font-weight-emphasis);
 }
 
 .actions button:focus-visible {

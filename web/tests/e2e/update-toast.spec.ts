@@ -28,6 +28,21 @@ test("its buttons are large enough to touch", async ({ page }) => {
   }
 });
 
+test("its buttons are visible as buttons, not just text", async ({ page }) => {
+  // 白いトーストの上に白いボタンを置くと、サイズは足りていても押せる場所に
+  // 見えない。E2E がサイズしか見ていないと、この抜けは通ってしまう。
+  const background = (el: HTMLElement) => getComputedStyle(el).backgroundColor;
+  const border = (el: HTMLElement) => getComputedStyle(el).borderTopWidth;
+  const reload = page.getByRole("button", { name: "再読み込み" });
+  const dismiss = page.getByRole("button", { name: "閉じる" });
+
+  // 主たる操作は色で分かれ、もう一方は枠で分かれる。
+  expect(await reload.evaluate(background)).not.toBe(
+    await dismiss.evaluate(background),
+  );
+  expect(await dismiss.evaluate(border)).not.toBe("0px");
+});
+
 test("it does not take focus", async ({ page }) => {
   await page.getByRole("button", { name: "7", exact: true }).focus();
   await expect(toast(page)).toBeVisible();
