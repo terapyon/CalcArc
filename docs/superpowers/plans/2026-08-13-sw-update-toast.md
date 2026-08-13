@@ -138,6 +138,22 @@ describe("UpdateToast", () => {
     expect(armed.applyUpdate).not.toHaveBeenCalled();
   });
 
+  it("swallows the Escape so the calculator does not clear", async () => {
+    // KEYBOARD_MAP の Escape は AC(useKeyboard.ts)。bubble まで通すと、
+    // 閉じた瞬間に計算が消える。capture で止めていることを見る。
+    const armed = arm();
+    const bubbled = vi.fn();
+    window.addEventListener("keydown", bubbled);
+    render(<UpdateToast />);
+    await waitFor(() => expect(watchForUpdate).toHaveBeenCalled());
+    armed.needRefresh();
+    await screen.findByRole("status");
+
+    await userEvent.keyboard("{Escape}");
+    expect(bubbled).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", bubbled);
+  });
+
   it("stays quiet when the registration fails", async () => {
     // SW が使えない環境(古いブラウザ、file://)でも画面は壊さない。
     vi.mocked(watchForUpdate).mockRejectedValue(new Error("no service worker"));
@@ -181,17 +197,21 @@ let ready: Promise<ApplyUpdate> | null = null;
  */
 export function watchForUpdate(onNeedRefresh: () => void): Promise<ApplyUpdate> {
   ready ??= new Promise<ApplyUpdate>((resolve, reject) => {
+    // registerSW は同期で updateSW を返すが、**解決は登録の完了を待つ**。
+    // 同 tick で resolve すると、あとから来る onRegisterError は解決済みの
+    // Promise に対して無効になり、失敗の経路が死ぬ。
     const updateSW = registerSW({
       onNeedRefresh,
+      // reload = true。SKIP_WAITING のあと controllerchange で再読み込み。
+      onRegisteredSW: () => resolve(() => updateSW(true)),
       onRegisterError: (error: unknown) => {
-        // 登録できない環境(古いブラウザ、file://)。**握ったままにしない**
-        // ——解決しない Promise を返すと、呼び出し側は永久に待つ。
         ready = null;
         reject(error);
       },
     });
-    // reload = true。SKIP_WAITING のあと controllerchange で再読み込みする。
-    resolve(() => updateSW(true));
+    // Service Worker を持たない環境では、どちらのコールバックも呼ばれず
+    // この Promise は未解決のままになる。**それでよい**——onNeedRefresh も
+    // 来ないのでトーストは出ず、画面は静かに壊れないまま動く。
   });
   return ready;
 }
@@ -239,13 +259,20 @@ export function UpdateToast() {
 
   // Escape で閉じる。トーストはフォーカスを取らないので、キーはどこで
   // 押されるか分からない——window で受ける(useKeyboard.ts と同じ流儀)。
+  //
+  // **capture 段で受けて止める。** `useKeyboard` の KEYBOARD_MAP は
+  // `Escape: "ac"` なので、bubble で受けると閉じた瞬間に AC が走って計算が
+  // 全部消える。capture は bubble のリスナより必ず先に走るので、開いている
+  // あいだだけ Escape を飲み込めば衝突は決定的に消える。
   useEffect(() => {
     if (!waiting) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setWaiting(false);
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setWaiting(false);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [waiting]);
 
   if (!waiting) return null;
@@ -459,6 +486,22 @@ test("it does not take focus, and Escape closes it", async ({ page }) => {
   await expect(
     page.getByRole("status", { name: "更新のお知らせ" }),
   ).toHaveCount(0);
+});
+
+test("closing with Escape does not clear the calculation", async ({ page }) => {
+  // KEYBOARD_MAP は Escape を AC に割り当てている(useKeyboard.ts)。トーストが
+  // bubble で受けると、閉じた瞬間に計算が全部消える。表示が残ることを見る
+  // ——「トーストが消えた」だけでは、この衝突を捕まえられない。
+  for (const name of ["3", "足す", "4", "計算する"]) {
+    await page.getByRole("button", { name, exact: true }).click();
+  }
+  await expect(page.getByTestId("display-main")).toHaveText("7");
+
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("status", { name: "更新のお知らせ" }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("display-main")).toHaveText("7");
 });
 
 test("the calculator underneath still works while the toast is up", async ({
