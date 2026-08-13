@@ -13,6 +13,9 @@ vi.mock("./ui/DataScale/DataScalePanel", () => ({
 vi.mock("./ui/Loan/LoanPanel", () => ({
   LoanPanel: () => <p data-testid="loan-panel" />,
 }));
+vi.mock("./ui/UpdateToast/UpdateToast", () => ({
+  UpdateToast: () => <p data-testid="update-toast" />,
+}));
 
 import { App } from "./App";
 
@@ -20,6 +23,14 @@ describe("App", () => {
   afterEach(() => {
     // location.hash はテスト間で持ち越らないよう、毎回既定に戻す。
     window.location.hash = "";
+  });
+
+  it("carries the update toast in the shell, outside main", () => {
+    render(<App />);
+    const toast = screen.getByTestId("update-toast");
+    expect(toast).toBeInTheDocument();
+    // <main> はモジュールのもの。トーストはシェルのものなので外に置く。
+    expect(screen.getByRole("main")).not.toContainElement(toast);
   });
 
   it("shows Scientific by default", () => {
