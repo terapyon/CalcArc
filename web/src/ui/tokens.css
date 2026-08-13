@@ -33,9 +33,10 @@
   --display-font: ui-monospace, SFMono-Regular, Menlo, monospace;
   --display-size-main: clamp(1.75rem, 8vw, 2.5rem);
   --display-size-status: 0.75rem;
-  --key-font-size: 1.125rem;
-  /* 関数キーは "sin" のように文字数が多いので少し小さくする。 */
-  --key-font-size-function: 1rem;
+  /* キーの文字。要件 7 で 1.125rem から拡大した。 */
+  --key-font-size: 1.375rem;
+  /* 関数キーは "sin" のように文字数が多く、行も半高なので一段小さい。 */
+  --key-font-size-function: 0.9375rem;
   /* 関数列の高さ。44px を割る唯一の場所(設計書 §4 に理由)。 */
   --function-row-height: 34px;
   --key-font-weight-emphasis: 600;
