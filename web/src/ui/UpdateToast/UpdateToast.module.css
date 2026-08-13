@@ -1,0 +1,45 @@
+.toast {
+  position: fixed;
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}
+
+.message {
+  margin: 0;
+  font-size: var(--display-size-status);
+}
+
+.actions {
+  display: flex;
+  gap: var(--key-gap);
+}
+
+.actions button {
+  /* 44px は base-spec §43。トーストのボタンは例外にしない。 */
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  flex: 1;
+  padding: 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--key-fg);
+  font-family: inherit;
+  font-size: var(--key-font-size-function);
+}
+
+.actions button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
