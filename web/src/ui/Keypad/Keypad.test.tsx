@@ -93,3 +93,60 @@ describe("Keypad", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 });
+
+describe("Keypad の Shift", () => {
+  it("swaps the second face on, and back after one key", async () => {
+    // ワンショット(設計書 §3): 1 キー押したら第 1 面へ自動で戻る。
+    const onPress = vi.fn();
+    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
+    const shift = screen.getByRole("button", { name: "第2面に切り替え" });
+    expect(shift).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(shift);
+    expect(shift).toHaveAttribute("aria-pressed", "true");
+
+    // 第 1 面の Exp が π に変わっている。
+    expect(
+      screen.queryByRole("button", { name: "指数入力（準備中）" }),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "円周率" }));
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("pi");
+
+    // 1 キーで戻る。
+    expect(shift).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "指数入力（準備中）" }),
+    ).toBeDisabled();
+  });
+
+  it("releases the face when Shift is pressed twice, sending nothing", async () => {
+    const onPress = vi.fn();
+    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
+    const shift = screen.getByRole("button", { name: "第2面に切り替え" });
+    await userEvent.click(shift);
+    await userEvent.click(shift);
+    expect(shift).toHaveAttribute("aria-pressed", "false");
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("shows the empty second-face slots as reserved", async () => {
+    // 第 2 面は今回ほぼ空(設計書 §3)。空きスロットは場所だけ示す。
+    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={vi.fn()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    const empty = screen.getAllByRole("button", { name: "第2面（準備中）" });
+    expect(empty).toHaveLength(3); // sin / cos / tan の裏
+    for (const slot of empty) expect(slot).toBeDisabled();
+  });
+
+  it("keeps keys without a second face unchanged", async () => {
+    const onPress = vi.fn();
+    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "7" }));
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("7");
+  });
+});

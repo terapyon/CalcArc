@@ -14,7 +14,14 @@ export interface KeyProps {
    */
   ariaLabel?: string;
   variant?: KeyVariant;
+  /** トグルキー(Shift)の押下状態。通常のキーには渡さない。 */
+  pressed?: boolean;
   onPress: (token: KeyToken) => void;
+  /**
+   * トークンを送らない特別なキー(Shift)。渡されたらこちらが優先され、
+   * `token` は使われない。
+   */
+  onActivate?: () => void;
 }
 
 export function Key({
@@ -22,19 +29,27 @@ export function Key({
   label,
   ariaLabel,
   variant = "digit",
+  pressed,
   onPress,
+  onActivate,
 }: KeyProps) {
   // 予約スロット(設計書 §5)。S2 が埋めるまで場所だけ確保する。
-  const reserved = token === null;
+  // 面を切り替えるキーは token を持たないが、押せる。
+  const reserved = token === null && !onActivate;
   return (
     <button
       type="button"
       className={`${styles.key} ${styles[variant]}`}
       aria-label={ariaLabel ?? label}
+      aria-pressed={pressed}
       data-token={token ?? undefined}
       disabled={reserved}
       aria-disabled={reserved || undefined}
       onClick={() => {
+        if (onActivate) {
+          onActivate();
+          return;
+        }
         if (token !== null) onPress(token);
       }}
     >
