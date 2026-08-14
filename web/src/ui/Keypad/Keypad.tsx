@@ -39,6 +39,9 @@ export function Keypad({ sections, onPress }: KeypadProps) {
                 />
               );
             }
+            // 第 2 面の空きスロットは押せないので、面は立ったままになる。
+            // 解除は Shift をもう一度押す——「押せないキーで面が降りる」より、
+            // 何も起きないほうが読める(S1 レビューでの申し送りの裁定)。
             const face = shifted && key.shift ? key.shift : key;
             return (
               // React の key は第 1 面のラベルで固定する。面で変えると

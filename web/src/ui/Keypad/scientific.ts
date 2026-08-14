@@ -99,12 +99,11 @@ const MAIN_GRID: KeypadSection = {
     { token: "2", label: "2", ariaLabel: "2", variant: "digit" },
     { token: "3", label: "3", ariaLabel: "3", variant: "digit" },
     { token: "sub", label: "−", ariaLabel: "引く", variant: "operator" },
-    // 第 1 面は Exp(S2 で有効化)、第 2 面が π。無効なのは第 1 面だけで、
-    // Shift → このキーなら π は S1 でも従来どおり入力できる(設計書 §5)。
+    // 第 1 面が Exp、第 2 面が π(設計書 §2/§5)。
     {
-      token: null,
+      token: "exp",
       label: "Exp",
-      ariaLabel: "指数入力（準備中）",
+      ariaLabel: "指数入力",
       variant: "function",
       shift: {
         token: "pi",
@@ -115,12 +114,7 @@ const MAIN_GRID: KeypadSection = {
     },
 
     { token: "0", label: "0", ariaLabel: "0", variant: "digit" },
-    {
-      token: null,
-      label: "000",
-      ariaLabel: "3桁のゼロ（準備中）",
-      variant: "digit",
-    },
+    { token: "zeros3", label: "000", ariaLabel: "3桁のゼロ", variant: "digit" },
     { token: "dot", label: ".", ariaLabel: "小数点", variant: "digit" },
     { token: "add", label: "+", ariaLabel: "足す", variant: "operator" },
     { token: "eq", label: "=", ariaLabel: "計算する", variant: "operator" },

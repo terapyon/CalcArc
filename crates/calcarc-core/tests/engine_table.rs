@@ -19,6 +19,29 @@ fn main_of(keys: &[&str]) -> String {
     run(keys).main
 }
 
+/// 上部のエコー行。保留中の式を見せる(設計書 §4)。
+fn echo_of(keys: &[&str]) -> String {
+    run(keys).echo
+}
+
+#[test]
+fn the_echo_shows_the_pending_expression() {
+    // 設計書 §4: 保留中の式を状態から導出する。打鍵履歴は持たない。
+    assert_eq!(echo_of(&["3", "add"]), "3 +");
+    assert_eq!(echo_of(&["3", "add", "4", "mul"]), "3 + 4 ×");
+    assert_eq!(echo_of(&["3", "add", "lparen", "4"]), "3 + ( 4");
+    assert_eq!(echo_of(&["j", "4", "mul"]), "j4 ×");
+    // = で確定するとスタックが空になり、echo も空になる。
+    assert_eq!(echo_of(&["3", "add", "4", "eq"]), "");
+    // 保留式が無いあいだは空(main が値を見せている)。
+    assert_eq!(echo_of(&["1", "dot", "5", "exp", "3"]), "");
+    // 畳まれたものは畳まれた姿で見える(設計書 §4 の制限)。
+    assert_eq!(echo_of(&["3", "0", "sin", "add"]), "0.5 +");
+    assert_eq!(echo_of(&["2", "mul", "3", "add"]), "6 +");
+    // エラー中は保留を伏せる(pending_op と同じ扱い)。
+    assert_eq!(echo_of(&["1", "div", "0", "eq"]), "");
+}
+
 #[test]
 fn starts_at_zero() {
     assert_eq!(main_of(&[]), "0");
@@ -57,6 +80,94 @@ fn j_starts_an_imaginary_entry() {
 fn del_removes_the_last_character() {
     assert_eq!(main_of(&["3", "1", "del"]), "3");
     assert_eq!(main_of(&["3", "del"]), "0");
+}
+
+#[test]
+fn j_after_digits_turns_the_entry_imaginary() {
+    // 設計書 §1: 数字があれば j は実部と虚部を切り替える。
+    assert_eq!(main_of(&["3", "j"]), "j3");
+    assert_eq!(main_of(&["3", "j", "j"]), "3");
+    assert_eq!(main_of(&["3", "j", "4"]), "j34");
+    assert_eq!(main_of(&["3", "dot", "5", "j"]), "j3.5");
+    // 数字が無い j は従来どおり新しい虚部入力を開始する。
+    assert_eq!(main_of(&["j", "j", "4"]), "j4");
+    // DEL の段構成は変わらない(数字だけ消え、j マーカーが残る)。
+    assert_eq!(main_of(&["3", "j", "del"]), "j");
+    assert_eq!(main_of(&["3", "j", "del", "del"]), "0");
+    // 式の中でも同じ。
+    assert_eq!(main_of(&["3", "add", "4", "j", "eq"]), "3+j4");
+    assert_eq!(main_of(&["3", "j", "add", "2", "j", "eq"]), "j5");
+}
+
+#[test]
+fn exp_enters_an_exponent() {
+    // 設計書 §2。1.5 Exp 3 = 1500。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3"]), "1.5e3");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1500");
+    // 仮数なしの Exp は仮数 1。表示にも 1 が出る(空の "e3" にはしない)。
+    assert_eq!(main_of(&["exp", "3"]), "1e3");
+    assert_eq!(main_of(&["exp", "3", "eq"]), "1000");
+    // 連打は無視。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "exp"]), "1.5e");
+    // 指数は整数。小数点は無視する。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "dot"]), "1.5e3");
+    // 指数は 3 桁で頭打ち(4 桁目は無視)。
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9", "9"]), "1e309");
+    // 先頭ゼロは仮数と同じ規則。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "0", "0", "3"]), "1.5e3");
+    // 指数入力中でも後置 j は効く(設計書 §1 の表の最後の行)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "j"]), "j1.5e3");
+}
+
+#[test]
+fn the_sign_key_follows_the_exponent_while_one_is_open() {
+    // 設計書 §2: 指数入力中は指数の符号、それ以外は確定値の符号。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "neg"]), "1.5e-3");
+    assert_eq!(
+        main_of(&["1", "dot", "5", "exp", "3", "neg", "neg"]),
+        "1.5e3"
+    );
+    // 桁が無くても押せる。順序を変えても同じ値になる。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "neg", "3"]), "1.5e-3");
+    // Exp 中でなければ従来どおり確定値の符号。
+    assert_eq!(main_of(&["4", "neg"]), "-4");
+}
+
+#[test]
+fn del_walks_out_of_the_exponent_one_stage_at_a_time() {
+    // 段は 指数の桁 → e マーカー → 仮数の文字(設計書 §2)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "del"]), "1.5e");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "del", "del"]), "1.5");
+    assert_eq!(
+        main_of(&["1", "dot", "5", "exp", "3", "del", "del", "del"]),
+        "1."
+    );
+}
+
+#[test]
+fn an_exponent_out_of_range_is_an_error_when_it_is_committed() {
+    // 打鍵の途中はエラーにしない。値になる瞬間に Overflow(設計書 §2)。
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9"]), "1e309");
+    assert_eq!(main_of(&["1", "exp", "3", "0", "9", "eq"]), "Math ERROR");
+}
+
+#[test]
+fn the_triple_zero_key_adds_three_zeros_at_most() {
+    // 設計書 §3。押した回数と消える回数が食い違わないよう、Digit(0) の
+    // 3 連ではなく 1 打鍵として扱う。
+    assert_eq!(main_of(&["1", "zeros3"]), "1000");
+    // 先頭ゼロは増えない(現行の規則をそのまま適用)。
+    assert_eq!(main_of(&["zeros3"]), "0");
+    assert_eq!(main_of(&["0", "zeros3"]), "0");
+    // 残り字数に収まるぶんだけ入る(MAX_ENTRY_LEN は 12)。
+    assert_eq!(
+        main_of(&["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "zeros3"]),
+        "123456789000"
+    );
+    // DEL は 1 文字ずつ。
+    assert_eq!(main_of(&["1", "zeros3", "del"]), "100");
+    // 指数入力中は指数へ入る(3 桁上限、先頭ゼロ規則も同じ)。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "zeros3"]), "1.5e0");
 }
 
 #[test]

@@ -52,7 +52,6 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 | Key::Pi
                 | Key::Sqrt
                 | Key::Sqr
-                | Key::Neg
                 | Key::Sin
                 | Key::Cos
                 | Key::Tan
@@ -62,8 +61,14 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // 入力中の文字・開き括弧・表示トグル・DEL は場所を動かさない。
                 // 括弧を開いた先はまだ何も入力されていないので、`(` を DEL で
                 // 消せば演算子の直後に戻る。
+                // +/− は指数の符号を変えたときバッファが残る——場所は動いて
+                // いないので旗も残す。確定値の符号を変えたときはバッファが
+                // 消えるので、この後判定で自然に落ちる(設計書 §2)。
+                Key::Neg => next.buffer.is_some() && was_pending,
                 Key::Digit(_)
+                | Key::Zeros3
                 | Key::Dot
+                | Key::Exp
                 | Key::J
                 | Key::LParen
                 | Key::Del
@@ -86,10 +91,14 @@ fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
 }
 
 /// 入力中のバッファを確定して `current` に移す。
-fn commit_entry(state: &mut EngineState) {
+///
+/// 指数が付いて f64 の範囲を超えていたら、ここで初めて Overflow になる
+/// (設計書 §2: 打鍵の途中はエラーにしない)。
+fn commit_entry(state: &mut EngineState) -> CalcResult<()> {
     if let Some(buffer) = state.buffer.take() {
-        state.current = buffer.value();
+        state.current = buffer.value()?;
     }
+    Ok(())
 }
 
 /// 演算子スタックの先頭 1 つを適用する。
@@ -124,7 +133,7 @@ fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
         *last = OpToken::Op(op);
         return Ok(());
     }
-    commit_entry(state);
+    commit_entry(state)?;
     state.operands.push(state.current);
     // `state.operators.last()` の借用を while の条件式で終わらせてから
     // `reduce_top(&mut state)` を呼ぶ。matches! の中に閉じ込めるのがその手段。
@@ -141,7 +150,7 @@ fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
 
 /// `=` が押されたときの遷移。保留中のものをすべて畳む。
 fn finish(state: &mut EngineState) -> CalcResult<()> {
-    commit_entry(state);
+    commit_entry(state)?;
     state.operands.push(state.current);
     // OpToken は Copy なので copied() で借用を切ってから分岐する。
     while let Some(top) = state.operators.last().copied() {
@@ -191,7 +200,7 @@ fn open_paren(state: &mut EngineState) {
 
 /// `)` が押されたときの遷移。対応する `(` まで畳む。
 fn close_paren(state: &mut EngineState) -> CalcResult<()> {
-    commit_entry(state);
+    commit_entry(state)?;
     state.operands.push(state.current);
     loop {
         // copied() で借用を切らないと、分岐の中で state を可変借用できない。
@@ -215,7 +224,7 @@ fn apply_unary<F>(state: &mut EngineState, f: F) -> CalcResult<()>
 where
     F: FnOnce(Value) -> CalcResult<Value>,
 {
-    commit_entry(state);
+    commit_entry(state)?;
     state.current = f(state.current)?;
     Ok(())
 }
@@ -236,8 +245,32 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
                 .push_dot()?;
         }
         Key::J => {
-            // j は常に新しい虚部入力を開始する。
-            state.buffer = Some(Buffer::imaginary());
+            // 数字があれば実部⇄虚部の切り替え、無ければ新しい虚部入力
+            // (設計書 §1)。数字が無いときに切り替えると「実部で数字なし」
+            // という無意味な状態になるので、そこは従来どおりにする。
+            //
+            // 借用を 2 段に分けているのは、match の腕の中で state.buffer を
+            // 差し替えると走査中の借用と衝突するため。
+            let toggles = state.buffer.as_ref().is_some_and(Buffer::has_digits);
+            if toggles {
+                if let Some(buffer) = state.buffer.as_mut() {
+                    buffer.toggle_imaginary();
+                }
+            } else {
+                state.buffer = Some(Buffer::imaginary());
+            }
+        }
+        Key::Zeros3 => {
+            state
+                .buffer
+                .get_or_insert_with(Buffer::default)
+                .push_zeros();
+        }
+        Key::Exp => {
+            state
+                .buffer
+                .get_or_insert_with(Buffer::default)
+                .push_exponent();
         }
         Key::Del => delete_one(state),
         Key::Add => push_binop(state, BinOp::Add)?,
@@ -249,7 +282,17 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::RParen => close_paren(state)?,
         Key::Sqrt => apply_unary(state, scientific::sqrt)?,
         Key::Sqr => apply_unary(state, scientific::sqr)?,
-        Key::Neg => apply_unary(state, |v| Ok(scientific::neg(v)))?,
+        Key::Neg => {
+            // +/− は 2 つの階層で働く(設計書 §2)。指数入力中は指数の符号、
+            // それ以外は確定値の符号。専用の符号キーを増やさずに済む。
+            let signed_exponent = state
+                .buffer
+                .as_mut()
+                .is_some_and(Buffer::toggle_exponent_sign);
+            if !signed_exponent {
+                apply_unary(state, |v| Ok(scientific::neg(v)))?;
+            }
+        }
         Key::Sin => {
             let mode = state.angle;
             apply_unary(state, |v| scientific::sin(v, mode))?;

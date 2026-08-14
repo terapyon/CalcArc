@@ -5,6 +5,7 @@ import { Display } from "./Display";
 
 function state(overrides: Partial<DisplayState> = {}): DisplayState {
   return {
+    echo: "",
     main: "0",
     angle: "Deg",
     form: "Rect",
@@ -16,6 +17,12 @@ function state(overrides: Partial<DisplayState> = {}): DisplayState {
 }
 
 describe("Display", () => {
+  it("passes the echo line through to the readout", () => {
+    // 導出された保留式(設計書 §4)。Display は写すだけで、組み立ては engine。
+    render(<Display display={state({ echo: "3 + 4 ×", main: "4" })} />);
+    expect(screen.getByTestId("display-echo")).toHaveTextContent("3 + 4 ×");
+  });
+
   it("shows the main value", () => {
     render(<Display display={state({ main: "5 ∠ 53.13010235" })} />);
     expect(screen.getByTestId("display-main")).toHaveTextContent(

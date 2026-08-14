@@ -182,8 +182,17 @@ mod invariants {
     }
 
     /// この打鍵が作用する値。入力中なら確定前のバッファの値。
+    ///
+    /// 指数が f64 の範囲を超えているバッファは、まだ値になっていない
+    /// (確定した瞬間に Overflow になる。設計書 §2)。その場合はこの観測点
+    /// としては確定値を使う——I3 が見ているのは実軸と虚軸の話であって、
+    /// 大きさではない。
     fn acting_on(state: &EngineState) -> Value {
-        state.buffer.as_ref().map_or(state.current, |b| b.value())
+        state
+            .buffer
+            .as_ref()
+            .and_then(|b| b.value().ok())
+            .unwrap_or(state.current)
     }
 
     /// I3 / I3b: 実軸は演算で閉じており、虚軸への出口は 2 つだけ。
@@ -327,23 +336,28 @@ mod invariants {
 
     /// DEL 1 回でバッファがどうなるべきか。
     ///
-    /// 打鍵した文字を末尾から 1 つだけ消す。数字が尽きても `j` マーカーは
-    /// 残り、消すにはもう一度押す。ここを「まとめて捨てる」に戻すと
+    /// 段は **指数の桁 → e マーカー → 仮数の文字 → j マーカー** の順で、
+    /// 一度に 1 つだけ消える(設計書 §2)。数字が尽きても `j` マーカーは残り、
+    /// 消すにはもう一度押す。ここを「まとめて捨てる」に戻すと
     /// `3 + j4 DEL 5 =` が 3+j5 ではなく 8 になる。実装の `Buffer::backspace` を
-    /// 写したものではなく、「入力欄から 1 文字消える」という外から見た
+    /// 写したものではなく、「入力欄から 1 段消える」という外から見た
     /// 期待をそのまま書いてある。
     fn entry_after_del(entry: &Buffer) -> Option<Buffer> {
-        let mut digits = entry.digits.clone();
-        // 数字が無いなら、残っているのは j マーカーだけ。それが消える。
-        digits.pop()?;
-        if digits.is_empty() && !entry.imaginary {
+        let mut next = entry.clone();
+        // 1 段目と 2 段目: 指数の桁、そして e マーカー。
+        if let Some(exponent) = next.exponent.as_mut() {
+            if exponent.digits.pop().is_none() {
+                next.exponent = None;
+            }
+            return Some(next);
+        }
+        // 3 段目と 4 段目: 仮数の文字、そして j マーカー。
+        next.digits.pop()?;
+        if next.digits.is_empty() && !next.imaginary {
             // 実数の入力が空になったらバッファごと消える。表示は確定値に戻る。
             return None;
         }
-        Some(Buffer {
-            digits,
-            imaginary: entry.imaginary,
-        })
+        Some(next)
     }
 
     /// I7: DEL は 3 段のうち 1 つだけを消す。
@@ -438,7 +452,20 @@ const STRUCTURE: [Key; 10] = [
 /// だが、`angle` は三角関数と極形式の角度にしか効かず、この網は単項関数を
 /// `√` に畳んでいるので `DRG` を選ぶと**何も変わらないキー**になる。
 /// `▸∠` なら極形式の描画が網の全域で走り、I1 がそれを見る。
-const ALL_CLASSES: [Key; 14] = [
+///
+/// `Exp` は畳めない。バッファの構造そのもの(仮数/指数)を変え、`+/−` と
+/// `DEL` の意味まで変えるので、他のどのキーとも作用が違う(設計書 §6)。
+/// 逆に `000` は畳む——`Digit` と同じ「数字を足す」枝で、違うのは入る文字数
+/// だけである。字数の境界は engine_table の個別テストが持つ。
+///
+/// **予算の実測(2026-08-13、S2)**: 14 個で 4.7 秒、15 個で 7.1 秒
+/// (`cargo test --workspace` 全体では 7.6 秒)。伸びは 1.5 倍で
+/// (15/14)^6 = 1.50 と一致する。**長さ 6 を維持した**——毎タスク回す検証段
+/// (CONTRIBUTING の段付け)に収まる範囲であり、`Exp` こそ状態機械の形を
+/// 変えるキーで、網から外すと一番見たいものが見えなくなるため。次に等価類を
+/// 足す人へ: 16 個なら約 11 秒、17 個なら約 16 秒になる。そこが分かれ目で、
+/// 越えるなら長さを 5 に落として `Exp` を含む列の重点列挙を別に持つこと。
+const ALL_CLASSES: [Key; 15] = [
     Key::Digit(3),
     Key::Digit(0),
     Key::Dot,
@@ -453,6 +480,7 @@ const ALL_CLASSES: [Key; 14] = [
     Key::PolarToggle,
     Key::Sqrt,
     Key::Pi,
+    Key::Exp,
 ];
 
 /// 深さ優先で全列を辿り、遷移ごとに不変条件を検査する。
