@@ -88,22 +88,23 @@ describe("Keypad（汎用）", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("lets the caller decide which keys look pressed", () => {
+  it("lets the caller decide which keys are toggles, and which are not", () => {
     // モード行・項目行は「画面全体の状態」で押下が決まる(設計書 §4)。
+    // **undefined を返したキーには aria-pressed を付けない**——数字キーに
+    // "false" が付くと、読み上げが全キーをトグルボタンとして扱う。
     render(
       <Keypad
         sections={SECTIONS}
         onPress={vi.fn()}
-        pressed={(token) => token === "b"}
+        pressed={(token) => (token === "b" ? true : undefined)}
       />,
     );
     expect(screen.getByRole("button", { name: "ビー" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "エー" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "エー" })).not.toHaveAttribute(
       "aria-pressed",
-      "false",
     );
   });
 
@@ -245,8 +246,13 @@ export function Key<T>({
 export interface KeypadProps<T> {
   sections: KeypadSection<T>[];
   onPress: (token: T) => void;
-  /** 押下状態を呼び出し側が決める(モード行・項目行。設計書 §4)。 */
-  pressed?: (token: T) => boolean;
+  /**
+   * 押下状態を呼び出し側が決める(モード行・項目行。設計書 §4)。
+   * **`undefined` は「トグルではない」**——`aria-pressed` を付けない。
+   * 数字キーに `aria-pressed="false"` が付くと、読み上げが全キーを
+   * トグルボタンとして扱う(base-spec §43 の意味論の退行)。
+   */
+  pressed?: (token: T) => boolean | undefined;
   /** 今は押せない(状態依存)。省略時はすべて押せる。 */
   disabled?: (token: T) => boolean;
 }
@@ -769,6 +775,23 @@ export const LOAN_SECTIONS: KeypadSection<LoanKeyToken>[] = [MODES, FIELDS, PAD]
     expect(screen.getByTestId("display-echo")).not.toHaveTextContent("600万");
   });
 
+  it("does not let a residual from another mode block the bonus", async () => {
+    // 排他は月額モードだけ(設計書 §6)。借入可能額モードでは残価は計算に
+    // 使われないので、残っている値でボーナスタブを塞がない。現行実装の
+    // 規則をそのまま守る——ここが退行すると、モードを行き来した人だけが
+    // ボーナスを打てなくなる。
+    await renderPanel();
+    await press(["残価を入力", "1", "2", "0", "0", "万"]);
+    expect(
+      screen.getByRole("button", { name: /ボーナス.*を入力/ }),
+    ).toBeDisabled();
+
+    await press(["借入可能額を求める"]);
+    expect(
+      screen.getByRole("button", { name: "ボーナス回の返済額を入力" }),
+    ).toBeEnabled();
+  });
+
   it("clears only the active field with AC", async () => {
     await renderPanel();
     await press(["借入額を入力", "3", "0", "0", "0", "万", "年利を入力", "1", ".", "5", "この項目を消去"]);
@@ -824,12 +847,15 @@ function keyDisabled(token: LoanKeyToken): boolean {
 function fieldEnabled(field: LoanField): boolean {
   if (field === solvedFor[mode]) return false;
   if (field === "residual") {
-    return mode === "payment" && bonusEntryFor(mode).digits === "" &&
-      bonusEntryFor(mode).segments.length === 0;
+    // 残価は月額モードのみ(設計書 §6)。同じモードのボーナス(元本)と排他。
+    return mode === "payment" && isEmpty(entries.bonusPrincipal);
   }
   if (field === "bonus") {
     if (mode === "term") return false;
-    return entries.residual.digits === "" && entries.residual.segments.length === 0;
+    // **排他が効くのは月額モードだけ。** 借入可能額モードでは残価は計算に
+    // 使われないので、そこに残っている値でボーナスを塞がない——現行実装の
+    // 規則(`!(mode === "payment" && residual !== "")`)をそのまま守る。
+    return mode !== "payment" || isEmpty(entries.residual);
   }
   return true;
 }
@@ -838,7 +864,8 @@ function fieldEnabled(field: LoanField): boolean {
   `solvedFor` は `{ payment: "payment", principal: "principal", term: "months" }`。
   **空判定を 2 か所に書かない**よう、`isEmpty(entry)` を `entry.ts` から
   export して使う（`segments.length === 0 && digits === ""`）。
-- `pressed` 述語: モードとアクティブ項目。
+- `pressed` 述語: **モードとアクティブ項目だけが `boolean`**、それ以外は
+  `undefined` を返す（数字キーをトグルにしない）。
 - **計算は導出**（現行の規律を維持）。必要な項目が揃ったときだけ `calc` を呼ぶ。
 - 年利は小数を含むので `entry.ts` を通さず**素の文字列**で持つ（`.` と数字だけ）。
   **`entry.ts` は金額のためのもの**であることをコメントに書く。
