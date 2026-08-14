@@ -9,6 +9,14 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
+/* 項目行は 6 列で 1 枠 54px。既定の関数キー文字(0.9375rem)だと「ボーナス」の
+   4 文字が折り返して読めなくなる。**この行だけ**小さくする——Scientific の
+   関数列(同じ half の区画)は短いラベルなので、共通の値を下げると向こうの
+   見た目が理由もなく縮む。区画名で狙い撃つ。 */
+.panel :global(fieldset[aria-label="入力する項目"]) button {
+  font-size: 0.75rem;
+}
+
 /* 内訳は Readout の外に置く——電卓の主表示は「求めた答え」1 本であり、
    同じ行に詰めると読めなくなる(設計書 §7)。 */
 .breakdown {

@@ -5,15 +5,22 @@ const nav = (page: Page, label: "Scientific" | "Data Scale" | "Loan") =>
 
 const panel = (page: Page) => page.getByRole("region", { name: "ローン計算" });
 
-// <output> の暗黙ロールは status。jsdom はアクセシビリティツリーを組み立て
-// ないので、role から引けることは実ブラウザでしか確かめられない。
-const status = (page: Page) => panel(page).getByRole("status");
-
+const echo = (page: Page) => page.getByTestId("display-echo");
 const main = (page: Page) => page.getByTestId("display-main");
+const breakdown = (page: Page) => page.getByTestId("loan-breakdown");
+
+const scientificMain = (page: Page) => page.getByTestId("display-main");
+
+/** キーをアクセシブルネームで順に押す。 */
+async function press(page: Page, names: string[]) {
+  for (const name of names) {
+    await panel(page).getByRole("button", { name, exact: true }).click();
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await expect(main(page)).toHaveText("0");
+  await expect(scientificMain(page)).toHaveText("0");
 });
 
 test("the nav now carries three tabs and aria-current follows", async ({
@@ -52,15 +59,39 @@ test("the housing case: 30M yen over 420 months at 1.5% is 91,855 a month", asyn
   page,
 }) => {
   // 実 wasm(mock ではない)で、golden(finance.json)と同じ値が画面に出る。
+  // 電卓化で打ち方は変わったが、**期待値は 1 つも変えていない**。
   await nav(page, "Loan").click();
+  await press(page, [
+    "借入額を入力",
+    "3",
+    "0",
+    "0",
+    "0",
+    "万",
+    "年利を入力",
+    "1",
+    "小数点",
+    "5",
+    "返済期間を入力",
+    "4",
+    "2",
+    "0",
+  ]);
 
-  await page.getByLabel("借入額").fill("30000000");
-  await page.getByLabel("年利(%)").fill("1.5");
-  await page.getByLabel("返済回数(月)").fill("420");
+  await expect(main(page)).toHaveText("91,855 円");
+  await expect(breakdown(page)).toContainText("38,579,007 円"); // 総支払額
+  await expect(breakdown(page)).toContainText("8,579,007 円"); // 総利息
+});
 
-  await expect(status(page)).toContainText("91,855 円");
-  await expect(status(page)).toContainText("38,579,007 円"); // 総支払額
-  await expect(status(page)).toContainText("8,579,007 円"); // 総利息
+test("万 and 億 build the amount the way they are typed", async ({ page }) => {
+  await nav(page, "Loan").click();
+  await press(page, ["借入額を入力", "1", "億", "2", "0", "0", "0", "万"]);
+  // エコーは打った通り。桁区切りを入れ直さない(設計書 §7)。
+  await expect(echo(page)).toHaveText("借入額 1億2000万円");
+
+  // 同じ値を 12000万 と打っても同じ答になる(加算合成。設計書 §5)。
+  await press(page, ["この項目を消去", "1", "2", "0", "0", "0", "万"]);
+  await expect(echo(page)).toHaveText("借入額 12000万円");
 });
 
 test("the car case: a residual closes the loan at the residual itself", async ({
@@ -68,14 +99,28 @@ test("the car case: a residual closes the loan at the residual itself", async ({
 }) => {
   // 300 万・5 年・年 3.9%・残価 120 万(golden の車例)。
   await nav(page, "Loan").click();
+  await press(page, [
+    "借入額を入力",
+    "3",
+    "0",
+    "0",
+    "万",
+    "年利を入力",
+    "3",
+    "小数点",
+    "9",
+    "返済期間を入力",
+    "6",
+    "0",
+    "残価を入力",
+    "1",
+    "2",
+    "0",
+    "万",
+  ]);
 
-  await page.getByLabel("借入額").fill("3000000");
-  await page.getByLabel("年利(%)").fill("3.9");
-  await page.getByLabel("返済回数(月)").fill("60");
-  await page.getByLabel("残価").fill("1200000");
-
-  await expect(status(page)).toContainText("37,536 円"); // 月々の返済額
-  await expect(status(page)).toContainText("1,200,000 円"); // 最終回 = 残価
+  await expect(main(page)).toHaveText("37,536 円");
+  await expect(breakdown(page)).toContainText("1,200,000 円"); // 最終回 = 残価
 });
 
 test("the borrowable amount comes back through the term inversion", async ({
@@ -83,17 +128,39 @@ test("the borrowable amount comes back through the term inversion", async ({
 }) => {
   // 85,000 円 × 420 回・1.5% の借入可能額(golden と同じ 27,761,211 円)。
   await nav(page, "Loan").click();
-
-  await page.getByLabel("何を求めるか").selectOption("principal");
-  await page.getByLabel("月々の返済額").fill("85000");
-  await page.getByLabel("年利(%)").fill("1.5");
-  await page.getByLabel("返済回数(月)").fill("420");
-  await expect(status(page)).toContainText("27,761,211 円");
+  await press(page, [
+    "借入可能額を求める",
+    "月々の返済額を入力",
+    "8",
+    "5",
+    "0",
+    "0",
+    "0",
+    "年利を入力",
+    "1",
+    "小数点",
+    "5",
+    "返済期間を入力",
+    "4",
+    "2",
+    "0",
+  ]);
+  await expect(main(page)).toHaveText("27,761,211 円");
 
   // 同じ額を期間モードに入れると 420 回に戻る。
-  await page.getByLabel("何を求めるか").selectOption("term");
-  await page.getByLabel("借入額").fill("27761211");
-  await expect(status(page)).toContainText("420 か月");
+  await press(page, [
+    "返済期間を求める",
+    "借入額を入力",
+    "2",
+    "7",
+    "7",
+    "6",
+    "1",
+    "2",
+    "1",
+    "1",
+  ]);
+  await expect(main(page)).toHaveText("420 か月");
 });
 
 test("the mode selector opens and closes the fields it owns", async ({
@@ -101,28 +168,30 @@ test("the mode selector opens and closes the fields it owns", async ({
 }) => {
   await nav(page, "Loan").click();
 
-  // 月額モード: 求める値の欄は閉じ、残価は開く。
-  await expect(page.getByLabel("月々の返済額")).toBeDisabled();
-  await expect(page.getByLabel("残価")).toBeEnabled();
-  await expect(page.getByLabel("ボーナス返済分(元本)")).toBeEnabled();
+  // 月額モード: 求める値の項目は押せない。残価は開く。
+  await expect(
+    panel(page).getByRole("button", { name: "月々の返済額を入力" }),
+  ).toBeDisabled();
+  await expect(
+    panel(page).getByRole("button", { name: "残価を入力" }),
+  ).toBeEnabled();
 
-  await page.getByLabel("何を求めるか").selectOption("principal");
-  await expect(page.getByLabel("借入額")).toBeDisabled();
-  await expect(page.getByLabel("月々の返済額")).toBeEnabled();
-  await expect(page.getByLabel("残価")).toBeDisabled();
-  await expect(page.getByLabel("残価")).toHaveAttribute(
-    "aria-disabled",
-    "true",
-  );
+  await press(page, ["借入可能額を求める"]);
+  await expect(
+    panel(page).getByRole("button", { name: "借入額を入力" }),
+  ).toBeDisabled();
+  await expect(
+    panel(page).getByRole("button", { name: "残価を入力" }),
+  ).toBeDisabled();
 
   // 期間モード: ボーナスも閉じる(2 列結合の期間は M6 では解かない)。
-  await page.getByLabel("何を求めるか").selectOption("term");
-  await expect(page.getByLabel("返済回数(月)")).toBeDisabled();
-  await expect(page.getByLabel("ボーナス返済分(元本)")).toBeDisabled();
-  await expect(page.getByLabel("ボーナス返済分(元本)")).toHaveAttribute(
-    "aria-disabled",
-    "true",
-  );
+  await press(page, ["返済期間を求める"]);
+  await expect(
+    panel(page).getByRole("button", { name: "返済期間を入力" }),
+  ).toBeDisabled();
+  await expect(
+    panel(page).getByRole("button", { name: /ボーナス.*を入力/ }),
+  ).toBeDisabled();
 });
 
 test("the disclaimer is always on screen and is not an alert", async ({
@@ -133,9 +202,22 @@ test("the disclaimer is always on screen and is not an alert", async ({
     panel(page).getByText(/金融機関の計算方法により異なります/);
   await expect(disclaimer).toBeVisible();
   // 入力しても消えない(結果の有無に関係なく常設)。
-  await page.getByLabel("借入額").fill("30000000");
-  await page.getByLabel("年利(%)").fill("1.5");
-  await page.getByLabel("返済回数(月)").fill("420");
+  await press(page, [
+    "借入額を入力",
+    "3",
+    "0",
+    "0",
+    "0",
+    "万",
+    "年利を入力",
+    "1",
+    "小数点",
+    "5",
+    "返済期間を入力",
+    "4",
+    "2",
+    "0",
+  ]);
   await expect(disclaimer).toBeVisible();
   await expect(panel(page).getByRole("alert")).toHaveCount(0);
 });
@@ -145,37 +227,45 @@ test("a payment that cannot cover the interest is reported as an error", async (
 }) => {
   // 100 万を年 12%(月利息 1 万円)、月々 1 万円 —— 永久に減らない。
   await nav(page, "Loan").click();
+  await press(page, [
+    "返済期間を求める",
+    "借入額を入力",
+    "1",
+    "0",
+    "0",
+    "万",
+    "年利を入力",
+    "1",
+    "2",
+    "月々の返済額を入力",
+    "1",
+    "万",
+  ]);
 
-  await page.getByLabel("何を求めるか").selectOption("term");
-  await page.getByLabel("借入額").fill("1000000");
-  await page.getByLabel("年利(%)").fill("12");
-  await page.getByLabel("月々の返済額").fill("10000");
-
-  await expect(status(page)).toContainText("Math ERROR");
-  await expect(
-    status(page).locator("[data-error='SyntaxError']"),
-  ).toBeVisible();
+  await expect(main(page)).toHaveText("Math ERROR");
+  await expect(main(page)).toHaveAttribute("data-error", "SyntaxError");
 });
 
-test("a partly-filled loan form stays neutral, no error shown", async ({
+test("a partly-filled loan calculator stays neutral, no error shown", async ({
   page,
 }) => {
   await nav(page, "Loan").click();
-  await page.getByLabel("借入額").fill("30000000");
+  await press(page, ["借入額を入力", "3", "0", "0", "0", "万"]);
 
-  await expect(status(page)).not.toContainText("Math ERROR");
-  await expect(status(page).locator("[data-error]")).toHaveCount(0);
+  await expect(main(page)).toBeEmpty();
+  await expect(main(page)).not.toHaveAttribute("data-error");
 });
 
-test("typing into the loan form does not touch the scientific state", async ({
+test("typing into the loan keypad does not touch the scientific state", async ({
   page,
 }) => {
   // useKeyboard は ScientificPanel が unmount されると外れる。3 モジュールに
-  // なっても漏れないことを、実際のキー入力で確かめる(data-scale 版と同型)。
+  // なっても漏れないことを確かめる(data-scale 版と同型)。電卓化で入力欄は
+  // 消えたので、キーを押して echo に入ることで打鍵を確かめる。
   await nav(page, "Loan").click();
-  await page.getByLabel("借入額").pressSequentially("3");
-  await expect(page.getByLabel("借入額")).toHaveValue("3");
+  await press(page, ["借入額を入力", "3"]);
+  await expect(echo(page)).toHaveText("借入額 3円");
 
   await nav(page, "Scientific").click();
-  await expect(main(page)).toHaveText("0");
+  await expect(scientificMain(page)).toHaveText("0");
 });
