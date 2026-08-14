@@ -1,0 +1,75 @@
+import { describe, expect, it } from "vitest";
+import { KEY_TOKENS } from "../../calc";
+import { SCIENTIFIC_SECTIONS } from "./scientific";
+
+// Scientific のキー集合そのものの検査。描画を伴わないので .ts に置く
+// （Keypad.test.tsx は部品の振る舞いを見る。設計書 §4）。
+
+const allKeys = SCIENTIFIC_SECTIONS.flatMap((s) => s.keys);
+
+/** 区画は名前で引く。添字だと並べ替えで黙って別の区画を見る。 */
+function section(ariaLabel: string) {
+  const found = SCIENTIFIC_SECTIONS.find((s) => s.ariaLabel === ariaLabel);
+  if (!found) throw new Error(`no section named ${ariaLabel}`);
+  return found;
+}
+
+describe("Scientific のキー集合", () => {
+  it("offers every key the core accepts, exactly once", () => {
+    // レイアウトから漏れたキーは押しようがない。網羅をテストで固定する。
+    // 第 1 面と第 2 面のどちらに出るかは問わない(π は Shift 面にある)。
+    const laidOut = allKeys
+      .flatMap((k) => [k.token, k.shift?.token ?? null])
+      .filter((t): t is NonNullable<typeof t> => t !== null)
+      .sort();
+    expect(laidOut).toEqual([...KEY_TOKENS].sort());
+  });
+
+  it("has no reserved slots left on the first face", () => {
+    // S2 で 000 と Exp が有効になった。残る予約は第 2 面の空きだけ。
+    const reserved = allKeys.filter((k) => k.token === null && !k.kind);
+    expect(reserved).toEqual([]);
+  });
+
+  it("gives every key an accessible label", () => {
+    for (const key of allKeys) {
+      expect(key.ariaLabel.length).toBeGreaterThan(0);
+      if (key.shift) expect(key.shift.ariaLabel.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("lays the main grid out five by five", () => {
+    const main = section("数字と演算のキー");
+    expect(main.columns).toBe(5);
+    expect(main.keys).toHaveLength(25);
+    // 先頭行と最終行だけ固定する(配置の意図が壊れたら気づく)。
+    expect(main.keys.slice(0, 5).map((k) => k.label)).toEqual([
+      "(",
+      ")",
+      "+/−",
+      "DEL",
+      "AC",
+    ]);
+    expect(main.keys.slice(20, 25).map((k) => k.label)).toEqual([
+      "0",
+      "000",
+      ".",
+      "+",
+      "=",
+    ]);
+  });
+
+  it("puts the function row above, half height, with DRG at its end", () => {
+    const functions = section("関数キー");
+    expect(functions.height).toBe("half");
+    expect(functions.keys.map((k) => k.label)).toEqual([
+      "Shift",
+      "sin",
+      "cos",
+      "tan",
+      "√",
+      "x²",
+      "DRG",
+    ]);
+  });
+});

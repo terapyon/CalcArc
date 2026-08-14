@@ -1,104 +1,98 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { KEY_TOKENS } from "../../calc";
 import { Keypad } from "./Keypad";
 import { SCIENTIFIC_SECTIONS } from "./scientific";
+import type { KeypadSection } from "./types";
 
-const allKeys = SCIENTIFIC_SECTIONS.flatMap((s) => s.keys);
+type Demo = "a" | "b";
 
-/** 区画は名前で引く。添字だと並べ替えで黙って別の区画を見る。 */
-function section(ariaLabel: string) {
-  const found = SCIENTIFIC_SECTIONS.find((s) => s.ariaLabel === ariaLabel);
-  if (!found) throw new Error(`no section named ${ariaLabel}`);
-  return found;
-}
+const SECTIONS: KeypadSection<Demo>[] = [
+  {
+    ariaLabel: "テストの区画",
+    columns: 2,
+    height: "square",
+    keys: [
+      { token: "a", label: "A", ariaLabel: "エー", variant: "digit" },
+      { token: "b", label: "B", ariaLabel: "ビー", variant: "digit" },
+      { token: null, label: "—", ariaLabel: "予約", variant: "function" },
+    ],
+  },
+];
 
-describe("Keypad", () => {
-  it("offers every key the core accepts, exactly once", () => {
-    // レイアウトから漏れたキーは押しようがない。網羅をテストで固定する。
-    // 第 1 面と第 2 面のどちらに出るかは問わない(π は Shift 面にある)。
-    const laidOut = allKeys
-      .flatMap((k) => [k.token, k.shift?.token ?? null])
-      .filter((t): t is NonNullable<typeof t> => t !== null)
-      .sort();
-    expect(laidOut).toEqual([...KEY_TOKENS].sort());
+describe("Keypad（汎用）", () => {
+  it("returns whatever token type it was given", async () => {
+    const onPress = vi.fn<(token: Demo) => void>();
+    render(<Keypad sections={SECTIONS} onPress={onPress} />);
+    await userEvent.click(screen.getByRole("button", { name: "エー" }));
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("a");
   });
 
-  it("has no reserved slots left on the first face", () => {
-    // S2 で 000 と Exp が有効になった。残る予約は第 2 面の空きだけ。
-    const reserved = allKeys.filter((k) => k.token === null && !k.kind);
-    expect(reserved).toEqual([]);
+  it("draws a section per group, with its own column count", () => {
+    render(<Keypad sections={SECTIONS} onPress={vi.fn()} />);
+    expect(
+      screen.getByRole("group", { name: "テストの区画" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(3);
   });
 
-  it("gives every key an accessible label", () => {
-    for (const key of allKeys) {
-      expect(key.ariaLabel.length).toBeGreaterThan(0);
-      if (key.shift) expect(key.shift.ariaLabel.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("lays the main grid out five by five", () => {
-    const main = section("数字と演算のキー");
-    expect(main.columns).toBe(5);
-    expect(main.keys).toHaveLength(25);
-    // 先頭行と最終行だけ固定する(配置の意図が壊れたら気づく)。
-    expect(main.keys.slice(0, 5).map((k) => k.label)).toEqual([
-      "(",
-      ")",
-      "+/−",
-      "DEL",
-      "AC",
-    ]);
-    expect(main.keys.slice(20, 25).map((k) => k.label)).toEqual([
-      "0",
-      "000",
-      ".",
-      "+",
-      "=",
-    ]);
-  });
-
-  it("puts the function row above, half height, with DRG at its end", () => {
-    const functions = section("関数キー");
-    expect(functions.height).toBe("half");
-    expect(functions.keys.map((k) => k.label)).toEqual([
-      "Shift",
-      "sin",
-      "cos",
-      "tan",
-      "√",
-      "x²",
-      "DRG",
-    ]);
-  });
-
-  it("renders a button per key and reports the token pressed", async () => {
+  it("sends nothing from a reserved slot", async () => {
     const onPress = vi.fn();
-    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
-    expect(screen.getAllByRole("button")).toHaveLength(allKeys.length);
-    await userEvent.click(screen.getByRole("button", { name: "虚数単位" }));
-    expect(onPress).toHaveBeenCalledExactlyOnceWith("j");
-  });
-
-  it("does not send anything from a reserved slot", async () => {
-    // 第 1 面の予約は S2 で消えた。残る予約は第 2 面の空きスロット。
-    const onPress = vi.fn();
-    render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "第2面に切り替え" }),
-    );
-    const reserved = screen.getAllByRole("button", {
-      name: "第2面（準備中）",
-    })[0];
+    render(<Keypad sections={SECTIONS} onPress={onPress} />);
+    const reserved = screen.getByRole("button", { name: "予約" });
     expect(reserved).toBeDisabled();
-    expect(reserved).toHaveAttribute("aria-disabled", "true");
-    await userEvent.click(reserved as HTMLElement);
+    await userEvent.click(reserved);
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("lets the caller decide which keys are toggles, and which are not", () => {
+    // モード行・項目行は「画面全体の状態」で押下が決まる(設計書 §4)。
+    // **undefined を返したキーには aria-pressed を付けない**——数字キーに
+    // "false" が付くと、読み上げが全キーをトグルボタンとして扱う。
+    render(
+      <Keypad
+        sections={SECTIONS}
+        onPress={vi.fn()}
+        pressed={(token) => (token === "b" ? true : undefined)}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "ビー" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "エー" })).not.toHaveAttribute(
+      "aria-pressed",
+    );
+  });
+
+  it("lets the caller disable keys that exist but cannot be pressed now", async () => {
+    // 予約スロット(恒久の空き)とは由来が違う無効(設計書 §4)。
+    const onPress = vi.fn();
+    render(
+      <Keypad
+        sections={SECTIONS}
+        onPress={onPress}
+        disabled={(token) => token === "a"}
+      />,
+    );
+    const a = screen.getByRole("button", { name: "エー" });
+    expect(a).toBeDisabled();
+    await userEvent.click(a);
+    expect(onPress).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "ビー" })).toBeEnabled();
+  });
+
+  it("says nothing about pressed state when the caller does not ask", () => {
+    render(<Keypad sections={SECTIONS} onPress={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "エー" })).not.toHaveAttribute(
+      "aria-pressed",
+    );
   });
 });
 
-describe("Keypad の Shift", () => {
+// Scientific は Keypad の実利用者であり続ける。キー集合そのものの検査は
+// scientific.test.ts に置き、ここでは描画を伴う振る舞いを見る。
+describe("Keypad の Shift（Scientific の盤面で）", () => {
   it("swaps the second face on, and back after one key", async () => {
     // ワンショット(設計書 §3): 1 キー押したら第 1 面へ自動で戻る。
     const onPress = vi.fn();

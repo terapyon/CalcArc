@@ -1,18 +1,33 @@
 import { type CSSProperties, useState } from "react";
-import type { KeyToken } from "../../calc";
 import { Key } from "../Key/Key";
 import styles from "./Keypad.module.css";
 import type { KeypadSection } from "./types";
 
-export interface KeypadProps {
-  /** 区画ごとのキー集合。列数と行の高さは区画が持つ(設計書 §6)。 */
-  sections: KeypadSection[];
-  onPress: (token: KeyToken) => void;
+export interface KeypadProps<T> {
+  /** 区画ごとのキー集合。列数と行の高さは区画が持つ(S1 設計書 §6)。 */
+  sections: KeypadSection<T>[];
+  onPress: (token: T) => void;
+  /**
+   * 押下状態を呼び出し側が決める(モード行・項目行。L 設計書 §4)。
+   * **`undefined` は「トグルではない」**——`aria-pressed` を付けない。
+   * 数字キーに "false" が付くと、読み上げが全キーをトグルとして扱う。
+   */
+  pressed?: (token: T) => boolean | undefined;
+  /**
+   * 今は押せない(状態依存)。省略時はすべて押せる。**予約スロットとは
+   * 由来が違う**——あちらは「ここに何か来る」永続的な空きである。
+   */
+  disabled?: (token: T) => boolean;
 }
 
-export function Keypad({ sections, onPress }: KeypadProps) {
+export function Keypad<T>({
+  sections,
+  onPress,
+  pressed,
+  disabled,
+}: KeypadProps<T>) {
   // Shift は UI 層の状態である。engine には面の概念を持ち込まない
-  // (設計書 §3)。engine から見れば従来どおり単一トークンの列である。
+  // (S1 設計書 §3)。engine から見れば従来どおり単一トークンの列である。
   const [shifted, setShifted] = useState(false);
 
   return (
@@ -43,18 +58,21 @@ export function Keypad({ sections, onPress }: KeypadProps) {
             // 解除は Shift をもう一度押す——「押せないキーで面が降りる」より、
             // 何も起きないほうが読める(S1 レビューでの申し送りの裁定)。
             const face = shifted && key.shift ? key.shift : key;
+            const token = face.token;
             return (
               // React の key は第 1 面のラベルで固定する。面で変えると
               // 別要素とみなされ、フォーカスが落ちる。
               <Key
                 key={key.label}
-                token={face.token}
+                token={token}
                 label={face.label}
                 ariaLabel={face.ariaLabel}
                 variant={face.variant}
-                onPress={(token) => {
-                  onPress(token);
-                  // ワンショット(設計書 §3): 1 キーで第 1 面へ戻る。
+                pressed={token === null ? undefined : pressed?.(token)}
+                disabled={token === null ? undefined : disabled?.(token)}
+                onPress={(sent) => {
+                  onPress(sent);
+                  // ワンショット(S1 設計書 §3): 1 キーで第 1 面へ戻る。
                   setShifted(false);
                 }}
               />
