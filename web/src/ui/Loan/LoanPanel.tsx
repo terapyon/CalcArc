@@ -26,6 +26,32 @@ import styles from "./LoanPanel.module.css";
 /** 金額の項目。ここだけが万・億を受け、`entry.ts` を通る(設計書 §6)。 */
 const MONEY_FIELDS: LoanField[] = ["principal", "payment", "residual", "bonus"];
 
+/** 項目を移すときの探索順(盤面の並びと同じ)。 */
+const FIELD_ORDER: LoanField[] = [
+  "principal",
+  "rate",
+  "months",
+  "payment",
+  "residual",
+  "bonus",
+];
+
+/**
+ * 期間の桁数。**u32 の境界で黙って折り返させないための上限**である。
+ *
+ * 期間は Number にしてから wasm へ u32 として渡る。10 桁を超えると変換が
+ * 2^32 で折り返し、たとえば 4,294,968,496 が 1200 に化けて、**もっともらしい
+ * 答えが出てしまう**(コアの上限ガードもすり抜ける)。4 桁あれば実装上の
+ * 上限 1,200 か月を覆える。
+ */
+const MAX_MONTHS_LEN = 4;
+
+/**
+ * 年利の文字数。コアが受ける最長は "100.0000"(整数 3 桁 + 小数 4 桁)。
+ * それ以上打てても SyntaxError になるだけなので、入口で止める。
+ */
+const MAX_RATE_LEN = 8;
+
 /** モードが求める値の項目。その項目は入力できない(それが答だから)。 */
 const SOLVED_FOR: Record<LoanMode, LoanField> = {
   payment: "payment",
@@ -126,20 +152,29 @@ export function LoanPanel() {
     setAmounts((previous) => ({ ...previous, [amountKey(field)]: next }));
   }
 
-  /** モードが受ける項目か(求める値は入力できない。残価×ボーナスは排他)。 */
-  function fieldEnabled(field: LoanField): boolean {
-    if (field === SOLVED_FOR[mode]) return false;
+  /**
+   * そのモードが受ける項目か(求める値は入力できない。残価×ボーナスは排他)。
+   *
+   * **モードを引数に取る**——切り替えの瞬間、まだ state に入っていない次の
+   * モードで判定する必要がある(下の press を参照)。
+   */
+  function fieldEnabledIn(field: LoanField, forMode: LoanMode): boolean {
+    if (field === SOLVED_FOR[forMode]) return false;
     if (field === "residual") {
       // 残価は月額モードのみ。同じモードのボーナス(元本)と排他。
-      return mode === "payment" && isEmpty(amounts.bonusPrincipal ?? EMPTY);
+      return forMode === "payment" && isEmpty(amounts.bonusPrincipal ?? EMPTY);
     }
     if (field === "bonus") {
-      if (mode === "term") return false;
+      if (forMode === "term") return false;
       // **排他が効くのは月額モードだけ。** 借入可能額モードでは残価は計算に
       // 使われないので、そこに残っている値でボーナスを塞がない。
-      return mode !== "payment" || isEmpty(amounts.residual ?? EMPTY);
+      return forMode !== "payment" || isEmpty(amounts.residual ?? EMPTY);
     }
     return true;
+  }
+
+  function fieldEnabled(field: LoanField): boolean {
+    return fieldEnabledIn(field, mode);
   }
 
   /** いま押せないキー(設計書 §6 の可否表 + 単位の文法)。 */
@@ -179,20 +214,29 @@ export function LoanPanel() {
       return;
     }
     if (active === "rate") {
-      setRate((previous) => (previous === "0" ? digit : previous + digit));
+      setRate((previous) => {
+        if (previous.length >= MAX_RATE_LEN) return previous;
+        return previous === "0" ? digit : previous + digit;
+      });
       return;
     }
-    setMonths((previous) => (previous === "0" ? digit : previous + digit));
+    setMonths((previous) => {
+      if (previous.length >= MAX_MONTHS_LEN) return previous;
+      return previous === "0" ? digit : previous + digit;
+    });
   }
 
   function press(token: LoanKeyToken) {
     if (token.startsWith("mode:")) {
       const next = token.slice("mode:".length) as LoanMode;
       setMode(next);
-      // 求める値の項目に居たままだと、打てない項目が選ばれたままになる。
-      if (SOLVED_FOR[next] === active) setActive("principal");
-      if (SOLVED_FOR[next] === "principal" && active === "principal") {
-        setActive("payment");
+      // **次のモードで打てない項目に居たままにしない。** 求める値の項目だけ
+      // でなく、そのモードが受けない項目(借入可能額モードの残価、期間モードの
+      // ボーナス)も同じである——放っておくと、無効なタブが押下状態のまま
+      // 「〜を入力中」と名乗り、打鍵が計算に使われない欄に落ちる。
+      if (!fieldEnabledIn(active, next)) {
+        const moved = FIELD_ORDER.find((field) => fieldEnabledIn(field, next));
+        if (moved) setActive(moved);
       }
       return;
     }
@@ -209,9 +253,11 @@ export function LoanPanel() {
         for (const _ of [0, 1, 2]) pressDigit("0");
         break;
       case "dot":
-        setRate((previous) =>
-          previous.includes(".") ? previous : `${previous || "0"}.`,
-        );
+        setRate((previous) => {
+          if (previous.includes(".")) return previous;
+          const next = `${previous || "0"}.`;
+          return next.length > MAX_RATE_LEN ? previous : next;
+        });
         break;
       case "man":
       case "oku": {

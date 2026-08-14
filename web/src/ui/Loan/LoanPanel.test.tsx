@@ -299,6 +299,58 @@ describe("LoanPanel（電卓）", () => {
     expect(calc.forward).not.toHaveBeenCalled();
   });
 
+  it("moves the active field off one the new mode cannot take", async () => {
+    // 残価は借入可能額モードでは受けない。active が残ったままだと、無効な
+    // タブが押下状態のまま「残価を入力中」と名乗り、打鍵が計算に使われない
+    // 欄に落ちる。
+    await renderPanel();
+    await press(["残価を入力"]);
+    expect(screen.getByTestId("loan-field")).toHaveTextContent("残価を入力中");
+
+    await press(["借入可能額を求める"]);
+    const residual = screen.getByRole("button", { name: "残価を入力" });
+    expect(residual).toBeDisabled();
+    expect(residual).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("loan-field")).not.toHaveTextContent(
+      "残価を入力中",
+    );
+  });
+
+  it("moves off the bonus when the term mode closes it", async () => {
+    await renderPanel();
+    await press(["ボーナス返済分（元本）を入力"]);
+    await press(["返済期間を求める"]);
+    const bonus = screen.getByRole("button", { name: /ボーナス.*を入力/ });
+    expect(bonus).toBeDisabled();
+    expect(bonus).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("stops the term at four digits, so u32 cannot wrap silently", async () => {
+    // 期間は Number にしてから wasm へ u32 で渡る。10 桁を超えると 2^32 で
+    // 折り返し、1200 以下に化けた値でもっともらしい答えが出てしまう。
+    await renderPanel();
+    await press(["返済期間を入力", "1", "2", "3", "4", "5", "6"]);
+    expect(echo()).toHaveTextContent("期間 1234か月");
+  });
+
+  it("stops the rate at what the core can parse", async () => {
+    // コアが受ける最長は "100.0000"(整数 3 桁 + 小数 4 桁)。
+    await renderPanel();
+    await press([
+      "年利を入力",
+      "1",
+      "0",
+      "0",
+      "小数点",
+      "0",
+      "0",
+      "0",
+      "0",
+      "1",
+    ]);
+    expect(echo()).toHaveTextContent("年利 100.0000%");
+  });
+
   it("puts the answer on the main line and the breakdown below", async () => {
     await renderPanel();
     await fillHousingExample();
