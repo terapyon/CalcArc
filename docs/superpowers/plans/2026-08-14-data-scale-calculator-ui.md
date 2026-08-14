@@ -209,6 +209,8 @@ describe("Data Scale のキー集合", () => {
 
   it("keeps both faces on the same four by four frame", () => {
     // 面を入れ替えても画面が伸び縮みしないこと(設計書 §2)。
+    // **これは列数と高さクラスが同じというだけでは成立しない**——型面は
+    // 11 キーで 3 行しか描かれないので、行数は CSS が押さえる(Task 3)。
     const pad = DATA_SCALE_SECTIONS[1];
     expect(pad?.columns).toBe(4);
     expect(TYPE_SECTION.columns).toBe(4);
@@ -489,7 +491,27 @@ git commit  # 件名の趣旨:「2 つの面を同じ枠に載せ、DEL と AC �
 - 状態: `active`（`count`/`dimensions`/`dtype`）、`count`/`dimensions` は
   `Entry`、`dtype` は `DataTypeToken`（**初期値 `float32`**。spec §5）。
 - `sections` は `active === "dtype"` のとき `[FIELDS, TYPE_SECTION]`、
-  それ以外は `DATA_SCALE_SECTIONS`。**高さは同じ枠**なので画面は動かない。
+  それ以外は `DATA_SCALE_SECTIONS`。
+- **枠の高さを保つ機構（重要）**: 型面は 11 キーなので、4 列グリッドの自然な
+  流れでは**3 行しか描かれない**（4 行目は空でセルが無い）。恒久の空きに
+  ボタンを置かない決定はそのままに、**行数を CSS で明示する**:
+
+```css
+/* 数字面と型面は同じ枠に載る(設計書 §2)。型面は 11 キーで 3 行しか
+   描かれないため、行数を明示しないと区画が 1 行ぶん(約 93px)縮み、
+   面を入れ替えるたびに画面が伸び縮みして、押そうとした位置がずれる。
+   85px のような決め打ちではなく**行数**で指定するのは、キーの寸法を
+   実機で見てから決めるという S1 の方針を壊さないため。 */
+.panel :global(fieldset[aria-label="数字と単位のキー"]),
+.panel :global(fieldset[aria-label="データ型のキー"]) {
+  grid-template-rows: repeat(4, 1fr);
+}
+```
+
+  高さが不定の格子では `1fr` の行はすべて同じ高さに揃うので、空の 4 行目も
+  他の行と同じ高さを取る。**この機構が効いているかは Task 5 の E2E が
+  実測で見る**（区画の高さと DEL の座標が入れ替え前後で一致）——効かない
+  ブラウザがあれば、そこで赤になるので `min-height` に切り替える。
 - `disabled` 述語: 型面では `del` を無効（消すものが無い。spec §5）。
   単位キーは `canPushUnit` が偽なら無効。
 - `pressed` 述語: 項目タブ、そして型面の選択中の型。**数字は `undefined`**。
