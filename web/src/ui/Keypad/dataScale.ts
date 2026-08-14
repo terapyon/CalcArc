@@ -172,9 +172,17 @@ const TYPES: KeypadSection<DataScaleKeyToken> = {
   ],
 };
 
+/** 項目の区画。どちらの面でも上に居座る——面が変わっても項目は選べる。 */
+export const FIELD_SECTION = FIELDS;
+
+/** 数字面。 */
 export const DATA_SCALE_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
   FIELDS,
   PAD,
 ];
 
-export const TYPE_SECTION = TYPES;
+/** 型面。数字面と同じ枠に、同じ位置の DEL・AC を載せて差し替える。 */
+export const TYPE_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
+  FIELDS,
+  TYPES,
+];
