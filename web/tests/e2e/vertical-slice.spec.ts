@@ -92,10 +92,11 @@ test("the angle mode is shown and switchable", async ({ page }) => {
 
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
+  // キーパッドは 2 区画に分かれている(関数列 7 + メイングリッド 25)。
   const buttons = page
-    .getByRole("group", { name: "電卓キーパッド" })
+    .getByRole("group", { name: /関数キー|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(30);
+  await expect(buttons).toHaveCount(32);
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);
@@ -168,7 +169,8 @@ test("high contrast keeps the destructive key distinguishable", async ({
 });
 
 test("touch targets are large enough", async ({ page }) => {
-  // --touch-target-min は 44px。
+  // --touch-target-min は 44px。メイングリッドのキーで見る(関数列は
+  // 縦だけ意図的に割る——設計書 §4。全キーの検査は keypad-shell.spec.ts)。
   const key = page.getByRole("button", { name: "7", exact: true });
   const box = await key.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);

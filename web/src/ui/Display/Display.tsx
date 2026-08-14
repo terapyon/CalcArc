@@ -1,5 +1,5 @@
 import type { BinOpName, DisplayState } from "../../calc";
-import styles from "./Display.module.css";
+import { Readout } from "../Readout/Readout";
 
 const OP_SYMBOL: Record<BinOpName, string> = {
   Add: "+",
@@ -12,48 +12,39 @@ export interface DisplayProps {
   display: DisplayState;
 }
 
+/**
+ * Scientific の表示。`DisplayState` を `Readout` の文字列に写すだけの層で、
+ * 記号の選び方など Scientific 固有の意味はここに残る(設計書 §6)。
+ */
 export function Display({ display }: DisplayProps) {
   const pending = `${"(".repeat(display.pendingDepth)}${
     display.pendingOp ? OP_SYMBOL[display.pendingOp] : ""
   }`;
 
   return (
-    <section className={styles.display}>
-      <div className={styles.status}>
-        <span
-          data-testid="display-angle"
-          role="status"
-          aria-label="角度の単位"
-          aria-live="polite"
-        >
-          {display.angle === "Deg" ? "DEG" : "RAD"}
-        </span>
-        <span
-          data-testid="display-pending"
-          role="status"
-          aria-label="計算の途中経過"
-          aria-live="off"
-        >
-          {pending}
-        </span>
-        <span
-          data-testid="display-form"
-          role="status"
-          aria-label="表示形式"
-          aria-live="off"
-        >
-          {display.form === "Polar" ? "∠" : ""}
-        </span>
-      </div>
-      <output
-        className={styles.main}
-        data-testid="display-main"
-        // 結果が変わったことを読み上げる。polite なので操作を妨げない。
-        aria-live="polite"
-        {...(display.error ? { "data-error": display.error } : {})}
-      >
-        {display.main}
-      </output>
-    </section>
+    <Readout
+      // S1 では常に空。S2 が DisplayState から中身を渡す(設計書 §5)。
+      echo=""
+      main={display.main}
+      error={display.error}
+      status={[
+        {
+          testId: "display-angle",
+          ariaLabel: "角度の単位",
+          text: display.angle === "Deg" ? "DEG" : "RAD",
+          live: "polite",
+        },
+        {
+          testId: "display-pending",
+          ariaLabel: "計算の途中経過",
+          text: pending,
+        },
+        {
+          testId: "display-form",
+          ariaLabel: "表示形式",
+          text: display.form === "Polar" ? "∠" : "",
+        },
+      ]}
+    />
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type Calc, initCalc, type KeyToken, type Step } from "../calc";
 import { Display } from "./Display/Display";
 import { Keypad } from "./Keypad/Keypad";
+import { SCIENTIFIC_SECTIONS } from "./Keypad/scientific";
 import styles from "./ScientificPanel.module.css";
 import { useKeyboard } from "./useKeyboard";
 
@@ -65,7 +66,7 @@ export function ScientificPanel() {
   return (
     <div className={styles.shell}>
       <Display display={step.display} />
-      <Keypad onPress={press} />
+      <Keypad sections={SCIENTIFIC_SECTIONS} onPress={press} />
       <p className={styles.version} data-testid="core-version">
         calcarc-core {version}
       </p>

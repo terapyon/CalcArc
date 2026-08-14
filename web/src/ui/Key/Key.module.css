@@ -48,3 +48,16 @@
   /* 高コントラストでのみ太い枠線が出て、演算子キーと区別できる。 */
   border: var(--key-danger-border);
 }
+
+/* 予約スロット(設計書 §5)。押せないことを色でも示す。S2 が埋める。 */
+.key:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* 面が立っている Shift。aria-pressed だけでは見えない(base-spec §43)。 */
+.key[aria-pressed="true"] {
+  background: var(--key-accent-bg);
+  color: var(--key-accent-fg);
+  font-weight: var(--key-font-weight-emphasis);
+}
