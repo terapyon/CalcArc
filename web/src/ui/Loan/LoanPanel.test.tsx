@@ -299,6 +299,118 @@ describe("LoanPanel（電卓）", () => {
     expect(calc.forward).not.toHaveBeenCalled();
   });
 
+  it("puts the answer on the main line and the breakdown below", async () => {
+    await renderPanel();
+    await fillHousingExample();
+    await waitFor(() => {
+      expect(main()).toHaveTextContent("91,855 円");
+    });
+    const breakdown = screen.getByTestId("loan-breakdown");
+    expect(breakdown).toHaveTextContent("総支払額");
+    expect(breakdown).toHaveTextContent("38,579,007 円");
+    expect(breakdown).toHaveTextContent("総利息");
+    // 主表示は 1 本(内訳は下。設計書 §7)。
+    expect(main()).not.toHaveTextContent("総支払額");
+  });
+
+  it("names the mode and the active field in the status line", async () => {
+    await renderPanel();
+    expect(screen.getByTestId("loan-mode")).toHaveTextContent("月額を求める");
+    expect(screen.getByTestId("loan-field")).toHaveTextContent(
+      "借入額を入力中",
+    );
+    await press(["年利を入力"]);
+    expect(screen.getByTestId("loan-field")).toHaveTextContent("年利を入力中");
+  });
+
+  it("keeps the disclaimer on screen and off the alert channel", async () => {
+    // 決定的概算であることの但し書きは常設(M6 設計書 §0)。
+    await renderPanel();
+    expect(
+      screen.getByText(/金融機関の計算方法により異なります/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows an error from the core on the main line", async () => {
+    const calc = await renderPanel(
+      stubCalc({
+        term: vi.fn().mockReturnValue({
+          months: null,
+          totalPayment: null,
+          totalInterest: null,
+          finalPayment: null,
+          error: "SyntaxError",
+        }),
+      }),
+    );
+    await press([
+      "返済期間を求める",
+      "借入額を入力",
+      "1",
+      "0",
+      "0",
+      "万",
+      "年利を入力",
+      "1",
+      "2",
+      "月々の返済額を入力",
+      "1",
+      "万",
+    ]);
+    await waitFor(() => {
+      expect(main()).toHaveTextContent("Math ERROR");
+    });
+    expect(main()).toHaveAttribute("data-error", "SyntaxError");
+    expect(calc.term).toHaveBeenCalled();
+  });
+
+  it("shows the residual as the final payment when there is one", async () => {
+    const calc = await renderPanel(
+      stubCalc({
+        forward: vi.fn().mockReturnValue({
+          monthlyPayment: "37536",
+          totalPayment: "3414605",
+          totalInterest: "414605",
+          finalPayment: "1200000",
+          rowsPaid: 60,
+          error: null,
+        }),
+      }),
+    );
+    await press([
+      "借入額を入力",
+      "3",
+      "0",
+      "0",
+      "万",
+      "年利を入力",
+      "3",
+      "小数点",
+      "9",
+      "返済期間を入力",
+      "6",
+      "0",
+      "残価を入力",
+      "1",
+      "2",
+      "0",
+      "万",
+    ]);
+    await waitFor(() => {
+      expect(main()).toHaveTextContent("37,536 円");
+    });
+    expect(screen.getByTestId("loan-breakdown")).toHaveTextContent(
+      "最終回（残価）",
+    );
+    expect(calc.forward).toHaveBeenLastCalledWith(
+      "3000000",
+      "3.9",
+      60,
+      "1200000",
+    );
+  });
+
   it("says so when the calculation engine cannot be loaded", async () => {
     vi.mocked(initLoan).mockRejectedValue(new Error("wasm unavailable"));
     render(<LoanPanel />);
