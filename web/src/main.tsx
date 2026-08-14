@@ -1,12 +1,10 @@
 import "./ui/tokens.css";
-import { registerSW } from "virtual:pwa-register";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 
-// prompt 戦略だが UI は出さない(設計書 §2)。コールバックを渡さなければ
-// 新 SW は waiting に留まり、標準のライフサイクルで切り替わる。
-registerSW();
+// SW の登録は UpdateToast が持つ(設計書 §1)。ここでも registerSW() を呼ぶと
+// 登録が 2 度走り、更新の購読を持たない側が先に登録してしまう。
 
 const root = document.getElementById("root");
 if (!root) {
