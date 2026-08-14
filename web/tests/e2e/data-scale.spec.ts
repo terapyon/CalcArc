@@ -6,12 +6,24 @@ const nav = (page: Page, label: "Scientific" | "Data Scale") =>
 const panel = (page: Page) =>
   page.getByRole("region", { name: "データスケール計算" });
 
-// <output> の暗黙ロールは status。jsdom はアクセシビリティツリーを組み立て
-// ないので、role から引けることは実ブラウザでしか確かめられない
-// (Task 4/5 レビューの申し送り)。
-const status = (page: Page) => panel(page).getByRole("status");
-
+/** 主表示。主 → 副 → bytes の順に繰り上がった「答え」が出る。 */
 const main = (page: Page) => page.getByTestId("display-main");
+
+/** 結果欄。bytes と両方の単位系が並ぶ(base-spec §17)。 */
+const result = (page: Page) => page.getByTestId("datascale-result");
+
+/**
+ * 盤面のキーを順に押す。**パネル起点で引く**——区画名(「入力する項目」
+ * など)は Loan と同名のものがあり、名前だけでは足りない(設計書 §3)。
+ */
+async function press(page: Page, labels: string[]): Promise<void> {
+  for (const label of labels) {
+    await panel(page).getByRole("button", { name: label, exact: true }).click();
+  }
+}
+
+/** 数字列をそのまま打つ。単位キーで縮められない桁の並びに使う。 */
+const typeDigits = (page: Page, digits: string) => press(page, [...digits]);
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -80,27 +92,45 @@ test("browser back returns to Scientific and aria-current follows", async ({
 test("the headline case: 100M x 768 x float32 is 307.2 GB / 286.1 GiB", async ({
   page,
 }) => {
-  // 実 wasm(mock ではない)で通す(完了条件 1)。
+  // 実 wasm(mock ではない)で通す(完了条件 1)。値は電卓化の前後で
+  // 変わらない——変えたのは打ち方だけである。
   await nav(page, "Data Scale").click();
 
-  await page.getByLabel("件数").fill("100000000");
-  await page.getByLabel("次元数").fill("768");
+  await press(page, ["件数を入力", "1", "0", "0", "百万"]);
+  await press(page, ["次元数を入力", "7", "6", "8"]);
   // dtype は既定の float32 のまま。
 
-  await expect(status(page)).toContainText("307,200,000,000 bytes");
-  await expect(status(page)).toContainText("307.2 GB");
-  await expect(status(page)).toContainText("286.1 GiB");
+  await expect(main(page)).toHaveText("307.2 GB");
+  await expect(result(page)).toContainText("307,200,000,000 bytes");
+  await expect(result(page)).toContainText("286.1 GiB");
+});
+
+test("the unit keys expand into plain digits, not a rounded display value", async ({
+  page,
+}) => {
+  // 100M は 100000000 として渡る(base-spec §26)。エコーは打った形
+  // 「100M」を見せ、コアへ行くのは展開後の数字列である——両者が
+  // 食い違わないことは、答えが 1e8 件ぶんであることで確かめる。
+  await nav(page, "Data Scale").click();
+
+  await press(page, ["件数を入力", "1", "0", "0", "百万"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("件数 100M");
+
+  await press(page, ["次元数を入力", "1"]);
+  await press(page, ["データ型を選ぶ", "int8"]);
+  await expect(result(page)).toContainText("100,000,000 bytes");
 });
 
 test("a 39-digit count survives the boundary intact", async ({ page }) => {
   // 2^127-1。JS number を経由していれば 2^53 で精度を失う。
   await nav(page, "Data Scale").click();
 
-  await page.getByLabel("件数").fill("170141183460469231731687303715884105727");
-  await page.getByLabel("次元数").fill("2");
-  await page.getByLabel("データ型").selectOption("uint8");
+  await press(page, ["件数を入力"]);
+  await typeDigits(page, "170141183460469231731687303715884105727");
+  await press(page, ["次元数を入力", "2"]);
+  await press(page, ["データ型を選ぶ", "uint8"]);
 
-  await expect(status(page)).toContainText(
+  await expect(result(page)).toContainText(
     "340,282,366,920,938,463,463,374,607,431,768,211,454 bytes",
   );
 });
@@ -109,68 +139,90 @@ test("crossing 2^128 shows an overflow error", async ({ page }) => {
   // 2^127 x 2 x 1 byte = 2^128、u128 の上限を超える(base-spec §25)。
   await nav(page, "Data Scale").click();
 
-  await page.getByLabel("件数").fill("170141183460469231731687303715884105728");
-  await page.getByLabel("次元数").fill("2");
-  await page.getByLabel("データ型").selectOption("uint8");
+  await press(page, ["件数を入力"]);
+  await typeDigits(page, "170141183460469231731687303715884105728");
+  await press(page, ["次元数を入力", "2"]);
+  await press(page, ["データ型を選ぶ", "uint8"]);
 
-  await expect(status(page)).toContainText("Math ERROR");
-  await expect(status(page).locator("[data-error='Overflow']")).toBeVisible();
+  await expect(main(page)).toHaveText("Math ERROR");
+  await expect(main(page)).toHaveAttribute("data-error", "Overflow");
 });
 
-test("the form fields are reachable by their accessible labels", async ({
-  page,
-}) => {
+test("every field is reachable as a named key", async ({ page }) => {
+  // フォームの <label> が担っていた到達性を、キーの読み上げ名が引き継ぐ
+  // (設計書 §3)。
   await nav(page, "Data Scale").click();
 
-  await expect(page.getByLabel("件数")).toBeVisible();
-  await expect(page.getByLabel("次元数")).toBeVisible();
-  await expect(page.getByLabel("データ型")).toBeVisible();
+  for (const name of ["件数を入力", "次元数を入力", "データ型を選ぶ"]) {
+    await expect(
+      panel(page).getByRole("button", { name, exact: true }),
+    ).toBeVisible();
+  }
 });
 
-test("a partly-filled form stays neutral, no error shown", async ({ page }) => {
+test("a partly-filled panel stays neutral, no error shown", async ({
+  page,
+}) => {
   await nav(page, "Data Scale").click();
 
   // 次元数は空のまま。
-  await page.getByLabel("件数").fill("100000000");
+  await press(page, ["件数を入力", "1", "0", "0", "百万"]);
 
-  await expect(status(page)).not.toContainText("Math ERROR");
-  await expect(status(page).locator("[data-error]")).toHaveCount(0);
+  await expect(main(page)).toHaveText("");
+  await expect(panel(page).locator("[data-error]")).toHaveCount(0);
 });
 
-test("a sub-unit success shows bytes without GB/GiB lines", async ({
+test("a sub-unit success shows bytes without KB/KiB lines", async ({
   page,
 }) => {
   // count=1, dimensions=1, int8 -> 1 byte。単位未満なので decimal/binary は
-  // 出ない(Task 3 の追補テストが保証する境界)。
+  // 出ず、main は bytes まで繰り上がる(設計書 §6)。
   await nav(page, "Data Scale").click();
 
-  await page.getByLabel("件数").fill("1");
-  await page.getByLabel("次元数").fill("1");
-  await page.getByLabel("データ型").selectOption("int8");
+  await press(page, ["件数を入力", "1"]);
+  await press(page, ["次元数を入力", "1"]);
+  await press(page, ["データ型を選ぶ", "int8"]);
 
-  await expect(status(page)).toContainText("1 bytes");
-  await expect(status(page)).not.toContainText("Math ERROR");
+  await expect(main(page)).toHaveText("1 bytes");
+  await expect(main(page)).not.toHaveAttribute("data-error");
   // 1 byte で実際に混入しうるのは KB/KiB(次に小さい単位)。GB の否定は
   // KB を含意しない——境界を検査するなら最寄りの単位を否定する。
-  await expect(status(page)).not.toContainText("KB");
-  await expect(status(page)).not.toContainText("KiB");
+  await expect(result(page)).not.toContainText("KB");
+  await expect(result(page)).not.toContainText("KiB");
 });
 
-test("typing into the data-scale form does not touch the scientific state", async ({
+test("the scientific keyboard listener does not survive into data-scale", async ({
   page,
 }) => {
   // useKeyboard は ScientificPanel が unmount されると外れる(App.tsx の
-  // 条件レンダリング)。data-scale で打った "3" が Scientific の window
-  // リスナに漏れないことを、実際のキー入力で確かめる(Task 4/5 の申し送り)。
-  //
-  // 検出器は toHaveValue("3")(下の行): リスナが漏れていれば useKeyboard
-  // 側の preventDefault() が入力欄への文字挿入自体を止める。最後の "0"
-  // 確認は ScientificPanel が毎回新規マウントされるため常に真になり、
-  // 単体では非リークの証拠にならない(再マウント後の健全性確認)。
-  await nav(page, "Data Scale").click();
-  await page.getByLabel("件数").pressSequentially("3");
-  await expect(page.getByLabel("件数")).toHaveValue("3");
+  // 条件レンダリング)。**電卓化で入力欄が無くなったので、旧来の
+  // 「入力欄に文字が入るか」という代理検査は使えない。** 代わりに
+  // リスナ自体を直接見る: 生きていれば "3" の keydown は
+  // preventDefault される(useKeyboard.ts)。dispatchEvent は
+  // preventDefault されたとき false を返す。
+  const keydownPrevented = () =>
+    page.evaluate(
+      () =>
+        !window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "3",
+            cancelable: true,
+            bubbles: true,
+          }),
+        ),
+    );
 
+  // **まず陽性を確かめる。** Scientific に居るあいだは捕まるはずで、
+  // これが true にならないなら以下の false は「リスナが外れた」ではなく
+  // 「そもそも検出できていない」を意味する。
+  await expect(main(page)).toHaveText("0");
+  expect(await keydownPrevented()).toBe(true);
+
+  await nav(page, "Data Scale").click();
+  await expect(panel(page)).toBeVisible();
+  expect(await keydownPrevented()).toBe(false);
+
+  // 再マウント後も Scientific は健全である。
   await nav(page, "Scientific").click();
   await expect(main(page)).toHaveText("0");
 });
