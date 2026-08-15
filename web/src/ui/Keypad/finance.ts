@@ -1,4 +1,4 @@
-import type { KeypadSection } from "./types";
+import type { KeyDef, KeypadSection } from "./types";
 
 /**
  * Finance のキー集合。
@@ -47,9 +47,12 @@ export type FinanceKeyToken =
   | "field:residual"
   | "field:bonus"
   | "mode:compound"
+  | "mode:deposit-for"
+  | "mode:periods-for"
   | "field:deposit"
   | "field:periods"
   | "field:tax"
+  | "field:target"
   | `period:${1 | 2 | 12}`
   | "tax:none"
   | "tax:withholding";
@@ -64,11 +67,12 @@ export type FinanceField =
   | "months"
   | "payment"
   | "residual"
-  | "bonus";
+  | "bonus"
+  | "target";
 
 const MODES: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "計算の種類",
-  columns: 4,
+  columns: 6,
   height: "half",
   keys: [
     {
@@ -95,6 +99,20 @@ const MODES: KeypadSection<FinanceKeyToken> = {
       token: "mode:compound",
       label: "複利",
       ariaLabel: "複利で増やす",
+      variant: "function",
+    },
+    // **複利の逆算は 2 モード**——目標額から積立額を求めるか、期数を求める
+    // かで探索の形が違う(単調 vs 非単調、設計書 §3〜§4)。
+    {
+      token: "mode:deposit-for",
+      label: "必要積立",
+      ariaLabel: "必要な積立額を求める",
+      variant: "function",
+    },
+    {
+      token: "mode:periods-for",
+      label: "必要年数",
+      ariaLabel: "必要な期間を求める",
       variant: "function",
     },
   ],
@@ -195,6 +213,34 @@ const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
     },
   ],
 };
+
+/** 目標額のキー。2 つの逆算で共有する(同じ意味の欄である)。 */
+const TARGET_KEY: KeyDef<FinanceKeyToken> = {
+  token: "field:target",
+  label: "目標",
+  ariaLabel: "目標額を入力",
+  variant: "function",
+};
+
+/** 1 キーだけ差し替えた項目行を作る。**行の形と区画名は動かさない。** */
+function fieldsWith(
+  replaced: FinanceKeyToken,
+  key: KeyDef<FinanceKeyToken>,
+): KeypadSection<FinanceKeyToken> {
+  return {
+    ...COMPOUND_FIELDS,
+    keys: COMPOUND_FIELDS.keys.map((k) => (k.token === replaced ? key : k)),
+  };
+}
+
+/** 必要積立額の項目。**積立の代わりに目標**が出る(設計書 §11)。 */
+const DEPOSIT_FOR_FIELDS = fieldsWith("field:deposit", TARGET_KEY);
+
+/** 必要年数の項目。**期間の代わりに目標**が出る。 */
+const PERIODS_FOR_FIELDS = fieldsWith("field:months", TARGET_KEY);
+
+export const DEPOSIT_FOR_FIELD_SECTION = DEPOSIT_FOR_FIELDS;
+export const PERIODS_FOR_FIELD_SECTION = PERIODS_FOR_FIELDS;
 
 /**
  * 周期の面。**面が入れ替わるのは「計算に入るもの」だから**——表示の読み方

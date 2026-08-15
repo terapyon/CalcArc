@@ -24,6 +24,32 @@ vi.mock("../../finance", () => ({
         net: null,
         error: null,
       }),
+      // 設計書 §7 の必須ケース #1(golden)。元本 0・年 3%・月次・240 期・
+      // 目標 1,000 万・税なし → 積立 30,461、残高 10,000,251。
+      depositFor: () => ({
+        deposit: "30461",
+        periods: null,
+        finalBalance: "10000251",
+        principalTotal: "7310640",
+        interest: "2689611",
+        nationalTax: null,
+        localTax: null,
+        net: null,
+        error: null,
+      }),
+      // 同 §7 の非単調ペア(a)(golden #4)。元本 999・年 1.5%・月次・積立 0・
+      // 目標 1,016・税あり → 19 期。次の期がまた下回ることがある(§3 帰結 2)。
+      periodsFor: () => ({
+        deposit: null,
+        periods: "19",
+        finalBalance: "1018",
+        principalTotal: "999",
+        interest: "19",
+        nationalTax: null,
+        localTax: null,
+        net: "1016",
+        error: null,
+      }),
     }),
 }));
 
@@ -622,5 +648,63 @@ describe("FinancePanel（電卓）", () => {
     // ローンへ戻れば、打った値はそのまま残っている。
     await press(["月々の返済額を求める", "借入額を入力"]);
     expect(echo()).toHaveTextContent("借入額 3000万円");
+  });
+
+  it("solves for the deposit and shows what it lands on", async () => {
+    // 設計書 §7 の必須ケース #1(golden)。元本 0・年 3%・月次・240 期・
+    // 目標 1,000 万・税なし → 積立 30,461、残高 10,000,251。
+    await renderPanel();
+    await press(["必要な積立額を求める"]);
+    expect(screen.getByTestId("finance-mode")).toHaveTextContent(
+      "必要な積立額を求める",
+    );
+    // **積立の代わりに目標が出る**(設計書 §11)。求める項目(積立)は消える。
+    expect(
+      screen.getByRole("button", { name: "目標額を入力" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "毎期の積立額を入力" }),
+    ).toBeNull();
+
+    // 元本は打たない(0 のまま)——積立だけで積み上げるケース。
+    await press(["年利を入力", "3"]);
+    await press(["期間を入力", "2", "4", "0"]);
+    await press(["目標額を入力", "1", "0", "0", "0", "万"]);
+
+    await waitFor(() => {
+      expect(main()).toHaveTextContent("30,461 円");
+    });
+    expect(screen.getByTestId("finance-breakdown")).toHaveTextContent(
+      "10,000,251 円",
+    );
+  });
+
+  it("keeps the periods answer even though the next period dips below", async () => {
+    // 非単調ペア(a)(設計書 §7 golden #4、§3 帰結 2)。元本 999・年 1.5%・
+    // 月次・積立 0・目標 1,016・税あり → 19 期。次の期(#5)はまた目標を
+    // 下回るが、それでも「最初に届いた期」を答として保つ。
+    await renderPanel();
+    await press(["必要な期間を求める"]);
+    expect(screen.getByTestId("finance-mode")).toHaveTextContent(
+      "必要な期間を求める",
+    );
+    // **期間の代わりに目標が出る**(設計書 §11)。求める項目(期間)は消える。
+    expect(
+      screen.getByRole("button", { name: "目標額を入力" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "期間を入力" })).toBeNull();
+
+    await press(["元本を入力", "9", "9", "9"]);
+    // 積立は打たない(0 のまま)。
+    await press(["年利を入力", "1", "小数点", "5"]);
+    await press(["目標額を入力", "1", "0", "1", "6"]);
+    await press(["税の扱いを選ぶ", "源泉分離課税を引く"]);
+
+    await waitFor(() => {
+      expect(main()).toHaveTextContent("19 期");
+    });
+    const breakdown = screen.getByTestId("finance-breakdown");
+    expect(breakdown).toHaveTextContent("手取り");
+    expect(breakdown).toHaveTextContent("1,016 円");
   });
 });

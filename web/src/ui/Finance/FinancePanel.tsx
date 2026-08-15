@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { type ExprCalc, initExpr, type UnitSetName } from "../../expr";
-import { type FinanceCalc, initFinance } from "../../finance";
+import {
+  type CompoundInverseResult,
+  type FinanceCalc,
+  initFinance,
+} from "../../finance";
 import {
   backspace,
   canPushCloseParen,
@@ -28,9 +32,11 @@ import {
 import { initLoan, type LoanCalc, type LoanMode } from "../../finance/loan";
 import {
   COMPOUND_FIELD_SECTION,
+  DEPOSIT_FOR_FIELD_SECTION,
   FINANCE_SECTIONS,
   type FinanceField,
   type FinanceKeyToken,
+  PERIODS_FOR_FIELD_SECTION,
   PERIODS_SECTION,
   TAX_SECTION,
 } from "../Keypad/finance";
@@ -94,8 +100,11 @@ function unitFor(
 const MAX_RATE_LEN = 8;
 
 /** モードが求める値の項目。その項目は入力できない(それが答だから)。 */
-/** 盤面のモード。**複利はローンの「求めるもの」ではない**ので、型を広げる。 */
-export type PanelMode = LoanMode | "compound";
+/**
+ * 盤面のモード。**複利とその逆算はローンの「求めるもの」ではない**ので、
+ * 型を広げる(設計書 §11)。
+ */
+export type PanelMode = LoanMode | "compound" | "deposit-for" | "periods-for";
 
 const SOLVED_FOR: Record<PanelMode, FinanceField | null> = {
   payment: "payment",
@@ -103,6 +112,10 @@ const SOLVED_FOR: Record<PanelMode, FinanceField | null> = {
   term: "months",
   // 複利は正算だけ(逆算はスコープ外。設計書 §12)。
   compound: null,
+  // 積立額が答なので入力できない。
+  "deposit-for": "deposit",
+  // 期間が答なので入力できない。
+  "periods-for": "months",
 };
 
 const MODE_STATUS: Record<PanelMode, string> = {
@@ -110,17 +123,36 @@ const MODE_STATUS: Record<PanelMode, string> = {
   principal: "借入可能額を求める",
   term: "返済期間を求める",
   compound: "複利で増やす",
+  "deposit-for": "必要な積立額を求める",
+  "periods-for": "必要な期間を求める",
 };
 
-/** その項目がその モードに出るか。**行ごと差し替える**(設計書 §4)。 */
-const COMPOUND_FIELDS: FinanceField[] = [
-  "principal",
+/**
+ * 複利系のモード。**行ごと差し替える**(設計書 §4)——求める項目が消えて
+ * 目標が出る(既存の `SOLVED_FOR` の仕組みをそのまま使う。設計書 §11)。
+ */
+const COMPOUND_MODE_FIELDS: Record<
+  "compound" | "deposit-for" | "periods-for",
+  FinanceField[]
+> = {
+  compound: ["principal", "deposit", "rate", "months", "periods", "tax"],
+  "deposit-for": ["principal", "target", "rate", "months", "periods", "tax"],
+  "periods-for": ["principal", "deposit", "rate", "target", "periods", "tax"],
+};
+
+/** ローンの項目行に出さない、複利系だけの項目(元本・年利・期間は共有)。 */
+const COMPOUND_ONLY_FIELDS: FinanceField[] = [
   "deposit",
-  "rate",
-  "months",
   "periods",
   "tax",
+  "target",
 ];
+
+function isCompoundFamily(
+  m: PanelMode,
+): m is "compound" | "deposit-for" | "periods-for" {
+  return m === "compound" || m === "deposit-for" || m === "periods-for";
+}
 
 const FIELD_LABELS: Record<FinanceField, string> = {
   principal: "借入額",
@@ -132,6 +164,7 @@ const FIELD_LABELS: Record<FinanceField, string> = {
   deposit: "積立額",
   periods: "周期",
   tax: "税",
+  target: "目標額",
 };
 
 /** 項目に付く単位。echo の末尾に出す(整形ではなく単位の表示)。 */
@@ -145,7 +178,34 @@ const FIELD_UNITS: Record<FinanceField, string> = {
   deposit: "円",
   periods: "",
   tax: "",
+  target: "円",
 };
+
+/**
+ * 複利の逆算の内訳。**deposit-for と periods-for で同じ形**(コアが返す
+ * `CompoundInverseResult` の構造が同じだから)。税ありのときは手取りを
+ * 一番大きく出す(裁定 Q5)。
+ */
+function compoundInverseBreakdown(
+  r: CompoundInverseResult,
+  withholding: boolean,
+): Line[] {
+  return [
+    {
+      label: withholding ? "手取り" : "残高",
+      value: `${grouped(withholding && r.net ? r.net : (r.finalBalance ?? ""))} 円`,
+    },
+    { label: "元本合計", value: `${grouped(r.principalTotal ?? "")} 円` },
+    { label: "運用収益", value: `${grouped(r.interest ?? "")} 円` },
+    ...(withholding
+      ? [
+          { label: "国税", value: `${grouped(r.nationalTax ?? "")} 円` },
+          { label: "地方税", value: `${grouped(r.localTax ?? "")} 円` },
+          { label: "税引前", value: `${grouped(r.finalBalance ?? "")} 円` },
+        ]
+      : []),
+  ];
+}
 
 /** ボーナス欄はモードで意味が変わる(設計書 §6)。値も別々に持つ。 */
 function bonusName(mode: PanelMode): string {
@@ -236,9 +296,17 @@ export function FinancePanel() {
    *
    * ボーナスをモードごとに分けたのと同じ理由で、「値は保持する」は
    * **同じ意味の欄の値が消えない**という意味である(設計書 §6)。
+   *
+   * **2 つの逆算も複利とは別の入れ物を持つ**——欄の名前が同じでも意味が
+   * 違う(F1 が「ローンの値を持ち回らない」と決めたのと同じ理由。設計書
+   * §11)。**ただし目標額だけは 2 つの逆算で共有する**——同じ意味の欄
+   * だからキーを `target` に固定する。
    */
   function amountKey(field: FinanceField): string {
     if (mode === "compound") return `compound:${field}`;
+    if (mode === "deposit-for" || mode === "periods-for") {
+      return field === "target" ? "target" : `${mode}:${field}`;
+    }
     return field === "bonus" ? bonusKey : field;
   }
 
@@ -257,16 +325,13 @@ export function FinancePanel() {
    * モードで判定する必要がある(下の press を参照)。
    */
   function fieldEnabledIn(field: FinanceField, forMode: PanelMode): boolean {
-    // **複利は別の行**。ローンの項目とは互いに出ない(設計書 §6)。
-    if (forMode === "compound") return COMPOUND_FIELDS.includes(field);
-    if (
-      COMPOUND_FIELDS.includes(field) &&
-      field !== "principal" &&
-      field !== "rate" &&
-      field !== "months"
-    ) {
-      return false;
+    // **複利系は別の行**。ローンの項目とは互いに出ない(設計書 §6・§11)。
+    // 求める項目はその行に出ない(目標に差し替わっているので、これだけで
+    // `SOLVED_FOR` を経由せずに答の項目が閉じる)。
+    if (isCompoundFamily(forMode)) {
+      return COMPOUND_MODE_FIELDS[forMode].includes(field);
     }
+    if (COMPOUND_ONLY_FIELDS.includes(field)) return false;
     if (field === SOLVED_FOR[forMode]) return false;
     if (field === "residual") {
       // 残価は月額モードのみ。同じモードのボーナス(元本)と排他。
@@ -346,7 +411,7 @@ export function FinancePanel() {
     // どの周期でも割り切れる(設計書 §5)。
     return {
       max: String(MAX_PERIODS),
-      unitSet: mode === "compound" ? `periods:${periodsPerYear}` : "months",
+      unitSet: isCompoundFamily(mode) ? `periods:${periodsPerYear}` : "months",
     };
   }
 
@@ -473,9 +538,9 @@ export function FinancePanel() {
   }
 
   function labelOf(field: FinanceField): string {
-    // **同じ入れ物でも意味が違えば名前も違う。** 複利の `principal` は
+    // **同じ入れ物でも意味が違えば名前も違う。** 複利系の `principal` は
     // 負債ではなく投資の元本である(入れ物も別。amountKey を参照)。
-    if (mode === "compound" && field === "principal") return "元本";
+    if (isCompoundFamily(mode) && field === "principal") return "元本";
     return field === "bonus" ? bonusName(mode) : FIELD_LABELS[field];
   }
 
@@ -518,6 +583,7 @@ export function FinancePanel() {
   const rate = evaluated("rate");
   const months = evaluated("months");
   const monthsNumber = months === "" ? 0 : Number(months);
+  const targetDigits = evaluated("target");
 
   // **式が壊れていたら、そこで止めて言う**(設計書 §8)。
   let error: string | null =
@@ -562,6 +628,50 @@ export function FinancePanel() {
               ]
             : []),
         ];
+      }
+    }
+  } else if (error === null && mode === "deposit-for") {
+    // **必要積立額**。目標に届く最小の積立額を、コアが二分探索で出す
+    // (設計書 §4)。答は積立額、内訳は複利と同じ形。
+    const periods = months === "" ? 0 : Number(months);
+    if (finance && rate !== "" && periods > 0 && targetDigits !== "") {
+      const r = finance.depositFor(
+        principalDigits || "0",
+        targetDigits,
+        rate,
+        periodsPerYear,
+        periods,
+        withholding,
+      );
+      error = r.error;
+      if (!r.error && r.deposit) {
+        answer = `${grouped(r.deposit)} 円`;
+        breakdown = compoundInverseBreakdown(r, withholding);
+      }
+    }
+  } else if (error === null && mode === "periods-for") {
+    // **必要年数**。目標に最初に届いた期を、コアが前進 1 本で出す
+    // (設計書 §4)。**次の期がまた下回ることがある**(§3 帰結 2)——それでも
+    // 「最初に届いた期」を答として保つ。
+    const depositDigits = evaluated("deposit");
+    if (
+      finance &&
+      rate !== "" &&
+      targetDigits !== "" &&
+      (principalDigits !== "" || depositDigits !== "")
+    ) {
+      const r = finance.periodsFor(
+        principalDigits || "0",
+        depositDigits || "0",
+        targetDigits,
+        rate,
+        periodsPerYear,
+        withholding,
+      );
+      error = r.error;
+      if (!r.error && r.periods) {
+        answer = `${r.periods} 期`;
+        breakdown = compoundInverseBreakdown(r, withholding);
       }
     }
   } else if (error === null && calc && rate !== "") {
@@ -707,24 +817,32 @@ function unitSuffix(field: FinanceField, typed: string): string {
 }
 
 function orderFor(mode: PanelMode): FinanceField[] {
-  return mode === "compound" ? COMPOUND_FIELDS : FIELD_ORDER;
+  return isCompoundFamily(mode) ? COMPOUND_MODE_FIELDS[mode] : FIELD_ORDER;
+}
+
+/** 複利系モードの項目行。**求める項目の代わりに目標が出る**(設計書 §11)。 */
+function compoundFieldSection(
+  mode: "compound" | "deposit-for" | "periods-for",
+): KeypadSection<FinanceKeyToken> {
+  if (mode === "deposit-for") return DEPOSIT_FOR_FIELD_SECTION;
+  if (mode === "periods-for") return PERIODS_FOR_FIELD_SECTION;
+  return COMPOUND_FIELD_SECTION;
 }
 
 /** ボーナス欄の名前だけモードで差し替える(設計書 §6)。 */
 function sectionsFor(mode: PanelMode, active: FinanceField) {
-  // 複利は項目行を差し替え、周期・税では**面が入れ替わる**(設計書 §7)。
-  const base =
-    mode === "compound"
-      ? [
-          FINANCE_SECTIONS[0] as KeypadSection<FinanceKeyToken>,
-          COMPOUND_FIELD_SECTION,
-          active === "periods"
-            ? PERIODS_SECTION
-            : active === "tax"
-              ? TAX_SECTION
-              : (FINANCE_SECTIONS[2] as KeypadSection<FinanceKeyToken>),
-        ]
-      : FINANCE_SECTIONS;
+  // 複利系は項目行を差し替え、周期・税では**面が入れ替わる**(設計書 §7)。
+  const base = isCompoundFamily(mode)
+    ? [
+        FINANCE_SECTIONS[0] as KeypadSection<FinanceKeyToken>,
+        compoundFieldSection(mode),
+        active === "periods"
+          ? PERIODS_SECTION
+          : active === "tax"
+            ? TAX_SECTION
+            : (FINANCE_SECTIONS[2] as KeypadSection<FinanceKeyToken>),
+      ]
+    : FINANCE_SECTIONS;
   // **単位キーのラベルも項目に従う**(設計書 §5)。挙動だけ差し替えて絵が
   // `万` のままだと、期間を打っている人には嘘のキーが見える——実機で
   // 実際にそうなっていた。
