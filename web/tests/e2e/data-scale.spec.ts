@@ -114,7 +114,9 @@ test("the unit keys expand into plain digits, not a rounded display value", asyn
   await nav(page, "Data Scale").click();
 
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("件数 100M");
+  await expect(page.getByTestId("display-entry-active")).toHaveText(
+    "件数 100M",
+  );
 
   await press(page, ["次元数を入力", "1"]);
   await press(page, ["データ型を選ぶ", "int8"]);

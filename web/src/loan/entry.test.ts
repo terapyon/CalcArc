@@ -1,25 +1,32 @@
 import { describe, expect, it } from "vitest";
-import type { Entry } from "./entry";
 import {
   backspace,
   canPushUnit,
-  digits,
   EMPTY,
-  grouped,
-  isEmpty,
   MAN,
+  MONTH,
   OKU,
   pushDigit,
   pushUnit,
   text,
+  YEAR,
 } from "./entry";
 
-/** 打鍵列をそのまま流す。"万"/"億" は単位キー、それ以外は数字。 */
-function press(keys: string): Entry {
+function press(keys: string) {
   let entry = EMPTY;
   for (const key of keys) {
-    if (key === "万" || key === "億") {
-      const next = pushUnit(entry, key === "万" ? MAN : OKU);
+    const unit =
+      key === "万"
+        ? MAN
+        : key === "億"
+          ? OKU
+          : key === "年"
+            ? YEAR
+            : key === "月"
+              ? MONTH
+              : null;
+    if (unit) {
+      const next = pushUnit(entry, unit);
       if (next === null) throw new Error(`文法違反: ${keys}`);
       entry = next;
     } else {
@@ -29,75 +36,41 @@ function press(keys: string): Entry {
   return entry;
 }
 
-describe("万・億の入力", () => {
-  it("commits the digits at the position the unit names", () => {
-    expect(digits(press("3000万"))).toBe("30000000");
+// **値の検査はここに無い。** `3000万` を 30,000,000 にするのはコアの仕事に
+// なったので（設計書 訂正 2）、値は golden が見る:
+//   expr_integer/3000万*2/yen → 60000000
+//   expr_integer/1億6000万-500万/yen → 155000000
+//   expr_integer/35年/months → 420、expr_integer/3年6/months → 42
+// ここが見るのは**打った通りに出るか**と**編集の 1 段**である。
+describe("Finance の入力（表示と編集）", () => {
+  it("keeps what was typed, unit labels and all", () => {
     expect(text(press("3000万"))).toBe("3000万");
+    expect(text(press("1億6000万"))).toBe("1億6000万");
+    expect(text(press("35年"))).toBe("35年");
+    expect(text(press("3年6月"))).toBe("3年6月");
   });
 
-  it("adds the segments together", () => {
-    expect(digits(press("1億2000万"))).toBe("120000000");
-    expect(text(press("1億2000万"))).toBe("1億2000万");
-    // 口語の「1 億 2000 万」を 12000 万と打っても同じ値になる。
-    expect(digits(press("12000万"))).toBe("120000000");
-  });
-
-  it("keeps typing after the last unit as plain ones", () => {
-    expect(digits(press("1億2000万500"))).toBe("120000500");
-    expect(text(press("1億2000万500"))).toBe("1億2000万500");
-  });
-
-  it("refuses a unit that does not go down", () => {
-    // 3000万 のあとの 億 は「3000 万億」で意味が無い(設計書 §5)。
-    const after = press("3000万");
-    expect(canPushUnit(after, OKU)).toBe(false);
-    expect(pushUnit(after, OKU)).toBeNull();
-    // 同じ単位の重ねも不可。**数字を打った後で確かめる**——単位の直後は
-    // digits が空で、先に「数字の無い単位」の規則が効いてしまい、
-    // 「下る単位しか受けない」の境界に届かない。
-    expect(canPushUnit(press("1万2"), MAN)).toBe(false);
+  it("only accepts units that step down", () => {
+    // 数字を打ってから確かめる——単位の直後は「数字の無い単位」の規則が
+    // 先に効いて境界に届かない（L で踏んだ穴）。
     expect(canPushUnit(press("1万2"), OKU)).toBe(false);
-    // 下る向きなら受ける。
+    expect(canPushUnit(press("1万2"), MAN)).toBe(false);
     expect(canPushUnit(press("1億2"), MAN)).toBe(true);
-  });
-
-  it("refuses a unit with no digits in front of it", () => {
     expect(canPushUnit(EMPTY, MAN)).toBe(false);
-    expect(pushUnit(EMPTY, MAN)).toBeNull();
-    // 単位の直後も同じ(1億億 を防ぐ)。下る単位なら数字を打てば押せる。
-    expect(canPushUnit(press("1億"), OKU)).toBe(false);
-    expect(canPushUnit(press("1億"), MAN)).toBe(false);
-    expect(canPushUnit(press("1億2"), MAN)).toBe(true);
+    // 期間も同じ規則で動く（年 → 月）。
+    expect(canPushUnit(press("3年6"), MONTH)).toBe(true);
+    expect(canPushUnit(press("3月6"), YEAR)).toBe(false);
   });
 
-  it("walks back one stage at a time", () => {
-    // 入力中の数字があれば 1 文字。無ければ直前のセグメントを解いて戻す。
-    expect(text(backspace(press("1億2000")))).toBe("1億200");
+  it("walks back one token at a time", () => {
+    expect(text(backspace(press("1億6000")))).toBe("1億600");
     expect(text(backspace(press("1億")))).toBe("1");
-    expect(digits(backspace(press("1億")))).toBe("1");
-    expect(text(backspace(press("1")))).toBe("");
-    expect(text(backspace(EMPTY))).toBe("");
+    expect(text(backspace(press("3")))).toBe("");
   });
 
-  it("gives the core plain digits, never separators", () => {
-    // parse_yen はカンマ・符号・小数点を拒否する(base-spec §26)。
-    expect(digits(press("1億2000万500"))).toMatch(/^\d+$/);
-    expect(digits(EMPTY)).toBe("");
-  });
-
-  it("drops a leading zero the way a calculator does", () => {
-    expect(text(press("007"))).toBe("7");
-    expect(text(press("0"))).toBe("0");
-  });
-
-  it("knows when nothing has been typed", () => {
-    expect(isEmpty(EMPTY)).toBe(true);
-    expect(isEmpty(press("0"))).toBe(false);
-    expect(isEmpty(press("1億"))).toBe(false);
-  });
-
-  it("groups digits for display only", () => {
-    expect(grouped("38579007")).toBe("38,579,007");
-    expect(grouped("0")).toBe("0");
+  it("caps the digits a single number can hold", () => {
+    // u64 の定義域（10 進 20 桁）。式の結果の上限はコアが見る。
+    const long = press("1".repeat(25));
+    expect(text(long)).toHaveLength(20);
   });
 });

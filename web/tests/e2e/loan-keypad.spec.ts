@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
-const echo = (page: Page) => page.getByTestId("display-echo");
+const echo = (page: Page) => page.getByTestId("display-entry-active");
 
 async function press(page: Page, names: string[]) {
   for (const name of names) {
@@ -19,7 +19,7 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
   // (設計書 §8): 数字と単位の押し間違いは金額を壊すのでここは守る。モードと
   // 項目は押し直せば戻るので縦だけ詰める。緩めた理由をここに書いておかないと、
   // 次に読む人が「うっかり緩めた」と読む。
-  const pad = panel(page).getByRole("group", { name: "数字と単位のキー" });
+  const pad = panel(page).getByRole("group", { name: "数字と演算のキー" });
   for (const button of await pad.getByRole("button").all()) {
     const box = await button.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -30,7 +30,7 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
 test("the mode and field rows are half height but wide enough", async ({
   page,
 }) => {
-  for (const name of ["求めるもの", "入力する項目"]) {
+  for (const name of ["計算の種類", "入力する項目"]) {
     const row = panel(page).getByRole("group", { name });
     for (const button of await row.getByRole("button").all()) {
       const box = await button.boundingBox();
@@ -60,23 +60,29 @@ test("the unit keys open only when the entry can take them", async ({
 test("each field opens only the keys its value can hold", async ({ page }) => {
   const dot = panel(page).getByRole("button", { name: "小数点" });
   const zeros = panel(page).getByRole("button", { name: "3桁のゼロ" });
-  const man = panel(page).getByRole("button", { name: "万", exact: true });
+  const key = (name: string) =>
+    panel(page).getByRole("button", { name, exact: true });
 
-  // 金額: 小数点は無い(parse_yen が拒否する)。
+  // 金額: 小数点は無い(parse_yen が拒否する)。単位は 万/億。
   await expect(dot).toBeDisabled();
   await expect(zeros).toBeEnabled();
+  await expect(key("万")).toHaveCount(1);
+  await expect(key("億")).toHaveCount(1);
 
-  // 年利: 小数点だけ。000 も単位も無い。
+  // 年利: 小数点だけ。000 も単位も無い——**単位の 2 マスは空きになる**。
   await press(page, ["年利を入力"]);
   await expect(dot).toBeEnabled();
   await expect(zeros).toBeDisabled();
-  await expect(man).toBeDisabled();
+  await expect(key("万")).toHaveCount(0);
+  await expect(key("年")).toHaveCount(0);
 
-  // 期間: 整数の月数。小数点も単位も無い。
+  // 期間: **単位キーが 年/月 に差し替わる**(設計書 §5)。小数点は無い。
   await press(page, ["返済期間を入力"]);
   await expect(dot).toBeDisabled();
-  await expect(man).toBeDisabled();
   await expect(zeros).toBeEnabled();
+  await expect(key("万")).toHaveCount(0);
+  await expect(key("年")).toHaveCount(1);
+  await expect(key("月")).toHaveCount(1);
 });
 
 test("a field tab shows what that field already holds", async ({ page }) => {
@@ -149,9 +155,9 @@ test("a residual left in another mode does not block the bonus", async ({
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
   const buttons = panel(page)
-    .getByRole("group", { name: /求めるもの|入力する項目|数字と単位のキー/ })
+    .getByRole("group", { name: /計算の種類|入力する項目|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(25); // 3 + 6 + 16
+  await expect(buttons).toHaveCount(35); // 4 + 6 + 25(5×5)
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);

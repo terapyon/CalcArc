@@ -293,3 +293,79 @@ fn compound_errors_are_returned_not_thrown() {
         Some("SyntaxError")
     );
 }
+
+#[wasm_bindgen_test]
+fn expressions_cross_the_boundary() {
+    // 丸めは着地の 1 回だけ。各演算で丸めるなら 999999 になる。
+    let result = calcarc_wasm::expr_integer("1000000/3*3", "18446744073709551615", "yen");
+    assert_eq!(
+        get(&result, "value").as_string().as_deref(),
+        Some("1000000")
+    );
+    assert!(get(&result, "error").is_null());
+    // **単位はコアが解釈する**(設計書 訂正 2)。UI は展開しない。
+    let with_units = calcarc_wasm::expr_integer("1億6000万-500万", "18446744073709551615", "yen");
+    assert_eq!(
+        get(&with_units, "value").as_string().as_deref(),
+        Some("155000000")
+    );
+}
+
+#[wasm_bindgen_test]
+fn the_unit_table_is_chosen_by_name() {
+    // 表そのものは渡さない。名前だけで選ぶ。
+    for (name, expected) in [
+        ("periods:12", "120"),
+        ("periods:2", "20"),
+        ("periods:1", "10"),
+    ] {
+        let result = calcarc_wasm::expr_integer("10年", "1200", name);
+        assert_eq!(
+            get(&result, "value").as_string().as_deref(),
+            Some(expected),
+            "{name}"
+        );
+    }
+    // 知らない名前は例外ではなく戻り値のエラー。
+    let unknown = calcarc_wasm::expr_integer("10年", "1200", "periods:4");
+    assert_eq!(
+        get(&unknown, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
+
+#[wasm_bindgen_test]
+fn expression_errors_are_returned_not_thrown() {
+    let zero = calcarc_wasm::expr_integer("100/0", "18446744073709551615", "yen");
+    assert_eq!(
+        get(&zero, "error").as_string().as_deref(),
+        Some("DivisionByZero")
+    );
+    assert!(
+        get(&zero, "value").is_null(),
+        "error carries null, not undefined"
+    );
+    // 中間オーバーフロー(数学的には戻るが仕様としてエラー)。
+    let huge = "170141183460469231731687303715884105727";
+    let middle = calcarc_wasm::expr_integer(
+        &format!("{huge}*2/2"),
+        "340282366920938463463374607431768211455",
+        "count",
+    );
+    assert_eq!(
+        get(&middle, "error").as_string().as_deref(),
+        Some("Overflow")
+    );
+}
+
+#[wasm_bindgen_test]
+fn the_percent_landing_crosses_the_boundary() {
+    let ok = calcarc_wasm::expr_percent("1.5+0.25");
+    assert_eq!(get(&ok, "value").as_string().as_deref(), Some("1.75"));
+    // 4 桁で表せない値は拒む(Rate の入口と同じ線)。
+    let refused = calcarc_wasm::expr_percent("1/3");
+    assert_eq!(
+        get(&refused, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}

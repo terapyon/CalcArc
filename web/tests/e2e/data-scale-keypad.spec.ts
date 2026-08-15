@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 const panel = (page: Page) =>
   page.getByRole("region", { name: "データスケール計算" });
-const echo = (page: Page) => page.getByTestId("display-echo");
+const echo = (page: Page) => page.getByTestId("display-entry-active");
 const result = (page: Page) => page.getByTestId("datascale-result");
 
 async function press(page: Page, names: string[]) {
@@ -12,7 +12,7 @@ async function press(page: Page, names: string[]) {
 }
 
 /** いま出ている面(数字面 or 型面)の区画。 */
-const face = (page: Page, name: "数字と単位のキー" | "データ型のキー") =>
+const face = (page: Page, name: "数字と演算のキー" | "データ型のキー") =>
   panel(page).getByRole("group", { name });
 
 test.beforeEach(async ({ page }) => {
@@ -24,7 +24,7 @@ test("both faces keep 44px touch targets", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。**誤爆の実害に比例させる**
   // (設計書 §8): 数字・単位・型の押し間違いは答えを壊すので、メインの
   // 枠に載る二面はどちらも守る。項目の列だけは押し直せば戻るので縦を詰める。
-  for (const button of await face(page, "数字と単位のキー")
+  for (const button of await face(page, "数字と演算のキー")
     .getByRole("button")
     .all()) {
     const box = await button.boundingBox();
@@ -55,7 +55,7 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   // **同じ枠に載る**(設計書 §2)。型面は 11 キーで 3 行しか描かれないため、
   // 行数を CSS で押さえていないとここで枠が 1 行ぶん縮み、DEL の位置が
   // 上にずれる。jsdom では寸法が出ないので、この検査は実ブラウザにしかない。
-  const numberBox = await face(page, "数字と単位のキー").boundingBox();
+  const numberBox = await face(page, "数字と演算のキー").boundingBox();
   const delBefore = await panel(page)
     .getByRole("button", { name: "1文字消去", exact: true })
     .boundingBox();

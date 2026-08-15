@@ -16,7 +16,7 @@ describe("Data Scale のキー集合", () => {
     // E2E はパネル起点で引く。
     expect(DATA_SCALE_SECTIONS.map((s) => s.ariaLabel)).toEqual([
       "入力する項目",
-      "数字と単位のキー",
+      "数字と演算のキー",
     ]);
     expect(TYPE_SECTIONS.map((s) => s.ariaLabel)).toEqual([
       "入力する項目",
@@ -27,22 +27,23 @@ describe("Data Scale のキー集合", () => {
     expect(DATA_SCALE_SECTIONS[0]).toBe(FIELD_SECTION);
   });
 
-  it("keeps both faces on the same four by four frame", () => {
+  it("keeps both faces on the same five by five frame", () => {
     // 面を入れ替えても画面が伸び縮みしないこと(設計書 §2)。
     // **これは列数と高さクラスが同じというだけでは成立しない**——型面は
     // 11 キーで 3 行しか描かれないので、行数は CSS が押さえる。
-    expect(PAD.columns).toBe(4);
-    expect(TYPE_SECTION.columns).toBe(4);
+    expect(PAD.columns).toBe(5);
+    expect(TYPE_SECTION.columns).toBe(5);
     expect(PAD.height).toBe("square");
     expect(TYPE_SECTION.height).toBe("square");
   });
 
   it("puts DEL and AC in the same place on both faces", () => {
     // 右上と、その下(設計書 §2)。面が変わっても指の位置が変わらない。
+    // **最上段の右 2 つ**。Scientific と同じ位置である(設計書 §4)。
     expect(PAD.keys[3]?.token).toBe("del");
-    expect(PAD.keys[7]?.token).toBe("ac");
+    expect(PAD.keys[4]?.token).toBe("ac");
     expect(TYPE_SECTION.keys[3]?.token).toBe("del");
-    expect(TYPE_SECTION.keys[7]?.token).toBe("ac");
+    expect(TYPE_SECTION.keys[4]?.token).toBe("ac");
   });
 
   it("offers every data type the core knows, and no new tokens", () => {
@@ -57,7 +58,10 @@ describe("Data Scale のキー集合", () => {
   it("leaves the spare cells empty rather than drawing dead buttons", () => {
     // 恒久の空きは何も描かない(S1 の予約スロット「ここに何か来る」とは
     // 別物。設計書 §2)。
-    expect(TYPE_SECTION.keys).toHaveLength(11); // 9 型 + DEL + AC
+    // 9 型 + DEL + AC + 予約スロット 1(格子の形を崩さないため。裁定 Q3)。
+    // 9 型 + DEL + AC + 予約スロット 4(格子の形を崩さないため。裁定 Q3)。
+    expect(TYPE_SECTION.keys).toHaveLength(15);
+    expect(TYPE_SECTION.keys.filter((k) => k.token === null)).toHaveLength(4);
   });
 
   it("gives every key an accessible name", () => {

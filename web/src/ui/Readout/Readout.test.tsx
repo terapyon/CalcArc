@@ -8,29 +8,71 @@ const status = [
 
 describe("Readout", () => {
   it("shows the main value and the status items", () => {
-    render(<Readout echo="" main="42" status={status} />);
+    render(<Readout entries={[]} main="42" status={status} />);
     expect(screen.getByTestId("display-main")).toHaveTextContent("42");
     expect(
       screen.getByRole("status", { name: "角度の単位" }),
     ).toHaveTextContent("DEG");
   });
 
-  it("keeps the echo line as a place even when empty", () => {
-    // S1 では常に空。S2 が中身を入れる(設計書 §5)。場所が先に決まって
-    // いれば、S2 は「無効を有効にする」だけで済む。
-    render(<Readout echo="" main="0" status={status} />);
-    expect(screen.getByTestId("display-echo")).toBeEmptyDOMElement();
+  it("keeps the echo line as a place even when there is no input", () => {
+    render(<Readout entries={[]} main="0" status={status} />);
+    expect(screen.getByTestId("display-echo")).toHaveTextContent("");
   });
 
-  it("shows the echo when it is given one", () => {
-    render(<Readout echo="3 + 4 ×" main="4" status={status} />);
+  it("shows a single unnamed entry the way Scientific always did", () => {
+    // Scientific は式を 1 件で渡す。**名前が無いので見た目は変わらない**
+    // ——ここが崩れると S2 のエコーが壊れる(設計書 §2)。
+    render(
+      <Readout
+        entries={[{ label: "", value: "3 + 4 ×", active: true }]}
+        main="4"
+        status={status}
+      />,
+    );
     expect(screen.getByTestId("display-echo")).toHaveTextContent("3 + 4 ×");
+    expect(screen.getByTestId("display-entries-done")).toBeEmptyDOMElement();
+  });
+
+  it("keeps the entered fields on screen, with the active one apart", () => {
+    // 項目を切り替えても**計算根拠が消えない**(設計書 §2 の症状 2)。
+    render(
+      <Readout
+        entries={[
+          { label: "借入額", value: "3000万" },
+          { label: "年利", value: "1.5", active: true },
+          { label: "期間", value: "35年" },
+        ]}
+        main="91,855"
+        status={status}
+      />,
+    );
+    const active = screen.getByTestId("display-entry-active");
+    expect(active).toHaveTextContent("年利 1.5");
+    const done = screen.getByTestId("display-entries-done");
+    expect(done).toHaveTextContent("借入額 3000万");
+    expect(done).toHaveTextContent("期間 35年");
+    // アクティブは入力済みの側に混ざらない。
+    expect(done).not.toHaveTextContent("年利");
+  });
+
+  it("shows the label alone while the active field is empty", () => {
+    render(
+      <Readout
+        entries={[{ label: "借入額", value: "", active: true }]}
+        main=""
+        status={status}
+      />,
+    );
+    expect(screen.getByTestId("display-entry-active")).toHaveTextContent(
+      "借入額",
+    );
   });
 
   it("marks an error on the main value", () => {
     render(
       <Readout
-        echo=""
+        entries={[]}
         main="Math ERROR"
         error="DivisionByZero"
         status={status}
@@ -47,7 +89,7 @@ describe("Readout", () => {
     // 受け取らないことが、その再利用の条件である。
     render(
       <Readout
-        echo="3,000万円"
+        entries={[{ label: "借入額", value: "3,000万円", active: true }]}
         main="91,855 円"
         status={[
           { testId: "display-mode", ariaLabel: "求めるもの", text: "月額" },

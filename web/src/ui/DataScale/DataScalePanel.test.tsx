@@ -9,6 +9,45 @@ vi.mock("../../datascale", () => ({
   initDataScale: vi.fn(),
 }));
 
+// 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
+// コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
+// 簡易版で足りる——値の正しさは golden が見る。
+vi.mock("../../expr", () => ({
+  initExpr: () =>
+    Promise.resolve({
+      integer: (text: string, max: string) => {
+        const units: Record<string, bigint> = {
+          億: 10n ** 8n,
+          万: 10n ** 4n,
+          G: 10n ** 9n,
+          M: 10n ** 6n,
+          K: 10n ** 3n,
+          年: 12n,
+          月: 1n,
+        };
+        // 項ごとに単位を展開し、`+` だけ足す（経路の確認に足りる分だけ）。
+        let value = 0n;
+        for (const term of text.split("+")) {
+          let total = 0n;
+          let digits = "";
+          for (const ch of term) {
+            if (/\d/.test(ch)) digits += ch;
+            else if (units[ch] !== undefined) {
+              total += BigInt(digits || "0") * (units[ch] as bigint);
+              digits = "";
+            } else return { value: null, error: "SyntaxError" };
+          }
+          value += total + BigInt(digits || "0");
+        }
+        if (text === "") return { value: null, error: null };
+        // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
+        if (value > BigInt(max)) return { value: null, error: "Overflow" };
+        return { value: value.toString(), error: null };
+      },
+      percent: (text: string) => ({ value: text, error: null }),
+    }),
+}));
+
 import { initDataScale } from "../../datascale";
 import { DataScalePanel } from "./DataScalePanel";
 
@@ -64,7 +103,7 @@ describe("DataScalePanel（電卓）", () => {
     expect(
       screen.getByRole("region", { name: "データスケール計算" }),
     ).toBeInTheDocument();
-    for (const name of ["入力する項目", "数字と単位のキー"]) {
+    for (const name of ["入力する項目", "数字と演算のキー"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
     }
   });
@@ -92,11 +131,11 @@ describe("DataScalePanel（電卓）", () => {
   it("swaps the keypad face when the type field is active", async () => {
     await renderPanel();
     expect(
-      screen.getByRole("group", { name: "数字と単位のキー" }),
+      screen.getByRole("group", { name: "数字と演算のキー" }),
     ).toBeInTheDocument();
     await press(["データ型を選ぶ"]);
     expect(
-      screen.queryByRole("group", { name: "数字と単位のキー" }),
+      screen.queryByRole("group", { name: "数字と演算のキー" }),
     ).toBeNull();
     expect(
       screen.getByRole("group", { name: "データ型のキー" }),

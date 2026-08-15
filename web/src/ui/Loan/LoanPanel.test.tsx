@@ -9,6 +9,60 @@ vi.mock("../../loan", () => ({
   initLoan: vi.fn(),
 }));
 
+// 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
+// コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
+// 簡易版で足りる——値の正しさは golden が見る。
+vi.mock("../../finance", () => ({
+  initFinance: () =>
+    Promise.resolve({
+      grow: () => ({
+        finalBalance: "1051136",
+        principalTotal: "1000000",
+        interest: "51136",
+        nationalTax: null,
+        localTax: null,
+        net: null,
+        error: null,
+      }),
+    }),
+}));
+
+vi.mock("../../expr", () => ({
+  initExpr: () =>
+    Promise.resolve({
+      integer: (text: string, max: string) => {
+        const units: Record<string, bigint> = {
+          億: 10n ** 8n,
+          万: 10n ** 4n,
+          G: 10n ** 9n,
+          M: 10n ** 6n,
+          K: 10n ** 3n,
+          年: 12n,
+          月: 1n,
+        };
+        // 項ごとに単位を展開し、`+` だけ足す（経路の確認に足りる分だけ）。
+        let value = 0n;
+        for (const term of text.split("+")) {
+          let total = 0n;
+          let digits = "";
+          for (const ch of term) {
+            if (/\d/.test(ch)) digits += ch;
+            else if (units[ch] !== undefined) {
+              total += BigInt(digits || "0") * (units[ch] as bigint);
+              digits = "";
+            } else return { value: null, error: "SyntaxError" };
+          }
+          value += total + BigInt(digits || "0");
+        }
+        if (text === "") return { value: null, error: null };
+        // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
+        if (value > BigInt(max)) return { value: null, error: "Overflow" };
+        return { value: value.toString(), error: null };
+      },
+      percent: (text: string) => ({ value: text, error: null }),
+    }),
+}));
+
 import { initLoan } from "../../loan";
 import { LoanPanel } from "./LoanPanel";
 
@@ -104,7 +158,7 @@ describe("LoanPanel（電卓）", () => {
     expect(
       screen.getByRole("region", { name: "金融計算" }),
     ).toBeInTheDocument();
-    for (const name of ["求めるもの", "入力する項目", "数字と単位のキー"]) {
+    for (const name of ["計算の種類", "入力する項目", "数字と演算のキー"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
     }
   });
@@ -145,10 +199,28 @@ describe("LoanPanel（電卓）", () => {
     expect(calc.forward).toHaveBeenLastCalledWith("30000000", "1.5", 420, "0");
   });
 
+  it("swaps the unit keys to match the field", async () => {
+    // **単位キーは項目に従う**(設計書 §5)。挙動だけ差し替えて絵が `万` の
+    // ままだと、期間を打っている人には嘘のキーが見える。
+    await renderPanel();
+    await press(["借入額を入力"]);
+    expect(screen.getByRole("button", { name: "万" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "億" })).toBeInTheDocument();
+
+    await press(["返済期間を入力"]);
+    expect(screen.getByRole("button", { name: "年" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "月" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "万" })).toBeNull();
+
+    // 年利には単位が無い。空きとして無効に描く。
+    await press(["年利を入力"]);
+    expect(screen.queryByRole("button", { name: "年" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "空き" })[0]).toBeDisabled();
+  });
+
   it("closes the keys a field cannot take", async () => {
     await renderPanel();
     await press(["年利を入力"]);
-    expect(screen.getByRole("button", { name: "万" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "3桁のゼロ" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "小数点" })).toBeEnabled();
 
@@ -158,7 +230,6 @@ describe("LoanPanel（電卓）", () => {
 
     await press(["返済期間を入力"]);
     expect(screen.getByRole("button", { name: "小数点" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "万" })).toBeDisabled();
   });
 
   it("closes the unit keys until a digit is there, and after a smaller unit", async () => {
@@ -325,30 +396,20 @@ describe("LoanPanel（電卓）", () => {
     expect(bonus).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("stops the term at four digits, so u32 cannot wrap silently", async () => {
-    // 期間は Number にしてから wasm へ u32 で渡る。10 桁を超えると 2^32 で
-    // 折り返し、1200 以下に化けた値でもっともらしい答えが出てしまう。
+  it("keeps an out-of-range term from producing an answer", async () => {
+    // **上限は打鍵ではなく着地に効く**(設計書 §5)。以前は 4 桁で打ち止めに
+    // していたが、単位が入ると `9999年9999` のように**打鍵は短くても合成後が
+    // 大きい**形が作れる。いまは打った通りに出したうえで、定義域を超えた値は
+    // コアが Overflow にし、答えが出ない——u32 で折り返してもっともらしい
+    // 誤答が出る経路が閉じている。
     await renderPanel();
+    await press(["借入額を入力", "3", "0", "0", "0", "万"]);
+    await press(["年利を入力", "1", "小数点", "5"]);
     await press(["返済期間を入力", "1", "2", "3", "4", "5", "6"]);
-    expect(echo()).toHaveTextContent("期間 1234か月");
-  });
-
-  it("stops the rate at what the core can parse", async () => {
-    // コアが受ける最長は "100.0000"(整数 3 桁 + 小数 4 桁)。
-    await renderPanel();
-    await press([
-      "年利を入力",
-      "1",
-      "0",
-      "0",
-      "小数点",
-      "0",
-      "0",
-      "0",
-      "0",
-      "1",
-    ]);
-    expect(echo()).toHaveTextContent("年利 100.0000%");
+    expect(echo()).toHaveTextContent("期間 123456か月");
+    // 1200 を超えるので着地しない。**黙って中立に戻らず、エラーを言う**
+    // ——打った人が「何も起きない画面」を見ることにならないように。
+    expect(main()).toHaveTextContent("Math ERROR");
   });
 
   it("puts the answer on the main line and the breakdown below", async () => {
@@ -468,5 +529,92 @@ describe("LoanPanel（電卓）", () => {
     render(<LoanPanel />);
     const alert = await screen.findByTestId("loan-load-error");
     expect(alert).toHaveAttribute("role", "alert");
+  });
+
+  it("lays down three zeros, in every field", async () => {
+    // **出口の検査**(設計書 §3)。以前は金額だけが 1 個しか入らなかった
+    // ——同じイベントで 3 回書き、3 回とも同じ値を読んでいたためである。
+    // いまは全項目が同じ機構なので、項目ごとに壊れることが無い。
+    await renderPanel();
+    await press(["借入額を入力", "3", "3桁のゼロ"]);
+    expect(echo()).toHaveTextContent("借入額 3000円");
+    await press(["返済期間を入力", "1", "3桁のゼロ"]);
+    expect(echo()).toHaveTextContent("期間 1000か月");
+  });
+
+  it("types an expression and settles it with =", async () => {
+    // 式はコアが評価する。単位も混ぜられる(裁定 Q13)。
+    await renderPanel();
+    await press([
+      "借入額を入力",
+      "3",
+      "0",
+      "0",
+      "0",
+      "万",
+      "足す",
+      "5",
+      "0",
+      "万",
+    ]);
+    expect(echo()).toHaveTextContent("借入額 3000万+50万円");
+    await press(["計算する"]);
+    expect(echo()).toHaveTextContent("借入額 30500000円");
+  });
+
+  it("grows a balance in the compound mode", async () => {
+    // **複利は 1 モード**——一括は積立額 0、積立は元本 0 の退化(設計書 §6)。
+    await renderPanel();
+    await press(["複利で増やす"]);
+    expect(
+      screen.getByRole("group", { name: "入力する項目" }),
+    ).toBeInTheDocument();
+    await press(["元本を入力", "1", "0", "0", "万"]);
+    await press(["年利を入力", "1"]);
+    await press(["期間を入力", "1", "0"]);
+    expect(main()).toHaveTextContent("1,051,136 円");
+  });
+
+  it("puts the period and the tax on faces that swap in", async () => {
+    // **計算に入るものは盤面の中**(設計書 §7)。表示の読み方だけを変える
+    // トグルとは置き場所を分ける。
+    await renderPanel();
+    await press(["複利で増やす", "複利の周期を選ぶ"]);
+    expect(
+      screen.getByRole("group", { name: "複利の周期のキー" }),
+    ).toBeInTheDocument();
+    await press(["半年ごとに複利"]);
+    expect(echo()).toHaveTextContent("周期 半年ごと");
+    await press(["税の扱いを選ぶ"]);
+    expect(screen.getByRole("group", { name: "税のキー" })).toBeInTheDocument();
+    await press(["源泉分離課税を引く"]);
+    expect(echo()).toHaveTextContent("税 20.315%");
+  });
+
+  it("does not carry loan values into the compound mode", async () => {
+    // **欄の名前が同じでも意味が違う。** 借入額は負債の元本、複利の元本は
+    // 投資の元本。決定的なのは期間で、ローンは「か月」・複利は「期」——
+    // 420 か月(35 年)を持ち回ると、年次複利では **420 年**として黙って
+    // 計算される。もっともらしい誤答の典型である(設計書 §6 の裁定)。
+    await renderPanel();
+    await press(["借入額を入力", "3", "0", "0", "0", "万"]);
+    await press(["返済期間を入力", "4", "2", "0"]);
+    await press(["年利を入力", "1", "小数点", "5"]);
+
+    await press(["複利で増やす"]);
+    await press(["元本を入力"]);
+    expect(echo()).toHaveTextContent("元本");
+    expect(echo()).not.toHaveTextContent("3000万");
+    await press(["期間を入力"]);
+    expect(echo()).toHaveTextContent("期間");
+    expect(echo()).not.toHaveTextContent("420");
+    // 入力済みの一覧にもローンの値が漏れていない。
+    expect(screen.getByTestId("display-entries-done")).not.toHaveTextContent(
+      "1.5",
+    );
+
+    // ローンへ戻れば、打った値はそのまま残っている。
+    await press(["月々の返済額を求める", "借入額を入力"]);
+    expect(echo()).toHaveTextContent("借入額 3000万円");
   });
 });

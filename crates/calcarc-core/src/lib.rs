@@ -7,6 +7,7 @@
 pub mod data_scale;
 pub mod engine;
 pub mod error;
+pub mod expr;
 pub mod finance;
 pub mod numeric;
 pub mod polar;
