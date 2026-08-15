@@ -61,6 +61,18 @@ test("the report says what was checked, not just that it passed", () => {
   expect(markdown).toContain("表示");
 });
 
+test("the report explains what the two routes are, so it stands on its own", () => {
+  // これ一枚を読む外の人は、コーパスの作り方も設計書も知らない。件数だけ
+  // 見せて「何を確かめたのか」を書かないと、判断する材料にならない。
+  const markdown = renderReport([summary()], PROVENANCE);
+
+  expect(markdown).toContain("何をどう確かめたか");
+  expect(markdown).toContain("mpmath");
+  expect(markdown).toContain("キー列");
+  // 同値ケースが期待値を持たないことも書く。
+  expect(markdown).toContain("期待値を持たない");
+});
+
 test("failures are listed, not summarised away", () => {
   const markdown = renderReport(
     [
