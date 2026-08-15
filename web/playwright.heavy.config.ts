@@ -8,7 +8,11 @@ export default defineConfig({
   testDir: "./tests/heavy",
   // 1 シャードで数千件を回す。既定の 30 秒では足りない。
   timeout: 300_000,
-  // 失敗したケースは全部見たい。最初の 1 件で打ち切らない。
+  // **1 ファイル内の test を並列に走らせない。** fullyParallel が制御するのは
+  // 並列度だけで、失敗時に打ち切るかどうか(bail / maxFailures)とは無関係
+  // である(レビュー修正ラウンド 2 でコメントの誤りを訂正)。ここで直列に
+  // するのは、シャードごとに数千件を 1 往復で流すテストが同時に走ると
+  // ブラウザ 1 つに重い evaluate が重なり、報告の順序も混ざるためである。
   fullyParallel: false,
   use: { baseURL: "http://localhost:4180" },
   webServer: {

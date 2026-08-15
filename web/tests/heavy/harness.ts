@@ -17,6 +17,7 @@ interface HarnessWindow {
   __calcarc: {
     ready: Promise<void>;
     runAll(sequences: string[][]): HarnessResult[];
+    version(): string;
   };
 }
 
@@ -30,6 +31,13 @@ export async function openHarness(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await (window as unknown as HarnessWindow).__calcarc.ready;
   });
+}
+
+/** 計算コア(wasm)の版。報告書の素性に載せる。 */
+export async function coreVersion(page: Page): Promise<string> {
+  return page.evaluate(() =>
+    (window as unknown as HarnessWindow).__calcarc.version(),
+  );
 }
 
 /** キー列の束を 1 往復で流す。往復を増やさないことが速度の要である。 */
