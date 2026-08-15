@@ -3,16 +3,27 @@ import { type ExprCalc, initExpr } from "../../expr";
 import { initLoan, type LoanCalc, type LoanMode } from "../../loan";
 import {
   backspace,
+  canPushCloseParen,
+  canPushOpenParen,
+  canPushOperator,
   canPushUnit,
   EMPTY,
   type Entry,
+  fromDigits,
   grouped,
   isEmpty,
   MAN,
+  MONTH,
   OKU,
+  pushCloseParen,
   pushDigit,
+  pushDot,
+  pushOpenParen,
+  pushOperator,
   pushUnit,
   text,
+  type Unit,
+  YEAR,
 } from "../../loan/entry";
 import { Keypad } from "../Keypad/Keypad";
 import {
@@ -24,7 +35,6 @@ import { Readout } from "../Readout/Readout";
 import styles from "./LoanPanel.module.css";
 
 /** 金額の項目。ここだけが万・億を受け、`entry.ts` を通る(設計書 §6)。 */
-const MONEY_FIELDS: LoanField[] = ["principal", "payment", "residual", "bonus"];
 
 /** 項目を移すときの探索順(盤面の並びと同じ)。 */
 const FIELD_ORDER: LoanField[] = [
@@ -44,10 +54,27 @@ const FIELD_ORDER: LoanField[] = [
  * 答えが出てしまう**(コアの上限ガードもすり抜ける)。4 桁あれば実装上の
  * 上限 1,200 か月を覆える。
  */
-const MAX_MONTHS_LEN = 4;
 
 /** 金額の上限。u64(設計書 §8 の着地表)。 */
 const MAX_YEN = "18446744073709551615";
+
+/** 期間の上限(月)。コアの MAX_TERM_MONTHS と同じ。 */
+const MAX_PERIODS = 1200;
+
+const OPERATORS = { add: "+", sub: "-", mul: "*", div: "/" } as const;
+
+/**
+ * その項目で単位キーが何になるか。**金額は 万/億、期間は 年/月、年利は無い。**
+ * 5 列目の 2 マスは項目に従って差し替わる(設計書 §5)。
+ */
+function unitFor(
+  field: LoanField,
+  slot: "unit:high" | "unit:low",
+): Unit | null {
+  if (field === "rate") return null;
+  if (field === "months") return slot === "unit:high" ? YEAR : MONTH;
+  return slot === "unit:high" ? MAN : OKU;
+}
 
 /**
  * 年利の文字数。コアが受ける最長は "100.0000"(整数 3 桁 + 小数 4 桁)。
@@ -103,18 +130,19 @@ export function LoanPanel() {
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<LoanMode>("payment");
   const [active, setActive] = useState<LoanField>("principal");
-  // 金額は entry.ts の構造で持つ。年利は小数を含み、期間は整数の月数なので、
-  // どちらも素の文字列で持つ(entry.ts は金額のためのもの)。
+  // **すべての項目を同じ構造で持つ。** 年利も期間もトークン列である
+  // ——式が全項目で打てる(裁定 Q14)し、項目ごとに違う入力機構を持つと
+  // `000` のような取りこぼしが生まれる(設計書 §3 の記録)。
   const [amounts, setAmounts] = useState<Record<string, Entry>>({
     principal: EMPTY,
+    rate: EMPTY,
+    months: EMPTY,
     payment: EMPTY,
     residual: EMPTY,
     // ボーナスはモードで意味が変わるので、意味ごとに別々に持つ。
     bonusPrincipal: EMPTY,
     bonusPayment: EMPTY,
   });
-  const [rate, setRate] = useState("");
-  const [months, setMonths] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +223,6 @@ export function LoanPanel() {
       return !fieldEnabled(token.slice("field:".length) as LoanField);
     }
     if (token.startsWith("mode:")) return false;
-    const money = MONEY_FIELDS.includes(active);
     switch (token) {
       // 小数点は年利だけ(parse_yen は小数点を拒否し、期間は整数月)。
       case "dot":
@@ -203,11 +230,24 @@ export function LoanPanel() {
       // 000 は年利で無効(0.000 の誤入力を誘うだけ)。
       case "zeros3":
         return active === "rate";
-      // 単位は金額だけ。さらに「いまの入力が受けられるか」が重なる(§5)。
+      // **単位キーは項目に従う**(設計書 §5)。金額は 万/億、期間は 年/月、
+      // 年利は単位を持たないので空きになる。
       case "unit:high":
-        return !money || !canPushUnit(entryOf(active), MAN);
-      case "unit:low":
-        return !money || !canPushUnit(entryOf(active), OKU);
+      case "unit:low": {
+        const unit = unitFor(active, token);
+        return unit === null || !canPushUnit(entryOf(active), unit);
+      }
+      case "add":
+      case "sub":
+      case "mul":
+      case "div":
+        return !canPushOperator(entryOf(active));
+      case "lparen":
+        return !canPushOpenParen(entryOf(active));
+      case "rparen":
+        return !canPushCloseParen(entryOf(active));
+      case "eq":
+        return settle(active) === null;
       default:
         return false; // 数字・DEL・AC はいつでも押せる
     }
@@ -221,21 +261,17 @@ export function LoanPanel() {
   }
 
   function pressDigit(digit: string) {
-    if (MONEY_FIELDS.includes(active)) {
-      setEntry(active, pushDigit(entryOf(active), digit));
-      return;
-    }
-    if (active === "rate") {
-      setRate((previous) => {
-        if (previous.length >= MAX_RATE_LEN) return previous;
-        return previous === "0" ? digit : previous + digit;
-      });
-      return;
-    }
-    setMonths((previous) => {
-      if (previous.length >= MAX_MONTHS_LEN) return previous;
-      return previous === "0" ? digit : previous + digit;
-    });
+    setEntry(active, pushDigit(entryOf(active), digit));
+  }
+
+  /** 項目の定義域。着地の上限と、どの単位表で読むか。 */
+  function domainOf(field: LoanField): {
+    max: string;
+    unitSet: "yen" | "months";
+  } {
+    return field === "months"
+      ? { max: String(MAX_PERIODS), unitSet: "months" }
+      : { max: MAX_YEN, unitSet: "yen" };
   }
 
   function press(token: LoanKeyToken) {
@@ -261,48 +297,68 @@ export function LoanPanel() {
       return;
     }
     switch (token) {
-      case "zeros3":
-        for (const _ of [0, 1, 2]) pressDigit("0");
+      case "zeros3": {
+        // **ローカルで畳んでから 1 回だけ書く。** 3 回に分けて書くと、同じ
+        // イベントの中で 3 回とも同じ値を読み、最後の 1 回しか残らない
+        // ——L で実際にそうなっていた(設計書 §3)。
+        let next = entryOf(active);
+        for (const _ of [0, 1, 2]) next = pushDigit(next, "0");
+        setEntry(active, next);
         break;
+      }
       case "dot":
-        setRate((previous) => {
-          if (previous.includes(".")) return previous;
-          const next = `${previous || "0"}.`;
-          return next.length > MAX_RATE_LEN ? previous : next;
-        });
+        setEntry(active, pushDot(entryOf(active), MAX_RATE_LEN));
         break;
+      case "add":
+      case "sub":
+      case "mul":
+      case "div":
+        setEntry(active, pushOperator(entryOf(active), OPERATORS[token]));
+        break;
+      case "lparen":
+        setEntry(active, pushOpenParen(entryOf(active)));
+        break;
+      case "rparen":
+        setEntry(active, pushCloseParen(entryOf(active)));
+        break;
+      case "eq": {
+        // **式を評価して項目の値にする。** 項目をまたぐ式は書けない
+        // (設計書 §8)。壊れた式は何も起きない——エラーは結果の表示が言う。
+        const settled = settle(active);
+        if (settled !== null) setEntry(active, fromDigits(settled));
+        break;
+      }
       case "unit:high":
       case "unit:low": {
-        const next = pushUnit(
-          entryOf(active),
-          token === "unit:high" ? MAN : OKU,
-        );
+        const unit = unitFor(active, token);
+        if (unit === null) break;
+        const next = pushUnit(entryOf(active), unit);
         // 盤面は押せないようにしてあるので、null はここに来ない(設計書 §5)。
         if (next !== null) setEntry(active, next);
         break;
       }
       case "del":
-        if (MONEY_FIELDS.includes(active)) {
-          setEntry(active, backspace(entryOf(active)));
-        } else if (active === "rate") {
-          setRate((previous) => previous.slice(0, -1));
-        } else {
-          setMonths((previous) => previous.slice(0, -1));
-        }
+        setEntry(active, backspace(entryOf(active)));
         break;
       case "ac":
         // AC はいま打っている項目を最初に戻す(設計書 §5)。
-        if (MONEY_FIELDS.includes(active)) setEntry(active, EMPTY);
-        else if (active === "rate") setRate("");
-        else setMonths("");
+        setEntry(active, EMPTY);
         break;
     }
   }
 
   /** 項目の、打った通りの文字列。 */
   function typedIn(field: LoanField): string {
-    if (MONEY_FIELDS.includes(field)) return text(entryOf(field));
-    return field === "rate" ? rate : months;
+    return text(entryOf(field));
+  }
+
+  /** 式を評価した値。壊れていれば null。 */
+  function settle(field: LoanField): string | null {
+    const typed = typedIn(field);
+    if (typed === "" || expr === null) return null;
+    if (field === "rate") return expr.percent(typed).value;
+    const { max, unitSet } = domainOf(field);
+    return expr.integer(typed, max, unitSet).value;
   }
 
   function labelOf(field: LoanField): string {
@@ -331,17 +387,19 @@ export function LoanPanel() {
    * 四則を計算するのもコアである(設計書 訂正 2)。空なら空文字、式が壊れて
    * いれば空文字にして「まだ揃っていない」扱いにする。
    */
+  /** 項目の値（式を評価した結果）。壊れていれば空文字＝「まだ揃っていない」。 */
   function evaluated(field: LoanField): string {
-    const typed = text(entryOf(field));
-    if (typed === "" || expr === null) return "";
-    return expr.integer(typed, MAX_YEN, "yen").value ?? "";
+    return settle(field) ?? "";
   }
 
+  // 項目の値。**式はコアが評価する**——単位の展開も四則もそこでやる。
   const principalDigits = evaluated("principal");
   const paymentDigits = evaluated("payment");
   const residualDigits = evaluated("residual");
   const bonusDigits = evaluated("bonus");
-  const monthsNumber = /^\d+$/.test(months) ? Number(months) : 0;
+  const rate = evaluated("rate");
+  const months = evaluated("months");
+  const monthsNumber = months === "" ? 0 : Number(months);
 
   let error: string | null = null;
   let answer = "";

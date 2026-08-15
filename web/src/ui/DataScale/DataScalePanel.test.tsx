@@ -15,7 +15,7 @@ vi.mock("../../datascale", () => ({
 vi.mock("../../expr", () => ({
   initExpr: () =>
     Promise.resolve({
-      integer: (text: string) => {
+      integer: (text: string, max: string) => {
         const units: Record<string, bigint> = {
           億: 10n ** 8n,
           万: 10n ** 4n,
@@ -25,17 +25,24 @@ vi.mock("../../expr", () => ({
           年: 12n,
           月: 1n,
         };
-        let total = 0n;
-        let digits = "";
-        for (const ch of text) {
-          if (/\d/.test(ch)) digits += ch;
-          else if (units[ch] !== undefined) {
-            total += BigInt(digits || "0") * (units[ch] as bigint);
-            digits = "";
-          } else return { value: null, error: "SyntaxError" };
+        // 項ごとに単位を展開し、`+` だけ足す（経路の確認に足りる分だけ）。
+        let value = 0n;
+        for (const term of text.split("+")) {
+          let total = 0n;
+          let digits = "";
+          for (const ch of term) {
+            if (/\d/.test(ch)) digits += ch;
+            else if (units[ch] !== undefined) {
+              total += BigInt(digits || "0") * (units[ch] as bigint);
+              digits = "";
+            } else return { value: null, error: "SyntaxError" };
+          }
+          value += total + BigInt(digits || "0");
         }
-        const value = total + BigInt(digits || "0");
-        return { value: text === "" ? null : value.toString(), error: null };
+        if (text === "") return { value: null, error: null };
+        // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
+        if (value > BigInt(max)) return { value: null, error: "Overflow" };
+        return { value: value.toString(), error: null };
       },
       percent: (text: string) => ({ value: text, error: null }),
     }),
