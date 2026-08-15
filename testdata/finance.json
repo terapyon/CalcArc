@@ -849,6 +849,382 @@
         "tax": false
       },
       "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "value": "1000000"
+      },
+      "id": "expr_integer/1000000/3*3/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "1000000/3*3",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "333333"
+      },
+      "id": "expr_integer/1000000/3/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "1000000/3",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "4000"
+      },
+      "id": "expr_integer/3000+500*2/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "3000+500*2",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "7000"
+      },
+      "id": "expr_integer/(3000+500)*2/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "(3000+500)*2",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "60000000"
+      },
+      "id": "expr_integer/3000\u4e07*2/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "3000\u4e07*2",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "1500000"
+      },
+      "id": "expr_integer/100\u4e07+50\u4e07/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "100\u4e07+50\u4e07",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "155000000"
+      },
+      "id": "expr_integer/1\u51046000\u4e07-500\u4e07/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "1\u51046000\u4e07-500\u4e07",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/1\u4e07\u5104/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "1\u4e07\u5104",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/3000\u842c/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "3000\u842c",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "420"
+      },
+      "id": "expr_integer/35\u5e74/months/1200",
+      "input": {
+        "max": "1200",
+        "text": "35\u5e74",
+        "unit_set": "months"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "42"
+      },
+      "id": "expr_integer/3\u5e746/months/1200",
+      "input": {
+        "max": "1200",
+        "text": "3\u5e746",
+        "unit_set": "months"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "120"
+      },
+      "id": "expr_integer/10\u5e74/periods:12/1200",
+      "input": {
+        "max": "1200",
+        "text": "10\u5e74",
+        "unit_set": "periods:12"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "20"
+      },
+      "id": "expr_integer/10\u5e74/periods:2/1200",
+      "input": {
+        "max": "1200",
+        "text": "10\u5e74",
+        "unit_set": "periods:2"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "10"
+      },
+      "id": "expr_integer/10\u5e74/periods:1/1200",
+      "input": {
+        "max": "1200",
+        "text": "10\u5e74",
+        "unit_set": "periods:1"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "25000000"
+      },
+      "id": "expr_integer/100M/4/count/340282366920938463463374607431768211455",
+      "input": {
+        "max": "340282366920938463463374607431768211455",
+        "text": "100M/4",
+        "unit_set": "count"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "56713727820156410577229101238628035242"
+      },
+      "id": "expr_integer/170141183460469231731687303715884105727/3/count/340282366920938463463374607431768211455",
+      "input": {
+        "max": "340282366920938463463374607431768211455",
+        "text": "170141183460469231731687303715884105727/3",
+        "unit_set": "count"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "170141183460469231731687303715884105727"
+      },
+      "id": "expr_integer/170141183460469231731687303715884105727/count/340282366920938463463374607431768211455",
+      "input": {
+        "max": "340282366920938463463374607431768211455",
+        "text": "170141183460469231731687303715884105727",
+        "unit_set": "count"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "expr_integer/170141183460469231731687303715884105728/count/340282366920938463463374607431768211455",
+      "input": {
+        "max": "340282366920938463463374607431768211455",
+        "text": "170141183460469231731687303715884105728",
+        "unit_set": "count"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "expr_integer/1000000*2/yen/1000000",
+      "input": {
+        "max": "1000000",
+        "text": "1000000*2",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "expr_integer/170141183460469231731687303715884105727*2/2/count/340282366920938463463374607431768211455",
+      "input": {
+        "max": "340282366920938463463374607431768211455",
+        "text": "170141183460469231731687303715884105727*2/2",
+        "unit_set": "count"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "DivisionByZero"
+      },
+      "id": "expr_integer/100/0/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "100/0",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "1500"
+      },
+      "id": "expr_integer/(500-1000)+2000/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "(500-1000)+2000",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/500-1000/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "500-1000",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "1200"
+      },
+      "id": "expr_integer/100*12/months/1200",
+      "input": {
+        "max": "1200",
+        "text": "100*12",
+        "unit_set": "months"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "expr_integer/100*12+1/months/1200",
+      "input": {
+        "max": "1200",
+        "text": "100*12+1",
+        "unit_set": "months"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/3000+/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "3000+",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/(3000+500/yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "(3000+500",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer//yen/18446744073709551615",
+      "input": {
+        "max": "18446744073709551615",
+        "text": "",
+        "unit_set": "yen"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "1.75"
+      },
+      "id": "expr_percent/1.5+0.25",
+      "input": {
+        "text": "1.5+0.25"
+      },
+      "op": "expr_percent"
+    },
+    {
+      "expect": {
+        "value": "0.125"
+      },
+      "id": "expr_percent/1/8",
+      "input": {
+        "text": "1/8"
+      },
+      "op": "expr_percent"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_percent/1/3",
+      "input": {
+        "text": "1/3"
+      },
+      "op": "expr_percent"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_percent/3*40",
+      "input": {
+        "text": "3*40"
+      },
+      "op": "expr_percent"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",

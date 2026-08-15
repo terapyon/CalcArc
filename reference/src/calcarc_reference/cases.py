@@ -479,3 +479,63 @@ COMPOUND_INPUTS: list[dict] = [
         "tax": False,
     },
 ]
+
+I128_MAX_TEXT = str((1 << 127) - 1)
+U128_MAX_TEXT = str((1 << 128) - 1)
+
+# 式入力（設計書 2026-08-15 §8）。**単位を含む式そのもの**が入る——単位を
+# 解釈するのはコアだからである（訂正 2）。
+EXPR_INPUTS: list[dict] = [
+    # 丸めが着地の 1 回だけであることの証明。各演算で丸めるなら 999999。
+    {"op": "expr_integer", "text": "1000000/3*3", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "1000000/3", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 優先順位と括弧
+    {"op": "expr_integer", "text": "3000+500*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "(3000+500)*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 単位を含む式（訂正 2。UI は展開しない）
+    {"op": "expr_integer", "text": "3000万*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "100万+50万", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "1億6000万-500万", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 昇る向きの単位と、綴り違いは文法違反（綴りはワイヤ契約）
+    {"op": "expr_integer", "text": "1万億", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "3000萬", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 期間の単位（月次のローン）と、複利の周期依存
+    {"op": "expr_integer", "text": "35年", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "3年6", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:12", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:2", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:1", "max": "1200"},
+    # 件数の単位
+    {"op": "expr_integer", "text": "100M/4", "unit_set": "count", "max": U128_MAX_TEXT},
+    # 定義域。f64 なら壊れる桁
+    {"op": "expr_integer", "text": f"{I128_MAX_TEXT}/3", "unit_set": "count", "max": U128_MAX_TEXT},
+    # 継ぎ目（訂正 1）: i128::MAX ちょうどは通る / +1 は式に入れられない
+    {"op": "expr_integer", "text": I128_MAX_TEXT, "unit_set": "count", "max": U128_MAX_TEXT},
+    {"op": "expr_integer", "text": str(1 << 127), "unit_set": "count", "max": U128_MAX_TEXT},
+    # 着地の Overflow
+    {"op": "expr_integer", "text": "1000000*2", "unit_set": "yen", "max": "1000000"},
+    # 中間の Overflow。数学的には戻るが仕様としてエラー（§8 の角）
+    {
+        "op": "expr_integer",
+        "text": f"{I128_MAX_TEXT}*2/2",
+        "unit_set": "count",
+        "max": U128_MAX_TEXT,
+    },
+    # 0 除算
+    {"op": "expr_integer", "text": "100/0", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 負の中間は許し、負の着地は拒む
+    {"op": "expr_integer", "text": "(500-1000)+2000", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "500-1000", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 期間の上限（1200 ちょうど / 超え）
+    {"op": "expr_integer", "text": "100*12", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "100*12+1", "unit_set": "months", "max": "1200"},
+    # 文法違反
+    {"op": "expr_integer", "text": "3000+", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "(3000+500", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 年利（4 桁の線と 100% の線）
+    {"op": "expr_percent", "text": "1.5+0.25"},
+    {"op": "expr_percent", "text": "1/8"},
+    {"op": "expr_percent", "text": "1/3"},
+    {"op": "expr_percent", "text": "3*40"},
+]

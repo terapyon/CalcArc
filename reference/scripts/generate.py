@@ -18,6 +18,7 @@ from calcarc_reference import (
     complex_ref,
     compound_ref,
     data_scale_ref,
+    expr_ref,
     loan_ref,
     scientific_ref,
 )
@@ -164,6 +165,17 @@ def build_finance() -> dict:
                 "op": op,
                 "input": params,
                 "expect": compound_ref.compute(op, params),
+            }
+        )
+    for case in cases.EXPR_INPUTS:
+        op = case["op"]
+        params = {k: v for k, v in case.items() if k != "op"}
+        entries.append(
+            {
+                "id": f"{op}/" + "/".join(str(v) for v in params.values()),
+                "op": op,
+                "input": params,
+                "expect": expr_ref.compute(op, params),
             }
         )
     ids = [entry["id"] for entry in entries]
