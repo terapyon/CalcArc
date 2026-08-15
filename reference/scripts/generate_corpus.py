@@ -15,7 +15,6 @@ import sys
 import time
 
 import mpmath as mp
-import sympy
 
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
@@ -42,9 +41,17 @@ CORPUS = pathlib.Path(__file__).resolve().parents[2] / "corpus" / "generated"
 
 
 def _provenance() -> str:
-    # generate.py の _provenance と同じ形。生成器の版が golden に残る。
+    """このシャードを実際に作ったものだけを名乗る。
+
+    **SymPy を書かない。** generate.py の素性は `sympy X / mpmath Y` の形だが、
+    あちらは本当に SymPy で式を立てている。この生成器は corpus_eval.py の
+    mpmath だけで評価しており、SymPy は値に一切触れていない。信頼を目的とした
+    文書で、値の生成に関与していない依存の版を素性に書くのは不正確である
+    (レビュー修正ラウンド 2)。精度(dps)は corpus_eval.py が決めるので、
+    宣言値ではなく実際の設定を読む。
+    """
     return (
-        f"sympy {sympy.__version__} / mpmath {mp.__version__}, "
+        f"mpmath {mp.__version__} ({mp.mp.dps} dps), "
         f"Python {sys.version_info.major}.{sys.version_info.minor}"
     )
 
@@ -123,25 +130,71 @@ def build_shard(seed: int, count: int) -> dict:
     }
 
 
-def _equivalent_pair(rng: random.Random, node: Node) -> tuple[Node, Node] | None:
+# 同値の作り方。番号は _equivalence_candidate の rng.randrange(N) と対応する。
+# **0 番だけが非負を要求する。** 平方して根を取る往復は負の値を返さない
+# (√((-5)²) = 5)。1 番と 2 番は負でも成り立つので、負の値を丸ごと捨てて
+# しまうと同値シャードが負数を一切通らなくなる(レビュー修正ラウンド 2)。
+SQRT_ROUND_TRIP = 0
+EQUIVALENCE_FORMS = 3
+
+
+def _equivalent_pair(which: int, node: Node) -> tuple[Node, Node]:
     """同じ値に着く二つの式木。**両辺の経路を必ず変える。**
 
     左右が同じ形に落ちると常に緑になり、テストが何も言わなくなる。
     """
-    which = rng.randrange(3)
-    if which == 0:
-        # 平方して根を取ると戻る(非負のときだけ)。
+    if which == SQRT_ROUND_TRIP:
+        # 平方して根を取ると戻る(非負のときだけ。呼ぶ側が確かめる)。
         return node, Un("sqrt", Un("sqr", node))
     if which == 1:
-        # 符号を二度反転すると戻る。
+        # 符号を二度反転すると戻る。負の値でも成り立つ。
         return node, Un("neg", Un("neg", node))
-    # 0 を足しても変わらない。左辺は素のまま。
+    # 0 を足しても変わらない。左辺は素のまま。負の値でも成り立つ。
     return node, Bin("+", node, Num(0))
+
+
+def _equivalence_candidate(
+    rng: random.Random,
+) -> tuple[list[str], list[str], mp.mpf] | None:
+    """同値ケースを 1 つ引く。採れなければ None。
+
+    値を一緒に返すのは、生成器のテストが「負の値が実際に残っているか」を
+    見られるようにするためである。キー列からは値が読めない——読もうとすると
+    engine の移植になる。
+    """
+    node = random_node(rng, MAX_DEPTH - 1)
+    if isinstance(node, Num):
+        # 裸のリテラルは「押した桁が返る」ことしか確かめない。`85 =` と
+        # `(85 + 0) =` が同じ表示に着くことを 3 桁の整数に対して何百回
+        # 主張しても、それ以上のことは何も言っていない。build_shard が
+        # ラウンド 1 で同じ理由により棄却しているのと同じ線を引く。
+        return None
+    try:
+        if not _within_range(node):
+            return None
+        value = evaluate(node)
+    except OutOfShard:
+        return None
+    which = rng.randrange(EQUIVALENCE_FORMS)
+    if which == SQRT_ROUND_TRIP and value < 0:
+        return None
+    left, right = _equivalent_pair(which, node)
+    try:
+        if not _within_range(right):
+            return None
+    except OutOfShard:
+        return None
+    left_keys = to_key_sequence(left)
+    right_keys = to_key_sequence(right)
+    if left_keys == right_keys:
+        return None
+    return left_keys, right_keys, value
 
 
 def build_equivalences(seed: int, count: int) -> dict:
     rng = random.Random(seed)
     entries: list[dict] = []
+    seen: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
     attempts = 0
     while len(entries) < count:
         attempts += 1
@@ -149,29 +202,16 @@ def build_equivalences(seed: int, count: int) -> dict:
             raise RuntimeError(
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
-        node = random_node(rng, MAX_DEPTH - 1)
-        try:
-            if not _within_range(node):
-                continue
-            value = evaluate(node)
-        except OutOfShard:
+        candidate = _equivalence_candidate(rng)
+        if candidate is None:
             continue
-        if value < 0:
-            # 平方根の往復が使えない。負の値は段階 3 で扱う。
+        left_keys, right_keys, _value = candidate
+        # 同じ対を二度主張しても件数が増えるだけで、確かめたことは増えない。
+        # build_shard が expr で重複を落としているのと同じ(ラウンド 2)。
+        fingerprint = (tuple(left_keys), tuple(right_keys))
+        if fingerprint in seen:
             continue
-        pair = _equivalent_pair(rng, node)
-        if pair is None:
-            continue
-        left, right = pair
-        try:
-            if not _within_range(right):
-                continue
-        except OutOfShard:
-            continue
-        left_keys = to_key_sequence(left)
-        right_keys = to_key_sequence(right)
-        if left_keys == right_keys:
-            continue
+        seen.add(fingerprint)
         entries.append(
             {
                 "kind": "equivalence",

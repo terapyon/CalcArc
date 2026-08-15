@@ -2,9 +2,13 @@
 
 import importlib.util
 import pathlib
+import random
 import sys
 
 import mpmath as mp
+
+from calcarc_reference.corpus_eval import evaluate
+from calcarc_reference.corpus_expr import Num, Un
 
 _PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "generate_corpus.py"
 _SPEC = importlib.util.spec_from_file_location("generate_corpus", _PATH)
@@ -53,8 +57,17 @@ def test_every_value_stays_inside_the_plain_display_range() -> None:
 def test_the_envelope_matches_the_existing_golden_convention() -> None:
     shard = generate_corpus.build_shard(seed=6, count=10)
     assert shard["schema"] == 1
-    assert "sympy" in shard["generated_by"]
     assert set(shard["tolerance"]) == {"abs", "rel"}
+
+
+def test_the_provenance_names_only_what_actually_produced_the_values() -> None:
+    # この生成器は corpus_eval.py の mpmath だけで評価しており、SymPy は値に
+    # 一切触れていない。信頼を目的とした文書で、関与していない依存の版を
+    # 素性に書くのは不正確である(レビュー修正ラウンド 2)。
+    provenance = generate_corpus._provenance()
+    assert "mpmath" in provenance
+    assert "dps" in provenance
+    assert "sympy" not in provenance.lower()
 
 
 def test_every_case_performs_at_least_one_operation() -> None:
@@ -88,3 +101,49 @@ def test_equivalences_are_deterministic() -> None:
     assert generate_corpus.build_equivalences(
         seed=9, count=20
     ) == generate_corpus.build_equivalences(seed=9, count=20)
+
+
+def _is_bare_literal(keys: list[str]) -> bool:
+    """キー列が数字と `=` だけでできているか。演算子も関数も括弧も無い形。"""
+    return all(key.isdigit() or key == "eq" for key in keys)
+
+
+def test_no_equivalence_pair_has_a_bare_literal_on_the_left() -> None:
+    # `85 =` と `(85 + 0) =` が同じ表示に着くことを 3 桁の整数に対して何百回
+    # 主張しても、「押した桁が返る」以上のことは何も言っていない。build_shard が
+    # ラウンド 1 で同じ理由により棄却したのと同じ線を、同値側にも引く
+    # (レビュー修正ラウンド 2)。
+    shard = generate_corpus.build_equivalences(seed=10, count=200)
+    for case in shard["cases"]:
+        assert not _is_bare_literal(case["left"]), case["left"]
+
+
+def test_the_same_pair_is_never_asserted_twice() -> None:
+    # 同じ対を二度主張しても件数が増えるだけで、確かめたことは増えない。
+    shard = generate_corpus.build_equivalences(seed=11, count=300)
+    pairs = [(tuple(case["left"]), tuple(case["right"])) for case in shard["cases"]]
+    assert len(set(pairs)) == len(pairs)
+
+
+def test_negative_values_are_kept_for_the_pairs_that_survive_them() -> None:
+    # `neg(neg(x))` と `x + 0` は負の x でも成り立つ。負の値を丸ごと捨てると
+    # 同値シャードが負数を一切通らなくなる(レビュー修正ラウンド 2)。
+    # キー列からは値が読めないので、生成器と同じ helper を同じ順で引いて見る。
+    rng = random.Random(20260816)
+    values = []
+    for _ in range(2000):
+        candidate = generate_corpus._equivalence_candidate(rng)
+        if candidate is not None:
+            values.append(candidate[2])
+    assert any(value < 0 for value in values), "負の値が一つも残っていない"
+
+
+def test_the_square_root_round_trip_is_the_only_form_that_needs_a_non_negative() -> None:
+    # 負の x で √(x²) だけが戻らない(√((-5)²) = 5)。他の二つは戻る。
+    node = Un("neg", Num(5))
+    assert evaluate(node) == -5
+    for which in (1, 2):
+        left, right = generate_corpus._equivalent_pair(which, node)
+        assert evaluate(left) == evaluate(right) == -5
+    _, squared = generate_corpus._equivalent_pair(generate_corpus.SQRT_ROUND_TRIP, node)
+    assert evaluate(squared) == 5

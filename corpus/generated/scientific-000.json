@@ -54192,7 +54192,7 @@
       "mode": "Deg"
     }
   ],
-  "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
+  "generated_by": "mpmath 1.3.0 (50 dps), Python 3.14",
   "schema": 1,
   "tolerance": {
     "abs": 5e-10,
