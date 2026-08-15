@@ -478,6 +478,140 @@ COMPOUND_INPUTS: list[dict] = [
         "periods": 1201,
         "tax": False,
     },
+    # ここから逆算（設計書 2026-08-15 §7）。期待値は spec 起草時に実測済み。
+    # 必要積立額: 元本 0・年 3%・月次・240 期・目標 1,000 万 → 30,461（残高 10,000,251）
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 1 円少ないと届かないことを固定する（上のケースの対）。
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "30460",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 必要年数: 元本 100 万・積立 3 万・年 3%・月次・目標 1,000 万 → 211 期
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "30000",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # **非単調ペア (a)**: 目標 1,016（手取り）→ 19 期。
+    # **対は次のケース**。片方だけ消すと numerical-policy の注記が根拠を失う。
+    {
+        "op": "compound_periods_for",
+        "principal": "999",
+        "deposit": "0",
+        "target": "1016",
+        "rate": "1.5",
+        "periods_per_year": 12,
+        "tax": True,
+    },
+    # **非単調ペア (b)**: 同じ入力の 20 期は手取り 1,015 で目標を下回る。
+    # 「届いた直後に下回る期がある」が仕様であることの証拠（設計書 §3 帰結 2）。
+    {
+        "op": "compound_grow",
+        "principal": "999",
+        "deposit": "0",
+        "rate": "1.5",
+        "periods_per_year": 12,
+        "periods": 20,
+        "tax": True,
+    },
+    # 0%: 整数の ceil になる。境界の +1 円も置く。
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "12000000",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "12000001",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 税あり必要積立額: 目標 1,000 万（手取り）→ 32,221
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": True,
+    },
+    # 目標が元本以下 → 1 期（エラーにしない。設計書 §5）
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "0",
+        "target": "500000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 発散: 積立 0・利率 0 では増えない → SyntaxError
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "0",
+        "target": "2000000",
+        "rate": "0",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 往復: #1 の残高を目標にすると 240 期に戻る
+    {
+        "op": "compound_periods_for",
+        "principal": "0",
+        "deposit": "30461",
+        "target": "10000251",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 目標 0 は入力が足りていない → SyntaxError
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # u64 を超える目標 → Overflow。**2 期であることに意味がある**——0%・1 期なら
+    # 答はちょうど u64::MAX で収まってしまう(残高 = 積立額)。2 期なら 2d ≥ u64::MAX
+    # が要り、最小の d = 2^63 で残高が 2^64 になってあふれる。
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "18446744073709551615",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 2,
+        "tax": False,
+    },
 ]
 
 I128_MAX_TEXT = str((1 << 127) - 1)
