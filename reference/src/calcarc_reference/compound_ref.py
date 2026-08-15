@@ -128,6 +128,21 @@ def reached(principal: int, deposit: int, num: int, den: int, periods: int, taxe
 MAX_WALK = 100_000
 
 
+def _reached_or_nothing(
+    principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool
+) -> int:
+    """探索中の 1 手。**何も入れていない状態は「何にも届かない」**として扱う。
+
+    `grow(0, 0, ...)` は「入れた金がゼロ」で SyntaxError を上げるが、探索の
+    途中でそこを踏むのは「積立 0 では届かない」を意味するだけである
+    （target > 0 は入口で保証済み）。Rust 側は probe が Err を「届かない側」に
+    倒すことで同じ扱いをしている。
+    """
+    if principal == 0 and deposit == 0:
+        return 0
+    return reached(principal, deposit, num, den, periods, taxed)
+
+
 def deposit_for(principal: int, num: int, den: int, periods: int, target: int, taxed: bool) -> int:
     """目標を下回らない最小の積立額（設計書 §1 の裁定 4）。
 
@@ -136,9 +151,7 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
     """
     if target <= 0:
         raise CompoundError("SyntaxError")
-    # **`principal > 0` の条件は要る**——`grow(0, 0, ...)` は「入れた金がゼロ」で
-    # SyntaxError を上げる。元本 0 の必須ケース(#1 ほか)がここで落ちる。
-    if principal > 0 and reached(principal, 0, num, den, periods, taxed) >= target:
+    if _reached_or_nothing(principal, 0, num, den, periods, taxed) >= target:
         return 0
     with localcontext() as ctx:
         ctx.prec = PRECISION
@@ -149,10 +162,10 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
         else:
             seed = int(remain * r / ((1 + r) ** periods - 1))
     d = max(seed, 0)
-    while d > 0 and reached(principal, d - 1, num, den, periods, taxed) >= target:
+    while d > 0 and _reached_or_nothing(principal, d - 1, num, den, periods, taxed) >= target:
         d -= 1
     for step in range(MAX_WALK):
-        if reached(principal, d, num, den, periods, taxed) >= target:
+        if _reached_or_nothing(principal, d, num, den, periods, taxed) >= target:
             return d
         d += 1
     raise ValueError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
