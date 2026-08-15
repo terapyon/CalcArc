@@ -259,6 +259,7 @@ mod tests {
     fn the_net_is_monotone_in_the_deposit() {
         // **§3 の証明を検査として残す。** 二分探索の正当性はこれに依存している。
         // 範囲は設計書 §15 の総当たりの縮小版(テスト時間に収める)。
+        let mut compared = 0usize;
         for percent in ["0", "0.0001", "1.5", "3", "20"] {
             for ppy in [1u32, 2, 12] {
                 let r = Rate::from_annual_percent(percent, ppy).unwrap();
@@ -270,7 +271,9 @@ mod tests {
                             // SyntaxError になる(無効な入力であって単調性の反例ではない)。
                             // 高率×長期×高額(例: 20%・240 期・元本 100 万)は u64 を
                             // あふれることがある(これも単調性の反例ではなく、別の契約の
-                            // 話なので素通りする)。
+                            // 話なので素通りする)。20%・ppy=1・240 期は d=1 でも
+                            // あふれる格子で、この 3 セルは 200 個の d が全て continue
+                            // する(この関数では 1 度も比較しない)。
                             let g = match grow(principal, d, &r, periods) {
                                 Ok(g) => g,
                                 Err(_) => continue,
@@ -281,11 +284,16 @@ mod tests {
                                 "手取りが減った: {percent}% ppy={ppy} n={periods} P={principal} d={d}"
                             );
                             previous = v;
+                            compared += 1;
                         }
                     }
                 }
             }
         }
+        // **空振りの検査**。`continue` が全部を飲み込んでも通ってしまう形に
+        // しないための下限である(オーバーフローする格子は実際にある: 20% ×
+        // 年複利 × 240 期は d=1 でも u64 を超える)。実測 44,326 / 45,000。
+        assert!(compared > 40_000, "比較したのは {compared} 回だけ");
     }
 
     #[test]
@@ -308,6 +316,7 @@ mod tests {
         // 写しがずれると、逆算だけが別の漸化式で走ることになる——しかも答は
         // もっともらしいままである。**複数の n で縛る**: 1 点の一致では
         // 「その n までは同じ」しか言えず、写しずれは特定の期で初めて出うる。
+        let mut compared = 0usize;
         for percent in ["0", "0.0001", "1.5", "3", "20"] {
             for ppy in [1u32, 2, 12] {
                 let r = Rate::from_annual_percent(percent, ppy).unwrap();
@@ -324,20 +333,30 @@ mod tests {
                         let target =
                             reached(expected.final_balance, expected.interest, false).unwrap();
                         let s = periods_for(principal, deposit, &r, target, false);
-                        // 目標が残高そのものなら、届く最初の期は n 以下である
-                        // (残高は税なしなら単調非減少)。n で止まったときだけ比べる。
                         if let Ok(s) = s {
-                            if s.periods == n {
-                                assert_eq!(
-                                    s.growth, expected,
-                                    "写しがずれた: {percent}% ppy={ppy} n={n} P={principal} d={deposit}"
-                                );
-                            }
+                            // **止まった期がどこであれ**、そこまで積んだ残高は
+                            // 同じ入力の grow と一致しなければならない。以前は
+                            // `s.periods == n` で絞っていたが、それだと「積み方が
+                            // ずれて止まる期も n からずれる」種類の写しずれが
+                            // 沈黙側(if の外)に落ちてしまい、検査が空振りになる。
+                            // s.periods <= n は残高の単調性から保証されるので、
+                            // grow(..., s.periods) はあふれない。
+                            let at_stop = grow(principal, deposit, &r, s.periods).unwrap();
+                            assert_eq!(
+                                s.growth, at_stop,
+                                "写しがずれた: {percent}% ppy={ppy} n={n} P={principal} d={deposit} 止まった期={}",
+                                s.periods
+                            );
+                            compared += 1;
                         }
                     }
                 }
             }
         }
+        // **空振りの検査**。ガードを外した後も `continue`(高率×長期の
+        // オーバーフロー)は残るので、下限は満杯の 360 より緩く置く。
+        // 実測 349 / 360(残り 11 は grow 自体があふれた格子)。
+        assert!(compared > 300, "比較したのは {compared} 回だけ");
     }
 
     #[test]
