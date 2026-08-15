@@ -113,29 +113,168 @@ def withholding_tax(interest: int) -> tuple[int, int]:
     return national, local
 
 
+def reached(principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool) -> int:
+    """目標と比べる値。税 ON なら手取り、OFF なら残高（公開契約 6）。"""
+    balance = grow(principal, deposit, num, den, periods)
+    if not taxed:
+        return balance
+    interest = balance - (principal + deposit * periods)
+    national, local = withholding_tax(interest)
+    return balance - national - local
+
+
+# 種から歩く上限。閉形式の種は数円〜数千円しかずれない（税ぶんが最大）ので、
+# ここに当たったら種か契約が壊れている。黙って長く歩かせない。
+MAX_WALK = 100_000
+
+
+def deposit_for(principal: int, num: int, den: int, periods: int, target: int, taxed: bool) -> int:
+    """目標を下回らない最小の積立額（設計書 §1 の裁定 4）。
+
+    **二分探索しない**——Rust がそれをやる。ここは Decimal 閉形式の種から
+    証明書を満たすまで歩く。種は税を見ないので必ず下から寄る。
+    """
+    if target <= 0:
+        raise CompoundError("SyntaxError")
+    # **`principal > 0` の条件は要る**——`grow(0, 0, ...)` は「入れた金がゼロ」で
+    # SyntaxError を上げる。元本 0 の必須ケース(#1 ほか)がここで落ちる。
+    if principal > 0 and reached(principal, 0, num, den, periods, taxed) >= target:
+        return 0
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        r = Decimal(num) / Decimal(den)
+        remain = Decimal(target) - Decimal(principal) * (1 + r) ** periods
+        if r == 0:
+            seed = int(remain / Decimal(periods))
+        else:
+            seed = int(remain * r / ((1 + r) ** periods - 1))
+    d = max(seed, 0)
+    while d > 0 and reached(principal, d - 1, num, den, periods, taxed) >= target:
+        d -= 1
+    for step in range(MAX_WALK):
+        if reached(principal, d, num, den, periods, taxed) >= target:
+            return d
+        d += 1
+    raise ValueError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
+
+
+def periods_for(principal: int, deposit: int, num: int, den: int, target: int, taxed: bool) -> int:
+    """目標を下回らない最小の期数。**最初に届いた期**（設計書 §4）。"""
+    if target <= 0:
+        raise CompoundError("SyntaxError")
+    if principal == 0 and deposit == 0:
+        raise CompoundError("SyntaxError")
+    for n in range(1, MAX_PERIODS + 1):
+        if reached(principal, deposit, num, den, n, taxed) >= target:
+            return n
+    raise CompoundError("SyntaxError")  # 1200 期でも届かない = 発散
+
+
+def check_deposit_certificate(
+    d: int, principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+) -> None:
+    """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。"""
+    assert reached(principal, d, num, den, periods, taxed) >= target, f"{d} が届かない"
+    if d > 0:
+        assert reached(principal, d - 1, num, den, periods, taxed) < target, f"{d} は最小でない"
+
+
+def check_periods_certificate(
+    n: int, principal: int, deposit: int, num: int, den: int, target: int, taxed: bool
+) -> None:
+    """非単調側。**1..n−1 の全数**を見る——「最初に届く」の定義そのもの。
+
+    残高を持ち回る 1 本の走査で全接頭辞を評価する。**探索ではない**——打ち切りの
+    判定を持たず、n まで必ず走り切る。
+    """
+    balance = principal
+    total = principal
+    for k in range(1, n + 1):
+        balance += balance * num // den + deposit
+        total += deposit
+        interest = balance - total
+        if taxed:
+            national, local = withholding_tax(interest)
+            value = balance - national - local
+        else:
+            value = balance
+        if k < n:
+            assert value < target, f"{n} より早く {k} で届いている"
+        else:
+            assert value >= target, f"{n} で届いていない"
+
+
 def compute(op: str, params: dict) -> dict:
     """生成スクリプトの入口。エラーは戻り値にする（loan_ref と同じ流儀）。"""
-    if op != "compound_grow":
-        raise ValueError(f"unknown op {op}")
     try:
-        principal = int(params["principal"])
-        deposit = int(params["deposit"])
-        periods = params["periods"]
-        num, den = rate_fraction(params["rate"], params["periods_per_year"])
-        final = grow(principal, deposit, num, den, periods)
-        check_against_closed_form(final, principal, deposit, num, den, periods)
-        principal_total = principal + deposit * periods
-        interest = final - principal_total
-        result = {
-            "final_balance": str(final),
-            "principal_total": str(principal_total),
-            "interest": str(interest),
-        }
-        if params.get("tax"):
-            national, local = withholding_tax(interest)
-            result["national_tax"] = str(national)
-            result["local_tax"] = str(local)
-            result["net"] = str(final - national - local)
+        if op == "compound_grow":
+            return _compute_grow(params)
+        if op == "compound_deposit_for":
+            return _compute_deposit_for(params)
+        if op == "compound_periods_for":
+            return _compute_periods_for(params)
     except CompoundError as error:
         return {"error": error.code}
+    raise ValueError(f"unknown op {op}")
+
+
+def _compute_grow(params: dict) -> dict:
+    principal = int(params["principal"])
+    deposit = int(params["deposit"])
+    periods = params["periods"]
+    num, den = rate_fraction(params["rate"], params["periods_per_year"])
+    final = grow(principal, deposit, num, den, periods)
+    check_against_closed_form(final, principal, deposit, num, den, periods)
+    principal_total = principal + deposit * periods
+    interest = final - principal_total
+    result = {
+        "final_balance": str(final),
+        "principal_total": str(principal_total),
+        "interest": str(interest),
+    }
+    if params.get("tax"):
+        national, local = withholding_tax(interest)
+        result["national_tax"] = str(national)
+        result["local_tax"] = str(local)
+        result["net"] = str(final - national - local)
     return result
+
+
+def _compute_deposit_for(params: dict) -> dict:
+    principal = int(params["principal"])
+    target = int(params["target"])
+    periods = params["periods"]
+    taxed = bool(params.get("tax"))
+    num, den = rate_fraction(params["rate"], params["periods_per_year"])
+    d = deposit_for(principal, num, den, periods, target, taxed)
+    check_deposit_certificate(d, principal, num, den, periods, target, taxed)
+    return {"deposit": str(d), **_picture(principal, d, num, den, periods, taxed)}
+
+
+def _compute_periods_for(params: dict) -> dict:
+    principal = int(params["principal"])
+    deposit = int(params["deposit"])
+    target = int(params["target"])
+    taxed = bool(params.get("tax"))
+    num, den = rate_fraction(params["rate"], params["periods_per_year"])
+    n = periods_for(principal, deposit, num, den, target, taxed)
+    check_periods_certificate(n, principal, deposit, num, den, target, taxed)
+    return {"periods": str(n), **_picture(principal, deposit, num, den, n, taxed)}
+
+
+def _picture(principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool) -> dict:
+    """答におけるその期の全体像（設計書 §4 の Solution と同じ内訳）。"""
+    balance = grow(principal, deposit, num, den, periods)
+    total = principal + deposit * periods
+    interest = balance - total
+    out = {
+        "final_balance": str(balance),
+        "principal_total": str(total),
+        "interest": str(interest),
+    }
+    if taxed:
+        national, local = withholding_tax(interest)
+        out["national_tax"] = str(national)
+        out["local_tax"] = str(local)
+        out["net"] = str(balance - national - local)
+    return out
