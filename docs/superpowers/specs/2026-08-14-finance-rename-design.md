@@ -1,10 +1,11 @@
 # Loan → Finance 改名（F0）— 設計
 
-日付: 2026-08-14
+日付: 2026-08-14（**裁定 2026-08-15**）
 対象: 表示層のみ。タブ表記・パネルの region 名・ハッシュ・base-spec の訂正印。
-前提: L（`feature/loan-calculator-ui`）と D（`feature/data-scale-calculator-ui`）が
-main にマージされた後の main から始める。時期は §7 Q3 で確定する。
-**状態: 未承認のドラフト。** 未裁定 3 点（§7）はユーザーの選択を待つ。
+前提: **L・D のマージを待たない。** D（`feature/data-scale-calculator-ui`）の
+上に縦積みで始める——L が書き換えた `LoanPanel.tsx` と loan の E2E を土台に
+するため、main から分岐すると衝突する（§7 Q3）。
+**状態: ユーザー裁定済み（2026-08-15）。** §7 の 3 点は確定した。
 
 ## §0 位置づけ — なぜ改名するか
 
@@ -62,32 +63,29 @@ L には混ぜない（ユーザー確認済み）。L のブランチは電卓�
 側の `aria-label` で日本語にする」）。パネルの region 名は日本語なので
 `ローン計算` → `金融計算` に変える。
 
-## §3 URL とリダイレクト（Q2）
-
-**推奨: `#finance` に変え、旧 `#loan` を受理して `#finance` へ書き換える。**
-
-PWA としてホーム画面に追加され、`#loan` を指すブックマークが既に実機に
-存在しうる（ユーザーは 2026-08-13 に実機 DoD 確認を済ませている）。
-リダイレクトが無いと、そのブックマークは Scientific に落ちる
-——`moduleFromHash` は不明なハッシュを `scientific` に倒すからである
-（`web/src/App.tsx:9-13`）。**壊れ方が静かなのが問題**で、「ブックマークが
-効かない」ではなく「別の電卓が開く」という形で出る。
-
-実装の形（F0 の plan で確定）:
+## §3 URL（Q2）【裁定: `#finance` に変える。**リダイレクトは作らない**】
 
 ```ts
-// 旧 #loan は受け入れる。history を汚さないよう replaceState で書き換える
-// ——戻るを押したときに #loan → #finance の往復に閉じ込めない。
 function moduleFromHash(hash: string): ModuleId {
   if (hash === "#data-scale") return "data-scale";
-  if (hash === "#finance" || hash === "#loan") return "finance";
+  if (hash === "#finance") return "finance";
   return "scientific";
 }
 ```
 
-`#loan` で入ってきたときに URL 自体を `#finance` へ揃えるかは plan の判断。
-揃えるなら `replaceState`（`pushState` ではない——戻るの履歴に旧 URL を
-残さない）。
+**旧 `#loan` は受けない。** 不明なハッシュとして `scientific` に倒れる
+（`web/src/App.tsx:9-13` の既存の規定）。
+
+**リダイレクトを捨てた根拠（ユーザー裁定 2026-08-15）: 利用者がまだ本人
+だけだから。** 検討時の懸念は「実機の PWA アイコンが `#loan` を指していると、
+**開かないのではなく Scientific が開く**という静かな壊れ方をする」ことだった。
+この懸念自体は正しいが、**被害を受けうる人が本人 1 人**なら、本人がアイコンを
+貼り直せば済む。互換のコードを恒久的に抱える方が高い。
+
+**この判断が変わる条件を書いておく**: 第三者が使い始めたら（公開告知・
+リポジトリの公開・URL の共有）、`#loan` を指すブックマークが本人の手の
+届かない所に生まれる。**その時点で互換分岐を足す**——ただしそのときは
+「今いる利用者を壊さない」ためであって、本 spec の判断の誤りではない。
 
 ## §4 base-spec の訂正印
 
@@ -122,17 +120,19 @@ function moduleFromHash(hash: string): ModuleId {
 据え置きの原則の例外。理由: この型は URL の写しであって、ドメイン名では
 ないため）。plan でこの 1 点を明示的に扱う。
 
-**新規の E2E 1 本**（機械的置換ではないので見落としやすい）:
+**新規の E2E は無い**（Q2 の裁定でリダイレクトを作らないため）。ただし
+**`#loan` が Scientific に倒れることは E2E で明示的に固定する**——「旧 URL は
+もう効かない」は仕様であって事故ではない、と読める形にしておく:
 
 ```ts
-test("an old #loan bookmark still opens the finance panel", async ({ page }) => {
-  // PWA のホーム画面アイコンが古い URL を指しうる。リダイレクトが無いと
-  // Scientific に落ちる——「開かない」ではなく「別の電卓が開く」形で
-  // 壊れるので、検査が無いと気付けない(設計書 §3)。
+test("the old #loan hash is no longer a route", async ({ page }) => {
+  // 旧 URL の互換は作らない(設計書 §3、利用者が本人のみのため)。
+  // 不明ハッシュの既定どおり Scientific に倒れる——これは仕様である。
   await page.goto("/#loan");
+  await expect(page.getByTestId("display-main")).toBeVisible();
   await expect(
     page.getByRole("region", { name: "金融計算" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 ```
 
@@ -151,26 +151,29 @@ cd web && pnpm typecheck && pnpm lint && pnpm test && pnpm e2e
   1 行に収まっていること）。撮ったら preview を落とし、`ss` で 4173 の解放を
   確かめる。
 
-## §7 未裁定（ユーザーの選択待ち）
+## §7 裁定（ユーザー、2026-08-15）
 
-| | 論点 | 選択肢 | 推奨 |
-|---|---|---|---|
-| Q1 | タブ表記 | (a) `Finance` (b) `Financial` (c) その他 | **(a)**（§2） |
-| Q2 | URL | (a) `#finance` + 旧 `#loan` リダイレクト (b) `#loan` のまま | **(a)**（§3） |
-| Q3 | 時期 | (a) L マージ直後・D の前 (b) D の後 (c) **L・D 両方のマージ後** | **(c)** |
+| | 論点 | 裁定 |
+|---|---|---|
+| Q1 | タブ表記 | **`Finance`**（§2） |
+| Q2 | URL | **`#finance` に変える。リダイレクトは作らない**（§3） |
+| Q3 | 時期 | **L・D のマージを待たない。D の上に縦積みで着手する** |
 
-**Q3 の推奨が変わった経緯**: 当初の推奨は (a) だった（D の E2E を新 region 名で
-書けるので二重書き換えを避けられる、という理由）。しかし **L と D は既に
-両方とも実装完了で push 待ち**であり、D の E2E は `ローン計算` ではなく
-`データスケール計算` を引くので、そもそも D は F0 の影響を受けない。
-(a) を採ると L と D のあいだに改名ブランチを挟むことになり、**縦積みの
-積み順が増えるだけで得が無い**。(c) なら main が一度平らになってから
-小さな改名 1 本を積める。
+**Q3 について**: ドラフト時の推奨は「L・D 両方のマージ後」だったが、
+ユーザーの裁定は**マージを待たずに始められる形**である。したがって
+
+- 分岐元は **D の HEAD**（`feature/data-scale-calculator-ui`）。**main では
+  ない**——`LoanPanel.tsx` と loan の E2E は L が全面的に書き換えており、
+  main から分岐すると改名の差分がその書き換えと衝突する。
+- PR の base は D のブランチ（縦積みの 4 段目。spec ドラフトの
+  `docs/finance-expansion` を挟む場合は 5 段目）。
+- マージ順は L → D → （spec）→ F0。**F0 が先に main へ入ることはない。**
 
 ## §8 完了条件
 
-1. タブ・region 名・ハッシュが Q1/Q2 の裁定どおりに変わっている。
-2. 旧 `#loan` の E2E（§5）が緑。
+1. タブが `Finance`、region 名が `金融計算`、ハッシュが `#finance`。
+2. 旧 `#loan` が Scientific に倒れることを固定した E2E（§5）が緑。
+   **互換分岐は無い。**
 3. `git diff --stat <分岐点> -- crates/ testdata/ reference/` が空。
 4. web 段のフルスイープが緑（§6）。
 5. 390×844 のスクリーンショットで 3 タブが 1 行に収まっていることを目視。
