@@ -612,6 +612,29 @@ COMPOUND_INPUTS: list[dict] = [
         "periods": 2,
         "tax": False,
     },
+    # **答が 0 になるケース**(spec §5)。積立をしなくても元本の成長だけで届く。
+    # Rust は `principal > 0 && probe(0)`、Python は `_reached_or_nothing(...) >= target`
+    # と**書き方が違う短絡経路**なので、言語間で突き合わせる価値がここにある。
+    {
+        "op": "compound_deposit_for",
+        "principal": "1000000",
+        "target": "500000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    # 元本ありで答も非ゼロ。`deposit_for` の principal > 0 の経路(Python の種の
+    # `principal * (1 + r)^n` 項を含む)を golden で初めて覆う。
+    {
+        "op": "compound_deposit_for",
+        "principal": "1000000",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
 ]
 
 I128_MAX_TEXT = str((1 << 127) - 1)

@@ -1084,6 +1084,42 @@
     },
     {
       "expect": {
+        "deposit": "0",
+        "final_balance": "1030411",
+        "interest": "30411",
+        "principal_total": "1000000"
+      },
+      "id": "compound_deposit_for/1000000/500000/3/12/12/False",
+      "input": {
+        "periods": 12,
+        "periods_per_year": 12,
+        "principal": "1000000",
+        "rate": "3",
+        "target": "500000",
+        "tax": false
+      },
+      "op": "compound_deposit_for"
+    },
+    {
+      "expect": {
+        "deposit": "24915",
+        "final_balance": "10000245",
+        "interest": "3020645",
+        "principal_total": "6979600"
+      },
+      "id": "compound_deposit_for/1000000/10000000/3/12/240/False",
+      "input": {
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "1000000",
+        "rate": "3",
+        "target": "10000000",
+        "tax": false
+      },
+      "op": "compound_deposit_for"
+    },
+    {
+      "expect": {
         "value": "1000000"
       },
       "id": "expr_integer/1000000/3*3/yen/18446744073709551615",

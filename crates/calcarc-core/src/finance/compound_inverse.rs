@@ -77,8 +77,10 @@ pub fn deposit_for(
         }
     };
     // **`principal > 0` の条件は要る**——`grow(0, 0, ...)` は「入れた金がゼロ」で
-    // SyntaxError を返す。`probe` の `Err(_) => false` に頼ると、元本 0 のときに
-    // 「積立 0 では届かない」を偶然の経路で得ることになる。条件で言い切る。
+    // SyntaxError を返す。`probe` の `Err(_) => false` に頼れば元本 0 のときも
+    // 「積立 0 では届かない」に倒れはする（`grow(0, 0, …)` は常に SyntaxError
+    // なので経路自体は決定的）が、それは `Err` 全般を握りつぶす分岐に意味を
+    // 委ねてしまう。ここは条件で言い切って、防御的・自己文書的にする。
     let answer = if principal > 0 && probe(0) {
         0
     } else {

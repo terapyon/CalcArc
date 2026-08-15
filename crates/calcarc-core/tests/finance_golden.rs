@@ -325,7 +325,7 @@ fn loan_matches_the_reference() {
     }
 }
 
-/// 必須ケースが 5 つの op すべてに行き渡っていること(設計書 §7 の植え漏れ検査)。
+/// 必須ケースが 7 つの op すべてに行き渡っていること(設計書 §7 の植え漏れ検査)。
 #[test]
 fn every_mode_is_covered_by_the_golden() {
     let golden = load();
@@ -355,5 +355,16 @@ fn every_mode_is_covered_by_the_golden() {
     assert!(
         golden.cases.iter().any(|c| c.expect.contains_key("error")),
         "no error case"
+    );
+    // **非単調ペアの片割れ**が消えると numerical-policy の注記が根拠を失う
+    // (設計書 §3 帰結 2)。id では結べないので、ここで存在を固定する。
+    assert!(
+        golden.cases.iter().any(|c| {
+            c.op == "compound_grow"
+                && c.input.principal.as_deref() == Some("999")
+                && c.input.periods == Some(20)
+                && c.input.tax == Some(true)
+        }),
+        "no compound_grow case pinning the dip at 20 periods"
     );
 }

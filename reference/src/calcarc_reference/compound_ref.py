@@ -15,6 +15,8 @@
    （無理数になり分数に載らない。numerical-policy）。
 4. 税は国税 15.315% と地方税 5% を**別々に**切り捨て、課税対象は利息。
 5. 金額は u64 の定義域。超えたら Overflow。
+6. **目標と比べる値は手取り**（税 ON）、**税 OFF なら残高そのもの**。逆算はこの
+   1 つの値だけを見る（設計書 2026-08-15 §2）。
 """
 
 from __future__ import annotations
@@ -189,7 +191,9 @@ def check_deposit_certificate(
     """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。"""
     assert reached(principal, d, num, den, periods, taxed) >= target, f"{d} が届かない"
     if d > 0:
-        assert reached(principal, d - 1, num, den, periods, taxed) < target, f"{d} は最小でない"
+        assert (
+            _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target
+        ), f"{d} は最小でない"
 
 
 def check_periods_certificate(

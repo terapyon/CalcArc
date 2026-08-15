@@ -114,3 +114,13 @@ def test_a_zero_principal_reaches_a_tiny_target_with_one_yen() -> None:
     num, den = compound_ref.rate_fraction("3", 12)
     assert compound_ref.deposit_for(0, num, den, 1, 1, taxed=False) == 1
     assert compound_ref.deposit_for(0, num, den, 2, 1, taxed=False) == 1
+
+
+def test_the_certificate_does_not_fall_into_the_zero_principal_hole() -> None:
+    # d == 1 かつ元本 0 のとき、両隣を見る証明書は d - 1 == 0 で
+    # reached(0, 0, ...) = grow(0, 0, ...) を直接呼んでいた。元本も積立も
+    # 無い入力は SyntaxError なので、答があるケースの証明が例外で落ちていた
+    # （修正 1）。_reached_or_nothing を使えば「積立 0 では届かない」に倒れて
+    # 例外を出さずに通る。
+    num, den = compound_ref.rate_fraction("3", 12)
+    compound_ref.check_deposit_certificate(1, 0, num, den, 1, 1, taxed=False)

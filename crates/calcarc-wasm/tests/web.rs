@@ -331,6 +331,19 @@ fn compound_inverse_errors_are_returned_not_thrown() {
 }
 
 #[wasm_bindgen_test]
+fn compound_periods_inverse_errors_are_returned_not_thrown() {
+    // 対称ケース: compound_periods_for も目標 0 で同じ形の SyntaxError になる
+    // ことを、例外を投げないまま確かめる(compound_deposit_for 側にしか
+    // 無かった検査を揃える)。
+    let result = calcarc_wasm::compound_periods_for("1000000", "0", "0", "3", 12, false);
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&result, "periods").is_null());
+}
+
+#[wasm_bindgen_test]
 fn expressions_cross_the_boundary() {
     // 丸めは着地の 1 回だけ。各演算で丸めるなら 999999 になる。
     let result = calcarc_wasm::expr_integer("1000000/3*3", "18446744073709551615", "yen");
