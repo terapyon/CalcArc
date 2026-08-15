@@ -103,5 +103,7 @@ def to_expr_text(node: Node) -> str:
         if node.fn in ("sin", "cos", "tan"):
             # 角度が度であることを数式そのものに書く。読み違えを防ぐ。
             return f"{node.fn}(rad({inner}))"
-        return f"sqrt({inner})"
+        if node.fn == "sqrt":
+            return f"sqrt({inner})"
+        raise ValueError(f"unknown unary fn: {node.fn!r}")
     return f"({to_expr_text(node.left)} {node.op} {to_expr_text(node.right)})"

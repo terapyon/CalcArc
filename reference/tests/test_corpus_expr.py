@@ -1,5 +1,7 @@
 """式木の二つの直列化。**ここでは一切計算しない。**"""
 
+import pytest
+
 from calcarc_reference.corpus_expr import (
     Bin,
     Num,
@@ -45,8 +47,17 @@ def test_trigonometry_says_the_angle_is_degrees() -> None:
     # コーパスの mode は Deg 固定。数式側にもそう書いておかないと、
     # 読んだ人が弧度法と取り違える。
     assert to_expr_text(Un("sin", Num(30))) == "sin(rad(30))"
+    assert to_expr_text(Un("cos", Num(30))) == "cos(rad(30))"
+    assert to_expr_text(Un("tan", Num(30))) == "tan(rad(30))"
 
 
 def test_walk_visits_every_subtree() -> None:
     node = Bin("+", Num(1), Un("neg", Num(2)))
     assert len(list(walk(node))) == 4
+
+
+def test_an_unknown_unary_fn_is_loud_not_silent() -> None:
+    # to_keys は不正な fn に即座に KeyError を投げる。to_expr_text も同じ
+    # 態度でなければならない——黙って sqrt(...) を描いてはいけない。
+    with pytest.raises(ValueError, match="unknown unary fn"):
+        to_expr_text(Un("cot", Num(2)))
