@@ -34,7 +34,7 @@ export interface ReadoutProps {
 /**
  * 上部表示。**計算コアに依存しない**——文字列だけを受け取る。
  *
- * Scientific / Loan / Data Scale が同じ部品を使う(設計書 §6)。モジュール
+ * Scientific / Finance / Data Scale が同じ部品を使う(設計書 §6)。モジュール
  * 固有の意味(演算子の記号、単位、丸め)は呼び出し側が文字列にしてから渡す。
  */
 function text(entry: ReadoutEntry): string {

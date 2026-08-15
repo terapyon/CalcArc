@@ -4,7 +4,7 @@
 
 **Goal:** Finance タブに複利を出し、盤面を Scientific に揃え、表示と入力の欠陥を直し、**有理数の式入力**を Data Scale と Finance に足す。
 
-**Architecture:** 段 1〜3 でコア（`u128` 有界の有理数評価器）を Python 参照と golden 付きで作り、段 4 で盤面と表示を作り直す。**段 2 が段 3 より先**（base-spec §30）。
+**Architecture:** 段 1〜3 でコア（`i128` 有界の有理数評価器。単位もコアが解釈する）を Python 参照と golden 付きで作り、段 4 で盤面と表示を作り直す。**段 2 が段 3 より先**（base-spec §30）。
 
 **Tech Stack:** Rust（`calcarc-core` に新モジュール `expr`）/ Python（`fractions.Fraction`）/ WASM 境界 / React。
 
@@ -14,7 +14,8 @@
 
 - **§49 のゲートを段順として守る。逆順を禁じる。** Rust を先に書くと Python が
   「Rust の答を再現するもの」に堕ちて独立性が消える。
-- **有理数は `u128` 有界。中間があふれたら `Overflow`**（spec §8 の角）。
+- **有理数は `i128` 有界。中間があふれたら `Overflow`**（spec §8 の角と訂正 1）。
+- **単位表はコアが持つ。TS はラベルと並び順だけ**（spec §8 の訂正 2）。
   多倍長クレートも自前実装も入れない。`calcarc-core` の依存は `serde` だけ。
 - **約分は正しさの一部**（最適化ではない）。各演算のあとに必ず約分する。
 - **丸めは着地の 1 回だけ**、向きは floor。
@@ -28,40 +29,30 @@
 - **段の切れ目で中間報告**（spec §1）。段 2 完了・段 3 完了・段 4 完了の 3 点で
   コミット SHA を報告し、レビューを受けてから次の段に入る。
 
-## この plan が決める 2 点（spec からは一意に決まらない。**レビュー対象**）
+## この plan が決める点（**spec の訂正 1・2 を受けた版**）
 
-### (1) 単位は **UI 層で展開**し、コアには数字と演算子だけを渡す
+spec §8 の【訂正 1】【訂正 2】（2026-08-15 の相談）で、当初この plan が
+決めていた 2 点は**どちらも逆になった**。経緯を残す:
 
-spec §8 の文法は `数 := 位取り入力（単位は数の後置修飾）` と書いている。
-**これを「コアが単位を解釈する」と読むと、単位表が TS と Rust の 2 か所に
-できる**——`KEY_TOKENS` と `Key::ALL` の二重管理で一度踏んだ形である
-（未知トークンが黙って no-op になる、という事故）。
+| | 当初の plan | 訂正後 | 崩した事実 |
+|---|---|---|---|
+| 単位 | UI が展開し、コアは数字と演算子だけ | **コアが単位を解釈する** | 「二重に持ちたくない」＋ (B) なら TS は scale を持たずに済む |
+| 符号 | `bool` + `u128` の大きさ | **`i128`** | Data Scale の実用上限は **17 桁**。u128 を覆う必要が無い |
 
-**したがって UI が展開する。** コアが受け取るのは
-`"30000000+500000"`——数字と `+ - * / ( )` だけである。
+**どちらも「実測・要望が前提を崩した」型の更新**であって、手戻りではない。
 
-- `100万 + 50万` → UI が `"1000000+500000"` にして渡す。
-- **意味論は spec と同じ**（単位は項ごとに効く）。展開は**厳密**であって
-  丸めた表示値の還流ではない（base-spec §26 に触れない）。
-- **単位表は TS の 1 か所**（`web/src/units/`）に残る。
-- 期間の `年`/`月`、複利の周期依存 scale も同じ経路で展開される。
+### 決めたこと
 
-### (2) 符号は**分子の隣に持つ**（`i128` にしない）
-
-spec §8 は「分母は常に正、符号は分子が持つ」と書く。素直に読むと `i128` だが、
-**`i128::MAX ≈ 1.7e38` は u128 の定義域（3.4e38）を覆えない**——Data Scale の
-39 桁の件数が式に入れられなくなる。
-
-```rust
-pub struct Rational {
-    negative: bool,
-    num: u128,   // 大きさ。0 のとき negative は false に正規化する
-    den: u128,   // 常に 1 以上
-}
-```
-
-**負の中間値は許す**（`(500 − 1000) + 2000` は 1500）。**着地で負なら
-`SyntaxError`**——金額も件数も期間も符号なしの定義域だからである。
+1. **単位表はコアの中の定数。TS はラベルと並び順だけ持つ。**
+   評価器は `unit_set` を引数で受ける（`yen` / `count` / `months` /
+   `periods:<n>`）。**表そのものを TS から渡さない**——渡した時点で TS が
+   scale を持ち、二重に戻る。
+2. **`Rational { num: i128, den: i128 }`**（分母は正）。中間が `i128` を
+   超えたら `Overflow`。負の中間値は許し、**着地で負なら `SyntaxError`**。
+3. **件数の継ぎ目**: 着地は u128 のまま（`parse_count` は変えない）ので、
+   `i128::MAX` 超は直接入力なら通るが式では `Overflow`。**golden で固定する。**
+4. **単位トークンの綴りはワイヤ契約。** `token_parity` 風の一致テストを 1 本
+   （TS のキー集合の単位ラベル ↔ コアが受理するトークン）。
 
 ---
 
@@ -105,29 +96,39 @@ pub struct Rational {
 年利の 4 桁は新しい規則ではない。`1.23456` は入口で拒否されるので、
 **計算で出た値にも同じ線を引く**——`1 ÷ 3` % は表せないので拒否する。
 
-### 分子・分母は u128 で有界
+### 分子・分母は `i128` で有界
 
 Rust の標準ライブラリに多倍長整数は無い。多倍長のクレートを足す案も自前で
 書く案も採らない——**依存ゼロと実装の小ささを優先する**。
 
-**分子か分母が u128 に収まらなくなった時点で Overflow を返す。** その結果、
+**分子か分母が `i128` に収まらなくなった時点で Overflow を返す。** その結果、
 **数学的には定義域に戻る式もエラーになる**:
 
     39桁 ÷ 3        → OK
     100万 ÷ 3 × 3   → OK（約分で分母が消える）
     39桁 × 2 ÷ 2    → Overflow（× の時点で分子があふれる）
 
-実用の式はすべて収まる。u128 の端に張り付いた値をさらに掛ける場合だけが
-外れるので、そこを通すために多倍長を抱えない。
+実用の式はすべて収まる。Data Scale の現実的な上限は **17 桁**で、`i128` の
+39 桁は天井であって使用域ではない。
+
+**継ぎ目**: 件数の着地は u128 のままなので、`i128::MAX` を超える件数は
+**直接入力なら通るが式に入れると `Overflow`** になる。使う人がいない帯である。
 
 **約分は最適化ではなく正しさの一部である。** `100万 ÷ 3 × 3` が通るのは
 約分で分母の 3 が消えるからで、約分をやめると予期しない Overflow になる。
 
-### 単位は UI が展開する
+### 単位を解釈するのはコア
 
-`3000万` は UI 層で `30000000` に展開してからコアへ渡す。単位表を TS と Rust に
-二重に持たないためで、展開は厳密なので §26（丸めた表示値を入力に還流させない）
-には触れない。
+`3000万` はそのままコアへ渡り、コアが `30000000` にする。**単位表は
+`calcarc-core` の中の定数**で、TypeScript は持たない——単位表を両方の言語に
+置くと二重管理になるからである。
+
+TS が持つのは**ラベル**（画面に出す文字）と**並び順**（「億 の次に 万」の
+判定）だけで、**scale の数値は要らない**。評価器はどの単位表を使うかを
+引数で受ける（`yen` / `count` / `months` / `periods:<n>`）。
+
+**単位トークンの綴りはワイヤ契約である。** TS のキーラベルとコアが受理する
+トークンがずれたら `SyntaxError` になる（黙って誤答にはならない）。
 ```
 
 - [ ] **Step 2: コミット**
@@ -159,28 +160,47 @@ git add docs/numerical-policy.md && git commit
 ```python
 """式入力の参照実装（設計書 2026-08-15 §8）。
 
-**独立軸**: Rust は u128 有界の有理数を自前で実装する。こちらは標準ライブラリの
+**独立軸**: Rust は `i128` 有界の有理数を自前で実装する。こちらは標準ライブラリの
 `fractions.Fraction`（多倍長）を使う——base-spec §30 の「既存の数学ライブラリや
 別手法を利用する」にそのまま当たる。
 
-**ただし u128 の有界性は共有の契約である。** Fraction は多倍長なので放って
-おくと Rust が出せない答を出す。**各演算のあとに分子・分母が u128 に収まるかを
-検査**し、超えたら Overflow にする。ここを入れないと golden が
-「Rust では出せない答」を持つ。
+**ただし有界性は共有の契約である。** Fraction は多倍長なので放っておくと
+Rust が出せない答を出す。**各演算のあとに分子・分母が i128 に収まるかを検査**し、
+超えたら Overflow にする。ここを入れないと golden が「Rust では出せない答」を持つ。
 
 共有する公開契約:
 1. 優先順位（× ÷ が先）と左結合。
 2. 丸めは着地の 1 回だけ、向きは floor。
-3. 中間値も u128 に収まること。
+3. 中間値も i128 に収まること。
 4. 各項目の定義域と、超えたときのエラー種別。
+5. **単位表（ラベルと scale）とその並び**——`DATA_TYPE_TOKENS` と同じ位置づけ。
 """
 
 from __future__ import annotations
 
 from fractions import Fraction
 
-U128_MAX = (1 << 128) - 1
+I128_MAX = (1 << 127) - 1
 PERCENT_SCALE = 10**4  # 年利は小数 4 桁まで
+
+# 単位表。**降順に並べる**——「億 の次に 万」は置けるが逆は置けない。
+UNIT_SETS: dict[str, list[tuple[str, int]]] = {
+    "yen": [("億", 10**8), ("万", 10**4)],
+    "count": [("G", 10**9), ("M", 10**6), ("K", 10**3)],
+    "months": [("年", 12), ("月", 1)],
+}
+
+
+def unit_table(unit_set: str) -> list[tuple[str, int]]:
+    """`periods:<n>` は複利。年 の scale が 1 年あたりの期数になる。"""
+    if unit_set.startswith("periods:"):
+        per_year = int(unit_set.split(":", 1)[1])
+        if per_year not in (1, 2, 12):
+            raise ExprError("SyntaxError")
+        return [("年", per_year), ("期", 1)] if per_year > 1 else [("年", 1)]
+    if unit_set not in UNIT_SETS:
+        raise ExprError("SyntaxError")
+    return UNIT_SETS[unit_set]
 
 
 class ExprError(Exception):
@@ -190,14 +210,14 @@ class ExprError(Exception):
 
 
 def _guard(value: Fraction) -> Fraction:
-    """u128 の有界性。**Rust と同じ範囲でしか答を出さない。**"""
-    if abs(value.numerator) > U128_MAX or value.denominator > U128_MAX:
+    """i128 の有界性。**Rust と同じ範囲でしか答を出さない。**"""
+    if abs(value.numerator) > I128_MAX or value.denominator > I128_MAX:
         raise ExprError("Overflow")
     return value
 
 
-def tokenize(text: str) -> list[str]:
-    """数字列と + - * / ( ) だけを受ける。単位は UI が展開済み。"""
+def tokenize(text: str, units: list[tuple[str, int]]) -> list[str]:
+    """数字列・単位・`+ - * / ( )`。**単位はコアが解釈する**（設計書 訂正 2）。"""
     tokens: list[str] = []
     index = 0
     while index < len(text):
@@ -209,6 +229,10 @@ def tokenize(text: str) -> list[str]:
             tokens.append(text[start:index])
             continue
         if char in "+-*/()":
+            tokens.append(char)
+            index += 1
+            continue
+        if any(char == label for label, _ in units):
             tokens.append(char)
             index += 1
             continue
@@ -229,8 +253,9 @@ def tokenize(text: str) -> list[str]:
 class _Parser:
     """再帰下降。式 := 項 (("+"|"-") 項)*、項 := 因子 (("*"|"/") 因子)*。"""
 
-    def __init__(self, tokens: list[str]) -> None:
+    def __init__(self, tokens: list[str], units: list[tuple[str, int]]) -> None:
         self.tokens = tokens
+        self.units = units
         self.at = 0
 
     def peek(self) -> str | None:
@@ -273,16 +298,43 @@ class _Parser:
             return value
         if token in "+-*/)":
             raise ExprError("SyntaxError")
+        return self.number(token)
+
+    def number(self, first: str) -> Fraction:
+        """数リテラル。単位は後置修飾で、**下る向きにしか置けない**。
+
+        `1億6000万` は 1×10^8 + 6000×10^4。`1万億` は文法違反。
+        """
+        scales = dict(self.units)
+        order = [label for label, _ in self.units]
+        total = Fraction(0)
+        digits = first
+        last_rank = -1
+        while True:
+            unit = self.peek()
+            if unit is None or unit not in scales:
+                break
+            rank = order.index(unit)
+            if rank <= last_rank:  # 同じか昇る向きは受けない
+                raise ExprError("SyntaxError")
+            last_rank = rank
+            self.take()
+            total = _guard(total + Fraction(digits) * scales[unit])
+            nxt = self.peek()
+            if nxt is None or not nxt[0].isdigit():
+                return total
+            digits = self.take()
         try:
-            return _guard(Fraction(token))
+            return _guard(total + Fraction(digits))
         except (ValueError, ZeroDivisionError) as error:
             raise ExprError("SyntaxError") from error
 
 
-def evaluate(text: str) -> Fraction:
+def evaluate(text: str, unit_set: str = "yen") -> Fraction:
     if text == "":
         raise ExprError("SyntaxError")
-    parser = _Parser(tokenize(text))
+    units = unit_table(unit_set)
+    parser = _Parser(tokenize(text, units), units)
     value = parser.expression()
     if parser.peek() is not None:
         raise ExprError("SyntaxError")
@@ -312,7 +364,7 @@ def land_percent(value: Fraction) -> str:
 
 def compute(op: str, params: dict) -> dict:
     try:
-        value = evaluate(params["text"])
+        value = evaluate(params["text"], params.get("unit_set", "yen"))
         if op == "expr_integer":
             return {"value": str(land_integer(value, int(params["max"])))}
         if op == "expr_percent":
@@ -343,19 +395,36 @@ def test_precedence_and_parentheses():
     assert expr_ref.evaluate("(3000+500)*2") == Fraction(7000)
 
 
+def test_units_are_parsed_by_the_core():
+    # 単位はコアが解釈する（設計書 訂正 2）。UI は展開しない。
+    assert expr_ref.evaluate("3000万*2", "yen") == Fraction(60_000_000)
+    assert expr_ref.evaluate("100万+50万", "yen") == Fraction(1_500_000)
+    assert expr_ref.evaluate("1億6000万-500万", "yen") == Fraction(155_000_000)
+    assert expr_ref.evaluate("35年", "months") == Fraction(420)
+    assert expr_ref.evaluate("3年6", "months") == Fraction(42)
+    # 複利は周期で scale が変わる。どの周期でも割り切れる。
+    assert expr_ref.evaluate("10年", "periods:12") == Fraction(120)
+    assert expr_ref.evaluate("10年", "periods:2") == Fraction(20)
+
+
+def test_units_only_step_down():
+    with pytest.raises(expr_ref.ExprError):
+        expr_ref.evaluate("1万億", "yen")
+
+
 def test_intermediate_overflow_is_an_error():
-    # 数学的には定義域へ戻るが、u128 を超えた時点で落とす（設計書 §8 の角）。
-    huge = str((1 << 128) - 1)
+    # 数学的には定義域へ戻るが、i128 を超えた時点で落とす（設計書 §8 の角）。
+    huge = str((1 << 127) - 1)
     with pytest.raises(expr_ref.ExprError) as error:
         expr_ref.evaluate(f"{huge}*2/2")
     assert error.value.code == "Overflow"
 
 
 def test_the_guard_has_teeth():
-    # 番人に判別力があること。u128 ちょうどは通り、1 つ超えると落ちる。
-    assert expr_ref._guard(Fraction((1 << 128) - 1)) is not None
+    # 番人に判別力があること。i128 ちょうどは通り、1 つ超えると落ちる。
+    assert expr_ref._guard(Fraction((1 << 127) - 1)) is not None
     with pytest.raises(expr_ref.ExprError):
-        expr_ref._guard(Fraction(1 << 128))
+        expr_ref._guard(Fraction(1 << 127))
 
 
 def test_division_by_zero():
@@ -377,7 +446,7 @@ def test_negative_intermediates_are_allowed_but_not_landings():
 ```
 
 Run: `cd reference && uv run --no-config pytest -q`
-Expected: 39 + 7 = **46 passed**。
+Expected: 39 + 9 = **48 passed**。
 
 - [ ] **Step 3: コミット**
 
@@ -404,36 +473,51 @@ base-spec の記述に手が入る**——そちらの方が高い。
 ```python
 U64_MAX_TEXT = str((1 << 64) - 1)
 U128_MAX_TEXT = str((1 << 128) - 1)
+I128_MAX_TEXT = str((1 << 127) - 1)
 
 EXPR_INPUTS: list[dict] = [
     # 丸めが着地の 1 回だけであることの証明。各演算で丸めるなら 999999。
-    {"op": "expr_integer", "text": "1000000/3*3", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "1000000/3", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "1000000/3*3", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "1000000/3", "unit_set": "yen", "max": U64_MAX_TEXT},
     # 優先順位と括弧
-    {"op": "expr_integer", "text": "3000+500*2", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "(3000+500)*2", "max": U64_MAX_TEXT},
-    # 単位の同居（UI が展開したあとの形）
-    {"op": "expr_integer", "text": "1000000+500000", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "160000000-5000000", "max": U64_MAX_TEXT},
-    # u128 の定義域。f64 なら壊れる桁
-    {"op": "expr_integer", "text": f"{U128_MAX_TEXT}/3", "max": U128_MAX_TEXT},
-    # 着地の Overflow（u128 を超える）
-    {"op": "expr_integer", "text": f"{U128_MAX_TEXT}*2", "max": U128_MAX_TEXT},
+    {"op": "expr_integer", "text": "3000+500*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "(3000+500)*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # **単位を含む式そのもの**（訂正 2。UI は展開しない）
+    {"op": "expr_integer", "text": "3000万*2", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "100万+50万", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "1億6000万-500万", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 昇る向きの単位は文法違反
+    {"op": "expr_integer", "text": "1万億", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 期間の単位（月次のローン）と、複利の周期依存
+    {"op": "expr_integer", "text": "35年", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "3年6", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:12", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:2", "max": "1200"},
+    {"op": "expr_integer", "text": "10年", "unit_set": "periods:1", "max": "1200"},
+    # 件数の単位
+    {"op": "expr_integer", "text": "100M/4", "unit_set": "count", "max": U128_MAX_TEXT},
+    # 定義域。f64 なら壊れる桁
+    {"op": "expr_integer", "text": f"{I128_MAX_TEXT}/3", "unit_set": "count", "max": U128_MAX_TEXT},
+    # **継ぎ目**（訂正 1）: i128::MAX ちょうどは通る / +1 は式に入れられない
+    {"op": "expr_integer", "text": I128_MAX_TEXT, "unit_set": "count", "max": U128_MAX_TEXT},
+    {"op": "expr_integer", "text": str((1 << 127)), "unit_set": "count", "max": U128_MAX_TEXT},
+    # 着地の Overflow
+    {"op": "expr_integer", "text": "1000000*2", "unit_set": "yen", "max": "1000000"},
     # **中間の Overflow**。数学的には戻るが仕様としてエラー（設計書 §8 の角）
-    {"op": "expr_integer", "text": f"{U128_MAX_TEXT}*2/2", "max": U128_MAX_TEXT},
+    {"op": "expr_integer", "text": f"{I128_MAX_TEXT}*2/2", "unit_set": "count", "max": U128_MAX_TEXT},
     # 0 除算
-    {"op": "expr_integer", "text": "100/0", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "100/0", "unit_set": "yen", "max": U64_MAX_TEXT},
     # 負の中間は許し、負の着地は拒む
-    {"op": "expr_integer", "text": "(500-1000)+2000", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "500-1000", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "(500-1000)+2000", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "500-1000", "unit_set": "yen", "max": U64_MAX_TEXT},
     # 期間の上限（1200 ちょうど / 超え）
-    {"op": "expr_integer", "text": "100*12", "max": "1200"},
-    {"op": "expr_integer", "text": "100*12+1", "max": "1200"},
+    {"op": "expr_integer", "text": "100*12", "unit_set": "months", "max": "1200"},
+    {"op": "expr_integer", "text": "100*12+1", "unit_set": "months", "max": "1200"},
     # 文法違反
-    {"op": "expr_integer", "text": "3000+", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "(3000+500", "max": U64_MAX_TEXT},
-    {"op": "expr_integer", "text": "", "max": U64_MAX_TEXT},
-    # 年利（4 桁の線）
+    {"op": "expr_integer", "text": "3000+", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "(3000+500", "unit_set": "yen", "max": U64_MAX_TEXT},
+    {"op": "expr_integer", "text": "", "unit_set": "yen", "max": U64_MAX_TEXT},
+    # 年利（4 桁の線）。単位は無い
     {"op": "expr_percent", "text": "1.5+0.25"},
     {"op": "expr_percent", "text": "1/3"},
     {"op": "expr_percent", "text": "3*40"},
@@ -451,7 +535,7 @@ EXPR_INPUTS: list[dict] = [
 cd reference && uv run --no-config python scripts/generate.py
 cd .. && git diff testdata/finance.json | grep "^-" | grep -v "^---" | wc -l
 ```
-Expected: **0**（追加のみ）。golden は 53 + 21 = **74 件**。
+Expected: **0**（追加のみ）。golden は 53 + 31 = **84 件**。
 
 - [ ] **Step 4: Rust が赤であることを確かめる**
 
@@ -464,7 +548,7 @@ Expected: **赤**（`unknown op expr_integer`）。これが段 3 の出発点�
 
 # 段 3: Rust の評価器
 
-### Task 4: `u128` 有界の有理数
+### Task 4: `i128` 有界の有理数
 
 **Files:**
 - Create: `crates/calcarc-core/src/expr/rational.rs`
@@ -474,9 +558,9 @@ Expected: **赤**（`unknown op expr_integer`）。これが段 3 の出発点�
 **Interfaces:**
 - Produces:
   ```rust
-  pub struct Rational { negative: bool, num: u128, den: u128 }
+  pub struct Rational { num: i128, den: i128 }   // den は常に正
   impl Rational {
-      pub fn from_u128(value: u128) -> Rational;
+      pub fn from_i128(value: i128) -> Rational;
       pub fn add(self, other: Rational) -> CalcResult<Rational>;
       pub fn sub(self, other: Rational) -> CalcResult<Rational>;
       pub fn mul(self, other: Rational) -> CalcResult<Rational>;
@@ -491,19 +575,21 @@ Expected: **赤**（`unknown op expr_integer`）。これが段 3 の出発点�
 要点だけ:
 
 ```rust
-/// 約分は**正しさの一部**である。u128 有界なので、約分しないと収まるはずの
-/// 式が Overflow になる(numerical-policy)。
-fn reduce(negative: bool, num: u128, den: u128) -> CalcResult<Rational> {
+/// 約分は**正しさの一部**である。有界なので、約分しないと収まるはずの式が
+/// Overflow になる(numerical-policy)。
+fn reduce(num: i128, den: i128) -> CalcResult<Rational> {
     if den == 0 {
         return Err(CalcError::DivisionByZero);
     }
-    let g = gcd(num, den);
-    let (num, den) = (num / g, den / g);
-    Ok(Rational {
-        negative: negative && num != 0, // 0 に符号を持たせない
-        num,
-        den,
-    })
+    // 分母を正に寄せる。**i128::MIN は符号反転できない**ので checked で受ける。
+    let (num, den) = if den < 0 {
+        (num.checked_neg().ok_or(CalcError::Overflow)?,
+         den.checked_neg().ok_or(CalcError::Overflow)?)
+    } else {
+        (num, den)
+    };
+    let g = gcd(num.unsigned_abs(), den.unsigned_abs()) as i128;
+    Ok(Rational { num: num / g, den: den / g })
 }
 
 fn gcd(a: u128, b: u128) -> u128 {
@@ -531,31 +617,35 @@ fn gcd(a: u128, b: u128) -> u128 {
         // 100万 ÷ 3 × 3。約分しなければ分母 3 が残り、× で分子が 300 万になる
         // ——ここでは収まるが、u128 の端では収まらない。約分が効いていること
         // 自体を、分母が 1 に戻ることで確かめる。
-        let a = Rational::from_u128(1_000_000)
-            .div(Rational::from_u128(3)).unwrap()
-            .mul(Rational::from_u128(3)).unwrap();
+        let a = Rational::from_i128(1_000_000)
+            .div(Rational::from_i128(3)).unwrap()
+            .mul(Rational::from_i128(3)).unwrap();
         assert_eq!(a.floor_to_u128().unwrap(), 1_000_000);
     }
 
     #[test]
-    fn an_intermediate_beyond_u128_is_an_error() {
-        let huge = Rational::from_u128(u128::MAX);
-        assert_eq!(huge.mul(Rational::from_u128(2)), Err(CalcError::Overflow));
+    fn an_intermediate_beyond_i128_is_an_error() {
+        let huge = Rational::from_i128(i128::MAX);
+        assert_eq!(huge.mul(Rational::from_i128(2)), Err(CalcError::Overflow));
     }
 
     #[test]
-    fn the_full_u128_range_fits_because_the_sign_is_a_flag() {
-        // i128 だったら u128::MAX が持てない(設計書の判断 (2))。
-        assert_eq!(Rational::from_u128(u128::MAX).floor_to_u128().unwrap(), u128::MAX);
+    fn the_seam_sits_exactly_at_i128_max() {
+        // 既存 golden の 39 桁ケースは**ちょうど i128::MAX** なので通る
+        // (設計書 訂正 1)。u128 側の残りの帯は式に入れられない。
+        assert_eq!(
+            Rational::from_i128(i128::MAX).floor_to_u128().unwrap(),
+            i128::MAX as u128
+        );
     }
 
     #[test]
     fn negatives_live_only_in_the_middle() {
-        let v = Rational::from_u128(500).sub(Rational::from_u128(1000)).unwrap();
+        let v = Rational::from_i128(500).sub(Rational::from_i128(1000)).unwrap();
         assert!(v.is_negative());
         assert_eq!(v.floor_to_u128(), Err(CalcError::SyntaxError));
         assert_eq!(
-            v.add(Rational::from_u128(2000)).unwrap().floor_to_u128().unwrap(),
+            v.add(Rational::from_i128(2000)).unwrap().floor_to_u128().unwrap(),
             1500
         );
     }
@@ -563,7 +653,7 @@ fn gcd(a: u128, b: u128) -> u128 {
     #[test]
     fn dividing_by_zero_is_its_own_error() {
         assert_eq!(
-            Rational::from_u128(100).div(Rational::from_u128(0)),
+            Rational::from_i128(100).div(Rational::from_i128(0)),
             Err(CalcError::DivisionByZero)
         );
     }
@@ -583,9 +673,20 @@ fn gcd(a: u128, b: u128) -> u128 {
 - Consumes: Task 4
 - Produces:
   ```rust
+  /// 単位表。**コアが持つ**(設計書 訂正 2)。TS はラベルと並びだけ。
+  pub enum UnitSet {
+      Yen,            // 億 = 10^8, 万 = 10^4
+      Count,          // G = 10^9, M = 10^6, K = 10^3
+      Months,         // 年 = 12, 月 = 1
+      Periods(u32),   // 複利。年 = 1 年あたりの期数、期 = 1
+  }
+  /// 境界から来る文字列を単位表に直す。`"periods:12"` の形。
+  pub fn unit_set_from_str(text: &str) -> CalcResult<UnitSet>;
+
   /// 式を評価して整数へ着地させる。`maximum` は項目の上限。
-  pub fn evaluate_to_integer(text: &str, maximum: u128) -> CalcResult<u128>;
-  /// 式を評価して年利のパーセント文字列へ着地させる（小数 4 桁まで）。
+  pub fn evaluate_to_integer(text: &str, maximum: u128, units: UnitSet)
+      -> CalcResult<u128>;
+  /// 式を評価して年利のパーセント文字列へ着地させる（小数 4 桁まで、単位なし）。
   pub fn evaluate_to_percent(text: &str) -> CalcResult<String>;
   ```
 
@@ -597,14 +698,27 @@ Python 側（Task 2）と**同じ文法**だが、**実装は独立**である
 `式 := 項 (("+"|"-") 項)*` / `項 := 因子 (("*"|"/") 因子)*` /
 `因子 := 数 | "(" 式 ")"`。
 
-**数は数字列（年利では小数点を含む）。** 小数は `1.75` → `175/100` として
-`Rational` にする。
+**数は「数字列と単位の列」である**（単位はコアが解釈する。設計書 訂正 2）:
+
+```
+数 := (数字列 単位)* 数字列?      -- 少なくとも 1 つは要る
+```
+
+`1億6000万` は 1×10^8 + 6000×10^4。**単位は下る向きにしか置けない**
+（`1万億` は `SyntaxError`）——`units/entry.ts` と同じ規則を、こんどはコアが
+持つ。年利は単位を取らない。小数は `1.75` → `175/100` として `Rational` に
+する。
+
+**単位表を TS から渡さない。** `unit_set` は「どれを使うか」だけで、表の中身は
+コアの定数である——渡した時点で TS が scale を持ち、二重管理に戻る。
 
 - [ ] **Step 2: 着地を書く**
 
 ```rust
-pub fn evaluate_to_integer(text: &str, maximum: u128) -> CalcResult<u128> {
-    let value = evaluate(text)?;
+pub fn evaluate_to_integer(text: &str, maximum: u128, units: UnitSet)
+    -> CalcResult<u128>
+{
+    let value = evaluate(text, units)?;
     let landed = value.floor_to_u128()?; // 負は SyntaxError
     if landed > maximum {
         return Err(CalcError::Overflow);
@@ -633,7 +747,7 @@ pub fn evaluate_to_integer(text: &str, maximum: u128) -> CalcResult<u128> {
 - [ ] **Step 2: 完全一致を確認する**
 
 Run: `cargo test --test finance_golden`
-Expected: PASS。**74 件**。
+Expected: PASS。**84 件**。
 
 - [ ] **Step 3: 赤確認 4 種（実出力を貼る）**
 
@@ -643,8 +757,10 @@ Expected: PASS。**74 件**。
 | 2 | `term()` を使わず全部左結合にする | `3000+500*2` が 7,000 で赤 |
 | 3 | **約分をやめる** | `{u128最大}/3` などが `Overflow` になって赤 |
 | 4 | 年利の 4 桁検査を外す | `1/3` が通ってしまい赤 |
+| 5 | **単位の降順検査を外す** | `1万億` が通ってしまい赤 |
+| 6 | **`Periods` の scale を 12 固定にする** | `10年`（`periods:2`）が 120 になって赤 |
 
-**3 は u128 有界だからこそ効く**（多倍長なら「遅くなるだけ」で赤にならない
+**3 は有界だからこそ効く**（多倍長なら「遅くなるだけ」で赤にならない
 可能性があった）。**赤にならないものがあれば正直に報告し、等価な変異に
 差し替える**（M6 の【訂正 2c】が先例）。
 
@@ -661,7 +777,8 @@ Expected: PASS。**74 件**。
 **Interfaces:**
 - Produces:
   ```rust
-  #[wasm_bindgen] pub fn expr_integer(text: &str, maximum: &str) -> JsValue;
+  #[wasm_bindgen] pub fn expr_integer(text: &str, maximum: &str, unit_set: &str)
+      -> JsValue;
   #[wasm_bindgen] pub fn expr_percent(text: &str) -> JsValue;
   ```
   戻り値は `{ value: string | null, error: CalcError | null }`。
@@ -798,11 +915,15 @@ Expected: PASS。**74 件**。
   ```
 
 - [ ] **Step 1: `Entry` をトークン列に一般化する。**
-  **既存の `units/entry.test.ts` が 1 文字も変わらずに通ること**が
-  無害性の証明である（D の引き上げと同じ流儀）。
-- [ ] **Step 2: 表示と `source` を導く**——`text()` は打った通り
-  （`3000万+50万`）、コアへ渡す `source` は**単位を展開した形**
-  （`30000000+500000`。この plan の判断 (1)）。
+  **`units/entry.ts` は「トークン列の編集と表示」だけの部品になる**——
+  `digits()` が消えるので、既存の `units/entry.test.ts` のうち
+  **値を見るテストはコア側（golden）へ移り、編集と表示を見るテストは
+  そのまま残る**。移した先で同じ入力・同じ期待値になっていることを
+  報告に書く（黙って消さない）。
+- [ ] **Step 2: 打った通りの文字列をそのままコアへ渡す**——`text()` が
+  `3000万+50万` なら、その文字列が式である。**TS は単位を展開しない**
+  （設計書 訂正 2）。`digits()`（値の計算）は `units/entry.ts` から**消える**
+  ——計算はコアに寄る。
 - [ ] **Step 3: DEL は 1 トークンぶん戻す**（数字は 1 文字、単位・演算子・
   括弧は 1 つ）。**単位の段規律の自然な拡張**である。
 - [ ] **Step 4: `=` を繋ぐ**——アクティブ項目の式を評価して値にする。
@@ -810,6 +931,10 @@ Expected: PASS。**74 件**。
   答を出さない）。エラーは `main` に `Math ERROR` + `data-error`。
 - [ ] **Step 5: 演算キーの可否**——年利でも式が使える（裁定 Q14）ので、
   **演算キーは全項目で有効**。`(` `)` も同様。
+- [ ] **Step 6: 単位トークンの綴りの一致テスト**（ワイヤ契約。設計書 訂正 2）
+  ——**TS のキー集合が持つ単位ラベル ↔ コアが受理するトークン**を突き合わせる。
+  `token_parity` と同じ流儀で wasm 経由。**赤確認**: TS 側のラベルを 1 文字
+  変えて赤になることを見る。
 - [ ] **Step 6: 緑を確認してコミット**
 
 ---
@@ -845,7 +970,8 @@ Expected: PASS。**74 件**。
 spec §13 の 12 項目をそのまま使う。加えてこの plan 固有:
 
 - **段 2 のコミットが段 3 より前**にあること（`git log` で示す）。
-- **`units/entry.test.ts` が 1 文字も変わっていない**こと（Task 13 の無害性）。
+- **`units/entry.ts` から `digits()` が消え、値の検証がコア側（golden）へ
+  移っていること。** 移した先で同じ入力・同じ期待値になっていることを示す。
 - **`testdata/finance.json` の既存 53 件が 1 行も動いていない**こと。
 
 # 進捗の見取り図
@@ -854,5 +980,5 @@ spec §13 の 12 項目をそのまま使う。加えてこの plan 固有:
 |---|---|---|---|
 | 1 | 1 | numerical-policy の式の節 | なし（文書） |
 | 2 | 2–3 | Python 参照 + golden 21 件 | pytest + 生成 |
-| 3 | 4–7 | 有理数・パーサ・golden 一致・境界 | cargo + wasm |
+| 3 | 4–7 | 有理数（i128）・単位つきパーサ・golden 一致・境界 | cargo + wasm |
 | 4 | 8–15 | 表示・盤面・`000`・単位・複利・式・仕上げ | web 段 |

@@ -1,6 +1,6 @@
 /**
  * Service Worker の更新購読。**UI Framework に依存しない**——ここに react を
- * import してはならない(base-spec §4.3、datascale/loan の境界と同じ)。
+ * import してはならない(base-spec §4.3、datascale/finance の境界と同じ)。
  *
  * `registerType: "prompt"` のまま、prompt の本来の使い方を配線する(設計書 §1)。
  * `SKIP_WAITING` の送信と `controllerchange` の購読はプラグインが持っている

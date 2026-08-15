@@ -12,7 +12,7 @@ if (PAD === undefined || TYPE_SECTION === undefined) {
 
 describe("Data Scale のキー集合", () => {
   it("names its sections the way the design fixed them", () => {
-    // 区画名は E2E のセレクタである(設計書 §3)。Loan と同名のものがあるので、
+    // 区画名は E2E のセレクタである(設計書 §3)。Finance と同名のものがあるので、
     // E2E はパネル起点で引く。
     expect(DATA_SCALE_SECTIONS.map((s) => s.ariaLabel)).toEqual([
       "入力する項目",

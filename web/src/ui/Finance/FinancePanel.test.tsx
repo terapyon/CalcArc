@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { LoanCalc } from "../../loan";
+import type { LoanCalc } from "../../finance/loan";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx と同じ流儀)。
-vi.mock("../../loan", () => ({
+vi.mock("../../finance/loan", () => ({
   initLoan: vi.fn(),
 }));
 
@@ -63,8 +63,8 @@ vi.mock("../../expr", () => ({
     }),
 }));
 
-import { initLoan } from "../../loan";
-import { LoanPanel } from "./LoanPanel";
+import { initLoan } from "../../finance/loan";
+import { FinancePanel } from "./FinancePanel";
 
 function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
   return {
@@ -115,7 +115,7 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
 
 async function renderPanel(calc: LoanCalc = stubCalc()) {
   vi.mocked(initLoan).mockResolvedValue(calc);
-  render(<LoanPanel />);
+  render(<FinancePanel />);
   // 読み込みの解決を待ってから抜ける。待たずに終わると、後続のテスト実行中に
   // act() 外の state 更新が起きて警告が出る。
   await screen.findByRole("button", { name: "借入額を入力" });
@@ -152,7 +152,7 @@ async function fillHousingExample() {
   ]);
 }
 
-describe("LoanPanel（電卓）", () => {
+describe("FinancePanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
     await renderPanel();
     expect(
@@ -376,13 +376,15 @@ describe("LoanPanel（電卓）", () => {
     // 欄に落ちる。
     await renderPanel();
     await press(["残価を入力"]);
-    expect(screen.getByTestId("loan-field")).toHaveTextContent("残価を入力中");
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
+      "残価を入力中",
+    );
 
     await press(["借入可能額を求める"]);
     const residual = screen.getByRole("button", { name: "残価を入力" });
     expect(residual).toBeDisabled();
     expect(residual).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTestId("loan-field")).not.toHaveTextContent(
+    expect(screen.getByTestId("finance-field")).not.toHaveTextContent(
       "残価を入力中",
     );
   });
@@ -418,7 +420,7 @@ describe("LoanPanel（電卓）", () => {
     await waitFor(() => {
       expect(main()).toHaveTextContent("91,855 円");
     });
-    const breakdown = screen.getByTestId("loan-breakdown");
+    const breakdown = screen.getByTestId("finance-breakdown");
     expect(breakdown).toHaveTextContent("総支払額");
     expect(breakdown).toHaveTextContent("38,579,007 円");
     expect(breakdown).toHaveTextContent("総利息");
@@ -428,12 +430,16 @@ describe("LoanPanel（電卓）", () => {
 
   it("names the mode and the active field in the status line", async () => {
     await renderPanel();
-    expect(screen.getByTestId("loan-mode")).toHaveTextContent("月額を求める");
-    expect(screen.getByTestId("loan-field")).toHaveTextContent(
+    expect(screen.getByTestId("finance-mode")).toHaveTextContent(
+      "月額を求める",
+    );
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
       "借入額を入力中",
     );
     await press(["年利を入力"]);
-    expect(screen.getByTestId("loan-field")).toHaveTextContent("年利を入力中");
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
+      "年利を入力中",
+    );
   });
 
   it("keeps the disclaimer on screen and off the alert channel", async () => {
@@ -513,7 +519,7 @@ describe("LoanPanel（電卓）", () => {
     await waitFor(() => {
       expect(main()).toHaveTextContent("37,536 円");
     });
-    expect(screen.getByTestId("loan-breakdown")).toHaveTextContent(
+    expect(screen.getByTestId("finance-breakdown")).toHaveTextContent(
       "最終回（残価）",
     );
     expect(calc.forward).toHaveBeenLastCalledWith(
@@ -526,8 +532,8 @@ describe("LoanPanel（電卓）", () => {
 
   it("says so when the calculation engine cannot be loaded", async () => {
     vi.mocked(initLoan).mockRejectedValue(new Error("wasm unavailable"));
-    render(<LoanPanel />);
-    const alert = await screen.findByTestId("loan-load-error");
+    render(<FinancePanel />);
+    const alert = await screen.findByTestId("finance-load-error");
     expect(alert).toHaveAttribute("role", "alert");
   });
 

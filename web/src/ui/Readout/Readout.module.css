@@ -19,7 +19,7 @@
 }
 
 /* いま打っている項目。**入力の主表示**なので大きく濃く出す(設計書 §2)
-   ——Loan と Data Scale では、打った数字はここにしか出ない。 */
+   ——Finance と Data Scale では、打った数字はここにしか出ない。 */
 .entryActive {
   overflow-x: auto;
   font-size: var(--key-font-size);

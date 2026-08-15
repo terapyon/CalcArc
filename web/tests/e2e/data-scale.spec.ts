@@ -14,7 +14,7 @@ const result = (page: Page) => page.getByTestId("datascale-result");
 
 /**
  * 盤面のキーを順に押す。**パネル起点で引く**——区画名(「入力する項目」
- * など)は Loan と同名のものがあり、名前だけでは足りない(設計書 §3)。
+ * など)は Finance と同名のものがあり、名前だけでは足りない(設計書 §3)。
  */
 async function press(page: Page, labels: string[]): Promise<void> {
   for (const label of labels) {

@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { LOAN_SECTIONS } from "./loan";
+import { FINANCE_SECTIONS } from "./finance";
 
-// Loan のキー集合そのものの検査。区画名は E2E のセレクタである(設計書 §3)。
+// Finance のキー集合そのものの検査。区画名は E2E のセレクタである(設計書 §3)。
 
 function section(ariaLabel: string) {
-  const found = LOAN_SECTIONS.find((s) => s.ariaLabel === ariaLabel);
+  const found = FINANCE_SECTIONS.find((s) => s.ariaLabel === ariaLabel);
   if (!found) throw new Error(`no section named ${ariaLabel}`);
   return found;
 }
 
-describe("Loan のキー集合", () => {
+describe("Finance のキー集合", () => {
   it("names its sections the way the design fixed them", () => {
     // 勝手に変えない——E2E がこの名前で引く。
-    expect(LOAN_SECTIONS.map((s) => s.ariaLabel)).toEqual([
+    expect(FINANCE_SECTIONS.map((s) => s.ariaLabel)).toEqual([
       "計算の種類",
       "入力する項目",
       "数字と演算のキー",
@@ -68,7 +68,7 @@ describe("Loan のキー集合", () => {
   });
 
   it("gives every key an accessible name", () => {
-    for (const s of LOAN_SECTIONS) {
+    for (const s of FINANCE_SECTIONS) {
       for (const key of s.keys) {
         expect(key.ariaLabel.length).toBeGreaterThan(0);
       }

@@ -16,7 +16,7 @@ import {
   text,
 } from "./entry";
 
-// 架空の単位表。**Loan でも Data Scale でもない組み合わせ**で、機構が
+// 架空の単位表。**Finance でも Data Scale でもない組み合わせ**で、機構が
 // 単位表に依存しないことを固定する。**scale は持たない**——順番だけで
 // 「下る向きか」が決まる（設計書 訂正 2）。
 const BIG: Unit = { label: "B", rank: 0 };
@@ -64,7 +64,7 @@ describe("打鍵のトークン列", () => {
   });
 
   it("takes the digit limit from the caller", () => {
-    // 呼び出し側の定義域（Loan は u64、D は u128）。
+    // 呼び出し側の定義域（Finance は u64、D は u128）。
     let entry = EMPTY;
     for (const digit of "123456") entry = pushDigit(entry, digit, 3);
     expect(text(entry)).toBe("123");
