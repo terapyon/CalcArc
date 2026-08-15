@@ -191,9 +191,9 @@ def check_deposit_certificate(
     """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。"""
     assert reached(principal, d, num, den, periods, taxed) >= target, f"{d} が届かない"
     if d > 0:
-        assert (
-            _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target
-        ), f"{d} は最小でない"
+        assert _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target, (
+            f"{d} は最小でない"
+        )
 
 
 def check_periods_certificate(
