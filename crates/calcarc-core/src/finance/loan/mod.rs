@@ -10,6 +10,9 @@
 //!
 //! `Value`/`engine`/`data_scale` とは相互 import しない(設計書 §9)。
 //! 共有するのはエラー分類(`CalcError`)だけ。
+//!
+//! **`finance` の下に居る**(2026-08-15 に移動)。複利(`finance::compound`)とは
+//! `Rate` を共有するが、償還表のロジックは共有しない。
 
 use crate::{CalcError, CalcResult};
 
