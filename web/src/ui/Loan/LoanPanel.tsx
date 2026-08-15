@@ -402,7 +402,7 @@ export function LoanPanel() {
   }
 
   return (
-    <section className={styles.panel} aria-label="ローン計算">
+    <section className={styles.panel} aria-label="金融計算">
       <Readout
         echo={echo}
         main={error ? "Math ERROR" : answer}
