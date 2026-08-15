@@ -60,23 +60,29 @@ test("the unit keys open only when the entry can take them", async ({
 test("each field opens only the keys its value can hold", async ({ page }) => {
   const dot = panel(page).getByRole("button", { name: "小数点" });
   const zeros = panel(page).getByRole("button", { name: "3桁のゼロ" });
-  const man = panel(page).getByRole("button", { name: "万", exact: true });
+  const key = (name: string) =>
+    panel(page).getByRole("button", { name, exact: true });
 
-  // 金額: 小数点は無い(parse_yen が拒否する)。
+  // 金額: 小数点は無い(parse_yen が拒否する)。単位は 万/億。
   await expect(dot).toBeDisabled();
   await expect(zeros).toBeEnabled();
+  await expect(key("万")).toHaveCount(1);
+  await expect(key("億")).toHaveCount(1);
 
-  // 年利: 小数点だけ。000 も単位も無い。
+  // 年利: 小数点だけ。000 も単位も無い——**単位の 2 マスは空きになる**。
   await press(page, ["年利を入力"]);
   await expect(dot).toBeEnabled();
   await expect(zeros).toBeDisabled();
-  await expect(man).toBeDisabled();
+  await expect(key("万")).toHaveCount(0);
+  await expect(key("年")).toHaveCount(0);
 
-  // 期間: 整数の月数。小数点も単位も無い。
+  // 期間: **単位キーが 年/月 に差し替わる**(設計書 §5)。小数点は無い。
   await press(page, ["返済期間を入力"]);
   await expect(dot).toBeDisabled();
-  await expect(man).toBeDisabled();
   await expect(zeros).toBeEnabled();
+  await expect(key("万")).toHaveCount(0);
+  await expect(key("年")).toHaveCount(1);
+  await expect(key("月")).toHaveCount(1);
 });
 
 test("a field tab shows what that field already holds", async ({ page }) => {

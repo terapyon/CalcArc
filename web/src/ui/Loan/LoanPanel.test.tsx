@@ -199,10 +199,28 @@ describe("LoanPanel（電卓）", () => {
     expect(calc.forward).toHaveBeenLastCalledWith("30000000", "1.5", 420, "0");
   });
 
+  it("swaps the unit keys to match the field", async () => {
+    // **単位キーは項目に従う**(設計書 §5)。挙動だけ差し替えて絵が `万` の
+    // ままだと、期間を打っている人には嘘のキーが見える。
+    await renderPanel();
+    await press(["借入額を入力"]);
+    expect(screen.getByRole("button", { name: "万" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "億" })).toBeInTheDocument();
+
+    await press(["返済期間を入力"]);
+    expect(screen.getByRole("button", { name: "年" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "月" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "万" })).toBeNull();
+
+    // 年利には単位が無い。空きとして無効に描く。
+    await press(["年利を入力"]);
+    expect(screen.queryByRole("button", { name: "年" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "空き" })[0]).toBeDisabled();
+  });
+
   it("closes the keys a field cannot take", async () => {
     await renderPanel();
     await press(["年利を入力"]);
-    expect(screen.getByRole("button", { name: "万" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "3桁のゼロ" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "小数点" })).toBeEnabled();
 
@@ -212,7 +230,6 @@ describe("LoanPanel（電卓）", () => {
 
     await press(["返済期間を入力"]);
     expect(screen.getByRole("button", { name: "小数点" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "万" })).toBeDisabled();
   });
 
   it("closes the unit keys until a digit is there, and after a smaller unit", async () => {

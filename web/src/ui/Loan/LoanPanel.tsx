@@ -473,7 +473,9 @@ export function LoanPanel() {
       const typed = typedIn(field);
       return {
         label: labelOf(field),
-        value: typed === "" ? "" : `${typed}${FIELD_UNITS[field]}`,
+        // **単位を二重に付けない。** `35年` に「か月」を足すと `35年か月`
+        // になる——単位を打った時点で、その値は自分の単位を持っている。
+        value: typed === "" ? "" : `${typed}${unitSuffix(field, typed)}`,
         active: field === active,
       };
     });
@@ -679,6 +681,12 @@ export function LoanPanel() {
 }
 
 /** 項目の並び。**入力の一覧は盤面と同じ順**に出す(設計書 §2)。 */
+/** 項目の既定の単位。**打った値が自分の単位を持っていれば足さない。** */
+function unitSuffix(field: LoanField, typed: string): string {
+  if (field === "months" && /[年月]/.test(typed)) return "";
+  return FIELD_UNITS[field];
+}
+
 function orderFor(mode: PanelMode): LoanField[] {
   return mode === "compound" ? COMPOUND_FIELDS : FIELD_ORDER;
 }
@@ -698,7 +706,27 @@ function sectionsFor(mode: PanelMode, active: LoanField) {
               : (LOAN_SECTIONS[2] as KeypadSection<LoanKeyToken>),
         ]
       : LOAN_SECTIONS;
-  return base.map((section) =>
+  // **単位キーのラベルも項目に従う**(設計書 §5)。挙動だけ差し替えて絵が
+  // `万` のままだと、期間を打っている人には嘘のキーが見える——実機で
+  // 実際にそうなっていた。
+  const withUnits = base.map((section) =>
+    section.ariaLabel === "数字と演算のキー"
+      ? {
+          ...section,
+          keys: section.keys.map((key) => {
+            if (key.token !== "unit:high" && key.token !== "unit:low")
+              return key;
+            const unit = unitFor(active, key.token);
+            if (unit === null) {
+              // 年利には単位が無い。予約スロットとして無効に描く。
+              return { ...key, token: null, label: "—", ariaLabel: "空き" };
+            }
+            return { ...key, label: unit.label, ariaLabel: unit.label };
+          }),
+        }
+      : section,
+  );
+  return withUnits.map((section) =>
     section.ariaLabel === "入力する項目"
       ? {
           ...section,
