@@ -811,6 +811,9 @@ Python Reference Validation
 
 Layer 5
 Browser E2E Test
+
+Layer 6
+Heavy Verification Corpus (browser, corpus/ 配下、通常の CI では実行しない)
 ```
 
 ---
