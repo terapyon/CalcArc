@@ -23,7 +23,14 @@ export function Display({ display }: DisplayProps) {
 
   return (
     <Readout
-      echo={display.echo}
+      // Scientific は式を**名前なしの 1 件**で渡す。名前が無いので見た目は
+      // 変わらない(設計書 §2)。空のときは 1 件も渡さない——行の場所は
+      // Readout 側が確保する。
+      entries={
+        display.echo === ""
+          ? []
+          : [{ label: "", value: display.echo, active: true }]
+      }
       main={display.main}
       error={display.error}
       status={[

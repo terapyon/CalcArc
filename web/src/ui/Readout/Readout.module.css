@@ -9,15 +9,33 @@
   font-family: var(--display-font);
 }
 
-/* 入力中の式。S1 では常に空だが、行の場所は確保する(設計書 §5)。 */
+/* 入力の一覧。行の場所は入力が無くても確保する(設計書 §5)。 */
 .echo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-height: 1.2em;
+  text-align: right;
+}
+
+/* いま打っている項目。**入力の主表示**なので大きく濃く出す(設計書 §2)
+   ——Loan と Data Scale では、打った数字はここにしか出ない。 */
+.entryActive {
   overflow-x: auto;
+  font-size: var(--key-font-size);
+  white-space: nowrap;
+}
+
+/* 入力済み。**小さく薄く、しかし画面に残す**——項目を切り替えたときに
+   計算根拠が消えないようにするため。値が見えることが目的なので、
+   横に隠さず折り返す(設計書 §2 の Q7)。 */
+.entriesDone {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 12px;
   color: var(--display-status-fg);
   font-size: var(--display-size-status);
-  /* 長い式は右端(いま打っている側)を見せる。 */
-  text-align: right;
-  white-space: nowrap;
 }
 
 .status {

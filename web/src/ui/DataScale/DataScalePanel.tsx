@@ -141,9 +141,14 @@ export function DataScalePanel() {
     }
   }
 
-  const typed = numberField ? text(entry) : dtype;
-  const echo =
-    typed === "" ? FIELD_LABELS[active] : `${FIELD_LABELS[active]} ${typed}`;
+  // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
+  // (設計書 §2)。未入力の項目は出さない。
+  const entries = (["count", "dimensions", "dtype"] as const).map((field) => ({
+    label: FIELD_LABELS[field],
+    value:
+      field === "dtype" ? dtype : text(field === "count" ? count : dimensions),
+    active: field === active,
+  }));
 
   // 結果は保持しない。両方の項目が埋まっているときだけ計算する。
   const countDigits = digits(count);
@@ -168,7 +173,7 @@ export function DataScalePanel() {
   return (
     <section className={styles.panel} aria-label="データスケール計算">
       <Readout
-        echo={echo}
+        entries={entries}
         main={answer}
         error={shown?.error ?? null}
         status={[

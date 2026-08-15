@@ -284,19 +284,31 @@ export function LoanPanel() {
     }
   }
 
-  /** いまアクティブな項目の、打った通りの文字列。 */
-  function activeText(): string {
-    if (MONEY_FIELDS.includes(active)) return text(entryOf(active));
-    return active === "rate" ? rate : months;
+  /** 項目の、打った通りの文字列。 */
+  function typedIn(field: LoanField): string {
+    if (MONEY_FIELDS.includes(field)) return text(entryOf(field));
+    return field === "rate" ? rate : months;
   }
 
-  const activeLabel =
-    active === "bonus" ? bonusName(mode) : FIELD_LABELS[active];
-  const typed = activeText();
-  const echo =
-    typed === ""
-      ? `${activeLabel}`
-      : `${activeLabel} ${typed}${FIELD_UNITS[active]}`;
+  function labelOf(field: LoanField): string {
+    return field === "bonus" ? bonusName(mode) : FIELD_LABELS[field];
+  }
+
+  // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
+  // (設計書 §2)。**そのモードで使わない項目と、未入力の項目は出さない**
+  // ——空の「残価」で埋めても根拠にならない。
+  const entries = FIELD_ORDER.filter(
+    (field) =>
+      field === active ||
+      (fieldEnabledIn(field, mode) && typedIn(field) !== ""),
+  ).map((field) => {
+    const typed = typedIn(field);
+    return {
+      label: labelOf(field),
+      value: typed === "" ? "" : `${typed}${FIELD_UNITS[field]}`,
+      active: field === active,
+    };
+  });
 
   // 結果は保持しない。必要な項目が埋まっているときだけ計算する(M6 の規律)。
   const principalDigits = digits(amounts.principal ?? EMPTY);
@@ -404,7 +416,7 @@ export function LoanPanel() {
   return (
     <section className={styles.panel} aria-label="金融計算">
       <Readout
-        echo={echo}
+        entries={entries}
         main={error ? "Math ERROR" : answer}
         error={error}
         status={[
@@ -416,7 +428,7 @@ export function LoanPanel() {
           {
             testId: "loan-field",
             ariaLabel: "入力中の項目",
-            text: `${activeLabel}を入力中`,
+            text: `${labelOf(active)}を入力中`,
           },
         ]}
       />
