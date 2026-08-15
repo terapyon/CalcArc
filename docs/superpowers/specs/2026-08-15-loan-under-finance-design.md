@@ -106,8 +106,9 @@ wasm-pack test --headless --chrome crates/calcarc-wasm   # 20、増減なし
    `crates/calcarc-core/src/loan/` は無い。
 2. **移動したファイルの中身が `git log --follow` で追える**
    （`git mv` を使い、内容の変更と同じコミットに混ぜない）。
-3. **テストを 1 行も書き換えていない。**
-   `git diff --stat` で、変更行が import と mod 宣言と doc の 2 行だけであること。
+3. **テストの検査内容を 1 行も書き換えていない。** `finance_golden.rs` は §2 の
+   とおり `use` のパスが変わるが、**assert も期待値も入力の読み方も動かない**。
+   `git diff` で、テストファイルの変更が `use` 行だけであることを示す。
 4. `cargo test --workspace` が **203 件のまま緑**。`testdata/` の差分が空。
 5. `wasm-pack test` が **20 件のまま緑**。
 6. `web/` と `reference/` の差分が空。
