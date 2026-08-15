@@ -590,4 +590,31 @@ describe("LoanPanel（電卓）", () => {
     await press(["源泉分離課税を引く"]);
     expect(echo()).toHaveTextContent("税 20.315%");
   });
+
+  it("does not carry loan values into the compound mode", async () => {
+    // **欄の名前が同じでも意味が違う。** 借入額は負債の元本、複利の元本は
+    // 投資の元本。決定的なのは期間で、ローンは「か月」・複利は「期」——
+    // 420 か月(35 年)を持ち回ると、年次複利では **420 年**として黙って
+    // 計算される。もっともらしい誤答の典型である(設計書 §6 の裁定)。
+    await renderPanel();
+    await press(["借入額を入力", "3", "0", "0", "0", "万"]);
+    await press(["返済期間を入力", "4", "2", "0"]);
+    await press(["年利を入力", "1", "小数点", "5"]);
+
+    await press(["複利で増やす"]);
+    await press(["元本を入力"]);
+    expect(echo()).toHaveTextContent("元本");
+    expect(echo()).not.toHaveTextContent("3000万");
+    await press(["期間を入力"]);
+    expect(echo()).toHaveTextContent("期間");
+    expect(echo()).not.toHaveTextContent("420");
+    // 入力済みの一覧にもローンの値が漏れていない。
+    expect(screen.getByTestId("display-entries-done")).not.toHaveTextContent(
+      "1.5",
+    );
+
+    // ローンへ戻れば、打った値はそのまま残っている。
+    await press(["月々の返済額を求める", "借入額を入力"]);
+    expect(echo()).toHaveTextContent("借入額 3000万円");
+  });
 });

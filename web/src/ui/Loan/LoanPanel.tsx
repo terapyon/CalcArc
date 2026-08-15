@@ -225,7 +225,20 @@ export function LoanPanel() {
   /** ボーナスの入れ物の名前。モードで別々(設計書 §6)。 */
   const bonusKey = mode === "principal" ? "bonusPayment" : "bonusPrincipal";
 
+  /**
+   * 値の入れ物の名前。
+   *
+   * **複利はローンと別の入れ物を使う**——欄の名前が同じでも**意味が違う**
+   * からである。借入額は負債の元本、複利の元本は投資の元本。年利は借入金利と
+   * 想定利回り。決定的なのは**期間**で、ローンは「か月」、複利は「期」
+   * (長さは周期に従う)——420 か月(35 年)を持ち回ると、年次複利では
+   * **420 年**として黙って計算される。もっともらしい誤答の典型である。
+   *
+   * ボーナスをモードごとに分けたのと同じ理由で、「値は保持する」は
+   * **同じ意味の欄の値が消えない**という意味である(設計書 §6)。
+   */
   function amountKey(field: LoanField): string {
+    if (mode === "compound") return `compound:${field}`;
     return field === "bonus" ? bonusKey : field;
   }
 
@@ -457,6 +470,9 @@ export function LoanPanel() {
   }
 
   function labelOf(field: LoanField): string {
+    // **同じ入れ物でも意味が違えば名前も違う。** 複利の `principal` は
+    // 負債ではなく投資の元本である(入れ物も別。amountKey を参照)。
+    if (mode === "compound" && field === "principal") return "元本";
     return field === "bonus" ? bonusName(mode) : FIELD_LABELS[field];
   }
 
