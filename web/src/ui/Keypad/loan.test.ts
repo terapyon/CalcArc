@@ -13,7 +13,7 @@ describe("Loan のキー集合", () => {
   it("names its sections the way the design fixed them", () => {
     // 勝手に変えない——E2E がこの名前で引く。
     expect(LOAN_SECTIONS.map((s) => s.ariaLabel)).toEqual([
-      "求めるもの",
+      "計算の種類",
       "入力する項目",
       "数字と演算のキー",
     ]);
@@ -59,9 +59,9 @@ describe("Loan のキー集合", () => {
   });
 
   it("keeps the mode and field rows half height", () => {
-    expect(section("求めるもの").height).toBe("half");
+    expect(section("計算の種類").height).toBe("half");
     expect(section("入力する項目").height).toBe("half");
-    expect(section("求めるもの").keys).toHaveLength(3);
+    expect(section("計算の種類").keys).toHaveLength(4); // ローン 3 + 複利
     // 月額は月額モードでは答だが、他の 2 モードでは入力である(設計書 §6)。
     expect(section("入力する項目").keys).toHaveLength(6);
     expect(section("入力する項目").columns).toBe(6);
@@ -88,7 +88,7 @@ describe("Loan のキー集合", () => {
 
   it("has no reserved slots in the mode and field rows", () => {
     // 予約スロットは数字面の 2 マスだけ。モード行と項目行のキーは全部働く。
-    for (const name of ["求めるもの", "入力する項目"]) {
+    for (const name of ["計算の種類", "入力する項目"]) {
       for (const key of section(name).keys) {
         expect(key.token).not.toBeNull();
       }

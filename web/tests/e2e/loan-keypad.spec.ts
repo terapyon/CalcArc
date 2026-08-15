@@ -30,7 +30,7 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
 test("the mode and field rows are half height but wide enough", async ({
   page,
 }) => {
-  for (const name of ["求めるもの", "入力する項目"]) {
+  for (const name of ["計算の種類", "入力する項目"]) {
     const row = panel(page).getByRole("group", { name });
     for (const button of await row.getByRole("button").all()) {
       const box = await button.boundingBox();
@@ -149,9 +149,9 @@ test("a residual left in another mode does not block the bonus", async ({
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
   const buttons = panel(page)
-    .getByRole("group", { name: /求めるもの|入力する項目|数字と演算のキー/ })
+    .getByRole("group", { name: /計算の種類|入力する項目|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(34); // 3 + 6 + 25(5×5)
+  await expect(buttons).toHaveCount(35); // 4 + 6 + 25(5×5)
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);

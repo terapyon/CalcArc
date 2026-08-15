@@ -12,6 +12,21 @@ vi.mock("../../loan", () => ({
 // 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
 // コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
 // 簡易版で足りる——値の正しさは golden が見る。
+vi.mock("../../finance", () => ({
+  initFinance: () =>
+    Promise.resolve({
+      grow: () => ({
+        finalBalance: "1051136",
+        principalTotal: "1000000",
+        interest: "51136",
+        nationalTax: null,
+        localTax: null,
+        net: null,
+        error: null,
+      }),
+    }),
+}));
+
 vi.mock("../../expr", () => ({
   initExpr: () =>
     Promise.resolve({
@@ -143,7 +158,7 @@ describe("LoanPanel（電卓）", () => {
     expect(
       screen.getByRole("region", { name: "金融計算" }),
     ).toBeInTheDocument();
-    for (const name of ["求めるもの", "入力する項目", "数字と演算のキー"]) {
+    for (const name of ["計算の種類", "入力する項目", "数字と演算のキー"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
     }
   });
@@ -528,5 +543,34 @@ describe("LoanPanel（電卓）", () => {
     expect(echo()).toHaveTextContent("借入額 3000万+50万円");
     await press(["計算する"]);
     expect(echo()).toHaveTextContent("借入額 30500000円");
+  });
+
+  it("grows a balance in the compound mode", async () => {
+    // **複利は 1 モード**——一括は積立額 0、積立は元本 0 の退化(設計書 §6)。
+    await renderPanel();
+    await press(["複利で増やす"]);
+    expect(
+      screen.getByRole("group", { name: "入力する項目" }),
+    ).toBeInTheDocument();
+    await press(["元本を入力", "1", "0", "0", "万"]);
+    await press(["年利を入力", "1"]);
+    await press(["期間を入力", "1", "0"]);
+    expect(main()).toHaveTextContent("1,051,136 円");
+  });
+
+  it("puts the period and the tax on faces that swap in", async () => {
+    // **計算に入るものは盤面の中**(設計書 §7)。表示の読み方だけを変える
+    // トグルとは置き場所を分ける。
+    await renderPanel();
+    await press(["複利で増やす", "複利の周期を選ぶ"]);
+    expect(
+      screen.getByRole("group", { name: "複利の周期のキー" }),
+    ).toBeInTheDocument();
+    await press(["半年ごとに複利"]);
+    expect(echo()).toHaveTextContent("周期 半年ごと");
+    await press(["税の扱いを選ぶ"]);
+    expect(screen.getByRole("group", { name: "税のキー" })).toBeInTheDocument();
+    await press(["源泉分離課税を引く"]);
+    expect(echo()).toHaveTextContent("税 20.315%");
   });
 });

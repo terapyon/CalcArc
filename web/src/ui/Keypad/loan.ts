@@ -45,11 +45,21 @@ export type LoanKeyToken =
   | "field:months"
   | "field:payment"
   | "field:residual"
-  | "field:bonus";
+  | "field:bonus"
+  | "mode:compound"
+  | "field:deposit"
+  | "field:periods"
+  | "field:tax"
+  | `period:${1 | 2 | 12}`
+  | "tax:none"
+  | "tax:withholding";
 
 /** 入力する項目。 */
 export type LoanField =
   | "principal"
+  | "deposit"
+  | "periods"
+  | "tax"
   | "rate"
   | "months"
   | "payment"
@@ -57,26 +67,34 @@ export type LoanField =
   | "bonus";
 
 const MODES: KeypadSection<LoanKeyToken> = {
-  ariaLabel: "求めるもの",
-  columns: 3,
+  ariaLabel: "計算の種類",
+  columns: 4,
   height: "half",
   keys: [
     {
       token: "mode:payment",
-      label: "月々の返済額",
+      label: "月額",
       ariaLabel: "月々の返済額を求める",
       variant: "function",
     },
     {
       token: "mode:principal",
-      label: "借入可能額",
+      label: "借入可能",
       ariaLabel: "借入可能額を求める",
       variant: "function",
     },
     {
       token: "mode:term",
-      label: "返済期間",
+      label: "期間",
       ariaLabel: "返済期間を求める",
+      variant: "function",
+    },
+    // **複利は 1 モード**——一括預入は積立額 0、毎月積立は元本 0 の退化で、
+    // コアも 1 本の関数である(設計書 §6)。
+    {
+      token: "mode:compound",
+      label: "複利",
+      ariaLabel: "複利で増やす",
       variant: "function",
     },
   ],
@@ -130,6 +148,132 @@ const FIELDS: KeypadSection<LoanKeyToken> = {
   ],
 };
 
+/**
+ * 複利の項目。**ローンとは別の行に差し替える**——同じ行に両方を並べると
+ * 9 列になり、1 キーが 36px で 44px を割る(設計書 §4)。
+ */
+const COMPOUND_FIELDS: KeypadSection<LoanKeyToken> = {
+  ariaLabel: "入力する項目",
+  columns: 6,
+  height: "half",
+  keys: [
+    {
+      token: "field:principal",
+      label: "元本",
+      ariaLabel: "元本を入力",
+      variant: "function",
+    },
+    {
+      token: "field:deposit",
+      label: "積立",
+      ariaLabel: "毎期の積立額を入力",
+      variant: "function",
+    },
+    {
+      token: "field:rate",
+      label: "年利",
+      ariaLabel: "年利を入力",
+      variant: "function",
+    },
+    {
+      token: "field:months",
+      label: "期間",
+      ariaLabel: "期間を入力",
+      variant: "function",
+    },
+    {
+      token: "field:periods",
+      label: "周期",
+      ariaLabel: "複利の周期を選ぶ",
+      variant: "function",
+    },
+    {
+      token: "field:tax",
+      label: "税",
+      ariaLabel: "税の扱いを選ぶ",
+      variant: "function",
+    },
+  ],
+};
+
+/**
+ * 周期の面。**面が入れ替わるのは「計算に入るもの」だから**——表示の読み方
+ * だけを変えるトグルとは置き場所を分ける(設計書 §7)。
+ */
+const PERIODS_FACE: KeypadSection<LoanKeyToken> = {
+  ariaLabel: "複利の周期のキー",
+  columns: 5,
+  height: "square",
+  keys: [
+    {
+      token: "period:12",
+      label: "月",
+      ariaLabel: "月ごとに複利",
+      variant: "function",
+    },
+    {
+      token: "period:2",
+      label: "半年",
+      ariaLabel: "半年ごとに複利",
+      variant: "function",
+    },
+    {
+      token: "period:1",
+      label: "年",
+      ariaLabel: "年ごとに複利",
+      variant: "function",
+    },
+    { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
+    {
+      token: "ac",
+      label: "AC",
+      ariaLabel: "この項目を消去",
+      variant: "danger",
+    },
+    ...Array.from({ length: 20 }, () => ({
+      token: null,
+      label: "—",
+      ariaLabel: "空き",
+      variant: "function" as const,
+    })),
+  ],
+};
+
+/** 税の面。既定はタックスフリー(NISA 前提。設計書 §6)。 */
+const TAX_FACE: KeypadSection<LoanKeyToken> = {
+  ariaLabel: "税のキー",
+  columns: 5,
+  height: "square",
+  keys: [
+    {
+      token: "tax:none",
+      label: "なし",
+      ariaLabel: "税を引かない",
+      variant: "function",
+    },
+    {
+      token: "tax:withholding",
+      label: "20.315%",
+      ariaLabel: "源泉分離課税を引く",
+      variant: "function",
+    },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
+    {
+      token: "ac",
+      label: "AC",
+      ariaLabel: "この項目を消去",
+      variant: "danger",
+    },
+    ...Array.from({ length: 20 }, () => ({
+      token: null,
+      label: "—",
+      ariaLabel: "空き",
+      variant: "function" as const,
+    })),
+  ],
+};
+
 const PAD: KeypadSection<LoanKeyToken> = {
   ariaLabel: "数字と演算のキー",
   columns: 5,
@@ -177,6 +321,10 @@ const PAD: KeypadSection<LoanKeyToken> = {
     { token: "eq", label: "=", ariaLabel: "計算する", variant: "operator" },
   ],
 };
+
+export const COMPOUND_FIELD_SECTION = COMPOUND_FIELDS;
+export const PERIODS_SECTION = PERIODS_FACE;
+export const TAX_SECTION = TAX_FACE;
 
 export const LOAN_SECTIONS: KeypadSection<LoanKeyToken>[] = [
   MODES,
