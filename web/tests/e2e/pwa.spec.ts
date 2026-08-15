@@ -9,9 +9,6 @@ async function press(page: Page, labels: string[]): Promise<void> {
 
 const main = (page: Page) => page.getByTestId("display-main");
 
-const dataScaleStatus = (page: Page) =>
-  page.getByRole("region", { name: "データスケール計算" }).getByRole("status");
-
 test("the manifest is fetchable, standalone, and its icons resolve", async ({
   page,
   baseURL,
@@ -79,11 +76,13 @@ test("Scientific and Data Scale keep working once the network drops, after one c
   await press(page, ["3", "足す", "4", "計算する"]);
   await expect(main(page)).toHaveText("7");
 
-  // Data Scale: 基準例 100M x 768 x float32 = 307.2 GB。
+  // Data Scale: 基準例 100M x 768 x float32 = 307.2 GB。**オフラインでも
+  // 計算できる**ことがここの中身であり、打ち方が盤面に変わっても検査点は
+  // 同じ——wasm が precache から出てきて答えを出せること。
   await page.getByRole("link", { name: "Data Scale", exact: true }).click();
-  await page.getByLabel("件数").fill("100000000");
-  await page.getByLabel("次元数").fill("768");
-  await expect(dataScaleStatus(page)).toContainText("307.2 GB");
+  await press(page, ["件数を入力", "1", "0", "0", "百万"]);
+  await press(page, ["次元数を入力", "7", "6", "8"]);
+  await expect(main(page)).toHaveText("307.2 GB");
 });
 
 test("a cold visit with the network already off fails to load (the failing twin)", async ({

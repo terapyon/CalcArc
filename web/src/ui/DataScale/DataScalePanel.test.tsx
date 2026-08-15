@@ -4,26 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataScaleCalc, DataScaleResult } from "../../datascale";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
-// (App.test.tsx と同じ流儀)。DATA_TYPE_TOKENS は types.ts の実体を
-// そのまま書き写す — wasm を import する index.ts 経由で読み込むと
-// vi.mock の意味が失われる。vi.mock はファイル先頭に巻き上げられる
-// ため、参照する定数も vi.hoisted で一緒に巻き上げる。
-const { DATA_TYPE_TOKENS } = vi.hoisted(() => ({
-  DATA_TYPE_TOKENS: [
-    "int8",
-    "uint8",
-    "int16",
-    "float16",
-    "bfloat16",
-    "int32",
-    "float32",
-    "int64",
-    "float64",
-  ] as const,
-}));
-
+// (App.test.tsx と同じ流儀)。
 vi.mock("../../datascale", () => ({
-  DATA_TYPE_TOKENS,
   initDataScale: vi.fn(),
 }));
 
@@ -41,134 +23,242 @@ function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
   };
 }
 
-function stubCalc(compute: DataScaleCalc["compute"]): DataScaleCalc {
-  return { compute };
+function stubCalc(compute?: DataScaleCalc["compute"]): DataScaleCalc {
+  return { compute: compute ?? vi.fn().mockReturnValue(result()) };
 }
 
-describe("DataScalePanel", () => {
-  it("connects count, dimensions and dtype to their labels", async () => {
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(vi.fn()));
-    render(<DataScalePanel />);
-    // 読み込みの解決を待ってから抜ける。待たずに終わると、後続のテスト
-    // 実行中に act() 外の state 更新が起きて警告が出る。
-    await screen.findByLabelText("件数");
-    expect(screen.getByLabelText("件数")).toBeInstanceOf(HTMLInputElement);
-    expect(screen.getByLabelText("次元数")).toBeInstanceOf(HTMLInputElement);
-    expect(screen.getByLabelText("データ型")).toBeInstanceOf(HTMLSelectElement);
-  });
+async function renderPanel(calc: DataScaleCalc = stubCalc()) {
+  vi.mocked(initDataScale).mockResolvedValue(calc);
+  render(<DataScalePanel />);
+  await screen.findByRole("button", { name: "件数を入力" });
+  return calc;
+}
 
-  it("names the panel in Japanese, matching the rest of the UI", async () => {
-    // Display/Keypad のアクセシブルネームはすべて日本語(「角度の単位」
-    // 「電卓キーパッド」等)。ここだけ英語だと読み上げの言語が揃わない。
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(vi.fn()));
-    render(<DataScalePanel />);
-    await screen.findByLabelText("件数");
+async function press(names: string[]) {
+  for (const name of names) {
+    await userEvent.click(screen.getByRole("button", { name }));
+  }
+}
+
+const echo = () => screen.getByTestId("display-echo");
+const main = () => screen.getByTestId("display-main");
+
+/** 基準例: 100M × 768 × float32 = 307.2 GB。 */
+async function fillHeadline() {
+  await press([
+    "件数を入力",
+    "1",
+    "0",
+    "0",
+    "百万",
+    "次元数を入力",
+    "7",
+    "6",
+    "8",
+  ]);
+}
+
+describe("DataScalePanel（電卓）", () => {
+  it("names the panel and its sections in Japanese", async () => {
+    await renderPanel();
     expect(
       screen.getByRole("region", { name: "データスケール計算" }),
     ).toBeInTheDocument();
+    for (const name of ["入力する項目", "数字と単位のキー"]) {
+      expect(screen.getByRole("group", { name })).toBeInTheDocument();
+    }
   });
 
-  it("lists every dtype token, in order, as an option", async () => {
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(vi.fn()));
-    render(<DataScalePanel />);
-    await screen.findByLabelText("件数");
-    const options = screen.getAllByRole("option");
-    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
-      ...DATA_TYPE_TOKENS,
-    ]);
+  it("types into the active field and shows it in the echo", async () => {
+    await renderPanel();
+    await press(["件数を入力", "1", "0", "0", "百万"]);
+    expect(echo()).toHaveTextContent("件数 100M");
   });
 
-  it("stays neutral — no error shown — while fields are empty", async () => {
-    // 未入力は SyntaxError ではない(設計書 §6)。compute 自体を呼ばない。
-    const compute = vi.fn();
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(compute));
-    render(<DataScalePanel />);
-    await screen.findByLabelText("件数");
-    const status = screen.getByRole("status");
-    expect(status).not.toHaveTextContent("Math ERROR");
-    expect(status.querySelector("[data-error]")).toBeNull();
-    expect(compute).not.toHaveBeenCalled();
-  });
-
-  it("shows bytes, decimal and binary once both fields are filled", async () => {
-    const compute = vi.fn().mockReturnValue(result());
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(compute));
-    render(<DataScalePanel />);
-
-    await userEvent.type(screen.getByLabelText("件数"), "100000000");
-    await userEvent.type(screen.getByLabelText("次元数"), "768");
-
-    // 結果は導出値で、wasm の読み込み完了と入力の両方が揃った次の
-    // 再描画で現れる。順序を仮定せず、状態が収束するまで待つ。
+  it("computes the headline case", async () => {
+    const calc = await renderPanel();
+    await fillHeadline();
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "307,200,000,000 bytes",
-      );
+      expect(main()).toHaveTextContent("307.2 GB");
     });
-    const status = screen.getByRole("status");
-    expect(status).toHaveTextContent("307.2 GB");
-    expect(status).toHaveTextContent("286.1 GiB");
-    expect(compute).toHaveBeenLastCalledWith("100000000", "768", "float32");
-  });
-
-  it("hides only the null lines on a sub-unit success (bytes but no decimal/binary)", async () => {
-    // count=1, dimensions=1, int8 → 1 byte: 成功(error: null)だが最小単位
-    // 未満なので decimal/binary は null(Task 3 の追補テストが保証する
-    // 実際の境界)。null の行だけが消え、bytes 行は出て、エラーは出ない
-    // ことを検査する — 全 null(エラー)/全非 null(単位あり)の中間形。
-    const compute = vi.fn().mockReturnValue(
-      result({
-        bytes: "1",
-        bytesGrouped: "1",
-        decimal: null,
-        binary: null,
-        error: null,
-      }),
+    // コアへ渡るのは展開後の素の数字列(base-spec §26)。
+    expect(calc.compute).toHaveBeenLastCalledWith(
+      "100000000",
+      "768",
+      "float32",
     );
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(compute));
-    render(<DataScalePanel />);
+  });
 
-    await userEvent.type(screen.getByLabelText("件数"), "1");
-    await userEvent.type(screen.getByLabelText("次元数"), "1");
+  it("swaps the keypad face when the type field is active", async () => {
+    await renderPanel();
+    expect(
+      screen.getByRole("group", { name: "数字と単位のキー" }),
+    ).toBeInTheDocument();
+    await press(["データ型を選ぶ"]);
+    expect(
+      screen.queryByRole("group", { name: "数字と単位のキー" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("group", { name: "データ型のキー" }),
+    ).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("1 bytes");
-    });
-    const status = screen.getByRole("status");
-    expect(status).not.toHaveTextContent("Math ERROR");
-    expect(status.querySelector("[data-error]")).toBeNull();
-    // "307.2 GB" のような単位付き表記が紛れ込んでいないこと(null の行は
-    // 出ない)。GB/GiB 系の文字列が一切現れないことで確かめる。
-    expect(status).not.toHaveTextContent("GB");
-    expect(status).not.toHaveTextContent("GiB");
-    // 文字列の不在だけでは、null 判定を外して空の `<p></p>` を描画する
-    // 退行を捕まえられない(文字列としては何も足されないため)。行数を
-    // 直接数えて、bytes の 1 行だけが存在することを確かめる。
-    expect(status.querySelectorAll("p")).toHaveLength(1);
+  it("starts on float32 and marks the chosen type", async () => {
+    await renderPanel();
+    await press(["データ型を選ぶ"]);
+    expect(screen.getByRole("button", { name: "float32" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await press(["int64"]);
+    expect(screen.getByRole("button", { name: "int64" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(echo()).toHaveTextContent("データ型 int64");
+  });
+
+  it("names the primary system and the active field in the status line", async () => {
+    await renderPanel();
+    expect(screen.getByTestId("datascale-primary")).toHaveTextContent(
+      "10 進を主表示",
+    );
+    expect(screen.getByTestId("datascale-field")).toHaveTextContent(
+      "件数を入力中",
+    );
+    await press(["データ型を選ぶ"]);
+    expect(screen.getByTestId("datascale-field")).toHaveTextContent(
+      "データ型を入力中",
+    );
+  });
+
+  it("has nothing for DEL to delete on the type face", async () => {
+    await renderPanel();
+    await press(["データ型を選ぶ"]);
+    expect(screen.getByRole("button", { name: "1文字消去" })).toBeDisabled();
+  });
+
+  it("returns the type to its default with AC", async () => {
+    await renderPanel();
+    await press(["データ型を選ぶ", "int64", "この項目を消去"]);
+    expect(screen.getByRole("button", { name: "float32" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("closes the unit keys until a digit is there, and after a smaller unit", async () => {
+    await renderPanel();
+    await press(["件数を入力"]);
+    expect(screen.getByRole("button", { name: "百万" })).toBeDisabled();
+    await press(["1", "0", "0"]);
+    expect(screen.getByRole("button", { name: "百万" })).toBeEnabled();
+    await press(["百万"]);
+    // M のあとに G は無い——単位は下る向きにしか置けない。
+    expect(screen.getByRole("button", { name: "十億" })).toBeDisabled();
+  });
+
+  it("does not make the digits look like toggles", async () => {
+    await renderPanel();
+    expect(screen.getByRole("button", { name: "7" })).not.toHaveAttribute(
+      "aria-pressed",
+    );
+  });
+
+  it("stays neutral while the fields are empty", async () => {
+    // 未入力は SyntaxError ではない。compute 自体を呼ばない。
+    const calc = await renderPanel();
+    expect(main()).toBeEmptyDOMElement();
+    expect(calc.compute).not.toHaveBeenCalled();
+  });
+
+  it("shows both unit systems, one of them larger", async () => {
+    // base-spec §17 は「両方表示する」。トグルが変えるのは**強調**だけ
+    // (設計書 §6)。
+    await renderPanel();
+    await fillHeadline();
+    await waitFor(() => expect(main()).toHaveTextContent("307.2 GB"));
+    const shown = screen.getByTestId("datascale-result");
+    expect(shown).toHaveTextContent("307,200,000,000 bytes");
+    expect(shown).toHaveTextContent("286.1 GiB");
+  });
+
+  it("changes only which system is primary", async () => {
+    const calc = await renderPanel();
+    await fillHeadline();
+    await waitFor(() => expect(main()).toHaveTextContent("307.2 GB"));
+    const argsBefore = vi.mocked(calc.compute).mock.lastCall;
+
+    await press(["2 進 (KiB) を主に"]);
+    expect(main()).toHaveTextContent("286.1 GiB");
+
+    // **トグルが変えるのは強調だけ**(設計書 §6/§9-3)。コアへ渡す入力も、
+    // 返ってきた bytes も動かない。結果は毎レンダーで導出するので
+    // compute は再度呼ばれる——見るべきは呼ばれた回数ではなく、
+    // **同じ入力から同じ値が出ていること**である。
+    expect(vi.mocked(calc.compute).mock.lastCall).toEqual(argsBefore);
+    expect(screen.getByTestId("datascale-result")).toHaveTextContent(
+      "307,200,000,000 bytes",
+    );
+  });
+
+  it("falls through to the other system, then to bytes", async () => {
+    // 1000 bytes 未満では両方 null(既知の非対称)。main は主 → 副 → bytes
+    // の順に繰り上げる(設計書 §6)。
+    await renderPanel(
+      stubCalc(
+        vi.fn().mockReturnValue(
+          result({
+            bytes: "999",
+            bytesGrouped: "999",
+            decimal: null,
+            binary: null,
+          }),
+        ),
+      ),
+    );
+    await fillHeadline();
+    await waitFor(() => expect(main()).toHaveTextContent("999 bytes"));
+    // 結果領域は null の行を出さない(現行のまま)。
+    expect(screen.getByTestId("datascale-result")).not.toHaveTextContent("GB");
+  });
+
+  it("promotes the other system when the primary one is missing", async () => {
+    await renderPanel(
+      stubCalc(
+        vi.fn().mockReturnValue(
+          result({
+            bytes: "1000",
+            bytesGrouped: "1,000",
+            decimal: "1.0 KB",
+            binary: null,
+          }),
+        ),
+      ),
+    );
+    await fillHeadline();
+    await press(["2 進 (KiB) を主に"]);
+    // 2 進が無いので 10 進が主に繰り上がる——空の主表示を見せない。
+    await waitFor(() => expect(main()).toHaveTextContent("1.0 KB"));
   });
 
   it("shows an error when the core reports one", async () => {
-    const compute = vi.fn().mockReturnValue(
-      result({
-        bytes: null,
-        bytesGrouped: null,
-        decimal: null,
-        binary: null,
-        error: "Overflow",
-      }),
+    await renderPanel(
+      stubCalc(
+        vi.fn().mockReturnValue(
+          result({
+            bytes: null,
+            bytesGrouped: null,
+            decimal: null,
+            binary: null,
+            error: "Overflow",
+          }),
+        ),
+      ),
     );
-    vi.mocked(initDataScale).mockResolvedValue(stubCalc(compute));
-    render(<DataScalePanel />);
-
-    await userEvent.type(screen.getByLabelText("件数"), "1");
-    await userEvent.type(screen.getByLabelText("次元数"), "1");
-
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Math ERROR");
-    });
-    expect(
-      screen.getByRole("status").querySelector("[data-error='Overflow']"),
-    ).not.toBeNull();
+    await fillHeadline();
+    await waitFor(() => expect(main()).toHaveTextContent("Math ERROR"));
+    expect(main()).toHaveAttribute("data-error", "Overflow");
   });
 
   it("says so when the calculation engine cannot be loaded", async () => {

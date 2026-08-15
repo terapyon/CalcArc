@@ -9,31 +9,39 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
-.field {
+/* 主表示の切り替え。入力ではなく「出た結果の読み方」を選ぶ操作なので、
+   Keypad の区画にはしない(設計書 §3)。**特異度の低いこちらを先に置く**
+   ——後段の面ごとの狙い撃ちより先でないと、biome が降順特異度を咎める。 */
+.units {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: var(--key-gap);
+  /* <fieldset> の既定枠線・余白を打ち消す(Keypad の .section と同形)。 */
+  margin: 0;
+  padding: 0;
+  border: none;
 }
 
-.field label {
-  color: var(--display-status-fg);
-  font-size: var(--display-size-status);
-}
-
-.field input,
-.field select {
+.units button {
+  /* 44px を守る。読み替えの押し間違いは読み違いに直結する(設計書 §8)。 */
   min-height: var(--touch-target-min);
+  flex: 1;
   padding: 8px 12px;
-  border: var(--key-border);
+  border: 1px solid var(--display-status-fg);
   border-radius: var(--radius);
   background: var(--key-bg);
   color: var(--key-fg);
   font-family: inherit;
-  font-size: var(--key-font-size);
+  font-size: var(--key-font-size-function);
 }
 
-.field input:focus-visible,
-.field select:focus-visible {
+.units button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--key-accent-bg);
+  color: var(--key-accent-fg);
+  font-weight: var(--key-font-weight-emphasis);
+}
+
+.units button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -42,18 +50,41 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: var(--touch-target-min);
   padding: 12px 16px;
   border-radius: var(--radius);
   background: var(--display-bg);
   color: var(--display-fg);
   font-family: var(--display-font);
+  text-align: right;
 }
 
 .result p {
   margin: 0;
 }
 
-.result [data-error] {
-  color: var(--error-fg);
+/* 数字面と型面は同じ枠に載る(設計書 §2)。型面は 11 キーで 3 行しか
+   描かれないため、行数を明示しないと区画が 1 行ぶん(約 93px)縮み、
+   面を入れ替えるたびに画面が伸び縮みして、押そうとした位置がずれる。
+   85px のような決め打ちではなく**行数**で指定するのは、キーの寸法を
+   実機で見てから決めるという S1 の方針を壊さないため。 */
+.panel :global(fieldset[aria-label="数字と単位のキー"]),
+.panel :global(fieldset[aria-label="データ型のキー"]) {
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* 型名は文字数が多い(bfloat16)。この面だけ小さくする——数字面や
+   Scientific の関数列に波及させないよう、区画名で狙い撃つ。 */
+.panel :global(fieldset[aria-label="データ型のキー"]) button {
+  font-size: 0.75rem;
+}
+
+/* 主は大きく、副は小さく併記する。両方出す(base-spec §17)ことは
+   変えず、どちらを強調するかだけをトグルが決める(設計書 §6)。 */
+.primary {
+  font-size: var(--key-font-size);
+}
+
+.secondary {
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
 }
