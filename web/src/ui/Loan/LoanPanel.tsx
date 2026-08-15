@@ -26,15 +26,15 @@ import {
   YEAR,
 } from "../../finance/entry";
 import { initLoan, type LoanCalc, type LoanMode } from "../../finance/loan";
-import { Keypad } from "../Keypad/Keypad";
 import {
   COMPOUND_FIELD_SECTION,
-  LOAN_SECTIONS,
-  type LoanField,
-  type LoanKeyToken,
+  FINANCE_SECTIONS,
+  type FinanceField,
+  type FinanceKeyToken,
   PERIODS_SECTION,
   TAX_SECTION,
-} from "../Keypad/loan";
+} from "../Keypad/finance";
+import { Keypad } from "../Keypad/Keypad";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import styles from "./LoanPanel.module.css";
@@ -42,7 +42,7 @@ import styles from "./LoanPanel.module.css";
 /** 金額の項目。ここだけが万・億を受け、`entry.ts` を通る(設計書 §6)。 */
 
 /** 項目を移すときの探索順(盤面の並びと同じ)。 */
-const FIELD_ORDER: LoanField[] = [
+const FIELD_ORDER: FinanceField[] = [
   "principal",
   "rate",
   "months",
@@ -79,7 +79,7 @@ const PERIOD_LABELS: Record<1 | 2 | 12, string> = {
  * 5 列目の 2 マスは項目に従って差し替わる(設計書 §5)。
  */
 function unitFor(
-  field: LoanField,
+  field: FinanceField,
   slot: "unit:high" | "unit:low",
 ): Unit | null {
   if (field === "rate") return null;
@@ -97,7 +97,7 @@ const MAX_RATE_LEN = 8;
 /** 盤面のモード。**複利はローンの「求めるもの」ではない**ので、型を広げる。 */
 export type PanelMode = LoanMode | "compound";
 
-const SOLVED_FOR: Record<PanelMode, LoanField | null> = {
+const SOLVED_FOR: Record<PanelMode, FinanceField | null> = {
   payment: "payment",
   principal: "principal",
   term: "months",
@@ -113,7 +113,7 @@ const MODE_STATUS: Record<PanelMode, string> = {
 };
 
 /** その項目がその モードに出るか。**行ごと差し替える**(設計書 §4)。 */
-const COMPOUND_FIELDS: LoanField[] = [
+const COMPOUND_FIELDS: FinanceField[] = [
   "principal",
   "deposit",
   "rate",
@@ -122,7 +122,7 @@ const COMPOUND_FIELDS: LoanField[] = [
   "tax",
 ];
 
-const FIELD_LABELS: Record<LoanField, string> = {
+const FIELD_LABELS: Record<FinanceField, string> = {
   principal: "借入額",
   rate: "年利",
   months: "期間",
@@ -135,7 +135,7 @@ const FIELD_LABELS: Record<LoanField, string> = {
 };
 
 /** 項目に付く単位。echo の末尾に出す(整形ではなく単位の表示)。 */
-const FIELD_UNITS: Record<LoanField, string> = {
+const FIELD_UNITS: Record<FinanceField, string> = {
   principal: "円",
   rate: "%",
   months: "か月",
@@ -166,7 +166,7 @@ export function LoanPanel() {
   // 周期と税は選択。**計算に入るので盤面の中**にある(設計書 §7)。
   const [periodsPerYear, setPeriodsPerYear] = useState<1 | 2 | 12>(12);
   const [withholding, setWithholding] = useState(false);
-  const [active, setActive] = useState<LoanField>("principal");
+  const [active, setActive] = useState<FinanceField>("principal");
   // **すべての項目を同じ構造で持つ。** 年利も期間もトークン列である
   // ——式が全項目で打てる(裁定 Q14)し、項目ごとに違う入力機構を持つと
   // `000` のような取りこぼしが生まれる(設計書 §3 の記録)。
@@ -237,16 +237,16 @@ export function LoanPanel() {
    * ボーナスをモードごとに分けたのと同じ理由で、「値は保持する」は
    * **同じ意味の欄の値が消えない**という意味である(設計書 §6)。
    */
-  function amountKey(field: LoanField): string {
+  function amountKey(field: FinanceField): string {
     if (mode === "compound") return `compound:${field}`;
     return field === "bonus" ? bonusKey : field;
   }
 
-  function entryOf(field: LoanField): Entry {
+  function entryOf(field: FinanceField): Entry {
     return amounts[amountKey(field)] ?? EMPTY;
   }
 
-  function setEntry(field: LoanField, next: Entry) {
+  function setEntry(field: FinanceField, next: Entry) {
     setAmounts((previous) => ({ ...previous, [amountKey(field)]: next }));
   }
 
@@ -256,7 +256,7 @@ export function LoanPanel() {
    * **モードを引数に取る**——切り替えの瞬間、まだ state に入っていない次の
    * モードで判定する必要がある(下の press を参照)。
    */
-  function fieldEnabledIn(field: LoanField, forMode: PanelMode): boolean {
+  function fieldEnabledIn(field: FinanceField, forMode: PanelMode): boolean {
     // **複利は別の行**。ローンの項目とは互いに出ない(設計書 §6)。
     if (forMode === "compound") return COMPOUND_FIELDS.includes(field);
     if (
@@ -281,14 +281,14 @@ export function LoanPanel() {
     return true;
   }
 
-  function fieldEnabled(field: LoanField): boolean {
+  function fieldEnabled(field: FinanceField): boolean {
     return fieldEnabledIn(field, mode);
   }
 
   /** いま押せないキー(設計書 §6 の可否表 + 単位の文法)。 */
-  function keyDisabled(token: LoanKeyToken): boolean {
+  function keyDisabled(token: FinanceKeyToken): boolean {
     if (token.startsWith("field:")) {
-      return !fieldEnabled(token.slice("field:".length) as LoanField);
+      return !fieldEnabled(token.slice("field:".length) as FinanceField);
     }
     if (token.startsWith("mode:")) return false;
     switch (token) {
@@ -322,7 +322,7 @@ export function LoanPanel() {
   }
 
   /** トグルとして押されているキー。数字は undefined(トグルではない)。 */
-  function keyPressed(token: LoanKeyToken): boolean | undefined {
+  function keyPressed(token: FinanceKeyToken): boolean | undefined {
     if (token.startsWith("mode:")) return token === `mode:${mode}`;
     if (token.startsWith("field:")) return token === `field:${active}`;
     if (token.startsWith("period:"))
@@ -337,7 +337,10 @@ export function LoanPanel() {
   }
 
   /** 項目の定義域。着地の上限と、どの単位表で読むか。 */
-  function domainOf(field: LoanField): { max: string; unitSet: UnitSetName } {
+  function domainOf(field: FinanceField): {
+    max: string;
+    unitSet: UnitSetName;
+  } {
     if (field !== "months") return { max: MAX_YEN, unitSet: "yen" };
     // **複利の期間は「期」**。年 の scale が 1 年あたりの期数になるので、
     // どの周期でも割り切れる(設計書 §5)。
@@ -347,7 +350,7 @@ export function LoanPanel() {
     };
   }
 
-  function press(token: LoanKeyToken) {
+  function press(token: FinanceKeyToken) {
     if (token.startsWith("mode:")) {
       const next = token.slice("mode:".length) as PanelMode;
       setMode(next);
@@ -364,7 +367,7 @@ export function LoanPanel() {
       return;
     }
     if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as LoanField);
+      setActive(token.slice("field:".length) as FinanceField);
       return;
     }
     if (token.startsWith("digit:")) {
@@ -434,14 +437,14 @@ export function LoanPanel() {
   }
 
   /** 項目の、打った通りの文字列。周期と税は選んだものを言葉で出す。 */
-  function typedIn(field: LoanField): string {
+  function typedIn(field: FinanceField): string {
     if (field === "periods") return PERIOD_LABELS[periodsPerYear];
     if (field === "tax") return withholding ? "20.315%" : "なし";
     return text(entryOf(field));
   }
 
   /** 式を評価した結果（値とエラー）。 */
-  function settleResult(field: LoanField): {
+  function settleResult(field: FinanceField): {
     value: string | null;
     error: string | null;
   } {
@@ -461,7 +464,7 @@ export function LoanPanel() {
   }
 
   /** 式を評価した値。壊れていれば null。 */
-  function settle(field: LoanField): string | null {
+  function settle(field: FinanceField): string | null {
     const typed = typedIn(field);
     if (typed === "" || expr === null) return null;
     if (field === "rate") return expr.percent(typed).value;
@@ -469,7 +472,7 @@ export function LoanPanel() {
     return expr.integer(typed, max, unitSet).value;
   }
 
-  function labelOf(field: LoanField): string {
+  function labelOf(field: FinanceField): string {
     // **同じ入れ物でも意味が違えば名前も違う。** 複利の `principal` は
     // 負債ではなく投資の元本である(入れ物も別。amountKey を参照)。
     if (mode === "compound" && field === "principal") return "元本";
@@ -503,7 +506,7 @@ export function LoanPanel() {
    * いれば空文字にして「まだ揃っていない」扱いにする。
    */
   /** 項目の値（式を評価した結果）。壊れていれば空文字＝「まだ揃っていない」。 */
-  function evaluated(field: LoanField): string {
+  function evaluated(field: FinanceField): string {
     return settle(field) ?? "";
   }
 
@@ -698,30 +701,30 @@ export function LoanPanel() {
 
 /** 項目の並び。**入力の一覧は盤面と同じ順**に出す(設計書 §2)。 */
 /** 項目の既定の単位。**打った値が自分の単位を持っていれば足さない。** */
-function unitSuffix(field: LoanField, typed: string): string {
+function unitSuffix(field: FinanceField, typed: string): string {
   if (field === "months" && /[年月]/.test(typed)) return "";
   return FIELD_UNITS[field];
 }
 
-function orderFor(mode: PanelMode): LoanField[] {
+function orderFor(mode: PanelMode): FinanceField[] {
   return mode === "compound" ? COMPOUND_FIELDS : FIELD_ORDER;
 }
 
 /** ボーナス欄の名前だけモードで差し替える(設計書 §6)。 */
-function sectionsFor(mode: PanelMode, active: LoanField) {
+function sectionsFor(mode: PanelMode, active: FinanceField) {
   // 複利は項目行を差し替え、周期・税では**面が入れ替わる**(設計書 §7)。
   const base =
     mode === "compound"
       ? [
-          LOAN_SECTIONS[0] as KeypadSection<LoanKeyToken>,
+          FINANCE_SECTIONS[0] as KeypadSection<FinanceKeyToken>,
           COMPOUND_FIELD_SECTION,
           active === "periods"
             ? PERIODS_SECTION
             : active === "tax"
               ? TAX_SECTION
-              : (LOAN_SECTIONS[2] as KeypadSection<LoanKeyToken>),
+              : (FINANCE_SECTIONS[2] as KeypadSection<FinanceKeyToken>),
         ]
-      : LOAN_SECTIONS;
+      : FINANCE_SECTIONS;
   // **単位キーのラベルも項目に従う**(設計書 §5)。挙動だけ差し替えて絵が
   // `万` のままだと、期間を打っている人には嘘のキーが見える——実機で
   // 実際にそうなっていた。

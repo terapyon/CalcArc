@@ -1,7 +1,7 @@
 import type { KeypadSection } from "./types";
 
 /**
- * Loan のキー集合。
+ * Finance のキー集合。
  *
  * 日本の電卓の**配置慣習と操作感まで**を参考にしている。意匠(配色・ボタン
  * 形状・書体・ロゴ・製品名)は複製していない(base-spec §3 Non-goals、§12)。
@@ -13,7 +13,7 @@ import type { KeypadSection } from "./types";
  */
 
 /** キーパッドが返すトークン。**calc の語彙とは別**(設計書 §4)。 */
-export type LoanKeyToken =
+export type FinanceKeyToken =
   | "digit:0"
   | "digit:1"
   | "digit:2"
@@ -55,7 +55,7 @@ export type LoanKeyToken =
   | "tax:withholding";
 
 /** 入力する項目。 */
-export type LoanField =
+export type FinanceField =
   | "principal"
   | "deposit"
   | "periods"
@@ -66,7 +66,7 @@ export type LoanField =
   | "residual"
   | "bonus";
 
-const MODES: KeypadSection<LoanKeyToken> = {
+const MODES: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "計算の種類",
   columns: 4,
   height: "half",
@@ -100,7 +100,7 @@ const MODES: KeypadSection<LoanKeyToken> = {
   ],
 };
 
-const FIELDS: KeypadSection<LoanKeyToken> = {
+const FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
   height: "half",
@@ -152,7 +152,7 @@ const FIELDS: KeypadSection<LoanKeyToken> = {
  * 複利の項目。**ローンとは別の行に差し替える**——同じ行に両方を並べると
  * 9 列になり、1 キーが 36px で 44px を割る(設計書 §4)。
  */
-const COMPOUND_FIELDS: KeypadSection<LoanKeyToken> = {
+const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
   height: "half",
@@ -200,7 +200,7 @@ const COMPOUND_FIELDS: KeypadSection<LoanKeyToken> = {
  * 周期の面。**面が入れ替わるのは「計算に入るもの」だから**——表示の読み方
  * だけを変えるトグルとは置き場所を分ける(設計書 §7)。
  */
-const PERIODS_FACE: KeypadSection<LoanKeyToken> = {
+const PERIODS_FACE: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "複利の周期のキー",
   columns: 5,
   height: "square",
@@ -240,7 +240,7 @@ const PERIODS_FACE: KeypadSection<LoanKeyToken> = {
 };
 
 /** 税の面。既定はタックスフリー(NISA 前提。設計書 §6)。 */
-const TAX_FACE: KeypadSection<LoanKeyToken> = {
+const TAX_FACE: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "税のキー",
   columns: 5,
   height: "square",
@@ -274,7 +274,7 @@ const TAX_FACE: KeypadSection<LoanKeyToken> = {
   ],
 };
 
-const PAD: KeypadSection<LoanKeyToken> = {
+const PAD: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "数字と演算のキー",
   columns: 5,
   height: "square",
@@ -326,7 +326,7 @@ export const COMPOUND_FIELD_SECTION = COMPOUND_FIELDS;
 export const PERIODS_SECTION = PERIODS_FACE;
 export const TAX_SECTION = TAX_FACE;
 
-export const LOAN_SECTIONS: KeypadSection<LoanKeyToken>[] = [
+export const FINANCE_SECTIONS: KeypadSection<FinanceKeyToken>[] = [
   MODES,
   FIELDS,
   PAD,
