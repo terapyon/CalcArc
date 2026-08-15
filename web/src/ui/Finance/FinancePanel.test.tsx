@@ -376,13 +376,15 @@ describe("FinancePanel（電卓）", () => {
     // 欄に落ちる。
     await renderPanel();
     await press(["残価を入力"]);
-    expect(screen.getByTestId("loan-field")).toHaveTextContent("残価を入力中");
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
+      "残価を入力中",
+    );
 
     await press(["借入可能額を求める"]);
     const residual = screen.getByRole("button", { name: "残価を入力" });
     expect(residual).toBeDisabled();
     expect(residual).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTestId("loan-field")).not.toHaveTextContent(
+    expect(screen.getByTestId("finance-field")).not.toHaveTextContent(
       "残価を入力中",
     );
   });
@@ -428,12 +430,16 @@ describe("FinancePanel（電卓）", () => {
 
   it("names the mode and the active field in the status line", async () => {
     await renderPanel();
-    expect(screen.getByTestId("loan-mode")).toHaveTextContent("月額を求める");
-    expect(screen.getByTestId("loan-field")).toHaveTextContent(
+    expect(screen.getByTestId("finance-mode")).toHaveTextContent(
+      "月額を求める",
+    );
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
       "借入額を入力中",
     );
     await press(["年利を入力"]);
-    expect(screen.getByTestId("loan-field")).toHaveTextContent("年利を入力中");
+    expect(screen.getByTestId("finance-field")).toHaveTextContent(
+      "年利を入力中",
+    );
   });
 
   it("keeps the disclaimer on screen and off the alert channel", async () => {

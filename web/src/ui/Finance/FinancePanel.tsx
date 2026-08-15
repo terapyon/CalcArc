@@ -664,12 +664,12 @@ export function FinancePanel() {
         error={error}
         status={[
           {
-            testId: "loan-mode",
+            testId: "finance-mode",
             ariaLabel: "求めるもの",
             text: MODE_STATUS[mode],
           },
           {
-            testId: "loan-field",
+            testId: "finance-field",
             ariaLabel: "入力中の項目",
             text: `${labelOf(active)}を入力中`,
           },
