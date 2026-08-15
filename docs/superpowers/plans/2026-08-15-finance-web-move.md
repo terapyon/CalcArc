@@ -706,6 +706,14 @@ git log --oneline main..HEAD
 - **`FinanceCalc` / `initFinance` の改名**（`finance/index.ts`）——複利のラッパーが
   Finance を名乗っている altitude の問題。`finance/compound.ts` に分けて
   `finance/index.ts` を barrel にする案があるが、**移動と混ぜない**。
+  最終レビューが挙げた具体案:
+  - `finance/index.ts` が持つ `FinanceCalc` / `initFinance` は**複利だけ**を
+    指しているが、`finance/` にはいま `loan/` と `entry.ts` も居る。
+    `FinancePanel.tsx:3` と `:28` が `from "../../finance"`(実体は複利)と
+    `from "../../finance/loan"` と並んで読める。
+  - `finance/types.ts`(複利の型が根に、`loan/types.ts` の隣に)も同じ非対称。
+  - 提案された形: **`finance/compound/{index,types}.ts` を `finance/loan/`
+    と対にし、`finance/index.ts` は barrel にするか無くす。**
 - **WASM のエクスポート名**（`loan_forward` ほか）の整理。
 - **E2E のファイル名**——複利の E2E が書かれた時点で判断する。
 - **`crates/` の追加移動**（`Rate` の置き場所など、B spec §3 が送ったもの）。

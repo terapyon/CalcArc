@@ -420,7 +420,7 @@ describe("FinancePanel（電卓）", () => {
     await waitFor(() => {
       expect(main()).toHaveTextContent("91,855 円");
     });
-    const breakdown = screen.getByTestId("loan-breakdown");
+    const breakdown = screen.getByTestId("finance-breakdown");
     expect(breakdown).toHaveTextContent("総支払額");
     expect(breakdown).toHaveTextContent("38,579,007 円");
     expect(breakdown).toHaveTextContent("総利息");
@@ -519,7 +519,7 @@ describe("FinancePanel（電卓）", () => {
     await waitFor(() => {
       expect(main()).toHaveTextContent("37,536 円");
     });
-    expect(screen.getByTestId("loan-breakdown")).toHaveTextContent(
+    expect(screen.getByTestId("finance-breakdown")).toHaveTextContent(
       "最終回（残価）",
     );
     expect(calc.forward).toHaveBeenLastCalledWith(

@@ -682,7 +682,7 @@ export function FinancePanel() {
         disabled={keyDisabled}
       />
       {breakdown.length > 0 && (
-        <div className={styles.breakdown} data-testid="loan-breakdown">
+        <div className={styles.breakdown} data-testid="finance-breakdown">
           {breakdown.map((line) => (
             <p key={line.label}>
               <span className={styles.breakdownLabel}>{line.label}</span>

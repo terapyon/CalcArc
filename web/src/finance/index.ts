@@ -4,9 +4,8 @@
  * UI Framework に依存しない(base-spec §4.3)。ここに react を
  * import してはならない。計算も持たない —— 型変換と初期化だけ。
  *
- * **いまは呼び出し元が無い。** F1 の spec は計算コアと検証を主戦場と定め、
- * 盤面は別 spec に送っている(設計書 §10/§14-8)。境界をここまで作って
- * おくのは、UI の spec が計算に触らず盤面だけに集中できるようにするため。
+ * 呼び出し元は `web/src/ui/Finance/FinancePanel.tsx`(import・`initFinance`・
+ * `grow` の呼び出し)。
  */
 
 import init, { compound_grow } from "../wasm/calcarc_wasm.js";
