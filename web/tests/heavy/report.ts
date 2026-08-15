@@ -243,7 +243,10 @@ export function renderReport(
     "- **再現:** `cd web && pnpm heavy`(内部で wasm をビルドし、ハーネスを",
     "  ポート 4180 で立て、実ブラウザで全件を回す)。この報告書",
     "  `web/heavy-report.md` はその実行が書き出したものである。",
-    "- **期待値の作り直し:** `cd reference && uv run python scripts/generate.py`。",
+    // **generate.py ではない。** あちらは testdata/ を作り直す別のスクリプトで、
+    // これを回してもコーパスは 1 バイトも変わらない。外から確かめる人が最初に
+    // 打つ行なので、ここを間違えると「再現できない」という結論になる。
+    "- **期待値の作り直し:** `cd reference && UV_NO_CONFIG=1 uv run python scripts/generate_corpus.py`。",
     "  期待値は Python の mpmath が 50 桁で独立に評価したもので、Rust の移植",
     "  ではない。",
     "- **読む側のコード:** `web/tests/heavy/`。シャードの検証(`corpus.ts`)、",
