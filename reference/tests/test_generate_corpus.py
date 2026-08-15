@@ -66,3 +66,25 @@ def test_every_case_performs_at_least_one_operation() -> None:
     shard = generate_corpus.build_shard(seed=7, count=200)
     for case in shard["cases"]:
         assert not case["expr"].lstrip("-").isdigit(), case["expr"]
+
+
+def test_equivalence_cases_carry_two_sequences_and_no_expected_value() -> None:
+    shard = generate_corpus.build_equivalences(seed=7, count=30)
+    for case in shard["cases"]:
+        assert case["kind"] == "equivalence"
+        assert case["left"] and case["right"]
+        assert "expect" not in case
+
+
+def test_the_two_sides_are_never_the_same_keys() -> None:
+    # 両辺が同じ経路に落ちると常に緑になる(設計書 §11)。生成器が
+    # 自明な対を出さないことを、生成器自身のテストで見る。
+    shard = generate_corpus.build_equivalences(seed=8, count=100)
+    for case in shard["cases"]:
+        assert case["left"] != case["right"]
+
+
+def test_equivalences_are_deterministic() -> None:
+    assert generate_corpus.build_equivalences(
+        seed=9, count=20
+    ) == generate_corpus.build_equivalences(seed=9, count=20)

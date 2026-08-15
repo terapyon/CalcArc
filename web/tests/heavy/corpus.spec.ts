@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { loadShards, withinTolerance } from "./corpus";
+import {
+  type EquivalenceCase,
+  loadShards,
+  type ValueCase,
+  withinTolerance,
+} from "./corpus";
 import { parseDisplay } from "./display";
 import { openHarness, runAll } from "./harness";
 
@@ -19,16 +24,20 @@ test("at least one shard is present", () => {
 });
 
 for (const { name, shard } of loadShards()) {
+  const values = shard.cases.filter((c): c is ValueCase => c.kind === "value");
+  if (values.length === 0) {
+    continue;
+  }
   test(`every case in ${name} matches the reference`, async ({ page }) => {
     await openHarness(page);
     // 1 シャード = 1 往復。ケースごとに evaluate すると往復が計算を覆い隠す。
     const results = await runAll(
       page,
-      shard.cases.map((c) => c.keys),
+      values.map((c) => c.keys),
     );
 
     const mismatches: string[] = [];
-    for (const [index, testCase] of shard.cases.entries()) {
+    for (const [index, testCase] of values.entries()) {
       const result = results[index];
       if (result === undefined) {
         mismatches.push(`${testCase.id}: the harness returned nothing`);
@@ -52,7 +61,54 @@ for (const { name, shard } of loadShards()) {
     // Task 8 のレポートが持つ(設計書 §8)。
     expect(
       mismatches.slice(0, 20).join("\n"),
-      `${mismatches.length} of ${shard.cases.length} cases disagree`,
+      `${mismatches.length} of ${values.length} cases disagree`,
+    ).toBe("");
+  });
+}
+
+for (const { name, shard } of loadShards()) {
+  const equivalences = shard.cases.filter(
+    (c): c is EquivalenceCase => c.kind === "equivalence",
+  );
+  if (equivalences.length === 0) {
+    continue;
+  }
+  test(`both routes agree in ${name}`, async ({ page }) => {
+    await openHarness(page);
+    // 左右をまとめて 1 往復で流す。前半が左、後半が右。
+    const results = await runAll(page, [
+      ...equivalences.map((c) => c.left),
+      ...equivalences.map((c) => c.right),
+    ]);
+
+    const mismatches: string[] = [];
+    for (const [index, testCase] of equivalences.entries()) {
+      const left = results[index];
+      const right = results[index + equivalences.length];
+      if (left === undefined || right === undefined) {
+        mismatches.push(`${testCase.id}: the harness returned nothing`);
+        continue;
+      }
+      if (left.error !== null || right.error !== null) {
+        mismatches.push(
+          `${testCase.id}: error ${left.error ?? "none"} / ${right.error ?? "none"}`,
+        );
+        continue;
+      }
+      if (
+        !withinTolerance(
+          parseDisplay(left.main),
+          parseDisplay(right.main),
+          shard.tolerance,
+        )
+      ) {
+        mismatches.push(`${testCase.id}: ${left.main} vs ${right.main}`);
+      }
+    }
+
+    expect(
+      mismatches.slice(0, 20).join("\n"),
+      `${mismatches.length} of ${equivalences.length} pairs disagree`,
     ).toBe("");
   });
 }

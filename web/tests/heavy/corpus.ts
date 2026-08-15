@@ -17,11 +17,25 @@ export interface ValueCase {
   expect: { re: number; im: number };
 }
 
+/**
+ * 期待値を持たないケース。二つのキー列が同じ表示に着くことだけを主張する。
+ * Python が介在しないので、比較は corpus.spec.ts が実ブラウザ上で行う。
+ */
+export interface EquivalenceCase {
+  kind: "equivalence";
+  id: string;
+  mode: string;
+  left: string[];
+  right: string[];
+}
+
+export type CorpusCase = ValueCase | EquivalenceCase;
+
 export interface Shard {
   schema: number;
   generated_by: string;
   tolerance: Tolerance;
-  cases: ValueCase[];
+  cases: CorpusCase[];
 }
 
 // web/tests/heavy/ から見たリポジトリ直下。package.json が type: module
