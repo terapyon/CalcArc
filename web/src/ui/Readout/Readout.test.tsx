@@ -85,7 +85,7 @@ describe("Readout", () => {
   });
 
   it("takes only strings — it knows nothing about the calculation core", () => {
-    // Loan と Data Scale が同じ部品を使う(設計書 §6)。DisplayState を
+    // Finance と Data Scale が同じ部品を使う(設計書 §6)。DisplayState を
     // 受け取らないことが、その再利用の条件である。
     render(
       <Readout

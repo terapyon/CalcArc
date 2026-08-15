@@ -190,10 +190,11 @@ calc-core
 └── numeric
 ```
 
-**【訂正 2026-08-15】** `finance` の枠はまだ空いている。ローンの計算は
-`loan` として実装されており（`testdata/finance.json` は既にこの名前）、
-`finance` を実際に作るかは複利・積立を足すときに判断する
-（[F1 設計](superpowers/specs/2026-08-14-finance-compound-design.md) §7）。
+**【訂正 2026-08-15】** `finance` の枠は埋まった。`finance::{compound, tax, loan}`
+であり、ローンは `finance::loan` の下に居る
+（[B 設計](superpowers/specs/2026-08-15-loan-under-finance-design.md)）。
+web も同じ木で、`web/src/finance/{entry.ts, loan/}` と `web/src/ui/Finance/`
+である（[web 移動の計画](superpowers/plans/2026-08-15-finance-web-move.md)）。
 
 可能な限り、
 
