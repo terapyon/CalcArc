@@ -13,14 +13,12 @@ test("plain decimals are read back", () => {
   expect(parseDisplay("1.414213562")).toBe(1.414213562);
 });
 
-test("a negative sign is read whichever glyph is used", () => {
-  // "-5"(ASCII)は「負の数」の探りで実際に観測した表示そのもの。
+test("a negative sign is read", () => {
+  // "-5"(ASCII)は「負の数」の探りで実際に観測した表示そのもの
+  // (docs/corpus-measurements.md)。U+2212(数学用マイナス)は観測して
+  // いないため、対応するテストも実装も置かない(レビュー修正ラウンド 1)。
+  // 実測されたら、そのときに実測付きで足す。
   expect(parseDisplay("-5")).toBe(-5);
-  // "−5"(U+2212 数学用マイナス)は今回の探りでは観測していない
-  // (CalcArc 自身は ASCII の "-" しか出さなかった)。それでも
-  // parseDisplay の実装(display.ts)はこの記号を読む契約を宣言している
-  // ので、その契約自体を検証する。
-  expect(parseDisplay("−5")).toBe(-5);
 });
 
 test("a display that is not a number is refused loudly", () => {
