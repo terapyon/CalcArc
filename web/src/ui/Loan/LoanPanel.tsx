@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { type ExprCalc, initExpr, type UnitSetName } from "../../expr";
 import { type FinanceCalc, initFinance } from "../../finance";
-import { initLoan, type LoanCalc, type LoanMode } from "../../loan";
 import {
   backspace,
   canPushCloseParen,
@@ -25,7 +24,8 @@ import {
   text,
   type Unit,
   YEAR,
-} from "../../loan/entry";
+} from "../../finance/entry";
+import { initLoan, type LoanCalc, type LoanMode } from "../../finance/loan";
 import { Keypad } from "../Keypad/Keypad";
 import {
   COMPOUND_FIELD_SECTION,

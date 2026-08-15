@@ -42,7 +42,7 @@ let ready: Promise<FinanceCalc> | null = null;
 /**
  * WASM を読み込んで FinanceCalc を返す。複数回呼んでも初期化は 1 度だけ。
  *
- * calc/ や loan/ も init() を呼ぶが、生成された __wbg_init は
+ * calc/ や finance/loan/ も init() を呼ぶが、生成された __wbg_init は
  * モジュール変数 wasm が設定済みなら即座に return する(二重初期化しない)。
  */
 export function initFinance(): Promise<FinanceCalc> {

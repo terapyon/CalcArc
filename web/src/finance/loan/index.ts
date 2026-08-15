@@ -15,7 +15,7 @@ import init, {
   loan_forward,
   loan_principal,
   loan_term,
-} from "../wasm/calcarc_wasm.js";
+} from "../../wasm/calcarc_wasm.js";
 import type {
   LoanBonusForwardResult,
   LoanBonusPrincipalResult,

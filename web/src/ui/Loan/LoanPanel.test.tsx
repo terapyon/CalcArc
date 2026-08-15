@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { LoanCalc } from "../../loan";
+import type { LoanCalc } from "../../finance/loan";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx と同じ流儀)。
-vi.mock("../../loan", () => ({
+vi.mock("../../finance/loan", () => ({
   initLoan: vi.fn(),
 }));
 
@@ -63,7 +63,7 @@ vi.mock("../../expr", () => ({
     }),
 }));
 
-import { initLoan } from "../../loan";
+import { initLoan } from "../../finance/loan";
 import { LoanPanel } from "./LoanPanel";
 
 function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
