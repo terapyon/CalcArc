@@ -37,7 +37,7 @@ import {
 import { Keypad } from "../Keypad/Keypad";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
-import styles from "./LoanPanel.module.css";
+import styles from "./FinancePanel.module.css";
 
 /** 金額の項目。ここだけが万・億を受け、`entry.ts` を通る(設計書 §6)。 */
 
@@ -157,7 +157,7 @@ interface Line {
   value: string;
 }
 
-export function LoanPanel() {
+export function FinancePanel() {
   const [calc, setCalc] = useState<LoanCalc | null>(null);
   const [expr, setExpr] = useState<ExprCalc | null>(null);
   const [finance, setFinance] = useState<FinanceCalc | null>(null);
@@ -216,7 +216,7 @@ export function LoanPanel() {
 
   if (failed) {
     return (
-      <p role="alert" data-testid="loan-load-error">
+      <p role="alert" data-testid="finance-load-error">
         計算エンジンを読み込めませんでした。ページを再読み込みしてください。
       </p>
     );

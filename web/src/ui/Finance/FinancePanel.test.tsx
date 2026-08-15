@@ -64,7 +64,7 @@ vi.mock("../../expr", () => ({
 }));
 
 import { initLoan } from "../../finance/loan";
-import { LoanPanel } from "./LoanPanel";
+import { FinancePanel } from "./FinancePanel";
 
 function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
   return {
@@ -115,7 +115,7 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
 
 async function renderPanel(calc: LoanCalc = stubCalc()) {
   vi.mocked(initLoan).mockResolvedValue(calc);
-  render(<LoanPanel />);
+  render(<FinancePanel />);
   // 読み込みの解決を待ってから抜ける。待たずに終わると、後続のテスト実行中に
   // act() 外の state 更新が起きて警告が出る。
   await screen.findByRole("button", { name: "借入額を入力" });
@@ -152,7 +152,7 @@ async function fillHousingExample() {
   ]);
 }
 
-describe("LoanPanel（電卓）", () => {
+describe("FinancePanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
     await renderPanel();
     expect(
@@ -526,8 +526,8 @@ describe("LoanPanel（電卓）", () => {
 
   it("says so when the calculation engine cannot be loaded", async () => {
     vi.mocked(initLoan).mockRejectedValue(new Error("wasm unavailable"));
-    render(<LoanPanel />);
-    const alert = await screen.findByTestId("loan-load-error");
+    render(<FinancePanel />);
+    const alert = await screen.findByTestId("finance-load-error");
     expect(alert).toHaveAttribute("role", "alert");
   });
 

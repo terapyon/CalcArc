@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DataScalePanel } from "./ui/DataScale/DataScalePanel";
-import { LoanPanel } from "./ui/Loan/LoanPanel";
+import { FinancePanel } from "./ui/Finance/FinancePanel";
 import { type ModuleId, Nav } from "./ui/Nav/Nav";
 import { ScientificPanel } from "./ui/ScientificPanel";
 import { UpdateToast } from "./ui/UpdateToast/UpdateToast";
@@ -34,7 +34,7 @@ export function App() {
       <main>
         {module === "scientific" && <ScientificPanel />}
         {module === "data-scale" && <DataScalePanel />}
-        {module === "finance" && <LoanPanel />}
+        {module === "finance" && <FinancePanel />}
       </main>
       {/* 更新の知らせはモジュールに属さない。シェルが 1 つだけ持つ。 */}
       <UpdateToast />
