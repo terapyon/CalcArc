@@ -352,6 +352,22 @@ export function LoanPanel() {
     return text(entryOf(field));
   }
 
+  /** 式を評価した結果（値とエラー）。 */
+  function settleResult(field: LoanField): {
+    value: string | null;
+    error: string | null;
+  } {
+    const typed = typedIn(field);
+    if (typed === "" || expr === null) return { value: null, error: null };
+    if (field === "rate") {
+      const r = expr.percent(typed);
+      return { value: r.value, error: r.error };
+    }
+    const { max, unitSet } = domainOf(field);
+    const r = expr.integer(typed, max, unitSet);
+    return { value: r.value, error: r.error };
+  }
+
   /** 式を評価した値。壊れていれば null。 */
   function settle(field: LoanField): string | null {
     const typed = typedIn(field);
@@ -401,11 +417,15 @@ export function LoanPanel() {
   const months = evaluated("months");
   const monthsNumber = months === "" ? 0 : Number(months);
 
-  let error: string | null = null;
+  // **式が壊れていたら、そこで止めて言う**(設計書 §8)。
+  let error: string | null =
+    FIELD_ORDER.filter((f) => fieldEnabledIn(f, mode))
+      .map((f) => settleResult(f).error)
+      .find((e) => e != null) ?? null;
   let answer = "";
   let breakdown: Line[] = [];
 
-  if (calc && rate !== "") {
+  if (error === null && calc && rate !== "") {
     if (mode === "payment" && principalDigits !== "" && months !== "") {
       if (bonusDigits !== "") {
         const r = calc.bonusForward(

@@ -29,6 +29,13 @@ export type DataScaleKeyToken =
   | "g"
   | "del"
   | "ac"
+  | "add"
+  | "sub"
+  | "mul"
+  | "div"
+  | "lparen"
+  | "rparen"
+  | "eq"
   | "field:count"
   | "field:dimensions"
   | "field:dtype"
@@ -64,18 +71,17 @@ const FIELDS: KeypadSection<DataScaleKeyToken> = {
 };
 
 const PAD: KeypadSection<DataScaleKeyToken> = {
-  ariaLabel: "数字と単位のキー",
-  columns: 4,
+  ariaLabel: "数字と演算のキー",
+  columns: 5,
   height: "square",
   keys: [
-    { token: "digit:7", label: "7", ariaLabel: "7", variant: "digit" },
-    { token: "digit:8", label: "8", ariaLabel: "8", variant: "digit" },
-    { token: "digit:9", label: "9", ariaLabel: "9", variant: "digit" },
+    // **最上段は Scientific と同じ**(設計書 §4)。3 つのタブで AC・DEL の
+    // 位置とキーの寸法を揃える。
+    { token: "lparen", label: "(", ariaLabel: "開き括弧", variant: "function" },
+    { token: "rparen", label: ")", ariaLabel: "閉じ括弧", variant: "function" },
+    // 件数に負の値は無いので `+/−` は置かない。予約スロット(裁定 Q3)。
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
     { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
-
-    { token: "digit:4", label: "4", ariaLabel: "4", variant: "digit" },
-    { token: "digit:5", label: "5", ariaLabel: "5", variant: "digit" },
-    { token: "digit:6", label: "6", ariaLabel: "6", variant: "digit" },
     {
       token: "ac",
       label: "AC",
@@ -83,16 +89,30 @@ const PAD: KeypadSection<DataScaleKeyToken> = {
       variant: "danger",
     },
 
+    { token: "digit:7", label: "7", ariaLabel: "7", variant: "digit" },
+    { token: "digit:8", label: "8", ariaLabel: "8", variant: "digit" },
+    { token: "digit:9", label: "9", ariaLabel: "9", variant: "digit" },
+    { token: "div", label: "÷", ariaLabel: "割る", variant: "operator" },
+    // 読み上げ名は日本語にする(記号キーの流儀。base-spec §43)。
+    { token: "g", label: "G", ariaLabel: "十億", variant: "operator" },
+
+    { token: "digit:4", label: "4", ariaLabel: "4", variant: "digit" },
+    { token: "digit:5", label: "5", ariaLabel: "5", variant: "digit" },
+    { token: "digit:6", label: "6", ariaLabel: "6", variant: "digit" },
+    { token: "mul", label: "×", ariaLabel: "掛ける", variant: "operator" },
+    { token: "m", label: "M", ariaLabel: "百万", variant: "operator" },
+
     { token: "digit:1", label: "1", ariaLabel: "1", variant: "digit" },
     { token: "digit:2", label: "2", ariaLabel: "2", variant: "digit" },
     { token: "digit:3", label: "3", ariaLabel: "3", variant: "digit" },
-    // 読み上げ名は日本語にする(記号キーの流儀。base-spec §43)。
+    { token: "sub", label: "−", ariaLabel: "引く", variant: "operator" },
     { token: "k", label: "K", ariaLabel: "千", variant: "operator" },
 
     { token: "digit:0", label: "0", ariaLabel: "0", variant: "digit" },
     { token: "zeros3", label: "000", ariaLabel: "3桁のゼロ", variant: "digit" },
-    { token: "m", label: "M", ariaLabel: "百万", variant: "operator" },
-    { token: "g", label: "G", ariaLabel: "十億", variant: "operator" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: "add", label: "+", ariaLabel: "足す", variant: "operator" },
+    { token: "eq", label: "=", ariaLabel: "計算する", variant: "operator" },
   ],
 };
 
@@ -103,7 +123,7 @@ const PAD: KeypadSection<DataScaleKeyToken> = {
  */
 const TYPES: KeypadSection<DataScaleKeyToken> = {
   ariaLabel: "データ型のキー",
-  columns: 4,
+  columns: 5,
   height: "square",
   keys: [
     {
@@ -125,6 +145,12 @@ const TYPES: KeypadSection<DataScaleKeyToken> = {
       variant: "function",
     },
     { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
+    {
+      token: "ac",
+      label: "AC",
+      ariaLabel: "この項目を消去",
+      variant: "danger",
+    },
 
     {
       token: "dtype:float16",
@@ -144,12 +170,8 @@ const TYPES: KeypadSection<DataScaleKeyToken> = {
       ariaLabel: "int32",
       variant: "function",
     },
-    {
-      token: "ac",
-      label: "AC",
-      ariaLabel: "この項目を消去",
-      variant: "danger",
-    },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
 
     {
       token: "dtype:float32",
@@ -169,6 +191,8 @@ const TYPES: KeypadSection<DataScaleKeyToken> = {
       ariaLabel: "float64",
       variant: "function",
     },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
   ],
 };
 

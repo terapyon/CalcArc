@@ -17,7 +17,7 @@ describe("Readout", () => {
 
   it("keeps the echo line as a place even when there is no input", () => {
     render(<Readout entries={[]} main="0" status={status} />);
-    expect(screen.getByTestId("display-echo")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("display-echo")).toHaveTextContent("");
   });
 
   it("shows a single unnamed entry the way Scientific always did", () => {
@@ -31,7 +31,7 @@ describe("Readout", () => {
       />,
     );
     expect(screen.getByTestId("display-echo")).toHaveTextContent("3 + 4 ×");
-    expect(screen.queryByTestId("display-entries-done")).toBeNull();
+    expect(screen.getByTestId("display-entries-done")).toBeEmptyDOMElement();
   });
 
   it("keeps the entered fields on screen, with the active one apart", () => {

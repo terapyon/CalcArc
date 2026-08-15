@@ -59,16 +59,14 @@ export function Readout({ entries, main, error, status }: ReadoutProps) {
             {text(active)}
           </div>
         )}
-        {done.length > 0 && (
-          <div
-            className={styles.entriesDone}
-            data-testid="display-entries-done"
-          >
-            {done.map((entry) => (
-              <span key={entry.label}>{text(entry)}</span>
-            ))}
-          </div>
-        )}
+        {/* **入力済みの行は空でも場所を残す。** 項目を切り替えたときに
+            行数が変わると、下にある盤面ごと動いて押す位置がずれる
+            (実測 19px)——打っている最中に指の下でキーが動くのは事故になる。 */}
+        <div className={styles.entriesDone} data-testid="display-entries-done">
+          {done.map((entry) => (
+            <span key={entry.label}>{text(entry)}</span>
+          ))}
+        </div>
       </div>
       <div className={styles.status}>
         {status.map((item) => (

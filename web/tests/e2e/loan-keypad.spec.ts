@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
-const echo = (page: Page) => page.getByTestId("display-echo");
+const echo = (page: Page) => page.getByTestId("display-entry-active");
 
 async function press(page: Page, names: string[]) {
   for (const name of names) {
@@ -151,7 +151,7 @@ test("every key is a button with an accessible name", async ({ page }) => {
   const buttons = panel(page)
     .getByRole("group", { name: /求めるもの|入力する項目|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(25); // 3 + 6 + 16
+  await expect(buttons).toHaveCount(34); // 3 + 6 + 25(5×5)
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);

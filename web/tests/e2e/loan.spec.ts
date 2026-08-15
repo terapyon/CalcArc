@@ -5,7 +5,7 @@ const nav = (page: Page, label: "Scientific" | "Data Scale" | "Finance") =>
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
 
-const echo = (page: Page) => page.getByTestId("display-echo");
+const echo = (page: Page) => page.getByTestId("display-entry-active");
 const main = (page: Page) => page.getByTestId("display-main");
 const breakdown = (page: Page) => page.getByTestId("loan-breakdown");
 

@@ -155,23 +155,35 @@ export function DataScalePanel() {
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。未入力の項目は出さない。
-  const entries = (["count", "dimensions", "dtype"] as const).map((field) => ({
-    label: FIELD_LABELS[field],
-    value:
-      field === "dtype" ? dtype : text(field === "count" ? count : dimensions),
-    active: field === active,
-  }));
+  // **未入力の項目は出さない**——空の「次元数」で埋めても根拠にならない
+  // (設計書 §2)。データ型は常に値を持つ。
+  const entries = (["count", "dimensions", "dtype"] as const)
+    .map((field) => ({
+      label: FIELD_LABELS[field],
+      value:
+        field === "dtype"
+          ? dtype
+          : text(field === "count" ? count : dimensions),
+      active: field === active,
+    }))
+    .filter((entry) => entry.active || entry.value !== "");
 
   // 結果は保持しない。両方の項目が埋まっているときだけ計算する。
   // 打った通りの文字列をコアに評価させる(設計書 訂正 2)。
-  const countDigits =
-    expr === null
-      ? ""
-      : (expr.integer(text(count), MAX_COUNT, "count").value ?? "");
-  const dimensionDigits =
-    expr === null
-      ? ""
-      : (expr.integer(text(dimensions), MAX_COUNT, "count").value ?? "");
+  function evaluate(entry: Entry) {
+    const typed = text(entry);
+    if (typed === "" || expr === null) return { value: "", error: null };
+    const r = expr.integer(typed, MAX_COUNT, "count");
+    return { value: r.value ?? "", error: r.error };
+  }
+
+  const countResult = evaluate(count);
+  const dimensionResult = evaluate(dimensions);
+  const countDigits = countResult.value;
+  const dimensionDigits = dimensionResult.value;
+  // **式が壊れていたら、そこで止めて言う。** 黙って中立に戻ると、打った人は
+  // 何も起きない画面を見ることになる(設計書 §8)。
+  const exprError = countResult.error ?? dimensionResult.error;
   const shown =
     calc && !isEmpty(count) && !isEmpty(dimensions)
       ? calc.compute(countDigits, dimensionDigits, dtype)
@@ -183,18 +195,20 @@ export function DataScalePanel() {
   const binary = shown?.binary ?? null;
   const first = primary === "decimal" ? decimal : binary;
   const second = primary === "decimal" ? binary : decimal;
-  const answer = shown?.error
+  const answer = exprError
     ? "Math ERROR"
-    : (first ??
-      second ??
-      (shown?.bytesGrouped ? `${shown.bytesGrouped} bytes` : ""));
+    : shown?.error
+      ? "Math ERROR"
+      : (first ??
+        second ??
+        (shown?.bytesGrouped ? `${shown.bytesGrouped} bytes` : ""));
 
   return (
     <section className={styles.panel} aria-label="データスケール計算">
       <Readout
         entries={entries}
         main={answer}
-        error={shown?.error ?? null}
+        error={exprError ?? shown?.error ?? null}
         status={[
           {
             testId: "datascale-primary",

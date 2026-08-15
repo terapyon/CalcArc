@@ -30,6 +30,11 @@
    計算根拠が消えないようにするため。値が見えることが目的なので、
    横に隠さず折り返す(設計書 §2 の Q7)。 */
 .entriesDone {
+  /* 空でも 1 行ぶんの場所を残す(盤面を動かさないため)。**行の高さを固定する**
+     ——既定の line-height だと、空のときと文字があるときで数 px 違い、
+     項目を切り替えるたびに盤面が動く(実測 2.6px)。 */
+  min-height: 1.2em;
+  line-height: 1.2;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

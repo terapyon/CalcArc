@@ -375,8 +375,9 @@ describe("LoanPanel（電卓）", () => {
     await press(["年利を入力", "1", "小数点", "5"]);
     await press(["返済期間を入力", "1", "2", "3", "4", "5", "6"]);
     expect(echo()).toHaveTextContent("期間 123456か月");
-    // 1200 を超えるので着地しない = 答えは出ない。
-    expect(main()).toBeEmpty();
+    // 1200 を超えるので着地しない。**黙って中立に戻らず、エラーを言う**
+    // ——打った人が「何も起きない画面」を見ることにならないように。
+    expect(main()).toHaveTextContent("Math ERROR");
   });
 
   it("puts the answer on the main line and the breakdown below", async () => {

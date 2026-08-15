@@ -103,7 +103,7 @@ describe("DataScalePanel（電卓）", () => {
     expect(
       screen.getByRole("region", { name: "データスケール計算" }),
     ).toBeInTheDocument();
-    for (const name of ["入力する項目", "数字と単位のキー"]) {
+    for (const name of ["入力する項目", "数字と演算のキー"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
     }
   });
@@ -131,11 +131,11 @@ describe("DataScalePanel（電卓）", () => {
   it("swaps the keypad face when the type field is active", async () => {
     await renderPanel();
     expect(
-      screen.getByRole("group", { name: "数字と単位のキー" }),
+      screen.getByRole("group", { name: "数字と演算のキー" }),
     ).toBeInTheDocument();
     await press(["データ型を選ぶ"]);
     expect(
-      screen.queryByRole("group", { name: "数字と単位のキー" }),
+      screen.queryByRole("group", { name: "数字と演算のキー" }),
     ).toBeNull();
     expect(
       screen.getByRole("group", { name: "データ型のキー" }),
