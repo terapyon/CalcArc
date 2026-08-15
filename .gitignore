@@ -3,6 +3,8 @@ node_modules/
 web/dist/
 web/dist-heavy/
 web/heavy-report.md
+# pnpm heavy がシャードごとの集計を落とす場所。globalSetup が毎回消す。
+web/.heavy-summaries/
 web/src/wasm/
 .venv/
 __pycache__/

@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
+  assertNoCaseTolerance,
   assertShardIsSound,
   assertSupportedMode,
   assertToleranceIsSane,
@@ -18,7 +19,7 @@ import {
 } from "./corpus";
 import { parseDisplay } from "./display";
 import { coreVersion, openHarness, runAll } from "./harness";
-import { noteRuntime, record, writeReport } from "./report";
+import { noteRuntime, record } from "./report";
 
 // **1 度だけ読む。** モジュールのトップレベルで 3 回呼ぶと 1.6MB の JSON を
 // 3 回パースすることになる(レビュー修正ラウンド 2)。
@@ -72,6 +73,30 @@ test("at least one shard is present", () => {
   expect(shards.length).toBeGreaterThan(0);
 });
 
+test("the half that is checked against an outside reference is still here", () => {
+  // 敵対者レビュー(2026-08-15、検証ラウンド)の実証: `scientific-000.json` を
+  // 退避して `pnpm heavy` を回すと **42 passed / EXIT=0**。外の基準(Python が
+  // 独立に出した期待値)を持つ半分が丸ごと消えても緑だった。
+  //
+  // 「シャードが 1 枚以上ある」では足りない。値ケースが 0 件の走行は、
+  // **同値ケースだけ**——電卓が自分自身と矛盾しないことしか見ていない走行で
+  // あり、どんなキー列にも定数を返す偽物に対して全件通る(同じレビューが
+  // 偽ハーネスで実証済み)。この層の主張の半分が消えた状態を緑にしない。
+  //
+  // 値ケースが**実際に走った**ことは、走行の最後に `writeReport()` が
+  // ディスクに残った集計から確かめる(そちらは記録が 0 件でも落ちる)。
+  const values = partitions.reduce(
+    (sum, partition) => sum + partition.values.length,
+    0,
+  );
+  expect(
+    values,
+    "no value case is present in corpus/generated/ — this run would verify " +
+      "only the calculator's agreement with itself, never against the " +
+      "expectations Python produced independently",
+  ).toBeGreaterThan(0);
+});
+
 /** 検証を試すための、最小限だが正しい 1 件を持つシャード。 */
 function soundShard(): Shard {
   return {
@@ -119,6 +144,42 @@ test("an empty shard is refused instead of running green", () => {
   const shard = soundShard();
   shard.cases = [];
   expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/no cases/);
+});
+
+test("a case that writes its own tolerance is refused, not silently ignored", () => {
+  // 設計書 §4.3 が約束している挙動。実測(2026-08-15 の検証ラウンド)では
+  // 1 件に {abs: 1e30, rel: 1e30} を足しても 43 passed / EXIT=0、無警告だった
+  // ——比較はシャード単位の tolerance しか読まないので、書いた側は効いている
+  // と思い込む。段階 3 で実装されるまでは、名指しして落ちる。
+  const shard = soundShard();
+  const overriding = {
+    ...shard.cases[0],
+    id: "x-009",
+    tolerance: { abs: 1e30, rel: 1e30 },
+  };
+  shard.cases.push(overriding as unknown as (typeof shard.cases)[number]);
+
+  // シャード名・ケース id・書かれていた値の三つとも名指しされること。
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(
+    /made-up\.json/,
+  );
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/x-009/);
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/1e\+30/);
+  // 「いまは未実装で、段階 3 で入る」と読めること。
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(
+    /NOT implemented/,
+  );
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/stage 3/);
+  // 直接呼んでも同じ。
+  expect(() =>
+    assertNoCaseTolerance("made-up.json", [
+      { id: "x-009", tolerance: { abs: 1e30, rel: 1e30 } },
+    ]),
+  ).toThrow(/silently ignored/);
+  // 素直なケースは通る。
+  expect(() =>
+    assertNoCaseTolerance("made-up.json", [{ id: "x-000" }]),
+  ).not.toThrow();
 });
 
 test("a schema this code does not know how to read is refused", () => {
@@ -465,7 +526,3 @@ for (const { name, shard, equivalences } of partitions) {
     ).toBe("");
   });
 }
-
-test.afterAll(() => {
-  writeReport();
-});

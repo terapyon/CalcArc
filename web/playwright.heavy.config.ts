@@ -8,22 +8,29 @@ export default defineConfig({
   testDir: "./tests/heavy",
   // 1 シャードで数千件を回す。既定の 30 秒では足りない。
   timeout: 300_000,
+  // **集計はワーカーの外に置く。**
+  // `tests/heavy/report.ts` の `record()` が、シャード 1 枚につき 1 ファイルを
+  // `web/.heavy-summaries/` に書く。`globalSetup` が走行の頭でそのディレクトリと
+  // 前回の `heavy-report.md` を消し、`globalTeardown` が全部を読んで 1 枚の
+  // 報告書に束ねる。**プロセス内の配列に集計を溜めない。**
+  //
+  // 以前はモジュールスコープの配列 `summaries` に積み、`test.afterAll` で
+  // 書き出していた。Playwright は**テストが 1 本落ちるとワーカーを再起動する**
+  // ので、そのとき配列ごと集計が消える。新しいワーカーの `afterAll` が自分の
+  // 見た分だけで同じファイルを上書きし、実測では 1 件の `expect.re` を壊した
+  // だけで「値: 0 / 不一致: 0 / 最大相対誤差 0.00e+0」——**赤い走行のあとに
+  // 緑の顔をした報告書**が残った(`wrote …heavy-report.md` がログに 2 回出る)。
+  // `fullyParallel: true` は同じ壊れ方を**落ちなくても**引き起こすが、
+  // 原因はそこではなく、集計をワーカーのメモリに置いていたことだった。
+  globalSetup: "./tests/heavy/global-setup.ts",
+  globalTeardown: "./tests/heavy/global-teardown.ts",
   // **1 ファイル内の test を並列に走らせない。** fullyParallel が制御するのは
   // 並列度だけで、失敗時に打ち切るかどうか(bail / maxFailures)とは無関係
   // である(レビュー修正ラウンド 2 でコメントの誤りを訂正)。ここで直列に
   // するのは、シャードごとに数千件を 1 往復で流すテストが同時に走ると
   // ブラウザ 1 つに重い evaluate が重なり、報告の順序も混ざるためである。
-  //
-  // **そしてもう一つ、この設定は集計そのものを支えている。**
-  // `tests/heavy/report.ts` はモジュールスコープの配列 `summaries` に
-  // `record()` で積み、`test.afterAll` の `writeReport()` で 1 枚の
-  // `heavy-report.md` を書き出す。`fullyParallel: true` にすると各テストが
-  // 別ワーカー(別プロセス)に散り、**ワーカーごとに別のモジュールインスタンス**
-  // になる。すると各ワーカーが自分の見た分だけの `summaries` を持って
-  // 同じ `heavy-report.md` を上書きし合い、**集計が黙って消える**——
-  // 落ちるのではなく、件数の減った緑の報告書が残る。並列にしたいときは、
-  // 先に集計をプロセス間で合流させる仕組み(各ワーカーが別ファイルに書き、
-  // グローバル teardown で束ねる等)を用意すること。
+  // 集計の合流はもう上の globalSetup / globalTeardown が担っているので、
+  // この設定はレポートの正しさを支えていない。
   fullyParallel: false,
   use: { baseURL: "http://localhost:4180" },
   webServer: {

@@ -87,6 +87,27 @@ test("the report explains what the two routes are, so it stands on its own", () 
   expect(markdown).toContain("期待値を持たない");
 });
 
+test("the report says mpmath evaluated the tree, not the printed expression", () => {
+  // **検証ラウンド(2026-08-15)の C5。** ここには「数式(`(3 + 4)`)は Python の
+  // mpmath が 50 桁の精度で独立に評価し」と書いてあった。実装は違う——Python は
+  // **式木を直接**評価しており、印字されている `expr` は式木から描き出した
+  // 人間向けの説明で、それを読んで値を出す経路はどこにも無い(設計書 §5 の訂正)。
+  // 二経路が独立という主張自体は変わらないが、外の読み手が「印字されている数式が
+  // 検証された経路だ」と受け取るのは誤りである。
+  const markdown = renderReport([summary()], PROVENANCE);
+
+  // 評価されたのは式木。
+  expect(markdown).toContain("mpmath が 50 桁の精度で評価したのは式木の方");
+  // expr が検証に使われていないことを明言する。
+  expect(markdown).toContain("検証に使われていない");
+  expect(markdown).toContain("`expr` の記法に誤りがあっても");
+  // 段階 5 で審判の入口になることと、その参照先。
+  expect(markdown).toContain("段階 5");
+  expect(markdown).toContain("§7.4");
+  // 古い言い方が残っていないこと。
+  expect(markdown).not.toContain("数式(`(3 + 4)`)は Python の mpmath");
+});
+
 test("failures are listed, not summarised away", () => {
   const markdown = renderReport(
     [
@@ -297,6 +318,97 @@ test("the abs floor's justification is written from what this run measured", () 
     PROVENANCE,
   );
   expect(floorEarnsIt).toContain("abs の側は実際に効いている");
+});
+
+test("the abs verdict cannot contradict the abs-only cases the same report lists", () => {
+  // **検証ラウンド(2026-08-15)の C1。** absVerdict は maxRelativeError と
+  // relUndefinedNonZeroAbs だけを見ていて、absOnlyCases を見ていなかった。
+  // その結果、同じ文書が「abs の下駄は一件も救っていない」「したがって abs を
+  // 0 にした許容でも全 4000 件が通る」と、「絶対誤差の側だけで通ったケース:
+  // 2 件」を**同時に印字した**。実測では abs を実質 0 にして rel を据え置くと
+  // 2 件が不一致になる——下駄はちょうどその 2 件を救っている。
+  //
+  // 元の主張が成り立つのは「rel も観測された最大相対誤差以上に上げる」という
+  // 反実仮想の下だけで、太字の結論はその条件を落としていた。
+  const markdown = renderReport(
+    [
+      summary({
+        maxRelativeError: 1.34e-9,
+        relMeasured: 3995,
+        relUndefinedNonZeroAbs: 0,
+        absOnlyCases: [
+          "sci-000019: ... (rel 7.65e-10, abs 1.1e-11)",
+          "sci-001332: ... (rel 1.34e-9, abs 2.32e-10)",
+        ],
+      }),
+    ],
+    PROVENANCE,
+  );
+
+  // **無条件の否定が出ていないこと。** ここが本丸。
+  expect(markdown).not.toContain("abs の下駄は一件も救っていない");
+  // 「abs を 0 にすれば通る」を、rel を上げる条件抜きで言っていないこと。
+  expect(markdown).not.toContain("`abs` を 0 にした許容でも全 2000 件が通る");
+  // 救っている件数が、下の節に列挙されている件数と一致すること。
+  expect(markdown).toContain("abs の側は実際に効いている");
+  expect(markdown).toContain("2 件を救っている");
+  expect(markdown).toContain("rel を据え置いたまま `abs` を 0 にすれば");
+  expect(markdown).toContain("精度限界の実例): **2**");
+  // 外すための条件が具体値つきで出ること。
+  expect(markdown).toContain("rel を 1.34e-9");
+  expect(markdown).toContain("以上に上げる必要がある");
+  // どちらを取るかが許容の設計の話で、段階 3 の主題だと書く。
+  expect(markdown).toContain("許容の設計の問題");
+  expect(markdown).toContain("段階 3 の主題");
+});
+
+test("a run that saves nothing through abs still states the condition on rel", () => {
+  // 逆側。absOnly が 0 のときの「一件も救っていない」は残ってよいが、
+  // 「abs を 0 にしても通る」には rel を上げる条件が付いていること。
+  const markdown = renderReport(
+    [
+      summary({
+        maxRelativeError: 3.4e-12,
+        relMeasured: 1996,
+        relUndefinedNonZeroAbs: 0,
+        absOnlyCases: [],
+      }),
+    ],
+    PROVENANCE,
+  );
+
+  expect(markdown).toContain("abs の下駄は一件も救っていない");
+  expect(markdown).toContain("rel を 3.40e-12 以上に取ったうえで");
+});
+
+test("an incomplete run says so before it says anything else", () => {
+  // **検証ラウンド(2026-08-15)の C2。** 1 件の expect.re を壊すと、Playwright が
+  // ワーカーを再起動し、モジュールスコープの集計が失われ、新しいワーカーが
+  // 「値: 0 / 不一致: 0 / 最大相対誤差 0.00e+0」で同じファイルを上書きした。
+  // 赤い走行のあとに緑の顔が残る、という壊れ方である。
+  //
+  // 集計はディスクに持つようにしたが、それでも揃わない走行はありうる。
+  // そのとき数字を結果として読ませない。
+  const markdown = renderReport(
+    [summary({ name: "equivalence-000.json (equivalences)" })],
+    PROVENANCE,
+    ["scientific-000.json (values)"],
+  );
+
+  // 欠落の宣言が、結果の見出しより**先**に出ること。
+  expect(markdown.indexOf("この走行は不完全である")).toBeGreaterThanOrEqual(0);
+  expect(markdown.indexOf("この走行は不完全である")).toBeLessThan(
+    markdown.indexOf("# 重量級コーパスの実行結果"),
+  );
+  // 何が欠けているかを名指しすること。
+  expect(markdown).toContain("scientific-000.json (values)");
+  // 「不一致: 0」を通ったという意味に読ませないこと。
+  expect(markdown).toContain("通ったという意味では");
+
+  // 揃っている走行にはこの見出しが出ない。
+  expect(renderReport([summary()], PROVENANCE)).not.toContain(
+    "この走行は不完全である",
+  );
 });
 
 test("a run with nothing to measure relatively says so instead of printing zero", () => {

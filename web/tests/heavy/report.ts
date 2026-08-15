@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
 import type {
@@ -8,7 +15,12 @@ import type {
   Tolerance,
   ToleranceBand,
 } from "./corpus";
-import { SHAPE_TOKENS, TOLERANCE_BANDS } from "./corpus";
+import {
+  loadShards,
+  partitionCases,
+  SHAPE_TOKENS,
+  TOLERANCE_BANDS,
+} from "./corpus";
 
 /**
  * 「何をいつ何で回したか」。外の人が判断する材料には、結果と同じくらい
@@ -72,10 +84,121 @@ export interface ShardSummary {
   tolerance: Tolerance;
 }
 
-const summaries: ShardSummary[] = [];
+/**
+ * **集計はディスクに置く。プロセス内の配列に頼らない。**
+ *
+ * 以前ここはモジュールスコープの `summaries` 配列だった。Playwright は
+ * テストが 1 本落ちるとワーカーを再起動するので、**配列ごと消える**。
+ * 新しいワーカーの `afterAll` が自分の見た分だけで同じ `heavy-report.md` を
+ * 上書きし、実測では「値: 0 / 不一致: 0 / 最大相対誤差 0.00e+0」——**赤い
+ * 走行のあとに緑の顔をした成果物**が残った(`wrote …heavy-report.md` が
+ * ログに 2 回出る)。`renderReport` の「空なら拒む」ガードは、同値シャードの
+ * 集計が残るために発火しなかった。
+ *
+ * 直し方は「配列を守る」ではなく「配列に頼らない」である。`record()` が
+ * シャード 1 枚につき 1 ファイルを書き、レポート生成は**走行の最後に
+ * ディレクトリを読む**。ワーカーが何回死のうと、既に書かれた集計は残る。
+ */
+const SUMMARY_DIR = fileURLToPath(
+  new URL("../../.heavy-summaries/", import.meta.url),
+);
+
+const REPORT_PATH = fileURLToPath(
+  new URL("../../heavy-report.md", import.meta.url),
+);
+
+/** ディスクに落とす 1 枚分。素性もここに入れる(これもワーカーごとの状態だった)。 */
+interface RecordedShard {
+  summary: ShardSummary;
+  runtime: { coreVersion: string; browser: string };
+}
+
+const runtime: { coreVersion: string; browser: string } = {
+  coreVersion: "unknown",
+  browser: "unknown",
+};
+
+/**
+ * JSON は Infinity / NaN を持てない(`JSON.stringify` は黙って `null` にする)。
+ * 集計の数字が黙って `null` に化けると、レポートの数字が黙って嘘をつく。
+ * 非有限だけを文字列に包んで往復させる。
+ */
+const NON_FINITE_PREFIX = "__number__:";
+
+function encodeNumbers(_key: string, value: unknown): unknown {
+  return typeof value === "number" && !Number.isFinite(value)
+    ? `${NON_FINITE_PREFIX}${String(value)}`
+    : value;
+}
+
+function decodeNumbers(_key: string, value: unknown): unknown {
+  return typeof value === "string" && value.startsWith(NON_FINITE_PREFIX)
+    ? Number(value.slice(NON_FINITE_PREFIX.length))
+    : value;
+}
+
+function summaryFileName(name: string): string {
+  return `${name.replace(/[^A-Za-z0-9._-]+/g, "_")}.json`;
+}
+
+/**
+ * **走行の開始時に古い残骸を消す。** 前回の走行が書いた集計が混ざると、
+ * 今回一件も回らなかったシャードが前回の数字で埋まる——それは緑の顔である。
+ * 前回の `heavy-report.md` も消す。書き出しを拒んだときに、**古い緑の
+ * 報告書がそのまま残る**のでは意味がない。
+ */
+export function resetRun(): void {
+  rmSync(SUMMARY_DIR, { recursive: true, force: true });
+  mkdirSync(SUMMARY_DIR, { recursive: true });
+  rmSync(REPORT_PATH, { force: true });
+}
 
 export function record(summary: ShardSummary): void {
-  summaries.push(summary);
+  mkdirSync(SUMMARY_DIR, { recursive: true });
+  const recorded: RecordedShard = { summary, runtime: { ...runtime } };
+  writeFileSync(
+    join(SUMMARY_DIR, summaryFileName(summary.name)),
+    JSON.stringify(recorded, encodeNumbers),
+    "utf-8",
+  );
+}
+
+function readRecorded(): RecordedShard[] {
+  let names: string[];
+  try {
+    names = readdirSync(SUMMARY_DIR);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map(
+      (name) =>
+        JSON.parse(
+          readFileSync(join(SUMMARY_DIR, name), "utf-8"),
+          decodeNumbers,
+        ) as RecordedShard,
+    );
+}
+
+/**
+ * **この走行で揃っているべき集計の名前。** コーパスそのものから導く——
+ * 「回った分だけ」を正解にすると、消えたシャードが検出できない(C3 の穴と
+ * 同じ形)。`corpus.spec.ts` が `record()` に渡す名前と同じ規則で組み立てる。
+ */
+export function expectedSummaryNames(): string[] {
+  const names: string[] = [];
+  for (const { name, shard } of loadShards()) {
+    const { values, equivalences } = partitionCases(name, shard.cases);
+    if (values.length > 0) {
+      names.push(`${name} (values)`);
+    }
+    if (equivalences.length > 0) {
+      names.push(`${name} (equivalences)`);
+    }
+  }
+  return names;
 }
 
 const BAND_LABELS: Record<ToleranceBand, string> = {
@@ -111,6 +234,13 @@ function relativeQuantity(value: number, measured: number): string {
 export function renderReport(
   entries: ShardSummary[],
   provenance: Provenance,
+  /**
+   * **揃っているはずなのに記録されなかった集計の名前。**
+   * 空でないとき、この報告書は本文の先頭から「不完全である」と名乗る。
+   * 部分的な集計から出た「不一致: 0」が、全件通った走行と同じ見た目に
+   * なってはならない(ワーカー再起動で集計が消えた実測に対する構造的な塞ぎ)。
+   */
+  missing: string[] = [],
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -164,6 +294,27 @@ export function renderReport(
     0,
   );
   const lines = [
+    ...(missing.length === 0
+      ? []
+      : [
+          "# この走行は不完全である — 下の数字を結果として読まないこと",
+          "",
+          "**揃っているはずのシャードの集計が揃っていない。** 走行が途中で",
+          "落ちたか、ワーカーが再起動して集計が失われている。以下に並ぶ件数・",
+          "最大誤差・「不一致」は**記録が残った分だけの数字**であって、",
+          "コーパス全体の結果ではない。**「不一致: 0」も、通ったという意味では",
+          "ない。**",
+          "",
+          "集計が記録されなかったシャード:",
+          "",
+          ...missing.map((name) => `- \`${name}\``),
+          "",
+          "原因を取り除いて `pnpm heavy` を回し直すこと。この見出しが消えるまで、",
+          "この文書は結果ではない。",
+          "",
+          "---",
+          "",
+        ]),
     "# 重量級コーパスの実行結果",
     "",
     `- **二経路で照合したケース(値): ${valueCases}** ` +
@@ -184,12 +335,21 @@ export function renderReport(
     "",
     "**独立した二つの経路が関与するのは、値ケースの側だけである。**",
     "",
-    "- **値ケース。** 1 件は同じ式の二つの表現を持つ。キー列(`lparen 3 add 4",
-    "  rparen eq` のような、実際に押すボタンの列)は Rust の計算コアが wasm",
-    "  として食べる。数式(`(3 + 4)`)は Python の mpmath が 50 桁の精度で",
-    "  独立に評価し、その値がコーパスの `expect` に入っている。電卓の表示と",
-    "  この期待値を突き合わせる。**参照実装は Rust の移植ではない**ので、",
-    "  同じバグが両方に入って一致してしまうことがない。",
+    "- **値ケース。** 生成器は**式木**を 1 本作り、そこから二つの表現を",
+    "  描き出す。一つは**キー列**(`lparen 3 add 4 rparen eq` のような、実際に",
+    "  押すボタンの列)で、これを Rust の計算コアが wasm として食べる。",
+    "  もう一つが**数式テキスト**(`(3 + 4)`)である。",
+    "  **Python の mpmath が 50 桁の精度で評価したのは式木の方**で、その値が",
+    "  コーパスの `expect` に入っている。電卓の表示とこの期待値を突き合わせる。",
+    "  Rust はキー列を歩き、Python は式木を歩く——**参照実装は Rust の移植では",
+    "  ない**ので、同じバグが両方に入って一致してしまうことがない。",
+    "",
+    "  **数式テキスト(`expr`)は検証に使われていない。** これは人が 1 件を",
+    "  取り出して手で検算するための描画であって、それを読んで値を出す経路は",
+    "  どこにも無い。したがって `expr` の記法に誤りがあっても、このコーパスの",
+    "  合否は変わらない。`expr` が審判の入口になるのは外からの投稿を受け付ける",
+    "  段階 5 で、そのときは `expr` を値に戻すパーサとその検証が別に要る",
+    "  (設計書 §7.4)。",
     "- **同値ケース。** 期待値を持たない。数学的に等しい二つのキー列",
     "  (`x` と `√(x²)`、`neg(neg(x))`、`x + 0`)の表示が一致することだけを",
     "  主張する。ここでは Python は介在せず、電卓が自分自身と矛盾しないことを見る。",
@@ -284,6 +444,7 @@ export function renderReport(
       worstEffective,
       relMeasured,
       maxRelativeError,
+      absOnly,
       relUndefinedNonZeroAbs: entries.reduce(
         (sum, entry) => sum + entry.relUndefinedNonZeroAbs,
         0,
@@ -366,6 +527,13 @@ interface Aggregate {
   worstEffective: number;
   relMeasured: number;
   maxRelativeError: number;
+  /**
+   * **abs の側だけで通ったケース数。** `absVerdict` はこれを見なければ
+   * ならない——見ないまま `maxRelativeError` と `relUndefinedNonZeroAbs`
+   * だけで判定していたとき、同じ文書が「abs の下駄は一件も救っていない」と
+   * 「絶対誤差の側だけで通ったケース: 2 件」を**同時に印字した**。
+   */
+  absOnly: number;
   relUndefinedNonZeroAbs: number;
 }
 
@@ -432,16 +600,31 @@ function renderEffectiveTolerance(
  * 同じ嘘を二度書かないために、この節は判定を走行の実測から導く。abs を 0 に
  * しても全件通るかどうかは、走行の数字だけで決まる:
  *
- * - 相対誤差を測定できたケースは、rel を「観測された最大相対誤差」以上に
- *   取れば rel の側だけで通る。
+ * - **abs の側だけで通ったケース**(rel の許容を超えたが abs には収まった)が
+ *   1 件でもあれば、いまの rel のままで abs を 0 にすればその件数が落ちる。
+ *   下駄は**実際にその件数を救っている。**
  * - 期待値が厳密に 0 のケースは、絶対誤差が 0 なら `|差| ≤ 0` で abs = 0
  *   でも通る。0 でないものが 1 件でもあれば、abs は実際に効いている。
+ * - どちらも 0 件のときにだけ「一件も救っていない」が成り立つ。
+ *
+ * **条件を落とさない。** ここには一度、条件付きの前提から結論だけを抜き出した
+ * 文が印字されていた——「abs の下駄は一件も救っていない」「したがって abs を 0 に
+ * した許容でも全件が通る」を、`absOnlyCases` が 2 件ある走行で。元の敵対的検証が
+ * 通したのは `{abs: 0, rel: 1.5e-9}`、つまり **rel も同時に上げた**反実仮想で
+ * あって、rel を据え置いたまま abs を外した世界ではない(実測: `abs` を実質 0 に
+ * して `rel` を 5e-10 のままにすると 2 件が不一致になる)。**成果物が自分の
+ * データと矛盾する主張を印字するのは、どんな数値の誤りよりも重い。**
  *
  * **許容の設計は変えていない。** ここでしているのは開示だけである。
  */
 function absVerdict(aggregate: Aggregate): string[] {
-  const { total, maxRelativeError, relMeasured, relUndefinedNonZeroAbs } =
-    aggregate;
+  const {
+    total,
+    absOnly,
+    maxRelativeError,
+    relMeasured,
+    relUndefinedNonZeroAbs,
+  } = aggregate;
   const closing = [
     "",
     "桁落ちで相対誤差が膨らむ領域が**あるかもしれない**ことは否定しない。",
@@ -458,26 +641,57 @@ function absVerdict(aggregate: Aggregate): string[] {
       ...closing,
     ];
   }
-  if (relUndefinedNonZeroAbs > 0) {
+  if (absOnly > 0 || relUndefinedNonZeroAbs > 0) {
+    const detail: string[] = [];
+    if (absOnly > 0) {
+      detail.push(
+        `- **rel をいまのまま(シャードが宣言する値)に据え置くなら、abs の下駄は ` +
+          `${absOnly} 件を救っている。**` +
+          "相対誤差の許容は超えたが絶対誤差の許容には収まった、と判定された" +
+          "ケースがこれだけある。id と数値は下の「絶対誤差の側だけで通った" +
+          "ケース(精度限界の実例)」の節に全件が挙がっている。" +
+          "**rel を据え置いたまま `abs` を 0 にすれば、この分が不一致になる。**",
+        `- **abs を外したいなら、rel を ${exponential(maxRelativeError)}` +
+          "(この走行で観測された最大相対誤差)以上に上げる必要がある。**" +
+          "二つを同時にした許容——rel をそこまで上げ、かつ abs を 0 にする——" +
+          `でなら、全 ${total} 件が通る。この条件を落として結論だけを取り出すと、` +
+          "**この文書は自分のデータと矛盾する。**",
+      );
+    }
+    if (relUndefinedNonZeroAbs > 0) {
+      detail.push(
+        `- **期待値が厳密に 0 のケースのうち ${relUndefinedNonZeroAbs} 件は` +
+          "絶対誤差が 0 でない。** そこでは相対誤差が数学的に定義できないので、" +
+          "rel をいくら上げても判定できない。この分は rel の引き上げでは" +
+          "代替できず、abs を外すと落ちる。",
+      );
+    }
     return [
-      `**abs の側は実際に効いている。** 期待値が厳密に 0 のケースのうち ` +
-        `${relUndefinedNonZeroAbs} 件は絶対誤差が 0 でなく、相対誤差が定義` +
-        "できないため rel だけでは判定できない。abs を 0 にするとこれらは落ちる。",
+      "**abs の側は実際に効いている。** この走行の数字がそう言っている。",
       "",
-      `残りは rel を ${exponential(maxRelativeError)}(観測された最大相対誤差)` +
-        "以上に取れば rel の側だけで通る。",
+      ...detail,
+      "",
+      "**どちらを取るかは許容の設計の問題であって、この走行が答えを出す話では",
+      "ない。** rel を据え置いて abs の下駄を残すか、rel を上げて abs を外すか",
+      "——マグニチュード依存の許容と合わせて段階 3 の主題である。その代償として",
+      `いま払っているのが、上の表に開示している「rel より緩く検査された ` +
+        `${aggregate.looser} 件」と「最悪の実効相対許容 ` +
+        `${relativeQuantity(aggregate.worstEffective, relMeasured)}」である。`,
       ...closing,
     ];
   }
   return [
-    `**このコーパスでは abs の下駄は一件も救っていない。**`,
+    `**この走行では abs の下駄は一件も救っていない。**` +
+      "abs の側だけで通ったケースが 0 件で、期待値が厳密に 0 のケースも" +
+      "全件が絶対誤差 0 だった、という実測からそう言える。",
     "",
     `- 相対誤差を測定できた ${relMeasured} 件の最大は ` +
       `**${exponential(maxRelativeError)}** で、rel をそれ以上に取れば` +
       "全部が rel の側だけで通る。",
     "- 期待値が厳密に 0 のケースは全件が絶対誤差 0 なので、`abs` を **0** に",
     "  しても `|差| ≤ 0` で通る。",
-    `- したがって **\`abs\` を 0 にした許容でも全 ${total} 件が通る**。`,
+    `- したがって **rel を ${exponential(maxRelativeError)} 以上に取ったうえで ` +
+      `\`abs\` を 0 にした許容でも、全 ${total} 件が通る**。`,
     "",
     "**それでも abs を残しているのは、期待値が厳密に 0 のケースに相対誤差が",
     "定義できないためである。** 将来そこに 0 でない誤差が出たとき、rel だけでは",
@@ -683,25 +897,76 @@ function gitDescription(): string {
   }
 }
 
-const runtime: { coreVersion: string; browser: string } = {
-  coreVersion: "unknown",
-  browser: "unknown",
-};
-
 /** 実際に走った実行環境を記録する。シャードごとに呼ばれてよい(最後が残る)。 */
 export function noteRuntime(coreVersion: string, browser: string): void {
   runtime.coreVersion = coreVersion;
   runtime.browser = browser;
 }
 
+/**
+ * **揃っていない走行を、緑の顔で書き出さない。**
+ *
+ * 走行の最後(`globalTeardown`)に 1 度だけ呼ぶ。ディスクに残った集計を読み、
+ * コーパスから導いた「揃っているべき集計」と突き合わせる。
+ *
+ * - 一枚も無い / 値ケースが一件も走っていない → **書き出さずに落ちる**。
+ *   `resetRun()` が古い報告書を消してあるので、緑の顔が残ることもない。
+ * - 一部が欠けている → 本文の先頭に**欠落を大書きしてから**書き出し、落ちる。
+ *   「値: 0 / 不一致: 0」が正常な結果と同じ見た目になる経路を構造的に潰す。
+ */
 export function writeReport(): void {
-  const path = fileURLToPath(new URL("../../heavy-report.md", import.meta.url));
-  const markdown = renderReport(summaries, {
-    ranAt: new Date().toISOString(),
-    commit: gitDescription(),
-    coreVersion: runtime.coreVersion,
-    browser: runtime.browser,
-  });
-  writeFileSync(path, markdown, "utf-8");
-  console.log(`wrote ${path}`);
+  const recorded = readRecorded();
+  const expected = expectedSummaryNames();
+  const seen = new Set(recorded.map((entry) => entry.summary.name));
+  const missing = expected.filter((name) => !seen.has(name));
+  const entries = recorded.map((entry) => entry.summary);
+  const valueCases = entries.reduce((sum, entry) => sum + entry.values, 0);
+
+  if (entries.length === 0) {
+    throw new Error(
+      "report: no shard summary survived the run — refusing to write a " +
+        "report at all. Expected " +
+        `${expected.map((name) => JSON.stringify(name)).join(", ")}. ` +
+        "A report written from nothing would read as '0 cases, 0 " +
+        "mismatches' and look like a pass.",
+    );
+  }
+  if (valueCases === 0) {
+    throw new Error(
+      "report: not a single value case was recorded. The value cases are " +
+        "the only half of this layer that is checked against an outside " +
+        "reference (the expectations Python produced independently); a run " +
+        "of equivalence cases alone verifies nothing but the calculator's " +
+        "agreement with itself. Refusing to write a report for it. " +
+        `Recorded: ${[...seen].map((name) => JSON.stringify(name)).join(", ")}.`,
+    );
+  }
+
+  // 素性は記録された側から拾う。ワーカーが死ぬと `runtime` はこのプロセスで
+  // "unknown" のままなので、集計と一緒にディスクへ落としたものを使う。
+  const known = recorded
+    .map((entry) => entry.runtime)
+    .filter((value) => value.coreVersion !== "unknown");
+  const provenanceRuntime = known[known.length - 1] ?? runtime;
+
+  const markdown = renderReport(
+    entries,
+    {
+      ranAt: new Date().toISOString(),
+      commit: gitDescription(),
+      coreVersion: provenanceRuntime.coreVersion,
+      browser: provenanceRuntime.browser,
+    },
+    missing,
+  );
+  writeFileSync(REPORT_PATH, markdown, "utf-8");
+  console.log(`wrote ${REPORT_PATH}`);
+  if (missing.length > 0) {
+    throw new Error(
+      `report: ${missing.length} expected shard summary/summaries never ` +
+        `reached disk (${missing.map((name) => JSON.stringify(name)).join(", ")}). ` +
+        "The report was written with the incompleteness stated at the top of " +
+        "the document; do not read its numbers as this corpus's result.",
+    );
+  }
 }

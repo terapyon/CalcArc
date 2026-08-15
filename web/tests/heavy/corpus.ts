@@ -119,7 +119,12 @@ export function assertShardIsSound(name: string, shard: Shard): void {
   const kinds: ReadonlySet<string> = new Set(CASE_KINDS);
   // JSON は型宣言に従う保証が無い。ここは「宣言どおりでない値」を探す場所
   // なので、宣言より緩い形で読む。
-  const declared = shard.cases as unknown as { id?: string; kind?: string }[];
+  const declared = shard.cases as unknown as {
+    id?: string;
+    kind?: string;
+    tolerance?: unknown;
+  }[];
+  assertNoCaseTolerance(name, declared);
   const strangers = declared.filter((c) => !kinds.has(c.kind ?? ""));
   if (strangers.length > 0) {
     const shown = strangers
@@ -130,6 +135,42 @@ export function assertShardIsSound(name: string, shard: Shard): void {
         `not run: ${shown.join(", ")}. Cases that match neither ` +
         `${CASE_KINDS.map((k) => JSON.stringify(k)).join(" nor ")} would be ` +
         "dropped without a warning and would vanish from the report's total.",
+    );
+  }
+}
+
+/**
+ * **ケース単位の `tolerance` を、大きな声で拒む。**
+ *
+ * 設計書 §4.3 は当初「必要なケースだけ個別に上書きできる」と書いていたが、
+ * **ケース単位の上書きは実装されていない**。しかも書いても警告なく黙って
+ * 無視される状態だった——実測で、1 件に `{abs: 1e30, rel: 1e30}` を足しても
+ * 43 passed / EXIT=0、無警告。投稿者は「効いている」と思い込み、レビュアーは
+ * JSON を読んで「効いている」と読む。どちらも間違っている、という壊れ方である。
+ *
+ * 段階 3 のマグニチュード依存の許容と同じ機構になるので、実装はそこで一緒に
+ * 行う。それまでは**黙って無視するのではなく、名指しして落ちる**(設計書 §4.3
+ * が約束している挙動)。
+ */
+export function assertNoCaseTolerance(
+  name: string,
+  cases: { id?: string; tolerance?: unknown }[],
+): void {
+  const overriding = cases.filter((c) => c.tolerance !== undefined);
+  if (overriding.length > 0) {
+    const shown = overriding
+      .slice(0, 5)
+      .map(
+        (c) => `${c.id ?? "(no id)"} carries ${JSON.stringify(c.tolerance)}`,
+      );
+    throw new Error(
+      `${name}: ${overriding.length} case(s) declare their own tolerance: ` +
+        `${shown.join(", ")}. Per-case tolerance is NOT implemented — the ` +
+        "comparison reads the shard-level tolerance only, so a case-level " +
+        "one would be silently ignored while looking like it applies. It is " +
+        "scheduled for stage 3 together with magnitude-dependent tolerance " +
+        "(design §4.3). Until then this suite refuses the shard instead of " +
+        "running it under a tolerance nobody applied.",
     );
   }
 }
