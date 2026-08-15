@@ -5,69 +5,42 @@
   max-width: var(--shell-max-width);
   margin: 0 auto;
   padding: 12px;
-  /* iOS のホームインジケータを避ける。DataScalePanel の .panel と同形。 */
+  /* iOS のホームインジケータを避ける。ScientificPanel の .shell と同形。 */
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
-.field {
+/* 項目行は 6 列で 1 枠 54px。既定の関数キー文字(0.9375rem)だと「ボーナス」の
+   4 文字が折り返して読めなくなる。**この行だけ**小さくする——Scientific の
+   関数列(同じ half の区画)は短いラベルなので、共通の値を下げると向こうの
+   見た目が理由もなく縮む。区画名で狙い撃つ。 */
+.panel :global(fieldset[aria-label="入力する項目"]) button {
+  font-size: 0.75rem;
+}
+
+/* 内訳は Readout の外に置く——電卓の主表示は「求めた答え」1 本であり、
+   同じ行に詰めると読めなくなる(設計書 §7)。 */
+.breakdown {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.field label {
-  color: var(--display-status-fg);
-  font-size: var(--display-size-status);
-}
-
-.field input,
-.field select {
-  min-height: var(--touch-target-min);
-  padding: 8px 12px;
-  border: var(--key-border);
-  border-radius: var(--radius);
-  background: var(--key-bg);
-  color: var(--key-fg);
-  font-family: inherit;
-  font-size: var(--key-font-size);
-}
-
-.field input:disabled {
-  /* モードが決める「求める値の欄」。押せないことを色でも示す。 */
-  opacity: 0.5;
-}
-
-.field input:focus-visible,
-.field select:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
-}
-
-.result {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: var(--touch-target-min);
-  padding: 12px 16px;
+  padding: 8px 16px;
   border-radius: var(--radius);
   background: var(--display-bg);
   color: var(--display-fg);
   font-family: var(--display-font);
 }
 
-.result p {
+.breakdown p {
   margin: 0;
+  text-align: right;
 }
 
-.resultLabel {
+.breakdownLabel {
   display: inline-block;
   min-width: 9em;
   color: var(--display-status-fg);
   font-size: var(--display-size-status);
-}
-
-.result [data-error] {
-  color: var(--error-fg);
+  text-align: left;
 }
 
 .disclaimer {

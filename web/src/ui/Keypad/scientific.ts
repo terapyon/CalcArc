@@ -1,3 +1,4 @@
+import type { KeyToken } from "../../calc";
 import type { KeypadSection, ShiftFace } from "./types";
 
 // Scientific のキー集合。
@@ -9,14 +10,14 @@ import type { KeypadSection, ShiftFace } from "./types";
 // (j・▸∠)は右端の列、四則はその左、制御(AC・DEL)は右上。
 
 /** 第 2 面の空きスロット。押しても何も起きない(設計書 §3)。 */
-const EMPTY_FACE: ShiftFace = {
+const EMPTY_FACE: ShiftFace<KeyToken> = {
   token: null,
   label: "—",
   ariaLabel: "第2面（準備中）",
   variant: "function",
 };
 
-const FUNCTION_ROW: KeypadSection = {
+const FUNCTION_ROW: KeypadSection<KeyToken> = {
   ariaLabel: "関数キー",
   columns: 7,
   height: "half",
@@ -62,7 +63,7 @@ const FUNCTION_ROW: KeypadSection = {
   ],
 };
 
-const MAIN_GRID: KeypadSection = {
+const MAIN_GRID: KeypadSection<KeyToken> = {
   ariaLabel: "数字と演算のキー",
   columns: 5,
   height: "square",
@@ -121,4 +122,7 @@ const MAIN_GRID: KeypadSection = {
   ],
 };
 
-export const SCIENTIFIC_SECTIONS: KeypadSection[] = [FUNCTION_ROW, MAIN_GRID];
+export const SCIENTIFIC_SECTIONS: KeypadSection<KeyToken>[] = [
+  FUNCTION_ROW,
+  MAIN_GRID,
+];
