@@ -256,6 +256,91 @@ mod tests {
     }
 
     #[test]
+    fn the_net_is_monotone_in_the_deposit() {
+        // **§3 の証明を検査として残す。** 二分探索の正当性はこれに依存している。
+        // 範囲は設計書 §15 の総当たりの縮小版(テスト時間に収める)。
+        for percent in ["0", "0.0001", "1.5", "3", "20"] {
+            for ppy in [1u32, 2, 12] {
+                let r = Rate::from_annual_percent(percent, ppy).unwrap();
+                for periods in [1u32, 2, 3, 12, 240] {
+                    for principal in [0u64, 999, 1_000_000] {
+                        let mut previous = 0u64;
+                        for d in 0..200u64 {
+                            // principal=0 かつ d=0 は grow の契約上「入れた金がゼロ」で
+                            // SyntaxError になる(無効な入力であって単調性の反例ではない)。
+                            // 高率×長期×高額(例: 20%・240 期・元本 100 万)は u64 を
+                            // あふれることがある(これも単調性の反例ではなく、別の契約の
+                            // 話なので素通りする)。
+                            let g = match grow(principal, d, &r, periods) {
+                                Ok(g) => g,
+                                Err(_) => continue,
+                            };
+                            let v = reached(g.final_balance, g.interest, true).unwrap();
+                            assert!(
+                                v >= previous,
+                                "手取りが減った: {percent}% ppy={ppy} n={periods} P={principal} d={d}"
+                            );
+                            previous = v;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_net_is_not_monotone_in_the_periods() {
+        // **非単調は仕様である**(numerical-policy)。ここが緑でなくなったら、
+        // 税の丸めが変わったということなので、前進 1 本の根拠を読み直す。
+        let r = Rate::from_annual_percent("1.5", 12).unwrap();
+        let net_at = |n: u32| {
+            let g = grow(999, 0, &r, n).unwrap();
+            reached(g.final_balance, g.interest, true).unwrap()
+        };
+        assert_eq!(net_at(19), 1016);
+        assert_eq!(net_at(20), 1015); // 減る
+        assert_eq!(net_at(21), 1016);
+    }
+
+    #[test]
+    fn the_forward_scan_accumulates_exactly_what_grow_would() {
+        // **periods_for は grow の 1 期分の式を書き写している**(一本走査にするため)。
+        // 写しがずれると、逆算だけが別の漸化式で走ることになる——しかも答は
+        // もっともらしいままである。**複数の n で縛る**: 1 点の一致では
+        // 「その n までは同じ」しか言えず、写しずれは特定の期で初めて出うる。
+        for percent in ["0", "0.0001", "1.5", "3", "20"] {
+            for ppy in [1u32, 2, 12] {
+                let r = Rate::from_annual_percent(percent, ppy).unwrap();
+                for n in [1u32, 2, 3, 19, 20, 21, 240, MAX_PERIODS] {
+                    for (principal, deposit) in [(999u64, 0u64), (0, 30_000), (1_000_000, 7)] {
+                        // 目標を「その n でちょうど届く値」に取る。ただし高率×長期は
+                        // u64 をあふれる(そのもの自体は別の契約の話なので、ここでは
+                        // 素通りする)。
+                        let expected = match grow(principal, deposit, &r, n) {
+                            Ok(g) => g,
+                            Err(_) => continue,
+                        };
+                        // taxed=false なので reached は残高をそのまま返す(常に Ok)。
+                        let target =
+                            reached(expected.final_balance, expected.interest, false).unwrap();
+                        let s = periods_for(principal, deposit, &r, target, false);
+                        // 目標が残高そのものなら、届く最初の期は n 以下である
+                        // (残高は税なしなら単調非減少)。n で止まったときだけ比べる。
+                        if let Ok(s) = s {
+                            if s.periods == n {
+                                assert_eq!(
+                                    s.growth, expected,
+                                    "写しがずれた: {percent}% ppy={ppy} n={n} P={principal} d={deposit}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn an_unreachable_target_overflows_instead_of_looping() {
         // **1 期ではなく 2 期であることに意味がある。** 0%・1 期なら答は
         // ちょうど u64::MAX で収まり、あふれずに収まってしまう(残高 = 積立額)。
