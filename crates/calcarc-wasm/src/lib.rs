@@ -5,9 +5,9 @@
 
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::{self, DataType};
+use calcarc_core::finance::loan::rate::Rate;
+use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::finance::{compound, tax};
-use calcarc_core::loan::rate::Rate;
-use calcarc_core::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;

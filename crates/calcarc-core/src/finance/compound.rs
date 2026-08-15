@@ -8,7 +8,7 @@
 //! 積立は**期末**——利息を付けてから足す。その期に入れた金はその期の
 //! 利息を生まない。
 
-use crate::loan::rate::Rate;
+use super::loan::rate::Rate;
 use crate::{CalcError, CalcResult};
 
 /// 期数の上限。ローンの `MAX_TERM_MONTHS` と揃える(月次なら 100 年ぶん)。

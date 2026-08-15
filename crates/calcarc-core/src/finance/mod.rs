@@ -6,4 +6,5 @@
 //! `loan::compound` という名前の嘘は生じない。再配置は別 spec で行う。
 
 pub mod compound;
+pub mod loan;
 pub mod tax;
