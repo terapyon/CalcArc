@@ -23,16 +23,16 @@ describe("Nav", () => {
       "href",
       "#data-scale",
     );
-    expect(screen.getByRole("link", { name: "Loan" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Finance" })).toHaveAttribute(
       "href",
-      "#loan",
+      "#finance",
     );
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
   it("marks only the current tab with aria-current", () => {
-    render(<Nav current="loan" />);
-    expect(screen.getByRole("link", { name: "Loan" })).toHaveAttribute(
+    render(<Nav current="finance" />);
+    expect(screen.getByRole("link", { name: "Finance" })).toHaveAttribute(
       "aria-current",
       "page",
     );
