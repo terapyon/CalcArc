@@ -17,6 +17,16 @@
   font-size: 0.75rem;
 }
 
+/* モード行も 6 列で 1 枠 54px。「借入可能」「必要積立」「必要年数」の 4 文字
+   ラベルは、ラベル文字列側に埋め込んだ改行(finance.ts)で語の切れ目を固定
+   している——`white-space` の既定(normal)は改行文字を空白に畳んでしまう
+   ので、`pre-line` で改行を活かす。**この行だけ**に当てる(区画名で狙い撃つ。
+   上の「入力する項目」と同じ流儀)——他の half 区画(Scientific の関数列や
+   Finance の項目行そのもの)は自動折り返しのままでよい。 */
+.panel :global(fieldset[aria-label="計算の種類"]) button {
+  white-space: pre-line;
+}
+
 /* 内訳は Readout の外に置く——電卓の主表示は「求めた答え」1 本であり、
    同じ行に詰めると読めなくなる(設計書 §7)。 */
 .breakdown {

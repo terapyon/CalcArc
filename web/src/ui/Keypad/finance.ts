@@ -83,7 +83,12 @@ const MODES: KeypadSection<FinanceKeyToken> = {
     },
     {
       token: "mode:principal",
-      label: "借入可能",
+      // **語の切れ目で固定改行**(設計書レビュー、C 案)。6 列だと 1 枠 54px
+      // ほどしか無く、4 文字ラベルは自動折り返しに任せると語の途中で割れる
+      // (「必要積」「立」のように)。折り返し位置はデータで固定する——語の
+      // 切れ目は設計判断であって描画結果ではない。読み上げ名(ariaLabel)は
+      // 変えない。
+      label: "借入\n可能",
       ariaLabel: "借入可能額を求める",
       variant: "function",
     },
@@ -105,13 +110,13 @@ const MODES: KeypadSection<FinanceKeyToken> = {
     // かで探索の形が違う(単調 vs 非単調、設計書 §3〜§4)。
     {
       token: "mode:deposit-for",
-      label: "必要積立",
+      label: "必要\n積立",
       ariaLabel: "必要な積立額を求める",
       variant: "function",
     },
     {
       token: "mode:periods-for",
-      label: "必要年数",
+      label: "必要\n年数",
       ariaLabel: "必要な期間を求める",
       variant: "function",
     },
