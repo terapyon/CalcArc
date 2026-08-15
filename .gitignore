@@ -2,6 +2,7 @@
 node_modules/
 web/dist/
 web/dist-heavy/
+web/heavy-report.md
 web/src/wasm/
 .venv/
 __pycache__/

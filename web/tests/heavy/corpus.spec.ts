@@ -7,6 +7,7 @@ import {
 } from "./corpus";
 import { parseDisplay } from "./display";
 import { openHarness, runAll } from "./harness";
+import { record, writeReport } from "./report";
 
 test("withinTolerance compares against the numbers it is handed", () => {
   // ここのリテラルは **withinTolerance 自身の入力**であって、コーパスの
@@ -37,6 +38,9 @@ for (const { name, shard } of loadShards()) {
     );
 
     const mismatches: string[] = [];
+    let maxRelativeError = 0;
+    let maxAbsoluteError = 0;
+    const absOnlyCases: string[] = [];
     for (const [index, testCase] of values.entries()) {
       const result = results[index];
       if (result === undefined) {
@@ -50,12 +54,51 @@ for (const { name, shard } of loadShards()) {
         continue;
       }
       const actual = parseDisplay(result.main);
-      if (!withinTolerance(actual, testCase.expect.re, shard.tolerance)) {
+      const expected = testCase.expect.re;
+      const absoluteError = Math.abs(actual - expected);
+      const scale = Math.abs(expected);
+      // 期待値が 0 のとき、相対誤差は数学的に定義できない(withinTolerance の
+      // rel 分岐も scale > 0 を前提にしている)。「最大」の集計に 0 を足しても
+      // 上限を押し上げないので無害だが、分母に 1 の下限を置く近似は使わない
+      // ——sci-001332(期待値 |0.17|)のように 1 未満のケースで真の相対誤差
+      // より小さい数字が出て、見出しの「観測された最大相対誤差」が実態を
+      // 過小に見せてしまう。
+      const relativeError = scale > 0 ? absoluteError / scale : 0;
+      maxAbsoluteError = Math.max(maxAbsoluteError, absoluteError);
+      maxRelativeError = Math.max(maxRelativeError, relativeError);
+
+      const passed = withinTolerance(actual, expected, shard.tolerance);
+      // withinTolerance は abs/rel を OR で判定する。abs の側だけで通った
+      // ケースを黙って合格に混ぜると、「rel の許容に収まっている」という
+      // 主張が実態より緩くなる(sci-001332 の裁定、設計書 §11)。
+      const passedRel = scale > 0 && relativeError <= shard.tolerance.rel;
+      if (passed && !passedRel) {
+        absOnlyCases.push(
+          `${testCase.id}: ${testCase.expr} → ${result.main}, expected ${expected} ` +
+            `(rel ${scale > 0 ? relativeError.toExponential(2) : "n/a (expected=0)"}, ` +
+            `abs ${absoluteError.toExponential(2)})`,
+        );
+      }
+      if (!passed) {
         mismatches.push(
-          `${testCase.id}: ${testCase.expr} → ${result.main}, expected ${testCase.expect.re}`,
+          `${testCase.id}: ${testCase.expr} → ${result.main}, expected ${expected}`,
         );
       }
     }
+
+    // **expect より先に記録する。** 落ちたときこそレポートが要るのに、
+    // 先に expect を書くとそこで打ち切られてレポートが空になる。
+    record({
+      name: `${name} (values)`,
+      total: values.length,
+      values: values.length,
+      equivalences: 0,
+      mismatches,
+      maxRelativeError,
+      maxAbsoluteError,
+      absOnlyCases,
+      tolerance: shard.tolerance,
+    });
 
     // 先頭 20 件だけ読ませる。端末で読める量に上限を置き、全件は
     // Task 8 のレポートが持つ(設計書 §8)。
@@ -82,6 +125,9 @@ for (const { name, shard } of loadShards()) {
     ]);
 
     const mismatches: string[] = [];
+    let maxRelativeError = 0;
+    let maxAbsoluteError = 0;
+    const absOnlyCases: string[] = [];
     for (const [index, testCase] of equivalences.entries()) {
       const left = results[index];
       const right = results[index + equivalences.length];
@@ -95,16 +141,42 @@ for (const { name, shard } of loadShards()) {
         );
         continue;
       }
-      if (
-        !withinTolerance(
-          parseDisplay(left.main),
-          parseDisplay(right.main),
-          shard.tolerance,
-        )
-      ) {
+      const actual = parseDisplay(left.main);
+      const expected = parseDisplay(right.main);
+      const absoluteError = Math.abs(actual - expected);
+      const scale = Math.abs(expected);
+      // 右辺が 0 のとき相対誤差は定義できない(理由は値ケース側の注記と同じ)。
+      const relativeError = scale > 0 ? absoluteError / scale : 0;
+      maxAbsoluteError = Math.max(maxAbsoluteError, absoluteError);
+      maxRelativeError = Math.max(maxRelativeError, relativeError);
+
+      const passed = withinTolerance(actual, expected, shard.tolerance);
+      const passedRel = scale > 0 && relativeError <= shard.tolerance.rel;
+      if (passed && !passedRel) {
+        absOnlyCases.push(
+          `${testCase.id}: ${left.main} vs ${right.main} ` +
+            `(rel ${scale > 0 ? relativeError.toExponential(2) : "n/a (right=0)"}, ` +
+            `abs ${absoluteError.toExponential(2)})`,
+        );
+      }
+      if (!passed) {
         mismatches.push(`${testCase.id}: ${left.main} vs ${right.main}`);
       }
     }
+
+    // **expect より先に記録する。** 落ちたときこそレポートが要るのに、
+    // 先に expect を書くとそこで打ち切られてレポートが空になる。
+    record({
+      name: `${name} (equivalences)`,
+      total: equivalences.length,
+      values: 0,
+      equivalences: equivalences.length,
+      mismatches,
+      maxRelativeError,
+      maxAbsoluteError,
+      absOnlyCases,
+      tolerance: shard.tolerance,
+    });
 
     expect(
       mismatches.slice(0, 20).join("\n"),
@@ -112,3 +184,7 @@ for (const { name, shard } of loadShards()) {
     ).toBe("");
   });
 }
+
+test.afterAll(() => {
+  writeReport();
+});
