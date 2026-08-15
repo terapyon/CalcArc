@@ -41,6 +41,7 @@ for (const { name, shard } of loadShards()) {
     let maxRelativeError = 0;
     let maxAbsoluteError = 0;
     const absOnlyCases: string[] = [];
+    const relUndefinedCases: string[] = [];
     for (const [index, testCase] of values.entries()) {
       const result = results[index];
       if (result === undefined) {
@@ -71,12 +72,19 @@ for (const { name, shard } of loadShards()) {
       // withinTolerance は abs/rel を OR で判定する。abs の側だけで通った
       // ケースを黙って合格に混ぜると、「rel の許容に収まっている」という
       // 主張が実態より緩くなる(sci-001332 の裁定、設計書 §11)。
-      const passedRel = scale > 0 && relativeError <= shard.tolerance.rel;
-      if (passed && !passedRel) {
+      //
+      // scale === 0(期待値が厳密に 0)のケースは rel が数学的に定義できない
+      // だけで、精度限界とは別物(修正ラウンド 1 のレビュー指摘)。精度限界の
+      // 実例(absOnlyCases)とは別に集計する。
+      if (passed && scale === 0) {
+        relUndefinedCases.push(
+          `${testCase.id}: ${testCase.expr} → ${result.main}, expected ${expected} ` +
+            `(abs ${absoluteError.toExponential(2)})`,
+        );
+      } else if (passed && relativeError > shard.tolerance.rel) {
         absOnlyCases.push(
           `${testCase.id}: ${testCase.expr} → ${result.main}, expected ${expected} ` +
-            `(rel ${scale > 0 ? relativeError.toExponential(2) : "n/a (expected=0)"}, ` +
-            `abs ${absoluteError.toExponential(2)})`,
+            `(rel ${relativeError.toExponential(2)}, abs ${absoluteError.toExponential(2)})`,
         );
       }
       if (!passed) {
@@ -97,6 +105,7 @@ for (const { name, shard } of loadShards()) {
       maxRelativeError,
       maxAbsoluteError,
       absOnlyCases,
+      relUndefinedCases,
       tolerance: shard.tolerance,
     });
 
@@ -128,6 +137,7 @@ for (const { name, shard } of loadShards()) {
     let maxRelativeError = 0;
     let maxAbsoluteError = 0;
     const absOnlyCases: string[] = [];
+    const relUndefinedCases: string[] = [];
     for (const [index, testCase] of equivalences.entries()) {
       const left = results[index];
       const right = results[index + equivalences.length];
@@ -151,12 +161,16 @@ for (const { name, shard } of loadShards()) {
       maxRelativeError = Math.max(maxRelativeError, relativeError);
 
       const passed = withinTolerance(actual, expected, shard.tolerance);
-      const passedRel = scale > 0 && relativeError <= shard.tolerance.rel;
-      if (passed && !passedRel) {
+      // scale === 0(右辺が厳密に 0)は rel が数学的に定義できないだけで、
+      // 精度限界とは別物(値ケース側の注記と同じ理由)。
+      if (passed && scale === 0) {
+        relUndefinedCases.push(
+          `${testCase.id}: ${left.main} vs ${right.main} (abs ${absoluteError.toExponential(2)})`,
+        );
+      } else if (passed && relativeError > shard.tolerance.rel) {
         absOnlyCases.push(
           `${testCase.id}: ${left.main} vs ${right.main} ` +
-            `(rel ${scale > 0 ? relativeError.toExponential(2) : "n/a (right=0)"}, ` +
-            `abs ${absoluteError.toExponential(2)})`,
+            `(rel ${relativeError.toExponential(2)}, abs ${absoluteError.toExponential(2)})`,
         );
       }
       if (!passed) {
@@ -175,6 +189,7 @@ for (const { name, shard } of loadShards()) {
       maxRelativeError,
       maxAbsoluteError,
       absOnlyCases,
+      relUndefinedCases,
       tolerance: shard.tolerance,
     });
 
