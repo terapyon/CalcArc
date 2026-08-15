@@ -70,12 +70,15 @@ corpus/generated/complex-000.json
 
 ```json
 {
-  "schema": "calcarc/corpus/1",
-  "generated_by": "reference/scripts/generate_corpus.py seed=20260815 shard=scientific-000",
-  "tolerance": 1e-9,
+  "schema": 1,
+  "generated_by": "sympy 1.x / mpmath 1.x, Python 3.14",
+  "tolerance": { "abs": 1e-9, "rel": 1e-9 },
   "cases": [ ... ]
 }
 ```
+
+`schema` が整数、`generated_by` が生成器の版という形は `reference/scripts/generate.py` の
+既存の書き方に合わせたものである。`tolerance` も同スクリプトと同じ `abs` / `rel` の対にする。
 
 `tolerance` はファイル単位が既定で、必要なケースだけ個別に上書きできる。
 **許容誤差をテストコードに書かない**という CLAUDE.md の規約は、これで守られる。
@@ -187,8 +190,12 @@ core 経路は DOM を経由せず `calc.dispatch` を直接回すが、本番�
 グローバルに露出していないので、`page.evaluate` から素直には呼べない。
 
 そこで **ハーネスページを 1 枚追加する**。`web/heavy-harness.html` とその入口が
-`src/calc` を読み込み、`window.__calcarc` に露出する。重い実行用のビルドだけがこの
-エントリを含み、`deploy.yml` が作る配信物には入らない。
+`src/calc` を読み込み、`window.__calcarc` に露出する。
+
+ビルドは既存 `vite.config.ts` を触らず、**`web/vite.heavy.config.ts` を別に持つ**。
+既存設定に入口を足すと VitePWA の workbox がハーネスを precache に巻き込み、配信物の
+Service Worker が変わってしまう。重い方の設定は PWA も React も持たない最小構成
+（`wasm()` と `topLevelAwait()` のみ）にする。`deploy.yml` が作る配信物には入らない。
 
 **正直に書いておく。** これにより「出荷するものそのもので確かめた」は厳密には成り立たない。
 ただし差分はエントリ HTML が 1 枚多いことだけで、`src/calc` と wasm のバイナリは同一である。
