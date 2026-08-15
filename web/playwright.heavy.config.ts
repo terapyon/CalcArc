@@ -13,6 +13,17 @@ export default defineConfig({
   // である(レビュー修正ラウンド 2 でコメントの誤りを訂正)。ここで直列に
   // するのは、シャードごとに数千件を 1 往復で流すテストが同時に走ると
   // ブラウザ 1 つに重い evaluate が重なり、報告の順序も混ざるためである。
+  //
+  // **そしてもう一つ、この設定は集計そのものを支えている。**
+  // `tests/heavy/report.ts` はモジュールスコープの配列 `summaries` に
+  // `record()` で積み、`test.afterAll` の `writeReport()` で 1 枚の
+  // `heavy-report.md` を書き出す。`fullyParallel: true` にすると各テストが
+  // 別ワーカー(別プロセス)に散り、**ワーカーごとに別のモジュールインスタンス**
+  // になる。すると各ワーカーが自分の見た分だけの `summaries` を持って
+  // 同じ `heavy-report.md` を上書きし合い、**集計が黙って消える**——
+  // 落ちるのではなく、件数の減った緑の報告書が残る。並列にしたいときは、
+  // 先に集計をプロセス間で合流させる仕組み(各ワーカーが別ファイルに書き、
+  // グローバル teardown で束ねる等)を用意すること。
   fullyParallel: false,
   use: { baseURL: "http://localhost:4180" },
   webServer: {
@@ -22,6 +33,16 @@ export default defineConfig({
     command:
       "pnpm exec vite build --config vite.heavy.config.ts && pnpm exec vite preview --config vite.heavy.config.ts --port 4180 --strictPort",
     url: "http://localhost:4180/heavy-harness.html",
+    // **手元では 4180 に既に居るものを掴む。** CI では毎回立て直すが、
+    // ローカルでは起動が遅いので使い回す。その代償として、**4180 に別物が
+    // 居ればそれを掴む**。2026-08-15 の敵対者レビューはこれを使い、
+    // 「あらゆるキー列に `{main: "0"}` を返すだけ」の偽ハーネスを 4180 に
+    // 置いて全件を緑にした。古いビルドを掴むのも同じ経路である。
+    //
+    // ハーネスが自分の素性(`calc.version()`)を返し、それが報告書の
+    // 「計算コア(wasm)」欄に載るので、**掴んだものが何かは報告書から読める**。
+    // ただし版が同じ偽物は見分けられない。結果を疑うときは 4180 を落として
+    // から回すこと(`CI=1 pnpm heavy` でも毎回立て直す)。
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },

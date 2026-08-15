@@ -1,16 +1,19 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
+  assertShardIsSound,
   assertSupportedMode,
+  assertToleranceIsSane,
   type Classification,
   classify,
-  type EquivalenceCase,
+  countInjectedTokens,
   loadShards,
+  partitionCases,
   quantiles,
+  type Shard,
   summarizeShape,
   TOLERANCE_BANDS,
   type Tolerance,
   type ToleranceBand,
-  type ValueCase,
   withinTolerance,
 } from "./corpus";
 import { parseDisplay } from "./display";
@@ -19,7 +22,20 @@ import { noteRuntime, record, writeReport } from "./report";
 
 // **1 度だけ読む。** モジュールのトップレベルで 3 回呼ぶと 1.6MB の JSON を
 // 3 回パースすることになる(レビュー修正ラウンド 2)。
+// loadShards() は読んだその場で schema・tolerance・kind・空を検証する。
+// 壊れたシャードはここで例外になり、テストが 1 本も生成されない——**黙って
+// ケースが消える**より、収集の時点で全体が落ちる方がよい。
 const shards = loadShards();
+
+// **種別に分けるのも 1 度だけ。** 分けた結果の合計が元の件数と一致しない
+// 状態を作れないようにする(partitionCases が突き合わせる)。レポートの
+// 「総ケース数」はこの分割の合計なので、ここが一致していれば見出しの数字が
+// シャードの実件数より小さくなることがない。
+const partitions = shards.map(({ name, shard }) => ({
+  name,
+  shard,
+  ...partitionCases(name, shard.cases),
+}));
 
 test("withinTolerance compares against the numbers it is handed", () => {
   // ここのリテラルは **withinTolerance 自身の入力**であって、コーパスの
@@ -56,6 +72,103 @@ test("at least one shard is present", () => {
   expect(shards.length).toBeGreaterThan(0);
 });
 
+/** 検証を試すための、最小限だが正しい 1 件を持つシャード。 */
+function soundShard(): Shard {
+  return {
+    schema: 1,
+    generated_by: "made up for this test",
+    tolerance: { abs: 5e-10, rel: 5e-10 },
+    cases: [
+      {
+        kind: "value",
+        id: "x-000",
+        mode: "Deg",
+        keys: ["1"],
+        expr: "1",
+        expect: { re: 1, im: 0 },
+      },
+    ],
+  };
+}
+
+test("a case whose kind this suite does not run is named, not dropped", () => {
+  // 敵対者レビュー(2026-08-15)の実証: 正しい 1 件と、`kind` を "vaue" に
+  // 綴り違えたうえで expect を 999999 にした 1 件を同じシャードに入れて
+  // 実行すると、**緑になり、総ケース数が 1 になった**。フィルタは
+  // kind === "value" の文字列リテラルで絞るので、当たらないケースは警告も
+  // エラーも無く捨てられ、レポートの総件数からも消える。
+  const shard = soundShard();
+  shard.cases.push({
+    kind: "vaue",
+    id: "x-001",
+    mode: "Deg",
+    keys: ["1"],
+    expr: "1",
+    expect: { re: 999999, im: 0 },
+  } as unknown as (typeof shard.cases)[number]);
+
+  // シャード名・ケース id・見つかった kind の三つとも名指しされること。
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(
+    /made-up\.json/,
+  );
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/x-001/);
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/"vaue"/);
+});
+
+test("an empty shard is refused instead of running green", () => {
+  const shard = soundShard();
+  shard.cases = [];
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/no cases/);
+});
+
+test("a schema this code does not know how to read is refused", () => {
+  // `schema` はこれまで型に宣言されているだけで一度も読まれていなかった。
+  const shard = soundShard();
+  shard.schema = 2;
+  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/schema/);
+});
+
+test("a tolerance loose enough to pass anything is refused", () => {
+  // 敵対者レビュー(2026-08-15)の実証: コミット済み JSON の tolerance を
+  // {abs: 1e30, rel: 1e30} に書き換えると、期待値が桁違いでも全件緑。
+  // CLAUDE.md の「許容誤差をテストコードに書かない」を守った結果、合否基準が
+  // データ側に完全に移り、そのデータを検査するものが無くなっていた。
+  // ここでするのは閾値の決め打ちではなく、**データが正気かを見る**ことである。
+  expect(() =>
+    assertToleranceIsSane("made-up.json", { abs: 1e30, rel: 1e30 }),
+  ).toThrow(/sane range/);
+  expect(() =>
+    assertToleranceIsSane("made-up.json", { abs: 5e-10, rel: 1e30 }),
+  ).toThrow(/rel/);
+  // 0 以下も弾く(何も通らない、あるいは比較が意味を失う)。
+  expect(() =>
+    assertToleranceIsSane("made-up.json", { abs: 0, rel: 5e-10 }),
+  ).toThrow(/abs/);
+  // 実際のコーパスの許容は通る。
+  expect(() =>
+    assertToleranceIsSane("made-up.json", { abs: 5e-10, rel: 5e-10 }),
+  ).not.toThrow();
+});
+
+test("the report's total cannot be smaller than what the shard holds", () => {
+  // 種別に分けた結果の合計が元の件数と一致しない状態を作れないようにする。
+  const cases = soundShard().cases;
+  expect(partitionCases("made-up.json", cases).values).toHaveLength(1);
+  const withStranger = [
+    ...cases,
+    { kind: "scalar", id: "x-002" } as unknown as (typeof cases)[number],
+  ];
+  expect(() => partitionCases("made-up.json", withStranger)).toThrow(
+    /understate/,
+  );
+});
+
+test("every shard on disk holds exactly the cases the report will count", () => {
+  for (const { name, shard, values, equivalences } of partitions) {
+    expect(values.length + equivalences.length, name).toBe(shard.cases.length);
+  }
+});
+
 test("every case in every shard declares the one mode this stage runs", () => {
   // 段階 2 は Deg だけ。ハーネスは angle_toggle を押さない。
   for (const { name, shard } of shards) {
@@ -85,6 +198,16 @@ interface Tally {
   mismatches: string[];
   absOnlyCases: string[];
   relUndefinedCases: string[];
+  /**
+   * **相対誤差を測定できたケース数**(期待値 ≠ 0)。0 のとき、最大相対誤差も
+   * 最悪の実効相対許容も数学的に定義できない。集計から非有限を外して
+   * `Math.max(0, ...)` を掛けると、その走行が「0.00e+0 = 完璧に厳しい」と
+   * 読める見出しになる(敵対者レビュー 2026-08-15)。件数を持ち回って、
+   * レポート側が「定義できない」と書けるようにする。
+   */
+  relMeasured: number;
+  /** 期待値が 0 のケースのうち、絶対誤差が 0 でなかったもの。 */
+  relUndefinedNonZeroAbs: number;
   maxRelativeError: number;
   maxAbsoluteError: number;
   looserThanDisplay: number;
@@ -102,6 +225,8 @@ function newTally(): Tally {
     mismatches: [],
     absOnlyCases: [],
     relUndefinedCases: [],
+    relMeasured: 0,
+    relUndefinedNonZeroAbs: 0,
     maxRelativeError: 0,
     maxAbsoluteError: 0,
     looserThanDisplay: 0,
@@ -126,10 +251,13 @@ function tally(
     into.looserThanDisplay += 1;
   }
   if (Number.isFinite(result.effectiveRelTolerance)) {
+    into.relMeasured += 1;
     into.worstEffectiveRelTolerance = Math.max(
       into.worstEffectiveRelTolerance,
       result.effectiveRelTolerance,
     );
+  } else if (result.absoluteError > 0) {
+    into.relUndefinedNonZeroAbs += 1;
   }
   // withinTolerance は abs/rel を OR で判定する。abs の側だけで通った
   // ケースを黙って合格に混ぜると、「rel の許容に収まっている」という
@@ -159,8 +287,7 @@ function browserLabel(page: Page): string {
     : "unknown";
 }
 
-for (const { name, shard } of shards) {
-  const values = shard.cases.filter((c): c is ValueCase => c.kind === "value");
+for (const { name, shard, values } of partitions) {
   if (values.length === 0) {
     continue;
   }
@@ -234,6 +361,8 @@ for (const { name, shard } of shards) {
       maxAbsoluteError: into.maxAbsoluteError,
       absOnlyCases: into.absOnlyCases,
       relUndefinedCases: into.relUndefinedCases,
+      relMeasured: into.relMeasured,
+      relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
@@ -251,10 +380,7 @@ for (const { name, shard } of shards) {
   });
 }
 
-for (const { name, shard } of shards) {
-  const equivalences = shard.cases.filter(
-    (c): c is EquivalenceCase => c.kind === "equivalence",
-  );
+for (const { name, shard, equivalences } of partitions) {
   if (equivalences.length === 0) {
     continue;
   }
@@ -318,13 +444,17 @@ for (const { name, shard } of shards) {
       maxAbsoluteError: into.maxAbsoluteError,
       absOnlyCases: into.absOnlyCases,
       relUndefinedCases: into.relUndefinedCases,
+      relMeasured: into.relMeasured,
+      relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
-      shape: summarizeShape([
-        ...equivalences.map((c) => c.left),
-        ...equivalences.map((c) => c.right),
-      ]),
+      // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、
+      // 左右をまとめて数えると変換が注入したキーが「電卓に与えた式の多様性」
+      // として計上される(実測では neg 2122 回のうち 74.2% が注入分)。
+      // 注入分は addedByTransform に分けて、読み手が区別できる形で出す。
+      shape: summarizeShape(equivalences.map((c) => c.left)),
+      addedByTransform: countInjectedTokens(equivalences),
       magnitudes: quantiles(into.magnitudes),
       tolerance: shard.tolerance,
     });

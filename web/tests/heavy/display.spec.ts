@@ -28,3 +28,43 @@ test("a display that is not a number is refused loudly", () => {
   // 化けて原因が見えなくなる。
   expect(() => parseDisplay("j2")).toThrow();
 });
+
+test("everything Number() would helpfully accept is refused", () => {
+  // 敵対者レビュー(2026-08-15)が実測した「Number() が親切に解してしまう」
+  // 入力。以前の実装はこれを全部黙って通していた。
+  //
+  // **空文字列が 0 になることが一番重い。** あらゆるキー列に空の表示を返す
+  // 偽ハーネスに対して、同値ケース(左右の表示が一致することだけを主張する)
+  // が 2000 件すべて通ってしまう。表示が壊れたことをこの層が検出できない
+  // という意味なので、ここで固定する。
+  expect(() => parseDisplay("")).toThrow();
+  expect(() => parseDisplay(" ")).toThrow();
+  expect(() => parseDisplay("\n")).toThrow();
+  expect(() => parseDisplay(" 5 ")).toThrow();
+  // 基数接頭辞。電卓は 16 進も 2 進も表示しない。
+  expect(() => parseDisplay("0x10")).toThrow();
+  expect(() => parseDisplay("0b101")).toThrow();
+  expect(() => parseDisplay("0o17")).toThrow();
+  // 正号。電卓は正の数に符号を付けない。
+  expect(() => parseDisplay("+5")).toThrow();
+  // 数でないもの。
+  expect(() => parseDisplay("Infinity")).toThrow();
+  expect(() => parseDisplay("-Infinity")).toThrow();
+  expect(() => parseDisplay("NaN")).toThrow();
+  // 小数点だけ・小数部が空。電卓の実測にこの形は無い。
+  expect(() => parseDisplay(".5")).toThrow();
+  expect(() => parseDisplay("5.")).toThrow();
+  // 大文字の指数と、指数部の無い e。
+  expect(() => parseDisplay("1E3")).toThrow();
+  expect(() => parseDisplay("1e")).toThrow();
+});
+
+test("the exponent form the display could reach is read", () => {
+  // 段階 2 のコーパスは指数表記を一度も踏んでいない(|値| が 1e-6 〜 1e9)。
+  // 書式として許してあるのは、段階 3 で入ったときに「書式が読めない」で
+  // 落ちるより素直に読めた方がよいためである。読めた値が正しいかは
+  // 呼び出し側が判定する。
+  expect(parseDisplay("1.234567891e+15")).toBe(1.234567891e15);
+  expect(parseDisplay("-1.234567891e-15")).toBe(-1.234567891e-15);
+  expect(parseDisplay("1e12")).toBe(1e12);
+});
