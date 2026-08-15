@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import mpmath as mp
 
-from .corpus_expr import Node, Num, Un
+from .corpus_expr import BINARY_OPS, UNARY_FNS, Node, Num, Un
 
 mp.mp.dps = 50
 
@@ -29,6 +29,10 @@ def evaluate(node: Node) -> mp.mpf:
     if isinstance(node, Num):
         return mp.mpf(node.value)
     if isinstance(node, Un):
+        if node.fn not in UNARY_FNS:
+            # 未知の fn を通すと、mpmath がたまたま同名の関数を持っていた
+            # 場合に無関係な値を返してしまう(例: "cbrt" は mp.cbrt に化ける)。
+            raise ValueError(f"unknown unary fn: {node.fn!r}")
         value = evaluate(node.arg)
         if node.fn == "sqrt":
             if value < 0:
@@ -38,8 +42,13 @@ def evaluate(node: Node) -> mp.mpf:
             return value * value
         if node.fn == "neg":
             return -value
+        # ここに残るのは sin/cos/tan だけ(UNARY_FNS のうち上で処理済み以外)。
         # 角度は度。ラジアンに直してから渡す。
         return getattr(mp, node.fn)(value * mp.pi / 180)
+    if node.op not in BINARY_OPS:
+        # 未知の op を通すと、下の else 節が黙って除算を実行してしまう
+        # ——違う演算の名の下にそれらしい数を返す、一番静かな壊れ方。
+        raise ValueError(f"unknown binary op: {node.op!r}")
     left = evaluate(node.left)
     right = evaluate(node.right)
     if node.op == "+":

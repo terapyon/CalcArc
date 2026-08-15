@@ -38,3 +38,18 @@ def test_precision_is_higher_than_the_display_can_show() -> None:
     # 表示精度に合わせて丸む理由はない(設計書 §6.3)。
     value = evaluate(Un("sqrt", Num(2)))
     assert mp.nstr(value, 30) != mp.nstr(mp.mpf(1.4142135623730951), 30)
+
+
+def test_unknown_binary_op_raises_instead_of_silently_dividing() -> None:
+    # "%" は BINARY_OPS に無い。かつて else 節が黙って除算に落ちていた
+    # ——違う演算を実行して、それらしい数を返す壊れ方だった。
+    with pytest.raises(ValueError, match="unknown binary op"):
+        evaluate(Bin("%", Num(1), Num(2)))
+
+
+def test_unknown_unary_fn_raises_instead_of_silently_using_mpmath() -> None:
+    # "cbrt" は UNARY_FNS に無いが、mpmath 自身は cbrt を持つ。
+    # getattr(mp, node.fn) に素通しすると、無関係な関数を実行して
+    # それらしい数を返してしまう。
+    with pytest.raises(ValueError, match="unknown unary fn"):
+        evaluate(Un("cbrt", Num(8)))
