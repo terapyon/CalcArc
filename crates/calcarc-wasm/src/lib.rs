@@ -5,6 +5,7 @@
 
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::{self, DataType};
+use calcarc_core::finance::{compound, tax};
 use calcarc_core::loan::rate::Rate;
 use calcarc_core::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
@@ -332,6 +333,76 @@ pub fn loan_bonus_principal(
             error: None,
         },
         Err(e) => LoanBonusPrincipalResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 複利・積立の結果。TypeScript 側の `CompoundResult` に対応する。
+///
+/// 税の 3 項目は `tax` が偽なら `null` になる。**既定はタックスフリー**
+/// (NISA 前提。設計書 §6)。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CompoundResult {
+    final_balance: Option<String>,
+    principal_total: Option<String>,
+    interest: Option<String>,
+    national_tax: Option<String>,
+    local_tax: Option<String>,
+    net: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// 複利で増やす。一括は `deposit` を "0"、積立は `principal` を "0" にする。
+///
+/// `periods_per_year` は 1・2・12 のみ(年・半年・月)。それ以外は
+/// SyntaxError を戻り値で返す——境界は例外を投げない。
+#[wasm_bindgen]
+pub fn compound_grow(
+    principal: &str,
+    deposit: &str,
+    rate: &str,
+    periods_per_year: u32,
+    periods: u32,
+    tax: bool,
+) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        let rate = Rate::from_annual_percent(rate, periods_per_year)?;
+        let growth = compound::grow(parse_yen(principal)?, parse_yen(deposit)?, &rate, periods)?;
+        let taxes = if tax {
+            Some(tax::withholding(growth.interest)?)
+        } else {
+            None
+        };
+        Ok((growth, taxes))
+    })();
+    let result = match outcome {
+        Ok((growth, taxes)) => {
+            let (national, local) = match taxes {
+                Some((n, l)) => (Some(n), Some(l)),
+                None => (None, None),
+            };
+            CompoundResult {
+                final_balance: Some(growth.final_balance.to_string()),
+                principal_total: Some(growth.principal_total.to_string()),
+                interest: Some(growth.interest.to_string()),
+                national_tax: national.map(|v| v.to_string()),
+                local_tax: local.map(|v| v.to_string()),
+                net: match (national, local) {
+                    (Some(n), Some(l)) => growth
+                        .final_balance
+                        .checked_sub(n)
+                        .and_then(|v| v.checked_sub(l))
+                        .map(|v| v.to_string()),
+                    _ => None,
+                },
+                error: None,
+            }
+        }
+        Err(e) => CompoundResult {
             error: Some(e),
             ..Default::default()
         },

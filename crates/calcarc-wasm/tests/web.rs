@@ -226,3 +226,70 @@ fn the_new_entry_keys_cross_the_boundary() {
         Some("j3 +")
     );
 }
+
+#[wasm_bindgen_test]
+fn compound_crosses_the_boundary() {
+    // 種①: 100 万・年 1%・5 年・半年複利。golden(finance.json)と同じ
+    // 1,051,136 が境界を越えて出る——丸めない方式なら 1,051,140 になる。
+    let result = calcarc_wasm::compound_grow("1000000", "0", "1", 2, 10, false);
+    assert_eq!(
+        get(&result, "finalBalance").as_string().as_deref(),
+        Some("1051136")
+    );
+    assert_eq!(
+        get(&result, "interest").as_string().as_deref(),
+        Some("51136")
+    );
+    // 税を求めなければ 3 項目は null(undefined ではない)。
+    assert!(get(&result, "nationalTax").is_null());
+    assert!(get(&result, "localTax").is_null());
+    assert!(get(&result, "net").is_null());
+    assert!(get(&result, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_tax_crosses_the_boundary() {
+    // 国税と地方税は別々に切り捨てる。合算 20.315% なら 7,832 になる。
+    let result = calcarc_wasm::compound_grow("1000000", "0", "1", 2, 10, true);
+    assert_eq!(
+        get(&result, "nationalTax").as_string().as_deref(),
+        Some("7831")
+    );
+    assert_eq!(
+        get(&result, "localTax").as_string().as_deref(),
+        Some("2556")
+    );
+    assert_eq!(get(&result, "net").as_string().as_deref(), Some("1040749"));
+}
+
+#[wasm_bindgen_test]
+fn compound_survives_values_beyond_js_numbers() {
+    // 積立 20 年ぶん。2^53 は超えないが、金額が文字列で往復することを
+    // 固定する(ローン側と同じ流儀)。
+    let result = calcarc_wasm::compound_grow("0", "30000", "3", 12, 240, false);
+    assert_eq!(
+        get(&result, "finalBalance").as_string().as_deref(),
+        Some("9848906")
+    );
+    assert_eq!(
+        get(&result, "principalTotal").as_string().as_deref(),
+        Some("7200000")
+    );
+}
+
+#[wasm_bindgen_test]
+fn compound_errors_are_returned_not_thrown() {
+    // 単調増加なので u64 を超えうる——ローンには無かった経路。
+    let overflowed = calcarc_wasm::compound_grow("18446744073709551615", "0", "100", 12, 12, false);
+    assert_eq!(
+        get(&overflowed, "error").as_string().as_deref(),
+        Some("Overflow")
+    );
+    assert!(get(&overflowed, "finalBalance").is_null());
+    // 四半期複利は持たない。境界も例外を投げず SyntaxError を返す。
+    let bad_period = calcarc_wasm::compound_grow("1000000", "0", "1", 4, 10, false);
+    assert_eq!(
+        get(&bad_period, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
