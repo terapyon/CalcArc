@@ -11,5 +11,6 @@
 //! 順序の理由をここに残す。
 
 pub mod compound;
+pub mod compound_inverse;
 pub mod loan;
 pub mod tax;

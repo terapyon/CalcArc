@@ -157,7 +157,8 @@ test("every key is a button with an accessible name", async ({ page }) => {
   const buttons = panel(page)
     .getByRole("group", { name: /計算の種類|入力する項目|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(35); // 4 + 6 + 25(5×5)
+  // モード行はローン 3 + 複利 1 + 複利の逆算 2(設計書 §11)。
+  await expect(buttons).toHaveCount(37); // 6 + 6 + 25(5×5)
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);

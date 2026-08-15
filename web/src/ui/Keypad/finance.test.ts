@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { FINANCE_SECTIONS } from "./finance";
+import {
+  DEPOSIT_FOR_FIELD_SECTION,
+  FINANCE_SECTIONS,
+  PERIODS_FOR_FIELD_SECTION,
+} from "./finance";
 
 // Finance のキー集合そのものの検査。区画名は E2E のセレクタである(設計書 §3)。
 
@@ -61,10 +65,34 @@ describe("Finance のキー集合", () => {
   it("keeps the mode and field rows half height", () => {
     expect(section("計算の種類").height).toBe("half");
     expect(section("入力する項目").height).toBe("half");
-    expect(section("計算の種類").keys).toHaveLength(4); // ローン 3 + 複利
+    // ローン 3 + 複利 1 + 複利の逆算 2 (設計書 §11)。
+    expect(section("計算の種類").keys).toHaveLength(6);
+    expect(section("計算の種類").columns).toBe(6);
     // 月額は月額モードでは答だが、他の 2 モードでは入力である(設計書 §6)。
     expect(section("入力する項目").keys).toHaveLength(6);
     expect(section("入力する項目").columns).toBe(6);
+  });
+
+  it("swaps exactly one key for the target field", () => {
+    expect(DEPOSIT_FOR_FIELD_SECTION.keys).toHaveLength(6);
+    expect(DEPOSIT_FOR_FIELD_SECTION.columns).toBe(6);
+    expect(DEPOSIT_FOR_FIELD_SECTION.ariaLabel).toBe("入力する項目");
+    expect(DEPOSIT_FOR_FIELD_SECTION.keys.map((k) => k.token)).toEqual([
+      "field:principal",
+      "field:target",
+      "field:rate",
+      "field:months",
+      "field:periods",
+      "field:tax",
+    ]);
+    expect(PERIODS_FOR_FIELD_SECTION.keys.map((k) => k.token)).toEqual([
+      "field:principal",
+      "field:deposit",
+      "field:rate",
+      "field:target",
+      "field:periods",
+      "field:tax",
+    ]);
   });
 
   it("gives every key an accessible name", () => {

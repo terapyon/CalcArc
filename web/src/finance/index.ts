@@ -8,11 +8,20 @@
  * `grow` の呼び出し)。
  */
 
-import init, { compound_grow } from "../wasm/calcarc_wasm.js";
-import type { CompoundResult, PeriodsPerYear } from "./types";
+import init, {
+  compound_deposit_for,
+  compound_grow,
+  compound_periods_for,
+} from "../wasm/calcarc_wasm.js";
+import type {
+  CompoundInverseResult,
+  CompoundResult,
+  PeriodsPerYear,
+} from "./types";
 
 export type {
   CompoundErrorCode,
+  CompoundInverseResult,
   CompoundResult,
   PeriodsPerYear,
 } from "./types";
@@ -34,6 +43,34 @@ export interface FinanceCalc {
     periods: number,
     tax: boolean,
   ): CompoundResult;
+
+  /**
+   * 目標額から必要な積立額を求める。**目標を下回らない最小**を返す。
+   * 税 ON のとき `target` は手取りと比べられる。
+   */
+  depositFor(
+    principal: string,
+    target: string,
+    rate: string,
+    periodsPerYear: PeriodsPerYear,
+    periods: number,
+    tax: boolean,
+  ): CompoundInverseResult;
+
+  /**
+   * 目標額から必要な期数を求める。**最初に届いた期**を返す。
+   *
+   * **その次の期が目標を下回ることがある**——手取りは期数について単調でない
+   * (numerical-policy)。仕様であって不具合ではない。
+   */
+  periodsFor(
+    principal: string,
+    deposit: string,
+    target: string,
+    rate: string,
+    periodsPerYear: PeriodsPerYear,
+    tax: boolean,
+  ): CompoundInverseResult;
 }
 
 let ready: Promise<FinanceCalc> | null = null;
@@ -57,6 +94,24 @@ export function initFinance(): Promise<FinanceCalc> {
             periods,
             tax,
           ) as CompoundResult,
+        depositFor: (principal, target, rate, periodsPerYear, periods, tax) =>
+          compound_deposit_for(
+            principal,
+            target,
+            rate,
+            periodsPerYear,
+            periods,
+            tax,
+          ) as CompoundInverseResult,
+        periodsFor: (principal, deposit, target, rate, periodsPerYear, tax) =>
+          compound_periods_for(
+            principal,
+            deposit,
+            target,
+            rate,
+            periodsPerYear,
+            tax,
+          ) as CompoundInverseResult,
       }),
     )
     .catch((cause: unknown) => {

@@ -34,3 +34,22 @@ export interface CompoundResult {
   net: string | null;
   error: CompoundErrorCode | null;
 }
+
+/**
+ * 逆算の結果。**答(`deposit` か `periods`)と、その答における全体像**。
+ *
+ * 税の 3 項目が `null` になる条件は `CompoundResult` と同じ(税を求めなかったとき)。
+ */
+export interface CompoundInverseResult {
+  /** 必要積立額。必要年数を求めたときは入力そのまま。 */
+  deposit: string | null;
+  /** 必要期数。必要積立額を求めたときは入力そのまま。 */
+  periods: string | null;
+  finalBalance: string | null;
+  principalTotal: string | null;
+  interest: string | null;
+  nationalTax: string | null;
+  localTax: string | null;
+  net: string | null;
+  error: CompoundErrorCode | null;
+}

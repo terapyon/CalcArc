@@ -295,6 +295,55 @@ fn compound_errors_are_returned_not_thrown() {
 }
 
 #[wasm_bindgen_test]
+fn compound_deposit_for_crosses_the_boundary() {
+    // 必須ケース #1(設計書 §7・golden と同じ)。目標を下回らない最小の積立額。
+    let result = calcarc_wasm::compound_deposit_for("0", "10000000", "3", 12, 240, false);
+    assert_eq!(
+        get(&result, "deposit").as_string().as_deref(),
+        Some("30461")
+    );
+    assert_eq!(
+        get(&result, "finalBalance").as_string().as_deref(),
+        Some("10000251")
+    );
+    assert!(get(&result, "nationalTax").is_null());
+    assert!(get(&result, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_periods_for_crosses_the_boundary() {
+    // 必須ケース #4(設計書 §7)。税 ON なので target は手取りと比べる。
+    let result = calcarc_wasm::compound_periods_for("999", "0", "1016", "1.5", 12, true);
+    assert_eq!(get(&result, "periods").as_string().as_deref(), Some("19"));
+    assert_eq!(get(&result, "net").as_string().as_deref(), Some("1016"));
+    assert!(get(&result, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_inverse_errors_are_returned_not_thrown() {
+    // 目標 0 は SyntaxError。境界は例外を投げず、戻り値の error に出す。
+    let result = calcarc_wasm::compound_deposit_for("0", "0", "3", 12, 240, false);
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&result, "deposit").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_periods_inverse_errors_are_returned_not_thrown() {
+    // 対称ケース: compound_periods_for も目標 0 で同じ形の SyntaxError になる
+    // ことを、例外を投げないまま確かめる(compound_deposit_for 側にしか
+    // 無かった検査を揃える)。
+    let result = calcarc_wasm::compound_periods_for("1000000", "0", "0", "3", 12, false);
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&result, "periods").is_null());
+}
+
+#[wasm_bindgen_test]
 fn expressions_cross_the_boundary() {
     // 丸めは着地の 1 回だけ。各演算で丸めるなら 999999 になる。
     let result = calcarc_wasm::expr_integer("1000000/3*3", "18446744073709551615", "yen");
