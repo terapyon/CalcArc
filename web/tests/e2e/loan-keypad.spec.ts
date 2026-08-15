@@ -19,7 +19,7 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
   // (設計書 §8): 数字と単位の押し間違いは金額を壊すのでここは守る。モードと
   // 項目は押し直せば戻るので縦だけ詰める。緩めた理由をここに書いておかないと、
   // 次に読む人が「うっかり緩めた」と読む。
-  const pad = panel(page).getByRole("group", { name: "数字と単位のキー" });
+  const pad = panel(page).getByRole("group", { name: "数字と演算のキー" });
   for (const button of await pad.getByRole("button").all()) {
     const box = await button.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -149,7 +149,7 @@ test("a residual left in another mode does not block the bonus", async ({
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
   const buttons = panel(page)
-    .getByRole("group", { name: /求めるもの|入力する項目|数字と単位のキー/ })
+    .getByRole("group", { name: /求めるもの|入力する項目|数字と演算のキー/ })
     .getByRole("button");
   await expect(buttons).toHaveCount(25); // 3 + 6 + 16
   for (const button of await buttons.all()) {

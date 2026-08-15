@@ -39,11 +39,12 @@ export function Keypad<T>({
           aria-label={section.ariaLabel}
           style={{ "--keypad-columns": section.columns } as CSSProperties}
         >
-          {section.keys.map((key) => {
+          {section.keys.map((key, index) => {
             if (key.kind === "shift") {
               return (
                 <Key
-                  key={key.label}
+                  // 面を切り替えるキーは区画に 1 つだけ。
+                  key="shift"
                   token={null}
                   label={key.label}
                   ariaLabel={key.ariaLabel}
@@ -60,10 +61,14 @@ export function Keypad<T>({
             const face = shifted && key.shift ? key.shift : key;
             const token = face.token;
             return (
-              // React の key は第 1 面のラベルで固定する。面で変えると
-              // 別要素とみなされ、フォーカスが落ちる。
+              // React の key はトークンと位置で固定する。面で変えると別要素と
+              // みなされフォーカスが落ちる。**予約スロットはトークンもラベルも
+              // 重なる**(どれも null と「—」)ので、位置以外に一意にする手が
+              // 無い——キー集合はモジュール定数で並び替えも挿入も起きないから、
+              // 位置は安定した識別子である。
               <Key
-                key={key.label}
+                // biome-ignore lint/suspicious/noArrayIndexKey: 上のとおり
+                key={`${key.token ?? "slot"}-${index}`}
                 token={token}
                 label={face.label}
                 ariaLabel={face.ariaLabel}

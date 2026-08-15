@@ -9,6 +9,38 @@ vi.mock("../../datascale", () => ({
   initDataScale: vi.fn(),
 }));
 
+// 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
+// コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
+// 簡易版で足りる——値の正しさは golden が見る。
+vi.mock("../../expr", () => ({
+  initExpr: () =>
+    Promise.resolve({
+      integer: (text: string) => {
+        const units: Record<string, bigint> = {
+          億: 10n ** 8n,
+          万: 10n ** 4n,
+          G: 10n ** 9n,
+          M: 10n ** 6n,
+          K: 10n ** 3n,
+          年: 12n,
+          月: 1n,
+        };
+        let total = 0n;
+        let digits = "";
+        for (const ch of text) {
+          if (/\d/.test(ch)) digits += ch;
+          else if (units[ch] !== undefined) {
+            total += BigInt(digits || "0") * (units[ch] as bigint);
+            digits = "";
+          } else return { value: null, error: "SyntaxError" };
+        }
+        const value = total + BigInt(digits || "0");
+        return { value: text === "" ? null : value.toString(), error: null };
+      },
+      percent: (text: string) => ({ value: text, error: null }),
+    }),
+}));
+
 import { initDataScale } from "../../datascale";
 import { DataScalePanel } from "./DataScalePanel";
 

@@ -7,7 +7,6 @@ import {
 import {
   backspace,
   canPushUnit,
-  digits,
   EMPTY,
   type Entry,
   G,
@@ -18,6 +17,7 @@ import {
   pushUnit,
   text,
 } from "../../datascale/entry";
+import { type ExprCalc, initExpr } from "../../expr";
 import {
   DATA_SCALE_SECTIONS,
   type DataScaleField,
@@ -30,6 +30,9 @@ import styles from "./DataScalePanel.module.css";
 
 /** 既定のデータ型。フォーム時代の select の初期値を引き継ぐ(設計書 §5)。 */
 const DEFAULT_TYPE: DataTypeToken = "float32";
+
+/** 件数・次元数の上限。u128(設計書 §8 の着地表)。 */
+const MAX_COUNT = "340282366920938463463374607431768211455";
 
 const FIELD_LABELS: Record<DataScaleField, string> = {
   count: "件数",
@@ -47,6 +50,7 @@ const PRIMARY_STATUS: Record<Primary, string> = {
 
 export function DataScalePanel() {
   const [calc, setCalc] = useState<DataScaleCalc | null>(null);
+  const [expr, setExpr] = useState<ExprCalc | null>(null);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState<DataScaleField>("count");
   const [count, setCount] = useState<Entry>(EMPTY);
@@ -56,6 +60,14 @@ export function DataScalePanel() {
 
   useEffect(() => {
     let cancelled = false;
+    initExpr().then(
+      (loaded) => {
+        if (!cancelled) setExpr(loaded);
+      },
+      () => {
+        if (!cancelled) setFailed(true);
+      },
+    );
     initDataScale().then(
       (loaded) => {
         if (!cancelled) setCalc(loaded);
@@ -151,8 +163,15 @@ export function DataScalePanel() {
   }));
 
   // 結果は保持しない。両方の項目が埋まっているときだけ計算する。
-  const countDigits = digits(count);
-  const dimensionDigits = digits(dimensions);
+  // 打った通りの文字列をコアに評価させる(設計書 訂正 2)。
+  const countDigits =
+    expr === null
+      ? ""
+      : (expr.integer(text(count), MAX_COUNT, "count").value ?? "");
+  const dimensionDigits =
+    expr === null
+      ? ""
+      : (expr.integer(text(dimensions), MAX_COUNT, "count").value ?? "");
   const shown =
     calc && !isEmpty(count) && !isEmpty(dimensions)
       ? calc.compute(countDigits, dimensionDigits, dtype)

@@ -26,8 +26,15 @@ export type LoanKeyToken =
   | "digit:9"
   | "zeros3"
   | "dot"
-  | "man"
-  | "oku"
+  | "unit:high"
+  | "unit:low"
+  | "add"
+  | "sub"
+  | "mul"
+  | "div"
+  | "lparen"
+  | "rparen"
+  | "eq"
   | "del"
   | "ac"
   | "mode:payment"
@@ -124,18 +131,18 @@ const FIELDS: KeypadSection<LoanKeyToken> = {
 };
 
 const PAD: KeypadSection<LoanKeyToken> = {
-  ariaLabel: "数字と単位のキー",
-  columns: 4,
+  ariaLabel: "数字と演算のキー",
+  columns: 5,
   height: "square",
   keys: [
-    { token: "digit:7", label: "7", ariaLabel: "7", variant: "digit" },
-    { token: "digit:8", label: "8", ariaLabel: "8", variant: "digit" },
-    { token: "digit:9", label: "9", ariaLabel: "9", variant: "digit" },
+    // **最上段は Scientific と同じ**——括弧・DEL・AC の位置を 3 つのタブで
+    // 揃える(設計書 §4)。タブを行き来して AC の場所が変わるのは、
+    // 押し間違いが入力のやり直しに直結する。
+    { token: "lparen", label: "(", ariaLabel: "開き括弧", variant: "function" },
+    { token: "rparen", label: ")", ariaLabel: "閉じ括弧", variant: "function" },
+    // 金額に負の値は無いので `+/−` は置かない。予約スロット(設計書 §4)。
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
     { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
-
-    { token: "digit:4", label: "4", ariaLabel: "4", variant: "digit" },
-    { token: "digit:5", label: "5", ariaLabel: "5", variant: "digit" },
-    { token: "digit:6", label: "6", ariaLabel: "6", variant: "digit" },
     {
       token: "ac",
       label: "AC",
@@ -143,15 +150,31 @@ const PAD: KeypadSection<LoanKeyToken> = {
       variant: "danger",
     },
 
+    { token: "digit:7", label: "7", ariaLabel: "7", variant: "digit" },
+    { token: "digit:8", label: "8", ariaLabel: "8", variant: "digit" },
+    { token: "digit:9", label: "9", ariaLabel: "9", variant: "digit" },
+    { token: "div", label: "÷", ariaLabel: "割る", variant: "operator" },
+    // 5 列目はモジュール固有。**単位キーは項目に従って差し替わる**
+    // (設計書 §5)——金額は 万/億、期間は 年/月、年利は空き。
+    { token: "unit:high", label: "万", ariaLabel: "万", variant: "operator" },
+
+    { token: "digit:4", label: "4", ariaLabel: "4", variant: "digit" },
+    { token: "digit:5", label: "5", ariaLabel: "5", variant: "digit" },
+    { token: "digit:6", label: "6", ariaLabel: "6", variant: "digit" },
+    { token: "mul", label: "×", ariaLabel: "掛ける", variant: "operator" },
+    { token: "unit:low", label: "億", ariaLabel: "億", variant: "operator" },
+
     { token: "digit:1", label: "1", ariaLabel: "1", variant: "digit" },
     { token: "digit:2", label: "2", ariaLabel: "2", variant: "digit" },
     { token: "digit:3", label: "3", ariaLabel: "3", variant: "digit" },
-    { token: "man", label: "万", ariaLabel: "万", variant: "operator" },
+    { token: "sub", label: "−", ariaLabel: "引く", variant: "operator" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
 
     { token: "digit:0", label: "0", ariaLabel: "0", variant: "digit" },
     { token: "zeros3", label: "000", ariaLabel: "3桁のゼロ", variant: "digit" },
     { token: "dot", label: ".", ariaLabel: "小数点", variant: "digit" },
-    { token: "oku", label: "億", ariaLabel: "億", variant: "operator" },
+    { token: "add", label: "+", ariaLabel: "足す", variant: "operator" },
+    { token: "eq", label: "=", ariaLabel: "計算する", variant: "operator" },
   ],
 };
 

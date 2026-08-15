@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { type ExprCalc, initExpr } from "../../expr";
 import { initLoan, type LoanCalc, type LoanMode } from "../../loan";
 import {
   backspace,
   canPushUnit,
-  digits,
   EMPTY,
   type Entry,
   grouped,
@@ -45,6 +45,9 @@ const FIELD_ORDER: LoanField[] = [
  * 上限 1,200 か月を覆える。
  */
 const MAX_MONTHS_LEN = 4;
+
+/** 金額の上限。u64(設計書 §8 の着地表)。 */
+const MAX_YEN = "18446744073709551615";
 
 /**
  * 年利の文字数。コアが受ける最長は "100.0000"(整数 3 桁 + 小数 4 桁)。
@@ -96,6 +99,7 @@ interface Line {
 
 export function LoanPanel() {
   const [calc, setCalc] = useState<LoanCalc | null>(null);
+  const [expr, setExpr] = useState<ExprCalc | null>(null);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<LoanMode>("payment");
   const [active, setActive] = useState<LoanField>("principal");
@@ -114,6 +118,14 @@ export function LoanPanel() {
 
   useEffect(() => {
     let cancelled = false;
+    initExpr().then(
+      (loaded) => {
+        if (!cancelled) setExpr(loaded);
+      },
+      () => {
+        if (!cancelled) setFailed(true);
+      },
+    );
     initLoan().then(
       (loaded) => {
         if (!cancelled) setCalc(loaded);
@@ -192,9 +204,9 @@ export function LoanPanel() {
       case "zeros3":
         return active === "rate";
       // 単位は金額だけ。さらに「いまの入力が受けられるか」が重なる(§5)。
-      case "man":
+      case "unit:high":
         return !money || !canPushUnit(entryOf(active), MAN);
-      case "oku":
+      case "unit:low":
         return !money || !canPushUnit(entryOf(active), OKU);
       default:
         return false; // 数字・DEL・AC はいつでも押せる
@@ -259,9 +271,12 @@ export function LoanPanel() {
           return next.length > MAX_RATE_LEN ? previous : next;
         });
         break;
-      case "man":
-      case "oku": {
-        const next = pushUnit(entryOf(active), token === "man" ? MAN : OKU);
+      case "unit:high":
+      case "unit:low": {
+        const next = pushUnit(
+          entryOf(active),
+          token === "unit:high" ? MAN : OKU,
+        );
         // 盤面は押せないようにしてあるので、null はここに来ない(設計書 §5)。
         if (next !== null) setEntry(active, next);
         break;
@@ -311,10 +326,21 @@ export function LoanPanel() {
   });
 
   // 結果は保持しない。必要な項目が埋まっているときだけ計算する(M6 の規律)。
-  const principalDigits = digits(amounts.principal ?? EMPTY);
-  const paymentDigits = digits(amounts.payment ?? EMPTY);
-  const residualDigits = digits(amounts.residual ?? EMPTY);
-  const bonusDigits = digits(amounts[bonusKey] ?? EMPTY);
+  /**
+   * 項目の値。**打った通りの文字列をコアに評価させる**——単位を解釈するのも
+   * 四則を計算するのもコアである(設計書 訂正 2)。空なら空文字、式が壊れて
+   * いれば空文字にして「まだ揃っていない」扱いにする。
+   */
+  function evaluated(field: LoanField): string {
+    const typed = text(entryOf(field));
+    if (typed === "" || expr === null) return "";
+    return expr.integer(typed, MAX_YEN, "yen").value ?? "";
+  }
+
+  const principalDigits = evaluated("principal");
+  const paymentDigits = evaluated("payment");
+  const residualDigits = evaluated("residual");
+  const bonusDigits = evaluated("bonus");
   const monthsNumber = /^\d+$/.test(months) ? Number(months) : 0;
 
   let error: string | null = null;
