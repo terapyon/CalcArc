@@ -309,3 +309,173 @@ LOAN_INPUTS: list[dict] = [
         "n": 420,
     },
 ]
+
+# 複利・積立（設計書 2026-08-14）。期待値は plan 起草時に Decimal で実測した。
+# **golden は銀行方式（各期切り捨て）の値である**——閉形式の値とは違う。
+COMPOUND_INPUTS: list[dict] = [
+    # 種①: 100 万・年 1%・5 年・半年複利 → 1,051,136（閉形式は 1,051,140）
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 2,
+        "periods": 10,
+        "tax": False,
+    },
+    # 同じ入力に税。国税 7,831 + 地方税 2,556 = 10,387
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 2,
+        "periods": 10,
+        "tax": True,
+    },
+    # 積立: 月 3 万・年 3%・20 年 → 9,848,906（閉形式の 9,849,059 ではない）
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "30000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 同じ積立に税。**別切り捨てと合算切り捨てが 1 円違う組**（設計書 §6）
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "30000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": True,
+    },
+    # 一括 + 積立の混合: 1000 万 + 月 5 万・年 3%・50 年 → 114,198,545
+    {
+        "op": "compound_grow",
+        "principal": "10000000",
+        "deposit": "50000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 600,
+        "tax": False,
+    },
+    # 周期 3 種（同じ年利で分母が期/年ぶん動くことを固定する）
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 1,
+        "periods": 10,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 2,
+        "periods": 10,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 10,
+        "tax": False,
+    },
+    # 金利 0% の退化（一括はそのまま、積立は deposit×periods）
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "30000",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    # 1 期だけ / 最長 1200 期
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 1,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 12,
+        "periods": 1200,
+        "tax": False,
+    },
+    # u64 Overflow（**新設のエラー経路**。ローンには無かった。設計書 §3）
+    {
+        "op": "compound_grow",
+        "principal": U64_MAX_TEXT,
+        "deposit": "0",
+        "rate": "100",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    # 税の小さい側の境界: 元本 1,000 円・年 1%・1 期 → 利息 10 円。
+    # 別切り捨てなら 国税 1 + 地方税 0 = 1、合算 20.315% だと 2 になる。
+    {
+        "op": "compound_grow",
+        "principal": "1000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 1,
+        "periods": 1,
+        "tax": True,
+    },
+    # エラー（設計書 §3）: 期数 0 / 元本も積立も 0 / 上限超の期数
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 0,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "1000000",
+        "deposit": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 1201,
+        "tax": False,
+    },
+]

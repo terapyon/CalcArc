@@ -13,7 +13,14 @@ import sys
 import mpmath
 import sympy
 
-from calcarc_reference import cases, complex_ref, data_scale_ref, loan_ref, scientific_ref
+from calcarc_reference import (
+    cases,
+    complex_ref,
+    compound_ref,
+    data_scale_ref,
+    loan_ref,
+    scientific_ref,
+)
 
 SCHEMA = 1
 TOLERANCE = {"abs": 1e-12, "rel": 1e-12}
@@ -130,22 +137,38 @@ def _resolve_placeholders(params: dict) -> dict:
 
 
 def build_finance() -> dict:
+    """ローンと複利は同じファイルに入る(設計書 §9)。
+
+    base-spec の 4 ファイル列挙を動かさずに済み、どちらも tolerance を
+    持たない完全一致だからである。**id の重複検査は 2 表を結合した後**で
+    行う——表ごとに見ると、表をまたいだ衝突を見逃す。
+    """
     entries = []
     for case in cases.LOAN_INPUTS:
         op = case["op"]
         params = _resolve_placeholders({k: v for k, v in case.items() if k != "op"})
-        result = loan_ref.compute(op, params)
         entries.append(
             {
                 "id": f"{op}/" + "/".join(str(v) for v in params.values()),
                 "op": op,
                 "input": params,
-                "expect": result,
+                "expect": loan_ref.compute(op, params),
+            }
+        )
+    for case in cases.COMPOUND_INPUTS:
+        op = case["op"]
+        params = {k: v for k, v in case.items() if k != "op"}
+        entries.append(
+            {
+                "id": f"{op}/" + "/".join(str(v) for v in params.values()),
+                "op": op,
+                "input": params,
+                "expect": compound_ref.compute(op, params),
             }
         )
     ids = [entry["id"] for entry in entries]
     if len(set(ids)) != len(ids):
-        raise ValueError("duplicate case id in LOAN_INPUTS")
+        raise ValueError("duplicate case id in finance golden")
     # 整数円の完全一致なので tolerance を持たない(設計書 §7)。
     return {
         "schema": SCHEMA,

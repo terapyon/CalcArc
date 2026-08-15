@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use calcarc_core::CalcError;
+use calcarc_core::finance::{compound, tax};
 use calcarc_core::loan::rate::Rate;
 use calcarc_core::loan::{bonus, forward, inverse};
 use serde::Deserialize;
@@ -50,6 +51,15 @@ struct Input {
     monthly_payment: Option<String>,
     #[serde(default)]
     bonus_payment: Option<String>,
+    // 複利。ローンとは入力が重ならないので、同じ合併型に足すだけで済む。
+    #[serde(default)]
+    deposit: Option<String>,
+    #[serde(default)]
+    periods: Option<u32>,
+    #[serde(default)]
+    periods_per_year: Option<u32>,
+    #[serde(default)]
+    tax: Option<bool>,
 }
 
 impl Input {
@@ -93,8 +103,42 @@ fn field(map: &mut BTreeMap<String, String>, key: &str, value: impl ToString) {
     map.insert(key.to_string(), value.to_string());
 }
 
+/// 複利。**金利の作り方がローンと違う**(分母に期/年が入る)ので、
+/// 月利を前提にした下の配線とは分けて受ける。
+fn run_compound(input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
+    let rate = Rate::from_annual_percent(
+        &input.rate,
+        input.periods_per_year.ok_or(CalcError::SyntaxError)?,
+    )?;
+    let growth = compound::grow(
+        input.yen(&input.principal)?,
+        input.yen(&input.deposit)?,
+        &rate,
+        input.periods.ok_or(CalcError::SyntaxError)?,
+    )?;
+    let mut out = BTreeMap::new();
+    field(&mut out, "final_balance", growth.final_balance);
+    field(&mut out, "principal_total", growth.principal_total);
+    field(&mut out, "interest", growth.interest);
+    if input.tax == Some(true) {
+        let (national, local) = tax::withholding(growth.interest)?;
+        let net = growth
+            .final_balance
+            .checked_sub(national)
+            .and_then(|v| v.checked_sub(local))
+            .ok_or(CalcError::Overflow)?;
+        field(&mut out, "national_tax", national);
+        field(&mut out, "local_tax", local);
+        field(&mut out, "net", net);
+    }
+    Ok(out)
+}
+
 /// op ごとにコアの関数へ配線し、出力を key→文字列の写像にする。
 fn run(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
+    if op == "compound_grow" {
+        return run_compound(input);
+    }
     let rate = Rate::from_percent(&input.rate)?;
     let mut out = BTreeMap::new();
     match op {

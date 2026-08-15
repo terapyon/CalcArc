@@ -13,11 +13,25 @@ pub struct Rate {
 }
 
 impl Rate {
-    /// 年利のパーセント文字列から月利分数へ。
+    /// 年利のパーセント文字列から**月利**分数へ。ローンの入口。
     ///
     /// "1.5" -> 15/(10·100·12) = 15/12000。小数 4 桁まで。
     /// 空・非数字・負・100% 超・5 桁以上は SyntaxError。
     pub fn from_percent(text: &str) -> CalcResult<Rate> {
+        Rate::from_annual_percent(text, 12)
+    }
+
+    /// 年利のパーセント文字列から **1 期の利率**へ。分母に期/年を掛ける。
+    ///
+    /// 複利は月次・半年・年を選べる(numerical-policy)。**名目換算のみ**で
+    /// ある——実効換算 (1+r)^(1/期) − 1 は無理数で、この分数に載らない。
+    ///
+    /// 受け付ける期/年は 1・2・12 だけ。他は SyntaxError にする: 分母の
+    /// 定義域を閉じておかないと、盤面が持たない値が境界から入りうる。
+    pub fn from_annual_percent(text: &str, periods_per_year: u32) -> CalcResult<Rate> {
+        if !matches!(periods_per_year, 1 | 2 | 12) {
+            return Err(CalcError::SyntaxError);
+        }
         let (int_part, frac_part) = match text.split_once('.') {
             Some((i, f)) => (i, f),
             None => (text, ""),
@@ -55,7 +69,7 @@ impl Rate {
         }
         let denominator = scale
             .checked_mul(100)
-            .and_then(|v| v.checked_mul(12))
+            .and_then(|v| v.checked_mul(periods_per_year as u64))
             .ok_or(CalcError::SyntaxError)?;
         Ok(Rate {
             numerator,
@@ -76,6 +90,16 @@ impl Rate {
         let product = balance as u128 * self.numerator as u128;
         let interest = product / self.denominator as u128;
         u64::try_from(interest).map_err(|_| CalcError::Overflow)
+    }
+
+    /// 1 期の利息 = floor(残高 × 分子 / 分母)。`monthly_interest_floor` と
+    /// 同じ計算である。
+    ///
+    /// **月次とは限らない**文脈(複利の半年・年)から呼ぶときに、名前が嘘に
+    /// ならないよう別名を置く。月次側を改名しないのは、ローン全体の
+    /// 呼び出しとコメントが動いて、複利と無関係な差分が混ざるためである。
+    pub fn interest_floor(&self, balance: u64) -> CalcResult<u64> {
+        self.monthly_interest_floor(balance)
     }
 
     /// f64 の月利(閉形式の候補計算にのみ使う。設計書 §1-3)。
@@ -144,6 +168,34 @@ mod tests {
         let r = Rate::from_percent("100").unwrap();
         let interest = r.monthly_interest_floor(u64::MAX).unwrap();
         assert_eq!(interest, u64::MAX / 12);
+    }
+
+    #[test]
+    fn the_period_count_moves_the_denominator() {
+        // 分母は scale·100·(期/年)。月次は既存の from_percent と一致する。
+        assert_eq!(
+            Rate::from_annual_percent("1", 2).unwrap(),
+            Rate {
+                numerator: 1,
+                denominator: 200
+            }
+        );
+        assert_eq!(
+            Rate::from_annual_percent("1", 1).unwrap(),
+            Rate {
+                numerator: 1,
+                denominator: 100
+            }
+        );
+        assert_eq!(
+            Rate::from_annual_percent("1.5", 12).unwrap(),
+            Rate::from_percent("1.5").unwrap()
+        );
+        // 定義域の外は受けない(四半期複利は持たない)。
+        assert_eq!(
+            Rate::from_annual_percent("1", 4),
+            Err(CalcError::SyntaxError)
+        );
     }
 
     #[test]

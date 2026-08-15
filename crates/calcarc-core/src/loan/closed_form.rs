@@ -11,6 +11,25 @@
 use super::rate::Rate;
 use crate::{CalcError, CalcResult};
 
+/// (1+r)^n。素朴な `powi` ではなく expm1/log1p 経由で評価する。
+///
+/// 素朴式は低金利で桁落ちし、年 0.001% では ~1e-5 円まで悪化する
+/// (設計書 §1-3)。**これは f64 の弱点への対処であって、複利(厳密整数)
+/// からは呼ばれない。**
+pub(super) fn pow_1p(r: f64, n: u32) -> f64 {
+    f64::exp_m1(n as f64 * f64::ln_1p(r)) + 1.0
+}
+
+/// 年金現価 (1 − (1+r)^{−n})/r。r > 0 を前提とする(呼び出し側が 0 を弾く)。
+///
+/// 内側で `pow_1p` から 1 を引き戻すのは意図的である。桁落ちが起きるのは
+/// `(1+r)^n − 1` の側で、その値を `x` として保持したまま使う。expm1 の値
+/// そのものを返す関数を別に作ると、呼び出し側が 2 種類を取り違える。
+pub(super) fn annuity(r: f64, n: u32) -> f64 {
+    let x = pow_1p(r, n) - 1.0; // = expm1(n·log1p(r))
+    (x / (x + 1.0)) / r
+}
+
 /// 元利均等の月額。
 ///
 /// 残価 B(既定 0)は設計書 §3 の実慣行モデル:
@@ -41,16 +60,9 @@ pub fn monthly_payment(principal: u64, rate: &Rate, n: u32, residual: u64) -> Ca
         return principal.checked_add(interest).ok_or(CalcError::Overflow);
     }
     let r = rate.as_f64_monthly();
-    // annuity(m) = (1 − (1+r)^{−m})/r を expm1 経由で:
-    // (1+r)^{−m} = 1/(x_m + 1)、x_m = expm1(m·log1p(r))
-    let x_n = f64::exp_m1(n as f64 * f64::ln_1p(r));
-    let pow_n = x_n + 1.0; // (1+r)^n
-    let x_m = if residual == 0 {
-        x_n
-    } else {
-        f64::exp_m1((n - 1) as f64 * f64::ln_1p(r))
-    };
-    let annuity_m = (x_m / (x_m + 1.0)) / r; // (1 − (1+r)^{−m})/r
+    let pow_n = pow_1p(r, n);
+    // 残価ありは n−1 回目が調整回なので、年金現価は n−1 回ぶん(設計書 §3)。
+    let annuity_m = annuity(r, if residual == 0 { n } else { n - 1 });
     let pv = principal as f64 - residual as f64 / pow_n;
     if pv <= 0.0 || annuity_m <= 0.0 {
         return Err(CalcError::SyntaxError);

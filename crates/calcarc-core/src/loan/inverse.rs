@@ -8,6 +8,7 @@
 //! 借入可能額で、厳密表の答は f64 候補より **167 円**高い。各行の利息切り捨てが
 //! 積み上がって連続式より借りられるためで、差は回数と金利とともに育つ。
 
+use super::closed_form::annuity;
 use super::rate::Rate;
 use super::schedule::{clears_within, run_schedule};
 use crate::{CalcError, CalcResult};
@@ -95,10 +96,7 @@ pub fn principal_for(payment: u64, rate: &Rate, n: u32) -> CalcResult<PrincipalR
         payment.checked_mul(n as u64).ok_or(CalcError::Overflow)?
     } else {
         let r = rate.as_f64_monthly();
-        // annuity(n) = (1 − (1+r)^{−n})/r を expm1 経由で(設計書 §1-3)。
-        let x_n = f64::exp_m1(n as f64 * f64::ln_1p(r));
-        let annuity = (x_n / (x_n + 1.0)) / r;
-        let candidate = payment as f64 * annuity;
+        let candidate = payment as f64 * annuity(r, n);
         if !candidate.is_finite() || candidate >= u64::MAX as f64 {
             return Err(CalcError::Overflow);
         }
