@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const panel = (page: Page) => page.getByRole("region", { name: "ローン計算" });
+const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
 const echo = (page: Page) => page.getByTestId("display-echo");
 
 async function press(page: Page, names: string[]) {
@@ -10,7 +10,7 @@ async function press(page: Page, names: string[]) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/#loan");
+  await page.goto("/#finance");
   await expect(panel(page)).toBeVisible();
 });
 

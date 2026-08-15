@@ -44,13 +44,21 @@ describe("App", () => {
     expect(screen.getByTestId("datascale-panel")).toBeInTheDocument();
   });
 
-  it("shows Loan when the hash says so", () => {
-    window.location.hash = "#loan";
+  it("shows Finance when the hash says so", () => {
+    window.location.hash = "#finance";
     render(<App />);
     expect(screen.getByTestId("loan-panel")).toBeInTheDocument();
     // 1 モジュールだけが <main> に居ること(出し分けの取りこぼしを防ぐ)。
     expect(screen.queryByTestId("scientific-panel")).toBeNull();
     expect(screen.queryByTestId("datascale-panel")).toBeNull();
+  });
+
+  it("does not route the old #loan hash any more", () => {
+    // 旧 URL の互換は作らない(設計書 §3、利用者が本人のみのため)。
+    // 不明ハッシュの既定どおり Scientific に倒れる——これは仕様である。
+    window.location.hash = "#loan";
+    render(<App />);
+    expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
   });
 
   it("falls back to Scientific for a hash it does not know", () => {

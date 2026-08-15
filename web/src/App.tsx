@@ -6,9 +6,11 @@ import { ScientificPanel } from "./ui/ScientificPanel";
 import { UpdateToast } from "./ui/UpdateToast/UpdateToast";
 
 // 不明・空ハッシュは "scientific" に倒す(base-spec §6 のデフォルト規定)。
+// **旧 #loan もここに落ちる**——互換分岐は作らない(設計書 §3。利用者が
+// 本人のみのため)。第三者が使い始めたら足す。
 function moduleFromHash(hash: string): ModuleId {
   if (hash === "#data-scale") return "data-scale";
-  if (hash === "#loan") return "loan";
+  if (hash === "#finance") return "finance";
   return "scientific";
 }
 
@@ -32,7 +34,7 @@ export function App() {
       <main>
         {module === "scientific" && <ScientificPanel />}
         {module === "data-scale" && <DataScalePanel />}
-        {module === "loan" && <LoanPanel />}
+        {module === "finance" && <LoanPanel />}
       </main>
       {/* 更新の知らせはモジュールに属さない。シェルが 1 つだけ持つ。 */}
       <UpdateToast />

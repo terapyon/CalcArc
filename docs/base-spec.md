@@ -190,6 +190,11 @@ calc-core
 └── numeric
 ```
 
+**【訂正 2026-08-15】** `finance` の枠はまだ空いている。ローンの計算は
+`loan` として実装されており（`testdata/finance.json` は既にこの名前）、
+`finance` を実際に作るかは複利・積立を足すときに判断する
+（[F1 設計](superpowers/specs/2026-08-14-finance-compound-design.md) §7）。
+
 可能な限り、
 
 ```rust
@@ -240,6 +245,11 @@ Calculator Platform
 ├── Loan / Finance
 └── Future Modules
 ```
+
+**【訂正 2026-08-15】** **UI のタブ表記は `Finance`、ハッシュは `#finance`**
+（[F0 設計](superpowers/specs/2026-08-14-finance-rename-design.md)）。
+ローンは Finance の中の 1 機能であり、§20〜§22 の仕様は変わらない。
+旧 `#loan` の互換は作っていない。
 
 共通UI、履歴、数値表示、設定などはPlatform側で提供する。
 

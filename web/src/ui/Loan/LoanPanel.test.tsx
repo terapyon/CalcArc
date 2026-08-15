@@ -102,7 +102,7 @@ describe("LoanPanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
     await renderPanel();
     expect(
-      screen.getByRole("region", { name: "ローン計算" }),
+      screen.getByRole("region", { name: "金融計算" }),
     ).toBeInTheDocument();
     for (const name of ["求めるもの", "入力する項目", "数字と単位のキー"]) {
       expect(screen.getByRole("group", { name })).toBeInTheDocument();
