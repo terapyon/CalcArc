@@ -7,7 +7,7 @@
 
 **Architecture:** ファイルの移動と識別子の改名だけ。WASM のエクスポート名
 （`loan_forward` など）、TS のローン固有の型（`LoanCalc`・`LoanMode`・`Loan*Result`）、
-E2E のセレクタ（region 名「金融計算」、`loan-breakdown`）は据え置く。木は Rust 側の
+region 名「金融計算」は据え置く。木は Rust 側の
 `calcarc_core::finance::{compound, tax, loan}`（B spec で移動済み）に揃える。
 
 **Tech Stack:** TypeScript / React 19 / Vite / vitest / Playwright / Biome
@@ -56,6 +56,7 @@ E2E のセレクタ（region 名「金融計算」、`loan-breakdown`）は据�
 | `LOAN_SECTIONS` `LoanKeyToken` `LoanField` | `FINANCE_SECTIONS` `FinanceKeyToken` `FinanceField` |
 | `src/ui/Loan/LoanPanel.{tsx,module.css,test.tsx}` | `src/ui/Finance/FinancePanel.{tsx,module.css,test.tsx}` |
 | testid `loan-panel` `loan-load-error` | `finance-panel` `finance-load-error` |
+| testid `loan-mode` `loan-field` `loan-breakdown` | `finance-mode` `finance-field` `finance-breakdown`（**訂正 2、下記**） |
 
 **変えない（理由付き）**
 
@@ -67,10 +68,35 @@ E2E のセレクタ（region 名「金融計算」、`loan-breakdown`）は据�
   `initFinance` が複利だけを指しているのは altitude の問題で、移動とは別。§スコープ外。
 - **E2E のファイル名**（`loan.spec.ts` `loan-keypad.spec.ts`）——中身はローンの
   モードしか触っていない（複利の E2E は 1 件も無い）。まだ嘘ではない。
-- **testid `loan-breakdown`**——ローンの内訳であり、E2E のセレクタである。
 - **`entry.ts` の中の `MAN` `OKU` `YEAR` `MONTH`**——単位そのもの。
 
 **testid の線引き**: パネル全体のものは `finance-`、モード固有のものは `loan-` のまま。
+
+### 【訂正 2026-08-15】testid の一覧が 3 つ取りこぼしていた
+
+**この計画は当初、`loan-mode` `loan-field` `loan-breakdown` を「変えない」側に
+置いていた。誤りである。** 線引き（すぐ上の 1 行）は正しかったが、**当てはめが
+間違っていた**——3 つとも**パネル全体のもの**である。
+
+| testid | 当初の理由 | 実態 |
+|---|---|---|
+| `loan-mode` | （一覧から漏れていた） | `MODE_STATUS` を描く。そこには `compound: "複利で増やす"` が入っている |
+| `loan-field` | （一覧から漏れていた） | 複利の項目（積立額・周期・税）も出す |
+| `loan-breakdown` | 「ローンの内訳であり、E2E のセレクタである」 | **前半が偽。** 複利も同じ `breakdown` 配列（元本合計 / 運用収益 / 国税 / 地方税 / 税引前）を**同じノードで**描く |
+
+**`loan-breakdown` の理由が偽になったのは A（Finance UI）のマージ時点**である。
+この計画はそれを検算せずに書き写した。3 つとも `finance-*` に改名した
+（`d21058c` と `20d64a7`）。E2E が引いていたのは `loan-breakdown` だけで、
+`web/tests/e2e/loan.spec.ts:10` を 1 行直している。
+
+**以下の Task 3・Task 4 の本文と検証コマンドは、実行時のまま残してある**
+（`grep -rn "loan-breakdown" # 期待: 4 行のまま` など）。実行の記録なので
+書き換えない。**現在の正は上の表である。**
+
+**この取りこぼしの原因**（同じ間違いを繰り返さないために）: 変更対象の一覧を
+`grep` で機械的に出さず、手で数えた。`loan-load-error` と `loan-breakdown` は
+grep したが、`loan-mode` と `loan-field` は grep していない。**移動と改名の計画では、
+対象一覧を `grep -rn "<古い名前>"` から起こすこと。**
 
 ## ファイル構成（完了後）
 
@@ -434,6 +460,8 @@ EOF
 - Produces: `web/src/ui/Finance/FinancePanel` が `FinancePanel` を named export
   する（React コンポーネント、props なし）。testid は `finance-load-error`
   （読み込み失敗の alert）と `loan-breakdown`（ローンの内訳。**据え置き**）。
+  ——**【訂正】`loan-breakdown` は据え置かず `finance-breakdown` にした。**
+  §「testid の一覧が 3 つ取りこぼしていた」を見ること。
 
 - [ ] **Step 1: `git mv` で移す**
 
@@ -660,6 +688,11 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm e2e
 **E2E が落ちたらそれは本物の回帰である**——この計画は region 名も
 アクセシブルネームも `loan-breakdown` も変えていないので、E2E から見て
 変わったものは 1 つも無いはずである。
+
+**【訂正】** 最終レビューの指摘で `loan-breakdown` → `finance-breakdown` を
+足したので、**E2E が引く名前は 1 つ変わった**（`web/tests/e2e/loan.spec.ts:10`
+を同時に直している）。E2E はその後もう一度回して **82 passed** である。
+region 名とアクセシブルネームが 1 つも動いていないことは変わらない。
 
 - [ ] **Step 2: 触っていない層の diff が空であることを示す**
 
