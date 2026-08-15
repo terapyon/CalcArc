@@ -5,6 +5,7 @@
 
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::{self, DataType};
+use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::finance::{compound, tax};
@@ -408,4 +409,47 @@ pub fn compound_grow(
         },
     };
     to_js_value(&result)
+}
+
+/// 式の評価結果。TypeScript 側の `ExprResult` に対応する。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ExprResult {
+    value: Option<String>,
+    error: Option<CalcError>,
+}
+
+fn to_expr_result(outcome: CalcResult<String>) -> JsValue {
+    let result = match outcome {
+        Ok(value) => ExprResult {
+            value: Some(value),
+            error: None,
+        },
+        Err(e) => ExprResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 式を整数へ着地させる。`maximum` は項目の上限(10 進文字列)。
+///
+/// `unit_set` は単位表の名前(`yen` / `count` / `months` / `periods:<n>` /
+/// `none`)。**表そのものは渡さない**——渡す形にすると呼ぶ側が scale を持ち、
+/// 単位表が 2 つの言語に散る(設計書 訂正 2)。
+#[wasm_bindgen]
+pub fn expr_integer(text: &str, maximum: &str, unit_set: &str) -> JsValue {
+    let outcome: CalcResult<String> = (|| {
+        let maximum: u128 = maximum.parse().map_err(|_| CalcError::SyntaxError)?;
+        let units = expr::unit_set_from_str(unit_set)?;
+        Ok(expr::evaluate_to_integer(text, maximum, units)?.to_string())
+    })();
+    to_expr_result(outcome)
+}
+
+/// 式を年利のパーセント文字列へ着地させる。単位は取らない。
+#[wasm_bindgen]
+pub fn expr_percent(text: &str) -> JsValue {
+    to_expr_result(expr::evaluate_to_percent(text))
 }
