@@ -88,6 +88,13 @@ def build_shard(seed: int, count: int) -> dict:
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
         node = random_node(rng, MAX_DEPTH)
+        if isinstance(node, Num):
+            # 裸のリテラルは「押した桁が返る」ことしか確かめない。それは
+            # engine_table.rs が既に仕様として持っている領域で、この重量級
+            # コーパスの仕事ではない(レビュー修正ラウンド 1)。最上位には
+            # 演算子か関数を最低 1 つ要求する。`Un("neg", Num(5))` のような
+            # 単項 1 つだけのケースは残る — `neg` キーを実際に叩いているので。
+            continue
         try:
             if not _within_range(node):
                 continue
@@ -133,7 +140,11 @@ def main() -> None:
     write("scientific-000.json", build_shard(seed=20260815, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
-    print(f"generated {count} cases in {elapsed:.1f}s ({elapsed / count * 1000:.1f}ms each)")
+    # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。
+    # ミリ秒単位で出す。
+    print(
+        f"generated {count} cases in {elapsed * 1000:.2f}ms ({elapsed / count * 1000:.4f}ms each)"
+    )
 
 
 if __name__ == "__main__":

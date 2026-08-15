@@ -55,3 +55,14 @@ def test_the_envelope_matches_the_existing_golden_convention() -> None:
     assert shard["schema"] == 1
     assert "sympy" in shard["generated_by"]
     assert set(shard["tolerance"]) == {"abs", "rel"}
+
+
+def test_every_case_performs_at_least_one_operation() -> None:
+    # 裸のリテラル(`769 => 769.0`)は「押した桁が返る」ことしか確かめない。それは
+    # engine_table.rs が既に仕様として持っている領域で、この重量級コーパスの
+    # 仕事ではない(レビュー修正ラウンド 1)。線は「演算子か関数が 1 つ以上あるか」で、
+    # `Un("neg", Num(5))` のような単項 1 つだけのケースは残す — `neg` キーを
+    # 実際に叩いているので。
+    shard = generate_corpus.build_shard(seed=7, count=200)
+    for case in shard["cases"]:
+        assert not case["expr"].lstrip("-").isdigit(), case["expr"]
