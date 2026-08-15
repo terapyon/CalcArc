@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use calcarc_core::CalcError;
+use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse};
 use calcarc_core::finance::{compound, tax};
@@ -36,6 +37,7 @@ struct Case {
 
 #[derive(Debug, Deserialize)]
 struct Input {
+    #[serde(default)]
     rate: String,
     #[serde(default)]
     n: Option<u32>,
@@ -60,6 +62,13 @@ struct Input {
     periods_per_year: Option<u32>,
     #[serde(default)]
     tax: Option<bool>,
+    // 式。ローン・複利とは入力が重ならないので、同じ合併型に足すだけで済む。
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    unit_set: Option<String>,
+    #[serde(default)]
+    max: Option<String>,
 }
 
 impl Input {
@@ -103,6 +112,26 @@ fn field(map: &mut BTreeMap<String, String>, key: &str, value: impl ToString) {
     map.insert(key.to_string(), value.to_string());
 }
 
+/// 式。**入力が金利を持たない**ので、下の配線とは分けて受ける。
+fn run_expression(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
+    let text = input.text.as_deref().ok_or(CalcError::SyntaxError)?;
+    let value = if op == "expr_percent" {
+        expr::evaluate_to_percent(text)?
+    } else {
+        let maximum: u128 = input
+            .max
+            .as_deref()
+            .ok_or(CalcError::SyntaxError)?
+            .parse()
+            .map_err(|_| CalcError::SyntaxError)?;
+        let units = expr::unit_set_from_str(input.unit_set.as_deref().unwrap_or("none"))?;
+        expr::evaluate_to_integer(text, maximum, units)?.to_string()
+    };
+    let mut out = BTreeMap::new();
+    field(&mut out, "value", value);
+    Ok(out)
+}
+
 /// 複利。**金利の作り方がローンと違う**(分母に期/年が入る)ので、
 /// 月利を前提にした下の配線とは分けて受ける。
 fn run_compound(input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
@@ -138,6 +167,9 @@ fn run_compound(input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
 fn run(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
     if op == "compound_grow" {
         return run_compound(input);
+    }
+    if op.starts_with("expr_") {
+        return run_expression(op, input);
     }
     let rate = Rate::from_percent(&input.rate)?;
     let mut out = BTreeMap::new();
@@ -234,6 +266,9 @@ fn loan_matches_the_reference() {
                 let code = match e {
                     CalcError::Overflow => "Overflow",
                     CalcError::SyntaxError => "SyntaxError",
+                    // 式が入って 0 除算が届くようになった。**panic の腕は残す**
+                    // ——知らないエラーが黙って通らないのは良い性質である。
+                    CalcError::DivisionByZero => "DivisionByZero",
                     other => panic!("{}: unexpected error kind {other:?}", case.id),
                 };
                 assert_eq!(code, expected_code, "{}: error kind", case.id);
