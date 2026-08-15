@@ -12,9 +12,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use calcarc_core::CalcError;
+use calcarc_core::finance::loan::rate::Rate;
+use calcarc_core::finance::loan::{bonus, forward, inverse};
 use calcarc_core::finance::{compound, tax};
-use calcarc_core::loan::rate::Rate;
-use calcarc_core::loan::{bonus, forward, inverse};
 use serde::Deserialize;
 
 const SCHEMA: u32 = 1;
