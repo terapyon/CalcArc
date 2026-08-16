@@ -687,3 +687,13 @@ fn eng_does_not_touch_what_you_are_typing() {
     // ENG を先に入れてから打っても同じ(モードは入力中の表示に効かない)。
     assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5"]), "12345");
 }
+
+#[test]
+fn eng_reaches_the_pending_expression_too() {
+    // 保留中の式(echo)と答(main)が同じ画面に出るので、表記が食い違うと読めない。
+    // 設計書 §6 は main しか論じていなかった。
+    // 1000 を確定して ENG に入れ、演算子を押して保留を作る。
+    let shown = run(&["1", "0", "0", "0", "eq", "eng", "add"]);
+    assert_eq!(shown.main, "1e3");
+    assert_eq!(shown.echo, "1e3 +");
+}

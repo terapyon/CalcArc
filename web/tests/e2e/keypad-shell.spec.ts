@@ -21,7 +21,10 @@ test("the main grid keeps 44px touch targets", async ({ page }) => {
 test("the function row is half height but still 44px wide", async ({
   page,
 }) => {
-  const functions = page.getByRole("group", { name: "関数キー" });
+  // 44px は 8 列案を却下した唯一の測定(390px で 38.75px)。2 段化は
+  // それを守るためだけに存在するので、2 段目も同じ検査に含める
+  // ——含めないと将来 8 列に戻す変更が入っても緑のまま通ってしまう。
+  const functions = page.getByRole("group", { name: /関数キー|第 2 関数列/ });
   for (const button of await functions.getByRole("button").all()) {
     const box = await button.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);

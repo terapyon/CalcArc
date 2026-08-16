@@ -86,6 +86,10 @@ describe("Scientific のキー集合", () => {
     expect(second?.columns).toBe(7);
     expect(second?.height).toBe("half");
     expect(second?.keys[0]?.token).toBe("eng");
+    // 予約スロットが 6 つあること自体を主張する。長さの検査が無いと
+    // "every" は空配列でも真になり、予約スロットを消しても緑のまま
+    // 通ってしまう(§7.3 が予約スロットを置く理由が守られない)。
+    expect(second?.keys).toHaveLength(7);
     // 残りは予約スロット。S-1 と S-4 が埋める。
     expect(second?.keys.slice(1).every((k) => k.token === null)).toBe(true);
   });

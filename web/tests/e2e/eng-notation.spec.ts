@@ -21,10 +21,17 @@ test("toggles 1000 to 1e3 and back", async ({ page }) => {
 
   await press(page, ["工学表記に切り替え"]);
   await expect(page.getByTestId("display-main")).toHaveText("1e3");
+  // 見た目が変わらない値もあるので、インジケータが無いと ENG に入ったか
+  // 分からない(設計書 §5)。境界(serde の "Eng" 文字列)が壊れても
+  // 部品のテストだけでは緑のまま通るので、ここで実ブラウザから固定する。
+  await expect(page.getByRole("status", { name: "数の表記" })).toHaveText(
+    "ENG",
+  );
 
   // もう一度押すと戻る(設計書 §1 の裁定 1)。
   await press(page, ["工学表記に切り替え"]);
   await expect(page.getByTestId("display-main")).toHaveText("1,000");
+  await expect(page.getByRole("status", { name: "数の表記" })).toBeEmpty();
 });
 
 test("keeps engineering notation for the next answer", async ({ page }) => {

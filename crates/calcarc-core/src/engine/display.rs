@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::numeric::format::{format_real, format_real_eng, format_rect, try_format_polar};
+use crate::numeric::format::{format_real, format_real_eng, try_format_polar};
 use crate::{AngleMode, CalcError, EngineState, Value};
 
 use super::state::{BinOp, DisplayForm, Notation, OpToken};
@@ -149,7 +149,10 @@ fn echo_of(state: &EngineState) -> String {
             OpToken::Op(op) => {
                 // 二項演算子の左側にはオペランドが 1 つ立っている。
                 if let Some(value) = operands.next() {
-                    parts.push(format_rect(*value));
+                    // echo も main と同じ画面に出る。ENG が main に掛かって
+                    // いるのに echo だけ通常表記だと、表記が食い違って見える
+                    // (設計書 §6。修正: 最終レビューで発覚)。
+                    parts.push(format_rect_notated(*value, state.notation));
                 }
                 parts.push(op_symbol(*op).to_string());
             }
@@ -159,7 +162,7 @@ fn echo_of(state: &EngineState) -> String {
     }
     // まだ演算子が来ていないオペランドと、入力中の値。
     for value in operands {
-        parts.push(format_rect(*value));
+        parts.push(format_rect_notated(*value, state.notation));
     }
     if let Some(buffer) = &state.buffer {
         parts.push(buffer.text());

@@ -89,6 +89,10 @@ pub fn format_real_eng(x: f64) -> String {
     };
     let exponent: i32 = exponent_text.parse().unwrap_or(0);
     // 3 の倍数へ**下向きに**丸める。-1 → -3、1 → 0、-4 → -6。
+    // `/` ではなく `div_euclid` を使う——`/` は 0 方向に切り捨てるので
+    // 負の指数で向きを間違える(`-1 / 3` は Rust で `0`、
+    // `(-1).div_euclid(3)` は `-1`)。「簡単にできる」と `/` に戻すと
+    // 負の指数側だけ静かに壊れる。
     let eng_exponent = exponent.div_euclid(3) * 3;
     let shift = exponent - eng_exponent; // 0, 1, 2 のいずれか
     // 仮数を 10^shift 倍する。小数点を動かすだけなので精度は落ちない。
