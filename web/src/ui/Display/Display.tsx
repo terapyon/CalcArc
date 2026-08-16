@@ -41,6 +41,12 @@ export function Display({ display }: DisplayProps) {
           live: "polite",
         },
         {
+          testId: "display-notation",
+          ariaLabel: "数の表記",
+          text: display.notation === "Eng" ? "ENG" : "",
+          live: "polite",
+        },
+        {
           testId: "display-pending",
           ariaLabel: "計算の途中経過",
           text: pending,

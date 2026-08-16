@@ -4,6 +4,9 @@ export type AngleMode = "Deg" | "Rad";
 /** calcarc-core の engine::state::DisplayForm に対応。 */
 export type DisplayForm = "Rect" | "Polar";
 
+/** calcarc-core の engine::state::Notation に対応。 */
+export type Notation = "Normal" | "Eng";
+
 /** calcarc-core の error::CalcError に対応。 */
 export type CalcErrorCode =
   | "DivisionByZero"
@@ -51,6 +54,7 @@ export const KEY_TOKENS = [
   "ac",
   "del",
   "angle_toggle",
+  "eng",
 ] as const;
 
 export type KeyToken = (typeof KEY_TOKENS)[number];
@@ -62,6 +66,7 @@ export interface DisplayState {
   main: string;
   angle: AngleMode;
   form: DisplayForm;
+  notation: Notation;
   pendingOp: BinOpName | null;
   pendingDepth: number;
   error: CalcErrorCode | null;
