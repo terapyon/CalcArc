@@ -57,7 +57,7 @@ jobs:
       - name: Smoke — the latest deploy is being served
         run: |
           set -eu
-          base="https://calcarc.pages.dev"
+          base="https://calc.terapyon.net"
           # 伝播遅延に備えて 10 秒間隔で最大 12 回(設計書 §3)。
           for i in $(seq 1 12); do
             served="$(curl -fsS "$base/build-info.json" | head -c 200)" || served=""
@@ -74,7 +74,7 @@ jobs:
       - name: Smoke — _headers are respected
         run: |
           set -eu
-          base="https://calcarc.pages.dev"
+          base="https://calc.terapyon.net"
           # 初回実行の実測(run 31646329769): _headers の規則は内容の伝播より
           # 遅れて効き始める。刻印(内容)が一致した直後でもヘッダはまだ既定の
           # まま、という 10 秒台のレースが実在した。刻印照合と同じリトライで
@@ -97,7 +97,7 @@ jobs:
       - name: Smoke — the served HTML is this build
         run: |
           set -eu
-          base="https://calcarc.pages.dev"
+          base="https://calc.terapyon.net"
           # id="root" だけの検査は壊れたバンドルでも緑になる。この版の
           # index-*.js を指す HTML が配られているかまで見る(設計書 §7-2)。
           # ヘッダ検査と同じ理由でリトライを持つ(ファイル単位の伝播は
