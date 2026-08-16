@@ -15,7 +15,16 @@ from dataclasses import dataclass
 # **綴りは web/src/calc/types.ts の KEY_TOKENS が正。** 一字でも違うと
 # ブラウザ側で未知のキーとして扱われる。
 DIGIT_KEYS = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
-BINARY_KEYS = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
+BINARY_KEYS = {
+    "+": "add",
+    "-": "sub",
+    "*": "mul",
+    "/": "div",
+    # 段階 3b-A で追加。**綴りは web/src/calc/types.ts の KEY_TOKENS が正。**
+    "^": "pow",
+    "nPr": "n_p_r",
+    "nCr": "n_c_r",
+}
 UNARY_KEYS = {
     "sqrt": "sqrt",
     "sqr": "sqr",
@@ -23,10 +32,31 @@ UNARY_KEYS = {
     "cos": "cos",
     "tan": "tan",
     "neg": "neg",
+    # 段階 3b-A で追加。`fact` だけ式木の名前とキーの綴りが違う。
+    "ln": "ln",
+    "log10": "log10",
+    "exp_e": "exp_e",
+    "recip": "recip",
+    "asin": "asin",
+    "acos": "acos",
+    "atan": "atan",
+    "fact": "n_fact",
 }
+
+# **定数のキー。1 打鍵で値が入る。**
+CONST_KEYS = {"pi": "pi", "e": "e"}
+CONST_NAMES = ("pi", "e")
 
 BINARY_OPS = ("+", "-", "*", "/")
 UNARY_FNS = ("sqrt", "sqr", "sin", "cos", "tan", "neg")
+
+# **既存の BINARY_OPS / UNARY_FNS は乱数の土台なので触らない**(設計書 §3.1)。
+# 系統ごとの選択肢はここに別に置く。
+ELEMENTARY_FNS = ("ln", "log10", "exp_e", "recip")
+ELEMENTARY_BINS = ("^",)
+INVERSE_TRIG_FNS = ("asin", "acos", "atan")
+COMBINATORICS_FNS = ("fact",)
+COMBINATORICS_BINS = ("nPr", "nCr")
 
 
 @dataclass(frozen=True)
@@ -49,7 +79,18 @@ class Un:
     arg: Node
 
 
-Node = Num | Bin | Un
+@dataclass(frozen=True)
+class Const:
+    """1 打鍵で入る定数。`pi` と `e` の 2 つだけ。
+
+    **現行のオペランドはすべて整数リテラルなので、これを入れるまで
+    `current` に有理でない値が入ることが一度も起きていない**(設計書 §3.4)。
+    """
+
+    name: str
+
+
+Node = Num | Const | Bin | Un
 
 
 def walk(node: Node) -> Iterator[Node]:
@@ -71,6 +112,10 @@ def to_keys(node: Node) -> list[str]:
     """
     if isinstance(node, Num):
         return [DIGIT_KEYS[int(digit)] for digit in str(node.value)]
+    if isinstance(node, Const):
+        if node.name not in CONST_KEYS:
+            raise ValueError(f"unknown constant: {node.name!r}")
+        return [CONST_KEYS[node.name]]
     if isinstance(node, Un):
         return [*to_keys(node.arg), UNARY_KEYS[node.fn]]
     return [
@@ -106,6 +151,10 @@ def to_keys_minimal(node: Node) -> list[str]:
     """
     if isinstance(node, Num):
         return [DIGIT_KEYS[int(digit)] for digit in str(node.value)]
+    if isinstance(node, Const):
+        if node.name not in CONST_KEYS:
+            raise ValueError(f"unknown constant: {node.name!r}")
+        return [CONST_KEYS[node.name]]
     if isinstance(node, Un):
         return [*_unary_operand_keys(node.arg), UNARY_KEYS[node.fn]]
     if node.op not in BINARY_PRECEDENCE:
@@ -157,6 +206,10 @@ def to_expr_text(node: Node) -> str:
     """
     if isinstance(node, Num):
         return str(node.value)
+    if isinstance(node, Const):
+        if node.name not in CONST_KEYS:
+            raise ValueError(f"unknown constant: {node.name!r}")
+        return node.name
     if isinstance(node, Un):
         inner = to_expr_text(node.arg)
         if node.fn == "sqr":
@@ -168,5 +221,17 @@ def to_expr_text(node: Node) -> str:
             return f"{node.fn}(rad({inner}))"
         if node.fn == "sqrt":
             return f"sqrt({inner})"
+        if node.fn in ("ln", "log10", "exp_e"):
+            return f"{node.fn}({inner})"
+        if node.fn == "recip":
+            return f"1/({inner})"
+        if node.fn in ("asin", "acos", "atan"):
+            # **結果が度である。** sin が引数側に rad(...) を書くのと対称に、
+            # 逆関数は結果側に deg(...) を書く(設計書 §3.3)。
+            return f"deg({node.fn}({inner}))"
+        if node.fn == "fact":
+            return f"({inner})!"
         raise ValueError(f"unknown unary fn: {node.fn!r}")
+    if node.op not in BINARY_KEYS:
+        raise ValueError(f"unknown binary op: {node.op!r}")
     return f"({to_expr_text(node.left)} {node.op} {to_expr_text(node.right)})"

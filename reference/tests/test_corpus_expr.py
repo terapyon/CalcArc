@@ -5,6 +5,7 @@ import pytest
 from calcarc_reference.corpus_expr import (
     BINARY_PRECEDENCE,
     Bin,
+    Const,
     Num,
     Un,
     to_expr_text,
@@ -177,3 +178,81 @@ def test_dropping_parentheses_never_changes_the_tokens_that_are_not_parentheses(
         return [k for k in keys if k not in ("lparen", "rparen")]
 
     assert without_parens(to_keys_minimal(node)) == without_parens(to_keys(node))
+
+
+def test_a_constant_is_one_key_press() -> None:
+    assert to_keys(Const("pi")) == ["pi"]
+    assert to_keys(Const("e")) == ["e"]
+
+
+def test_a_constant_reads_as_itself() -> None:
+    assert to_expr_text(Const("pi")) == "pi"
+    assert to_expr_text(Const("e")) == "e"
+
+
+def test_an_unknown_constant_is_refused_loudly() -> None:
+    # 未知の名前を通すと、キー列に存在しないトークンが載って
+    # ブラウザ側で黙って読み飛ばされ、別の式が計算される。
+    import pytest
+
+    with pytest.raises(ValueError):
+        to_keys(Const("tau"))
+    with pytest.raises(ValueError):
+        to_expr_text(Const("tau"))
+
+
+def test_a_constant_is_a_leaf_when_walking() -> None:
+    assert list(walk(Const("pi"))) == [Const("pi")]
+
+
+def test_the_new_unary_functions_use_the_key_tokens_the_browser_knows() -> None:
+    # 綴りは web/src/calc/types.ts の KEY_TOKENS が正。
+    # `fact` だけ式木の名前とキーの綴りが違う（キーは `n_fact`）。
+    assert to_keys(Un("ln", Num(5))) == ["5", "ln"]
+    assert to_keys(Un("log10", Num(5))) == ["5", "log10"]
+    assert to_keys(Un("exp_e", Num(5))) == ["5", "exp_e"]
+    assert to_keys(Un("recip", Num(5))) == ["5", "recip"]
+    assert to_keys(Un("asin", Num(0))) == ["0", "asin"]
+    assert to_keys(Un("acos", Num(0))) == ["0", "acos"]
+    assert to_keys(Un("atan", Num(0))) == ["0", "atan"]
+    assert to_keys(Un("fact", Num(5))) == ["5", "n_fact"]
+
+
+def test_the_new_binary_operators_use_the_key_tokens_the_browser_knows() -> None:
+    assert to_keys(Bin("^", Num(2), Num(3))) == [
+        "lparen",
+        "2",
+        "pow",
+        "3",
+        "rparen",
+    ]
+    assert to_keys(Bin("nPr", Num(5), Num(2))) == [
+        "lparen",
+        "5",
+        "n_p_r",
+        "2",
+        "rparen",
+    ]
+    assert to_keys(Bin("nCr", Num(5), Num(2))) == [
+        "lparen",
+        "5",
+        "n_c_r",
+        "2",
+        "rparen",
+    ]
+
+
+def test_the_new_operators_read_as_mathematics() -> None:
+    assert to_expr_text(Bin("^", Num(2), Num(3))) == "(2 ^ 3)"
+    assert to_expr_text(Un("fact", Num(5))) == "(5)!"
+    assert to_expr_text(Un("ln", Num(5))) == "ln(5)"
+    assert to_expr_text(Un("recip", Num(5))) == "1/(5)"
+    # 逆三角関数は結果が度である。それを式そのものに書く——
+    # sin が rad(...) と書いているのと対称。
+    assert to_expr_text(Un("asin", Num(1))) == "deg(asin(1))"
+
+
+def test_a_constant_inside_a_bigger_tree() -> None:
+    tree = Bin("*", Const("pi"), Num(2))
+    assert to_key_sequence(tree) == ["lparen", "pi", "mul", "2", "rparen", "eq"]
+    assert to_expr_text(tree) == "(pi * 2)"
