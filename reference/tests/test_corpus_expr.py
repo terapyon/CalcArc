@@ -3,7 +3,16 @@
 import pytest
 
 from calcarc_reference.corpus_expr import (
+    BINARY_KEYS,
     BINARY_PRECEDENCE,
+    COMBINATORICS_BINS,
+    COMBINATORICS_FNS,
+    CONST_KEYS,
+    CONST_NAMES,
+    ELEMENTARY_BINS,
+    ELEMENTARY_FNS,
+    INVERSE_TRIG_FNS,
+    UNARY_KEYS,
     Bin,
     Const,
     Num,
@@ -186,15 +195,17 @@ def test_a_constant_is_one_key_press() -> None:
 
 
 def test_a_constant_reads_as_itself() -> None:
+    # `to_expr_text`'s Const arm returns `node.name` verbatim regardless of
+    # which constant it is, so one example pins the whole branch; asserting
+    # both "pi" and "e" here would exercise the identical line twice
+    # (M5, Task 1 review round 1). `"e"` is still exercised via `to_keys`
+    # in `test_a_constant_is_one_key_press`.
     assert to_expr_text(Const("pi")) == "pi"
-    assert to_expr_text(Const("e")) == "e"
 
 
 def test_an_unknown_constant_is_refused_loudly() -> None:
     # 未知の名前を通すと、キー列に存在しないトークンが載って
     # ブラウザ側で黙って読み飛ばされ、別の式が計算される。
-    import pytest
-
     with pytest.raises(ValueError):
         to_keys(Const("tau"))
     with pytest.raises(ValueError):
@@ -246,13 +257,75 @@ def test_the_new_operators_read_as_mathematics() -> None:
     assert to_expr_text(Bin("^", Num(2), Num(3))) == "(2 ^ 3)"
     assert to_expr_text(Un("fact", Num(5))) == "(5)!"
     assert to_expr_text(Un("ln", Num(5))) == "ln(5)"
-    assert to_expr_text(Un("recip", Num(5))) == "1/(5)"
+    # 自身を括弧で包む(I1、fix round 1)。周囲に生の `/` を漏らさない。
+    assert to_expr_text(Un("recip", Num(5))) == "(1/(5))"
+    # `exp_e` はキーの綴り。人が読む数式では標準的な `exp(...)`(M3)。
+    assert to_expr_text(Un("exp_e", Num(5))) == "exp(5)"
     # 逆三角関数は結果が度である。それを式そのものに書く——
     # sin が rad(...) と書いているのと対称。
     assert to_expr_text(Un("asin", Num(1))) == "deg(asin(1))"
+
+
+def test_recip_does_not_leak_a_bare_slash_into_the_surrounding_expression() -> None:
+    # I1 (Task 1 review round 1). `recip` was the only unary that emitted a
+    # bare binary operator at top level without wrapping itself, so composing
+    # it read as a different expression than it computed:
+    #   `(1 / 1/(5))` parses as `(1/1)/5` = 0.2, but the tree's value is 5.
+    #   `(2 ^ 1/(5))` parses as `(2^1)/5` = 0.4, but the tree's value is
+    #   2^(1/5) ~= 1.1487.
+    # Both trees are reachable: `recip` is in ELEMENTARY_FNS, `^` is in
+    # ELEMENTARY_BINS, `/` is in the untouched BINARY_OPS.
+    assert to_expr_text(Bin("/", Num(1), Un("recip", Num(5)))) == "(1 / (1/(5)))"
+    assert to_expr_text(Bin("^", Num(2), Un("recip", Num(5)))) == "(2 ^ (1/(5)))"
 
 
 def test_a_constant_inside_a_bigger_tree() -> None:
     tree = Bin("*", Const("pi"), Num(2))
     assert to_key_sequence(tree) == ["lparen", "pi", "mul", "2", "rparen", "eq"]
     assert to_expr_text(tree) == "(pi * 2)"
+
+
+def test_a_constant_is_a_leaf_in_the_minimal_serialization_too() -> None:
+    # I2 (Task 1 review round 1). `to_keys_minimal`'s whole `Const` branch
+    # was unprotected — deleting it, or just its unknown-name guard, left
+    # all tests green. Without it, a `Const` falls through to `node.op` and
+    # raises `AttributeError` instead of the module's usual `ValueError`.
+    # 3c のシャードは定数を使わないが、この関数自体は Const を渡されたとき
+    # 大きな声で扱う契約を持つ。
+    assert to_keys_minimal(Const("pi")) == ["pi"]
+    with pytest.raises(ValueError, match="unknown constant"):
+        to_keys_minimal(Const("tau"))
+
+
+def test_an_unknown_binary_op_is_loud_not_silent_in_expr_text() -> None:
+    # M1 (Task 1 review round 1). `to_keys` and `to_keys_minimal` both raise
+    # on an unknown binary op; `to_expr_text` must hold the same line
+    # (symmetric with `test_an_unknown_unary_fn_is_loud_not_silent` above).
+    with pytest.raises(ValueError, match="unknown binary op"):
+        to_expr_text(Bin("%", Num(1), Num(2)))
+
+
+def test_the_new_family_tuples_hold_exactly_what_they_promise() -> None:
+    # M2 (Task 1 review round 1). These five tuples are this task's declared
+    # deliverable — Tasks 3-5 draw their random choices from them. Nothing
+    # asserted their contents, so removing an element (`recip` from
+    # ELEMENTARY_FNS, `atan` from INVERSE_TRIG_FNS, `nCr` from
+    # COMBINATORICS_BINS, `e` from CONST_NAMES) stayed green: a key the plan
+    # promised would silently never be pressed, and the shard would still
+    # look fine.
+    assert ELEMENTARY_FNS == ("ln", "log10", "exp_e", "recip")
+    assert ELEMENTARY_BINS == ("^",)
+    assert INVERSE_TRIG_FNS == ("asin", "acos", "atan")
+    assert COMBINATORICS_FNS == ("fact",)
+    assert COMBINATORICS_BINS == ("nPr", "nCr")
+    assert CONST_NAMES == ("pi", "e")
+
+    # And the cross-check that actually matters: every member must be a key
+    # the serializers can look up, so a typo here fails at generation time
+    # rather than shipping a corpus that quietly never presses that key.
+    for fn in ELEMENTARY_FNS + INVERSE_TRIG_FNS + COMBINATORICS_FNS:
+        assert fn in UNARY_KEYS
+    for op in ELEMENTARY_BINS + COMBINATORICS_BINS:
+        assert op in BINARY_KEYS
+    for name in CONST_NAMES:
+        assert name in CONST_KEYS

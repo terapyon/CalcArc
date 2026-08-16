@@ -311,6 +311,11 @@ def _parse_with_precedence(keys: list[str], precedence: dict[str, int]) -> objec
     を跨がない限り右へ結合を伸ばし、越えたら親へ戻る、という教科書どおりの形。
     """
     key_to_op = {v: k for k, v in BINARY_KEYS.items()}
+    # UNARY_KEYS は木の名前→キーの綴り。`fact` → `n_fact` で両者が食い違う
+    # 唯一の項目なので、キー列から木を戻すにはここも BINARY_KEYS と同じく
+    # 反転させる必要がある(name == token が偶然成り立っていた6件だけでは
+    # 済まなくなった)。
+    key_to_fn = {v: k for k, v in UNARY_KEYS.items()}
 
     def parse_atom(pos: int) -> tuple[object, int]:
         token = keys[pos]
@@ -325,8 +330,8 @@ def _parse_with_precedence(keys: list[str], precedence: dict[str, int]) -> objec
             node = Num(int("".join(keys[start:pos])))
         else:
             raise ValueError(f"unexpected token {token!r} at {pos} in {keys}")
-        while pos < len(keys) and keys[pos] in UNARY_KEYS:
-            node = Un(UNARY_KEYS[keys[pos]], node)
+        while pos < len(keys) and keys[pos] in key_to_fn:
+            node = Un(key_to_fn[keys[pos]], node)
             pos += 1
         return node, pos
 
@@ -366,6 +371,19 @@ def test_the_postfix_unary_trap() -> None:
     tree = _parse_with_precedence(["1", "add", "2", "sqrt"], uniform)
     assert tree == Bin("+", Num(1), Un("sqrt", Num(2)))
     assert tree != Un("sqrt", Bin("+", Num(1), Num(2)))
+
+
+def test_the_parser_inverts_unary_keys_not_just_binary_keys() -> None:
+    # **F1 (Task 1 review round 1).** `UNARY_KEYS` maps tree name -> key
+    # token. Indexing it directly with a key token (`UNARY_KEYS[keys[pos]]`)
+    # was only ever correct because `name == token` held for the six original
+    # unaries. `fact` -> `n_fact` breaks that coincidence: a `n_fact` token
+    # in `keys` is not itself a valid tree-name lookup. This pins the fix
+    # (inverting `UNARY_KEYS` the same way `key_to_op` inverts `BINARY_KEYS`
+    # at line 313) using the one name where the coincidence does not hold.
+    uniform = {key: 1 for key in BINARY_KEYS.values()}
+    tree = _parse_with_precedence(["5", "n_fact"], uniform)
+    assert tree == Un("fact", Num(5))
 
 
 def test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence() -> None:

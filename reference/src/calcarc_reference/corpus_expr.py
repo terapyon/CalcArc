@@ -221,10 +221,16 @@ def to_expr_text(node: Node) -> str:
             return f"{node.fn}(rad({inner}))"
         if node.fn == "sqrt":
             return f"sqrt({inner})"
-        if node.fn in ("ln", "log10", "exp_e"):
+        if node.fn in ("ln", "log10"):
             return f"{node.fn}({inner})"
+        if node.fn == "exp_e":
+            # `exp_e` はキーの綴り(EE キーと区別するための名前)。人が読む
+            # 数式では標準的な `exp(...)` と書く(M3)。
+            return f"exp({inner})"
         if node.fn == "recip":
-            return f"1/({inner})"
+            # 自身を括弧で包む。`neg`/`sqr` と同じく、周囲の演算子に
+            # 生の `/` を漏らさない(I1)。
+            return f"(1/({inner}))"
         if node.fn in ("asin", "acos", "atan"):
             # **結果が度である。** sin が引数側に rad(...) を書くのと対称に、
             # 逆関数は結果側に deg(...) を書く(設計書 §3.3)。
