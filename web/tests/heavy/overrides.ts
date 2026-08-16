@@ -92,7 +92,20 @@ export function loadOverrides(): Map<string, Override> {
  * ありふれた壊し方**だけが読めない例外になる。
  */
 export function parseOverridesFile(raw: string): Map<string, Override> {
-  const parsed = JSON.parse(raw) as OverridesFile;
+  const root: unknown = JSON.parse(raw);
+  // **根がオブジェクトであることを、`schema` を読む前に確かめる。** `overrides`
+  // 側は下で同じ形の検査をしているが、根の側だけが素の TypeError に開いていた
+  // ——`null` を渡すと `parsed.schema` が `Cannot read properties of null` で
+  // 落ちる(`[]` は `Array` なので `schema` が `undefined` になり、下の schema
+  // 検査に自然に掛かる。壊れるのは `null` だけ)。防御が非対称だと、**手で
+  // 書くファイルの最もありふれた壊し方**の一部だけが読めない例外になる。
+  if (typeof root !== "object" || root === null || Array.isArray(root)) {
+    throw new Error(
+      "overrides: ファイルの中身は { schema, overrides } を持つオブジェクト " +
+        `でなければならないが、${JSON.stringify(root)} である。`,
+    );
+  }
+  const parsed = root as OverridesFile;
   if (parsed.schema !== KNOWN_OVERRIDES_SCHEMA) {
     throw new Error(
       `overrides: schema ${parsed.schema} は読み方を知らない ` +

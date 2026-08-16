@@ -193,8 +193,21 @@ test("with no override, the report does not claim examples it has none of", () =
   );
 
   // 0 件と言った直後に「上に挙がっているのはその実例であり」と書かない。
+  //
+  // **この言い回しは `renderCaveats` の説明文にも(行を跨いで)登場する**
+  // ——renderCaveats はこの旧バグを引用の形で説明しており、その引用文が
+  // 「実例が無い走行で「上に挙がっている」+「のはその実例であり」…」と、
+  // renderReport が行を `\n` で join する前提でたまたま 2 つの配列要素に
+  // 割れている。生の文字列一致で「無い」と確かめようとすると、その折り返し
+  // 位置の偶然に依存する——`renderCaveats` の散文を 1 行にまとめ直せば
+  // (実際には何も壊れていないのに)ここが赤くなり、逆に `renderOverrides`
+  // の段落を行の途中で折り返せば、本当に出ているのにここが緑のまま見逃す。
+  // そこで、`renderOverrides` の段落だけが使う語句——`renderCaveats` 側は
+  // 同じ話を「巨大角度の三角関数という既知の領域」という別の言い回しで
+  // 語っている——で判定する。隣の assert が使っている「引数還元の限界で
+  // 表示精度に届かない」も同じ理由で堅い(両段落で語が異なる)。
   expect(markdown).toContain("**0 件。**");
-  expect(markdown).not.toContain("上に挙がっているのは");
+  expect(markdown).not.toContain("巨大な角度を三角関数に渡した");
   expect(markdown).not.toContain("引数還元の限界で表示精度に届かない");
   // 但し書きの節そのものは残る(主張が弱まりうることは常に書く)。
   expect(markdown).toContain("この結果が主張していないこと");

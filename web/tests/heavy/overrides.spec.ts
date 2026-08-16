@@ -247,6 +247,19 @@ test("a file that forgets the overrides table is refused, not a raw TypeError", 
   ).not.toThrow();
 });
 
+test("a file whose root is not an object is refused, not a raw TypeError", () => {
+  // `parsed.schema` を根がオブジェクトであることを確かめる前に読んでいた
+  // ので、`null` は `Cannot read properties of null` の生 TypeError に
+  // なっていた(`[]` は `Array` なので `schema` が `undefined` になり、
+  // 既存の schema 検査に自然に掛かっていたため無事だった——壊れるのは
+  // `null` のような「オブジェクトでも配列でもない」根だけ)。
+  expect(() => parseOverridesFile("null")).toThrow(/overrides/);
+  expect(() => parseOverridesFile("null")).not.toThrow(TypeError);
+  expect(() => parseOverridesFile("42")).toThrow(/overrides/);
+  expect(() => parseOverridesFile('"a string"')).toThrow(/overrides/);
+  expect(() => parseOverridesFile("[]")).toThrow(/schema/);
+});
+
 test("a top-level key the reader never looks at is refused", () => {
   let message = "";
   try {
