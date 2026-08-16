@@ -34,6 +34,10 @@ test("the Scientific keypad does not move while you type", async ({ page }) => {
 
   // 打つ → 演算子 → 打つ → 確定。**主犯は「打ち始めた瞬間」**なので、
   // 最初の 1 打のあとを必ず測る。
+  // **この検査の赤は 2 つの組でしか出ない**——常時描画と .echo の下限高を
+  // 同時に元へ戻したとき、打っていない状態から打った瞬間に跳ぶ(実測 23.6px)。
+  // 片方ずつ戻しても出ない: 常時描画のままなら entryActive が場所を占め続け、
+  // 下限高があるなら親が子の有無を吸収する。
   for (const name of ["3", "足す", "4", "計算する"]) {
     await page.getByRole("button", { name, exact: true }).click();
     expect(await keypadTop(page, "数字と演算のキー")).toBe(before);
