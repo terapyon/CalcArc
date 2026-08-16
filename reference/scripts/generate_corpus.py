@@ -27,6 +27,7 @@ from calcarc_reference.corpus_expr import (
     CONST_NAMES,
     ELEMENTARY_BINS,
     ELEMENTARY_FNS,
+    INVERSE_TRIG_FNS,
     UNARY_FNS,
     Bin,
     Const,
@@ -454,6 +455,19 @@ def build_elementary_shard(seed: int, count: int) -> dict:
     return build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
 
 
+def build_inverse_trig_shard(seed: int, count: int) -> dict:
+    """逆三角関数のシャード。
+
+    **二項演算子には既存の 4 つを使う。** `asin` などは単項なので、式の骨格を
+    作る演算子が別に要る。ここで `^` を混ぜると、この系統の棄却の内訳に
+    `^` の定義域が混ざって読めなくなる(設計書 §3.6)。
+
+    `BINARY_OPS` は**引数として渡すだけ**でタプルには触っていない。生成器は
+    独自の `random.Random(seed)` を持つので、既存シャードの乱数に影響しない。
+    """
+    return build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
+
+
 def write(name: str, payload: dict) -> None:
     path = CORPUS / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -472,6 +486,7 @@ def main() -> None:
     write("equivalence-000.json", build_equivalences(seed=20260816, count=count))
     write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
+    write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
     # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。

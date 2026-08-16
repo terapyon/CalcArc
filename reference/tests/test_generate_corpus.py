@@ -622,3 +622,48 @@ def test_every_out_of_shard_message_is_classified() -> None:
         assert generate_corpus._classify_out_of_shard(message) == "division_by_zero"
     for message in domain:
         assert generate_corpus._classify_out_of_shard(message) == "domain"
+
+
+def test_the_inverse_trig_shard_presses_every_key_it_promises() -> None:
+    shard = json.loads((_CORPUS_GENERATED / "inverse-trig-000.json").read_text())
+    pressed = {k for case in shard["cases"] for k in case["keys"]}
+    for token in ("asin", "acos", "atan"):
+        assert token in pressed, f"{token} は一度も押されていない"
+
+
+def test_inverse_trig_answers_are_angles_in_degrees() -> None:
+    """`asin` / `acos` / `atan` の結果は度である(設計書 §3.3)。
+
+    **ラジアンで持つと必ず落ちる。** ラジアンなら絶対値は π 以下、つまり
+    3.15 未満に収まる。度なら 90 や 180 に届く。
+
+    このテストを赤くする編集: `corpus_eval.py` の `_degrees` を恒等関数にする。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "inverse-trig-000.json").read_text())
+    singles = [
+        c
+        for c in shard["cases"]
+        if len(c["keys"]) >= 2 and c["keys"][-2] in ("asin", "acos", "atan")
+    ]
+    assert len(singles) > 100, f"逆三角関数で終わるケースが {len(singles)} 件しかない"
+    biggest = max(abs(c["expect"]["re"]) for c in singles)
+    assert biggest > 3.15, (
+        f"逆三角関数の答の最大値が {biggest} しかない。"
+        "ラジアンのまま持っている疑いがある(度なら 90 や 180 に届く)"
+    )
+
+
+def test_the_inverse_trig_shard_records_why_it_threw_candidates_away() -> None:
+    """棄却の内訳が `elementary` と同じ形で取れていること。
+
+    **この系統は `domain` が主要因になる。** 葉は 0〜999 の整数だが
+    `asin`/`acos` の定義域は `[-1, 1]` なので、大半がそこで落ちる。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "inverse-trig-000.json").read_text())
+    rejections = shard["rejections"]
+    elementary = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    assert set(rejections) == set(elementary["rejections"])
+    assert rejections["domain"] > 0, "定義域による棄却が 0 件"
+    assert rejections["domain"] > rejections["out_of_range"], (
+        "定義域より範囲外のほうが多い。asin/acos の [-1,1] が効いていない疑い"
+    )
