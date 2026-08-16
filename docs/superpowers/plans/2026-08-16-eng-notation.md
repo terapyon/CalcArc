@@ -41,7 +41,13 @@
   **これは合意済みで、待ち合わせない**——相手は赤くなってから実測し直して直す
 - **`KEY_TOKENS` は足すだけ**（`eng` の 1 つ）。既存の綴りを 1 文字も変えない
 - **`corpus_expr.py` の `UNARY_FNS` / `BINARY_OPS` に触らない**
-- **`engine_table.rs` の既存行を書き換えない**（足すだけ）
+- **`engine_table.rs` は、行を足すのが原則。ただし既存行のうち
+  「4 桁以上の表示が出る行」は、カンマが既定なので必ず書き換わる**
+  （**【訂正 2026-08-16】** 当初この行は「既存行を書き換えない」とだけ書いていたが、
+  **カンマが既定を変える以上それは最初から満たせない約束だった**。実際
+  `exp_enters_an_exponent` の 2 行が変わっている。**相手が実際に依存しているのは
+  「キー列の綴りを変えないこと」**であり、表示の期待値ではない——期待値が変われば
+  相手のコーパスは自分で赤くなって気づく）
 - **実装が入ったら伝える**（Task 8 の完了条件）
 
 ## ファイル構成
@@ -290,7 +296,7 @@ pub fn format_real_eng(x: f64) -> String {
 - Modify: `crates/calcarc-core/src/engine/key.rs`（`Key::EngToggle`）
 - Modify: `crates/calcarc-core/src/engine/mod.rs`（`reduce` の分岐）
 - Modify: `crates/calcarc-core/src/engine/display.rs`（`render` と `DisplayState`）
-- Modify: `crates/calcarc-core/tests/engine_table.rs`（**足すだけ**）
+- Modify: `crates/calcarc-core/tests/engine_table.rs`（**足す + カンマで変わる既存行を直す**）
 
 **Interfaces:**
 - Consumes: Task 2 の `format_real_eng`
