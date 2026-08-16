@@ -17,14 +17,19 @@ import pathlib
 import random
 import sys
 import time
+from collections.abc import Iterator
 
 import mpmath as mp
 
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_OPS,
+    CONST_NAMES,
+    ELEMENTARY_BINS,
+    ELEMENTARY_FNS,
     UNARY_FNS,
     Bin,
+    Const,
     Node,
     Num,
     Un,
@@ -33,7 +38,6 @@ from calcarc_reference.corpus_expr import (
     to_keys,
     to_keys_minimal,
     to_minimal_key_sequence,
-    walk,
 )
 
 SCHEMA = 1
@@ -80,10 +84,36 @@ def random_node(rng: random.Random, depth: int) -> Node:
     )
 
 
+def _subtrees_leaves_first(node: Node) -> Iterator[Node]:
+    """**葉から先に返す。** `walk` は根を先に返すので、`_within_range` が
+    いちばん高価な式を最初に評価してしまう。`^` が入るまでは深さ 3 で
+    値が 1e12 を超えなかったので表に出なかった。
+
+    実測: `999^(999^999)` は根から見ると 2.239 秒、葉から見ると 0.000 秒。
+    **述語も答えも同じで、評価の順だけが違う。**
+
+    共有の `walk`(根が先)は他のコードが前順であることに依存しているので
+    変えない。ここだけのローカルな生成器にする。
+    """
+    if isinstance(node, Bin):
+        yield from _subtrees_leaves_first(node.left)
+        yield from _subtrees_leaves_first(node.right)
+    elif isinstance(node, Un):
+        yield from _subtrees_leaves_first(node.arg)
+    yield node
+
+
 def _within_range(node: Node) -> bool:
     """**中間値も範囲に収める。** 着地だけ見ると、途中で指数表記に飛んだ
-    式が混ざり、表示の読み取りが書式の問題で落ちる。"""
-    for sub in walk(node):
+    式が混ざり、表示の読み取りが書式の問題で落ちる。
+
+    **葉から先に評価する。** 根から見ると、既に範囲外の部分木を持つ式でも
+    まず根そのものを評価してしまい、`^` の入れ子(`999^(999^999)`)では
+    その評価だけで何秒もかかる。部分木が先に範囲外だと分かればそこで
+    打ち切れる——述語(「どの部分木も範囲外でない」)は順序に依らないので、
+    答えは変わらない。
+    """
+    for sub in _subtrees_leaves_first(node):
         value = evaluate(sub)
         if value != 0 and not (MIN_ABS <= abs(value) <= MAX_ABS):
             return False
@@ -302,6 +332,128 @@ def build_precedence_shard(seed: int, count: int) -> dict:
     }
 
 
+# 棄却の理由。**E(エラー経路)の設計の入力になる**ので、名前を engine の
+# エラー名に寄せてある(設計書 §3.6)。`division_by_zero` を `domain` と
+# 分けるのは engine が分けているからである。
+REJECTION_REASONS = (
+    "bare",
+    "domain",
+    "division_by_zero",
+    "overflow",
+    "out_of_range",
+    "dup",
+)
+
+
+def random_family_node(
+    rng: random.Random,
+    depth: int,
+    unary_fns: tuple[str, ...],
+    binary_ops: tuple[str, ...],
+    const_prob: float,
+) -> Node:
+    """系統ごとの選択肢から引く乱択。
+
+    **既存の `random_node` を呼ばない。** あちらは既存 3 枚のシャードの
+    乱数の消費列そのものなので、共有すると片方を変えたときにもう片方が
+    総入れ替えになる(設計書 §3.1)。
+    """
+    if depth <= 0 or rng.random() < 0.35:
+        if rng.random() < const_prob:
+            return Const(rng.choice(CONST_NAMES))
+        return Num(rng.randint(0, 999))
+    if rng.random() < 0.45:
+        return Un(
+            rng.choice(unary_fns),
+            random_family_node(rng, depth - 1, unary_fns, binary_ops, const_prob),
+        )
+    return Bin(
+        rng.choice(binary_ops),
+        random_family_node(rng, depth - 1, unary_fns, binary_ops, const_prob),
+        random_family_node(rng, depth - 1, unary_fns, binary_ops, const_prob),
+    )
+
+
+def _classify_out_of_shard(reason: str) -> str:
+    """`OutOfShard` の文言を棄却の理由に割り当てる。
+
+    **文言で分けるのは脆い**が、`OutOfShard` に種別を持たせると
+    `corpus_eval` が「シャードの都合」を知ることになる。境界はそのままにして、
+    ここで読み替える。文言を変えたらここも変わる、という結合は残る——
+    その結合は `test_every_out_of_shard_message_is_classified` が守る。
+    """
+    if "division by zero" in reason or "reciprocal of zero" in reason:
+        return "division_by_zero"
+    return "domain"
+
+
+def build_family_shard(
+    seed: int,
+    count: int,
+    prefix: str,
+    unary_fns: tuple[str, ...],
+    binary_ops: tuple[str, ...],
+) -> dict:
+    """系統別のシャードを積む。**帯は既存の `MIN_ABS`〜`MAX_ABS`。**
+
+    組合せ論は帯が違うので、この関数を使わない(設計書 §3.2.1)。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    rejections = dict.fromkeys(REJECTION_REASONS, 0)
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = random_family_node(rng, MAX_DEPTH, unary_fns, binary_ops, 0.2)
+        if isinstance(node, (Num, Const)):
+            # 裸のリテラルも裸の定数も、押した桁(あるいは定数)がそのまま
+            # 返ることしか確かめない。engine_table.rs の領域である。
+            rejections["bare"] += 1
+            continue
+        try:
+            if not _within_range(node):
+                rejections["out_of_range"] += 1
+                continue
+            value = evaluate(node)
+        except OutOfShard as exc:
+            rejections[_classify_out_of_shard(str(exc))] += 1
+            continue
+        except OverflowError:
+            rejections["overflow"] += 1
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            rejections["dup"] += 1
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"{prefix}-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "rejections": rejections,
+        "cases": entries,
+    }
+
+
+def build_elementary_shard(seed: int, count: int) -> dict:
+    return build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
+
+
 def write(name: str, payload: dict) -> None:
     path = CORPUS / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +471,7 @@ def main() -> None:
     write("scientific-000.json", build_shard(seed=20260815, count=count))
     write("equivalence-000.json", build_equivalences(seed=20260816, count=count))
     write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
+    write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
     # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。

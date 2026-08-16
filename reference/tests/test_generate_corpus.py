@@ -478,3 +478,147 @@ def test_the_precedence_envelope_matches_the_existing_convention() -> None:
     shard = generate_corpus.build_precedence_shard(seed=15, count=10)
     assert shard["schema"] == 1
     assert set(shard["tolerance"]) == {"abs", "rel"}
+
+
+def test_the_elementary_shard_presses_every_key_it_promises() -> None:
+    shard = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    pressed = {k for case in shard["cases"] for k in case["keys"]}
+    # 設計書 §3.1 が約束した 5 演算 + 定数 2 つ。
+    for token in ("ln", "log10", "exp_e", "recip", "pow", "pi", "e"):
+        assert token in pressed, f"{token} は一度も押されていない"
+
+
+def test_the_elementary_shard_records_why_it_threw_candidates_away() -> None:
+    shard = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    rejections = shard["rejections"]
+    # **理由ごとに数えていることが要件**(設計書 R9)。E の設計の入力になる。
+    assert set(rejections) == {
+        "bare",
+        "domain",
+        "division_by_zero",
+        "overflow",
+        "out_of_range",
+        "dup",
+    }
+    assert sum(rejections.values()) > 0, "1 件も捨てていないのは疑わしい"
+
+
+def test_every_elementary_case_lands_in_the_flat_display_band() -> None:
+    # このシャードは既存の帯を使う(設計書 §3.2.1)。組合せ論だけが別。
+    shard = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    for case in shard["cases"]:
+        value = abs(case["expect"]["re"])
+        assert value == 0 or 1e-6 <= value <= 1e9, case["id"]
+
+
+def test_no_elementary_case_is_a_bare_literal_or_a_bare_constant() -> None:
+    """裸のリテラルも裸の定数も、押した桁(あるいは定数)がそのまま返ることしか
+    確かめない。`pi` を押すと 3.141592654 が出ることは engine_table.rs の領域である。
+
+    **長さで判定してはいけない**——`5 0 0 eq` は 4 打鍵だが裸である。
+    演算子か関数のトークンを 1 つ以上含むことを直接主張する。
+
+    このテストを赤くする編集: build_family_shard の `isinstance(node, (Num, Const))`
+    を `isinstance(node, Num)` に狭める(裸の定数が混ざるようになる)。
+    """
+    operators = {
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "pow",
+        "ln",
+        "log10",
+        "exp_e",
+        "recip",
+        "sqrt",
+        "sqr",
+        "sin",
+        "cos",
+        "tan",
+        "neg",
+        "asin",
+        "acos",
+        "atan",
+        "n_fact",
+        "n_p_r",
+        "n_c_r",
+    }
+    shard = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    for case in shard["cases"]:
+        assert operators & set(case["keys"]), f"{case['id']} は裸: {case['keys']}"
+
+
+def test_the_elementary_shard_actually_presses_the_constants() -> None:
+    # 定数が 1 件も出ないと、`const_prob` が効いていないのに緑になる。
+    shard = json.loads((_CORPUS_GENERATED / "elementary-000.json").read_text())
+    with_const = [c for c in shard["cases"] if "pi" in c["keys"] or "e" in c["keys"]]
+    assert len(with_const) > 50, f"定数を含むケースが {len(with_const)} 件しかない"
+
+
+def test_subtrees_are_yielded_leaves_first_not_root_first() -> None:
+    """`_within_range` が `walk`(根が先)ではなく `_subtrees_leaves_first`
+    (葉が先)を使うことを、順序そのもので固定する。
+
+    `^` の入れ子(`999^(999^999)`)は根から評価すると最も高価な式を最初に
+    評価してしまい、実測で 2.239 秒かかった。葉から見れば、既に範囲外の
+    部分木(`999^999`)が先に見つかり、根そのものを評価せずに打ち切れる
+    (実測 0.000 秒)。タイミングは脆いので、ここは構造だけを主張する:
+    根が最後に、葉が最初に来ること。
+
+    このテストを赤くする編集: `_subtrees_leaves_first` の再帰を「まず
+    `yield node` してから子を再帰する」に変える(root-first に戻す)。
+    """
+    killer = Bin("^", Num(999), Bin("^", Num(999), Num(999)))
+    order = list(generate_corpus._subtrees_leaves_first(killer))
+    assert order[0] == Num(999), "先頭が葉ではない"
+    assert order[-1] is killer, "末尾が根そのものではない"
+    # 内側の Bin(^, 999, 999) も、自分の 2 枚の葉より後、外側の根より前。
+    inner = killer.right
+    assert order.index(inner) > order.index(order[0])
+    assert order.index(inner) < order.index(killer)
+
+
+def test_every_out_of_shard_message_is_classified() -> None:
+    """`corpus_eval` が投げる文言と、生成器の分類が食い違わないこと。
+
+    **ここは reference/src/calcarc_reference/corpus_eval.py を実際に読んで
+    数え上げた列挙である。** ブリーフの下書きは `factorial`/`nPr`/`nCr` が
+    共有する `_as_non_negative_integer` の "of a non-finite number" 分岐と、
+    `nPr` の "of a non-integer" / "with r greater than n" を数え落としていた
+    (`nCr` 側は挙げていたのに `nPr` 側は挙げていなかった、という非対称も
+    あった)。全部 `domain` に落ちるので分類そのものにバグは無いが、
+    数え落としたまま固定すると「将来 `division_by_zero` に化けても気付かない」
+    穴になるので、ここで実装から数え直して埋める。
+
+    このテストを赤くする編集: corpus_eval.py の "reciprocal of zero" を
+    "one over zero" に変える(分類が domain に落ちる)。
+    """
+    division = [
+        "division by zero",
+        "reciprocal of zero",
+    ]
+    domain = [
+        "sqrt of a negative number",
+        "ln of a non-positive number",
+        "log10 of a non-positive number",
+        "asin outside [-1, 1]",
+        "acos outside [-1, 1]",
+        "factorial of a non-finite number",
+        "factorial of a negative number",
+        "factorial of a non-integer",
+        "nPr of a non-finite number",
+        "nPr of a negative number",
+        "nPr of a non-integer",
+        "nPr with r greater than n",
+        "nCr of a non-finite number",
+        "nCr of a negative number",
+        "nCr of a non-integer",
+        "nCr with r greater than n",
+        "zero to a negative power",
+        "negative base with a non-integer exponent",
+    ]
+    for message in division:
+        assert generate_corpus._classify_out_of_shard(message) == "division_by_zero"
+    for message in domain:
+        assert generate_corpus._classify_out_of_shard(message) == "domain"
