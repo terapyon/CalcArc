@@ -45,7 +45,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         // `del_returns_to_the_pending_operator`）。
         next.operator_pending = next.error.is_none()
             && match key {
-                Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Pow => true,
+                Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Pow | Key::Npr | Key::Ncr => true,
                 // 値を確定させるキーは、その場を演算子の直後ではなくす。
                 Key::Eq
                 | Key::RParen
@@ -63,6 +63,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 | Key::Asin
                 | Key::Acos
                 | Key::Atan
+                | Key::NFact
                 // Key::Ac はここに到達しない（reduce の冒頭で先に処理される）が、
                 // match の網羅性のために腕は残す。値はどちらでも同じ。
                 | Key::Ac => false,
@@ -97,6 +98,8 @@ fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
         BinOp::Mul => lhs.checked_mul(rhs),
         BinOp::Div => lhs.checked_div(rhs),
         BinOp::Pow => scientific::pow(lhs, rhs),
+        BinOp::Npr => scientific::npr(lhs, rhs),
+        BinOp::Ncr => scientific::ncr(lhs, rhs),
     }
 }
 
@@ -293,6 +296,9 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Mul => push_binop(state, BinOp::Mul)?,
         Key::Div => push_binop(state, BinOp::Div)?,
         Key::Pow => push_binop(state, BinOp::Pow)?,
+        Key::Npr => push_binop(state, BinOp::Npr)?,
+        Key::Ncr => push_binop(state, BinOp::Ncr)?,
+        Key::NFact => apply_unary(state, scientific::factorial)?,
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,

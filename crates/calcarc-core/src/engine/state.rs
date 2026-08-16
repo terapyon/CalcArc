@@ -58,16 +58,26 @@ pub enum BinOp {
     Div,
     /// xʸ。**唯一の右結合演算子**(S-1 設計書 §3.1)。
     Pow,
+    /// 順列 nPr。**左結合**、優先順位 3(S-3 設計書 §2)。
+    Npr,
+    /// 組合せ nCr。**左結合**、優先順位 3。
+    Ncr,
 }
 
 impl BinOp {
     /// 大きいほど先に評価される（設計書 D9）。
     ///
-    /// 3 は空けてある——S-3 が `nPr` / `nCr` をそこに置く。
+    /// 段は 4 つある: `+ −`(1) < `× ÷`(2) < `nPr nCr`(3) < `xʸ`(4)。
+    /// **上下の両方が engine_table に固定されている**——`nPr`/`nCr` を 2 に
+    /// 下げると `combinations_bind_tighter_than_multiplication` が、
+    /// 5 に上げると `combinations_sit_below_the_power_operator` が落ちる。
     pub fn precedence(self) -> u8 {
         match self {
             BinOp::Add | BinOp::Sub => 1,
             BinOp::Mul | BinOp::Div => 2,
+            // 「1 つの数」を作る演算として読まれるので × ÷ より先
+            // (S-3 設計書 §2 の裁定 1)。`5 × 4 nCr 2` は `5 × 6 = 30`。
+            BinOp::Npr | BinOp::Ncr => 3,
             BinOp::Pow => 4,
         }
     }

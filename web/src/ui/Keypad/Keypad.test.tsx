@@ -140,8 +140,11 @@ describe("Keypad の Shift（Scientific の盤面で）", () => {
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
     const shift = screen.getByRole("button", { name: "第2面に切り替え" });
     await userEvent.click(shift);
-    await userEvent.click(screen.getByRole("button", { name: "7" }));
-    expect(onPress).toHaveBeenCalledExactlyOnceWith("7");
+    // **`1` を使う。かつては `7` だった**——S-3 で 7/8/9 の裏に n!/nPr/nCr が
+    // 付いたので、7 はもう「第 2 面を持たないキー」ではない。ここが見たいのは
+    // 「裏の無いキーでも面が解除されること」なので、裏の無い数字に替える。
+    await userEvent.click(screen.getByRole("button", { name: "1" }));
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("1");
     expect(shift).toHaveAttribute("aria-pressed", "false");
   });
 });

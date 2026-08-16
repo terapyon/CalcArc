@@ -16,7 +16,7 @@ export type CalcErrorCode =
   | "SyntaxError";
 
 /** calcarc-core の engine::state::BinOp に対応。 */
-export type BinOpName = "Add" | "Sub" | "Mul" | "Div" | "Pow";
+export type BinOpName = "Add" | "Sub" | "Mul" | "Div" | "Pow" | "Npr" | "Ncr";
 
 /**
  * calcarc-core の engine::key::Key に対応するトークン。
@@ -65,6 +65,9 @@ export const KEY_TOKENS = [
   "acos",
   "atan",
   "e",
+  "n_fact",
+  "n_p_r",
+  "n_c_r",
 ] as const;
 
 export type KeyToken = (typeof KEY_TOKENS)[number];

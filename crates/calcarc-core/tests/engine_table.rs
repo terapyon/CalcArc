@@ -327,6 +327,95 @@ fn e_is_a_value_not_an_entry() {
 }
 
 #[test]
+fn factorial_applies_immediately_like_the_other_unary_keys() {
+    // 単項は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["5", "n_fact"]), "120");
+    assert_eq!(main_of(&["0", "n_fact"]), "1");
+    assert_eq!(main_of(&["1", "0", "n_fact"]), "3,628,800");
+    // 20! は 2^53 を超えるが、表示の 10 桁は正しい（S-3 設計書 §4）。
+    assert_eq!(main_of(&["2", "0", "n_fact"]), "2.432902008e18");
+}
+
+#[test]
+fn factorial_leaves_the_integers_with_an_error() {
+    // ガンマ関数には広げない（S-3 設計書 §3 の裁定 3）。
+    assert_eq!(main_of(&["2", "dot", "5", "n_fact"]), "Math ERROR");
+    assert_eq!(main_of(&["1", "neg", "n_fact"]), "Math ERROR");
+}
+
+#[test]
+fn permutations_and_combinations_are_binary_operators() {
+    assert_eq!(main_of(&["5", "n_p_r", "2", "eq"]), "20");
+    assert_eq!(main_of(&["5", "n_c_r", "2", "eq"]), "10");
+    // 境界は全部 1（S-3 設計書 §3）。
+    assert_eq!(main_of(&["5", "n_c_r", "0", "eq"]), "1");
+    assert_eq!(main_of(&["5", "n_c_r", "5", "eq"]), "1");
+    // r > n は定義域の外。
+    assert_eq!(main_of(&["5", "n_c_r", "6", "eq"]), "Math ERROR");
+}
+
+#[test]
+fn combinations_bind_tighter_than_multiplication() {
+    // 5 × (4 nCr 2) = 5 × 6 = 30（S-3 設計書 §2 の裁定 1）。
+    // 左から順なら (5 × 4) nCr 2 = 20 nCr 2 = 190 になる。
+    assert_eq!(main_of(&["5", "mul", "4", "n_c_r", "2", "eq"]), "30");
+}
+
+#[test]
+fn combinations_fold_from_the_left() {
+    // (5 nCr 3) nCr 2 = 10 nCr 2 = 45（S-3 設計書 §2）。
+    // **右結合なのは xʸ だけである**（S-1）。右結合なら
+    // 5 nCr (3 nCr 2) = 5 nCr 3 = 10 になる。
+    assert_eq!(main_of(&["5", "n_c_r", "3", "n_c_r", "2", "eq"]), "45");
+}
+
+#[test]
+fn combinations_sit_below_the_power_operator() {
+    // 優先順位は + −(1) < × ÷(2) < nPr nCr(3) < xʸ(4)。
+    // 4 nCr (2 xʸ 2) = 4 nCr 4 = 1。逆なら (4 nCr 2) xʸ 2 = 6² = 36。
+    assert_eq!(main_of(&["4", "n_c_r", "2", "pow", "2", "eq"]), "1");
+}
+
+#[test]
+fn the_echo_shows_the_counting_operators() {
+    assert_eq!(echo_of(&["5", "n_p_r"]), "5 P");
+    assert_eq!(echo_of(&["5", "n_c_r"]), "5 C");
+}
+
+#[test]
+fn a_three_tier_stack_folds_from_the_inside_out() {
+    // **網羅列挙が届かない形をここで押さえる。** 長さ 6 では二項演算子が
+    // 2 個までしか積めないので、3 段（× < nCr < xʸ）が同時に立った形は
+    // engine_robustness の網には現れない（あちらの FOCUS のコメント参照）。
+    //
+    // 2 × 3 nCr 2 xʸ 2 = 2 × (3 nCr (2²)) = 2 × (3 nCr 4) → r > n でエラー。
+    // 段がどれか 1 つでも入れ替わると別の答えになる。
+    assert_eq!(
+        main_of(&["2", "mul", "3", "n_c_r", "2", "pow", "2", "eq"]),
+        "Math ERROR"
+    );
+    // 3 段が全部生きて答えが出る形。2 × (5 nCr (2²)) = 2 × 5 = 10。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "eq"]),
+        "10"
+    );
+    // DEL は演算子を消さないので、3 段積んだまま右辺だけ差し替わる。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "del", "1", "eq"]),
+        "20"
+    );
+}
+
+#[test]
+fn combinations_do_not_overflow_on_the_way_to_an_answer_that_fits() {
+    // S-3 設計書 §4（訂正版）。素直な n!/(r!(n−r)!) はここで落ちる。
+    assert_eq!(
+        main_of(&["2", "0", "0", "n_c_r", "1", "0", "0", "eq"]),
+        "9.054851466e58"
+    );
+}
+
+#[test]
 fn subtracts_and_divides() {
     assert_eq!(main_of(&["1", "0", "sub", "4", "eq"]), "6");
     assert_eq!(main_of(&["7", "div", "2", "eq"]), "3.5");

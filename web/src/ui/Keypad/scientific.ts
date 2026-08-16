@@ -143,9 +143,50 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
     { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
     { token: "ac", label: "AC", ariaLabel: "全消去", variant: "danger" },
 
-    { token: "7", label: "7", ariaLabel: "7", variant: "digit" },
-    { token: "8", label: "8", ariaLabel: "8", variant: "digit" },
-    { token: "9", label: "9", ariaLabel: "9", variant: "digit" },
+    // **数字キーに第 2 面が付くのはここが初めてである**(S-3 設計書 §7 の
+    // 裁定 2)。3 つを隣り合わせに置ける場所が他に無い——関数列の裏は
+    // S-1 が意味の対応(√→ln、sin→asin など)で埋めており、そこに割り込むと
+    // 対応が壊れる。
+    //
+    // **第 2 面の variant を "function" にするのは意図的**。数字キーの上で
+    // 面が変わったことが**色で分かる**ようにするためで、裁定 2 の
+    // 「発見性」への答えである。E2E が実ブラウザで背景色を比べている。
+    {
+      token: "7",
+      label: "7",
+      ariaLabel: "7",
+      variant: "digit",
+      shift: {
+        token: "n_fact",
+        label: "n!",
+        ariaLabel: "階乗",
+        variant: "function",
+      },
+    },
+    {
+      token: "8",
+      label: "8",
+      ariaLabel: "8",
+      variant: "digit",
+      shift: {
+        token: "n_p_r",
+        label: "nPr",
+        ariaLabel: "順列",
+        variant: "function",
+      },
+    },
+    {
+      token: "9",
+      label: "9",
+      ariaLabel: "9",
+      variant: "digit",
+      shift: {
+        token: "n_c_r",
+        label: "nCr",
+        ariaLabel: "組合せ",
+        variant: "function",
+      },
+    },
     { token: "div", label: "÷", ariaLabel: "割る", variant: "operator" },
     { token: "j", label: "j", ariaLabel: "虚数単位", variant: "function" },
 

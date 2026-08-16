@@ -136,6 +136,62 @@ def recip(x: float, mode: str) -> dict:
     return {"re": y, "im": 0.0}
 
 
+def _non_negative_integer(x: float) -> int | None:
+    """非負整数なら int に、そうでなければ None。
+
+    **Rust の `x.fract() == 0.0` を写したのではない。** Python 側は
+    `float.is_integer()` という別の問い方をする。
+    """
+    if not math.isfinite(x) or x < 0 or not float(x).is_integer():
+        return None
+    return int(x)
+
+
+def _fits_f64(n: int) -> dict:
+    """厳密整数を f64 の値として返す。収まらなければ Overflow。"""
+    try:
+        v = float(n)
+    except OverflowError:
+        return {"error": "Overflow"}
+    if math.isinf(v):
+        return {"error": "Overflow"}
+    return {"re": v, "im": 0.0}
+
+
+def factorial(x: float, mode: str) -> dict:
+    """階乗。**厳密な整数で計算してから f64 に落とす。**
+
+    Rust は f64 で逐次乗算する。こちらは `math.factorial` の任意精度整数で
+    答えを出してから 1 度だけ f64 にする——**同じアルゴリズムではない**ので、
+    Rust の逐次乗算の誤差がここに写ることがない（設計書 §5）。
+    """
+    n = _non_negative_integer(x)
+    if n is None:
+        return {"error": "DomainError"}
+    return _fits_f64(math.factorial(n))
+
+
+def npr(x: float, y: float) -> dict:
+    """順列。Rust は f64 の逐次乗算、こちらは `math.perm` の厳密整数。"""
+    n, r = _non_negative_integer(x), _non_negative_integer(y)
+    if n is None or r is None or r > n:
+        return {"error": "DomainError"}
+    return _fits_f64(math.perm(n, r))
+
+
+def ncr(x: float, y: float) -> dict:
+    """組合せ。**任意精度なので途中で溢れる問題がそもそも無い。**
+
+    Rust は f64 で「割ってから掛ける」（設計書 §4 の訂正）。順序を選ばないと
+    答が収まるのに落ちる帯があるが、こちらにはその問題が存在しない
+    ——**だからこそ突き合わせる価値がある。**
+    """
+    n, r = _non_negative_integer(x), _non_negative_integer(y)
+    if n is None or r is None or r > n:
+        return {"error": "DomainError"}
+    return _fits_f64(math.comb(n, r))
+
+
 def sqrt_real(x: float) -> dict:
     """実数の平方根。
 
