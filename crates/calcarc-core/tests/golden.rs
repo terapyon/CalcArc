@@ -204,6 +204,7 @@ fn scientific_functions_match_the_reference() {
             "asin" => scientific::asin(x, mode),
             "acos" => scientific::acos(x, mode),
             "atan" => scientific::atan(x, mode),
+            "recip" => scientific::recip(x),
             other => panic!("{}: unknown op {other}", case.id),
         };
 

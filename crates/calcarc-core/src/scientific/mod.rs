@@ -136,6 +136,18 @@ pub fn atan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     Value::real(mode.angle_of(x.atan())).finalize()
 }
 
+/// 逆数。**`x = 0` は `DomainError` ではなく `DivisionByZero`**（設計書 §3.0）。
+///
+/// `DomainError` は「その値には定義が無い」を言うために新設した名前で、
+/// 0 除算はそれとは別に既に名前を持っている。
+pub fn recip(v: Value) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    if x == 0.0 {
+        return Err(CalcError::DivisionByZero);
+    }
+    Value::real(1.0 / x).finalize()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,6 +274,26 @@ mod tests {
         assert!(acos(Value::real(-1.0), AngleMode::Deg).is_ok());
         // atan は全実数。
         assert!(atan(Value::real(1e300), AngleMode::Deg).is_ok());
+    }
+
+    #[test]
+    fn reciprocal_of_zero_is_a_division_by_zero() {
+        // DomainError ではない（設計書 §3.0）。利用者にとってこれは 0 除算で
+        // あり、5 ÷ 0 と違うエラーを返す理由が無い。
+        assert_eq!(recip(Value::real(0.0)), Err(CalcError::DivisionByZero));
+    }
+
+    #[test]
+    fn reciprocal_inverts() {
+        close(recip(Value::real(4.0)).unwrap().re, 0.25);
+        close(recip(Value::real(-8.0)).unwrap().re, -0.125);
+        // 複素数は DomainError。1 ÷ (3+j4) と四則で書けるので機能は失われない。
+        assert_eq!(recip(Value::new(3.0, 4.0)), Err(CalcError::DomainError));
+    }
+
+    #[test]
+    fn reciprocal_of_a_tiny_value_overflows() {
+        assert_eq!(recip(Value::real(1e-320)), Err(CalcError::Overflow));
     }
 
     #[test]

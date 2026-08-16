@@ -5,6 +5,7 @@ from calcarc_reference.scientific_ref import (
     cos,
     exp_e,
     ln,
+    recip,
     sin,
     sqrt_real,
     tan,
@@ -46,6 +47,11 @@ def test_ln_is_undefined_at_zero_and_below() -> None:
 def test_inverse_sine_is_bounded_by_one() -> None:
     assert asin(1.0000001, "Deg") == {"error": "DomainError"}
     assert math.isclose(asin(1.0, "Deg")["re"], 90.0, abs_tol=1e-13)
+
+
+def test_reciprocal_of_zero_is_a_division_by_zero() -> None:
+    # DomainError と取り違えると、golden が Rust の裁定違いを見逃す。
+    assert recip(0.0, "Deg") == {"error": "DivisionByZero"}
 
 
 def test_exp_overflows_rather_than_leaving_the_domain() -> None:

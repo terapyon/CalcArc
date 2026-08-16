@@ -120,6 +120,14 @@ REAL_FN_INPUTS: list[tuple[str, float, str]] = [
     ("atan", -1.0, "Deg"),
     ("atan", 1e300, "Deg"),
     ("atan", 1.0, "Rad"),
+    # 逆数（設計書 §3.0）。0 は DivisionByZero、極小は Overflow。
+    ("recip", 4.0, "Deg"),
+    ("recip", -8.0, "Deg"),
+    ("recip", 1.0, "Deg"),
+    ("recip", 3.0, "Deg"),
+    ("recip", 0.0, "Deg"),
+    ("recip", 1e-320, "Deg"),
+    ("recip", 1e300, "Deg"),
 ]
 
 # ((a_re, a_im), (b_re, b_im))。各ペアに 4 演算すべてを生成する。

@@ -93,6 +93,22 @@ def atan(x: float, mode: str) -> dict:
     return _real_or_domain_error(_from_radians(mp.atan(mp.mpf(str(x))), mode))
 
 
+def recip(x: float, mode: str) -> dict:
+    """逆数。0 は DivisionByZero（設計書 §3.0）。
+
+    mpmath は 1/0 で ZeroDivisionError を投げる。**その例外をそのまま
+    「0 で割った」の判定に使う**——Rust の `x == 0.0` を写したのではない。
+    """
+    try:
+        r = mp.mpf(1) / mp.mpf(str(x))
+    except ZeroDivisionError:
+        return {"error": "DivisionByZero"}
+    y = float(r)
+    if math.isinf(y):
+        return {"error": "Overflow"}
+    return {"re": y, "im": 0.0}
+
+
 def sqrt_real(x: float) -> dict:
     """実数の平方根。
 
