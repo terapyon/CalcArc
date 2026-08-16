@@ -15,7 +15,7 @@ use calcarc_core::CalcError;
 use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse};
-use calcarc_core::finance::{compound, tax};
+use calcarc_core::finance::{compound, compound_inverse, tax};
 use serde::Deserialize;
 
 const SCHEMA: u32 = 1;
@@ -62,6 +62,8 @@ struct Input {
     periods_per_year: Option<u32>,
     #[serde(default)]
     tax: Option<bool>,
+    #[serde(default)]
+    target: Option<String>,
     // 式。ローン・複利とは入力が重ならないので、同じ合併型に足すだけで済む。
     #[serde(default)]
     text: Option<String>,
@@ -163,10 +165,54 @@ fn run_compound(input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
     Ok(out)
 }
 
+/// 逆算 2 op。**答の key だけが違い、内訳は compound_grow と同じ形**である。
+fn run_compound_inverse(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
+    let rate = Rate::from_annual_percent(
+        &input.rate,
+        input.periods_per_year.ok_or(CalcError::SyntaxError)?,
+    )?;
+    let target = input.yen(&input.target)?;
+    let taxed = input.tax == Some(true);
+    let mut out = BTreeMap::new();
+    let s = if op == "compound_deposit_for" {
+        let s = compound_inverse::deposit_for(
+            input.yen(&input.principal)?,
+            &rate,
+            input.periods.ok_or(CalcError::SyntaxError)?,
+            target,
+            taxed,
+        )?;
+        field(&mut out, "deposit", s.deposit);
+        s
+    } else {
+        let s = compound_inverse::periods_for(
+            input.yen(&input.principal)?,
+            input.yen(&input.deposit)?,
+            &rate,
+            target,
+            taxed,
+        )?;
+        field(&mut out, "periods", s.periods);
+        s
+    };
+    field(&mut out, "final_balance", s.growth.final_balance);
+    field(&mut out, "principal_total", s.growth.principal_total);
+    field(&mut out, "interest", s.growth.interest);
+    if taxed {
+        field(&mut out, "national_tax", s.national_tax);
+        field(&mut out, "local_tax", s.local_tax);
+        field(&mut out, "net", s.net);
+    }
+    Ok(out)
+}
+
 /// op ごとにコアの関数へ配線し、出力を key→文字列の写像にする。
 fn run(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
     if op == "compound_grow" {
         return run_compound(input);
+    }
+    if op == "compound_deposit_for" || op == "compound_periods_for" {
+        return run_compound_inverse(op, input);
     }
     if op.starts_with("expr_") {
         return run_expression(op, input);
@@ -279,7 +325,7 @@ fn loan_matches_the_reference() {
     }
 }
 
-/// 必須ケースが 5 つの op すべてに行き渡っていること(設計書 §7 の植え漏れ検査)。
+/// 必須ケースが 7 つの op すべてに行き渡っていること(設計書 §7 の植え漏れ検査)。
 #[test]
 fn every_mode_is_covered_by_the_golden() {
     let golden = load();
@@ -289,6 +335,8 @@ fn every_mode_is_covered_by_the_golden() {
         "loan_term",
         "loan_bonus_forward",
         "loan_bonus_principal",
+        "compound_deposit_for",
+        "compound_periods_for",
     ] {
         let count = golden.cases.iter().filter(|c| c.op == op).count();
         assert!(count > 0, "no golden case for {op}");
@@ -307,5 +355,16 @@ fn every_mode_is_covered_by_the_golden() {
     assert!(
         golden.cases.iter().any(|c| c.expect.contains_key("error")),
         "no error case"
+    );
+    // **非単調ペアの片割れ**が消えると numerical-policy の注記が根拠を失う
+    // (設計書 §3 帰結 2)。id では結べないので、ここで存在を固定する。
+    assert!(
+        golden.cases.iter().any(|c| {
+            c.op == "compound_grow"
+                && c.input.principal.as_deref() == Some("999")
+                && c.input.periods == Some(20)
+                && c.input.tax == Some(true)
+        }),
+        "no compound_grow case pinning the dip at 20 periods"
     );
 }

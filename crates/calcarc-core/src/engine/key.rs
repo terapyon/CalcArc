@@ -31,6 +31,32 @@ pub enum Key {
     Ac,
     Del,
     AngleToggle,
+    /// 工学表記(ENG)のトグル。表示の切り替えであって計算ではない(設計書 §4)。
+    EngToggle,
+    /// xʸ。二項演算子であって後置関数ではない(S-1 設計書 §3.1)。
+    Pow,
+    /// 自然対数。
+    Ln,
+    /// 常用対数。
+    Log10,
+    /// e の x 乗。**`Key::Exp`(指数入力 EE)とは別物**(S-1 設計書 §3)。
+    ExpE,
+    /// 逆数。
+    Recip,
+    Asin,
+    Acos,
+    Atan,
+    /// 自然対数の底。π と同じ「値そのもの」のキー。
+    E,
+    /// 階乗。後置の単項(S-3 設計書 §1)。
+    NFact,
+    /// 順列 nPr。二項(S-3 設計書 §1)。
+    Npr,
+    /// 組合せ nCr。二項。
+    Ncr,
+    /// 60 進(度分秒)。**入力中は区切り、確定後は表示の一時トグル**
+    /// (S-4 設計書 §3)。2 つの仕事をする唯一のキーである。
+    Dms,
 }
 
 impl Key {
@@ -69,6 +95,20 @@ impl Key {
             "ac" => Key::Ac,
             "del" => Key::Del,
             "angle_toggle" => Key::AngleToggle,
+            "eng" => Key::EngToggle,
+            "pow" => Key::Pow,
+            "ln" => Key::Ln,
+            "log10" => Key::Log10,
+            "exp_e" => Key::ExpE,
+            "recip" => Key::Recip,
+            "asin" => Key::Asin,
+            "acos" => Key::Acos,
+            "atan" => Key::Atan,
+            "e" => Key::E,
+            "n_fact" => Key::NFact,
+            "n_p_r" => Key::Npr,
+            "n_c_r" => Key::Ncr,
+            "dms" => Key::Dms,
             _ => return None,
         })
     }
@@ -108,6 +148,20 @@ impl Key {
             Key::Ac => "ac",
             Key::Del => "del",
             Key::AngleToggle => "angle_toggle",
+            Key::EngToggle => "eng",
+            Key::Pow => "pow",
+            Key::Ln => "ln",
+            Key::Log10 => "log10",
+            Key::ExpE => "exp_e",
+            Key::Recip => "recip",
+            Key::Asin => "asin",
+            Key::Acos => "acos",
+            Key::Atan => "atan",
+            Key::E => "e",
+            Key::NFact => "n_fact",
+            Key::Npr => "n_p_r",
+            Key::Ncr => "n_c_r",
+            Key::Dms => "dms",
         }
     }
 }
@@ -118,7 +172,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 32] = [
+    pub const ALL: [Key; 46] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -151,6 +205,20 @@ impl Key {
         Key::Ac,
         Key::Del,
         Key::AngleToggle,
+        Key::EngToggle,
+        Key::Pow,
+        Key::Ln,
+        Key::Log10,
+        Key::ExpE,
+        Key::Recip,
+        Key::Asin,
+        Key::Acos,
+        Key::Atan,
+        Key::E,
+        Key::NFact,
+        Key::Npr,
+        Key::Ncr,
+        Key::Dms,
     ];
 }
 

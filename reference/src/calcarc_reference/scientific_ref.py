@@ -6,6 +6,8 @@ Rust は libm の f64 実装を使う。ここでは mpmath の任意精度実�
 
 from __future__ import annotations
 
+import math
+
 import mpmath as mp
 
 mp.mp.dps = 50
@@ -32,9 +34,171 @@ def tan(x: float, mode: str) -> float:
     return float(mp.tan(_to_radians(x, mode)))
 
 
-def sqrt_real(x: float) -> tuple[float, float]:
-    """実数の平方根。負なら虚部として返す。"""
-    v = mp.mpf(str(x))
-    if v >= 0:
-        return float(mp.sqrt(v)), 0.0
-    return 0.0, float(mp.sqrt(-v))
+def _real_or_domain_error(r) -> dict:
+    """mpmath の結果を golden の expect に写す。
+
+    **定義域の判定を Rust から写さない。** mpmath は定義域の外で mpc（複素数）
+    または非有限を返すので、それをそのまま「実数の答が無い」の判定に使う。
+    これが独立検証の軸である（CONTRIBUTING: 参照実装を Rust の移植にしない）。
+    """
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    x = float(r.real if isinstance(r, mp.mpc) else r)
+    if math.isnan(x) or math.isinf(x):
+        return {"error": "DomainError"}
+    return {"re": x, "im": 0.0}
+
+
+def ln(x: float, mode: str) -> dict:
+    return _real_or_domain_error(mp.log(mp.mpf(str(x))))
+
+
+def log10(x: float, mode: str) -> dict:
+    return _real_or_domain_error(mp.log10(mp.mpf(str(x))))
+
+
+def exp_e(x: float, mode: str) -> dict:
+    """e の x 乗。定義域は全実数なので、外れるのは f64 に入らないときだけ。"""
+    y = float(mp.exp(mp.mpf(str(x))))
+    # 実数として定義はされている。f64 に収まらないだけなので Overflow
+    # （設計書 §3 の「Overflow のみ」）。
+    if math.isinf(y):
+        return {"error": "Overflow"}
+    return {"re": y, "im": 0.0}
+
+
+def _from_radians(r, mode: str):
+    if mode == "Deg":
+        return r * 180 / mp.pi
+    if mode == "Rad":
+        return r
+    raise ValueError(f"unknown angle mode: {mode}")
+
+
+def asin(x: float, mode: str) -> dict:
+    r = mp.asin(mp.mpf(str(x)))
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    return _real_or_domain_error(_from_radians(r, mode))
+
+
+def acos(x: float, mode: str) -> dict:
+    r = mp.acos(mp.mpf(str(x)))
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    return _real_or_domain_error(_from_radians(r, mode))
+
+
+def atan(x: float, mode: str) -> dict:
+    return _real_or_domain_error(_from_radians(mp.atan(mp.mpf(str(x))), mode))
+
+
+def pow_real(x: float, y: float) -> dict:
+    """x の y 乗を実数の範囲で。
+
+    **定義域の判定を Rust から写さない。** mpmath に計算させ、返ってきたのが
+    複素数なら「実数の答が無い」と判定する。Rust は `y.fract() == 0.0` で
+    整数指数を先に判定しており、**書き方がまるで違う**——そこに突き合わせる
+    価値がある。
+
+    **1 か所だけ規約を直に書いている**: `0^(y<0)` である。mpmath は
+    ZeroDivisionError を投げるが、設計書 §4 の表はここを DomainError と
+    定めている（`1/x` の 0 が DivisionByZero なのとは別の裁定）。
+    数学からは導けないので、規約として書く。
+    """
+    if x == 0.0 and y < 0.0:
+        return {"error": "DomainError"}
+    try:
+        r = mp.power(mp.mpf(str(x)), mp.mpf(str(y)))
+    except ZeroDivisionError:
+        return {"error": "DomainError"}
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    v = float(r.real if isinstance(r, mp.mpc) else r)
+    if math.isinf(v):
+        return {"error": "Overflow"}
+    return {"re": v, "im": 0.0}
+
+
+def recip(x: float, mode: str) -> dict:
+    """逆数。0 は DivisionByZero（設計書 §3.0）。
+
+    mpmath は 1/0 で ZeroDivisionError を投げる。**その例外をそのまま
+    「0 で割った」の判定に使う**——Rust の `x == 0.0` を写したのではない。
+    """
+    try:
+        r = mp.mpf(1) / mp.mpf(str(x))
+    except ZeroDivisionError:
+        return {"error": "DivisionByZero"}
+    y = float(r)
+    if math.isinf(y):
+        return {"error": "Overflow"}
+    return {"re": y, "im": 0.0}
+
+
+def _non_negative_integer(x: float) -> int | None:
+    """非負整数なら int に、そうでなければ None。
+
+    **Rust の `x.fract() == 0.0` を写したのではない。** Python 側は
+    `float.is_integer()` という別の問い方をする。
+    """
+    if not math.isfinite(x) or x < 0 or not float(x).is_integer():
+        return None
+    return int(x)
+
+
+def _fits_f64(n: int) -> dict:
+    """厳密整数を f64 の値として返す。収まらなければ Overflow。"""
+    try:
+        v = float(n)
+    except OverflowError:
+        return {"error": "Overflow"}
+    if math.isinf(v):
+        return {"error": "Overflow"}
+    return {"re": v, "im": 0.0}
+
+
+def factorial(x: float, mode: str) -> dict:
+    """階乗。**厳密な整数で計算してから f64 に落とす。**
+
+    Rust は f64 で逐次乗算する。こちらは `math.factorial` の任意精度整数で
+    答えを出してから 1 度だけ f64 にする——**同じアルゴリズムではない**ので、
+    Rust の逐次乗算の誤差がここに写ることがない（設計書 §5）。
+    """
+    n = _non_negative_integer(x)
+    if n is None:
+        return {"error": "DomainError"}
+    return _fits_f64(math.factorial(n))
+
+
+def npr(x: float, y: float) -> dict:
+    """順列。Rust は f64 の逐次乗算、こちらは `math.perm` の厳密整数。"""
+    n, r = _non_negative_integer(x), _non_negative_integer(y)
+    if n is None or r is None or r > n:
+        return {"error": "DomainError"}
+    return _fits_f64(math.perm(n, r))
+
+
+def ncr(x: float, y: float) -> dict:
+    """組合せ。**任意精度なので途中で溢れる問題がそもそも無い。**
+
+    Rust は f64 で「割ってから掛ける」（設計書 §4 の訂正）。順序を選ばないと
+    答が収まるのに落ちる帯があるが、こちらにはその問題が存在しない
+    ——**だからこそ突き合わせる価値がある。**
+    """
+    n, r = _non_negative_integer(x), _non_negative_integer(y)
+    if n is None or r is None or r > n:
+        return {"error": "DomainError"}
+    return _fits_f64(math.comb(n, r))
+
+
+def sqrt_real(x: float) -> dict:
+    """実数の平方根。
+
+    **負の実数は定義域の外**である（S-1 設計書 §1 の裁定 1）。判定は Rust の
+    分岐を写したものではなく、mpmath が mpc（複素数）を返すかどうかで決める。
+    """
+    r = mp.sqrt(mp.mpf(str(x)))
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    return {"re": float(r), "im": 0.0}

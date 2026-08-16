@@ -6,6 +6,9 @@ const OP_SYMBOL: Record<BinOpName, string> = {
   Sub: "−",
   Mul: "×",
   Div: "÷",
+  Pow: "^",
+  Npr: "P",
+  Ncr: "C",
 };
 
 export interface DisplayProps {
@@ -38,6 +41,12 @@ export function Display({ display }: DisplayProps) {
           testId: "display-angle",
           ariaLabel: "角度の単位",
           text: display.angle === "Deg" ? "DEG" : "RAD",
+          live: "polite",
+        },
+        {
+          testId: "display-notation",
+          ariaLabel: "数の表記",
+          text: display.notation === "Eng" ? "ENG" : "",
           live: "polite",
         },
         {

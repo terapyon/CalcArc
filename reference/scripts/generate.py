@@ -21,6 +21,7 @@ from calcarc_reference import (
     expr_ref,
     loan_ref,
     scientific_ref,
+    sexagesimal_ref,
 )
 
 SCHEMA = 1
@@ -86,16 +87,64 @@ def build_scientific() -> dict:
             }
         )
     for x in cases.SQRT_INPUTS:
-        re, im = scientific_ref.sqrt_real(x)
         entries.append(
             {
                 "id": f"sqrt/{x}",
                 "op": "sqrt",
                 "mode": "Deg",
                 "input": {"x": x},
-                "expect": {"re": re, "im": im},
+                "expect": scientific_ref.sqrt_real(x),
             }
         )
+    for name, x, mode in cases.REAL_FN_INPUTS:
+        fn = getattr(scientific_ref, name)
+        entries.append(
+            {
+                "id": f"{name}/{mode}/{x}",
+                "op": name,
+                "mode": mode,
+                "input": {"x": x},
+                "expect": fn(x, mode),
+            }
+        )
+    for x, y in cases.POW_INPUTS:
+        entries.append(
+            {
+                "id": f"pow/{x}/{y}",
+                "op": "pow",
+                "input": {"x": x, "y": y},
+                "expect": scientific_ref.pow_real(x, y),
+            }
+        )
+    for x in cases.FACTORIAL_INPUTS:
+        entries.append(
+            {
+                "id": f"factorial/{x}",
+                "op": "factorial",
+                "input": {"x": x},
+                "expect": scientific_ref.factorial(x, "Deg"),
+            }
+        )
+    for x in cases.SEXAGESIMAL_INPUTS:
+        entries.append(
+            {
+                "id": f"sexagesimal/{x}",
+                "op": "sexagesimal",
+                "input": {"x": x},
+                "expect": {"text": sexagesimal_ref.format_sexagesimal(x)},
+            }
+        )
+    for x, y in cases.PAIR_INPUTS:
+        for name in ("npr", "ncr"):
+            fn = getattr(scientific_ref, name)
+            entries.append(
+                {
+                    "id": f"{name}/{x}/{y}",
+                    "op": name,
+                    "input": {"x": x, "y": y},
+                    "expect": fn(x, y),
+                }
+            )
     return _envelope(entries)
 
 

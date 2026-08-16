@@ -123,15 +123,12 @@ describe("Keypad の Shift（Scientific の盤面で）", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("shows the empty second-face slots as reserved", async () => {
-    // 第 2 面は今回ほぼ空(設計書 §3)。空きスロットは場所だけ示す。
+  it("has no reserved slots left on the Scientific board", () => {
+    // **S-4 で最後の 1 枠が埋まった。** 無効表示の意味論そのものは
+    // `Key` と Finance の面が持ち続けるが、Scientific の盤面には
+    // 守る対象が無くなった——そのこと自体を主張する。
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={vi.fn()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "第2面に切り替え" }),
-    );
-    const empty = screen.getAllByRole("button", { name: "第2面（準備中）" });
-    expect(empty).toHaveLength(3); // sin / cos / tan の裏
-    for (const slot of empty) expect(slot).toBeDisabled();
+    expect(screen.queryAllByRole("button", { name: "空き" })).toEqual([]);
   });
 
   it("keeps keys without a second face unchanged, and still releases", async () => {
@@ -141,8 +138,11 @@ describe("Keypad の Shift（Scientific の盤面で）", () => {
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={onPress} />);
     const shift = screen.getByRole("button", { name: "第2面に切り替え" });
     await userEvent.click(shift);
-    await userEvent.click(screen.getByRole("button", { name: "7" }));
-    expect(onPress).toHaveBeenCalledExactlyOnceWith("7");
+    // **`1` を使う。かつては `7` だった**——S-3 で 7/8/9 の裏に n!/nPr/nCr が
+    // 付いたので、7 はもう「第 2 面を持たないキー」ではない。ここが見たいのは
+    // 「裏の無いキーでも面が解除されること」なので、裏の無い数字に替える。
+    await userEvent.click(screen.getByRole("button", { name: "1" }));
+    expect(onPress).toHaveBeenCalledExactlyOnceWith("1");
     expect(shift).toHaveAttribute("aria-pressed", "false");
   });
 });

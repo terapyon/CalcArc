@@ -21,7 +21,10 @@ test("the main grid keeps 44px touch targets", async ({ page }) => {
 test("the function row is half height but still 44px wide", async ({
   page,
 }) => {
-  const functions = page.getByRole("group", { name: "関数キー" });
+  // 44px は 8 列案を却下した唯一の測定(390px で 38.75px)。2 段化は
+  // それを守るためだけに存在するので、2 段目も同じ検査に含める
+  // ——含めないと将来 8 列に戻す変更が入っても緑のまま通ってしまう。
+  const functions = page.getByRole("group", { name: /関数キー|第 2 関数列/ });
   for (const button of await functions.getByRole("button").all()) {
     const box = await button.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -44,28 +47,30 @@ test("pi is reachable through the Shift face and reaches the core", async ({
   await expect(page.getByRole("button", { name: "指数入力" })).toBeEnabled();
 });
 
-test("the empty second-face slots are reserved, not missing", async ({
+test("the second face is full now, not a row of placeholders", async ({
   page,
 }) => {
+  // S-1 で sin/cos/tan の裏が asin/acos/atan になり、「準備中」の面は
+  // 1 つも残っていない。
   await page.getByRole("button", { name: "第2面に切り替え" }).click();
-  const empty = page.getByRole("button", { name: "第2面（準備中）" });
-  await expect(empty).toHaveCount(3);
-  for (const slot of await empty.all()) {
-    await expect(slot).toBeDisabled();
-  }
+  await expect(
+    page.getByRole("button", { name: "第2面（準備中）" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "アークサイン" }),
+  ).toBeEnabled();
 });
 
-test("the remaining reserved slots do nothing, and look like it", async ({
-  page,
-}) => {
-  // 第 1 面の予約は S2 で解けた。残るのは第 2 面の空きスロット。
-  await page.getByRole("button", { name: "第2面に切り替え" }).click();
-  const empty = page.getByRole("button", { name: "第2面（準備中）" }).first();
-  await expect(empty).toBeDisabled();
-  // 無効なことは見た目にも出す(設計書 §5 の「無効表示」)。属性だけだと
-  // 押せる見た目のキーが押せない、という一番いらだつ形になる。
-  const opacity = await empty.evaluate((el) => getComputedStyle(el).opacity);
-  expect(Number(opacity)).toBeLessThan(1);
+test("the board has no reserved slots left", async ({ page }) => {
+  // 第 1 面の予約は S2 で、第 2 面は S-1 で、最後の 1 枠は S-4 の `°'"` で
+  // 埋まった。**盤面に「空き」は 1 つも無い。**
+  await expect(
+    page.getByRole("button", { name: "空き", exact: true }),
+  ).toHaveCount(0);
+  // 埋めた当人が押せることも見る——「消えた」と「無効になった」を分ける。
+  await expect(
+    page.getByRole("button", { name: "60進に切り替え" }),
+  ).toBeEnabled();
 });
 
 test("Shift shows its face is on, not just to the accessibility tree", async ({

@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use calcarc_core::AngleMode;
+use calcarc_core::numeric::format;
 use calcarc_core::polar::{Polar, from_polar};
 use calcarc_core::{Value, scientific};
 use serde::Deserialize;
@@ -54,6 +55,23 @@ fn load(name: &str) -> Golden {
     );
     assert!(!golden.cases.is_empty(), "{name} has no cases");
     golden
+}
+
+/// `expect` にエラーが書かれていればその名前。値のケースでは None。
+fn expected_error(case: &Case) -> Option<&str> {
+    case.expect.get("error").and_then(|e| e.as_str())
+}
+
+/// CalcError を golden の綴りに写す。
+fn error_name(e: calcarc_core::CalcError) -> &'static str {
+    use calcarc_core::CalcError::*;
+    match e {
+        DivisionByZero => "DivisionByZero",
+        Overflow => "Overflow",
+        TrigPole => "TrigPole",
+        DomainError => "DomainError",
+        SyntaxError => "SyntaxError",
+    }
 }
 
 fn field(v: &serde_json::Value, key: &str) -> f64 {
@@ -174,6 +192,16 @@ fn scientific_functions_match_the_reference() {
     println!("validating against {}", golden.generated_by);
 
     for case in &golden.cases {
+        // **`sexagesimal` だけ expect が文字列である**(S-4)。数値の腕に
+        // 混ぜられないので、match の手前で分ける。許容誤差は要らない
+        // ——文字列の完全一致だからである。
+        if case.op == "sexagesimal" {
+            let expected = case.expect.get("text").and_then(|t| t.as_str());
+            let actual = format::format_sexagesimal(field(&case.input, "x"));
+            assert_eq!(actual.as_deref(), expected, "{}", case.id);
+            continue;
+        }
+
         let x = Value::real(field(&case.input, "x"));
         let mode = angle_mode(case);
         let actual = match case.op.as_str() {
@@ -181,16 +209,36 @@ fn scientific_functions_match_the_reference() {
             "cos" => scientific::cos(x, mode),
             "tan" => scientific::tan(x, mode),
             "sqrt" => scientific::sqrt(x),
+            "ln" => scientific::ln(x),
+            "log10" => scientific::log10(x),
+            "exp_e" => scientific::exp_e(x),
+            "asin" => scientific::asin(x, mode),
+            "acos" => scientific::acos(x, mode),
+            "atan" => scientific::atan(x, mode),
+            "recip" => scientific::recip(x),
+            // pow / npr / ncr は 2 引数。x は上で作ってある。
+            "pow" => scientific::pow(x, Value::real(field(&case.input, "y"))),
+            "factorial" => scientific::factorial(x),
+            "npr" => scientific::npr(x, Value::real(field(&case.input, "y"))),
+            "ncr" => scientific::ncr(x, Value::real(field(&case.input, "y"))),
             other => panic!("{}: unknown op {other}", case.id),
-        }
-        .unwrap_or_else(|e| panic!("{}: unexpected error {e:?}", case.id));
+        };
 
-        close_complex(
-            actual,
-            field(&case.expect, "re"),
-            field(&case.expect, "im"),
-            golden.tolerance,
-            &case.id,
-        );
+        match (actual, expected_error(case)) {
+            (Ok(v), None) => close_complex(
+                v,
+                field(&case.expect, "re"),
+                field(&case.expect, "im"),
+                golden.tolerance,
+                &case.id,
+            ),
+            (Err(e), Some(expected)) => {
+                assert_eq!(error_name(e), expected, "{}: error kind", case.id)
+            }
+            (Ok(v), Some(expected)) => {
+                panic!("{}: expected {expected} but got {v:?}", case.id)
+            }
+            (Err(e), None) => panic!("{}: unexpected error {e:?}", case.id),
+        }
     }
 }

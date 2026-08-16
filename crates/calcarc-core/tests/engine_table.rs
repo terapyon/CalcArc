@@ -103,10 +103,10 @@ fn j_after_digits_turns_the_entry_imaginary() {
 fn exp_enters_an_exponent() {
     // 設計書 §2。1.5 Exp 3 = 1500。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "3"]), "1.5e3");
-    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1500");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1,500");
     // 仮数なしの Exp は仮数 1。表示にも 1 が出る(空の "e3" にはしない)。
     assert_eq!(main_of(&["exp", "3"]), "1e3");
-    assert_eq!(main_of(&["exp", "3", "eq"]), "1000");
+    assert_eq!(main_of(&["exp", "3", "eq"]), "1,000");
     // 連打は無視。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "exp"]), "1.5e");
     // 指数は整数。小数点は無視する。
@@ -214,8 +214,275 @@ fn respects_operator_precedence() {
 #[test]
 fn reduces_same_precedence_left_to_right() {
     // 2 つ目の + を押した時点で 2+3 が確定して 5 が表示される。
+    //
+    // **1 行目が「途中の表示」として結合方向を捕まえる。** push_binop の
+    // 比較を `>` にすると畳まれず current が 3 のままになり、"3" が出る。
+    // 2 行目は捕まえない——加算は結合的なのでどちらの結合でも 9 である。
+    // 答えの側は same_precedence_operators_fold_from_the_left_in_the_answer
+    // が受け持つ。
     assert_eq!(main_of(&["2", "add", "3", "add"]), "5");
     assert_eq!(main_of(&["2", "add", "3", "add", "4", "eq"]), "9");
+}
+
+#[test]
+fn same_precedence_operators_fold_from_the_left_in_the_answer() {
+    // **この行は `xʸ` の右結合のために足した。** push_binop の畳み込み条件に
+    // 手が入るので、他の演算子が左結合のままであることを先に固定する。
+    //
+    // 上の `reduces_same_precedence_left_to_right` が守っているのは**途中の
+    // 表示**だけである。守られていなかったのは**答え**のほうで、減算と除算
+    // なら左右で違う答えになる（S-1 設計書 §3.1、2026-08-16 に実測して訂正）。
+    assert_eq!(main_of(&["1", "0", "sub", "3", "sub", "2", "eq"]), "5"); // 9 でない
+    assert_eq!(
+        main_of(&["1", "0", "0", "div", "5", "div", "2", "eq"]),
+        "10"
+    ); // 40 でない
+}
+
+#[test]
+fn the_power_operator_folds_from_the_right() {
+    // 数学の慣行（S-1 設計書 §3.1 の裁定 3）。左結合なら (2^3)^2 = 64 になる。
+    assert_eq!(main_of(&["2", "pow", "3", "pow", "2", "eq"]), "512");
+}
+
+#[test]
+fn the_power_operator_binds_tighter_than_multiplication() {
+    // 2 × 3² = 18。優先順位 4（S-1 設計書 §3.1）。
+    assert_eq!(main_of(&["2", "mul", "3", "pow", "2", "eq"]), "18");
+    assert_eq!(main_of(&["2", "pow", "3", "mul", "2", "eq"]), "16");
+}
+
+#[test]
+fn the_power_operator_takes_a_negative_base_with_an_integer_exponent() {
+    // (-2)^3 = -8 は実数で一意（S-1 設計書 §4）。
+    assert_eq!(main_of(&["2", "neg", "pow", "3", "eq"]), "-8");
+    // 非整数の指数は複素数になるので落とす。
+    assert_eq!(
+        main_of(&["2", "neg", "pow", "0", "dot", "5", "eq"]),
+        "Math ERROR"
+    );
+}
+
+#[test]
+fn zero_to_the_zero_is_one_on_the_keypad() {
+    assert_eq!(main_of(&["0", "pow", "0", "eq"]), "1");
+}
+
+#[test]
+fn the_echo_shows_the_power_operator() {
+    assert_eq!(echo_of(&["2", "pow"]), "2 ^");
+}
+
+#[test]
+fn del_leaves_a_stack_of_power_operators_alone() {
+    // **右結合が作る形を名指しで押さえる行。** `2 ^ 3 ^` は畳まれないので、
+    // 同順位の演算子が 2 つ積まれたスタックになる——他のどの演算子でも
+    // 到達できない形である。網羅列挙は長さ 6 の焦点列でここへ届くが、
+    // 網は安いほうがよいので代表列を表にも置く（engine_robustness の
+    // FOCUS のコメントを参照）。
+    //
+    // DEL は演算子を消さない（設計書 I7）ので、入力中の 2 を消しても
+    // スタックは 2 段のまま残り、4 が右辺に入って 2^(3^4) になる。
+    // 2^(3^4) = 2^81。左結合なら (2^3)^4 = 4096 になる。
+    assert_eq!(
+        main_of(&["2", "pow", "3", "pow", "2", "del", "4", "eq"]),
+        "2.417851639e24"
+    );
+}
+
+#[test]
+fn the_real_functions_apply_immediately_like_the_others() {
+    // 単項は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["2", "ln"]), "0.6931471806");
+    assert_eq!(main_of(&["1", "0", "0", "log10"]), "2");
+    assert_eq!(main_of(&["1", "exp_e"]), "2.718281828");
+    assert_eq!(main_of(&["4", "recip"]), "0.25");
+}
+
+#[test]
+fn the_inverse_trig_functions_follow_the_angle_mode() {
+    assert_eq!(main_of(&["0", "dot", "5", "asin"]), "30");
+    assert_eq!(main_of(&["0", "dot", "5", "acos"]), "60");
+    assert_eq!(main_of(&["1", "atan"]), "45");
+    // Rad に切り替えると同じ入力がラジアンで返る。
+    assert_eq!(main_of(&["angle_toggle", "1", "atan"]), "0.7853981634");
+}
+
+#[test]
+fn the_domain_boundaries_show_an_error() {
+    use calcarc_core::CalcError;
+    assert_eq!(main_of(&["0", "ln"]), "Math ERROR");
+    assert_eq!(main_of(&["1", "neg", "log10"]), "Math ERROR");
+    assert_eq!(main_of(&["2", "asin"]), "Math ERROR");
+    // 1/0 は DivisionByZero。表示は同じでも種類が違う（S-1 設計書 §3.0）。
+    assert_eq!(run(&["0", "recip"]).error, Some(CalcError::DivisionByZero));
+    assert_eq!(run(&["0", "ln"]).error, Some(CalcError::DomainError));
+}
+
+#[test]
+fn e_is_a_value_not_an_entry() {
+    // π と同じ扱い（S-1 設計書 §3）。
+    assert_eq!(main_of(&["e"]), "2.718281828");
+    assert_eq!(main_of(&["e", "ln"]), "1");
+}
+
+#[test]
+fn factorial_applies_immediately_like_the_other_unary_keys() {
+    // 単項は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["5", "n_fact"]), "120");
+    assert_eq!(main_of(&["0", "n_fact"]), "1");
+    assert_eq!(main_of(&["1", "0", "n_fact"]), "3,628,800");
+    // 20! は 2^53 を超えるが、表示の 10 桁は正しい（S-3 設計書 §4）。
+    assert_eq!(main_of(&["2", "0", "n_fact"]), "2.432902008e18");
+}
+
+#[test]
+fn factorial_leaves_the_integers_with_an_error() {
+    // ガンマ関数には広げない（S-3 設計書 §3 の裁定 3）。
+    assert_eq!(main_of(&["2", "dot", "5", "n_fact"]), "Math ERROR");
+    assert_eq!(main_of(&["1", "neg", "n_fact"]), "Math ERROR");
+}
+
+#[test]
+fn permutations_and_combinations_are_binary_operators() {
+    assert_eq!(main_of(&["5", "n_p_r", "2", "eq"]), "20");
+    assert_eq!(main_of(&["5", "n_c_r", "2", "eq"]), "10");
+    // 境界は全部 1（S-3 設計書 §3）。
+    assert_eq!(main_of(&["5", "n_c_r", "0", "eq"]), "1");
+    assert_eq!(main_of(&["5", "n_c_r", "5", "eq"]), "1");
+    // r > n は定義域の外。
+    assert_eq!(main_of(&["5", "n_c_r", "6", "eq"]), "Math ERROR");
+}
+
+#[test]
+fn combinations_bind_tighter_than_multiplication() {
+    // 5 × (4 nCr 2) = 5 × 6 = 30（S-3 設計書 §2 の裁定 1）。
+    // 左から順なら (5 × 4) nCr 2 = 20 nCr 2 = 190 になる。
+    assert_eq!(main_of(&["5", "mul", "4", "n_c_r", "2", "eq"]), "30");
+}
+
+#[test]
+fn combinations_fold_from_the_left() {
+    // (5 nCr 3) nCr 2 = 10 nCr 2 = 45（S-3 設計書 §2）。
+    // **右結合なのは xʸ だけである**（S-1）。右結合なら
+    // 5 nCr (3 nCr 2) = 5 nCr 3 = 10 になる。
+    assert_eq!(main_of(&["5", "n_c_r", "3", "n_c_r", "2", "eq"]), "45");
+}
+
+#[test]
+fn combinations_sit_below_the_power_operator() {
+    // 優先順位は + −(1) < × ÷(2) < nPr nCr(3) < xʸ(4)。
+    // 4 nCr (2 xʸ 2) = 4 nCr 4 = 1。逆なら (4 nCr 2) xʸ 2 = 6² = 36。
+    assert_eq!(main_of(&["4", "n_c_r", "2", "pow", "2", "eq"]), "1");
+}
+
+#[test]
+fn the_echo_shows_the_counting_operators() {
+    assert_eq!(echo_of(&["5", "n_p_r"]), "5 P");
+    assert_eq!(echo_of(&["5", "n_c_r"]), "5 C");
+}
+
+#[test]
+fn a_three_tier_stack_folds_from_the_inside_out() {
+    // **網羅列挙が届かない形をここで押さえる。** 長さ 6 では二項演算子が
+    // 2 個までしか積めないので、3 段（× < nCr < xʸ）が同時に立った形は
+    // engine_robustness の網には現れない（あちらの FOCUS のコメント参照）。
+    //
+    // 2 × 3 nCr 2 xʸ 2 = 2 × (3 nCr (2²)) = 2 × (3 nCr 4) → r > n でエラー。
+    // 段がどれか 1 つでも入れ替わると別の答えになる。
+    assert_eq!(
+        main_of(&["2", "mul", "3", "n_c_r", "2", "pow", "2", "eq"]),
+        "Math ERROR"
+    );
+    // 3 段が全部生きて答えが出る形。2 × (5 nCr (2²)) = 2 × 5 = 10。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "eq"]),
+        "10"
+    );
+    // DEL は演算子を消さないので、3 段積んだまま右辺だけ差し替わる。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "del", "1", "eq"]),
+        "20"
+    );
+}
+
+#[test]
+fn combinations_do_not_overflow_on_the_way_to_an_answer_that_fits() {
+    // S-3 設計書 §4（訂正版）。素直な n!/(r!(n−r)!) はここで落ちる。
+    assert_eq!(
+        main_of(&["2", "0", "0", "n_c_r", "1", "0", "0", "eq"]),
+        "9.054851466e58"
+    );
+}
+
+#[test]
+fn the_dms_key_separates_stages_while_typing() {
+    // 1 °'" 30 °'" 0 → 1.5(S-4 設計書 §3)。入力中は打った通りに見せる。
+    assert_eq!(main_of(&["1", "dms", "3", "0"]), "1°30");
+    assert_eq!(main_of(&["1", "dms", "3", "0", "dms", "0", "eq"]), "1.5");
+    // 秒は省ける。
+    assert_eq!(main_of(&["1", "dms", "3", "0", "dms", "eq"]), "1.5");
+}
+
+#[test]
+fn the_dms_key_shows_a_committed_value_in_sexagesimal() {
+    // = のあとに押すと現在値を 60 進で見せる(設計書 §3)。
+    assert_eq!(main_of(&["3", "dot", "7", "5", "eq", "dms"]), "3°45'0\"");
+    // もう一度押すと戻る(裁定 4 のトグル)。
+    assert_eq!(main_of(&["3", "dot", "7", "5", "eq", "dms", "dms"]), "3.75");
+}
+
+#[test]
+fn the_sexagesimal_view_is_released_by_any_other_key() {
+    // **例外を作らない**(設計書 §3.1)。表示トグルでも解除する。
+    for release in ["angle_toggle", "polar_toggle", "eng", "del", "ac"] {
+        let keys = vec!["3", "dot", "7", "5", "eq", "dms", release];
+        assert_ne!(
+            main_of(&keys),
+            "3°45'0\"",
+            "{release} should have released the sexagesimal view"
+        );
+    }
+}
+
+#[test]
+fn the_four_operations_answer_in_sexagesimal_without_new_arithmetic() {
+    // **この spec の要点**(設計書 §1): 1:30 + 2:45 = 4:15 は
+    // 1.5 + 2.75 = 4.25 であり、既存の加算がそのまま答える。
+    assert_eq!(
+        main_of(&[
+            "1", "dms", "3", "0", "dms", "add", "2", "dms", "4", "5", "dms", "eq", "dms"
+        ]),
+        "4°15'0\""
+    );
+}
+
+#[test]
+fn the_dms_key_does_nothing_to_a_value_it_cannot_show() {
+    // 裁定 6: 表示を変えないだけで、エラーにはしない。
+    let shown = run(&["1", "exp", "2", "0", "eq", "dms"]);
+    assert_eq!(shown.main, "1e20");
+    assert!(shown.error.is_none());
+}
+
+#[test]
+fn the_two_entry_modes_ignore_each_other() {
+    // **両方向とも無視**(S-4 の実装計画で明文化)。打ち間違いで入力が
+    // 壊れないようにする——push_dot の前例と同じ。
+    // 指数入力中の `°'"` は効かない。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "dms"]), "1.5e3");
+    // 60 進入力中の `Exp` は効かない。
+    assert_eq!(main_of(&["1", "dms", "3", "0", "exp"]), "1°30");
+}
+
+#[test]
+fn sexagesimal_wins_over_engineering_notation() {
+    // どちらも表示層で、設計書 §9 は「排他にする」としか書いていない。
+    // **60 進を勝たせる**——押した直後だからである。
+    assert_eq!(
+        main_of(&["3", "dot", "7", "5", "eq", "eng", "dms"]),
+        "3°45'0\""
+    );
 }
 
 #[test]
@@ -352,9 +619,10 @@ fn functions_apply_immediately_to_the_displayed_value() {
 }
 
 #[test]
-fn square_root_of_a_negative_gives_an_imaginary_result() {
-    // 従来機が Math ERROR を返す入力に、複素数対応の電卓は答えられる。
-    assert_eq!(main_of(&["4", "neg", "sqrt"]), "j2");
+fn square_root_of_a_negative_is_a_domain_error() {
+    // 関数は実数に閉じる（設計書 §1 の裁定 1）。複素数は入力と四則と
+    // 表示の機能であって、関数の値域ではない。
+    assert_eq!(main_of(&["4", "neg", "sqrt"]), "Math ERROR");
 }
 
 #[test]
@@ -475,6 +743,10 @@ fn every_error_kind_reaches_the_display() {
         Some(CalcError::DivisionByZero)
     );
     assert_eq!(run(&["9", "0", "tan"]).error, Some(CalcError::TrigPole));
+    assert_eq!(
+        run(&["4", "neg", "sqrt"]).error,
+        Some(CalcError::DomainError)
+    );
     assert_eq!(run(&["rparen"]).error, Some(CalcError::SyntaxError));
     let mut keys = vec!["9"];
     keys.extend(std::iter::repeat_n("sqr", 10));
@@ -660,4 +932,40 @@ fn del_does_not_remove_an_operator() {
 
     // 括弧の内側で演算子が保留中なら、その括弧も消さない。
     assert_eq!(run(&["lparen", "3", "add", "del"]).pending_depth, 1);
+}
+
+#[test]
+fn eng_turns_the_answer_into_engineering_notation() {
+    // 1000 を作って ENG を押す。もう一度押すと戻る(設計書 §1 の裁定 1)。
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq"]), "1,000");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng"]), "1e3");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng", "eng"]), "1,000");
+}
+
+#[test]
+fn eng_stays_on_for_the_next_answer() {
+    // **モードとして残る**——一度押したら以後の計算結果も ENG で出る。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5", "eq"]), "12.345e3");
+}
+
+#[test]
+fn eng_does_not_touch_what_you_are_typing() {
+    // 入力中は buffer.text() の経路で、format_real を通らない(設計書 §3.2)。
+    // ENG に入れても打っている数字はそのまま見える。
+    //
+    // **数字を打ってから eng を押すこと。** 逆順だと commit_entry を足す変異が
+    // 空バッファへの no-op になり、この検査は緑のまま何も主張しない。
+    assert_eq!(main_of(&["1", "2", "3", "4", "5", "eng"]), "12345");
+    // ENG を先に入れてから打っても同じ(モードは入力中の表示に効かない)。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5"]), "12345");
+}
+
+#[test]
+fn eng_reaches_the_pending_expression_too() {
+    // 保留中の式(echo)と答(main)が同じ画面に出るので、表記が食い違うと読めない。
+    // 設計書 §6 は main しか論じていなかった。
+    // 1000 を確定して ENG に入れ、演算子を押して保留を作る。
+    let shown = run(&["1", "0", "0", "0", "eq", "eng", "add"]);
+    assert_eq!(shown.main, "1e3");
+    assert_eq!(shown.echo, "1e3 +");
 }

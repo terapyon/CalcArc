@@ -74,3 +74,53 @@ def test_growth_can_overflow_u64():
     with pytest.raises(compound_ref.CompoundError) as error:
         compound_ref.grow(compound_ref.U64_MAX, 0, num, den, 12)
     assert error.value.code == "Overflow"
+
+
+def test_reached_is_the_net_when_taxed() -> None:
+    # 目標と比べる値は、税 ON なら手取り、OFF なら残高(設計書 §2)。
+    num, den = compound_ref.rate_fraction("1.5", 12)
+    assert compound_ref.reached(999, 0, num, den, 19, taxed=False) == 1018
+    assert compound_ref.reached(999, 0, num, den, 19, taxed=True) == 1016
+
+
+def test_the_periods_answer_is_the_first_that_reaches() -> None:
+    # 非単調の実例(設計書 §3)。19 で届き、20 で下回り、21 で戻る。
+    num, den = compound_ref.rate_fraction("1.5", 12)
+    assert compound_ref.periods_for(999, 0, num, den, 1016, taxed=True) == 19
+    assert compound_ref.reached(999, 0, num, den, 20, taxed=True) == 1015
+    assert compound_ref.reached(999, 0, num, den, 21, taxed=True) == 1016
+
+
+def test_the_deposit_answer_does_not_fall_short() -> None:
+    num, den = compound_ref.rate_fraction("3", 12)
+    d = compound_ref.deposit_for(0, num, den, 240, 10_000_000, taxed=False)
+    assert d == 30_461
+    assert compound_ref.grow(0, d, num, den, 240) == 10_000_251
+    assert compound_ref.grow(0, d - 1, num, den, 240) == 9_999_906
+
+
+def test_the_certificate_rejects_an_answer_one_period_too_late() -> None:
+    # 21 は「最初に届いた期」ではない。20 期が下回るので、n−1 の 1 点しか
+    # 見なければ通ってしまう——全数走査が要る理由(設計書 §9 の #2)。
+    num, den = compound_ref.rate_fraction("1.5", 12)
+    with pytest.raises(AssertionError):
+        compound_ref.check_periods_certificate(21, 999, 0, num, den, 1016, taxed=True)
+    compound_ref.check_periods_certificate(19, 999, 0, num, den, 1016, taxed=True)
+
+
+def test_a_zero_principal_reaches_a_tiny_target_with_one_yen() -> None:
+    # **探索の途中で「元本 0・積立 0」を踏む入力**。grow はそこで SyntaxError を
+    # 上げるが、それは「積立 0 では届かない」の意味であって入力の誤りではない。
+    num, den = compound_ref.rate_fraction("3", 12)
+    assert compound_ref.deposit_for(0, num, den, 1, 1, taxed=False) == 1
+    assert compound_ref.deposit_for(0, num, den, 2, 1, taxed=False) == 1
+
+
+def test_the_certificate_does_not_fall_into_the_zero_principal_hole() -> None:
+    # d == 1 かつ元本 0 のとき、両隣を見る証明書は d - 1 == 0 で
+    # reached(0, 0, ...) = grow(0, 0, ...) を直接呼んでいた。元本も積立も
+    # 無い入力は SyntaxError なので、答があるケースの証明が例外で落ちていた
+    # （修正 1）。_reached_or_nothing を使えば「積立 0 では届かない」に倒れて
+    # 例外を出さずに通る。
+    num, den = compound_ref.rate_fraction("3", 12)
+    compound_ref.check_deposit_certificate(1, 0, num, den, 1, 1, taxed=False)

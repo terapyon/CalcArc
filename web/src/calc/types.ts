@@ -4,15 +4,19 @@ export type AngleMode = "Deg" | "Rad";
 /** calcarc-core の engine::state::DisplayForm に対応。 */
 export type DisplayForm = "Rect" | "Polar";
 
+/** calcarc-core の engine::state::Notation に対応。 */
+export type Notation = "Normal" | "Eng";
+
 /** calcarc-core の error::CalcError に対応。 */
 export type CalcErrorCode =
   | "DivisionByZero"
   | "Overflow"
   | "TrigPole"
+  | "DomainError"
   | "SyntaxError";
 
 /** calcarc-core の engine::state::BinOp に対応。 */
-export type BinOpName = "Add" | "Sub" | "Mul" | "Div";
+export type BinOpName = "Add" | "Sub" | "Mul" | "Div" | "Pow" | "Npr" | "Ncr";
 
 /**
  * calcarc-core の engine::key::Key に対応するトークン。
@@ -51,6 +55,20 @@ export const KEY_TOKENS = [
   "ac",
   "del",
   "angle_toggle",
+  "eng",
+  "pow",
+  "ln",
+  "log10",
+  "exp_e",
+  "recip",
+  "asin",
+  "acos",
+  "atan",
+  "e",
+  "n_fact",
+  "n_p_r",
+  "n_c_r",
+  "dms",
 ] as const;
 
 export type KeyToken = (typeof KEY_TOKENS)[number];
@@ -62,6 +80,7 @@ export interface DisplayState {
   main: string;
   angle: AngleMode;
   form: DisplayForm;
+  notation: Notation;
   pendingOp: BinOpName | null;
   pendingDepth: number;
   error: CalcErrorCode | null;

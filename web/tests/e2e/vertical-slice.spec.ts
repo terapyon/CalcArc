@@ -66,9 +66,15 @@ test("functions apply to the displayed value immediately", async ({ page }) => {
   await expect(main(page)).toHaveText("0.5");
 });
 
-test("the square root of a negative number is imaginary", async ({ page }) => {
+test("the square root of a negative number is a domain error", async ({
+  page,
+}) => {
+  // **かつては j2 だった。** 関数を実数に閉じる裁定で落とした
+  // (S-1 設計書 §1 の裁定 1)。複素数は入力と四則と表示の機能であって、
+  // 関数の値域ではない——下の複素数の行はそのまま生きている。
   await press(page, ["4", "符号を反転", "平方根"]);
-  await expect(main(page)).toHaveText("j2");
+  await expect(main(page)).toHaveText("Math ERROR");
+  await expect(main(page)).toHaveAttribute("data-error", "DomainError");
 });
 
 test("an error is shown and cleared with AC", async ({ page }) => {
@@ -92,11 +98,11 @@ test("the angle mode is shown and switchable", async ({ page }) => {
 
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
-  // キーパッドは 2 区画に分かれている(関数列 7 + メイングリッド 25)。
+  // キーパッドは 3 区画に分かれている(関数列 7 + 第 2 関数列 7 + メイングリッド 25)。
   const buttons = page
-    .getByRole("group", { name: /関数キー|数字と演算のキー/ })
+    .getByRole("group", { name: /関数キー|第 2 関数列|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(32);
+  await expect(buttons).toHaveCount(39);
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);
@@ -116,6 +122,9 @@ test("the status indicators are exposed as named status regions", async ({
   await expect(page.getByRole("status", { name: "角度の単位" })).toHaveText(
     "DEG",
   );
+  // ENG インジケータも同じ status 行にいる(eng-notation.spec.ts の専用
+  // 検査とは別に、ここが status 行を列挙する場所であることを確かめる)。
+  await expect(page.getByRole("status", { name: "数の表記" })).toBeEmpty();
 });
 
 test("high contrast keeps the destructive key distinguishable", async ({

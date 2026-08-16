@@ -210,12 +210,14 @@ fn loan_errors_are_returned_not_thrown() {
 #[wasm_bindgen_test]
 fn the_new_entry_keys_cross_the_boundary() {
     // 1.5 Exp 3 = 1500。指数は境界を越えても指数のまま届く。
+    // 3 桁カンマは既定の表示である(numerical-policy)。1500 は "1,500" と出る。
     let step = press(
         calcarc_wasm::initial_state(),
         &["1", "dot", "5", "exp", "3", "eq"],
     );
-    assert_eq!(main_text(&step), "1500");
-    // 000 は 1 打鍵で 3 文字。
+    assert_eq!(main_text(&step), "1,500");
+    // 000 は 1 打鍵で 3 文字。eq 前なので入力エコーのまま
+    // (buffer.text() は format_real を通らない。カンマは付かない)。
     let step = press(calcarc_wasm::initial_state(), &["1", "zeros3"]);
     assert_eq!(main_text(&step), "1000");
     // 後置 j とエコー行も境界を越える。
@@ -292,6 +294,55 @@ fn compound_errors_are_returned_not_thrown() {
         get(&bad_period, "error").as_string().as_deref(),
         Some("SyntaxError")
     );
+}
+
+#[wasm_bindgen_test]
+fn compound_deposit_for_crosses_the_boundary() {
+    // 必須ケース #1(設計書 §7・golden と同じ)。目標を下回らない最小の積立額。
+    let result = calcarc_wasm::compound_deposit_for("0", "10000000", "3", 12, 240, false);
+    assert_eq!(
+        get(&result, "deposit").as_string().as_deref(),
+        Some("30461")
+    );
+    assert_eq!(
+        get(&result, "finalBalance").as_string().as_deref(),
+        Some("10000251")
+    );
+    assert!(get(&result, "nationalTax").is_null());
+    assert!(get(&result, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_periods_for_crosses_the_boundary() {
+    // 必須ケース #4(設計書 §7)。税 ON なので target は手取りと比べる。
+    let result = calcarc_wasm::compound_periods_for("999", "0", "1016", "1.5", 12, true);
+    assert_eq!(get(&result, "periods").as_string().as_deref(), Some("19"));
+    assert_eq!(get(&result, "net").as_string().as_deref(), Some("1016"));
+    assert!(get(&result, "error").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_inverse_errors_are_returned_not_thrown() {
+    // 目標 0 は SyntaxError。境界は例外を投げず、戻り値の error に出す。
+    let result = calcarc_wasm::compound_deposit_for("0", "0", "3", 12, 240, false);
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&result, "deposit").is_null());
+}
+
+#[wasm_bindgen_test]
+fn compound_periods_inverse_errors_are_returned_not_thrown() {
+    // 対称ケース: compound_periods_for も目標 0 で同じ形の SyntaxError になる
+    // ことを、例外を投げないまま確かめる(compound_deposit_for 側にしか
+    // 無かった検査を揃える)。
+    let result = calcarc_wasm::compound_periods_for("1000000", "0", "0", "3", 12, false);
+    assert_eq!(
+        get(&result, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&result, "periods").is_null());
 }
 
 #[wasm_bindgen_test]

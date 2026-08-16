@@ -8,7 +8,7 @@ use calcarc_core::data_scale::{self, DataType};
 use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
-use calcarc_core::finance::{compound, tax};
+use calcarc_core::finance::{compound, compound_inverse, tax};
 use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -357,6 +357,42 @@ struct CompoundResult {
     error: Option<CalcError>,
 }
 
+/// 逆算の結果。**答(`deposit` か `periods`)と、その答における全体像**。
+///
+/// `CompoundResult` と分けてあるのは、`compound_grow` の出力に常に `null` の
+/// `deposit` / `periods` が混ざるのを避けるためである。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CompoundInverseResult {
+    /// 必要積立額。`compound_periods_for` では入力そのまま。
+    deposit: Option<String>,
+    /// 必要期数。`compound_deposit_for` では入力そのまま。
+    periods: Option<String>,
+    final_balance: Option<String>,
+    principal_total: Option<String>,
+    interest: Option<String>,
+    national_tax: Option<String>,
+    local_tax: Option<String>,
+    net: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// `Solution` を境界の形に詰める。**税 OFF のとき税の 3 項目は `None`**
+/// ——`compound_grow` が同じ扱いなので、TS 側の読み方を揃える。
+fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverseResult {
+    CompoundInverseResult {
+        deposit: Some(s.deposit.to_string()),
+        periods: Some(s.periods.to_string()),
+        final_balance: Some(s.growth.final_balance.to_string()),
+        principal_total: Some(s.growth.principal_total.to_string()),
+        interest: Some(s.growth.interest.to_string()),
+        national_tax: taxed.then(|| s.national_tax.to_string()),
+        local_tax: taxed.then(|| s.local_tax.to_string()),
+        net: taxed.then(|| s.net.to_string()),
+        error: None,
+    }
+}
+
 /// 複利で増やす。一括は `deposit` を "0"、積立は `principal` を "0" にする。
 ///
 /// `periods_per_year` は 1・2・12 のみ(年・半年・月)。それ以外は
@@ -404,6 +440,71 @@ pub fn compound_grow(
             }
         }
         Err(e) => CompoundResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 目標額から必要な積立額を求める。**目標を下回らない最小**(設計書 §1 の裁定 4)。
+///
+/// 税 ON のとき `target` は**手取り**と比べられる(設計書 §2)。
+#[wasm_bindgen]
+pub fn compound_deposit_for(
+    principal: &str,
+    target: &str,
+    rate: &str,
+    periods_per_year: u32,
+    periods: u32,
+    tax: bool,
+) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        let rate = Rate::from_annual_percent(rate, periods_per_year)?;
+        compound_inverse::deposit_for(
+            parse_yen(principal)?,
+            &rate,
+            periods,
+            parse_yen(target)?,
+            tax,
+        )
+    })();
+    let result = match outcome {
+        Ok(s) => inverse_result(s, tax),
+        Err(e) => CompoundInverseResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 目標額から必要な期数を求める。**最初に届いた期**を返す。
+///
+/// **その次の期が目標を下回ることがある**——手取りは期数について単調でない
+/// (numerical-policy)。仕様であって不具合ではない。
+#[wasm_bindgen]
+pub fn compound_periods_for(
+    principal: &str,
+    deposit: &str,
+    target: &str,
+    rate: &str,
+    periods_per_year: u32,
+    tax: bool,
+) -> JsValue {
+    let outcome: CalcResult<_> = (|| {
+        let rate = Rate::from_annual_percent(rate, periods_per_year)?;
+        compound_inverse::periods_for(
+            parse_yen(principal)?,
+            parse_yen(deposit)?,
+            &rate,
+            parse_yen(target)?,
+            tax,
+        )
+    })();
+    let result = match outcome {
+        Ok(s) => inverse_result(s, tax),
+        Err(e) => CompoundInverseResult {
             error: Some(e),
             ..Default::default()
         },

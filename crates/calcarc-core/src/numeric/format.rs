@@ -37,7 +37,7 @@ pub fn format_real(x: f64) -> String {
     // 小数点以下の桁数 = 有効数字 10 桁 - 整数部の桁数。
     // 指数が -1 なら 0.ddd… なので 10 桁ぶん小数が要る。
     let decimals = (DISPLAY_DIGITS as i32 - 1 - exponent).max(0) as usize;
-    trim_zeros(&format!("{:.*}", decimals, x))
+    group_integer_part(&trim_zeros(&format!("{:.*}", decimals, x)))
 }
 
 fn trim_zeros(s: &str) -> String {
@@ -45,6 +45,124 @@ fn trim_zeros(s: &str) -> String {
         return s.to_string();
     }
     s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// 整数部だけを 3 桁ごとに区切る。**小数部と指数部には入れない**(設計書 §3.3)。
+///
+/// `data_scale::format::group_digits` と見た目は同じだが共通化しない——あちらは
+/// `u128` の整数で定義域も用途も違い、**同じ見た目のものを 1 つにまとめると
+/// 片方の都合がもう片方に効く**。5 行の処理であり、共有する価値より結合の害が大きい。
+fn group_integer_part(text: &str) -> String {
+    let (sign, rest) = match text.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", text),
+    };
+    let (int_part, frac) = match rest.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (rest, None),
+    };
+    let mut grouped = String::with_capacity(int_part.len() + int_part.len() / 3);
+    for (i, c) in int_part.chars().enumerate() {
+        if i != 0 && (int_part.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    match frac {
+        Some(f) => format!("{sign}{grouped}.{f}"),
+        None => format!("{sign}{grouped}"),
+    }
+}
+
+/// 工学表記。**指数は常に 3 の倍数**で、仮数は 1 以上 1000 未満(設計書 §3)。
+///
+/// `log10` を使わないのは `format_real` と同じ理由である——10 の冪の近くで
+/// 1 桁ずれ、丸めの繰り上がりを先読みできない。**丸めた後の値から指数を決める。**
+pub fn format_real_eng(x: f64) -> String {
+    if x == 0.0 {
+        return "0".to_string();
+    }
+    let scientific = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
+    let (mantissa, exponent_text) = match scientific.split_once('e') {
+        Some(parts) => parts,
+        None => return scientific,
+    };
+    let exponent: i32 = exponent_text.parse().unwrap_or(0);
+    // 3 の倍数へ**下向きに**丸める。-1 → -3、1 → 0、-4 → -6。
+    // `/` ではなく `div_euclid` を使う——`/` は 0 方向に切り捨てるので
+    // 負の指数で向きを間違える(`-1 / 3` は Rust で `0`、
+    // `(-1).div_euclid(3)` は `-1`)。「簡単にできる」と `/` に戻すと
+    // 負の指数側だけ静かに壊れる。
+    let eng_exponent = exponent.div_euclid(3) * 3;
+    let shift = exponent - eng_exponent; // 0, 1, 2 のいずれか
+    // 仮数を 10^shift 倍する。小数点を動かすだけなので精度は落ちない。
+    let value: f64 = mantissa.parse().unwrap_or(0.0) * 10f64.powi(shift);
+    // 有効数字 10 桁から、整数部が使うぶんを引いた残りを小数に回す。
+    let int_digits = shift + 1;
+    let decimals = (DISPLAY_DIGITS as i32 - int_digits).max(0) as usize;
+    let body = trim_zeros(&format!("{:.*}", decimals, value));
+    if eng_exponent == 0 {
+        // 指数 0 は書かない(設計書 §3.1)。通常の 10 進と同じ扱いにする。
+        return group_integer_part(&body);
+    }
+    format!("{body}e{eng_exponent}")
+}
+
+/// 60 進で表示する。`3.75` → `3°45'0"`（S-4 設計書 §3）。
+///
+/// **値は 10 進のままである。** 60 進は表示の形式にすぎず、時間とも角度とも
+/// 読める——どちらの意味かは利用者の頭の中にしかない（設計書 §1）。
+/// だからこの spec は四則演算を 1 つも足していない。
+///
+/// `None` は「60 進にできない」。**呼び出し側は表示を変えない**（裁定 6）
+/// ——表示の操作でエラー状態に落とすのは重い。
+///
+/// 秒の小数桁は `DISPLAY_DIGITS` の残りを回す（裁定 7）。度が `nd` 桁、
+/// 分が 2 桁、秒の整数部が 2 桁を使うので、残りは `10 − nd − 4` 桁。
+/// 秒に小数を許さないと `0.001` 時間（`0°0'3.6"`）が表せない。
+pub fn format_sexagesimal(x: f64) -> Option<String> {
+    if !x.is_finite() {
+        return None;
+    }
+    let sign = if x < 0.0 { "-" } else { "" };
+    let a = x.abs();
+    let mut degrees = a.trunc();
+    // 度が有効数字を使い切ると、分と秒を置く場所が無い。
+    let int_digits = if degrees < 1.0 {
+        1
+    } else {
+        degrees.log10().floor() as i32 + 1
+    };
+    if int_digits + 4 > DISPLAY_DIGITS as i32 {
+        return None;
+    }
+    let rest = (a - degrees) * 60.0;
+    let mut minutes = rest.trunc();
+    let seconds = (rest - minutes) * 60.0;
+    let decimals = (DISPLAY_DIGITS as i32 - int_digits - 4).max(0) as usize;
+
+    // **先に丸めてから繰り上がりを見る。** `59.9999996` が `60` になるのは
+    // 丸めた後で、丸める前の値からは先読みできない——`format_real` が
+    // `9999999999.6 → 1e10` で踏んだのと同じ形であり、手も同じである。
+    //
+    // `unwrap_or` なのは、このクレートが panic しないと約束しているため。
+    // `format!` が作った文字列は必ず解析できるが、万一できなければ 0 と
+    // みなして繰り上げない——安全側に倒れる。
+    let mut text = format!("{:.*}", decimals, seconds);
+    if text.parse::<f64>().unwrap_or(0.0) >= 60.0 {
+        text = format!("{:.*}", decimals, 0.0);
+        minutes += 1.0;
+        if minutes >= 60.0 {
+            minutes = 0.0;
+            degrees += 1.0;
+        }
+    }
+    Some(format!(
+        "{sign}{}°{}'{}\"",
+        degrees,
+        minutes,
+        trim_zeros(&text)
+    ))
 }
 
 /// 直交形式で表示する。`3+j4` のように j を数の前に置く。
@@ -136,7 +254,7 @@ mod tests {
         // 丸めると 1e10 に繰り上がる。表記の判断は丸めた後の値で行うので、
         // 11 桁の "10000000000" ではなく "1e10" になる。
         assert_eq!(format_real(9999999999.6), "1e10");
-        assert_eq!(format_real(9999999999.4), "9999999999");
+        assert_eq!(format_real(9999999999.4), "9,999,999,999");
     }
 
     #[test]
@@ -152,6 +270,45 @@ mod tests {
 
         assert_eq!(format_real(0.99999999996), "1");
         assert_eq!(format_real(0.99999999994), "0.9999999999");
+    }
+
+    #[test]
+    fn formats_sexagesimal() {
+        // 設計書 §1: 1.5 は 1 時間 30 分とも 1 度 30 分とも読める。
+        assert_eq!(format_sexagesimal(1.5).as_deref(), Some("1°30'0\""));
+        assert_eq!(format_sexagesimal(-3.75).as_deref(), Some("-3°45'0\""));
+        assert_eq!(format_sexagesimal(0.0).as_deref(), Some("0°0'0\""));
+        // 24 を超えてもそのまま出す(裁定 5)。経過時間なので割らない。
+        assert_eq!(format_sexagesimal(30.5).as_deref(), Some("30°30'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_seconds_may_have_decimals() {
+        // 秒に小数を許さないと 0.001 時間が表せない(設計書 §3)。
+        assert_eq!(format_sexagesimal(0.001).as_deref(), Some("0°0'3.6\""));
+        assert_eq!(format_sexagesimal(0.1).as_deref(), Some("0°6'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_carries_when_the_seconds_round_up() {
+        // **59.999... が 60 に丸まったら繰り上げる**(設計書 §3 の丸め)。
+        // format_real が 9999999999.6 → 1e10 で踏んだのと同じ形で、
+        // 手も同じ(先に丸めてから桁を決める)。
+        //
+        // 0.999999999 は秒が 59.9999996 で、5 桁に丸めると 60.00000。
+        // 分へ繰り上がって 60 分になり、さらに度へ繰り上がる——**二段**。
+        assert_eq!(format_sexagesimal(0.999999999).as_deref(), Some("1°0'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_declines_what_it_cannot_show() {
+        // 裁定 6: 何もしない。呼び出し側が表示を変えない。
+        assert_eq!(format_sexagesimal(f64::INFINITY), None);
+        assert_eq!(format_sexagesimal(f64::NAN), None);
+        // 度が 10 桁を使い切ると分と秒の場所が無い。
+        assert_eq!(format_sexagesimal(1e10), None);
+        // その手前は出せる。
+        assert!(format_sexagesimal(999999.5).is_some());
     }
 
     #[test]
@@ -189,5 +346,42 @@ mod tests {
             try_format_polar(Value::new(f64::MAX, f64::MAX), AngleMode::Deg),
             None
         );
+    }
+
+    #[test]
+    fn thousands_separators_group_only_the_integer_part() {
+        assert_eq!(format_real(1234567.0), "1,234,567");
+        assert_eq!(format_real(1234.5678), "1,234.5678"); // 小数部は刻まない
+        assert_eq!(format_real(-1234567.0), "-1,234,567"); // 符号は先頭
+        assert_eq!(format_real(999.0), "999"); // 4 桁未満は変わらない
+        assert_eq!(format_real(1000.0), "1,000"); // 境界の両側
+        assert_eq!(format_real(1.5e12), "1.5e12"); // 指数表記には入らない
+    }
+
+    #[test]
+    fn engineering_notation_keeps_the_exponent_a_multiple_of_three() {
+        assert_eq!(format_real_eng(1000.0), "1e3");
+        assert_eq!(format_real_eng(12345.0), "12.345e3");
+        assert_eq!(format_real_eng(0.0022), "2.2e-3");
+        assert_eq!(format_real_eng(1500000.0), "1.5e6");
+        assert_eq!(format_real_eng(1.5e11), "150e9"); // 仮数は 1000 未満
+        assert_eq!(format_real_eng(0.0), "0");
+        assert_eq!(format_real_eng(-1500000.0), "-1.5e6");
+    }
+
+    #[test]
+    fn engineering_notation_omits_a_zero_exponent() {
+        // **`999e0` とは書かない**(設計書 §3.1)。指数が 0 なら通常の 10 進。
+        // つまり ENG に入れても見た目が変わらない値がある——それは仕様である。
+        assert_eq!(format_real_eng(999.0), "999");
+        assert_eq!(format_real_eng(1.5), "1.5");
+        assert_eq!(format_real_eng(0.5), "500e-3"); // 1 未満は指数が付く
+    }
+
+    #[test]
+    fn engineering_notation_decides_the_exponent_after_rounding() {
+        // 先に指数を決めて丸めると 999.99999999e0 が 1000e0 になり、
+        // 仮数の範囲(1 以上 1000 未満)を破る(設計書「有効数字」)。
+        assert_eq!(format_real_eng(999.99999999), "1e3");
     }
 }

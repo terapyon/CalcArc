@@ -74,6 +74,114 @@ UNARY_INPUTS: list[tuple[str, float, str]] = [
 # sqrt の入力（実数のみ）
 SQRT_INPUTS: list[float] = [0.0, 1.0, 4.0, 2.0, 0.25, -4.0, -1.0, 1e-8, 1e8]
 
+# S-1 で足した実数の関数（設計書 §3）。**定義域の境界を必須で含める**（§8）。
+# 戻り値が dict なので UNARY_INPUTS とは別のループが読む。
+REAL_FN_INPUTS: list[tuple[str, float, str]] = [
+    # 自然対数: 既知値 / 境界 0 / 定義域の外 / 極大・極小
+    ("ln", 1.0, "Deg"),
+    ("ln", 2.718281828459045, "Deg"),
+    ("ln", 2.0, "Deg"),
+    ("ln", 0.5, "Deg"),
+    ("ln", 0.0, "Deg"),
+    ("ln", -1.0, "Deg"),
+    ("ln", 1e-300, "Deg"),
+    ("ln", 1e300, "Deg"),
+    # 常用対数
+    ("log10", 1.0, "Deg"),
+    ("log10", 100.0, "Deg"),
+    ("log10", 0.001, "Deg"),
+    ("log10", 2.0, "Deg"),
+    ("log10", 0.0, "Deg"),
+    ("log10", -1.0, "Deg"),
+    # e^x: 全実数。溢れる側の境界も置く(709.78 あたりが f64 の限界)
+    ("exp_e", 0.0, "Deg"),
+    ("exp_e", 1.0, "Deg"),
+    ("exp_e", -1.0, "Deg"),
+    ("exp_e", 2.0, "Deg"),
+    ("exp_e", 709.0, "Deg"),
+    ("exp_e", 710.0, "Deg"),
+    ("exp_e", -745.0, "Deg"),
+    # 逆三角: 両モード / 定義域の境界ちょうど / その外側
+    ("asin", 0.0, "Deg"),
+    ("asin", 0.5, "Deg"),
+    ("asin", 1.0, "Deg"),
+    ("asin", -1.0, "Deg"),
+    ("asin", 1.0000001, "Deg"),
+    ("asin", -1.0000001, "Deg"),
+    ("asin", 0.5, "Rad"),
+    ("acos", 0.0, "Deg"),
+    ("acos", 0.5, "Deg"),
+    ("acos", 1.0, "Deg"),
+    ("acos", -1.0, "Deg"),
+    ("acos", 1.0000001, "Deg"),
+    ("acos", 0.5, "Rad"),
+    ("atan", 0.0, "Deg"),
+    ("atan", 1.0, "Deg"),
+    ("atan", -1.0, "Deg"),
+    ("atan", 1e300, "Deg"),
+    ("atan", 1.0, "Rad"),
+    # 逆数（設計書 §3.0）。0 は DivisionByZero、極小は Overflow。
+    ("recip", 4.0, "Deg"),
+    ("recip", -8.0, "Deg"),
+    ("recip", 1.0, "Deg"),
+    ("recip", 3.0, "Deg"),
+    ("recip", 0.0, "Deg"),
+    ("recip", 1e-320, "Deg"),
+    ("recip", 1e300, "Deg"),
+]
+
+# xʸ（設計書 §4 の定義域表と 1:1）。(x, y)
+POW_INPUTS: list[tuple[float, float]] = [
+    (2.0, 10.0),  # x > 0 / 整数
+    (2.0, 0.5),  # x > 0 / 非整数
+    (2.0, -1.0),  # x > 0 / 負
+    (10.0, 3.0),
+    (1.5, 2.5),
+    (0.0, 3.0),  # x = 0, y > 0 → 0
+    (0.0, 0.0),  # x = 0, y = 0 → 1（§4.1）
+    (0.0, -1.0),  # x = 0, y < 0 → DomainError
+    (-2.0, 3.0),  # x < 0 / 整数 → -8
+    (-2.0, 2.0),  # x < 0 / 偶数 → 4
+    (-2.0, 0.0),  # x < 0 / 0 乗 → 1
+    (-2.0, 0.5),  # x < 0 / 非整数 → DomainError
+    (-8.0, 0.3333333333333333),  # x < 0 / 非整数（立方根の見た目）→ DomainError
+    (10.0, 400.0),  # Overflow
+    (10.0, -400.0),  # 極小（Overflow ではない）
+    (1e-8, 2.0),
+]
+
+# 階乗（S-3 設計書 §3・§4）。1 引数。
+FACTORIAL_INPUTS: list[float] = [
+    0.0,  # 0! = 1（境界）
+    1.0,
+    5.0,
+    10.0,
+    20.0,  # 2^53 を超える。f64 は既に厳密でないが表示の 10 桁は正しい
+    170.0,  # f64 に収まる最大
+    171.0,  # Overflow
+    2.5,  # 非整数 → DomainError（ガンマ関数には広げない）
+    -1.0,  # 負 → DomainError
+]
+
+# nPr / nCr（S-3 設計書 §3・§4）。(n, r)
+PAIR_INPUTS: list[tuple[float, float]] = [
+    (5.0, 2.0),  # 既知値: P=20, C=10
+    (5.0, 0.0),  # nP0 = nC0 = 1（境界）
+    (5.0, 5.0),  # nPn = n!, nCn = 1（境界）
+    (5.0, 6.0),  # r > n → DomainError
+    (10.0, 3.0),
+    (170.0, 3.0),
+    (52.0, 5.0),  # トランプの手札。実用域
+    # **途中であふれない書き方の証拠**（設計書 §4 の訂正）。
+    (200.0, 100.0),  # 素直な n!/(r!(n-r)!) はここで落ちる
+    (1000.0, 500.0),  # f64 の上限近く
+    (1020.0, 510.0),  # 帯の外側（3 つの書き方すべてが通る対照）
+    (1022.0, 511.0),  # **掛けてから割る形はここから落ちる**
+    (1028.0, 514.0),  # 帯の上端
+    (5.5, 2.0),  # 非整数 → DomainError
+    (5.0, -1.0),  # 負 → DomainError
+]
+
 # ((a_re, a_im), (b_re, b_im))。各ペアに 4 演算すべてを生成する。
 # 設計基準は spec §2: Smith 法の両分岐、単体テストの極端値、四象限・軸上、
 # 成分比の偏り。結果が inf/nan になるペアは入れない(generate.py が
@@ -478,6 +586,163 @@ COMPOUND_INPUTS: list[dict] = [
         "periods": 1201,
         "tax": False,
     },
+    # ここから逆算（設計書 2026-08-15 §7）。期待値は spec 起草時に実測済み。
+    # 必要積立額: 元本 0・年 3%・月次・240 期・目標 1,000 万 → 30,461（残高 10,000,251）
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 1 円少ないと届かないことを固定する（上のケースの対）。
+    {
+        "op": "compound_grow",
+        "principal": "0",
+        "deposit": "30460",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 必要年数: 元本 100 万・積立 3 万・年 3%・月次・目標 1,000 万 → 211 期
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "30000",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # **非単調ペア (a)**: 目標 1,016（手取り）→ 19 期。
+    # **対は次のケース**。片方だけ消すと numerical-policy の注記が根拠を失う。
+    {
+        "op": "compound_periods_for",
+        "principal": "999",
+        "deposit": "0",
+        "target": "1016",
+        "rate": "1.5",
+        "periods_per_year": 12,
+        "tax": True,
+    },
+    # **非単調ペア (b)**: 同じ入力の 20 期は手取り 1,015 で目標を下回る。
+    # 「届いた直後に下回る期がある」が仕様であることの証拠（設計書 §3 帰結 2）。
+    {
+        "op": "compound_grow",
+        "principal": "999",
+        "deposit": "0",
+        "rate": "1.5",
+        "periods_per_year": 12,
+        "periods": 20,
+        "tax": True,
+    },
+    # 0%: 整数の ceil になる。境界の +1 円も置く。
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "12000000",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "12000001",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # 税あり必要積立額: 目標 1,000 万（手取り）→ 32,221
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": True,
+    },
+    # 目標が元本以下 → 1 期（エラーにしない。設計書 §5）
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "0",
+        "target": "500000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 発散: 積立 0・利率 0 では増えない → SyntaxError
+    {
+        "op": "compound_periods_for",
+        "principal": "1000000",
+        "deposit": "0",
+        "target": "2000000",
+        "rate": "0",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 往復: #1 の残高を目標にすると 240 期に戻る
+    {
+        "op": "compound_periods_for",
+        "principal": "0",
+        "deposit": "30461",
+        "target": "10000251",
+        "rate": "3",
+        "periods_per_year": 12,
+        "tax": False,
+    },
+    # 目標 0 は入力が足りていない → SyntaxError
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "0",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
+    # u64 を超える目標 → Overflow。**2 期であることに意味がある**——0%・1 期なら
+    # 答はちょうど u64::MAX で収まってしまう(残高 = 積立額)。2 期なら 2d ≥ u64::MAX
+    # が要り、最小の d = 2^63 で残高が 2^64 になってあふれる。
+    {
+        "op": "compound_deposit_for",
+        "principal": "0",
+        "target": "18446744073709551615",
+        "rate": "0",
+        "periods_per_year": 12,
+        "periods": 2,
+        "tax": False,
+    },
+    # **答が 0 になるケース**(spec §5)。積立をしなくても元本の成長だけで届く。
+    # Rust は `principal > 0 && probe(0)`、Python は `_reached_or_nothing(...) >= target`
+    # と**書き方が違う短絡経路**なので、言語間で突き合わせる価値がここにある。
+    {
+        "op": "compound_deposit_for",
+        "principal": "1000000",
+        "target": "500000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    # 元本ありで答も非ゼロ。`deposit_for` の principal > 0 の経路(Python の種の
+    # `principal * (1 + r)^n` 項を含む)を golden で初めて覆う。
+    {
+        "op": "compound_deposit_for",
+        "principal": "1000000",
+        "target": "10000000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 240,
+        "tax": False,
+    },
 ]
 
 I128_MAX_TEXT = str((1 << 127) - 1)
@@ -538,4 +803,21 @@ EXPR_INPUTS: list[dict] = [
     {"op": "expr_percent", "text": "1/8"},
     {"op": "expr_percent", "text": "1/3"},
     {"op": "expr_percent", "text": "3*40"},
+]
+
+# 60 進表示（S-4 設計書 §7 の必須ケース）。
+SEXAGESIMAL_INPUTS: list[float] = [
+    1.5,  # 1°30'0"（設計書 §1 の見出し例）
+    0.001,  # 0°0'3.6"（秒に小数が要る証拠）
+    -3.75,  # 符号は先頭に 1 つ
+    0.0,  # 0°0'0"
+    30.5,  # 24 を超えてもそのまま（裁定 5）
+    0.1,
+    0.3333333333333333,  # 1/3
+    0.999999999,  # **秒 → 分 → 度と二段繰り上がる**
+    2.75,
+    999999.5,  # 度が 6 桁。まだ出せる
+    1e10,  # 度が 10 桁 → None（裁定 6）
+    1e308,  # 同上
+    123.456,
 ]
