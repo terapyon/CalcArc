@@ -63,6 +63,20 @@ jobs:
         env:
           CI: "1"
 
+      - name: Type a sample on the real keypad
+        # **計算コアの経路とはブラウザに載るものが違う。** あちらは
+        # `heavy-harness.html` だけを配信するので画面が存在せず、
+        # 「そのキーが盤面のどこにあるか」を一度も通らない。ここは
+        # 本物のアプリを開いて実際にボタンを押す。
+        #
+        # **前の段が落ちても走らせる**——計算が合っているかと、盤面から
+        # 打てるかは別の問いで、片方の赤でもう片方を隠さない。
+        if: always()
+        run: pnpm heavy:ui
+        working-directory: web
+        env:
+          CI: "1"
+
       - name: Put the verdict in the job summary
         # **記録はここに残る。** コミットされたログファイルは作らない
         # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。

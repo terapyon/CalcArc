@@ -20,8 +20,17 @@ import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
  * 「UI 経路だけ通る」という意味の無い緑が生まれる。
  */
 
-/** 何件通すか。クリックが 1 件ごとに要るので、コアの経路とは桁が違う。 */
-const SAMPLE = Number(process.env.HEAVY_UI_SAMPLE ?? "60");
+/**
+ * シャードあたり何件通すか。
+ *
+ * **実測 1 件あたり 0.53 秒**(50 件を 26.6 秒、2026-08-17)。クリックが
+ * 1 件ごとに要るので、コアの経路(1 万件を 5 秒)とは 3 桁違う。
+ * 100 件 × 5 シャードで約 4.4 分——GitHub Actions に収まる。
+ *
+ * **網羅はコアの経路が担う。** ここが確かめるのは「盤面から打てるか」と
+ * 「打った結果が画面に正しく出るか」であって、計算の網羅ではない。
+ */
+const SAMPLE = Number(process.env.HEAVY_UI_SAMPLE ?? "100");
 
 /** ボタンは page から直接引く(既存の科学計算 E2E と同じ作法)。 */
 const panel = (page: Page) => page;
@@ -36,26 +45,32 @@ const main = (page: Page) => page.getByTestId("display-main");
  * 押した結果が合っていれば、面の扱いも正しかったことになる。
  */
 async function pressCase(page: Page, keys: string[]): Promise<void> {
-  await panel(page)
-    .getByRole("button", { name: "オールクリア", exact: true })
-    .click();
+  // **クリアのボタンも対応表から引く。** ここだけ名前を手書きしていて、
+  // 実在しない「オールクリア」を押しに行き、存在しないボタンを待ち続けた
+  // ——実際の名前は「全消去」だった。**手書きは 1 箇所でも腐る。**
+  await pressToken(page, "ac");
   for (const key of keys) {
-    const button = BUTTON_FOR.get(key as KeyToken);
-    if (button === undefined) {
-      throw new Error(
-        `corpus-ui: key token ${JSON.stringify(key)} has no button on the ` +
-          "scientific keypad, so this case cannot be typed by a person",
-      );
-    }
-    if (button.needsShift) {
-      await panel(page)
-        .getByRole("button", { name: SHIFT_ARIA_LABEL, exact: true })
-        .click();
-    }
+    await pressToken(page, key);
+  }
+}
+
+/** キートークンを 1 つ押す。**名前は必ず対応表から引く。** */
+async function pressToken(page: Page, key: string): Promise<void> {
+  const button = BUTTON_FOR.get(key as KeyToken);
+  if (button === undefined) {
+    throw new Error(
+      `corpus-ui: key token ${JSON.stringify(key)} has no button on the ` +
+        "scientific keypad, so this case cannot be typed by a person",
+    );
+  }
+  if (button.needsShift) {
     await panel(page)
-      .getByRole("button", { name: button.ariaLabel, exact: true })
+      .getByRole("button", { name: SHIFT_ARIA_LABEL, exact: true })
       .click();
   }
+  await panel(page)
+    .getByRole("button", { name: button.ariaLabel, exact: true })
+    .click();
 }
 
 /** 等間隔に選ぶ。先頭だけ通すと、生成の後半の形をまったく踏まない。 */
