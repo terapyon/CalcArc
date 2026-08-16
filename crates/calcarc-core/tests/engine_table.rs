@@ -214,8 +214,29 @@ fn respects_operator_precedence() {
 #[test]
 fn reduces_same_precedence_left_to_right() {
     // 2 つ目の + を押した時点で 2+3 が確定して 5 が表示される。
+    //
+    // **1 行目が「途中の表示」として結合方向を捕まえる。** push_binop の
+    // 比較を `>` にすると畳まれず current が 3 のままになり、"3" が出る。
+    // 2 行目は捕まえない——加算は結合的なのでどちらの結合でも 9 である。
+    // 答えの側は same_precedence_operators_fold_from_the_left_in_the_answer
+    // が受け持つ。
     assert_eq!(main_of(&["2", "add", "3", "add"]), "5");
     assert_eq!(main_of(&["2", "add", "3", "add", "4", "eq"]), "9");
+}
+
+#[test]
+fn same_precedence_operators_fold_from_the_left_in_the_answer() {
+    // **この行は `xʸ` の右結合のために足した。** push_binop の畳み込み条件に
+    // 手が入るので、他の演算子が左結合のままであることを先に固定する。
+    //
+    // 上の `reduces_same_precedence_left_to_right` が守っているのは**途中の
+    // 表示**だけである。守られていなかったのは**答え**のほうで、減算と除算
+    // なら左右で違う答えになる（S-1 設計書 §3.1、2026-08-16 に実測して訂正）。
+    assert_eq!(main_of(&["1", "0", "sub", "3", "sub", "2", "eq"]), "5"); // 9 でない
+    assert_eq!(
+        main_of(&["1", "0", "0", "div", "5", "div", "2", "eq"]),
+        "10"
+    ); // 40 でない
 }
 
 #[test]
