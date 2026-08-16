@@ -210,12 +210,14 @@ fn loan_errors_are_returned_not_thrown() {
 #[wasm_bindgen_test]
 fn the_new_entry_keys_cross_the_boundary() {
     // 1.5 Exp 3 = 1500。指数は境界を越えても指数のまま届く。
+    // 3 桁カンマは既定の表示である(numerical-policy)。1500 は "1,500" と出る。
     let step = press(
         calcarc_wasm::initial_state(),
         &["1", "dot", "5", "exp", "3", "eq"],
     );
-    assert_eq!(main_text(&step), "1500");
-    // 000 は 1 打鍵で 3 文字。
+    assert_eq!(main_text(&step), "1,500");
+    // 000 は 1 打鍵で 3 文字。eq 前なので入力エコーのまま
+    // (buffer.text() は format_real を通らない。カンマは付かない)。
     let step = press(calcarc_wasm::initial_state(), &["1", "zeros3"]);
     assert_eq!(main_text(&step), "1000");
     // 後置 j とエコー行も境界を越える。

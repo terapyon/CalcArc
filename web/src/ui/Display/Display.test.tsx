@@ -9,6 +9,7 @@ function state(overrides: Partial<DisplayState> = {}): DisplayState {
     main: "0",
     angle: "Deg",
     form: "Rect",
+    notation: "Normal",
     pendingOp: null,
     pendingDepth: 0,
     error: null,
@@ -54,6 +55,16 @@ describe("Display", () => {
   it("leaves the form indicator empty in rectangular form", () => {
     render(<Display display={state({ form: "Rect" })} />);
     expect(screen.getByTestId("display-form")).toBeEmptyDOMElement();
+  });
+
+  it("marks the engineering notation", () => {
+    render(<Display display={state({ notation: "Eng" })} />);
+    expect(screen.getByTestId("display-notation")).toHaveTextContent("ENG");
+  });
+
+  it("leaves the notation indicator empty in normal notation", () => {
+    render(<Display display={state({ notation: "Normal" })} />);
+    expect(screen.getByTestId("display-notation")).toBeEmptyDOMElement();
   });
 
   it("shows the pending operator and parenthesis depth", () => {

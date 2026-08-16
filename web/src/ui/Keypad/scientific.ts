@@ -63,6 +63,38 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
   ],
 };
 
+/**
+ * 関数列の 2 段目。**横に 8 列へ広げると 44px を割る**ので縦に増やした
+ * (設計書 §7.1: 390px で 8 列は 38.75px)。キー幅は 45.43px のまま。
+ *
+ * ENG 以外は**予約スロット**である。S-1(実数の関数)と S-4(60 進)が埋める。
+ * 格子の形を崩さないために置く——Finance の周期・税の面と同じ形。
+ *
+ * 区画名は 1 段目「関数キー」を**含まない**名前にする。Playwright の
+ * `getByRole` は部分一致なので、「関数キー 2 段目」のような名前だと
+ * `{ name: "関数キー" }` に当たってしまい、1 要素を期待する将来の E2E
+ * locator が strict-mode エラーで詰まる(書いた本人には理由が見えない)。
+ */
+const FUNCTIONS_SECOND: KeypadSection<KeyToken> = {
+  ariaLabel: "第 2 関数列",
+  columns: 7,
+  height: "half",
+  keys: [
+    {
+      token: "eng",
+      label: "ENG",
+      ariaLabel: "工学表記に切り替え",
+      variant: "function",
+    },
+    ...Array.from({ length: 6 }, () => ({
+      token: null,
+      label: "—",
+      ariaLabel: "空き",
+      variant: "function" as const,
+    })),
+  ],
+};
+
 const MAIN_GRID: KeypadSection<KeyToken> = {
   ariaLabel: "数字と演算のキー",
   columns: 5,
@@ -124,5 +156,6 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
 
 export const SCIENTIFIC_SECTIONS: KeypadSection<KeyToken>[] = [
   FUNCTION_ROW,
+  FUNCTIONS_SECOND,
   MAIN_GRID,
 ];

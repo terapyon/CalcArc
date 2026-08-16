@@ -103,10 +103,10 @@ fn j_after_digits_turns_the_entry_imaginary() {
 fn exp_enters_an_exponent() {
     // 設計書 §2。1.5 Exp 3 = 1500。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "3"]), "1.5e3");
-    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1500");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1,500");
     // 仮数なしの Exp は仮数 1。表示にも 1 が出る(空の "e3" にはしない)。
     assert_eq!(main_of(&["exp", "3"]), "1e3");
-    assert_eq!(main_of(&["exp", "3", "eq"]), "1000");
+    assert_eq!(main_of(&["exp", "3", "eq"]), "1,000");
     // 連打は無視。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "exp"]), "1.5e");
     // 指数は整数。小数点は無視する。
@@ -660,4 +660,40 @@ fn del_does_not_remove_an_operator() {
 
     // 括弧の内側で演算子が保留中なら、その括弧も消さない。
     assert_eq!(run(&["lparen", "3", "add", "del"]).pending_depth, 1);
+}
+
+#[test]
+fn eng_turns_the_answer_into_engineering_notation() {
+    // 1000 を作って ENG を押す。もう一度押すと戻る(設計書 §1 の裁定 1)。
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq"]), "1,000");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng"]), "1e3");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng", "eng"]), "1,000");
+}
+
+#[test]
+fn eng_stays_on_for_the_next_answer() {
+    // **モードとして残る**——一度押したら以後の計算結果も ENG で出る。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5", "eq"]), "12.345e3");
+}
+
+#[test]
+fn eng_does_not_touch_what_you_are_typing() {
+    // 入力中は buffer.text() の経路で、format_real を通らない(設計書 §3.2)。
+    // ENG に入れても打っている数字はそのまま見える。
+    //
+    // **数字を打ってから eng を押すこと。** 逆順だと commit_entry を足す変異が
+    // 空バッファへの no-op になり、この検査は緑のまま何も主張しない。
+    assert_eq!(main_of(&["1", "2", "3", "4", "5", "eng"]), "12345");
+    // ENG を先に入れてから打っても同じ(モードは入力中の表示に効かない)。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5"]), "12345");
+}
+
+#[test]
+fn eng_reaches_the_pending_expression_too() {
+    // 保留中の式(echo)と答(main)が同じ画面に出るので、表記が食い違うと読めない。
+    // 設計書 §6 は main しか論じていなかった。
+    // 1000 を確定して ENG に入れ、演算子を押して保留を作る。
+    let shown = run(&["1", "0", "0", "0", "eq", "eng", "add"]);
+    assert_eq!(shown.main, "1e3");
+    assert_eq!(shown.echo, "1e3 +");
 }

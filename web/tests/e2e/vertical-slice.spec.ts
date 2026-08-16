@@ -92,11 +92,11 @@ test("the angle mode is shown and switchable", async ({ page }) => {
 
 test("every key is a button with an accessible name", async ({ page }) => {
   // base-spec §43。div にハンドラを付けた実装を弾く。
-  // キーパッドは 2 区画に分かれている(関数列 7 + メイングリッド 25)。
+  // キーパッドは 3 区画に分かれている(関数列 7 + 第 2 関数列 7 + メイングリッド 25)。
   const buttons = page
-    .getByRole("group", { name: /関数キー|数字と演算のキー/ })
+    .getByRole("group", { name: /関数キー|第 2 関数列|数字と演算のキー/ })
     .getByRole("button");
-  await expect(buttons).toHaveCount(32);
+  await expect(buttons).toHaveCount(39);
   for (const button of await buttons.all()) {
     const name = await button.getAttribute("aria-label");
     expect(name?.length ?? 0).toBeGreaterThan(0);
@@ -116,6 +116,9 @@ test("the status indicators are exposed as named status regions", async ({
   await expect(page.getByRole("status", { name: "角度の単位" })).toHaveText(
     "DEG",
   );
+  // ENG インジケータも同じ status 行にいる(eng-notation.spec.ts の専用
+  // 検査とは別に、ここが status 行を列挙する場所であることを確かめる)。
+  await expect(page.getByRole("status", { name: "数の表記" })).toBeEmpty();
 });
 
 test("high contrast keeps the destructive key distinguishable", async ({
