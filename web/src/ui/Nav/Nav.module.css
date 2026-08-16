@@ -12,13 +12,16 @@
   align-items: center;
   justify-content: center;
   min-height: var(--touch-target-min);
-  padding: 8px 12px;
+  padding: 8px;
+  /* **折り返しを構造で禁じる。** 文字を縮めるだけだと、将来ラベルが
+     伸びたときにまた 2 段に戻る(0.2.0 設計書 §7)。 */
+  white-space: nowrap;
   border: var(--key-border);
   border-radius: var(--radius);
   background: var(--key-function-bg);
   color: var(--key-function-fg);
   font-family: inherit;
-  font-size: var(--key-font-size);
+  font-size: var(--nav-font-size);
   text-decoration: none;
   /* 長押しの選択・コンテキストメニューを抑える(Key.module.css と同じ)。 */
   user-select: none;

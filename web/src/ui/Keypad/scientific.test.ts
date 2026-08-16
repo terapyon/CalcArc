@@ -129,32 +129,6 @@ describe("Scientific のキー集合", () => {
     expect(faces.every((t) => t !== null)).toBe(true);
   });
 
-  it("puts the counting keys behind the digits, the only place three fit", () => {
-    // S-3 設計書 §7 の裁定 2。**数字キーに第 2 面が付くのは初めて**なので、
-    // 3 つが隣り合っていることを明示的に主張する。
-    const grid = section("数字と演算のキー");
-    const shifted = grid.keys
-      .filter((k) => k.shift)
-      .map((k) => [k.token, k.shift?.token]);
-    expect(shifted).toEqual([
-      ["7", "n_fact"],
-      ["8", "n_p_r"],
-      ["9", "n_c_r"],
-      ["exp", "pi"],
-    ]);
-  });
-
-  it("makes the shifted digits look like functions, not digits", () => {
-    // 裁定 2 の「発見性」への答え。色が変わらないと、第 2 面に入ったことが
-    // 数字キーの上では見えない(E2E が実ブラウザで背景色を確かめる)。
-    const grid = section("数字と演算のキー");
-    for (const token of ["7", "8", "9"]) {
-      const key = grid.keys.find((k) => k.token === token);
-      expect(key?.variant).toBe("digit");
-      expect(key?.shift?.variant).toBe("function");
-    }
-  });
-
   it("does not move the main grid", () => {
     // **3 タブで揃えた 5×5**。ここを崩すと Finance / Data Scale と食い違う。
     const pad = SCIENTIFIC_SECTIONS.find(
@@ -174,5 +148,28 @@ describe("Scientific のキー集合", () => {
         if (a !== b) expect(b.includes(a)).toBe(false);
       }
     }
+  });
+
+  it("hides no digit behind the second face", () => {
+    // **数字が消えるより、使っていない裏を使うほうがよい**(0.2.0 設計書 §9)。
+    // 7/8/9 に裏があると、Shift 中は数字が打てない。
+    const main = SCIENTIFIC_SECTIONS.find(
+      (s) => s.ariaLabel === "数字と演算のキー",
+    );
+    for (const token of ["7", "8", "9"]) {
+      const key = main?.keys.find((k) => k.token === token);
+      expect(key?.shift, `${token} still has a second face`).toBeUndefined();
+    }
+  });
+
+  it("puts the counting functions behind the parens and the sign", () => {
+    const main = SCIENTIFIC_SECTIONS.find(
+      (s) => s.ariaLabel === "数字と演算のキー",
+    );
+    const behind = (token: string) =>
+      main?.keys.find((k) => k.token === token)?.shift?.token;
+    expect(behind("lparen")).toBe("n_fact");
+    expect(behind("rparen")).toBe("n_p_r");
+    expect(behind("neg")).toBe("n_c_r");
   });
 });

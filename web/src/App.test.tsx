@@ -16,6 +16,9 @@ vi.mock("./ui/Finance/FinancePanel", () => ({
 vi.mock("./ui/UpdateToast/UpdateToast", () => ({
   UpdateToast: () => <p data-testid="update-toast" />,
 }));
+vi.mock("./ui/Footer/Footer", () => ({
+  Footer: () => <p data-testid="footer" />,
+}));
 
 import { App } from "./App";
 
@@ -31,6 +34,14 @@ describe("App", () => {
     expect(toast).toBeInTheDocument();
     // <main> はモジュールのもの。トーストはシェルのものなので外に置く。
     expect(screen.getByRole("main")).not.toContainElement(toast);
+  });
+
+  it("carries the footer in the shell, outside main", () => {
+    // トーストと同じ理屈——モジュールに属さないものはシェルが持つ。
+    render(<App />);
+    const footer = screen.getByTestId("footer");
+    expect(footer).toBeInTheDocument();
+    expect(screen.getByRole("main")).not.toContainElement(footer);
   });
 
   it("shows Scientific by default", () => {

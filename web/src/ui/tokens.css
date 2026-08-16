@@ -37,8 +37,16 @@
   --key-font-size: 1.375rem;
   /* 関数キーは "sin" のように文字数が多く、行も半高なので一段小さい。 */
   --key-font-size-function: 0.9375rem;
+  /* タブの文字。キーとは別に持つ——390px で 1 枠が約 110px しかなく、
+     キーと同じ 1.375rem だと "Data Scale" が 2 段になる。 */
+  --nav-font-size: 1rem;
+  /* フッタの文字。**免責の全文を 1 行に収めるために status より小さい**
+     (0.2.0 設計書 §5)。390px 幅に載る最大の値を実測で決めた。 */
+  --footer-font-size: 0.5rem;
   /* 関数列の高さ。44px を割る唯一の場所(設計書 §4 に理由)。 */
   --function-row-height: 34px;
+  /* 2 行のラベルを持つ行(Finance の 6 列区画)。半高では 2 行が入らない。 */
+  --function-row-height-double: calc(2 * var(--function-row-height));
   --key-font-weight-emphasis: 600;
   /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
   --key-border: none;
