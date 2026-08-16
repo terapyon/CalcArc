@@ -1027,10 +1027,26 @@ EOF
 ### Task 4: 左結合を守る行を足して、緑を見る
 
 **このタスクは 1 行も実装を変えない。** `push_binop` の比較を触る前に、**いま何が
-守られているのかを書き留める**（設計書 §3.1）。実測したところ、`engine_table.rs` に
-**同順位の演算子が連続したときにどちらから畳むかを確かめる行が 1 つも無い**。
+守られているのかを書き留める**。
 
-**守るものが無い状態で守りを崩さない。**
+**【訂正 2026-08-16】設計書 §3.1 の「左結合を守る行が 1 つも無い」は誤りである。**
+`feature/e2e-corpus` 担当セッションの指摘を受けて実測し直した。**半分は在る:**
+
+`engine_table.rs:214-219` の `reduces_same_precedence_left_to_right` の**1 行目**
+（`["2","add","3","add"]` → `"5"`）が結合方向を捕まえる。`push_binop` の比較を
+`>=` から `>` に素朴に変えると 2 つ目の `+` で畳まれなくなり、`state.current` が
+3 のままになって **`"3"` が出る。この行は赤くなる**（2026-08-16 実測。
+落ちるのはこの 1 件だけ）。
+
+**在るのは「途中の表示」の守りであって、「答え」の守りではない。** 同じ test の
+2 行目 `2 + 3 + 4 = 9` は、加算が結合的なので**どちらの結合でも 9** であり、
+区別しない。`10 − 3 − 2` が 5 か 9 か、`100 ÷ 5 ÷ 2` が 10 か 40 か——
+**答えの側で結合方向を主張する行は無い。** このタスクが足すのはそれである。
+
+**この区別には使い道がある**（相手の指摘）: `xʸ` だけを右結合にする実装なら、
+**既存の 217 行目は緑のままのはず**である。もし赤くなったら、他の演算子まで
+巻き込んでいる証拠になる。**既存の行が、変更の範囲を測る道具になる**
+——Task 5 の赤確認でそう使う。
 
 **Files:**
 - Modify: `crates/calcarc-core/tests/engine_table.rs`
@@ -1044,11 +1060,15 @@ EOF
 
 ```rust
 #[test]
-fn same_precedence_operators_fold_from_the_left() {
+fn same_precedence_operators_fold_from_the_left_in_the_answer() {
     // **この行は Task 5 のために足した。** `xʸ` を右結合で入れるとき
     // `push_binop` の畳み込み条件に手が入るので、他の演算子が左結合の
-    // ままであることを先に固定する。守るものが無い状態で守りを崩さない
-    // （S-1 設計書 §3.1）。
+    // ままであることを先に固定する。
+    //
+    // `reduces_same_precedence_left_to_right` が既に**途中の表示**を
+    // 守っている（2 つ目の `+` で 5 が出る）。守られていないのは**答え**
+    // のほうで、あちらの `2 + 3 + 4 = 9` は加算が結合的なのでどちらの
+    // 結合でも 9 になり、区別しない。減算と除算なら区別する。
     assert_eq!(main_of(&["1", "0", "sub", "3", "sub", "2", "eq"]), "5"); // 9 でない
     assert_eq!(main_of(&["1", "0", "0", "div", "5", "div", "2", "eq"]), "10"); // 40 でない
 }
@@ -1063,7 +1083,31 @@ cargo test -p calcarc-core --test engine_table -- --exact same_precedence_operat
 期待: **PASS**。いまのエンジンは全演算子が左結合なので通る。
 **ここで落ちたら Task 5 に進んではいけない**——前提が違う。
 
-- [ ] **Step 3: コミット**
+- [ ] **Step 3: 設計書の誤った実測記録を訂正する**
+
+`docs/superpowers/specs/2026-08-16-scientific-real-functions-design.md` §3.1 の
+
+> **左結合を守る行を足す。実測したところ、いま `engine_table.rs` に 1 つも無い**
+> （2026-08-16 確認）。在るのは演算子の押し直し（…）の 2 行だけで、**同順位の
+> 演算子が連続したときにどちらから畳むかを確かめる行が無い**。
+
+を、実測し直した事実に置き換える:
+
+```markdown
+**左結合を守る行を足す。ただし「1 つも無い」は誤りだった**（当初の記述を
+2026-08-16 に訂正。`feature/e2e-corpus` 担当セッションの指摘で測り直した）。
+
+`reduces_same_precedence_left_to_right` の 1 行目（`2 add 3 add` → `"5"`）が
+**途中の表示**として結合方向を捕まえる。比較を `>` に変えると `"3"` が出て
+赤くなる（実測。落ちるのはこの 1 件だけ）。**守られていないのは「答え」の
+ほうである**——同じ test の `2 + 3 + 4 = 9` は加算が結合的なのでどちらの
+結合でも 9 になり、区別しない。足すべきは減算と除算で答えを主張する行である。
+```
+
+**理由が静かに腐るのを防ぐ訂正である。** 検査は緑のままでも、「なぜこの順序で
+やるのか」の根拠が事実でなくなっていた。
+
+- [ ] **Step 4: コミット**
 
 ```bash
 cargo fmt
@@ -1484,15 +1528,23 @@ cd web && pnpm test && cd ..
 ```
 
 ```bash
-cargo test -p calcarc-core --test engine_table 2>&1 | grep -E '^test .*(ok|FAILED)' | grep -E 'fold_from_the|power_operator'
+cargo test -p calcarc-core --test engine_table --no-fail-fast 2>&1 \
+  | grep -E '^test .*(ok|FAILED)' | grep -E 'fold_from_the|power_operator|same_precedence'
 ```
 
 期待:
 - `the_power_operator_folds_from_the_right` … **FAILED**（`64` が出る）
-- `same_precedence_operators_fold_from_the_left` … **ok**（左結合は無傷）
+- `same_precedence_operators_fold_from_the_left_in_the_answer` … **ok**
+- `reduces_same_precedence_left_to_right` … **ok**
 
-**この 2 つが同時に成り立つことを目で確かめる。** 右結合だけが壊れ、左結合は
+**3 つが同時に成り立つことを目で確かめる。** 右結合だけが壊れ、左結合は
 壊れていない——それが「1 行の条件式で他の演算子の挙動を変えていない」ことの証拠である。
+
+**逆向きの測り方も 1 度やる**（`feature/e2e-corpus` 担当セッションの指摘）。
+Step 6 の実装のまま、`is_right_associative` を `true` を返すだけにする
+（= 全演算子を右結合にする）と、**`reduces_same_precedence_left_to_right` と
+Task 4 の 2 行がどちらも赤くなる**はずである。片方しか赤くならなければ、
+守りの射程がこちらの想定より狭い。**戻すのを忘れないこと。**
 
 **再編集で Step 6 の形に戻し**、緑を見る。
 
