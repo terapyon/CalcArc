@@ -21,6 +21,7 @@ from calcarc_reference import (
     expr_ref,
     loan_ref,
     scientific_ref,
+    sexagesimal_ref,
 )
 
 SCHEMA = 1
@@ -122,6 +123,15 @@ def build_scientific() -> dict:
                 "op": "factorial",
                 "input": {"x": x},
                 "expect": scientific_ref.factorial(x, "Deg"),
+            }
+        )
+    for x in cases.SEXAGESIMAL_INPUTS:
+        entries.append(
+            {
+                "id": f"sexagesimal/{x}",
+                "op": "sexagesimal",
+                "input": {"x": x},
+                "expect": {"text": sexagesimal_ref.format_sexagesimal(x)},
             }
         )
     for x, y in cases.PAIR_INPUTS:

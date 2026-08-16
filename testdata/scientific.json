@@ -1174,6 +1174,136 @@
     },
     {
       "expect": {
+        "text": "1\u00b030'0\""
+      },
+      "id": "sexagesimal/1.5",
+      "input": {
+        "x": 1.5
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "0\u00b00'3.6\""
+      },
+      "id": "sexagesimal/0.001",
+      "input": {
+        "x": 0.001
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "-3\u00b045'0\""
+      },
+      "id": "sexagesimal/-3.75",
+      "input": {
+        "x": -3.75
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "0\u00b00'0\""
+      },
+      "id": "sexagesimal/0.0",
+      "input": {
+        "x": 0.0
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "30\u00b030'0\""
+      },
+      "id": "sexagesimal/30.5",
+      "input": {
+        "x": 30.5
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "0\u00b06'0\""
+      },
+      "id": "sexagesimal/0.1",
+      "input": {
+        "x": 0.1
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "0\u00b020'0\""
+      },
+      "id": "sexagesimal/0.3333333333333333",
+      "input": {
+        "x": 0.3333333333333333
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "1\u00b00'0\""
+      },
+      "id": "sexagesimal/0.999999999",
+      "input": {
+        "x": 0.999999999
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "2\u00b045'0\""
+      },
+      "id": "sexagesimal/2.75",
+      "input": {
+        "x": 2.75
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "999999\u00b030'0\""
+      },
+      "id": "sexagesimal/999999.5",
+      "input": {
+        "x": 999999.5
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": null
+      },
+      "id": "sexagesimal/10000000000.0",
+      "input": {
+        "x": 10000000000.0
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": null
+      },
+      "id": "sexagesimal/1e+308",
+      "input": {
+        "x": 1e+308
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
+        "text": "123\u00b027'21.6\""
+      },
+      "id": "sexagesimal/123.456",
+      "input": {
+        "x": 123.456
+      },
+      "op": "sexagesimal"
+    },
+    {
+      "expect": {
         "im": 0.0,
         "re": 20.0
       },

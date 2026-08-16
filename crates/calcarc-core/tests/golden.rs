@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use calcarc_core::AngleMode;
+use calcarc_core::numeric::format;
 use calcarc_core::polar::{Polar, from_polar};
 use calcarc_core::{Value, scientific};
 use serde::Deserialize;
@@ -191,6 +192,16 @@ fn scientific_functions_match_the_reference() {
     println!("validating against {}", golden.generated_by);
 
     for case in &golden.cases {
+        // **`sexagesimal` だけ expect が文字列である**(S-4)。数値の腕に
+        // 混ぜられないので、match の手前で分ける。許容誤差は要らない
+        // ——文字列の完全一致だからである。
+        if case.op == "sexagesimal" {
+            let expected = case.expect.get("text").and_then(|t| t.as_str());
+            let actual = format::format_sexagesimal(field(&case.input, "x"));
+            assert_eq!(actual.as_deref(), expected, "{}", case.id);
+            continue;
+        }
+
         let x = Value::real(field(&case.input, "x"));
         let mode = angle_mode(case);
         let actual = match case.op.as_str() {
