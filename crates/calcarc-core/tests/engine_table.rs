@@ -214,8 +214,116 @@ fn respects_operator_precedence() {
 #[test]
 fn reduces_same_precedence_left_to_right() {
     // 2 つ目の + を押した時点で 2+3 が確定して 5 が表示される。
+    //
+    // **1 行目が「途中の表示」として結合方向を捕まえる。** push_binop の
+    // 比較を `>` にすると畳まれず current が 3 のままになり、"3" が出る。
+    // 2 行目は捕まえない——加算は結合的なのでどちらの結合でも 9 である。
+    // 答えの側は same_precedence_operators_fold_from_the_left_in_the_answer
+    // が受け持つ。
     assert_eq!(main_of(&["2", "add", "3", "add"]), "5");
     assert_eq!(main_of(&["2", "add", "3", "add", "4", "eq"]), "9");
+}
+
+#[test]
+fn same_precedence_operators_fold_from_the_left_in_the_answer() {
+    // **この行は `xʸ` の右結合のために足した。** push_binop の畳み込み条件に
+    // 手が入るので、他の演算子が左結合のままであることを先に固定する。
+    //
+    // 上の `reduces_same_precedence_left_to_right` が守っているのは**途中の
+    // 表示**だけである。守られていなかったのは**答え**のほうで、減算と除算
+    // なら左右で違う答えになる（S-1 設計書 §3.1、2026-08-16 に実測して訂正）。
+    assert_eq!(main_of(&["1", "0", "sub", "3", "sub", "2", "eq"]), "5"); // 9 でない
+    assert_eq!(
+        main_of(&["1", "0", "0", "div", "5", "div", "2", "eq"]),
+        "10"
+    ); // 40 でない
+}
+
+#[test]
+fn the_power_operator_folds_from_the_right() {
+    // 数学の慣行（S-1 設計書 §3.1 の裁定 3）。左結合なら (2^3)^2 = 64 になる。
+    assert_eq!(main_of(&["2", "pow", "3", "pow", "2", "eq"]), "512");
+}
+
+#[test]
+fn the_power_operator_binds_tighter_than_multiplication() {
+    // 2 × 3² = 18。優先順位 4（S-1 設計書 §3.1）。
+    assert_eq!(main_of(&["2", "mul", "3", "pow", "2", "eq"]), "18");
+    assert_eq!(main_of(&["2", "pow", "3", "mul", "2", "eq"]), "16");
+}
+
+#[test]
+fn the_power_operator_takes_a_negative_base_with_an_integer_exponent() {
+    // (-2)^3 = -8 は実数で一意（S-1 設計書 §4）。
+    assert_eq!(main_of(&["2", "neg", "pow", "3", "eq"]), "-8");
+    // 非整数の指数は複素数になるので落とす。
+    assert_eq!(
+        main_of(&["2", "neg", "pow", "0", "dot", "5", "eq"]),
+        "Math ERROR"
+    );
+}
+
+#[test]
+fn zero_to_the_zero_is_one_on_the_keypad() {
+    assert_eq!(main_of(&["0", "pow", "0", "eq"]), "1");
+}
+
+#[test]
+fn the_echo_shows_the_power_operator() {
+    assert_eq!(echo_of(&["2", "pow"]), "2 ^");
+}
+
+#[test]
+fn del_leaves_a_stack_of_power_operators_alone() {
+    // **右結合が作る形を名指しで押さえる行。** `2 ^ 3 ^` は畳まれないので、
+    // 同順位の演算子が 2 つ積まれたスタックになる——他のどの演算子でも
+    // 到達できない形である。網羅列挙は長さ 6 の焦点列でここへ届くが、
+    // 網は安いほうがよいので代表列を表にも置く（engine_robustness の
+    // FOCUS のコメントを参照）。
+    //
+    // DEL は演算子を消さない（設計書 I7）ので、入力中の 2 を消しても
+    // スタックは 2 段のまま残り、4 が右辺に入って 2^(3^4) になる。
+    // 2^(3^4) = 2^81。左結合なら (2^3)^4 = 4096 になる。
+    assert_eq!(
+        main_of(&["2", "pow", "3", "pow", "2", "del", "4", "eq"]),
+        "2.417851639e24"
+    );
+}
+
+#[test]
+fn the_real_functions_apply_immediately_like_the_others() {
+    // 単項は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["2", "ln"]), "0.6931471806");
+    assert_eq!(main_of(&["1", "0", "0", "log10"]), "2");
+    assert_eq!(main_of(&["1", "exp_e"]), "2.718281828");
+    assert_eq!(main_of(&["4", "recip"]), "0.25");
+}
+
+#[test]
+fn the_inverse_trig_functions_follow_the_angle_mode() {
+    assert_eq!(main_of(&["0", "dot", "5", "asin"]), "30");
+    assert_eq!(main_of(&["0", "dot", "5", "acos"]), "60");
+    assert_eq!(main_of(&["1", "atan"]), "45");
+    // Rad に切り替えると同じ入力がラジアンで返る。
+    assert_eq!(main_of(&["angle_toggle", "1", "atan"]), "0.7853981634");
+}
+
+#[test]
+fn the_domain_boundaries_show_an_error() {
+    use calcarc_core::CalcError;
+    assert_eq!(main_of(&["0", "ln"]), "Math ERROR");
+    assert_eq!(main_of(&["1", "neg", "log10"]), "Math ERROR");
+    assert_eq!(main_of(&["2", "asin"]), "Math ERROR");
+    // 1/0 は DivisionByZero。表示は同じでも種類が違う（S-1 設計書 §3.0）。
+    assert_eq!(run(&["0", "recip"]).error, Some(CalcError::DivisionByZero));
+    assert_eq!(run(&["0", "ln"]).error, Some(CalcError::DomainError));
+}
+
+#[test]
+fn e_is_a_value_not_an_entry() {
+    // π と同じ扱い（S-1 設計書 §3）。
+    assert_eq!(main_of(&["e"]), "2.718281828");
+    assert_eq!(main_of(&["e", "ln"]), "1");
 }
 
 #[test]
@@ -352,9 +460,10 @@ fn functions_apply_immediately_to_the_displayed_value() {
 }
 
 #[test]
-fn square_root_of_a_negative_gives_an_imaginary_result() {
-    // 従来機が Math ERROR を返す入力に、複素数対応の電卓は答えられる。
-    assert_eq!(main_of(&["4", "neg", "sqrt"]), "j2");
+fn square_root_of_a_negative_is_a_domain_error() {
+    // 関数は実数に閉じる（設計書 §1 の裁定 1）。複素数は入力と四則と
+    // 表示の機能であって、関数の値域ではない。
+    assert_eq!(main_of(&["4", "neg", "sqrt"]), "Math ERROR");
 }
 
 #[test]
@@ -475,6 +584,10 @@ fn every_error_kind_reaches_the_display() {
         Some(CalcError::DivisionByZero)
     );
     assert_eq!(run(&["9", "0", "tan"]).error, Some(CalcError::TrigPole));
+    assert_eq!(
+        run(&["4", "neg", "sqrt"]).error,
+        Some(CalcError::DomainError)
+    );
     assert_eq!(run(&["rparen"]).error, Some(CalcError::SyntaxError));
     let mut keys = vec!["9"];
     keys.extend(std::iter::repeat_n("sqr", 10));

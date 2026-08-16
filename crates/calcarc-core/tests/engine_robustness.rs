@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, Value, render};
+    use calcarc_core::{DisplayState, EngineState, Key, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -181,27 +181,17 @@ mod invariants {
             && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
     }
 
-    /// この打鍵が作用する値。入力中なら確定前のバッファの値。
+    /// I3: 実軸は演算で閉じており、虚軸への出口は `j` キーだけ。
     ///
-    /// 指数が f64 の範囲を超えているバッファは、まだ値になっていない
-    /// (確定した瞬間に Overflow になる。設計書 §2)。その場合はこの観測点
-    /// としては確定値を使う——I3 が見ているのは実軸と虚軸の話であって、
-    /// 大きさではない。
-    fn acting_on(state: &EngineState) -> Value {
-        state
-            .buffer
-            .as_ref()
-            .and_then(|b| b.value().ok())
-            .unwrap_or(state.current)
-    }
-
-    /// I3 / I3b: 実軸は演算で閉じており、虚軸への出口は 2 つだけ。
+    /// `j` は入力なので「実数のみの入力」という前提から外れる。これを例外と
+    /// して認めないと、網羅列挙が `j` を踏んだ瞬間にバグでないものが落ちる
+    /// テストになる。
     ///
-    /// 出口 1 は `j` キーで、これは入力なので「実数のみの入力」という
-    /// 前提から外れる。出口 2 は負の実数の sqrt で、`sqrt(-4) = j2` を
-    /// 返すのは設計上の機能である（Vertical Slice 設計書 §4.1）。
-    /// この 2 つを例外として認めないと、網羅列挙が `−` `√` を踏んだ
-    /// 瞬間にバグでないものが落ちるテストになる。
+    /// **かつては出口が 2 つあった。** `sqrt(-4) = j2` を返すのが設計上の機能
+    /// だったためで、負の実数の sqrt に I3b という例外を置いていた。関数を
+    /// 実数に閉じる裁定（S-1 設計書 §1）でその機能が消え、例外も消えた
+    /// ——いまの `sqrt` はエラーを返すので、上の `after.error.is_some()` に
+    /// 吸収される。
     fn real_axis_is_closed(step: &Step<'_>) -> Result<(), String> {
         let (before, after) = (step.before, step.after);
         if !all_real(before) || after.error.is_some() {
@@ -217,22 +207,6 @@ mod invariants {
                 ));
             }
             return Ok(());
-        }
-        if step.key == Key::Sqrt && acting_on(before).re < 0.0 {
-            // I3b: 純虚数でなければならない。極形式を経由する実装だと
-            // 実部に 1.2e-16 が残り、j2 が 1.224646799e-16+j2 になる。
-            //
-            // 網羅列挙がここへ届くのは `− 3 = √` や `0 − 3 = √` で、
-            // 二項演算の低優先クラスの代表を `+` ではなく `−` にして
-            // ある理由がこれである（設計書 §5.2）。
-            return if after.current.re == 0.0 {
-                Ok(())
-            } else {
-                Err(format!(
-                    "I3b: sqrt of a negative real left re={}",
-                    after.current.re
-                ))
-            };
         }
         if !all_real(after) {
             return Err(format!(
@@ -426,10 +400,10 @@ mod invariants {
 /// 構造の網。表示トグルと定数を外すぶん、長さ 7 まで届く。
 ///
 /// 二項演算子の代表が `−` と `÷` なのは、同じ等価類のうち**射程が広いほう**
-/// を選んでいるからである。`−` は負の実数を作れるので `√` の I3b 経路に
-/// 届き、`÷` は畳み込みの途中で失敗できる唯一の二項演算子で、被演算数を
-/// 消費した後にエラーになった状態の形を網に入れる。`+` `×` を代表にすると
-/// どちらの形も一度も通らない。
+/// を選んでいるからである。`−` は負の実数を作れるので、負の値を単項関数に
+/// 通す経路（`0 − 3 = √` が `DomainError` になる形）に届き、`÷` は畳み込みの
+/// 途中で失敗できる唯一の二項演算子で、被演算数を消費した後にエラーになった
+/// 状態の形を網に入れる。`+` `×` を代表にするとどちらの形も一度も通らない。
 const STRUCTURE: [Key; 10] = [
     Key::Digit(3),
     Key::Dot,
@@ -445,8 +419,9 @@ const STRUCTURE: [Key; 10] = [
 
 /// 全等価類の網。表示トグル・後置関数・定数・ゼロを足すぶん長さ 6 まで。
 ///
-/// `√` を後置関数の代表にするのは、sqrt だけが負の実数用の専用経路を持ち
-/// （I3b）、他の単項関数と違う分岐を通るためである。`0 − 3 = √` で届く。
+/// `√` を後置関数の代表にするのは、**エラーを返しうる単項関数**の代表だから
+/// である（`0 − 3 = √` で `DomainError` に届く）。エラーに落ちた後の状態の形を
+/// 網に入れられるのは、この経路だけである。
 ///
 /// 表示トグルの代表は `▸∠` にする。`DRG` と `▸∠` は状態への作用こそ同じ
 /// だが、`angle` は三角関数と極形式の角度にしか効かず、この網は単項関数を
@@ -458,14 +433,34 @@ const STRUCTURE: [Key; 10] = [
 /// 逆に `000` は畳む——`Digit` と同じ「数字を足す」枝で、違うのは入る文字数
 /// だけである。字数の境界は engine_table の個別テストが持つ。
 ///
+/// `xʸ` は畳めない。**唯一の右結合演算子**で、同順位の演算子が畳まれずに
+/// 2 つ積まれたスタック(`2 ^ 3 ^`)を作る。これは他のどの演算子でも到達
+/// できない形なので、`−` や `÷` の等価類には入らない(S-1 設計書 §3.1)。
+///
 /// **予算の実測(2026-08-13、S2)**: 14 個で 4.7 秒、15 個で 7.1 秒
 /// (`cargo test --workspace` 全体では 7.6 秒)。伸びは 1.5 倍で
-/// (15/14)^6 = 1.50 と一致する。**長さ 6 を維持した**——毎タスク回す検証段
-/// (CONTRIBUTING の段付け)に収まる範囲であり、`Exp` こそ状態機械の形を
-/// 変えるキーで、網から外すと一番見たいものが見えなくなるため。次に等価類を
-/// 足す人へ: 16 個なら約 11 秒、17 個なら約 16 秒になる。そこが分かれ目で、
-/// 越えるなら長さを 5 に落として `Exp` を含む列の重点列挙を別に持つこと。
-const ALL_CLASSES: [Key; 15] = [
+/// (15/14)^6 = 1.50 と一致する。
+///
+/// **再実測(2026-08-16、S-1)**: 同じ 15 個がこの機械では 11.9 秒だった
+/// (機械が違うので絶対値は比べられない。**比だけを使うこと**)。`xʸ` を足した
+/// 16 個の全数は **19.1 秒**で、**比は 1.60**。
+///
+/// **見込みの 1.48 ((16/15)^6) を超えた。** 数え上げだけなら 1.48 のはずで、
+/// 超えたぶんは**枝刈りが減ったから**である——`xʸ` は右結合なので `2 ^ 3 ^`
+/// で畳まれず、エラーに落ちて枝刈りされる列が他の演算子より少ない。
+/// **予測より遅いこと自体が「新しい形に届いている」証拠**だが、同時に
+/// **「クラス数の比^深さ」という見積り式が上振れする**ことも意味する。
+/// 次に足す人はこの式を下限として使うこと——上限ではない。
+///
+/// **19.1 秒は毎タスク段には重いので、このファイルが S2 から持っている
+/// 分かれ目規則をそのまま適用した**——「16/17 個が境目、越えるなら長さを 5 に
+/// 落として焦点列挙を別に持つ」。結果は下の `FOCUS` と、長さ 5 全数 +
+/// 長さ 6 焦点の 1 本の走査である。**12.7 秒に戻った**
+/// (`cargo test --workspace` は 20.0 → 13.4 秒。全数 15 個の時代とほぼ同じ)。
+///
+/// **決定打は S-3 である。** `nPr` / `nCr` で 2 クラス増えて 18 個になるので、
+/// 長さ 6 の全数はどのみち保たない。いま規則どおりに落としてある。
+const ALL_CLASSES: [Key; 16] = [
     Key::Digit(3),
     Key::Digit(0),
     Key::Dot,
@@ -481,24 +476,44 @@ const ALL_CLASSES: [Key; 15] = [
     Key::Sqrt,
     Key::Pi,
     Key::Exp,
+    Key::Pow,
 ];
 
 /// 深さ優先で全列を辿り、遷移ごとに不変条件を検査する。
 ///
 /// エラー状態に落ちた列は AC 以外が無効なので（I5）、そこから先を辿っても
 /// 新しい状態には届かない。枝刈りする。
-fn walk(
-    state: &EngineState,
-    keys: &[Key],
-    depth: usize,
+///
+/// `focus` が空でないとき、**最長の列だけを焦点キーを含むものに絞る**。
+/// 最後の 1 手に来てまだ焦点キーが出ていなければ、そこは焦点キーしか
+/// 選ばない。**短い列は絞らない**——長さ `max - 1` までの列はすべて、
+/// 焦点キーを 1 つ足せば焦点を含む列になるので、prefix として全数辿られる。
+struct Sweep<'a> {
+    /// 各手で試すキー。等価類の代表。
+    keys: &'a [Key],
+    /// 列の長さの上限。
     max: usize,
+    /// 空でなければ、**最長の列だけ**をこれらを含むものに絞る。
+    focus: &'a [Key],
+}
+
+fn walk(
+    sweep: &Sweep<'_>,
+    state: &EngineState,
+    depth: usize,
     trail: &mut Vec<&'static str>,
     anchor: Option<Key>,
+    seen_focus: bool,
 ) {
-    if depth == max {
+    if depth == sweep.max {
         return;
     }
-    for &key in keys {
+    // 最後の 1 手。焦点がまだ出ていなければ、ここは焦点キーに限る。
+    let must_focus = !sweep.focus.is_empty() && !seen_focus && depth + 1 == sweep.max;
+    for &key in sweep.keys {
+        if must_focus && !sweep.focus.contains(&key) {
+            continue;
+        }
         let (next, shown) = reduce(state, key);
         trail.push(key.token());
         let step = invariants::Step {
@@ -521,19 +536,27 @@ fn walk(
         // I5（エラーは AC でしか解けない）である以上、I5 を検査せずに
         // 枝刈りしては循環で、I5 だけが網羅から漏れる。
         if state.error.is_none() || key == Key::Ac {
-            walk(&next, keys, depth + 1, max, trail, next_anchor);
+            walk(
+                sweep,
+                &next,
+                depth + 1,
+                trail,
+                next_anchor,
+                seen_focus || sweep.focus.contains(&key),
+            );
         }
         trail.pop();
     }
 }
 
 /// 網羅列挙の入口。長さ 0 の列——初期状態そのもの——も検査してから降りる。
-fn walk_from_the_start(keys: &[Key], max: usize) {
+fn walk_from_the_start(keys: &[Key], max: usize, focus: &[Key]) {
     let start = EngineState::initial();
     if let Err(why) = invariants::check_state(&start) {
         panic!("{why}\n  key sequence: []");
     }
-    walk(&start, keys, 0, max, &mut Vec::new(), None);
+    let sweep = Sweep { keys, max, focus };
+    walk(&sweep, &start, 0, &mut Vec::new(), None, false);
 }
 
 /// 構造に関わるキーだけで、長さ 7 までのすべての打鍵列を検査する。
@@ -542,14 +565,30 @@ fn walk_from_the_start(keys: &[Key], max: usize) {
 /// （`3 + j 4 DEL 5 =`）。ランダム探索はこの領域をたまたましか踏まない。
 #[test]
 fn every_structural_sequence_up_to_seven_keys_holds_the_invariants() {
-    walk_from_the_start(&STRUCTURE, 7);
+    walk_from_the_start(&STRUCTURE, 7, &[]);
 }
 
-/// 全等価類で長さ 6 まで。表示トグルを挟んだ形（`3 − ▸∠ − 4 =`）や
-/// 負の実数の `√`（`0 − 3 = √`）はこちらの網にかかる。
+/// 全等価類で**長さ 5 までは全数**、**長さ 6 は焦点キーを含む列だけ**。
+///
+/// 表示トグルを挟んだ形（`3 − ▸∠ − 4 =`）や負の実数の `√`（`0 − 3 = √`）は
+/// 長さ 5 の側にかかる。
+///
+/// **1 本の走査で 2 つのことを主張している。** 長さ 5 以下の列はすべて
+/// 「焦点キーを 1 つ足せば長さ 6 の焦点列になる」ので、prefix として例外なく
+/// 辿られる。絞りが効くのは最後の 1 手だけである。
+///
+/// **なぜ絞るのか(2026-08-16、S-1)**: 等価類が 15 個から 16 個になり、
+/// 長さ 6 の全数が 11.9 秒から 19.1 秒になった。このファイルが S2 から
+/// 持っている分かれ目規則——「16/17 個が境目、越えるなら長さ 5 に落として
+/// 焦点列挙を別に持つ」——をそのまま適用した。**S-3 が `nPr` / `nCr` で
+/// 2 クラス足すので、全数の長さ 6 はどのみち保たない**(18 個)。
+/// S-3 は 2 つを `FOCUS` に足すこと——どちらも二項演算子で、優先順位 3 という
+/// 新しい段を作る。
+const FOCUS: [Key; 2] = [Key::Exp, Key::Pow];
+
 #[test]
-fn every_sequence_over_all_classes_up_to_six_keys_holds_the_invariants() {
-    walk_from_the_start(&ALL_CLASSES, 6);
+fn every_sequence_over_all_classes_up_to_five_keys_and_six_through_the_focus() {
+    walk_from_the_start(&ALL_CLASSES, 6, &FOCUS);
 }
 
 /// 重みつきのキー生成。演算子と括弧を厚くして、深い入れ子と長い畳み込みに

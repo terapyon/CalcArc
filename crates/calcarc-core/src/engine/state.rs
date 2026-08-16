@@ -56,15 +56,32 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    /// xʸ。**唯一の右結合演算子**(S-1 設計書 §3.1)。
+    Pow,
 }
 
 impl BinOp {
     /// 大きいほど先に評価される（設計書 D9）。
+    ///
+    /// 3 は空けてある——S-3 が `nPr` / `nCr` をそこに置く。
     pub fn precedence(self) -> u8 {
         match self {
             BinOp::Add | BinOp::Sub => 1,
             BinOp::Mul | BinOp::Div => 2,
+            BinOp::Pow => 4,
         }
+    }
+
+    /// 同じ優先順位が連続したとき、右から畳むか。
+    ///
+    /// 数学の慣行では冪だけが右結合で、`2^3^2` は `2^(3^2) = 512` である
+    /// （`(2^3)^2 = 64` ではない）。**左結合はタダではない**——独立検証層の
+    /// mpmath は慣行に従うので、左結合を選ぶと恒久的に食い違う。それを消す
+    /// 唯一の方法は Python に engine の意味論を教えることで、それは
+    /// CONTRIBUTING の「参照実装を Rust の移植にしない」に真正面から当たる
+    /// （S-1 設計書 §3.2）。
+    pub fn is_right_associative(self) -> bool {
+        matches!(self, BinOp::Pow)
     }
 }
 

@@ -26,8 +26,8 @@ describe("Scientific のキー集合", () => {
   });
 
   it("has no reserved slots in the function row or main grid", () => {
-    // S2 で 000 と Exp が有効になった。関数列 2 段目には ENG 以外に 6 つの
-    // 予約がある(S-1/S-4 が後で埋める)ので、そこだけ対象から外す。
+    // S2 で 000 と Exp が有効になった。関数列 2 段目には S-4 が埋める予約が
+    // 1 つ残っている(S-1 が他の 5 つを埋めた)ので、そこだけ対象から外す。
     for (const name of ["関数キー", "数字と演算のキー"]) {
       const reserved = section(name).keys.filter(
         (k) => k.token === null && !k.kind,
@@ -86,12 +86,44 @@ describe("Scientific のキー集合", () => {
     expect(second?.columns).toBe(7);
     expect(second?.height).toBe("half");
     expect(second?.keys[0]?.token).toBe("eng");
-    // 予約スロットが 6 つあること自体を主張する。長さの検査が無いと
-    // "every" は空配列でも真になり、予約スロットを消しても緑のまま
-    // 通ってしまう(§7.3 が予約スロットを置く理由が守られない)。
     expect(second?.keys).toHaveLength(7);
-    // 残りは予約スロット。S-1 と S-4 が埋める。
-    expect(second?.keys.slice(1).every((k) => k.token === null)).toBe(true);
+    // **並びを丸ごと主張する**(S-1 設計書 §7 の確定盤面)。残る予約は
+    // 7 番目だけで、S-4 の `°'"` が入る。`every` で書くと空配列でも真に
+    // なり、スロットを消しても緑のまま通ってしまう。
+    expect(second?.keys.map((k) => k.token)).toEqual([
+      "eng",
+      "ln",
+      "log10",
+      "recip",
+      "exp_e",
+      "pow",
+      null,
+    ]);
+  });
+
+  it("puts the inverse trig functions behind their own first face", () => {
+    // sin の裏が asin という対応が自然だから第 2 面に置いた(S-1 設計書 §7)。
+    const pairs = section("関数キー").keys.map((k) => [
+      k.token,
+      k.shift?.token,
+    ]);
+    expect(pairs).toContainEqual(["sin", "asin"]);
+    expect(pairs).toContainEqual(["cos", "acos"]);
+    expect(pairs).toContainEqual(["tan", "atan"]);
+  });
+
+  it("puts the base of the natural logarithm behind e to the x", () => {
+    // ユーザーの質問への答え: 同じ e。eˣ を Shift すると底そのものが出る。
+    const key = section("第 2 関数列").keys.find((k) => k.token === "exp_e");
+    expect(key?.shift?.token).toBe("e");
+  });
+
+  it("has one reserved slot left, and it is the one S-4 fills", () => {
+    // 第 2 面の「準備中」は S-1 で全部埋まった。無効表示の意味論を守る
+    // 対象は、第 2 関数列に残る 1 枠だけになる。
+    const reserved = allKeys.filter((k) => k.token === null && !k.kind);
+    expect(reserved).toHaveLength(1);
+    expect(reserved[0]?.ariaLabel).toBe("空き");
   });
 
   it("does not move the main grid", () => {

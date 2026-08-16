@@ -47,25 +47,29 @@ test("pi is reachable through the Shift face and reaches the core", async ({
   await expect(page.getByRole("button", { name: "指数入力" })).toBeEnabled();
 });
 
-test("the empty second-face slots are reserved, not missing", async ({
+test("the second face is full now, not a row of placeholders", async ({
   page,
 }) => {
+  // S-1 で sin/cos/tan の裏が asin/acos/atan になり、「準備中」の面は
+  // 1 つも残っていない。
   await page.getByRole("button", { name: "第2面に切り替え" }).click();
-  const empty = page.getByRole("button", { name: "第2面（準備中）" });
-  await expect(empty).toHaveCount(3);
-  for (const slot of await empty.all()) {
-    await expect(slot).toBeDisabled();
-  }
+  await expect(
+    page.getByRole("button", { name: "第2面（準備中）" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "アークサイン" }),
+  ).toBeEnabled();
 });
 
-test("the remaining reserved slots do nothing, and look like it", async ({
+test("the one remaining reserved slot does nothing, and looks like it", async ({
   page,
 }) => {
-  // 第 1 面の予約は S2 で解けた。残るのは第 2 面の空きスロット。
-  await page.getByRole("button", { name: "第2面に切り替え" }).click();
-  const empty = page.getByRole("button", { name: "第2面（準備中）" }).first();
+  // 第 1 面の予約は S2 で解け、第 2 面の予約は S-1 で解けた。残るのは
+  // 第 2 関数列の 1 枠(S-4 の `°'"`)だけ。
+  const empty = page.getByRole("button", { name: "空き", exact: true });
+  await expect(empty).toHaveCount(1);
   await expect(empty).toBeDisabled();
-  // 無効なことは見た目にも出す(設計書 §5 の「無効表示」)。属性だけだと
+  // 無効なことは見た目にも出す(S-2 設計書 §5 の「無効表示」)。属性だけだと
   // 押せる見た目のキーが押せない、という一番いらだつ形になる。
   const opacity = await empty.evaluate((el) => getComputedStyle(el).opacity);
   expect(Number(opacity)).toBeLessThan(1);

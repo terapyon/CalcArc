@@ -45,16 +45,24 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         // `del_returns_to_the_pending_operator`）。
         next.operator_pending = next.error.is_none()
             && match key {
-                Key::Add | Key::Sub | Key::Mul | Key::Div => true,
+                Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Pow => true,
                 // 値を確定させるキーは、その場を演算子の直後ではなくす。
                 Key::Eq
                 | Key::RParen
                 | Key::Pi
+                | Key::E
                 | Key::Sqrt
                 | Key::Sqr
                 | Key::Sin
                 | Key::Cos
                 | Key::Tan
+                | Key::Ln
+                | Key::Log10
+                | Key::ExpE
+                | Key::Recip
+                | Key::Asin
+                | Key::Acos
+                | Key::Atan
                 // Key::Ac はここに到達しない（reduce の冒頭で先に処理される）が、
                 // match の網羅性のために腕は残す。値はどちらでも同じ。
                 | Key::Ac => false,
@@ -88,6 +96,7 @@ fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
         BinOp::Sub => lhs.checked_sub(rhs),
         BinOp::Mul => lhs.checked_mul(rhs),
         BinOp::Div => lhs.checked_div(rhs),
+        BinOp::Pow => scientific::pow(lhs, rhs),
     }
 }
 
@@ -138,9 +147,14 @@ fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
     state.operands.push(state.current);
     // `state.operators.last()` の借用を while の条件式で終わらせてから
     // `reduce_top(&mut state)` を呼ぶ。matches! の中に閉じ込めるのがその手段。
+    //
+    // **`>=` ではない。** 同順位のときに畳むかどうかを結合方向が決める
+    // ——左結合なら畳み（`10 − 3 − 2` は `(10−3)−2`）、右結合なら積む
+    // （`2 xʸ 3 xʸ 2` は `2^(3^2)`）。S-1 設計書 §3.1。
     while matches!(
         state.operators.last(),
-        Some(OpToken::Op(top)) if top.precedence() >= op.precedence()
+        Some(OpToken::Op(top)) if top.precedence() > op.precedence()
+            || (top.precedence() == op.precedence() && !op.is_right_associative())
     ) {
         reduce_top(state)?;
     }
@@ -278,6 +292,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Sub => push_binop(state, BinOp::Sub)?,
         Key::Mul => push_binop(state, BinOp::Mul)?,
         Key::Div => push_binop(state, BinOp::Div)?,
+        Key::Pow => push_binop(state, BinOp::Pow)?,
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
@@ -306,9 +321,30 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             let mode = state.angle;
             apply_unary(state, |v| scientific::tan(v, mode))?;
         }
+        Key::Ln => apply_unary(state, scientific::ln)?,
+        Key::Log10 => apply_unary(state, scientific::log10)?,
+        Key::ExpE => apply_unary(state, scientific::exp_e)?,
+        Key::Recip => apply_unary(state, scientific::recip)?,
+        Key::Asin => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::asin(v, mode))?;
+        }
+        Key::Acos => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::acos(v, mode))?;
+        }
+        Key::Atan => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::atan(v, mode))?;
+        }
         Key::Pi => {
             state.buffer = None;
             state.current = Value::real(std::f64::consts::PI);
+        }
+        Key::E => {
+            // π と同じ。入力中のバッファを捨てて値そのものを置く。
+            state.buffer = None;
+            state.current = Value::real(std::f64::consts::E);
         }
         Key::AngleToggle => {
             // 保持している値は変えない。表示と以後の三角関数にだけ効く。

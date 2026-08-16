@@ -1,6 +1,16 @@
 import math
 
-from calcarc_reference.scientific_ref import cos, sin, sqrt_real, tan
+from calcarc_reference.scientific_ref import (
+    asin,
+    cos,
+    exp_e,
+    ln,
+    pow_real,
+    recip,
+    sin,
+    sqrt_real,
+    tan,
+)
 
 
 def test_sine_in_degrees() -> None:
@@ -23,6 +33,38 @@ def test_radian_mode() -> None:
     assert math.isclose(sin(math.pi / 6, "Rad"), 0.5, abs_tol=1e-15)
 
 
-def test_square_root_of_a_negative_is_imaginary() -> None:
-    assert sqrt_real(-4.0) == (0.0, 2.0)
-    assert sqrt_real(4.0) == (2.0, 0.0)
+def test_square_root_of_a_negative_leaves_the_reals() -> None:
+    # 関数は実数に閉じる（S-1 設計書 §1 の裁定 1）。参照実装は Rust の分岐を
+    # 写すのではなく、mpmath が mpc を返したことを定義域の外の判定に使う。
+    assert sqrt_real(-4.0) == {"error": "DomainError"}
+    assert sqrt_real(4.0) == {"re": 2.0, "im": 0.0}
+
+
+def test_ln_is_undefined_at_zero_and_below() -> None:
+    assert ln(0.0, "Deg") == {"error": "DomainError"}
+    assert ln(-1.0, "Deg") == {"error": "DomainError"}
+
+
+def test_inverse_sine_is_bounded_by_one() -> None:
+    assert asin(1.0000001, "Deg") == {"error": "DomainError"}
+    assert math.isclose(asin(1.0, "Deg")["re"], 90.0, abs_tol=1e-13)
+
+
+def test_reciprocal_of_zero_is_a_division_by_zero() -> None:
+    # DomainError と取り違えると、golden が Rust の裁定違いを見逃す。
+    assert recip(0.0, "Deg") == {"error": "DivisionByZero"}
+
+
+def test_zero_to_the_zero_is_one() -> None:
+    assert pow_real(0.0, 0.0)["re"] == 1.0
+
+
+def test_a_negative_base_with_a_fractional_exponent_leaves_the_reals() -> None:
+    assert pow_real(-2.0, 0.5) == {"error": "DomainError"}
+    # 整数指数なら実数で一意。
+    assert pow_real(-2.0, 3.0)["re"] == -8.0
+
+
+def test_exp_overflows_rather_than_leaving_the_domain() -> None:
+    # e^x は全実数で定義されている。f64 に入らないだけ（設計書 §3）。
+    assert exp_e(710.0, "Deg") == {"error": "Overflow"}

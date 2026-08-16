@@ -6,6 +6,7 @@ const OP_SYMBOL: Record<BinOpName, string> = {
   Sub: "−",
   Mul: "×",
   Div: "÷",
+  Pow: "^",
 };
 
 export interface DisplayProps {
