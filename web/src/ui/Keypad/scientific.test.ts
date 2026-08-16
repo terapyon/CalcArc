@@ -126,6 +126,32 @@ describe("Scientific のキー集合", () => {
     expect(reserved[0]?.ariaLabel).toBe("空き");
   });
 
+  it("puts the counting keys behind the digits, the only place three fit", () => {
+    // S-3 設計書 §7 の裁定 2。**数字キーに第 2 面が付くのは初めて**なので、
+    // 3 つが隣り合っていることを明示的に主張する。
+    const grid = section("数字と演算のキー");
+    const shifted = grid.keys
+      .filter((k) => k.shift)
+      .map((k) => [k.token, k.shift?.token]);
+    expect(shifted).toEqual([
+      ["7", "n_fact"],
+      ["8", "n_p_r"],
+      ["9", "n_c_r"],
+      ["exp", "pi"],
+    ]);
+  });
+
+  it("makes the shifted digits look like functions, not digits", () => {
+    // 裁定 2 の「発見性」への答え。色が変わらないと、第 2 面に入ったことが
+    // 数字キーの上では見えない(E2E が実ブラウザで背景色を確かめる)。
+    const grid = section("数字と演算のキー");
+    for (const token of ["7", "8", "9"]) {
+      const key = grid.keys.find((k) => k.token === token);
+      expect(key?.variant).toBe("digit");
+      expect(key?.shift?.variant).toBe("function");
+    }
+  });
+
   it("does not move the main grid", () => {
     // **3 タブで揃えた 5×5**。ここを崩すと Finance / Data Scale と食い違う。
     const pad = SCIENTIFIC_SECTIONS.find(

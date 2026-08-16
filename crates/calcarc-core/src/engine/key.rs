@@ -48,6 +48,12 @@ pub enum Key {
     Atan,
     /// 自然対数の底。π と同じ「値そのもの」のキー。
     E,
+    /// 階乗。後置の単項(S-3 設計書 §1)。
+    NFact,
+    /// 順列 nPr。二項(S-3 設計書 §1)。
+    Npr,
+    /// 組合せ nCr。二項。
+    Ncr,
 }
 
 impl Key {
@@ -96,6 +102,9 @@ impl Key {
             "acos" => Key::Acos,
             "atan" => Key::Atan,
             "e" => Key::E,
+            "n_fact" => Key::NFact,
+            "n_p_r" => Key::Npr,
+            "n_c_r" => Key::Ncr,
             _ => return None,
         })
     }
@@ -145,6 +154,9 @@ impl Key {
             Key::Acos => "acos",
             Key::Atan => "atan",
             Key::E => "e",
+            Key::NFact => "n_fact",
+            Key::Npr => "n_p_r",
+            Key::Ncr => "n_c_r",
         }
     }
 }
@@ -155,7 +167,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 42] = [
+    pub const ALL: [Key; 45] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -198,6 +210,9 @@ impl Key {
         Key::Acos,
         Key::Atan,
         Key::E,
+        Key::NFact,
+        Key::Npr,
+        Key::Ncr,
     ];
 }
 
