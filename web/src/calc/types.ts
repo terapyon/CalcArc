@@ -68,6 +68,7 @@ export const KEY_TOKENS = [
   "n_fact",
   "n_p_r",
   "n_c_r",
+  "dms",
 ] as const;
 
 export type KeyToken = (typeof KEY_TOKENS)[number];

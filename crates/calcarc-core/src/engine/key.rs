@@ -54,6 +54,9 @@ pub enum Key {
     Npr,
     /// 組合せ nCr。二項。
     Ncr,
+    /// 60 進(度分秒)。**入力中は区切り、確定後は表示の一時トグル**
+    /// (S-4 設計書 §3)。2 つの仕事をする唯一のキーである。
+    Dms,
 }
 
 impl Key {
@@ -105,6 +108,7 @@ impl Key {
             "n_fact" => Key::NFact,
             "n_p_r" => Key::Npr,
             "n_c_r" => Key::Ncr,
+            "dms" => Key::Dms,
             _ => return None,
         })
     }
@@ -157,6 +161,7 @@ impl Key {
             Key::NFact => "n_fact",
             Key::Npr => "n_p_r",
             Key::Ncr => "n_c_r",
+            Key::Dms => "dms",
         }
     }
 }
@@ -167,7 +172,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 45] = [
+    pub const ALL: [Key; 46] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -213,6 +218,7 @@ impl Key {
         Key::NFact,
         Key::Npr,
         Key::Ncr,
+        Key::Dms,
     ];
 }
 

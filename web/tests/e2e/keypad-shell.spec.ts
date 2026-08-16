@@ -61,18 +61,16 @@ test("the second face is full now, not a row of placeholders", async ({
   ).toBeEnabled();
 });
 
-test("the one remaining reserved slot does nothing, and looks like it", async ({
-  page,
-}) => {
-  // 第 1 面の予約は S2 で解け、第 2 面の予約は S-1 で解けた。残るのは
-  // 第 2 関数列の 1 枠(S-4 の `°'"`)だけ。
-  const empty = page.getByRole("button", { name: "空き", exact: true });
-  await expect(empty).toHaveCount(1);
-  await expect(empty).toBeDisabled();
-  // 無効なことは見た目にも出す(S-2 設計書 §5 の「無効表示」)。属性だけだと
-  // 押せる見た目のキーが押せない、という一番いらだつ形になる。
-  const opacity = await empty.evaluate((el) => getComputedStyle(el).opacity);
-  expect(Number(opacity)).toBeLessThan(1);
+test("the board has no reserved slots left", async ({ page }) => {
+  // 第 1 面の予約は S2 で、第 2 面は S-1 で、最後の 1 枠は S-4 の `°'"` で
+  // 埋まった。**盤面に「空き」は 1 つも無い。**
+  await expect(
+    page.getByRole("button", { name: "空き", exact: true }),
+  ).toHaveCount(0);
+  // 埋めた当人が押せることも見る——「消えた」と「無効になった」を分ける。
+  await expect(
+    page.getByRole("button", { name: "60進に切り替え" }),
+  ).toBeEnabled();
 });
 
 test("Shift shows its face is on, not just to the accessibility tree", async ({

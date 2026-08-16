@@ -383,6 +383,11 @@ pub struct EngineState {
     pub angle: AngleMode,
     pub form: DisplayForm,
     pub notation: Notation,
+    /// **60 進で見せているか**(S-4 設計書 §3.1)。`°'"` を押した直後だけ真で、
+    /// **`°'"` 以外のあらゆるキーで解除される**——モードではなく一時状態
+    /// である。`angle` / `form` / `notation` と違って `AC` でも落ちる。
+    #[serde(default)]
+    pub sexagesimal_view: bool,
     /// Some のあいだは AC 以外のキーを受け付けない。
     pub error: Option<CalcError>,
     /// 二項演算子の直後に居るか。演算子を続けて押したときに差し替える
@@ -407,12 +412,16 @@ impl EngineState {
             angle: AngleMode::Deg,
             form: DisplayForm::Rect,
             notation: Notation::Normal,
+            sexagesimal_view: false,
             error: None,
             operator_pending: false,
         }
     }
 
     /// 角度モード・表示形式・記法は利用者の設定なので AC で戻さない。
+    ///
+    /// **`sexagesimal_view` は戻す**(S-4 設計書 §3.1)。あれは設定ではなく
+    /// 「いま覗いている」という一時状態なので、`AC` でも解除される。
     pub fn cleared(&self) -> EngineState {
         EngineState {
             angle: self.angle,

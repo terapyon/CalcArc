@@ -23,7 +23,7 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
     },
     // 第 2 面に逆三角を置く(S-1 設計書 §7)。使用頻度が低く、sin/cos/tan の
     // 裏という対応が自然だからである。**S-1 で「準備中」の空き面は全部
-    // 埋まった**——残る予約は第 2 関数列の 1 枠(S-4 の `°'"`)だけ。
+    // 埋まり、S-4 で最後の予約スロットも埋まった**——盤面に空きは無い。
     {
       token: "sin",
       label: "sin",
@@ -77,7 +77,7 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
  *
  * **よく使う関数を第 1 面に出す**(S-1 設計書 §7)——関数電卓で `ln` や `log` が
  * Shift の裏なのは不便であり、空きを予約スロットで埋めたまま隠すのは本末転倒
- * である。残る 1 枠は S-4 の `°'"`(60 進)が埋める。
+ * である。**S-4 の `°'"` で 7 枠すべてが埋まった。**
  *
  * 区画名は 1 段目「関数キー」を**含まない**名前にする。Playwright の
  * `getByRole` は部分一致なので、「関数キー 2 段目」のような名前だと
@@ -117,12 +117,13 @@ const FUNCTIONS_SECOND: KeypadSection<KeyToken> = {
       },
     },
     { token: "pow", label: "xʸ", ariaLabel: "べき乗", variant: "function" },
-    // 7 番目は S-4 の `°'"` が埋める。
+    // **S-4 でここが埋まり、盤面に予約スロットは 1 つも無くなった。**
+    // 表に出すのはユーザー裁定(時間計算をよく使うため。S-4 §5)。
     {
-      token: null,
-      label: "—",
-      ariaLabel: "空き",
-      variant: "function" as const,
+      token: "dms",
+      label: "°′″",
+      ariaLabel: "60進に切り替え",
+      variant: "function",
     },
   ],
 };

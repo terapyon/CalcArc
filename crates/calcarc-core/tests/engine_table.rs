@@ -416,6 +416,76 @@ fn combinations_do_not_overflow_on_the_way_to_an_answer_that_fits() {
 }
 
 #[test]
+fn the_dms_key_separates_stages_while_typing() {
+    // 1 °'" 30 °'" 0 → 1.5(S-4 設計書 §3)。入力中は打った通りに見せる。
+    assert_eq!(main_of(&["1", "dms", "3", "0"]), "1°30");
+    assert_eq!(main_of(&["1", "dms", "3", "0", "dms", "0", "eq"]), "1.5");
+    // 秒は省ける。
+    assert_eq!(main_of(&["1", "dms", "3", "0", "dms", "eq"]), "1.5");
+}
+
+#[test]
+fn the_dms_key_shows_a_committed_value_in_sexagesimal() {
+    // = のあとに押すと現在値を 60 進で見せる(設計書 §3)。
+    assert_eq!(main_of(&["3", "dot", "7", "5", "eq", "dms"]), "3°45'0\"");
+    // もう一度押すと戻る(裁定 4 のトグル)。
+    assert_eq!(main_of(&["3", "dot", "7", "5", "eq", "dms", "dms"]), "3.75");
+}
+
+#[test]
+fn the_sexagesimal_view_is_released_by_any_other_key() {
+    // **例外を作らない**(設計書 §3.1)。表示トグルでも解除する。
+    for release in ["angle_toggle", "polar_toggle", "eng", "del", "ac"] {
+        let keys = vec!["3", "dot", "7", "5", "eq", "dms", release];
+        assert_ne!(
+            main_of(&keys),
+            "3°45'0\"",
+            "{release} should have released the sexagesimal view"
+        );
+    }
+}
+
+#[test]
+fn the_four_operations_answer_in_sexagesimal_without_new_arithmetic() {
+    // **この spec の要点**(設計書 §1): 1:30 + 2:45 = 4:15 は
+    // 1.5 + 2.75 = 4.25 であり、既存の加算がそのまま答える。
+    assert_eq!(
+        main_of(&[
+            "1", "dms", "3", "0", "dms", "add", "2", "dms", "4", "5", "dms", "eq", "dms"
+        ]),
+        "4°15'0\""
+    );
+}
+
+#[test]
+fn the_dms_key_does_nothing_to_a_value_it_cannot_show() {
+    // 裁定 6: 表示を変えないだけで、エラーにはしない。
+    let shown = run(&["1", "exp", "2", "0", "eq", "dms"]);
+    assert_eq!(shown.main, "1e20");
+    assert!(shown.error.is_none());
+}
+
+#[test]
+fn the_two_entry_modes_ignore_each_other() {
+    // **両方向とも無視**(S-4 の実装計画で明文化)。打ち間違いで入力が
+    // 壊れないようにする——push_dot の前例と同じ。
+    // 指数入力中の `°'"` は効かない。
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "dms"]), "1.5e3");
+    // 60 進入力中の `Exp` は効かない。
+    assert_eq!(main_of(&["1", "dms", "3", "0", "exp"]), "1°30");
+}
+
+#[test]
+fn sexagesimal_wins_over_engineering_notation() {
+    // どちらも表示層で、設計書 §9 は「排他にする」としか書いていない。
+    // **60 進を勝たせる**——押した直後だからである。
+    assert_eq!(
+        main_of(&["3", "dot", "7", "5", "eq", "eng", "dms"]),
+        "3°45'0\""
+    );
+}
+
+#[test]
 fn subtracts_and_divides() {
     assert_eq!(main_of(&["1", "0", "sub", "4", "eq"]), "6");
     assert_eq!(main_of(&["7", "div", "2", "eq"]), "3.5");
