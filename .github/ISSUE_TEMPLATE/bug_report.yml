@@ -1,0 +1,70 @@
+name: 不具合の報告 / Bug report
+description: 計算結果や画面の不具合を報告する / Report a wrong result or a broken screen
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ありがとうございます。**押したキーの順**を書いていただけると、そのまま 1 件のテストになります。
+        Thank you. If you include **the keys you pressed, in order**, your report becomes a test case directly.
+
+  - type: dropdown
+    id: tab
+    attributes:
+      label: どのタブ / Which tab
+      options:
+        - Scientific
+        - Data Scale
+        - Finance
+        - わからない / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: keys
+    attributes:
+      label: 押したキーの順 / Key sequence
+      description: |
+        押したキーを順に、左から書いてください。例: `3 + 4 =`
+        List the keys you pressed in order, left to right. Example: `3 + 4 =`
+      placeholder: "3 + 4 ="
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した表示 / What you expected to see
+      placeholder: "7"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の表示 / What you actually saw
+      placeholder: "8"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 端末とブラウザ / Device and browser
+      description: |
+        わかる範囲で構いません。ホーム画面から起動した場合はその旨も。
+        Whatever you know is fine. Mention if you launched it from the home screen.
+      placeholder: "iPhone 15 / Safari / ホーム画面から起動"
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: 版数 / Version
+      description: |
+        画面のいちばん下に出ています（例: CalcArc 0.2.0 @terapyon）。
+        It is at the very bottom of the screen (e.g. CalcArc 0.2.0 @terapyon).
+      placeholder: "0.2.0"
+    validations:
+      required: false
