@@ -3,12 +3,15 @@
 import pytest
 
 from calcarc_reference.corpus_expr import (
+    BINARY_PRECEDENCE,
     Bin,
     Num,
     Un,
     to_expr_text,
     to_key_sequence,
     to_keys,
+    to_keys_minimal,
+    to_minimal_key_sequence,
     walk,
 )
 
@@ -61,3 +64,92 @@ def test_an_unknown_unary_fn_is_loud_not_silent() -> None:
     # 態度でなければならない——黙って sqrt(...) を描いてはいけない。
     with pytest.raises(ValueError, match="unknown unary fn"):
         to_expr_text(Un("cot", Num(2)))
+
+
+def test_a_higher_precedence_child_loses_its_parentheses() -> None:
+    # 1 + (2 * 3) → 1 + 2 * 3。子の優先順位が親より真に大きい。
+    node = Bin("+", Num(1), Bin("*", Num(2), Num(3)))
+    assert to_keys_minimal(node) == ["1", "add", "2", "mul", "3"]
+
+
+def test_a_lower_precedence_child_keeps_its_parentheses() -> None:
+    # (1 + 2) * 3。省くと別の式になる。
+    node = Bin("*", Bin("+", Num(1), Num(2)), Num(3))
+    assert to_keys_minimal(node) == [
+        "lparen",
+        "1",
+        "add",
+        "2",
+        "rparen",
+        "mul",
+        "3",
+    ]
+
+
+def test_same_precedence_keeps_its_parentheses() -> None:
+    # (10 - 3) - 2。**省けるのは左結合だからで、それを知りたくない。**
+    # 同順位の入れ子は常に括弧を残す(設計書 §3.1)。
+    node = Bin("-", Bin("-", Num(10), Num(3)), Num(2))
+    assert to_keys_minimal(node) == [
+        "lparen",
+        "1",
+        "0",
+        "sub",
+        "3",
+        "rparen",
+        "sub",
+        "2",
+    ]
+    # 右側も同じ。
+    right = Bin("-", Num(10), Bin("-", Num(3), Num(2)))
+    assert to_keys_minimal(right) == [
+        "1",
+        "0",
+        "sub",
+        "lparen",
+        "3",
+        "sub",
+        "2",
+        "rparen",
+    ]
+
+
+def test_a_unary_always_parenthesises_a_binary_argument() -> None:
+    # **単項は後置なので、二項の子は必ず括弧で囲む。**
+    # 省くと sqrt が直前の数だけに掛かる別の式になる
+    # (`1 add 2 sqrt` は 1 + √2 であって √(1+2) ではない)。
+    node = Un("sqrt", Bin("+", Num(1), Num(2)))
+    assert to_keys_minimal(node) == [
+        "lparen",
+        "1",
+        "add",
+        "2",
+        "rparen",
+        "sqrt",
+    ]
+
+
+def test_a_unary_child_of_a_binary_needs_no_parentheses() -> None:
+    # √2 + 3。単項は後置で、括弧は要らない。
+    node = Bin("+", Un("sqrt", Num(2)), Num(3))
+    assert to_keys_minimal(node) == ["2", "sqrt", "add", "3"]
+
+
+def test_the_minimal_sequence_ends_with_equals() -> None:
+    assert to_minimal_key_sequence(Num(5)) == ["5", "eq"]
+
+
+def test_the_precedence_table_matches_the_engine() -> None:
+    # crates/calcarc-core/src/engine/state.rs:46 が正。
+    # Add|Sub = 1、Mul|Div = 2 の 2 段。
+    assert BINARY_PRECEDENCE == {"+": 1, "-": 1, "*": 2, "/": 2}
+
+
+def test_dropping_parentheses_never_changes_the_tokens_that_are_not_parentheses() -> None:
+    # **括弧以外は 1 つも変わらない。** 片方だけ直す事故への守り(設計書 §6)。
+    node = Bin("+", Num(1), Bin("*", Num(2), Un("sqrt", Num(9))))
+
+    def without_parens(keys: list[str]) -> list[str]:
+        return [k for k in keys if k not in ("lparen", "rparen")]
+
+    assert without_parens(to_keys_minimal(node)) == without_parens(to_keys(node))

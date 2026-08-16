@@ -87,6 +87,61 @@ def to_key_sequence(node: Node) -> list[str]:
     return [*to_keys(node), "eq"]
 
 
+# **engine の優先順位。crates/calcarc-core/src/engine/state.rs:46 が正。**
+# Add|Sub = 1、Mul|Div = 2 の 2 段。ここは計算ではなく**記法の約束**なので、
+# 参照実装の移植には当たらない(設計書 §5.1 の「残る結合」)。ただし engine が
+# 段を増やしたらここも直す必要がある、という結合は残る。
+BINARY_PRECEDENCE = {"+": 1, "-": 1, "*": 2, "/": 2}
+
+
+def to_keys_minimal(node: Node) -> list[str]:
+    """式木を、**省ける括弧を省いた**キー列にする。
+
+    省くのは**子の優先順位が親より真に大きいとき**だけである。同順位の入れ子
+    (`(10-3)-2`)の括弧を省けるのは engine が左結合だからで、省いた瞬間に
+    この関数が結合方向を知ることになる。**知りたくないので残す**(設計書 §3.1)。
+
+    代償として、このコーパスは結合方向を検証しない。それは engine_table.rs の
+    担当である。
+    """
+    if isinstance(node, Num):
+        return [DIGIT_KEYS[int(digit)] for digit in str(node.value)]
+    if isinstance(node, Un):
+        return [*_unary_operand_keys(node.arg), UNARY_KEYS[node.fn]]
+    if node.op not in BINARY_PRECEDENCE:
+        raise ValueError(f"unknown binary op: {node.op!r}")
+    parent = BINARY_PRECEDENCE[node.op]
+    return [
+        *_binary_operand_keys(node.left, parent),
+        BINARY_KEYS[node.op],
+        *_binary_operand_keys(node.right, parent),
+    ]
+
+
+def _binary_operand_keys(child: Node, parent_precedence: int) -> list[str]:
+    """二項の子。**優先順位が真に大きいときだけ**括弧を省く。"""
+    if isinstance(child, Bin) and BINARY_PRECEDENCE[child.op] <= parent_precedence:
+        return ["lparen", *to_keys_minimal(child), "rparen"]
+    return to_keys_minimal(child)
+
+
+def _unary_operand_keys(child: Node) -> list[str]:
+    """単項の子。**二項なら必ず括弧で囲む。**
+
+    単項は後置なので、括弧を省くと直前の数だけに掛かる別の式になる——
+    `1 add 2 sqrt` は `1 + √2` であって `√(1+2)` ではない。ここは優先順位の
+    話ではなく、後置記法そのものの要請である。
+    """
+    if isinstance(child, Bin):
+        return ["lparen", *to_keys_minimal(child), "rparen"]
+    return to_keys_minimal(child)
+
+
+def to_minimal_key_sequence(node: Node) -> list[str]:
+    """corpus の `keys` に入る形(括弧を省いた版)。末尾の `=` まで含む。"""
+    return [*to_keys_minimal(node), "eq"]
+
+
 def to_expr_text(node: Node) -> str:
     """corpus の `expr` に入る形。**人が読んで検算できることが要件**である。
 
