@@ -661,3 +661,24 @@ fn del_does_not_remove_an_operator() {
     // 括弧の内側で演算子が保留中なら、その括弧も消さない。
     assert_eq!(run(&["lparen", "3", "add", "del"]).pending_depth, 1);
 }
+
+#[test]
+fn eng_turns_the_answer_into_engineering_notation() {
+    // 1000 を作って ENG を押す。もう一度押すと戻る(設計書 §1 の裁定 1)。
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq"]), "1,000");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng"]), "1e3");
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng", "eng"]), "1,000");
+}
+
+#[test]
+fn eng_stays_on_for_the_next_answer() {
+    // **モードとして残る**——一度押したら以後の計算結果も ENG で出る。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5", "eq"]), "12.345e3");
+}
+
+#[test]
+fn eng_does_not_touch_what_you_are_typing() {
+    // 入力中は buffer.text() の経路で、format_real を通らない(設計書 §3.2)。
+    // ENG に入れても打っている数字はそのまま見える。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5"]), "12345");
+}

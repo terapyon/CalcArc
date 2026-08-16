@@ -73,7 +73,8 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 | Key::LParen
                 | Key::Del
                 | Key::AngleToggle
-                | Key::PolarToggle => was_pending,
+                | Key::PolarToggle
+                | Key::EngToggle => was_pending,
             };
     }
 
@@ -317,6 +318,12 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // 表示形式だけを入れ替える。current には触れない。
             // これがあるから丸めた値が次の計算に流れ込まない。
             state.form = state.form.toggled();
+        }
+        Key::EngToggle => {
+            // 記法だけを入れ替える。表示の切り替えであって計算ではないので、
+            // AngleToggle / PolarToggle と同じく commit_entry を呼ばない
+            // ——入力中の数はそのまま残る(設計書 §3.2)。
+            state.notation = state.notation.toggled();
         }
         // AC は reduce 側で処理済みなので、ここでは何もしない。
         // 網羅性のために腕だけ置く。

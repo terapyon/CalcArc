@@ -6,9 +6,10 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 本スライスでは保存しないが、後から足すと既存データが扱えなくなるため
 /// 最初から持たせておく（設計書 §4.4）。
 /// 4: `Buffer` に指数部が入った(設計書 §2)。直列化の形が変わったので上げた。
+/// 5: `EngineState` に `notation`(ENG トグル)が入った(設計書 §4)。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 4;
+pub const STATE_SCHEMA: u32 = 5;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
@@ -29,6 +30,22 @@ impl DisplayForm {
         match self {
             DisplayForm::Rect => DisplayForm::Polar,
             DisplayForm::Polar => DisplayForm::Rect,
+        }
+    }
+}
+
+/// 表示の記法。`AngleMode` や `DisplayForm` と同じ**表示の状態**である(設計書 §4)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Notation {
+    Normal,
+    Eng,
+}
+
+impl Notation {
+    pub fn toggled(self) -> Notation {
+        match self {
+            Notation::Normal => Notation::Eng,
+            Notation::Eng => Notation::Normal,
         }
     }
 }
@@ -267,6 +284,7 @@ pub struct EngineState {
     pub operators: Vec<OpToken>,
     pub angle: AngleMode,
     pub form: DisplayForm,
+    pub notation: Notation,
     /// Some のあいだは AC 以外のキーを受け付けない。
     pub error: Option<CalcError>,
     /// 二項演算子の直後に居るか。演算子を続けて押したときに差し替える
@@ -290,16 +308,18 @@ impl EngineState {
             operators: Vec::new(),
             angle: AngleMode::Deg,
             form: DisplayForm::Rect,
+            notation: Notation::Normal,
             error: None,
             operator_pending: false,
         }
     }
 
-    /// 角度モードと表示形式は利用者の設定なので AC で戻さない。
+    /// 角度モード・表示形式・記法は利用者の設定なので AC で戻さない。
     pub fn cleared(&self) -> EngineState {
         EngineState {
             angle: self.angle,
             form: self.form,
+            notation: self.notation,
             ..EngineState::initial()
         }
     }
