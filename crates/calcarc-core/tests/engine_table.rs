@@ -274,6 +274,23 @@ fn the_echo_shows_the_power_operator() {
 }
 
 #[test]
+fn del_leaves_a_stack_of_power_operators_alone() {
+    // **右結合が作る形を名指しで押さえる行。** `2 ^ 3 ^` は畳まれないので、
+    // 同順位の演算子が 2 つ積まれたスタックになる——他のどの演算子でも
+    // 到達できない形である。網羅列挙は長さ 6 の焦点列でここへ届くが、
+    // 網は安いほうがよいので代表列を表にも置く（engine_robustness の
+    // FOCUS のコメントを参照）。
+    //
+    // DEL は演算子を消さない（設計書 I7）ので、入力中の 2 を消しても
+    // スタックは 2 段のまま残り、4 が右辺に入って 2^(3^4) になる。
+    // 2^(3^4) = 2^81。左結合なら (2^3)^4 = 4096 になる。
+    assert_eq!(
+        main_of(&["2", "pow", "3", "pow", "2", "del", "4", "eq"]),
+        "2.417851639e24"
+    );
+}
+
+#[test]
 fn the_real_functions_apply_immediately_like_the_others() {
     // 単項は後置。式には積まれない（設計書 D6）。
     assert_eq!(main_of(&["2", "ln"]), "0.6931471806");
