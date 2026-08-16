@@ -192,6 +192,96 @@ pub fn recip(v: Value) -> CalcResult<Value> {
     Value::real(1.0 / x).finalize()
 }
 
+/// 非負整数の引数を取り出す。`n!` / `nPr` / `nCr` の共通の入口（設計書 §3）。
+///
+/// 複素数は `real_arg` が弾く。ここで見るのは「非負の整数か」だけである。
+fn non_negative_integer(v: Value) -> CalcResult<f64> {
+    let x = real_arg(v)?;
+    if !x.is_finite() || x < 0.0 || x.fract() != 0.0 {
+        return Err(CalcError::DomainError);
+    }
+    Ok(x)
+}
+
+/// 階乗。定義域は**非負整数**（設計書 §3 の裁定 3）。
+///
+/// `2.5!` はガンマ関数だが入れない——「関数は実数に閉じる、面倒な拡張は
+/// しない」という S-1 の精神と同じである。
+///
+/// `170!` ≈ 7.26e306 が f64 の上限で、`171!` は `Overflow` になる。
+/// **f64 は `20!` の時点で既に厳密ではない**が、表示は有効数字 10 桁なので
+/// 表示される桁はすべて正しい（実測 6.9e-16。numerical-policy を参照）。
+pub fn factorial(v: Value) -> CalcResult<Value> {
+    let n = non_negative_integer(v)?;
+    let mut acc = 1.0_f64;
+    let mut i = 2.0_f64;
+    while i <= n {
+        acc *= i;
+        if !acc.is_finite() {
+            return Err(CalcError::Overflow);
+        }
+        i += 1.0;
+    }
+    Value::real(acc).finalize()
+}
+
+/// `nPr` / `nCr` の 2 引数を検査する。どちらも非負整数で、`r ≤ n`。
+fn check_pair(n: Value, r: Value) -> CalcResult<(f64, f64)> {
+    let n = non_negative_integer(n)?;
+    let r = non_negative_integer(r)?;
+    if r > n {
+        return Err(CalcError::DomainError);
+    }
+    Ok((n, r))
+}
+
+/// 順列 nPr = n(n−1)…(n−r+1)。定義域は非負整数で `r ≤ n`（設計書 §3）。
+///
+/// 素直な積でよい——答より大きい途中値が出ない。
+pub fn npr(n: Value, r: Value) -> CalcResult<Value> {
+    let (n, r) = check_pair(n, r)?;
+    let mut acc = 1.0_f64;
+    let mut i = 0.0_f64;
+    while i < r {
+        acc *= n - i;
+        if !acc.is_finite() {
+            return Err(CalcError::Overflow);
+        }
+        i += 1.0;
+    }
+    Value::real(acc).finalize()
+}
+
+/// 組合せ nCr。定義域は非負整数で `r ≤ n`（設計書 §3）。
+///
+/// **割ってから掛ける。順序が定義域を決める**（設計書 §4 の訂正）:
+///
+/// - 素直な `n!/(r!(n−r)!)` は `200 nCr 100`（答は 9.05e58）で `200!` が
+///   溢れて落ちる
+/// - 掛けてから割る（`acc * (n−i) / (i+1)`）は、**段の中のピーク**が答の
+///   最大 `r` 倍になるので `n = 1022`〜`1028` の中心二項係数が**答は収まる
+///   のに**落ちる
+/// - **割ってから掛ける**（`acc / (i+1) * (n−i)`）だけが両方を通る
+///
+/// 精度は落ちない。無作為な 4,000 組で最悪相対誤差 3.6e-15 であり、
+/// 表示の 10 桁より 5 桁良い（実測）。途中で整数にならない段があるが
+/// （`C(5,2)` は 2.5 を通る）、f64 はもともと厳密ではない。
+pub fn ncr(n: Value, r: Value) -> CalcResult<Value> {
+    let (n, r) = check_pair(n, r)?;
+    // 反復回数を減らす。C(n, r) = C(n, n−r)。
+    let r = if r > n - r { n - r } else { r };
+    let mut acc = 1.0_f64;
+    let mut i = 0.0_f64;
+    while i < r {
+        acc = acc / (i + 1.0) * (n - i);
+        if !acc.is_finite() {
+            return Err(CalcError::Overflow);
+        }
+        i += 1.0;
+    }
+    Value::real(acc).finalize()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -402,6 +492,104 @@ mod tests {
     #[test]
     fn reciprocal_of_a_tiny_value_overflows() {
         assert_eq!(recip(Value::real(1e-320)), Err(CalcError::Overflow));
+    }
+
+    #[test]
+    fn factorial_of_small_integers() {
+        assert_eq!(factorial(Value::real(0.0)).unwrap(), Value::real(1.0));
+        assert_eq!(factorial(Value::real(1.0)).unwrap(), Value::real(1.0));
+        assert_eq!(factorial(Value::real(5.0)).unwrap(), Value::real(120.0));
+        close(
+            factorial(Value::real(20.0)).unwrap().re,
+            2.43290200817664e18,
+        );
+    }
+
+    #[test]
+    fn factorial_stops_at_the_f64_ceiling() {
+        // 170! は収まり、171! は溢れる（設計書 §4）。
+        assert!(factorial(Value::real(170.0)).is_ok());
+        assert_eq!(factorial(Value::real(171.0)), Err(CalcError::Overflow));
+    }
+
+    #[test]
+    fn factorial_is_only_defined_on_non_negative_integers() {
+        // ガンマ関数には広げない（設計書 §3 の裁定 3）。
+        assert_eq!(factorial(Value::real(2.5)), Err(CalcError::DomainError));
+        assert_eq!(factorial(Value::real(-1.0)), Err(CalcError::DomainError));
+        assert_eq!(factorial(Value::new(3.0, 4.0)), Err(CalcError::DomainError));
+    }
+
+    #[test]
+    fn permutations_and_combinations_of_small_numbers() {
+        assert_eq!(
+            npr(Value::real(5.0), Value::real(2.0)).unwrap(),
+            Value::real(20.0)
+        );
+        assert_eq!(
+            ncr(Value::real(5.0), Value::real(2.0)).unwrap(),
+            Value::real(10.0)
+        );
+    }
+
+    #[test]
+    fn the_counting_boundaries_are_all_one() {
+        // 0! = nP0 = nC0 = nCn = 1（設計書 §3）。
+        assert_eq!(
+            npr(Value::real(5.0), Value::real(0.0)).unwrap(),
+            Value::real(1.0)
+        );
+        assert_eq!(
+            ncr(Value::real(5.0), Value::real(0.0)).unwrap(),
+            Value::real(1.0)
+        );
+        assert_eq!(
+            ncr(Value::real(5.0), Value::real(5.0)).unwrap(),
+            Value::real(1.0)
+        );
+    }
+
+    #[test]
+    fn r_may_not_exceed_n() {
+        assert_eq!(
+            ncr(Value::real(5.0), Value::real(6.0)),
+            Err(CalcError::DomainError)
+        );
+        assert_eq!(
+            npr(Value::real(5.0), Value::real(6.0)),
+            Err(CalcError::DomainError)
+        );
+        // 非整数と負も定義域の外。
+        assert_eq!(
+            ncr(Value::real(5.5), Value::real(2.0)),
+            Err(CalcError::DomainError)
+        );
+        assert_eq!(
+            ncr(Value::real(5.0), Value::real(-1.0)),
+            Err(CalcError::DomainError)
+        );
+    }
+
+    #[test]
+    fn ncr_does_not_overflow_on_the_way_to_an_answer_that_fits() {
+        // **設計書 §4 の主張、訂正版。** ここで主張するのは**溢れないこと**
+        // だけである。
+        //
+        // **値そのものはここでは測れない。** `assert_close` は絶対誤差
+        // 1e-12 で比べるので、1e58 や 1e306 では常に落ちる（差が 1 ULP でも
+        // 1e42 ある）。値は golden が Python の厳密整数と**相対誤差**で
+        // 突き合わせる——そちらが正しい場所である。
+        let c = |n: f64, r: f64| ncr(Value::real(n), Value::real(r));
+        // 素直な n!/(r!(n−r)!) はここで落ちる（200! が溢れる）。
+        assert!(c(200.0, 100.0).is_ok());
+        assert!(c(1000.0, 500.0).is_ok());
+        // **この 3 行が「割ってから掛ける」でしか通らない**——掛けてから
+        // 割る形は段の中のピークが答の r 倍になって溢れる。
+        assert!(c(1022.0, 511.0).is_ok());
+        assert!(c(1024.0, 512.0).is_ok());
+        assert!(c(1028.0, 514.0).is_ok());
+        // 帯の外側。対照として置く——ここまでは 3 つの書き方すべてが通る。
+        assert!(c(1020.0, 510.0).is_ok());
     }
 
     #[test]
