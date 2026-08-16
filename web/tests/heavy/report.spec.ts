@@ -1,7 +1,17 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { ToleranceBand } from "./corpus";
 import { loadShards, needsPrecedence, partitionCases } from "./corpus";
-import { type Provenance, renderReport, type ShardSummary } from "./report";
+import {
+  expectedSummaryNames,
+  PRECEDENCE_CHANGES_MEANING,
+  PRECEDENCE_SHARD,
+  type Provenance,
+  renderReport,
+  type ShardSummary,
+  summaryName,
+} from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
 
@@ -605,6 +615,14 @@ test("an unmatched rparen fails loudly instead of silently under-counting", () =
   // **All four malformed shapes the round-3 review probed, not just the one
   // a prior round happened to name (N4).** The topLevel/stack split fixes
   // all of them at once, but only one had a regression test.
+  //
+  // **These four are one guard, not four (fix round 4).** All four pin the
+  // same single `throw` in `needsPrecedence`; removing it reddens all four at
+  // once, and no edit reddens one alone. They are kept as *shape* coverage —
+  // two of these shapes used to be silently `false` on the Python twin while
+  // the other two raised, so what the extra three catch is a future rewrite
+  // that reintroduces a shape-dependent path. Do not count them as
+  // independent guards.
   expect(() =>
     needsPrecedence(["1", "rparen", "add", "2", "mul", "3", "eq"]),
   ).toThrow(/unmatched "rparen"/);
@@ -632,7 +650,7 @@ test("the report says how many cases exercised precedence", () => {
   const markdown = renderReport(
     [
       summary({
-        name: "precedence-000.json (values)",
+        name: summaryName(PRECEDENCE_SHARD, "values"),
         precedenceCases: 1500,
       }),
     ],
@@ -654,12 +672,17 @@ test("the precedence-specific elaboration is absent when that shard is not in th
   // claims (its own total, the 1101 figure, the associativity caveat) must
   // not, because they are not true of this run.
   const markdown = renderReport(
-    [summary({ name: "scientific-000.json (values)", precedenceCases: 7 })],
+    [
+      summary({
+        name: summaryName("scientific-000.json", "values"),
+        precedenceCases: 7,
+      }),
+    ],
     PROVENANCE,
   );
   expect(markdown).toContain("7 件が踏んでいる");
-  expect(markdown).not.toContain("precedence-000.json");
-  expect(markdown).not.toContain("1101");
+  expect(markdown).not.toContain(PRECEDENCE_SHARD);
+  expect(markdown).not.toContain(String(PRECEDENCE_CHANGES_MEANING));
   expect(markdown).not.toContain("結合方向");
 });
 
@@ -677,4 +700,253 @@ test("zero precedence cases reads as never touched", () => {
   const markdown = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
   expect(markdown).toContain("キー列は二項演算を必ず括弧で囲む");
   expect(markdown).not.toContain("件が踏んでいる");
+});
+
+/**
+ * `reference/tests/test_generate_corpus.py` が固定している「優先順位が無いと
+ * 別の木になる」件数を、テストのソースそのものから読み出す。
+ */
+function pinnedChangesMeaning(): number {
+  const source = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../../../reference/tests/test_generate_corpus.py",
+        import.meta.url,
+      ),
+    ),
+    "utf-8",
+  );
+  const match = /^\s*assert changes_meaning == (\d+)\s*$/m.exec(source);
+  const figure = match?.[1];
+  if (figure === undefined) {
+    throw new Error(
+      "reference/tests/test_generate_corpus.py no longer contains an " +
+        "`assert changes_meaning == <n>` line — the report's figure for how " +
+        "many precedence cases change meaning is pinned to that assert, so " +
+        "either restore it or move the pin somewhere this test can read",
+    );
+  }
+  return Number(figure);
+}
+
+test("the changes-meaning figure is pinned to the number the reference test asserts", () => {
+  // **F2 (fix round 4). この数字を制約しているものが一つも無かった。**
+  // 1101 は報告書のいちばん具体的で強い数字なのに、`report.ts` の中に
+  // 文字列リテラルとして**2 か所**書かれているだけだった。実測(review
+  // round 3): 片方を 9999 に変えてもレポートのテストは **30 passed** の
+  // まま。しかも round 3 が分母だけをデータ由来にしたので、シャードを
+  // 再生成すると「2300 件のうち 1101 件」——別々の時代の 2 つの数字が
+  // 1 つの文に並ぶ、という壊れ方に**近づいて**いた。
+  //
+  // ここで閉じる。描画側の複製は `PRECEDENCE_CHANGES_MEANING` 1 つに畳み、
+  // その値を reference のテストの assert から実際に読み出して照合する。
+  // Python 側だけを直しても、TypeScript 側だけを直しても赤くなる。
+  const pinned = pinnedChangesMeaning();
+  expect(PRECEDENCE_CHANGES_MEANING).toBe(pinned);
+
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(PRECEDENCE_SHARD, "values"),
+        precedenceCases: 2000,
+      }),
+    ],
+    PROVENANCE,
+  );
+  // 本文と但し書きの両方に出る。両方が同じ 1 つの定数から来ていること。
+  expect(markdown).toContain(`無いと別の木になる件数は **${pinned} 件**`);
+  expect(markdown).toContain(`> ${pinned} 件が意味を変える`);
+});
+
+test("the precedence shard's own total is read from the summary, not written in", () => {
+  // **F2b (fix round 4).** Round 3 replaced a literal `2000` in this sentence
+  // with `${precedenceShard.total}` — a real fix that no test could see,
+  // because every fixture in this file defaults to `total: 2000`, exactly the
+  // literal it replaced. Measured by the round-3 review: putting the literal
+  // back left **30 passed**. Use a total that is *not* 2000, so the two are
+  // distinguishable.
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(PRECEDENCE_SHARD, "values"),
+        total: 1234,
+        values: 1234,
+        precedenceCases: 1234,
+        relMeasured: 1234,
+        bands: bands({ display: 1234 }),
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(markdown).toContain(`\`${PRECEDENCE_SHARD}\` の 1234 件のうち`);
+  expect(markdown).toContain(`\`${PRECEDENCE_SHARD}\` の 1234 件中`);
+  // The two positive assertions above are what catch a literal, in both the
+  // body and the disclaimer. (A blanket `not.toContain("2000 件中")` would
+  // catch the historical adversarial-fake sentence, which legitimately names
+  // the 2000 value cases of 2026-08-15.)
+  expect(markdown).not.toContain("2000 件のうち");
+});
+
+test("the parenthesis item and its disclaimer never describe different things", () => {
+  // **F3 (fix round 4).** The item branched on `precedence === 0`; the
+  // disclaimer branched on `precedenceShard === undefined`. Three states
+  // exist. In `(0, undefined)` — every run that does not include the
+  // precedence shard, which is the state this project was in for its whole
+  // life before this task — the item was 100% fixed prose containing no count
+  // at all, while the disclaimer described it as 「見出しの件数だけの、
+  // 完全にデータ由来の行である」. Both now read one `parenthesis.kind`.
+  const untouched = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
+  expect(untouched).toContain("キー列は二項演算を必ず括弧で囲む");
+  expect(untouched).toContain("この走行では**完全に固定の文章**である");
+  expect(untouched).not.toContain("完全にデータ由来の行である");
+  expect(untouched).not.toContain("**半分だけ**データ由来");
+
+  const counted = renderReport(
+    [
+      summary({
+        name: summaryName("scientific-000.json", "values"),
+        precedenceCases: 7,
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(counted).toContain("7 件が踏んでいる");
+  expect(counted).toContain("見出しの件数だけの、完全にデータ由来の行である");
+  expect(counted).not.toContain("この走行では**完全に固定の文章**である");
+  expect(counted).not.toContain("**半分だけ**データ由来");
+
+  const pinned = renderReport(
+    [
+      summary({
+        name: summaryName(PRECEDENCE_SHARD, "values"),
+        precedenceCases: 2000,
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(pinned).toContain("**半分だけ**データ由来");
+  expect(pinned).not.toContain("この走行では**完全に固定の文章**である");
+  expect(pinned).not.toContain(
+    "見出しの件数だけの、完全にデータ由来の行である",
+  );
+});
+
+test("the qualification stays attached to the precedence claim in every branch", () => {
+  // **F6 (fix round 4).** 「engine は括弧ではなく優先順位で構造を決めた」 is
+  // true for all `precedence` cases, but the reader hears "these 2000 cases
+  // would have been wrong without precedence" — which is true for only 1101
+  // of them. Round 3's gate moved the paragraph that says so behind the
+  // shard's presence, leaving the unqualified sentence standing alone in
+  // every shard-absent run. The qualification now sits in the head sentence,
+  // where it renders in *both* non-zero branches; only the figure is gated.
+  for (const entry of [
+    summary({
+      name: summaryName("scientific-000.json", "values"),
+      precedenceCases: 7,
+    }),
+    summary({
+      name: summaryName(PRECEDENCE_SHARD, "values"),
+      precedenceCases: 2000,
+    }),
+  ]) {
+    const markdown = renderReport([entry], PROVENANCE);
+    expect(markdown).toContain("優先順位から復元した");
+    expect(markdown).toContain("「優先順位が無ければ誤答になる」件数ではない");
+  }
+});
+
+test("the gate name is one the corpus actually produces", () => {
+  // **F9 (fix round 4).** The gate used to compare against a hand-written
+  // `"precedence-000.json (values)"`. `record()` and `expectedSummaryNames()`
+  // build that string from the same `${name} (values)` template, so changing
+  // the format would move those two together — `missing` stays empty,
+  // `writeReport` stays silent — and only the gate would stop matching: the
+  // figure paragraph would vanish from the real report while this file, which
+  // builds the string itself, stayed green. All three now call `summaryName`,
+  // and this asserts the gate's name is one the real corpus on disk produces.
+  expect(expectedSummaryNames()).toContain(
+    summaryName(PRECEDENCE_SHARD, "values"),
+  );
+});
+
+test("a disclosure of two cases in six thousand is not rounded away to 0.0%", () => {
+  // **F11 (fix round 4).** `toFixed(1)` printed 2/6000 as "0.0%" — a
+  // disclosure rounded to the same字面 as "none".
+  const markdown = renderReport(
+    [
+      summary({
+        total: 6000,
+        values: 6000,
+        relMeasured: 6000,
+        looserThanDisplay: 2,
+        bands: bands({ display: 5998, "1e-9": 2 }),
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("全 6000 件中 0.033%");
+  expect(markdown).not.toContain("0.0%");
+});
+
+test("the adversarial-fake measurement says when it was taken and over what", () => {
+  // **F5 (fix round 4).** 「値ケースは 2000 件中 1996 件が不一致になった」 was a
+  // one-off 2026-08-15 measurement rendered in the present tense, four lines
+  // under a headline that now says 4000 value cases.
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(markdown).toContain(
+    "**2026-08-15 の測定時点、当時の値ケース 2000 件中 1996 件**",
+  );
+  expect(markdown).toContain("この走行で測り直した数字ではない");
+});
+
+test("the input-display caveat quotes the headline's own number", () => {
+  // **F6b (fix round 4).** 「上の「4000 件通った」」 was a literal — it said
+  // 4000 for a 2000-case run, and the phrase it claimed to quote never
+  // appeared above (the headline reads 「二経路で照合したケース(値): 4000」).
+  const markdown = renderReport(
+    [
+      summary({
+        total: 1234,
+        values: 1234,
+        relMeasured: 1234,
+        bands: bands({ display: 1234 }),
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("**二経路で照合したケース(値): 1234**");
+  expect(markdown).toContain("上の「二経路で照合したケース(値): 1234」");
+  expect(markdown).not.toContain("4000 件通った");
+});
+
+test("the injected-token share is derived from the same counts the table renders", () => {
+  // **F7 (fix round 4).** 「`neg` 2122 回のうち 74.2%(1574 回)」 was hand
+  // written, sat directly above the table that renders those same quantities
+  // from data, and would rot on any regeneration of `equivalence-000.json`.
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName("equivalence-000.json", "equivalences"),
+        values: 0,
+        equivalences: 2000,
+        shape: {
+          sequences: 2000,
+          tokens: { neg: 10, eq: 2000, "1": 900 },
+          depths: { "0": 2000 },
+        },
+        addedByTransform: { neg: 30 },
+      }),
+    ],
+    PROVENANCE,
+  );
+  // 10 pressed on the left, 30 injected into the right, so both sides hold
+  // 10 + (10 + 30) = 50 and the injected share is 30/50.
+  expect(markdown).toContain(
+    "この走行では左辺の `neg` が 10 回、変換が右辺に足した `neg` が 30 回。",
+  );
+  expect(markdown).toContain(
+    "左右を合わせた 50 回のうち **60.0%** が注入分になる",
+  );
+  expect(markdown).not.toContain("2122");
+  expect(markdown).not.toContain("74.2%");
 });

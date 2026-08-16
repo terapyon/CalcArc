@@ -194,7 +194,9 @@ def _needs_precedence(keys: list[str]) -> bool:
     トップレベルの組を巻き込んで消せてしまうのが原因で、M1 が名指しした
     「壊れた入力を静かに読み違える」形そのものだった。トップレベルを pop
     できない別変数にしたことで、対応の無い `rparen` は**必ず** `stack` が
-    空の状態で `pop()` を試みることになり、ここで明示的に例外を投げる。
+    空の状態で現れることになり、`pop()` に入る前の `if not stack` で
+    明示的に例外を投げる(以前は空の `stack` を `pop()` しようとして
+    `IndexError` になる、という偶然に頼っていた)。
 
     **双子について。** この関数は `test_every_precedence_case_actually_drops_a_parenthesis`
     が `precedence-000.json` を生成する側のゲートとして使い、TypeScript の
@@ -257,6 +259,15 @@ def test_malformed_rparen_always_raises_not_only_when_an_operator_follows() -> N
     # group. All four must now raise, matching the TypeScript twin
     # (`needsPrecedence`) on every one of them, not just the one probe a prior
     # round happened to name.
+    #
+    # **These four are one guard, not four (fix round 4).** All four pin the
+    # same single `raise` in `_needs_precedence`; deleting it reddens all four
+    # at once, and no edit reddens one alone. They are kept as *shape*
+    # coverage — the round-3 review found that two of these shapes (a trailing
+    # unmatched `rparen`, and an extra `rparen` after a balanced group) used to
+    # return a quiet `False` while the other two raised, so a future rewrite
+    # that reintroduces a shape-dependent path is what the extra three catch.
+    # Do not count them as independent guards.
     import pytest
 
     with pytest.raises(ValueError, match='unmatched "rparen"'):
@@ -368,11 +379,11 @@ def test_precedence_shard_reports_how_many_cases_change_meaning_without_preceden
     # the result, structurally, to a real-precedence parse of the same keys.
     #
     # **Reads `corpus/generated/precedence-000.json` from disk (N3, review
-    # round 3).** The first version of this test called
-    # `generate_corpus._precedence_candidates(random.Random(20260817), 2000)`
-    # directly — a literal copy of `main()`'s seed and count
-    # (`generate_corpus.py:335`) that regenerated trees in memory and never
-    # touched the committed file. Measured: change the generator's seed and
+    # round 3).** The first version of this test re-ran the generator's own
+    # loop in memory — with a literal copy of `main()`'s seed and count
+    # (`generate_corpus.py`'s `build_precedence_shard(seed=20260817,
+    # count=2000)`) — and never touched the committed file. Measured: change
+    # the generator's seed and
     # `test_corpus_reproducibility.py` correctly reddens (the committed shard
     # no longer matches a fresh generation) — but the old version of this test
     # stayed green, still asserting 1101 against a stream the committed shard
@@ -390,10 +401,14 @@ def test_precedence_shard_reports_how_many_cases_change_meaning_without_preceden
     # ground-truth self-check, not an assumption. Only then is the same keys
     # list parsed a second time with *no* precedence distinction and compared,
     # structurally, to the ground-truth tree.
+    #
+    # **`assert len(cases) > 0` used to stand here and was removed (fix round
+    # 4).** It cannot fail in any state where `len(cases) == 2000` below
+    # passes, so it constrained nothing; the round-3 review could not construct
+    # an input that reddened it alone.
     with (_CORPUS_GENERATED / "precedence-000.json").open(encoding="utf-8") as f:
         shard = json.load(f)
     cases = shard["cases"]
-    assert len(cases) > 0, "precedence-000.json carries no cases to check"
 
     real = {BINARY_KEYS[op]: prec for op, prec in BINARY_PRECEDENCE.items()}
     uniform = {key: 1 for key in BINARY_KEYS.values()}

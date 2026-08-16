@@ -28,7 +28,7 @@ import {
   loadOverrides,
   resolveTolerance,
 } from "./overrides";
-import { noteRuntime, record } from "./report";
+import { noteRuntime, PRECEDENCE_SHARD, record, summaryName } from "./report";
 
 // **1 度だけ読む。** モジュールのトップレベルで 3 回呼ぶと 1.6MB の JSON を
 // 3 回パースすることになる(レビュー修正ラウンド 2)。
@@ -577,7 +577,7 @@ for (const { name, shard, values } of partitions) {
       needsPrecedence(c.keys),
     ).length;
     record({
-      name: `${name} (values)`,
+      name: summaryName(name, "values"),
       total: values.length,
       values: values.length,
       equivalences: 0,
@@ -602,6 +602,30 @@ for (const { name, shard, values } of partitions) {
     // 別の欠陥なので、不一致が 0 でも赤くする。record() の後に置くのは、
     // ここで throw してもレポートは残したいからである。
     assertNoStaleOverrides(stale, overrides);
+
+    // **F1 (fix round 4): この件数を制約しているものが一つも無かった。**
+    // `precedenceCases` は報告書の「括弧を省いた式」の項目を丸ごと決めて
+    // いる——0 なら「**一度も踏んでいない**」と印字する——のに、リポジトリ中
+    // どこにもこれを実データについて縛る expect が無かった。実測(review
+    // round 3):上の `needsPrecedence(c.keys)` を
+    // `needsPrecedence(c.keys.slice(0, 3))` に変えると `pnpm heavy` は
+    // **84 passed** のまま通り、`heavy-report.md` は 2000 件の括弧省略
+    // シャードの存在を正面から否定する文を公開した。
+    //
+    // 縛れる根拠はコーパスの不変条件の側にある。`precedence-000.json` は
+    // 「省ける括弧が 1 つも無い木は捨てる」で生成されており(reference の
+    // `test_every_precedence_case_actually_drops_a_parenthesis` が生成側で
+    // 強制している)、全件が必ず踏む。それ以外の値シャードは二項演算を必ず
+    // 括弧で囲むので、1 件も踏まない。**どちらも `needsPrecedence` とは
+    // 独立に決まっている**ので、ここで突き合わせるのは自己言及ではない。
+    const expectedPrecedenceCases =
+      name === PRECEDENCE_SHARD ? values.length : 0;
+    expect(
+      precedenceCases,
+      `${name}: ${precedenceCases} of ${values.length} value case(s) were ` +
+        `counted as needing precedence, expected ${expectedPrecedenceCases} ` +
+        `— the report's "括弧を省いた式" item is derived from this number`,
+    ).toBe(expectedPrecedenceCases);
 
     // 先頭 20 件だけ読ませる。端末で読める量に上限を置き、全件は
     // Task 8 のレポートが持つ(設計書 §8)。
@@ -651,22 +675,21 @@ test("an equivalence case counts once even when both its sequences need preceden
     },
   ];
   const precedenceCases = synthetic.filter(equivalenceNeedsPrecedence).length;
-  // Per-case OR: all three cases qualify once each.
+  // **Per-case OR: all three cases qualify once each — and 3 is exactly the
+  // number that separates this from the mistake being guarded against.** The
+  // `(left ? 1 : 0) + (right ? 1 : 0)` reduction this test exists to rule out
+  // gives 4 on the same three cases (2 left-matches + 2 right-matches,
+  // double-counting `synthetic-both`), so swapping the production function
+  // for that reduction reddens this line.
+  //
+  // **Two assertions used to stand here and were removed (fix round 4):**
+  // `expect(wrongSequenceSum).toBe(4)` computed that reduction inline and
+  // asserted its value — but `wrongSequenceSum` was consumed nowhere in
+  // production, so no change to production code could move it — and
+  // `expect(precedenceCases).not.toBe(wrongSequenceSum)`, which given the two
+  // literals above was the arithmetic claim 3 ≠ 4. Neither could be made to
+  // fail. The fact they encoded now lives in this comment, where it belongs.
   expect(precedenceCases).toBe(3);
-  // Not the sequence-sum a `(left ? 1 : 0) + (right ? 1 : 0)` reduction would
-  // give (2 left-matches + 2 right-matches = 4, double-counting "both").
-  // This alternate computation is deliberately *not* routed through
-  // `equivalenceNeedsPrecedence` — it exists only to give the assertion
-  // below something concrete to differ from.
-  const wrongSequenceSum = synthetic.reduce(
-    (sum, c) =>
-      sum +
-      (needsPrecedence(c.left) ? 1 : 0) +
-      (needsPrecedence(c.right) ? 1 : 0),
-    0,
-  );
-  expect(wrongSequenceSum).toBe(4);
-  expect(precedenceCases).not.toBe(wrongSequenceSum);
 });
 
 for (const { name, shard, equivalences } of partitions) {
@@ -734,7 +757,7 @@ for (const { name, shard, equivalences } of partitions) {
       equivalenceNeedsPrecedence,
     ).length;
     record({
-      name: `${name} (equivalences)`,
+      name: summaryName(name, "equivalences"),
       total: equivalences.length,
       values: 0,
       equivalences: equivalences.length,
@@ -757,8 +780,11 @@ for (const { name, shard, equivalences } of partitions) {
       bands: into.bands,
       // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、
       // 左右をまとめて数えると変換が注入したキーが「電卓に与えた式の多様性」
-      // として計上される(実測では neg 2122 回のうち 74.2% が注入分)。
-      // 注入分は addedByTransform に分けて、読み手が区別できる形で出す。
+      // として計上される。どれだけ効くかは走行ごとに違うので、ここには
+      // 手書きの実測値を置かない(以前は「neg 2122 回のうち 74.2%」と書いて
+      // いた)——報告書が `addedByTransform` と `shape.tokens` から導いて
+      // 印字する。注入分は addedByTransform に分けて、読み手が区別できる
+      // 形で出す。
       shape: summarizeShape(equivalences.map((c) => c.left)),
       addedByTransform: countInjectedTokens(equivalences),
       magnitudes: quantiles(into.magnitudes),

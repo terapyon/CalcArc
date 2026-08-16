@@ -167,6 +167,48 @@ function summaryFileName(name: string): string {
 }
 
 /**
+ * **集計の名前は 1 か所でしか組み立てない(F9、修正ラウンド 4)。**
+ *
+ * 以前は `corpus.spec.ts` の `record()` 呼び出し・`expectedSummaryNames()`・
+ * そして下の「優先順位シャードがこの走行に居るか」のゲートが、それぞれ
+ * 独立に `` `${name} (values)` `` を書いていた。3 つが同じ規則を手で
+ * 繰り返しているだけなので、書式を変えると `record()` と
+ * `expectedSummaryNames()` は**揃って**動き(`missing` は空のまま、
+ * `writeReport` は黙る)、ゲートだけが静かに一致しなくなる——実データの
+ * 報告書から 1101 の段落が消えるのに、自分で名前を組み立てている
+ * `report.spec.ts` は緑のまま、という壊れ方をする。
+ */
+export function summaryName(
+  shardName: string,
+  kind: "values" | "equivalences",
+): string {
+  return `${shardName} (${kind})`;
+}
+
+/** 括弧を省いたキー列のシャード。ゲートと `corpus.spec.ts` の不変条件が共有する。 */
+export const PRECEDENCE_SHARD = "precedence-000.json";
+
+/**
+ * **`precedence-000.json` の 2000 件のうち、優先順位が無いと別の木になる件数。**
+ *
+ * この数は報告書が再計算しているものではない。reference の
+ * `test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`
+ * がコミット済みシャードを読んで構文木の等価性そのもので測り、`assert
+ * changes_meaning == 1101` で固定している。
+ *
+ * **ここに直接書かれているのが唯一の複製である(F2、修正ラウンド 4)。**
+ * 以前はこの数値が本文と但し書きの 2 か所に文字列リテラルとして書かれており、
+ * どちらを 9999 に変えても 30 件のレポートテストが全部緑のままだった——
+ * つまり報告書の最も具体的な数字を制約しているものが 1 つも無かった。
+ * いまは (1) 描画側の複製がこの定数 1 つに畳まれ、(2)
+ * `report.spec.ts` の "the 1101 figure is pinned to the number the reference
+ * test asserts" が `reference/tests/test_generate_corpus.py` から
+ * `assert changes_meaning == N` を実際に読み出して照合する。Python 側だけを
+ * 直しても、こちらだけを直しても、赤くなる。
+ */
+export const PRECEDENCE_CHANGES_MEANING = 1101;
+
+/**
  * **走行の開始時に古い残骸を消す。** 前回の走行が書いた集計が混ざると、
  * 今回一件も回らなかったシャードが前回の数字で埋まる——それは緑の顔である。
  * 前回の `heavy-report.md` も消す。書き出しを拒んだときに、**古い緑の
@@ -217,10 +259,10 @@ export function expectedSummaryNames(): string[] {
   for (const { name, shard } of loadShards()) {
     const { values, equivalences } = partitionCases(name, shard.cases);
     if (values.length > 0) {
-      names.push(`${name} (values)`);
+      names.push(summaryName(name, "values"));
     }
     if (equivalences.length > 0) {
-      names.push(`${name} (equivalences)`);
+      names.push(summaryName(name, "equivalences"));
     }
   }
   return names;
@@ -250,6 +292,26 @@ function exponential(value: number): string {
  */
 function relativeQuantity(value: number, measured: number): string {
   return measured === 0 ? "定義できない" : exponential(value);
+}
+
+/**
+ * **開示を 0 に丸めない(F11、修正ラウンド 4)。**
+ *
+ * `toFixed(1)` 固定だと 2/6000 が「0.0%」になる。緩く検査したケースが
+ * **在る**ことを開示する行が、無いのと同じ字面で出る——信憑性を目的とした
+ * 文書でいちばんしてはいけない丸め方である。0 でない限り、少なくとも
+ * 有効数字 2 桁が残る桁数まで伸ばす。厳密に 0 のときだけ「0%」と書く。
+ */
+function percentage(part: number, whole: number): string {
+  if (whole === 0) {
+    return "—";
+  }
+  const pct = (part / whole) * 100;
+  if (pct === 0) {
+    return "0%";
+  }
+  const digits = pct >= 0.1 ? 1 : Math.min(6, Math.ceil(-Math.log10(pct)) + 1);
+  return `${pct.toFixed(digits)}%`;
 }
 
 /**
@@ -353,7 +415,7 @@ export function renderReport(
     `- 上書きされたケース: **${overrideCount}**`,
     `- 相対誤差が定義できないケース(期待値が厳密に 0): **${relUndefined}**`,
     `- **表示分解能より緩く検査されたケース: ${looser}** ` +
-      `(全 ${total} 件中 ${((looser / total) * 100).toFixed(1)}%)`,
+      `(全 ${total} 件中 ${percentage(looser, total)})`,
     `- **最悪の実効相対許容: ${relativeQuantity(worstEffective, relMeasured)}**`,
     "",
     "## 何をどう確かめたか",
@@ -387,8 +449,14 @@ export function renderReport(
     "ケースの欠陥ではなく**性質**である——自己整合の検査は、外の基準を持たない。",
     "",
     "**それを捕まえるのは値ケースの側である。** 同じ偽ハーネスに対して値ケースは",
-    "2000 件中 1996 件が不一致になった。外の基準(Python が独立に出した期待値)を",
-    "持っているのは値ケースだけなので、上の見出しでも件数を分けている。",
+    // **F5 fix (fix round 4).** ここは 2026-08-15 の一度きりの測定であって、
+    // この走行で測り直したものではない。当時の値ケースは 2000 件だったが、
+    // いまは 4000 件ある——「2000 件中 1996 件」を裸で置くと、直上の見出しが
+    // 出している今回の件数と食い違い、現在のコーパスの性質として読まれる。
+    // 測定時点と当時の母数を明示して、過去の測定として書く。
+    "不一致になった——**2026-08-15 の測定時点、当時の値ケース 2000 件中 1996 件**",
+    "である(この走行で測り直した数字ではない)。外の基準(Python が独立に出した",
+    "期待値)を持っているのは値ケースだけなので、上の見出しでも件数を分けている。",
     "",
     "**同値ケースの誤差が全件厳密に 0 なのは、選んだ変換の帰結である。**",
     "`√(x²)`・`neg(neg(x))`・`x + 0` はいずれも f64 の上で厳密に往復する",
@@ -630,8 +698,39 @@ function renderOverrides(entries: ShardSummary[]): string[] {
   return lines;
 }
 
+/**
+ * **注入分がどれだけ効いているかを、この走行の数字で言う(F7、修正ラウンド 4)。**
+ *
+ * 以前ここは「`neg` 2122 回のうち 74.2%(1574 回)」という手書きの実測値で、
+ * **その同じ量をデータから描いている表の真上**に座っていた。書いた時点では
+ * 正しかった(実際に再導出して確認されている)が、`equivalence-000.json` を
+ * 再生成すれば黙って腐る。左辺の出現回数と注入回数はどちらも集計に入って
+ * いるので、そこから出す。
+ *
+ * 左右を合わせた回数が `左辺 × 2 + 注入` なのは、右辺が**左辺のキー列に恒等
+ * 変換を被せたもの**だからである(`_equivalent_pair`。変換はキーを足すだけで
+ * 減らさないので、左辺の分は右辺にもそのまま現れる)。`countInjectedTokens`
+ * が数えているのは、その差分の正の側そのものである。
+ */
+function injectionShare(
+  entries: ShardSummary[],
+  token: string,
+):
+  | { left: number; added: number; combined: number; share: string }
+  | undefined {
+  const entry = entries.find((e) => e.addedByTransform !== undefined);
+  const added = entry?.addedByTransform?.[token] ?? 0;
+  const left = entry?.shape.tokens[token] ?? 0;
+  if (entry === undefined || added === 0) {
+    return undefined;
+  }
+  const combined = left * 2 + added;
+  return { left, added, combined, share: percentage(added, combined) };
+}
+
 /** 設計書 §11:「分布そのものを報告書に載せて、外から検証可能にする。」 */
 function renderDistribution(entries: ShardSummary[]): string[] {
+  const negShare = injectionShare(entries, "neg");
   const lines = [
     "",
     "## コーパスの分布",
@@ -644,8 +743,17 @@ function renderDistribution(entries: ShardSummary[]): string[] {
     "**同値シャードは左辺のキー列だけを数えている。** 右辺は左辺に恒等変換",
     "(`neg neg`、`sqrt` と `sqr` の対、`add 0`)を被せて作られたもので、",
     "左右をまとめて数えると**変換が注入したキーが電卓に与えた式の多様性として",
-    "計上される**。実測では同値シャードの `neg` 2122 回のうち 74.2%(1574 回)が",
-    "注入分だった。この表が答えているのは「同じような式を大量に試しただけか」",
+    "計上される**。",
+    ...(negShare === undefined
+      ? []
+      : [
+          `この走行では左辺の \`neg\` が ${negShare.left} 回、変換が右辺に足した \`neg\` が ${negShare.added} 回。`,
+          `左右を合わせた ${negShare.combined} 回のうち **${negShare.share}** が注入分になる`,
+          "(右辺は左辺のキー列に変換を被せたものなので、左辺の分は右辺にも",
+          "そのまま現れる)。この 3 つの数字は下の表と同じ集計から導いている",
+          "——手で書いた実測値ではない。",
+        ]),
+    "この表が答えているのは「同じような式を大量に試しただけか」",
     "なので、注入分は「うち変換で付加」の行に分けて出す(敵対者レビュー",
     "2026-08-15 の指摘)。",
     "",
@@ -740,24 +848,56 @@ function unusedKeyTokens(entries: ShardSummary[]): string[] {
   return KEY_TOKENS.filter((token) => !pressed.has(token));
 }
 
+/**
+ * **「括弧を省いた式」の項目が、この走行でどの形で出るか。**
+ *
+ * 3 状態あり、以前は項目自身が `precedence === 0` で 2 分岐、直後の但し書きが
+ * `precedenceShard === undefined` で 2 分岐していた——**別々の述語で分岐する
+ * 2 つの文章**である。`(precedence === 0, シャード無し)` の走行、つまり
+ * 優先順位シャードを含まない**すべての**走行で、但し書きは項目を
+ * 「見出しの件数だけの、完全にデータ由来の行である」と説明していたが、
+ * その状態の項目は件数を 1 つも含まない固定文だった(F3、修正ラウンド 4)。
+ * 状態をここで 1 度だけ決めて、項目と但し書きの両方がこれを見る。
+ */
+type ParenthesisItemState =
+  /** 優先順位を一度も踏んでいない。項目は件数を持たない固定文。 */
+  | { kind: "untouched" }
+  /** 踏んだ件数はデータ由来。ただし優先順位シャード固有の内訳は出せない。 */
+  | { kind: "counted" }
+  /** 件数に加えて、reference テストが固定した内訳(1101)が付く。 */
+  | { kind: "counted-with-pinned-breakdown"; shard: ShardSummary };
+
 function renderCaveats(entries: ShardSummary[]): string[] {
   const unused = unusedKeyTokens(entries);
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
-  // **N1 fix (review round 3).** The elaboration below (the "1101" figure and
+  // **F6b fix (fix round 4).** 「上の『4000 件通った』」は以前リテラルで、
+  // 2000 件だけの走行でも 4000 と書いた。見出しと同じ集計から出す。
+  const valueCases = entries.reduce((sum, e) => sum + e.values, 0);
+  // **N1 fix (review round 3).** The elaboration below (the pinned figure and
   // the associativity caveat) is a specific claim about how
   // `precedence-000.json` was built — it is true only when that shard is
   // actually part of this run. The old version rendered it unconditionally
   // whenever the *aggregate* `precedence` count was non-zero: measured with a
   // summary set holding only `scientific-000.json` and a count of 7, the
   // report still named `precedence-000.json`, still claimed it held 2000
-  // cases, and still printed 1101 — for a run that never touched that shard.
-  // The head phrase (`precedence` itself) stays unconditional because it is
-  // genuinely derived from whatever shard(s) are in this run.
+  // cases, and still printed the figure — for a run that never touched that
+  // shard. The head phrase (`precedence` itself) stays unconditional because
+  // it is genuinely derived from whatever shard(s) are in this run.
+  //
+  // **The name is built by `summaryName`, not written out here (F9, fix round
+  // 4)** — see that function for why a second hand-written copy of the format
+  // is a silent failure.
   const precedenceShard = entries.find(
-    (e) => e.name === "precedence-000.json (values)",
+    (e) => e.name === summaryName(PRECEDENCE_SHARD, "values"),
   );
-  const parenthesisItem =
+  const parenthesis: ParenthesisItemState =
     precedence === 0
+      ? { kind: "untouched" }
+      : precedenceShard === undefined
+        ? { kind: "counted" }
+        : { kind: "counted-with-pinned-breakdown", shard: precedenceShard };
+  const parenthesisItem =
+    parenthesis.kind === "untouched"
       ? [
           "- **括弧を省いた式。** キー列は二項演算を必ず括弧で囲む。したがって",
           "  演算子の優先順位と保留演算の意味論(`1 + 2 * 3` が 7 か 9 か)を",
@@ -770,34 +910,57 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           // とは**言わない**——独立した意味論パーサで測ると、drop の 45%
           // (899/2000、例 `prec-000001` = `(541 / 138) + 748`)は左結合の
           // 自然な読みと一致し、無くても同じ木になる。
+          //
+          // **F6 fix (fix round 4).** その限定は以前、優先順位シャードが
+          // 走行に含まれるときだけ出る段落の中にしか無かった——N1 のゲートが
+          // 「engine は括弧ではなく優先順位で構造を決めた」を限定なしで
+          // 立たせたまま、限定する段落だけを消していた。限定を見出し文の側に
+          // 移し、**どの分岐でも**主張に付いて回るようにする。シャード固有の
+          // 内訳(何件がそうなのか)だけを下でゲートする。
           `- **括弧を省いた式——${precedence} 件が踏んでいる。** 同じ括弧の組の`,
           "  中に優先順位の異なる二項演算子が 2 つ以上並ぶキー列がこれだけある。",
-          "  engine は括弧ではなく優先順位で構造を決めた。",
-          ...(precedenceShard === undefined
-            ? []
+          "  engine はその構造を括弧ではなく優先順位から復元した。**ただしこの",
+          "  件数は「優先順位が無ければ誤答になる」件数ではない**——括弧を省いた",
+          "  列にも、左結合で素直に読んだだけで同じ木になるもの(例 `(541 / 138)",
+          "  + 748`)が相当数含まれる。その内訳は浮動小数の一致では測れず、",
+          "  構文木そのものを突き合わせないと出ない。",
+          ...(parenthesis.kind !== "counted-with-pinned-breakdown"
+            ? [
+                // **シャード名も件数もここでは出さない。** この走行はその
+                // 内訳を測っていないのだから、測った側の固有名を出す資格が
+                // ない(N1 が塞いだのはまさにその形である)。
+                "  **この走行にはその内訳を測ったシャードが含まれていないので、",
+                "  何件がそうなのかはここでは出せない。**",
+              ]
             : [
                 "",
                 // **step B.** 「踏んだ」件数(構造を優先順位で決めた)と「無ければ
                 // 誤答になる」件数は別である。後者は reference の構文木比較でしか
-                // 測れない(浮動小数の一致では測れない——単なる drop と意味の変化は
-                // 別の性質)。手で数えるとポストフィックス単項の罠(`1 add 2 sqrt`
+                // 測れない。手で数えるとポストフィックス単項の罠(`1 add 2 sqrt`
                 // は `√(1+2)` ではなく `1 + √2`)を踏みやすいので、生成器が実際に
                 // 持っている木と、優先順位を使わず同じキー列を読み直した木を、
                 // 構造として直接突き合わせている。
-                "  **ただし「踏んだ」件数は「無ければ誤答になる」件数ではない。**",
-                `  \`precedence-000.json\` の ${precedenceShard.total} 件のうち、`,
-                "  実際に優先順位が無いと別の木になる件数は **1101 件**。",
-                // **N7 fix (review round 3).** 前はここが 1 要素の配列に収まる
-                // 1 本の ~200 字の行だった——この文書はどこも ~40〜70 字で
-                // 折り返している。テストの完全修飾パスは 1 語として折れない
-                // ので、文の前後をそれぞれ独立の行にして、それだけを孤立させる。
+                "  **その内訳がこの走行では測れている。**",
+                `  \`${PRECEDENCE_SHARD}\` の ${parenthesis.shard.total} 件のうち、実際に優先順位が`,
+                `  無いと別の木になる件数は **${PRECEDENCE_CHANGES_MEANING} 件**。`,
+                // **N7 fix (review round 3), 理由を訂正(F10、修正ラウンド 4)。**
+                // 前はここが 1 本の ~200 字の行だった。折ったのは正しいが、
+                // 当時書いた理由(「この文書はどこも ~40〜70 字で折り返して
+                // いる」)は事実ではない——「使っていないキートークン」の行は
+                // 1 本で ~225 字あり、同じ節でいちばん長い。本当の理由は、
+                // テストの完全修飾パスが 1 語として折れないこと:同じ行に文を
+                // 混ぜると、その行だけが他の 2 倍以上に伸びて差分が読めなくなる。
+                // だから前後の文をそれぞれ独立の行にして、折れない 1 語だけを
+                // 孤立させている。
                 "  この数値は reference のテストが構文木の等価性そのもので厳密に",
                 "  測り、固定している",
                 "  (`reference/tests/test_generate_corpus.py::" +
                   "test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`)。",
                 "  この数はそのテストの assert に固定された値であって、ここで",
                 "  再計算したものではない——シャードを再生成したらそのテストを",
-                "  走らせて検算し、必要ならこの文も書き換えること。",
+                "  走らせて検算すること。**両者が食い違ったらレポートのテストが",
+                "  赤くなる**(`report.spec.ts` がその assert を実際に読んで",
+                "  照合している)ので、片方だけ直して黙って食い違うことはない。",
                 "",
                 "  **結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
                 "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",
@@ -834,7 +997,14 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     // か、限定的にしか踏んでいない」で、0 件の項目にも N 件の項目にも
     // 矛盾なく掛かるようにする。
     "以下はこのコーパスの守備範囲の外か、限定的にしか踏んでいない領域である。",
-    "緑であることは、これらについて何も言っていない。",
+    // **F8 fix (fix round 4).** 以前ここは「緑であることは、これらについて
+    // 何も言っていない」だった。N5(review round 3)が見出しの「一度も」を
+    // 直したときに、矛盾はもう 1 行下のこの文へ移っていた——「括弧を省いた式」
+    // の項目は 2000 件が緑で通ったことを報告しており、その項目については
+    // 「何も言っていない」は端的に偽である。守備範囲の外の項目と、限定的に
+    // 踏んでいる項目とで、緑の意味が違うことを書き分ける。
+    "**守備範囲の外の項目については、緑であることは何も言っていない。**",
+    "限定的に踏んでいる項目については、どこまで踏んだのかをその項目自身が書く。",
     "",
     // **この一項目だけがこの走行の実データから出ている。** 残りは手書きで、
     // 下の但し書きがそのことを名指ししている。
@@ -865,7 +1035,13 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "  踏んでいない**。電卓には表示の規則が二つあり(`render()` の分岐)、入力中は",
     "  打った文字がそのまま出て、確定後だけが整形を通る。`1e10` を打ち込むと平坦な",
     "  `10000000000` が出るが、同じ値を計算で作ると `1e10` になる(2026-08-16 実測)。",
-    "  **上の「4000 件通った」は、確定値の表示についてだけの主張である。**",
+    // **F6b fix (fix round 4).** 以前ここは「上の『4000 件通った』」という
+    // リテラルで、(a) 2000 件だけの走行でも 4000 と言い、(b) 引用元だと
+    // 称する文字列が上に literal には出てこなかった(見出しは「二経路で
+    // 照合したケース(値): 4000」)。見出しと同じ集計から、見出しと同じ
+    // 言い方で引く。
+    `  **上の「二経路で照合したケース(値): ${valueCases}」は、確定値の表示に`,
+    "  ついてだけの主張である。**",
     "  なお入力中の側は踏む価値も薄い——「打った文字がそのまま出る」は規則というより",
     "  恒等写像で、破れるとしたら「打った文字が出ない」という壊れ方になる。それは",
     "  この層の道具立て(表示を数に戻して期待値と突き合わせる)では捕まえにくく、",
@@ -879,20 +1055,33 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     // 件数だけの完全にデータ由来な行になる。disclaimer 自身もそれに合わせて
     // 書き分ける——固定文にしてしまうと、precedenceShard が無い走行でこの
     // disclaimer 自体が存在しない主張(手書きの数値・シャード名)をすることになる。
+    //
+    // **F3 fix (fix round 4).** その書き分けは `precedenceShard === undefined`
+    // を見ていたのに、項目自身は `precedence === 0` を見ていた——**別の述語**
+    // である。両方が偽になる状態、つまり優先順位を一度も踏んでいない走行では、
+    // 項目は件数を 1 つも含まない固定文なのに、この但し書きが「見出しの件数
+    // だけの、完全にデータ由来の行である」と説明していた。いまは項目と
+    // 但し書きが同じ `parenthesis.kind` を見る。
     "> **この節は手で保守されている。** 「使っていないキートークン」の行は",
     "> 走行の実データから導かれている。「括弧を省いた式」の項目は",
-    ...(precedenceShard === undefined
+    ...(parenthesis.kind === "untouched"
       ? [
-          "> この走行では見出しの件数だけの、完全にデータ由来の行である",
-          "> (詳細な内訳を伴う手書きの段落は、その内訳の元になるシャードが",
-          "> この走行に含まれるときだけ付く)。",
+          "> この走行では**完全に固定の文章**である——この走行は優先順位を一度も",
+          "> 踏んでいないので、この項目は件数を一つも含んでいない。",
         ]
-      : [
-          "> **半分だけ**データ由来である——見出しの件数とシャードの有無判定は",
-          `> 実データからだが、\`precedence-000.json\` の ${precedenceShard.total} 件中`,
-          "> 1101 件が意味を変える、という段落そのものは reference テストの",
-          "> assert に固定された手書きの数値である。",
-        ]),
+      : parenthesis.kind === "counted"
+        ? [
+            "> この走行では見出しの件数だけの、完全にデータ由来の行である",
+            "> (詳細な内訳を伴う手書きの段落は、その内訳の元になるシャードが",
+            "> この走行に含まれるときだけ付く)。",
+          ]
+        : [
+            "> **半分だけ**データ由来である——見出しの件数とシャードの有無判定は",
+            `> 実データからだが、\`${PRECEDENCE_SHARD}\` の ${parenthesis.shard.total} 件中`,
+            `> ${PRECEDENCE_CHANGES_MEANING} 件が意味を変える、という段落そのものは`,
+            "> reference テストの assert に固定された数値である(その assert と",
+            "> ここが食い違えば `report.spec.ts` が赤くなる)。",
+          ]),
     "> 残りの項目——エラー経路・複素数・指数表記・",
     "> 角度モード・UI・入力中の表示——は完全に固定の文章である。段階 3 で",
     "> これらの領域が埋まったら、**ここを更新すること**。更新を忘れると、",
