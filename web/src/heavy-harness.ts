@@ -8,6 +8,17 @@
  * UI そのものの検証は ui 経路(本物のアプリ)が担う。
  */
 import { type Calc, initCalc, KEY_TOKENS, type KeyToken } from "./calc";
+import {
+  compound_deposit_for,
+  compound_grow,
+  compound_periods_for,
+  data_scale,
+  loan_bonus_forward,
+  loan_bonus_principal,
+  loan_forward,
+  loan_principal,
+  loan_term,
+} from "./wasm/calcarc_wasm.js";
 
 /** 1 ケースの結果。表示は整形済み文字列で、数値は取り出せない(設計書 §6.3)。 */
 export interface HarnessResult {
@@ -20,6 +31,7 @@ declare global {
     __calcarc?: {
       ready: Promise<void>;
       runAll(sequences: string[][]): HarnessResult[];
+      runCalls(cases: CallCase[]): unknown[];
       version(): string;
     };
   }
@@ -85,6 +97,128 @@ function runAll(sequences: string[][]): HarnessResult[] {
   });
 }
 
+/** 関数呼び出しのケース 1 件(設計書 2026-08-17 §3.1)。 */
+export interface CallCase {
+  op: string;
+  input: Record<string, string | number | boolean>;
+}
+
+/**
+ * 金融とデータスケールは**キー列ではなく関数呼び出し**である。
+ *
+ * 引数名は参照実装のものを使い、ここで wasm の綴りに直す(`n` → `months`)。
+ * **参照実装の側を wasm に合わせて書き換えない**——あちらが独立している
+ * ことが検証の土台なので、寄せるならこちら側で寄せる(設計書 §6 のリスク)。
+ */
+const CALLS: Record<string, (input: Record<string, never>) => unknown> = {
+  data_scale: (i) =>
+    data_scale(str(i, "count"), str(i, "dimensions"), str(i, "dtype")),
+  loan_forward: (i) =>
+    loan_forward(
+      str(i, "principal"),
+      str(i, "rate"),
+      num(i, "n"),
+      str(i, "residual"),
+    ),
+  loan_principal: (i) =>
+    loan_principal(str(i, "payment"), str(i, "rate"), num(i, "n")),
+  loan_term: (i) =>
+    loan_term(str(i, "principal"), str(i, "rate"), str(i, "payment")),
+  loan_bonus_forward: (i) =>
+    loan_bonus_forward(
+      str(i, "principal"),
+      str(i, "bonus_principal"),
+      str(i, "rate"),
+      num(i, "n"),
+    ),
+  loan_bonus_principal: (i) =>
+    loan_bonus_principal(
+      str(i, "monthly_payment"),
+      str(i, "bonus_payment"),
+      str(i, "rate"),
+      num(i, "n"),
+    ),
+  compound_grow: (i) =>
+    compound_grow(
+      str(i, "principal"),
+      str(i, "deposit"),
+      str(i, "rate"),
+      num(i, "periods_per_year"),
+      num(i, "periods"),
+      bool(i, "tax"),
+    ),
+  compound_deposit_for: (i) =>
+    compound_deposit_for(
+      str(i, "principal"),
+      str(i, "target"),
+      str(i, "rate"),
+      num(i, "periods_per_year"),
+      num(i, "periods"),
+      bool(i, "tax"),
+    ),
+  compound_periods_for: (i) =>
+    compound_periods_for(
+      str(i, "principal"),
+      str(i, "deposit"),
+      str(i, "target"),
+      str(i, "rate"),
+      num(i, "periods_per_year"),
+      bool(i, "tax"),
+    ),
+};
+
+/**
+ * 引数を型ごとに取り出す。**欠けていたら落ちる。**
+ *
+ * `undefined` をそのまま wasm に渡すと、`String(undefined)` が `"undefined"` に
+ * なって「構文エラー」という**もっともらしい答え**が返る——検証層が
+ * 一番検出しにくい壊れ方なので、ここで大きな声を出す。
+ */
+function str(input: Record<string, unknown>, key: string): string {
+  const value = input[key];
+  if (typeof value !== "string") {
+    throw new Error(
+      `heavy-harness: ${key} should be a string, got ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
+function num(input: Record<string, unknown>, key: string): number {
+  const value = input[key];
+  if (typeof value !== "number") {
+    throw new Error(
+      `heavy-harness: ${key} should be a number, got ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
+function bool(input: Record<string, unknown>, key: string): boolean {
+  const value = input[key];
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `heavy-harness: ${key} should be a boolean, got ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
+/** 関数呼び出しの束をまとめて回す。1 束 = 1 往復。 */
+function runCalls(cases: CallCase[]): unknown[] {
+  return cases.map((testCase) => {
+    const call = CALLS[testCase.op];
+    if (call === undefined) {
+      // 未知の op を黙って飛ばすと、その領域が「全件一致」に見える。
+      throw new Error(
+        `heavy-harness: unknown op ${JSON.stringify(testCase.op)}. ` +
+          `Known: ${Object.keys(CALLS).join(", ")}`,
+      );
+    }
+    return call(testCase.input as Record<string, never>);
+  });
+}
+
 /**
  * 計算コア(wasm)の版。**報告書の素性に載せる。**
  * 外の人が判断するには、何をいつ何で回したかが要る(レビュー修正ラウンド 2)。
@@ -96,4 +230,4 @@ function version(): string {
   return calc.version();
 }
 
-window.__calcarc = { ready, runAll, version };
+window.__calcarc = { ready, runAll, runCalls, version };

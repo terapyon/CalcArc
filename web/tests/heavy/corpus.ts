@@ -241,9 +241,71 @@ export function partitionCases(
   return { values, equivalences };
 }
 
+/**
+ * 関数呼び出しのシャード(金融・データスケール)の名前。
+ *
+ * **キー列のシャードとは形も比較の仕方も違う**ので、別のローダーが読む
+ * (設計書 2026-08-17 §3.1)。ここで名前を挙げているのは、`loadShards` が
+ * 黙って読み飛ばして「そんなシャードは無かった」ことにしないためである。
+ */
+export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
+
+/** 関数呼び出しのケース 1 件。 */
+export interface CallCase {
+  kind: "call";
+  id: string;
+  op: string;
+  input: Record<string, string | number | boolean>;
+  expect: Record<string, unknown>;
+}
+
+export interface CallShard {
+  schema: number;
+  generated_by: string;
+  rejections?: Record<string, number>;
+  cases: CallCase[];
+}
+
+/**
+ * 関数呼び出しのシャードを読む。**期待値は厳密一致で比べる**ので、
+ * `tolerance` を持たない——持たせると「緩めれば通る」余地が生まれる。
+ */
+export function loadCallShards(): { name: string; shard: CallShard }[] {
+  const shards = readdirSync(CORPUS)
+    .filter((name) => CALL_SHARD_PATTERN.test(name))
+    .sort()
+    .map((name) => ({
+      name,
+      shard: JSON.parse(readFileSync(join(CORPUS, name), "utf-8")) as CallShard,
+    }));
+  for (const { name, shard } of shards) {
+    if (shard.schema !== KNOWN_SCHEMA) {
+      throw new Error(
+        `${name}: schema ${JSON.stringify(shard.schema)} is not one this ` +
+          `code knows how to read (expected ${KNOWN_SCHEMA})`,
+      );
+    }
+    if (!Array.isArray(shard.cases) || shard.cases.length === 0) {
+      throw new Error(
+        `${name}: the shard carries no cases. An empty shard runs green ` +
+          "while verifying nothing, so it is refused here.",
+      );
+    }
+    const strangers = shard.cases.filter((c) => c.kind !== "call");
+    if (strangers.length > 0) {
+      throw new Error(
+        `${name}: ${strangers.length} case(s) are not of kind "call". ` +
+          "A call shard read as anything else would compare the wrong things.",
+      );
+    }
+  }
+  return shards;
+}
+
 export function loadShards(): { name: string; shard: Shard }[] {
   const shards = readdirSync(CORPUS)
     .filter((name) => name.endsWith(".json"))
+    .filter((name) => !CALL_SHARD_PATTERN.test(name))
     .sort()
     .map((name) => ({
       name,

@@ -22,6 +22,7 @@ from collections.abc import Iterator
 
 import mpmath as mp
 
+from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_OPS,
@@ -584,6 +585,10 @@ def main() -> None:
         "combinatorics-000.json",
         build_combinatorics_shard(seed=20260820, count=count),
     )
+    # 金融とデータスケール。**科学計算とは別の領域**で、期待値は整数なので
+    # 厳密一致で比べる(設計書 2026-08-17 §3.2)。
+    write("finance-000.json", build_finance_shard(seed=20260821, count=count))
+    write("data-scale-000.json", build_data_scale_shard(seed=20260822, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
     # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。
