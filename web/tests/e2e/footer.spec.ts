@@ -12,7 +12,7 @@ test("the footer shows on every tab, once", async ({ page }) => {
       "https://github.com/terapyon/CalcArc",
     );
     await expect(page.getByTestId("footer-disclaimer")).toHaveText(
-      "・計算結果は無保証です。重要な判断の根拠にしないでください。",
+      "計算結果は無保証です。重要な判断の根拠にしないでください。",
     );
   }
 });
@@ -50,4 +50,44 @@ test("the footer stays on one line and never overflows sideways", async ({
     overflow,
     `the page scrolls sideways by ${overflow}px`,
   ).toBeLessThanOrEqual(0);
+});
+
+test("the footer survives a narrower phone", async ({ page }) => {
+  // **8px は 390px に載る最大**として決めた値である。360px(多くの Android)や
+  // 320px でも、折り返さず・横にも溢れないこと。
+  //
+  // **`getByRole("contentinfo")` ではなく `footer-disclaimer` を測る**——上の
+  // 「stays on one line」と同じ理由。<footer> はリンクと区切りと免責の複数
+  // 要素を子に持つので、1 行に並んでいても `Range.getClientRects()` は要素
+  // 境界ごとに rect を割り、常に複数になる(実測: 8)。
+  for (const width of [360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("display-main")).toBeVisible();
+
+    const lines = await page.getByTestId("footer-disclaimer").evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return range.getClientRects().length;
+    });
+    expect(lines, `the footer wrapped at ${width}px`).toBe(1);
+
+    // **フッタ自身の右端で測る**(`document.documentElement.scrollWidth` では
+    // ない)。盤面(Keypad の関数列)は 360px 未満で独自に横へ溢れることが
+    // 実測でわかっており——このブランチの変更とは無関係の既存の挙動——
+    // ページ全体の scrollWidth で測るとその不具合を巻き込み、フッタ自体は
+    // 直っていても赤くなる。ここで確かめたいのは「フッタが溢れないか」
+    // であって「ページのどこも溢れないか」ではない。
+    const overflow = await page.evaluate(() => {
+      const footer = document.querySelector("footer");
+      if (!footer) return Number.NaN;
+      return Math.ceil(
+        footer.getBoundingClientRect().right - window.innerWidth,
+      );
+    });
+    expect(
+      overflow,
+      `the footer itself scrolls sideways by ${overflow}px at ${width}px`,
+    ).toBeLessThanOrEqual(0);
+  }
 });

@@ -11,7 +11,10 @@
   /* iOS のホームインジケータを避ける(パネルの .shell と同形)。 */
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   color: var(--display-status-fg);
-  font-size: var(--footer-font-size);
+  /* **狭い画面では更に縮む。** 8px は 390px に 1 行で載る最大として決めた値で、
+     360px や 320px ではそのままだと nowrap のまま横へ溢れる(横スクロールが
+     出る)。vw で頭打ちにして、折り返さず・溢れずに縮ませる。 */
+  font-size: min(var(--footer-font-size), 2.05vw);
   text-align: center;
   /* **折り返させない。** 折り返ったら 2 行に戻り、縦の予算が破れる。 */
   white-space: nowrap;

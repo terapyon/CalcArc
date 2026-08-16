@@ -5,8 +5,11 @@
   max-width: var(--shell-max-width);
   margin: 0 auto;
   padding: 12px;
-  /* iOS のホームインジケータを避ける。ScientificPanel の .shell と同形。 */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  /* **下端はフッタが持つ**(Footer.module.css)。ホームインジケータを避けるのも
+     あちらの仕事である——0.2.0 でシェルにフッタが入り、パネルは画面の最下端
+     ではなくなった。ここで env(safe-area-inset-bottom) を吸うと二重になり、
+     standalone 起動でだけ下が 44px 伸びる。 */
+  padding-bottom: 12px;
 }
 
 /* モード行も 6 列で 1 枠 54px。「借入可能」「必要積立」「必要年数」の 4 文字

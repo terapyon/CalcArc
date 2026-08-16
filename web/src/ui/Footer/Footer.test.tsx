@@ -23,7 +23,7 @@ describe("Footer", () => {
   it("says the results carry no warranty", () => {
     render(<Footer />);
     expect(screen.getByTestId("footer-disclaimer")).toHaveTextContent(
-      "・計算結果は無保証です。重要な判断の根拠にしないでください。",
+      "計算結果は無保証です。重要な判断の根拠にしないでください。",
     );
   });
 });

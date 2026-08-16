@@ -25,8 +25,11 @@ export function Footer() {
           **Finance の画面内免責とは役割が違う**(0.2.0 設計書 §5)。あちらは
           ローンの数字が決定的概算であること、こちらはツール全体が無保証で
           あること。両方残す。 */}
+      {/* 区切りは視覚の都合。**読み上げに混ぜない**ので独立した要素にし、
+          aria-hidden で読み上げから外す。 */}
+      <span aria-hidden="true">・</span>
       <span className={styles.disclaimer} data-testid="footer-disclaimer">
-        ・計算結果は無保証です。重要な判断の根拠にしないでください。
+        計算結果は無保証です。重要な判断の根拠にしないでください。
       </span>
     </footer>
   );
