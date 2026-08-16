@@ -576,6 +576,12 @@ for (const { name, shard, values } of partitions) {
     const precedenceCases = values.filter((c) =>
       needsPrecedence(c.keys),
     ).length;
+    // 表示が指数表記になる境界は `|x| >= 1e10`(docs/numerical-policy.md)。
+    // **表示そのものではなく期待値から数える**——表示から数えると、
+    // 表示が壊れたときに件数も一緒に嘘になる。
+    const exponentDisplayCases = values.filter(
+      (c) => Math.abs(c.expect.re) >= 1e10,
+    ).length;
     record({
       name: summaryName(name, "values"),
       total: values.length,
@@ -591,6 +597,7 @@ for (const { name, shard, values } of partitions) {
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
       precedenceCases,
+      exponentDisplayCases,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       shape: summarizeShape(values.map((c) => c.keys)),
@@ -776,6 +783,8 @@ for (const { name, shard, equivalences } of partitions) {
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
       precedenceCases,
+      // 同値ケースは期待値を持たないので、指数表記かどうかを言えない。
+      exponentDisplayCases: 0,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、

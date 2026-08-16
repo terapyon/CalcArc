@@ -54,6 +54,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     relUndefinedNonZeroAbs: 0,
     looserThanDisplay: 0,
     precedenceCases: 0,
+    exponentDisplayCases: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -686,7 +687,12 @@ test("the precedence-specific elaboration is absent when that shard is not in th
   expect(markdown).toContain("7 件が踏んでいる");
   expect(markdown).not.toContain(PRECEDENCE_SHARD);
   expect(markdown).not.toContain(String(PRECEDENCE_CHANGES_MEANING));
-  expect(markdown).not.toContain("結合方向");
+  // **「結合方向」という語そのもので判定しない。** 段階 3b-A で `xʸ` の
+  // 但し書き(「`pow` は押されるが右結合も優先順位 4 も踏んでいない」)が
+  // 別の項目として入り、**この語は無関係な 2 箇所に出るようになった**。
+  // ゲートされた段落に固有の言い回しで見る——ここが緩いと、優先順位
+  // シャードが走行に無いのにその段落が出ていても緑になる。
+  expect(markdown).not.toContain("同順位の入れ子は括弧を残して生成して");
 });
 
 test("zero precedence cases reads as never touched", () => {

@@ -16,6 +16,7 @@ import type {
   ToleranceBand,
 } from "./corpus";
 import {
+  loadCallShards,
   loadShards,
   partitionCases,
   SHAPE_TOKENS,
@@ -93,6 +94,14 @@ export interface ShardSummary {
    * 次に領域が埋まったとき黙って嘘になる(設計書 §3.4)。
    */
   precedenceCases: number;
+  /**
+   * 答が指数表記で表示されたケースの件数。
+   *
+   * **段階 3b-A まで、この数は 0 だった**——生成器が値を `1e-6`〜`1e9` に
+   * 閉じ込めていたためである。組合せ論のシャードが帯を外したので、
+   * 初めて 0 でなくなる(設計書 2026-08-16-corpus-functions §3.2.1)。
+   */
+  exponentDisplayCases: number;
   worstEffectiveRelTolerance: number;
   bands: Record<ToleranceBand, number>;
   // 設計書 §11 の「分布そのものを報告書に載せる」。
@@ -180,7 +189,7 @@ function summaryFileName(name: string): string {
  */
 export function summaryName(
   shardName: string,
-  kind: "values" | "equivalences",
+  kind: "values" | "equivalences" | "calls",
 ): string {
   return `${shardName} (${kind})`;
 }
@@ -264,6 +273,13 @@ export function expectedSummaryNames(): string[] {
     if (equivalences.length > 0) {
       names.push(summaryName(name, "equivalences"));
     }
+  }
+  // **関数呼び出しのシャードも数える。** `loadShards()` はこれらを除外するので、
+  // ここで足さないと**金融とデータスケールが「揃うはずの集計」から丸ごと外れる**
+  // ——テストが走らなくても報告書が「完全である」と名乗り、判定表は
+  // 「検証していない」と出て、その食い違いを誰も咎めない。
+  for (const { name } of loadCallShards()) {
+    names.push(summaryName(name, "calls"));
   }
   return names;
 }
@@ -1111,6 +1127,23 @@ function renderCaveats(entries: ShardSummary[]): string[] {
       : precedenceShard === undefined
         ? { kind: "counted" }
         : { kind: "counted-with-pinned-breakdown", shard: precedenceShard };
+  const exponent = entries.reduce(
+    (sum, entry) => sum + entry.exponentDisplayCases,
+    0,
+  );
+  const exponentItem =
+    exponent === 0
+      ? [
+          "- **指数表記の表示。** 生成器が値を `1e-6`〜`1e9` に閉じ込めているので、",
+          "  **平坦表示の帯を一度も出ていない**。`parseDisplay` は指数表記を",
+          "  受け付けるが、受け付けることと実際に読んだことは違う。",
+        ]
+      : [
+          `- **指数表記の表示——${exponent} 件が読んでいる。** 組合せ論のシャードが`,
+          "  帯を外したので、答が `1e10` 以上になるケースが出るようになった",
+          "  (設計書 2026-08-16-corpus-functions §3.2.1)。表示は指数表記でも",
+          "  有効数字 10 桁なので、許容はそのまま効く。",
+        ];
   const parenthesisItem =
     parenthesis.kind === "untouched"
       ? [
@@ -1237,6 +1270,16 @@ function renderCaveats(entries: ShardSummary[]): string[] {
             "古い否定が残ることがない。",
         ]),
     ...parenthesisItem,
+    ...exponentItem,
+    // **`xʸ` は押されるが、結合方向にも優先順位 4 にも触れていない。**
+    // キー列は二項を必ず括弧で囲むためである(設計書 2026-08-16-corpus-functions
+    // §3.5)。新しい関数の検証と結合方向の検証を混ぜると、赤が出たときどちらが
+    // 原因か分からなくなるので、意図して分けている。
+    "- **`xʸ` の右結合と優先順位 4。** `pow` は押されるが、キー列は二項を必ず",
+    "  括弧で囲むので、**右結合も優先順位 4 も踏んでいない**。これは意図した",
+    "  分離である(設計書 2026-08-16-corpus-functions §3.5)。",
+    "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
+    "  ——結合方向を反転する変異で 1 件も赤くならない。",
     "- **エラー経路。** ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
     "  生成の時点で範囲外にしている。エラーが出たケースは不一致として扱う。",
     "- **複素数。** 負数の平方根は範囲外。表示(`j2` のような形)も読まない。",
