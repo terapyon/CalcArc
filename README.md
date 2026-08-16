@@ -13,11 +13,12 @@
 
 ## 現在の版
 
-**0.2.0（公開ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
+**0.2.0（ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
 リリースごとの記録は [Releases](https://github.com/terapyon/CalcArc/releases) にある。
 
-**公開ベータである。** 計算結果は無保証で、重要な判断の根拠にしないでほしい。
-気づいたことは [Issue](https://github.com/terapyon/CalcArc/issues) で教えてもらえると助かる。
+**ベータである。** まだ広くは告知しておらず、使っている人はごく少ない。
+計算結果は無保証で、重要な判断の根拠にしないでほしい。気づいたことは
+[Issue](https://github.com/terapyon/CalcArc/issues) で教えてもらえると助かる。
 
 ## 画面
 
