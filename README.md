@@ -1,45 +1,97 @@
 # CalcArc
 
-ブラウザで動く計算ツール群。計算は端末内で完結し、サーバへ送信しない。
+**[English](README.en.md)**
 
-計算コアは Rust で実装し、WebAssembly としてブラウザから呼び出す。計算結果の
-正しさは Rust のテストだけに頼らず、Python による独立した参照実装と突き合わせて
-検証する。
+ブラウザで動く計算ツール群。関数電卓・データ量計算・金融計算。
+計算は端末内で完結し、サーバへ送信しない。
 
-## 現状
+## ▶ 使ってみる
 
-3 つのモジュールが動く。ナビのタブで切り替える。
+**https://calc.terapyon.net/**
 
-- **Scientific Calculator** — 複素数と極座標変換。
-- **Data Scale Calculator** — 要素数 × 次元 × データ型のメモリ量。
-- **Loan Calculator** — 元利均等の月額（残価つきも可）、借入可能額と返済期間の
-  逆算、ボーナス併用。実額の機関一致は目標にせず、**決定的な概算**を返す
-  （画面に免責を常設している）。
+インストールは不要。ホーム画面に追加すればアプリとして起動し、オフラインでも動く。
 
-## 構成
+## 現在の版
 
-| ディレクトリ | 内容 |
-|---|---|
-| `crates/calcarc-core` | 計算コア。WASM と UI に依存しない |
-| `crates/calcarc-wasm` | WASM adapter。計算ロジックを持たない |
-| `web` | React + Vite の UI |
-| `reference` | Python による参照実装。期待値を生成する |
-| `testdata` | 参照実装が生成した期待値 |
-| `docs` | 仕様と数値方針 |
+**0.2.0（公開ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
+リリースごとの記録は [Releases](https://github.com/terapyon/CalcArc/releases) にある。
+
+**公開ベータである。** 計算結果は無保証で、重要な判断の根拠にしないでほしい。
+気づいたことは [Issue](https://github.com/terapyon/CalcArc/issues) で教えてもらえると助かる。
+
+## 画面
+
+| Scientific | Data Scale | Finance |
+|---|---|---|
+| ![Scientific](docs/images/scientific.png) | ![Data Scale](docs/images/data-scale.png) | ![Finance](docs/images/finance.png) |
+
+## できること
+
+### Scientific — 関数電卓
+
+四則演算・括弧・符号反転に加えて、
+
+- **複素数と極座標変換。** `3 + j4` を打って `5 ∠ 53.130102°` に変換できる
+- `sqrt` `x²` `xʸ` `1/x` `eˣ` `ln` `log` と三角関数・逆三角関数。
+  **関数は実数に閉じている**（実数の答が一意に決まらない入力はエラーを返す）
+- `n!` `nPr` `nCr`（非負整数の上でのみ定義）
+- **60 進の入出力**（`°'"`）。経過時間と角度の両方に使える。度分秒で入れた角度を
+  そのまま `sin` に渡せる
+- ENG（工学表記）、3 桁カンマ、Degree / Radian
+
+### Data Scale — データ量の計算
+
+要素数 × 次元 × データ型から、必要なメモリ量を 10 進（KB / MB / GB / TB）と
+2 進（KiB / MiB / GiB / TiB）の両方で出す。ベクトル検索や機械学習の規模感を
+掴むためのもの。
+
+### Finance — 金融計算
+
+- **ローン**（元利均等）— 月額、借入可能額、返済期間の逆算。残価・ボーナス併用に対応
+- **複利** — 一括預入と毎月積立。税（源泉分離課税）の有無を選べる
+- **複利の逆算** — 目標額から必要な積立額、または必要な年数
+
+**実額の機関一致は目標にしていない。** 返す値は決定的な概算である（画面にも
+免責を常設している）。
+
+## 特徴
+
+- **端末内で完結する。** 入力した数値を計算目的で外部へ送らない
+- **PWA。** ホーム画面に追加でき、オフラインで動く
+- **計算コアは Rust、ブラウザでは WebAssembly として動く**
+- **Python の独立実装で検証している。** Rust のテストだけに頼らず、SymPy /
+  mpmath / `decimal.Decimal` による別実装が生成した期待値と突き合わせる。
+  同じアルゴリズムを両方に書くと同じバグが両方に入るので、**実装方法を変えている**
+
+## 免責
+
+**計算結果は無保証です。重要な判断の根拠にしないでください。**
+
+このツールは Apache License 2.0 で提供され、同ライセンスの定めるとおり、
+明示・黙示を問わずいかなる保証も伴わない。
+
+## 質問・要望・不具合
+
+**[Issue](https://github.com/terapyon/CalcArc/issues) へどうぞ。** 日本語でも英語でも構わない。
+
+不具合の報告では、**押したキーの順**を書いてもらえると助かる（例: `3 + 4 =`）。
+このプロジェクトはキー列と表示の対応表をテストとして持っているので、
+**その形で届くとそのまま 1 件のテストになる**。テンプレートが聞くようになっている。
 
 ## Numerical Policy
 
-数値の扱いは [docs/numerical-policy.md](docs/numerical-policy.md) に定める。
-要点は次のとおり。
+数値の扱いは [docs/numerical-policy.md](docs/numerical-policy.md) に定める。要点は次のとおり。
 
-- モジュールごとに数値の扱いが違う。Scientific は浮動小数点、Data Scale は
-  厳密整数、Loan は決定的概算（月額の決定だけが f64 で、償還表は厳密整数）。
-- すべての値を複素数として保持する。実数は虚部 0 の複素数である。
-- 表示は有効数字 10 桁、丸めは round-half-to-even。
-- 表示のための丸めは保持している値に書き戻さない。極形式への切り替えは
-  表示の変更であって計算ではないため、丸めた値が次の計算に入り込まない。
-- 計算コアは panic しない。すべてのエラーは `Result` を通り、UI には
-  戻り値として届く。
+- **モジュールごとに数値の扱いが違う。** Scientific は浮動小数点、Data Scale は
+  厳密整数、Finance は決定的概算（着地の 1 回だけ丸める）
+- **Scientific は**すべての値を複素数として保持する。実数は虚部 0 の複素数である。
+  表示は有効数字 10 桁、丸めは round-half-to-even
+- **Data Scale は厳密整数**（`u128`）で、丸めない。**Finance は円単位の整数**で、
+  丸めるのは着地の 1 回だけである
+- **表示のための丸めを、保持している値に書き戻さない。** 極形式への切り替えは
+  表示の変更であって計算ではないので、丸めた値が次の計算に入り込まない
+- **計算コアは panic しない。** すべてのエラーは `Result` を通り、UI には
+  戻り値として届く
 
 ## 開発
 
@@ -52,8 +104,8 @@ cargo test --workspace
 # WASM 境界のテスト
 wasm-pack test --headless --chrome crates/calcarc-wasm
 
-# Web
-cd web && pnpm install && pnpm dev
+# Web（新しいクローンでは先に pnpm wasm が要る）
+cd web && pnpm install && pnpm wasm && pnpm dev
 
 # 参照実装と期待値の再生成
 cd reference && uv sync && uv run pytest
@@ -61,7 +113,14 @@ cd reference && uv run python scripts/generate.py
 ```
 
 `crates/calcarc-core` の数値を変更したときは期待値の再生成が必要になる。
-再生成せずに `testdata/` を手で書き換えないこと。
+**再生成せずに `testdata/` を手で書き換えないこと。**
+
+版数を上げるときは `Cargo.toml` と `web/package.json` の **2 箇所**を同じ値にし、
+`README.md` の「現在の版」も直す。前 2 つの不一致は `pnpm check:version` が
+検査する。
+
+詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) と
+[docs/base-spec.md](docs/base-spec.md)（全体仕様）を参照。
 
 ## ライセンス
 
