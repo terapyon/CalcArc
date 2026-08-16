@@ -35,7 +35,12 @@ export interface KeyDef<T> {
 export interface KeypadSection<T> {
   ariaLabel: string;
   columns: number;
-  /** 行の高さ。square = 正方、half = 半高(設計書 §4)。 */
-  height: "square" | "half";
+  /**
+   * 行の高さ。square = 正方、half = 半高(設計書 §4)、double = 半高の 2 倍。
+   *
+   * **double は 2 行のラベルを持つ行のためにある**(0.2.0 設計書 §8)。
+   * 文字の大きさは half と同じで、器だけが倍になる。
+   */
+  height: "square" | "half" | "double";
   keys: KeyDef<T>[];
 }
