@@ -1095,6 +1095,10 @@ Apache License 2.0
 
 正式名称はMVP実装後に決定してもよい。
 
+**【訂正 2026-08-16】** **正式名称は `CalcArc` に確定した。** リポジトリ名・
+PWA の manifest（`name` / `short_name`）・画面のフッタ表記が同じ綴りで揃っている。
+公開先は https://calc.terapyon.net/ である。
+
 ---
 
 # 47. MVP Scope

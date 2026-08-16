@@ -1,6 +1,6 @@
 # Deploy
 
-main への push が calcarc.pages.dev に届くまでの経路と、届いたことを確認する手順。
+main への push が calc.terapyon.net に届くまでの経路と、届いたことを確認する手順。
 
 ## 仕組み要約
 
@@ -9,7 +9,7 @@ main への push が calcarc.pages.dev に届くまでの経路と、届いた�
    → `check:sw` の順にビルドと自前検査を行う。
 2. 検査を通った `web/dist` を `wrangler-action` が Cloudflare Pages に
    Direct Upload する（`--branch=main` で本番に配る）。
-3. デプロイ直後にスモークが実 URL（calcarc.pages.dev）へ `curl` を打ち、
+3. デプロイ直後にスモークが実 URL（calc.terapyon.net）へ `curl` を打ち、
    配信物が期待どおりかを機械検証する。
 
 deploy.yml は CI（ci.yml）の成功を**待たない**独立ワークフローである。main に
@@ -20,6 +20,12 @@ deploy.yml は CI（ci.yml）の成功を**待たない**独立ワークフロ�
 検査した dist と、デプロイジョブがビルドした dist は別のビルドで、「検査した
 物を配る」を成立させるには配る物を検査するしかないため。
 
+**スモークは公開 URL（`calc.terapyon.net`）を叩く。** Cloudflare Pages が持つ
+`calcarc.pages.dev` ではない——利用者が見る URL を検査しないと、**カスタム
+ドメイン側だけが壊れたときに緑のまま気づけない**。両方が同じビルドを配って
+いることと、カスタムドメインでも `_headers` が効いていることは
+2026-08-16 に実測で確認した。
+
 ## 初回確認チェックリスト
 
 deploy.yml が初めて実際に走るのは main へのマージ後（このリポジトリの規約では
@@ -27,7 +33,7 @@ deploy.yml が初めて実際に走るのは main へのマージ後（このリ
 実機で確認する。
 
 1. **Actions が緑**であることを確認する（deploy.yml のスモークまで含めて緑）。
-2. **スマートフォンの Chrome** で `https://calcarc.pages.dev` を開き、
+2. **スマートフォンの Chrome** で `https://calc.terapyon.net` を開き、
    Scientific で `3 + 4 =`、Data Scale で基準例を 1 つ計算する。
 3. **「ホーム画面に追加」**でインストールし、standalone（ブラウザ UI なし）で
    起動することを確認する。
