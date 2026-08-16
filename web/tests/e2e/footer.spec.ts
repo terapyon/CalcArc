@@ -72,22 +72,32 @@ test("the footer survives a narrower phone", async ({ page }) => {
     });
     expect(lines, `the footer wrapped at ${width}px`).toBe(1);
 
-    // **フッタ自身の右端で測る**(`document.documentElement.scrollWidth` では
-    // ない)。盤面(Keypad の関数列)は 360px 未満で独自に横へ溢れることが
-    // 実測でわかっており——このブランチの変更とは無関係の既存の挙動——
-    // ページ全体の scrollWidth で測るとその不具合を巻き込み、フッタ自体は
-    // 直っていても赤くなる。ここで確かめたいのは「フッタが溢れないか」
-    // であって「ページのどこも溢れないか」ではない。
-    const overflow = await page.evaluate(() => {
-      const footer = document.querySelector("footer");
-      if (!footer) return Number.NaN;
-      return Math.ceil(
-        footer.getBoundingClientRect().right - window.innerWidth,
-      );
+    // **フッタ自身の必要幅とビューポート幅を比べる。** `<footer>` は
+    // `margin: 0 auto` を持つ flex item で、`align-items: stretch` による
+    // 伸長を受けない——中身(nowrap のテキスト)がそのまま自分の箱の幅を
+    // 決める「shrink-to-fit」の箱である。だから中身がどれだけ長くても
+    // **箱の中で内部的にはみ出すことがなく**、`scrollWidth − clientWidth`
+    // は常に 0 になる(実測: CSS を戻しても 0 のまま。空振り)。
+    // `getBoundingClientRect().right − innerWidth` も使えない——盤面
+    // (Keypad の関数列)が独自に画面より広がっていると、`margin: auto`
+    // の中央寄せが祖先の広がった幅を基準に計算され、フッタの左端が
+    // 動いてしまう(実測: 360px で `right` が innerWidth より小さくなり、
+    // 溢れているのに検知できない)。
+    //
+    // 効くのは **`scrollWidth` を `window.innerWidth` と直接比べる**こと。
+    // `scrollWidth` はフッタが実際に必要とする幅そのもの(内部の折り返し
+    // 有無に関係なく、shrink-to-fit の箱では `clientWidth` と一致する)
+    // なので、それがビューポート幅を超えていれば、フッタの中身がその
+    // ビューポートに収まりきらないと直接言える。祖先の広がり(Keypad の
+    // 既存バグ)にも、中央寄せの副作用にも左右されない。
+    // vw の頭打ちを外して赤確認済み(320px で +33px、360px は収まる幅
+    // だったため赤くならない——閾値の狙いどおり)。
+    const spill = await page.getByRole("contentinfo").evaluate((el) => {
+      return el.scrollWidth - window.innerWidth;
     });
     expect(
-      overflow,
-      `the footer itself scrolls sideways by ${overflow}px at ${width}px`,
+      spill,
+      `the footer spills ${spill}px at ${width}px`,
     ).toBeLessThanOrEqual(0);
   }
 });
