@@ -37,6 +37,9 @@
   --key-font-size: 1.375rem;
   /* 関数キーは "sin" のように文字数が多く、行も半高なので一段小さい。 */
   --key-font-size-function: 0.9375rem;
+  /* タブの文字。キーとは別に持つ——390px で 1 枠が約 110px しかなく、
+     キーと同じ 1.375rem だと "Data Scale" が 2 段になる。 */
+  --nav-font-size: 1rem;
   /* 関数列の高さ。44px を割る唯一の場所(設計書 §4 に理由)。 */
   --function-row-height: 34px;
   --key-font-weight-emphasis: 600;
