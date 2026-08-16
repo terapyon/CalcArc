@@ -2,6 +2,336 @@
 
 設計書 `2026-08-15-heavy-corpus-e2e-design.md` §6.3 / §11 の未知を実測した記録。
 
+## 括弧を省いたシャードが実際に掛かった費用（2026-08-16 実測、段階 3c Task 4）
+
+設計書 `2026-08-16-corpus-precedence-design.md` の実装（`corpus/generated/precedence-000.json`）
+が掛けた費用の記録。**この節の数字はすべて、本タスクで実際に走らせたコマンドの出力である。**
+予想・見積り・過去のレポートからの転記は無い。測れなかったものは「測れなかった」と書いてある。
+
+計測環境: worktree `/home/terapyon/dev/CalcArc-e2e`、ブランチ `feature/e2e-corpus`、
+HEAD `a89bec4`、ブランチ基点 `ec13beb`（`git merge-base HEAD origin/main` と一致）。
+
+### 件数
+
+| シャード | 件数 | 種別 |
+|---|---|---|
+| `scientific-000.json` | 2000 | value |
+| `equivalence-000.json` | 2000 | equivalence |
+| `precedence-000.json` | **2000**（本段階で追加） | value |
+
+value ケースは 2000 → **4000** に倍増した。全 3 シャード合計 6000 件。
+
+### 棄却の内訳（`precedence-000.json`、seed=20260817、count=2000）
+
+`build_precedence_shard` の採択ループを 1 行も変えずに複製し（`generate_corpus.py` を
+`importlib` で読み込んで `random_node` / `to_keys_minimal` / `to_keys` / `_within_range` /
+`evaluate` / `to_expr_text` をそのまま呼ぶ）、棄却理由ごとに数えた。**複製が正しいことは
+自己検査で確かめている**——複製したループが積んだ 2000 件は、コミット済み
+`corpus/generated/precedence-000.json` の `cases` と Python の `==` で完全一致した
+（`True`）。生成器側に `print` を仕込む必要はなく、`reference/` は 1 バイトも触っていない。
+
+```
+attempts=18897 accepted=2000 rejected=16897 (acceptance 10.58%, rejection 89.42%)
+  bare            : 6695  (35.43% of attempts, 39.62% of rejections)
+  dropped_nothing : 10100 (53.45% of attempts, 59.77% of rejections)
+  out_of_range    : 70    ( 0.37% of attempts,  0.41% of rejections)
+  out_of_shard    : 32    ( 0.17% of attempts,  0.19% of rejections)
+  dup             : 0     ( 0.00% of attempts,  0.00% of rejections)
+  cap は count*200 = 400000 attempts。使ったのは 4.72%。
+```
+
+- **「省ける括弧が無い」（`dropped_nothing`）で捨てた割合: 全試行の 53.45%、全棄却の 59.77%。**
+  最大の棄却理由である。
+- 2 番目は「最上位が裸のリテラル」（`bare`）の 35.43%。これは既存 2 シャードと共通の棄却で、
+  この段階が新しく足した費用ではない。
+- 採択率は 10.58%。既存 `scientific-000.json` の採択率は 62.2%（2000 件時点）だったと
+  この文書の下の節が記録している——**そちらは本タスクで測り直していない、下の節からの引用**
+  である。両者を並べると約 6 分の 1 で、落ちた分はほぼすべて `dropped_nothing` に対応する。
+- 上限にはまだ 21 倍の余裕がある。件数を伸ばすときに最初に効いてくるのはここ。
+
+### 生成時間
+
+`time.perf_counter` で `build_*` を直接測った（CLI のプロセス起動を含まない）。
+**ディスクには書いていない**——メモリ上の shard を `write()` と同じ
+`json.dumps(shard, indent=2, sort_keys=True) + "\n"` で直列化し、コミット済みファイルと
+文字列比較して 3 枚とも `byte-identical: True` を確認した。
+
+| シャード | 2000 件の生成時間 | 1 件あたり | コミット済みファイルと一致 |
+|---|---|---|---|
+| `scientific-000.json` | 119.62ms | 0.0598ms | True |
+| `equivalence-000.json` | 163.35ms | 0.0817ms | True |
+| `precedence-000.json` | **211.31ms** | **0.1057ms** | True |
+| 3 枚合計（6000 件） | **494.27ms** | — | — |
+
+- 新シャードは全体の **42.8%** を占める。追加前の 2 枚合計は 282.96ms だった。
+- 1 件あたりの生成コストは既存シャードの約 1.3〜1.8 倍。棄却率が 62%→10.58% に落ちた分の
+  再抽選コストが、そのまま時間に出ている。
+- それでも 2000 件で 0.2 秒であり、この文書の下の節が書いた「生成時間は事実上 O(件数) の
+  定数倍」という結論は変わらない。
+
+### 優先順位を踏んだ件数と、意味が変わる件数
+
+**この 2 つは違うものである。混ぜてはいけない。**
+
+- **踏んだ件数: 2000 / 2000。** 同じ括弧の組の中に優先順位の異なる二項演算子が 2 つ以上
+  並ぶキー列の数。`pnpm heavy` が走行ごとにシャードから live で数え、
+  `web/heavy-report.md` に「括弧を省いた式——2000 件が踏んでいる」として出す。
+  engine は括弧ではなく優先順位で構造を決めた——この 2000 件すべてについて言える。
+- **意味が変わる件数: 1101 / 2000。** 優先順位を捨てて一様・左結合で読み直すと**別の木**に
+  なる件数。つまり「優先順位が無ければ誤答になる」件数。残る 899 件は、優先順位を
+  無視しても同じ木になる（踏んではいるが、それだけでは差が出ない）。
+- **1101 は自分で導き直していない。** 出所は
+  `reference/tests/test_generate_corpus.py:435` の
+  `assert changes_meaning == 1101`（テスト関数は同ファイル :370 の
+  `test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`）。
+  このテストはコミット済みシャードを読み、本物の優先順位表で読み直した木が `expr` に
+  往復することを先に確かめてから、一様表での再パースと構造比較する。本タスクで実行:
+  `UV_NO_CONFIG=1 uv run --no-config pytest tests/test_generate_corpus.py -k change_meaning`
+  → **1 passed**。
+
+### 実行時間の変化（2000 件増えた分）
+
+`CI=1` を付けて **毎回 wasm を作り直し、4180 のプレビューも立て直した**走行で測った
+（`reuseExistingServer` で古いものを掴んでいない、という保証のため。レビュー round 4 が
+「未実施」として残していた項目でもある）。
+
+```
+cd web && CI=1 pnpm heavy   → 93 passed (4.1s)   ← 1 回目
+cd web && CI=1 pnpm heavy   → 93 passed (4.0s)   ← 3 回目（報告書を作り直すため）
+```
+
+テスト単位の所要時間は、同じ設定に `--reporter=json` を付けた 2 回目の走行から取った
+（`stats.duration` = 4003ms、全 93 テスト `passed`）:
+
+| テスト | 所要時間 |
+|---|---|
+| `both routes agree in equivalence-000.json` | 588ms |
+| **`every case in precedence-000.json matches the reference`** | **527ms** |
+| `every case in scientific-000.json matches the reference` | 416ms |
+| 93 テストの所要時間の合計 | 2312ms |
+| その走行の wall clock | 4003ms |
+
+新シャードを外した走行との比較:
+
+```
+CI=1 pnpm exec playwright test --config playwright.heavy.config.ts \
+     --grep-invert "precedence-000.json"   → 92 passed (3.5s)
+```
+
+**2000 件の追加が掛けた実行時間は 527ms（テスト単位）、wall clock で約 0.5 秒。**
+1 件あたり約 0.26ms で、既存 `scientific-000.json` の 416ms / 2000 件 = 0.21ms/件 と
+同じ桁である。往復は 1 回のままなので、固定コスト（ページ起動・wasm 初期化）は増えていない。
+（`--grep-invert` の走行は `globalTeardown` が「揃うはずのシャードが 1 枚足りない」と
+エラーを出す。これは集計の健全性検査が働いた結果で、テストの失敗ではない。）
+
+### キートークンの被覆——このコーパス最大の穴
+
+`corpus/generated/*.json` の全ケースで実際に押されているキートークンを数えた
+（value ケースは `keys`、equivalence ケースは `left` と `right` の両方）。
+
+- 押されている distinct トークン: **23**。3 シャードとも同じ 23 で、シャードごとの違いは無い。
+  `0`〜`9` `add` `sub` `mul` `div` `eq` `lparen` `rparen` `sqrt` `sqr` `sin` `cos` `tan` `neg`
+- ブランチ基点の `web/src/calc/types.ts` の `KEY_TOKENS` は **32**。
+  → **一度も押されないトークンは 9 / 32（押されているのは 71.9%）**:
+  `dot` `zeros3` `exp` `pi` `j` `polar_toggle` `ac` `del` `angle_toggle`
+
+**これはこのコーパスの被覆の穴として最大のものである。** 小数点も、定数も、指数入力も、
+複素数の入口も、クリア／訂正キーも、角度モードの切り替えも、6000 件を通して 1 度も
+押されていない。緑であることは、これらについて何も言っていない。
+（`web/heavy-report.md` はこの 9 / 32 を走行ごとに実データから導いて出している。本タスクの
+独立集計はその値と一致した。）
+
+### main が入ったとき、この被覆がどうなるか
+
+`origin/main`（`b63362d`）と `feature/sexagesimal`（ローカル `45e477d`。別セッションの
+完了済みの仕事で、このリポジトリの共有オブジェクトストアから `git show <branch>:<path>` で
+読んだ。**チェックアウトはしていない**）は、どちらも `KEY_TOKENS` を伸ばしている。
+
+| 地点 | `KEY_TOKENS` | 押されている | **一度も押されない** | 被覆率 |
+|---|---|---|---|---|
+| このワークツリーの基点（`ec13beb`） | 32 | 23 | **9** | 71.9% |
+| `origin/main`（`b63362d`） | 46 | 23 | **23** | 50.0% |
+| `feature/sexagesimal`（`45e477d`） | 46 | 23 | **23** | 50.0% |
+
+両者が同じ 46 なのは偶然ではない。`origin/main` の直近のコミットが
+`Merge pull request #47 from terapyon/feature/sexagesimal` であり、ローカルの
+`feature/sexagesimal` は push 時に rebase された同じ仕事の push 前の姿だからである
+（`git merge-base --is-ancestor feature/sexagesimal origin/main` は偽を返す——SHA は
+別だが中身は同じ、という縦積みブランチのいつもの壊れ方）。両者が足すトークンは同一の 14 個:
+`eng` `pow` `ln` `log10` `exp_e` `recip` `asin` `acos` `atan` `e` `n_fact` `n_p_r` `n_c_r` `dms`
+
+**追加が append-only であることを自分で確かめた。** 証拠は 2 つ:
+
+1. 基点の 32 トークンのリストは、`origin/main` / `feature/sexagesimal` の 46 トークンの
+   リストの**先頭 32 要素と順序込みで完全一致**する（Python の `o[:len(base)] == base` が
+   両方 `True`）。既存トークンの削除も並べ替えも改名も無い。
+2. `git diff ec13beb origin/main -- web/src/calc/types.ts` の `KEY_TOKENS` 配列に掛かる
+   hunk は `angle_toggle` の直後に `+` 行が 14 本並ぶだけで、配列内に `-` 行が 1 本も無い。
+   `feature/sexagesimal` 側の同じ diff の `-` 行は全体で 2 本、うち 1 本は `--- a/…` の
+   ヘッダで、実体は `BinOpName` の 1 行のみ（`KEY_TOKENS` ではない）。
+
+つまり **main が入っても既存の 23 件は押され続けるが、穴は 9 個から 23 個に広がる。**
+被覆率は 71.9% → 50.0% に落ちる。コーパスの中身が悪くなるのではなく、電卓が伸びた分だけ
+コーパスが置いていかれる。
+
+### 3 桁カンマが入った瞬間に赤くなる件数（既知・計画済みの破壊）
+
+`origin/main` の `66c1fc4`「Group the integer part in threes, and nothing else」が
+`format_real` を変え、**平坦表示のときだけ整数部を 3 桁ごとにカンマで区切る**ようになった
+（小数部にも指数部にも入れない）。一方 `web/tests/heavy/display.ts` の `parseDisplay` は
+`/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/` で、カンマを含む文字列を**読まずに throw する**。
+
+判定条件は `format_real` の構造から一意に決まる: 有効数字 10 桁に丸めた後の 10 進指数を
+`e` とすると、平坦表示は `-9 <= e < 10`、カンマが入るのは整数部が 4 桁以上、すなわち
+`e >= 3`。これを各シャードの値に当てた結果:
+
+| シャード | 全件 | **カンマが付く件数** | 割合 |
+|---|---|---|---|
+| `scientific-000.json` (value) | 2000 | **555** | 27.75% |
+| `precedence-000.json` (value) | 2000 | **943** | 47.15% |
+| value 合計 | 4000 | **1498** | 37.45% |
+| `equivalence-000.json` (左右どちらかに付く) | 2000 | **483** | 24.15% |
+
+数え方と、その健全性:
+
+- value シャードはコミット済み JSON の `expect.re` をそのまま使った。虚部が 0 でない
+  ケースは両シャードとも **0 件**、指数表記になるケースも両シャードとも **0 件**
+  （生成器が `1e-6 <= |x| < 1e9` に閉じ込めているため、全件が平坦表示）。
+- equivalence シャードは `expect` を持たないので、コミット済みの `left` / `right` の
+  キー列を `test_generate_corpus.py` の `_parse_with_precedence` に本物の優先順位表で
+  通し、`corpus_eval.evaluate` で評価した。**自己検査**として左右の値が一致することを
+  全件で確かめた——**不一致 0 / 2000**。
+- **境界の曖昧さは無い。** 1e3 / 1e10 の閾値に相対 1e-8 以内まで近いケースは全 6000 件で
+  1 件だけ（`sci-000935`、式 `(552 + 448)`、値ちょうど `1000.0`）。厳密な整数なので
+  丸めの向きに依存せず「1,000」と表示される。engine 側の値が参照値から 5e-10 ずれても
+  判定は動かない。
+
+**したがって main を取り込んだ時点で、少なくとも value 1498 件と equivalence 483 件が
+`parseDisplay` の throw で赤くなる。** これは計画された破壊であり、対処は
+`2026-08-16-corpus-precedence.md`「この計画が積み残すもの」の方針どおり
+**main に入ってから直す**。未観測の書式に備えるコードを先に書かない。
+
+なお、本タスクの `CI=1 pnpm heavy` の `measure.spec.ts` が撮った 9 本の表示（`3`,
+`1.414213562`, `8.1e13` ほか）にはカンマが 1 つも出ていない。このブランチの engine は
+まだ `66c1fc4` を持っていない、ということが走行の出力から読める。
+
+**同時に入る `DomainError` の方は、このコーパスに当たらない。** 両 value シャードの
+`expect.im` は全件 0 で、負数の平方根は生成時に `OutOfShard` で捨てられている
+（`precedence-000.json` の棄却内訳で 32 件）。
+
+### 非干渉——このブランチが他を壊していないこと
+
+**`crates/` は 1 バイトも触っていない。**
+
+```
+$ git diff --stat f436438 HEAD -- crates      # 段階 3c の設計書をコミットした地点から
+（出力なし）
+$ git diff --stat ec13beb HEAD -- crates      # ブランチ基点から。ブランチ全体を覆う
+（出力なし）
+```
+
+ブリーフが指定した `f436438` は段階 3c が始まった地点にすぎないので、ブランチ基点
+`ec13beb` からも取り、両方が空であることを確かめた。
+
+**`web/src/` の差分は 1 ファイルだけ。**
+
+```
+$ git diff --stat ec13beb HEAD -- web/src
+ web/src/heavy-harness.ts | 99 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 99 insertions(+)
+```
+
+出ているのは新規追加の `web/src/heavy-harness.ts` 99 行のみで、既存ファイルの変更行は
+0 である（`-` 行が無い）。重量級専用の 2 つの設定ファイル
+（`web/playwright.heavy.config.ts` 56 行、`web/vite.heavy.config.ts` 20 行）は
+`web/src/` の外なので、この diff には現れない。どちらも新規追加である。
+`web/` の残りの差分は、このブランチ自身の試験ディレクトリ `web/tests/heavy/`（13 ファイル、
+全て新規）と、`web/heavy-harness.html`（新規 10 行）、`web/package.json`（`heavy` スクリプトを
+1 行追加）、`web/tsconfig.json`（`include` の 1 行を書き換えて `vite.heavy.config.ts` を追加）
+である。**既存ファイルに掛かった変更は `web/` 全体でこの 2 行だけ**で、あとはすべて新規追加である。
+
+**既存 `playwright test`（設定なし）は heavy を 1 件も拾わない。**
+
+```
+$ cd web && pnpm exec playwright test --list | grep -c heavy
+0
+$ cd web && pnpm exec playwright test --list | tail -1
+Total: 82 tests in 10 files
+```
+
+**走らせた検査（`.github/workflows/ci.yml` の 5 ジョブのうち 4 つ）**
+
+| CI ジョブ | コマンド | 結果 |
+|---|---|---|
+| Rust core | `cargo fmt --check` | exit 0 |
+| Rust core | `cargo clippy --workspace --all-targets -- -D warnings` | 警告 0 |
+| Rust core | `cargo test --workspace` | 12 スイート **223 passed / 0 failed / 0 ignored** |
+| Web | `pnpm typecheck` | 出力なし（clean） |
+| Web | `pnpm lint` | `Checked 86 files in 22ms. No fixes applied.` |
+| Web | `pnpm test`（vitest） | **16 files / 141 passed** |
+| Web | `pnpm exec vite build` | 成功（`precache 10 entries (557.61 KiB)`） |
+| Web | `pnpm check:sw` | `check:sw OK` |
+| End-to-end | `pnpm e2e` | **82 passed (10.9s)** |
+| Python reference | `uv sync --locked` | `Resolved 10 packages / Checked 9 packages` |
+| Python reference | `uv run ruff check .` | `All checks passed!` |
+| Python reference | `uv run ruff format --check .` | **失敗——下記参照** |
+| Python reference | `uv run pytest` | **104 passed** |
+| Python reference | `uv run python scripts/generate.py` → golden 一致 | 再生成後 `git status --porcelain` 空 |
+
+`reference` の全コマンドは `UV_NO_CONFIG=1 uv run --no-config` で走らせた。
+全走行のあと `git status --porcelain` は空で、`reference/uv.lock` に差分は無い。
+
+**「全レイヤー緑」とは書けない。** CI は 5 ジョブあり、走らせられたのは 4 つである。
+
+- **`WASM boundary`（`wasm-pack test --headless --chrome`）はこの環境で走らせられない。**
+  ChromeDriver と Chrome の版が食い違う（CLAUDE.md が「踏んだ罠」に書いている既知のもの）。
+  **走らせていないので、通ったとは書かない。** 代わりに置くのは上の
+  `git diff --stat ec13beb HEAD -- crates` が空であるという事実、すなわち
+  **境界層の入力が 1 バイトも変わっていない**という**構造的な論拠**である。
+  テストを走らせた結果ではない。差分が無い以上このブランチが境界層を壊す経路は無い、
+  という推論であって、境界層が今日実際に緑であることの観測ではない。
+- `pnpm heavy`（Layer 6）は CI のジョブではない。本タスクでは `CI=1 pnpm heavy` を
+  走らせて **93 passed / 不一致 0** を確認した。
+
+**見つかった赤: `ruff format --check` が落ちる。**
+
+```
+$ cd reference && UV_NO_CONFIG=1 uv run --no-config ruff format --check .
+unformatted: File would be reformatted
+   --> tests/test_generate_corpus.py:225:79
+   ...
+1 file would be reformatted, 21 files already formatted
+```
+
+- 対象は `reference/tests/test_generate_corpus.py` の 2 箇所——:225 の `ValueError` の
+  f-string 連結（1 行に繋げるべきところを 2 行に割っている）と、:286 の 79 文字の
+  テスト関数名 `test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need_precedence`
+  の折り返し。ruff 0.16.1（`uv.lock` が固定している版）。
+- **このブランチが入れたものである。** ファイルの各コミット時点の中身を
+  `ruff format --check --stdin-filename tests/test_generate_corpus.py -` に流して二分した:
+  `f436438` `33096b3` `33abf2f` `d7f94c9` `dcee3e3` は exit 0、
+  **`02c5f4b`（"Count operators in the same parenthesis group, not at the same depth"）から
+  exit 1** になり、`d6ee6ed` `36ec4f6` `a89bec4` も 1 のまま。
+  （ブランチ基点 `ec13beb` にこのファイルは存在しない。段階 3 で新設されたファイルである。）
+- **このまま push すれば CI の `Python reference` ジョブは `ruff format --check` で落ちる。**
+  本タスクの差分は `docs/corpus-measurements.md` に限る決まりなので、ここでは直さずに
+  記録だけ残す。直すのは `uv run ruff format reference/tests/test_generate_corpus.py`
+  1 回で済むが、それは別のコミットの仕事である。
+
+### 測れなかったもの
+
+- **WASM 境界層（`wasm-pack test --headless --chrome`）。** ChromeDriver と Chrome の
+  版が合わない。上に書いたとおり、代わりに置いたのは差分ゼロという構造的な論拠であって、
+  テストの結果ではない。
+- **カンマ導入後の実際の赤の件数。** 上の 1498 / 483 は、コミット済みの期待値と
+  `format_real` の分岐条件から数えた「カンマが付く件数」である。`origin/main` の engine を
+  実際に動かして `parseDisplay` に食わせた観測ではない（この worktree の engine には
+  まだ `66c1fc4` が入っていない）。カンマが付けば `parseDisplay` は必ず throw するので
+  下限としては固いが、main を取り込んだ後の実測で確かめ直すこと。
+- **`equivalence-000.json` の表示値を engine から直接。** シャードが `expect` を
+  持たないため、コミット済みキー列を参照実装側で読み直して評価した。左右一致 0 不一致
+  という自己検査は通っているが、engine が画面に出す文字列そのものを見たわけではない。
+
 ## 許容判定を相対誤差だけに締め直した結果（2026-08-16 実測、Task 5）
 
 設計書 `2026-08-16-corpus-tolerance-design.md` の実装後、`cd web && pnpm heavy` が
