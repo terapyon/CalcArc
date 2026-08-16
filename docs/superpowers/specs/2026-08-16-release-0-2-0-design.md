@@ -195,8 +195,15 @@ web から参照されなくなるが、**WASM 境界のテストが「境界が
 2. **`.entriesDone` の `flex-wrap: wrap`** — 入力済みの項目が増えると 1 行から
    2 行に伸びる。項目の多い Finance で効く
 
-`.main` は `white-space: nowrap` + `overflow-x: auto` なので高さは一定、`.status`
-は `min-height` を持ち中身も短いので、どちらも原因ではない。
+`.status` は `min-height` を持ち中身も短いので原因ではない。
+
+**【訂正 2026-08-16】** 当初ここには「`.main` は `white-space: nowrap` +
+`overflow-x: auto` なので高さは一定」と書いていた。**誤りである。**中身が
+ある場合しか見ておらず、**空のときに 0px になる**ことを見落としていた。
+Scientific は常に `0` などが入るので踏まないが、**Finance は答えが出るまで
+空**で、計算が走った瞬間に 1 行ぶん(実測 45px)伸びて盤面ごと押し下げる。
+実装中に E2E が捕まえた。`.main` にも同じ規則(`min-height` と固定
+`line-height`)を当てて解決した。
 
 ### 決め
 
