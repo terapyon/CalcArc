@@ -8,6 +8,7 @@ import {
   classify,
   countInjectedTokens,
   type EquivalenceCase,
+  equivalenceNeedsPrecedence,
   loadShards,
   needsPrecedence,
   partitionCases,
@@ -612,15 +613,18 @@ for (const { name, shard, values } of partitions) {
 }
 
 test("an equivalence case counts once even when both its sequences need precedence", () => {
-  // **M4 (review round 2).** The count below (in the equivalence test loop)
-  // is `left || right`, per case — not `left`'s matches plus `right`'s
-  // matches. On the real corpus this is unexercised: 0 of the 4000
-  // equivalence-case sequences need precedence, so summing and OR-ing are
-  // indistinguishable there and nothing pins the "count once" decision.
-  // Build three synthetic cases — left-only, right-only, and both — so a
-  // regression to summing sequences (which would count the "both" case
-  // twice, for 4 total instead of 3) is caught here instead of only being
-  // silently possible on real data.
+  // **M4 (review round 2), fixed for real in N2 (review round 3).** The
+  // round-2 version of this test applied its **own inline copy** of
+  // `left || right` rather than calling the production path — measured by
+  // mutation: replacing the production expression (then at `corpus.spec.ts`'s
+  // equivalence loop) with a per-sequence sum left this test green,
+  // unchanged (1 passed → 1 passed). It was a tautology about a literal
+  // written three lines above it, not a test of production code.
+  //
+  // Fixed by extracting the decision into `equivalenceNeedsPrecedence`
+  // (`corpus.ts`) and having **both** the production loop below and this
+  // test call the same function — see that function's doc comment for the
+  // mutation numbers before and after this fix.
   const needsIt = ["1", "add", "2", "mul", "3", "eq"]; // true, see tests above
   const doesNot = ["1", "add", "2", "eq"]; // false, see tests above
   const synthetic: EquivalenceCase[] = [
@@ -646,13 +650,14 @@ test("an equivalence case counts once even when both its sequences need preceden
       right: ["4", "mul", "5", "add", "6", "eq"], // also true
     },
   ];
-  const precedenceCases = synthetic.filter(
-    (c) => needsPrecedence(c.left) || needsPrecedence(c.right),
-  ).length;
+  const precedenceCases = synthetic.filter(equivalenceNeedsPrecedence).length;
   // Per-case OR: all three cases qualify once each.
   expect(precedenceCases).toBe(3);
-  // Not the sequence-sum a `left ? 1 : 0) + (right ? 1 : 0)` reduction would
+  // Not the sequence-sum a `(left ? 1 : 0) + (right ? 1 : 0)` reduction would
   // give (2 left-matches + 2 right-matches = 4, double-counting "both").
+  // This alternate computation is deliberately *not* routed through
+  // `equivalenceNeedsPrecedence` — it exists only to give the assertion
+  // below something concrete to differ from.
   const wrongSequenceSum = synthetic.reduce(
     (sum, c) =>
       sum +
@@ -726,7 +731,7 @@ for (const { name, shard, equivalences } of partitions) {
     // なら、そのケースは「優先順位を踏んだ」でよい。左右を別々に数えて
     // 足すと 1 件が 2 件に化ける。
     const precedenceCases = equivalences.filter(
-      (c) => needsPrecedence(c.left) || needsPrecedence(c.right),
+      equivalenceNeedsPrecedence,
     ).length;
     record({
       name: `${name} (equivalences)`,

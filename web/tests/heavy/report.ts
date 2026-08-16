@@ -743,6 +743,19 @@ function unusedKeyTokens(entries: ShardSummary[]): string[] {
 function renderCaveats(entries: ShardSummary[]): string[] {
   const unused = unusedKeyTokens(entries);
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
+  // **N1 fix (review round 3).** The elaboration below (the "1101" figure and
+  // the associativity caveat) is a specific claim about how
+  // `precedence-000.json` was built — it is true only when that shard is
+  // actually part of this run. The old version rendered it unconditionally
+  // whenever the *aggregate* `precedence` count was non-zero: measured with a
+  // summary set holding only `scientific-000.json` and a count of 7, the
+  // report still named `precedence-000.json`, still claimed it held 2000
+  // cases, and still printed 1101 — for a run that never touched that shard.
+  // The head phrase (`precedence` itself) stays unconditional because it is
+  // genuinely derived from whatever shard(s) are in this run.
+  const precedenceShard = entries.find(
+    (e) => e.name === "precedence-000.json (values)",
+  );
   const parenthesisItem =
     precedence === 0
       ? [
@@ -760,28 +773,37 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           `- **括弧を省いた式——${precedence} 件が踏んでいる。** 同じ括弧の組の`,
           "  中に優先順位の異なる二項演算子が 2 つ以上並ぶキー列がこれだけある。",
           "  engine は括弧ではなく優先順位で構造を決めた。",
-          "",
-          // **step B.** 「踏んだ」件数(構造を優先順位で決めた)と「無ければ
-          // 誤答になる」件数は別である。後者は reference の構文木比較でしか
-          // 測れない(浮動小数の一致では測れない——単なる drop と意味の変化は
-          // 別の性質)。手で数えるとポストフィックス単項の罠(`1 add 2 sqrt`
-          // は `√(1+2)` ではなく `1 + √2`)を踏みやすいので、生成器が実際に
-          // 持っている木と、優先順位を使わず同じキー列を読み直した木を、
-          // 構造として直接突き合わせている。
-          "  **ただし「踏んだ」件数は「無ければ誤答になる」件数ではない。**",
-          "  `precedence-000.json` の 2000 件のうち、実際に優先順位が無いと",
-          "  別の木になる件数は **1101 件**——" +
-            "`reference/tests/test_generate_corpus.py::" +
-            "test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`" +
-            " が構文木の等価性そのもので厳密に測り、値を固定している。",
-          "  この数はそのテストの assert に固定された値であって、ここで再計算した",
-          "  ものではない——シャードを再生成したらそのテストを走らせて検算し、",
-          "  必要ならこの文も書き換えること。",
-          "",
-          "  **結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
-          "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",
-          "  省いた瞬間に生成側が結合方向を知ることになるため、意図して残している",
-          "  (設計書 2026-08-16 §3.1)。結合方向は `engine_table.rs` の担当である。",
+          ...(precedenceShard === undefined
+            ? []
+            : [
+                "",
+                // **step B.** 「踏んだ」件数(構造を優先順位で決めた)と「無ければ
+                // 誤答になる」件数は別である。後者は reference の構文木比較でしか
+                // 測れない(浮動小数の一致では測れない——単なる drop と意味の変化は
+                // 別の性質)。手で数えるとポストフィックス単項の罠(`1 add 2 sqrt`
+                // は `√(1+2)` ではなく `1 + √2`)を踏みやすいので、生成器が実際に
+                // 持っている木と、優先順位を使わず同じキー列を読み直した木を、
+                // 構造として直接突き合わせている。
+                "  **ただし「踏んだ」件数は「無ければ誤答になる」件数ではない。**",
+                `  \`precedence-000.json\` の ${precedenceShard.total} 件のうち、`,
+                "  実際に優先順位が無いと別の木になる件数は **1101 件**。",
+                // **N7 fix (review round 3).** 前はここが 1 要素の配列に収まる
+                // 1 本の ~200 字の行だった——この文書はどこも ~40〜70 字で
+                // 折り返している。テストの完全修飾パスは 1 語として折れない
+                // ので、文の前後をそれぞれ独立の行にして、それだけを孤立させる。
+                "  この数値は reference のテストが構文木の等価性そのもので厳密に",
+                "  測り、固定している",
+                "  (`reference/tests/test_generate_corpus.py::" +
+                  "test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`)。",
+                "  この数はそのテストの assert に固定された値であって、ここで",
+                "  再計算したものではない——シャードを再生成したらそのテストを",
+                "  走らせて検算し、必要ならこの文も書き換えること。",
+                "",
+                "  **結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
+                "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",
+                "  省いた瞬間に生成側が結合方向を知ることになるため、意図して残している",
+                "  (設計書 2026-08-16 §3.1)。結合方向は `engine_table.rs` の担当である。",
+              ]),
         ];
   return [
     "",
@@ -798,7 +820,12 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "**実例があるときだけ**その節に出る——実例が無い走行で「上に挙がっている",
     "のはその実例であり」と書けば、それは 0 件という事実と矛盾する。",
     "",
-    "### まだ一度も踏んでいない領域",
+    // **N5 fix (review round 3).** 見出しはもともと「まだ一度も踏んでいない
+    // 領域」だった。I2(review round 2)が直下の前置きの自己矛盾(「一件も
+    // 含んでいない」の直後に「2000 件が踏んでいる」)を直したが、見出し自身の
+    // 「一度も」はそのまま残していた——矛盾は消えたのではなく 1 行上に
+    // 移っただけだった。見出しと前置きを同時に、同じ言い方で直す。
+    "### まだ踏んでいない、または限定的にしか踏んでいない領域",
     "",
     // **I2 fix (review round 2).** 以前ここは「以下はこのコーパスが一件も
     // 含んでいない」で固定していたが、直後の「括弧を省いた式」の項目が
@@ -844,14 +871,34 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "  この層の道具立て(表示を数に戻して期待値と突き合わせる)では捕まえにくく、",
     "  既存の E2E(Layer 5)の方が向いている。",
     "",
-    "> **この節は手で保守されている。** 「使っていないキートークン」と「括弧を",
-    "> 省いた式」の 2 項目だけが走行の実データから導かれていて、残りの項目——",
-    "> エラー経路・複素数・指数表記・角度モード・UI・入力中の表示——は固定の",
-    "> 文章である。段階 3 でこれらの領域が埋まったら、**ここを更新すること**。",
-    "> 更新を忘れると、この報告書は実際には埋まった領域を「守備範囲の外」だと",
-    "> 言い続ける——ちょうど「括弧を省いた式」がかつてそうだった。",
-    "> 信憑性を目的とした文書でそれが起きると、数字が正しくても文書全体が",
-    "> 信用を失う。",
+    // **N6 fix (review round 3).** 以前ここは「括弧を省いた式」が丸ごと
+    // データ由来であるかのように書いていたが、N1(review round 3)以降、
+    // その項目はこの走行の内容によって違う——`precedence-000.json` 自身が
+    // この走行に含まれるときだけ、reference テストの assert に固定された
+    // 手書きの数値(1101)を伴う段落が付く。含まれない走行では、見出しの
+    // 件数だけの完全にデータ由来な行になる。disclaimer 自身もそれに合わせて
+    // 書き分ける——固定文にしてしまうと、precedenceShard が無い走行でこの
+    // disclaimer 自体が存在しない主張(手書きの数値・シャード名)をすることになる。
+    "> **この節は手で保守されている。** 「使っていないキートークン」の行は",
+    "> 走行の実データから導かれている。「括弧を省いた式」の項目は",
+    ...(precedenceShard === undefined
+      ? [
+          "> この走行では見出しの件数だけの、完全にデータ由来の行である",
+          "> (詳細な内訳を伴う手書きの段落は、その内訳の元になるシャードが",
+          "> この走行に含まれるときだけ付く)。",
+        ]
+      : [
+          "> **半分だけ**データ由来である——見出しの件数とシャードの有無判定は",
+          `> 実データからだが、\`precedence-000.json\` の ${precedenceShard.total} 件中`,
+          "> 1101 件が意味を変える、という段落そのものは reference テストの",
+          "> assert に固定された手書きの数値である。",
+        ]),
+    "> 残りの項目——エラー経路・複素数・指数表記・",
+    "> 角度モード・UI・入力中の表示——は完全に固定の文章である。段階 3 で",
+    "> これらの領域が埋まったら、**ここを更新すること**。更新を忘れると、",
+    "> この報告書は実際には埋まった領域を「守備範囲の外」だと言い続ける",
+    "> ——ちょうど「括弧を省いた式」がかつてそうだった。信憑性を目的とした",
+    "> 文書でそれが起きると、数字が正しくても文書全体が信用を失う。",
     "",
   ];
 }

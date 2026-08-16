@@ -471,7 +471,13 @@ test("the report says what was run, when, and with what", () => {
 test("the report lists the ground it has never touched", () => {
   const markdown = renderReport([summary()], PROVENANCE);
 
-  expect(markdown).toContain("まだ一度も踏んでいない領域");
+  // **N5 (review round 3): the heading itself used to say "一度も" (never,
+  // even once), directly contradicting the bullet under it once that bullet
+  // reports a nonzero count.** The heading now moves with the lead-in
+  // I2 already fixed.
+  expect(markdown).toContain(
+    "まだ踏んでいない、または限定的にしか踏んでいない領域",
+  );
   expect(markdown).toContain("優先順位");
   expect(markdown).toContain("指数表記");
   expect(markdown).toContain("angle_toggle");
@@ -592,17 +598,44 @@ test("an unmatched rparen fails loudly instead of silently under-counting", () =
   // `rparen` empty the stack and then silently drop every operator that
   // followed at the top level, returning `false` where the answer is
   // actually undefined for malformed input. The Python twin
-  // (`_needs_precedence`) raises a bare `IndexError` on the same input; this
-  // makes the TS side fail loudly too, matching this project's convention of
-  // being noisy on malformed input rather than quietly wrong.
+  // (`_needs_precedence`) raises on the same input; this makes the TS side
+  // fail loudly too, matching this project's convention of being noisy on
+  // malformed input rather than quietly wrong.
+  //
+  // **All four malformed shapes the round-3 review probed, not just the one
+  // a prior round happened to name (N4).** The topLevel/stack split fixes
+  // all of them at once, but only one had a regression test.
   expect(() =>
     needsPrecedence(["1", "rparen", "add", "2", "mul", "3", "eq"]),
   ).toThrow(/unmatched "rparen"/);
+  expect(() => needsPrecedence(["1", "rparen", "eq"])).toThrow(
+    /unmatched "rparen"/,
+  );
+  expect(() =>
+    needsPrecedence(["lparen", "1", "add", "2", "rparen", "rparen", "eq"]),
+  ).toThrow(/unmatched "rparen"/);
+  expect(() =>
+    needsPrecedence(["rparen", "1", "add", "2", "mul", "3", "eq"]),
+  ).toThrow(/unmatched "rparen"/);
+  // An unclosed `lparen` is not malformed in this sense — the open group is
+  // still inspected.
+  expect(needsPrecedence(["lparen", "1", "add", "2", "mul", "3", "eq"])).toBe(
+    true,
+  );
 });
 
 test("the report says how many cases exercised precedence", () => {
+  // **N1 (review round 3): the elaboration (1101, the associativity caveat)
+  // is specific to `precedence-000.json`, so the entry here must actually be
+  // that shard** — a synthetic entry named e.g. `scientific-000.json` would
+  // no longer render it. See the paired test below for the absence case.
   const markdown = renderReport(
-    [summary({ precedenceCases: 1500 })],
+    [
+      summary({
+        name: "precedence-000.json (values)",
+        precedenceCases: 1500,
+      }),
+    ],
     PROVENANCE,
   );
   expect(markdown).toContain("1500");
@@ -610,13 +643,37 @@ test("the report says how many cases exercised precedence", () => {
   expect(markdown).toContain("結合方向");
 });
 
+test("the precedence-specific elaboration is absent when that shard is not in the run", () => {
+  // **N1 (review round 3).** The old version of this sentence rendered
+  // whenever the *aggregate* precedence count was non-zero, regardless of
+  // which shard(s) were actually summarised. Reproduce the reviewer's exact
+  // probe: a run containing only `scientific-000.json`, with a nonzero
+  // precedence count on it (as if some future non-parens-dropping shard
+  // could still exercise precedence). The count itself is legitimately
+  // data-derived and must still show; the `precedence-000.json`-specific
+  // claims (its own total, the 1101 figure, the associativity caveat) must
+  // not, because they are not true of this run.
+  const markdown = renderReport(
+    [summary({ name: "scientific-000.json (values)", precedenceCases: 7 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("7 件が踏んでいる");
+  expect(markdown).not.toContain("precedence-000.json");
+  expect(markdown).not.toContain("1101");
+  expect(markdown).not.toContain("結合方向");
+});
+
 test("zero precedence cases reads as never touched", () => {
-  // **C1 fix (review round 1).** `toContain("一度も踏んでいない")` alone is
-  // satisfied by the section *heading* ("### まだ一度も踏んでいない領域"),
-  // which renders unconditionally regardless of which branch of
-  // `parenthesisItem` ran — deleting the zero branch outright still left this
-  // green. Assert on text unique to the zero branch, and assert the
-  // non-zero branch's count phrase is absent.
+  // **C1 fix (review round 2).** `toContain("一度も踏んでいない")` alone was
+  // satisfied by the section *heading*, which at the time literally read
+  // "### まだ一度も踏んでいない領域" and rendered unconditionally regardless
+  // of which branch of `parenthesisItem` ran — deleting the zero branch
+  // outright still left this green. (The heading text itself has since
+  // changed under N5, review round 3, for an unrelated reason — see "the
+  // report lists the ground it has never touched" — but that is not what
+  // makes this assertion meaningful; the fix below is.) Assert on text
+  // unique to the zero branch, and assert the non-zero branch's count phrase
+  // is absent.
   const markdown = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
   expect(markdown).toContain("キー列は二項演算を必ず括弧で囲む");
   expect(markdown).not.toContain("件が踏んでいる");

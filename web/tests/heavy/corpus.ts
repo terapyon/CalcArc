@@ -567,7 +567,11 @@ export function needsPrecedence(keys: string[]): boolean {
         // rparen 以降のトップレベル演算子が黙って捨てられ、間違った(多くは
         // 偽の)答えを返す——測定済み: `["1","rparen","add","2","mul","3","eq"]`
         // は `?.` 版だと `false` を返すが、正しい答えは判定不能である。
-        // Python の双子 `_needs_precedence` はここで素の `IndexError` になる。
+        // Python の双子 `_needs_precedence` も同じ形(トップレベルの組を
+        // `stack` に積まない別変数で持つ)に直してあり、対応の無い `rparen`
+        // は常に明示的な例外(`ValueError`)を投げる(N4、review round 3——
+        // 直す前は演算子が後に続くときだけ `IndexError` で偶然落ち、続かない
+        // ときは静かに `False` を返す中途半端な壊れ方だった)。
         // この関数は報告専用だが、この project の約束は「壊れた入力は騒いで
         // 落ちる」であって、黙って数字がずれることではない。
         throw new Error(
@@ -588,6 +592,28 @@ export function needsPrecedence(keys: string[]): boolean {
   // 閉じた組・閉じ損なった組(開いたままの `lparen`)・トップレベルの組の
   // すべてを見る。
   return [...closedGroups, topLevel, ...stack].some((group) => group.size >= 2);
+}
+
+/**
+ * **同値ケース 1 件が優先順位を踏んだかどうか。**
+ *
+ * どちらか一方(左右)が踏んでいれば、そのケースは 1 件として数える——左右を
+ * 別々に数えて足すと、両方踏んだケースが 2 件に化ける(同値ケースは 1 件が
+ * 左右二本のキー列を持つだけで、依然として 1 件だからである)。
+ *
+ * **`corpus.spec.ts` の集計とこの関数の単体テストの両方がこれを呼ぶ。**
+ * 以前はどちらも同じ式 `needsPrecedence(c.left) || needsPrecedence(c.right)`
+ * を別々に書いていた——見た目は同じでも別のコピーなので、テストは自分自身の
+ * コピーを検査しているだけで、本番側の集計を一切拘束していなかった(review
+ * round 3、N2)。実測: 本番側の式を「左右それぞれの一致数を足す」誤りに
+ * 差し替えても、そのときのテストは緑のままだった。関数を 1 つに括り出し、
+ * 両方がそれを呼ぶことで、本番側を壊す変更がテストを赤くするようにする。
+ */
+export function equivalenceNeedsPrecedence(c: {
+  left: string[];
+  right: string[];
+}): boolean {
+  return needsPrecedence(c.left) || needsPrecedence(c.right);
 }
 
 /** 大きさの分位。最近傍順位法——補間しないので、必ず実在の観測値が出る。 */

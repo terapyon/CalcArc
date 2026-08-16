@@ -9,7 +9,16 @@ import sys
 import mpmath as mp
 
 from calcarc_reference.corpus_eval import evaluate
-from calcarc_reference.corpus_expr import BINARY_KEYS, DIGIT_KEYS, UNARY_KEYS, Bin, Num, Un
+from calcarc_reference.corpus_expr import (
+    BINARY_KEYS,
+    BINARY_PRECEDENCE,
+    DIGIT_KEYS,
+    UNARY_KEYS,
+    Bin,
+    Num,
+    Un,
+    to_expr_text,
+)
 
 _PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "generate_corpus.py"
 _SPEC = importlib.util.spec_from_file_location("generate_corpus", _PATH)
@@ -170,10 +179,22 @@ def _needs_precedence(keys: list[str]) -> bool:
     (`web/tests/heavy/corpus.ts` の `needsPrecedence`)も同じ理由で同じ形に直した。
 
     実装は `lparen` で新しい組をスタックに push し、`rparen` で pop して確定させる。
-    トップレベル(どの括弧の外)も 1 つの組として扱う。対応の無い `rparen` は
-    `stack.pop()` が素の `IndexError` で落ちる——騒いで落ちる。TypeScript の
-    双子は `?.` で読み飛ばしていて同じ入力を静かに `false` にしていた
-    (M1、review round 2)。いまは同じ入力で TypeScript 側も例外を投げる。
+    トップレベル(どの括弧の外)は `stack` に積まない別変数で持つ——**以前は
+    トップレベルの組を `stack` の最初の要素として積んでいた**ため、対応の無い
+    `rparen` がその要素まで pop してしまうと、後続の演算子が(`stack[-1]` が
+    静かに存在しなくなるのではなく)ただ**次の binary key まで例外が起きない**
+    という中途半端な壊れ方をしていた:直後に演算子が続けば `IndexError` で
+    騒いで落ちるが、`rparen` の後に演算子が一つも無ければ(`["1","rparen","eq"]`
+    のように)何も例外が起きず、`False` を静かに返していた。
+
+    **M1(review round 2)は TypeScript 側だけを直したが、Python 側は直って
+    いなかった。** N4(review round 3)が実測で反証: `["1","rparen","eq"]` と
+    `["lparen","1","add","2","rparen","rparen","eq"]` はどちらも TypeScript 側は
+    例外を投げるのに、この関数は `False` を返していた——`stack.pop()` が
+    トップレベルの組を巻き込んで消せてしまうのが原因で、M1 が名指しした
+    「壊れた入力を静かに読み違える」形そのものだった。トップレベルを pop
+    できない別変数にしたことで、対応の無い `rparen` は**必ず** `stack` が
+    空の状態で `pop()` を試みることになり、ここで明示的に例外を投げる。
 
     **双子について。** この関数は `test_every_precedence_case_actually_drops_a_parenthesis`
     が `precedence-000.json` を生成する側のゲートとして使い、TypeScript の
@@ -190,16 +211,22 @@ def _needs_precedence(keys: list[str]) -> bool:
     from calcarc_reference.corpus_expr import BINARY_KEYS, BINARY_PRECEDENCE
 
     key_precedence = {BINARY_KEYS[op]: precedence for op, precedence in BINARY_PRECEDENCE.items()}
-    stack: list[set[int]] = [set()]
+    top_level: set[int] = set()
+    stack: list[set[int]] = []
     closed_groups: list[set[int]] = []
     for key in keys:
         if key == "lparen":
             stack.append(set())
         elif key == "rparen":
+            if not stack:
+                raise ValueError(
+                    f'_needs_precedence: unmatched "rparen" (more rparen than '
+                    f"lparen) in {keys!r}."
+                )
             closed_groups.append(stack.pop())
         elif key in key_precedence:
-            stack[-1].add(key_precedence[key])
-    return any(len(group) >= 2 for group in (*closed_groups, *stack))
+            (stack[-1] if stack else top_level).add(key_precedence[key])
+    return any(len(group) >= 2 for group in (*closed_groups, top_level, *stack))
 
 
 def test_every_precedence_case_actually_drops_a_parenthesis() -> None:
@@ -218,6 +245,31 @@ def test_the_helper_itself_distinguishes_the_two_forms() -> None:
     assert _needs_precedence(["1", "add", "2", "mul", "3", "eq"]) is True
     assert _needs_precedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]) is False
     assert _needs_precedence(["1", "add", "2", "eq"]) is False
+
+
+def test_malformed_rparen_always_raises_not_only_when_an_operator_follows() -> None:
+    # **N4 (review round 3).** Before this fix, an unmatched `rparen` raised
+    # only *incidentally*, when a binary key happened to follow it (because
+    # `stack.pop()` had already silently consumed the top-level group, and the
+    # next `stack[-1]` was what actually failed). Two of the four probes the
+    # reviewer used returned a quiet `False` instead: an unmatched `rparen`
+    # with nothing after it, and an extra `rparen` right after a balanced
+    # group. All four must now raise, matching the TypeScript twin
+    # (`needsPrecedence`) on every one of them, not just the one probe a prior
+    # round happened to name.
+    import pytest
+
+    with pytest.raises(ValueError, match='unmatched "rparen"'):
+        _needs_precedence(["1", "rparen", "add", "2", "mul", "3", "eq"])
+    with pytest.raises(ValueError, match='unmatched "rparen"'):
+        _needs_precedence(["1", "rparen", "eq"])
+    with pytest.raises(ValueError, match='unmatched "rparen"'):
+        _needs_precedence(["lparen", "1", "add", "2", "rparen", "rparen", "eq"])
+    with pytest.raises(ValueError, match='unmatched "rparen"'):
+        _needs_precedence(["rparen", "1", "add", "2", "mul", "3", "eq"])
+    # An *unclosed* `lparen` is not malformed in this sense — the open group
+    # is still inspected, matching the TypeScript twin.
+    assert _needs_precedence(["lparen", "1", "add", "2", "mul", "3", "eq"]) is True
 
 
 def test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need_precedence() -> None:
@@ -286,6 +338,18 @@ def test_the_postfix_unary_trap() -> None:
     # round 2, I1): applying a postfix unary to the accumulated value instead
     # of the current operand reads `1 add 2 sqrt` as `√(1 + 2)`. It is `1 + √2`
     # — `sqrt` binds only to the `2` that precedes it, regardless of precedence.
+    #
+    # **N8 (review round 3), informational.** This test cannot actually fail
+    # for `_parse_with_precedence` as written: the mistake it names is not
+    # expressible in a recursive precedence-climbing parser that consumes
+    # postfix unaries inside `parse_atom` (there confirmed by trying to
+    # relocate the unary loop into `parse_expr` — the result was semantically
+    # identical). Keep it as executable documentation of the property; the
+    # assert that actually is sensitive to this class of mistake is
+    # `test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence`'s
+    # `changes_meaning == 1101` (verified: a wrong postfix rule gives 1598 on
+    # this corpus, and a right-associativity mutation elsewhere in the same
+    # parser gives 1131 — both move the number, so it is not inert).
     uniform = {key: 1 for key in BINARY_KEYS.values()}
     tree = _parse_with_precedence(["1", "add", "2", "sqrt"], uniform)
     assert tree == Bin("+", Num(1), Un("sqrt", Num(2)))
@@ -301,20 +365,58 @@ def test_precedence_shard_reports_how_many_cases_change_meaning_without_preceden
     # exactly: parse each case's own committed `keys` with *no* precedence
     # distinction (all binary operators equal, left-associative, parens and
     # postfix unaries honoured — see `test_the_postfix_unary_trap`) and compare
-    # the result to the tree the generator actually built. No float comparison,
-    # no guessing: `_precedence_candidates` hands back the real `Node` next to
-    # the `keys` it was serialized into, so this is a structural `==` against
-    # ground truth, not against a second, independently-written parser.
-    rng = random.Random(20260817)
+    # the result, structurally, to a real-precedence parse of the same keys.
+    #
+    # **Reads `corpus/generated/precedence-000.json` from disk (N3, review
+    # round 3).** The first version of this test called
+    # `generate_corpus._precedence_candidates(random.Random(20260817), 2000)`
+    # directly — a literal copy of `main()`'s seed and count
+    # (`generate_corpus.py:335`) that regenerated trees in memory and never
+    # touched the committed file. Measured: change the generator's seed and
+    # `test_corpus_reproducibility.py` correctly reddens (the committed shard
+    # no longer matches a fresh generation) — but the old version of this test
+    # stayed green, still asserting 1101 against a stream the committed shard
+    # no longer came from. After someone regenerates the shard to clear the
+    # reproducibility gate, the "1101" claim this test backs (and that
+    # `web/heavy-report.md` prints) could be false with nothing saying so.
+    #
+    # Fixed by never regenerating: read the committed shard, and get "ground
+    # truth" the same way the external reviewer who independently confirmed
+    # 1101 did — parse each case's own `keys` with the engine's *real*
+    # precedence table, then confirm that reparse round-trips back to the
+    # committed `expr` string via `to_expr_text`. If the real-precedence parse
+    # did not recover the tree `to_keys_minimal` was built from, it would not
+    # render back to the same `expr`; checking every case's round-trip is the
+    # ground-truth self-check, not an assumption. Only then is the same keys
+    # list parsed a second time with *no* precedence distinction and compared,
+    # structurally, to the ground-truth tree.
+    with (_CORPUS_GENERATED / "precedence-000.json").open(encoding="utf-8") as f:
+        shard = json.load(f)
+    cases = shard["cases"]
+    assert len(cases) > 0, "precedence-000.json carries no cases to check"
+
+    real = {BINARY_KEYS[op]: prec for op, prec in BINARY_PRECEDENCE.items()}
     uniform = {key: 1 for key in BINARY_KEYS.values()}
-    total = 0
+
+    round_trip_mismatches: list[str] = []
     changes_meaning = 0
-    for node, entry in generate_corpus._precedence_candidates(rng, 2000):
-        total += 1
-        reparsed = _parse_with_precedence(entry["keys"][:-1], uniform)
-        if reparsed != node:
+    for case in cases:
+        keys = case["keys"][:-1]  # drop the trailing "eq"
+        ground_truth = _parse_with_precedence(keys, real)
+        if to_expr_text(ground_truth) != case["expr"]:
+            round_trip_mismatches.append(case["id"])
+            continue
+        reparsed = _parse_with_precedence(keys, uniform)
+        if reparsed != ground_truth:
             changes_meaning += 1
-    assert total == 2000
+
+    # The ground-truth self-check must hold for every case, or the count below
+    # is measured against a broken ground truth rather than the real one.
+    assert round_trip_mismatches == [], (
+        f"{len(round_trip_mismatches)} case(s) did not round-trip through "
+        f"_parse_with_precedence with the real table: {round_trip_mismatches[:5]}"
+    )
+    assert len(cases) == 2000
     assert changes_meaning == 1101
 
 
