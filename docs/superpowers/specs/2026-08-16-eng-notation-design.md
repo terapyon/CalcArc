@@ -355,22 +355,38 @@ S-1 がそこを埋める。
 
 **だから約束そのものを検査にする。**
 
+**【2026-08-16 訂正】カンマ（§3.3）を足したので、この検査の内容が変わる。**
+当初この節は `format_real(1000.0) == "1000"` と書いていたが、**カンマは既定を変える**
+ので `"1,000"` が正しい。**「既定は動かない」ではなく「ENG が既定に漏れない」を守る
+検査である**と読み替える。
+
 ```rust
 #[test]
-fn the_default_display_rule_does_not_move() {
+fn eng_does_not_leak_into_the_default_display() {
     // **この spec の約束を、散文ではなくここで持つ。** ENG は既定では入らない。
-    // 他レイヤー(feature/e2e-corpus)が表示書式を実測して parseDisplay を
-    // 組んでおり、既定が動くと黙って壊れる側にいる。
-    assert_eq!(format_real(1000.0), "1000");        // ENG なら "1e3"
-    assert_eq!(format_real(12345.0), "12345");      // ENG なら "12.345e3"
-    assert_eq!(format_real(1e10), "1e10");          // 指数表記の下限は動かない
-    assert_eq!(format_real(9.999e9), "9999000000"); // その手前は平坦なまま
+    // 平坦か指数かの閾値も、ENG のために動かさない。
+    // (カンマは §3.3 で既定を変える。それはこの検査の対象ではなく、下の
+    //  thousands_separators_group_only_the_integer_part が持つ。)
+    assert_eq!(format_real(1000.0), "1,000");         // ENG なら "1e3"
+    assert_eq!(format_real(12345.0), "12,345");       // ENG なら "12.345e3"
+    assert_eq!(format_real(1e10), "1e10");            // 指数表記の下限は動かない
+    assert_eq!(format_real(9.999e9), "9,999,000,000"); // その手前は平坦なまま
     assert_eq!(format_real(1e-9), "1e-9");
     assert_eq!(format_real(1.1e-9), "0.0000000011");
 }
+
+#[test]
+fn thousands_separators_group_only_the_integer_part() {
+    assert_eq!(format_real(1234567.0), "1,234,567");
+    assert_eq!(format_real(1234.5678), "1,234.5678");  // 小数部は刻まない
+    assert_eq!(format_real(-1234567.0), "-1,234,567"); // 符号は先頭
+    assert_eq!(format_real(999.0), "999");             // 4 桁未満は変わらない
+    assert_eq!(format_real(1000.0), "1,000");          // 境界の両側
+    assert_eq!(format_real(1.5e12), "1.5e12");         // 指数表記には入らない
+}
 ```
 
-**境界の両側を置く**のが要点である（`1e10` と `9.999e9`、`1e-9` と `1.1e-9`）——
+**境界の両側を置く**のが要点である（`1e10` と `9.999e9`、`999` と `1000`）——
 片側だけだと閾値がずれても通る。
 
 **この形は他セッションから学んだ**（2026-08-16）:「**再観測できる根拠は、散文ではなく
