@@ -49,9 +49,10 @@ cd reference && uv run python scripts/generate.py   # golden の再生成
   入って検証の意味がなくなる。
 - **電卓の挙動は `crates/calcarc-core/tests/engine_table.rs` が仕様書。** キー列と表示の
   対応を先に変えてから実装を直す。
-- **版数を上げるときは 3 箇所を揃える。** `Cargo.toml`（workspace）、
-  `web/package.json`、`README.md` の「現在の版」。前 2 つの不一致は
-  `pnpm check:version` が検査する（README は自由文なので検査しない）。
+- **版数を上げるときは 4 箇所を揃える。** `Cargo.toml`（workspace）、
+  `web/package.json`、`README.md` の「現在の版」、`README.en.md` の
+  「Current version」。`pnpm check:version` が検査するのは `Cargo.toml` と
+  `web/package.json` の不一致だけで、**どちらの README も見ない**。
   画面に出る版数は `web/package.json` からビルド時に埋まる。
 
 ## 踏んだ罠

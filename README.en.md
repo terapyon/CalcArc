@@ -52,8 +52,8 @@ scale for vector search and machine learning workloads.
 
 - **Loan** (equal principal and interest) — monthly payment, borrowable amount, and reverse
   calculation of repayment period. It also supports residual value and bonus payments
-  (**the two cannot be used at the same time**; while one is entered, the other cannot be
-  pressed)
+  (**residual value only works in payment mode. Bonus payments don't work in term mode.
+  In payment mode, only one of the two — residual value or bonus — can be used**)
 - **Compound interest** — lump-sum deposit and monthly contributions. You can choose whether
   tax (separate withholding tax) applies
 - **Reverse compound-interest calculation** — from a target amount, the required contribution
@@ -100,15 +100,17 @@ The handling of numbers is defined in [docs/numerical-policy.md](docs/numerical-
 The main points:
 
 - **Numerical handling differs per module.** Scientific uses floating point, Data Scale
-  uses exact integers, Finance uses integer yen units
+  uses exact integers, Finance uses a deterministic approximation
 - **Scientific** holds every value as a complex number. Real numbers are complex numbers
   with zero imaginary part. Display uses 10 significant digits, and rounding is
   round-half-to-even
 - **Data Scale holds its internal values as exact integers (`u128`).** Rounding happens
   only at display time
 - **Finance returns a deterministic approximation.** Matching the exact figures of any
-  particular lender is not a goal. Where and how rounding happens is defined by
-  [docs/numerical-policy.md](docs/numerical-policy.md)
+  particular lender is not a goal — how repayment amounts get rounded differs by
+  institution. **Only the monthly payment is decided in floating point; the amortization
+  schedule is exact-integer.** See [docs/numerical-policy.md](docs/numerical-policy.md)
+  for details
 - **Expressions typed into the Finance and Data Scale fields are not rounded partway
   through.** They are evaluated as a rational number and rounded exactly once at the end,
   so entering the same answer via a different sequence of keystrokes does not change the
@@ -141,9 +143,10 @@ cd reference && uv run python scripts/generate.py
 When you change a number in `crates/calcarc-core`, the expected values need to be
 regenerated. **Do not hand-edit `testdata/` instead of regenerating it.**
 
-When bumping the version number, set the same value in **two places** —
-`Cargo.toml` and `web/package.json` — and also update "Current version" in `README.md`.
-`pnpm check:version` checks that the first two match.
+When bumping the version number, set the same value in **four places** —
+`Cargo.toml`, `web/package.json`, "Current version" in `README.md`, and "Current
+version" in this file. `pnpm check:version` only checks that `Cargo.toml` and
+`web/package.json` match — **it does not look at either README**.
 
 For more detail, see [CONTRIBUTING.md](CONTRIBUTING.md) and
 [docs/base-spec.md](docs/base-spec.md) (the overall specification).

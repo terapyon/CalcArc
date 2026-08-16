@@ -49,7 +49,8 @@
 ### Finance — 金融計算
 
 - **ローン**（元利均等）— 月額、借入可能額、返済期間の逆算。残価とボーナス併用にも
-  対応する（**この 2 つは同時には使えない**。片方を入れている間、もう片方は押せない）
+  対応する（**残価は月額モードでだけ使える。ボーナスは期間モードでは使えない。
+  月額モードでは、残価とボーナスのどちらか一方だけ**）
 - **複利** — 一括預入と毎月積立。税（源泉分離課税）の有無を選べる
 - **複利の逆算** — 目標額から必要な積立額、または必要な年数
 
@@ -85,12 +86,13 @@
 数値の扱いは [docs/numerical-policy.md](docs/numerical-policy.md) に定める。要点は次のとおり。
 
 - **モジュールごとに数値の扱いが違う。** Scientific は浮動小数点、Data Scale は
-  厳密整数、Finance は円単位の整数である
+  厳密整数、Finance は決定的概算である
 - **Scientific は**すべての値を複素数として保持する。実数は虚部 0 の複素数である。
   表示は有効数字 10 桁、丸めは round-half-to-even
 - **Data Scale は内部を厳密整数（`u128`）で持つ。** 丸めるのは表示のときだけである
-- **Finance は決定的な概算を返す。** 実額の機関一致は目標にしていない。どこで
-  どう丸めるかは [docs/numerical-policy.md](docs/numerical-policy.md) が定める
+- **Finance は決定的な概算を返す。** 実額の機関一致は目標にしていない——返済額の
+  端数処理は金融機関ごとに違う。**月額の決定だけが浮動小数点で、償還表は厳密整数**
+  である。詳細は [docs/numerical-policy.md](docs/numerical-policy.md) が定める
 - **Finance と Data Scale の入力欄に打った式は、途中で丸めない。** 有理数で評価して
   着地で 1 回だけ丸めるので、同じ答えを別の打ち方で入れても結果が変わらない
 - **表示のための丸めを、保持している値に書き戻さない。** 極形式への切り替えは
@@ -120,9 +122,10 @@ cd reference && uv run python scripts/generate.py
 `crates/calcarc-core` の数値を変更したときは期待値の再生成が必要になる。
 **再生成せずに `testdata/` を手で書き換えないこと。**
 
-版数を上げるときは `Cargo.toml` と `web/package.json` の **2 箇所**を同じ値にし、
-`README.md` の「現在の版」も直す。前 2 つの不一致は `pnpm check:version` が
-検査する。
+版数を上げるときは **4 箇所**を同じ値にする。`Cargo.toml`、`web/package.json`、
+`README.md` の「現在の版」、`README.en.md` の「Current version」。
+`pnpm check:version` が検査するのは `Cargo.toml` と `web/package.json` の
+不一致だけで、**どちらの README も見ない**。
 
 詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) と
 [docs/base-spec.md](docs/base-spec.md)（全体仕様）を参照。

@@ -4,16 +4,16 @@ base-spec §50 の 14 項目に、根拠を 1 つずつ付ける。**根拠は�
 「実機確認」の別を書く**——テストが緑であることと、実機で動いたことは別の
 主張である。
 
-日付: 2026-08-16（0.2.0 ベータ）
+日付: 2026-08-17（0.2.0 ベータ）
 公開先: https://calc.terapyon.net/
 
 | # | 項目 | 根拠 | 別 |
 |---|---|---|---|
-| 1 | Smartphone で利用可能 | ユーザー本人が iPhone / Safari で `calc.terapyon.net` を操作。E2E も 390×844 の viewport で 122 件緑 | 実機確認 + テスト |
+| 1 | Smartphone で利用可能 | ユーザー本人が iPhone / Safari で操作（2026-08-13、当時の URL は `calcarc.pages.dev`）。E2E も 390×844 の viewport で 122 件緑 | 実機確認 + テスト |
 | 2 | Tablet で利用可能 | シェル寸法規約（`--shell-max-width`、タッチ target 44px）を全パネルが使う。E2E がタッチ target を検査 | 実装 + テスト |
 | 3 | Desktop で利用可能 | 同上（幅は `--shell-max-width` で頭打ち）。開発時のブラウザ確認 | 実装 |
 | 4 | PWA としてインストール可能 | ユーザー本人が iPhone / Safari でホーム画面に追加し standalone 起動を確認（2026-08-13）。`pnpm check:sw` が manifest と precache を検査 | 実機確認 + テスト |
-| 5 | Offline で基本計算可能 | ユーザー本人が機内モードで 3 モジュールすべての動作を確認（Scientific / Data Scale は 2026-08-13、Finance は 2026-08-16） | 実機確認 |
+| 5 | Offline で基本計算可能 | ユーザー本人が機内モードで動作を確認（Scientific / Data Scale は 2026-08-13、Finance は 2026-08-16 に本人が申告）。**確認したのはその時点で配信されていた版**であり、0.2.0 の版ではない | 実機確認 |
 | 6 | Rust/WASM で計算 | 3 モジュールとも計算は `calcarc-core`。境界は `calcarc-wasm` の純関数で、`crates/calcarc-wasm/tests/web.rs` 28 件が実ブラウザで往復を確認 | 実装 + テスト |
 | 7 | Scientific Calculator 動作 | `tests/engine_table.rs`（キー列と表示の仕様表）、`scientific.json` の言語間検証、E2E | テスト |
 | 8 | Polar / Rectangular 変換動作 | `tests/roundtrip.rs`、`complex.json`、E2E の `▸∠` | テスト |
@@ -24,7 +24,7 @@ base-spec §50 の 14 項目に、根拠を 1 つずつ付ける。**根拠は�
 | 13 | README に Numerical Policy を説明 | `README.md` の Numerical Policy 節と `docs/numerical-policy.md` | 実装 |
 | 14 | OSS License 明記 | `LICENSE`（Apache 2.0）と README の License 節 | 実装 |
 
-## ローカルのフルスイープ（2026-08-16、ci.yml から導出）
+## ローカルのフルスイープ（2026-08-17、ci.yml から導出）
 
 | コマンド | 結果 |
 |---|---|
@@ -48,7 +48,7 @@ base-spec §50 の 14 項目に、根拠を 1 つずつ付ける。**根拠は�
 | 場所 | 高さ | 理由 |
 |---|---|---|
 | Scientific の関数列 | 34px | 誤爆しても DEL で戻せる（S1 設計書 §4） |
-| フッタのリンク | 約 10px | 広げる縦が無い。押せなくても計算に影響しない（0.2.0 設計書 §5） |
+| フッタのリンク | 11px（実測。390×844、`page.getByRole("link", { name: /^CalcArc .+ @terapyon$/ }).boundingBox()`） | 広げる縦が無い。押せなくても計算に影響しない（0.2.0 設計書 §5） |
 
 **Finance のモード行と項目行は、0.2.0 で例外から外れた**（34px → 68px）。
 
