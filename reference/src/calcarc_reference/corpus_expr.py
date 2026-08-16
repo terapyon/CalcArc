@@ -119,9 +119,17 @@ def to_keys_minimal(node: Node) -> list[str]:
 
 
 def _binary_operand_keys(child: Node, parent_precedence: int) -> list[str]:
-    """二項の子。**優先順位が真に大きいときだけ**括弧を省く。"""
-    if isinstance(child, Bin) and BINARY_PRECEDENCE[child.op] <= parent_precedence:
-        return ["lparen", *to_keys_minimal(child), "rparen"]
+    """二項の子。**優先順位が真に大きいときだけ**括弧を省く。
+
+    未知の演算子には大きな声で落ちる(to_keys_minimal / to_expr_text と同じ態度)。
+    `BINARY_PRECEDENCE[child.op]` を素で引くと、子として来た未知の演算子が
+    `to_keys_minimal` の明示的な `ValueError` ではなく素の `KeyError` になってしまう。
+    """
+    if isinstance(child, Bin):
+        if child.op not in BINARY_PRECEDENCE:
+            raise ValueError(f"unknown binary op: {child.op!r}")
+        if BINARY_PRECEDENCE[child.op] <= parent_precedence:
+            return ["lparen", *to_keys_minimal(child), "rparen"]
     return to_keys_minimal(child)
 
 

@@ -30,6 +30,9 @@ from calcarc_reference.corpus_expr import (
     Un,
     to_expr_text,
     to_key_sequence,
+    to_keys,
+    to_keys_minimal,
+    to_minimal_key_sequence,
     walk,
 )
 
@@ -233,6 +236,72 @@ def build_equivalences(seed: int, count: int) -> dict:
     }
 
 
+def build_precedence_shard(seed: int, count: int) -> dict:
+    """**括弧を省いたキー列**のシャード。
+
+    式も期待値も既存シャードと同じ作り方で、変わるのは直列化だけである。
+    つまり「Rust が優先順位から構造を復元できるか」だけを分離して測れる。
+
+    **省ける括弧が 1 つも無い木は捨てる。** 省くものが無ければキー列が
+    括弧つきの形と同一になり、新しいことを何も試さないケースが混ざる
+    (設計書 §3.3)。全件が必ず優先順位を踏む。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    dropped_nothing = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} "
+                f"cases ({dropped_nothing} trees had no droppable parenthesis)"
+            )
+        node = random_node(rng, MAX_DEPTH)
+        if isinstance(node, Num):
+            continue
+        minimal = to_keys_minimal(node)
+        full = to_keys(node)
+        if isinstance(node, Bin):
+            # to_keys_minimal は root 自身を包まない――子として現れたときだけ
+            # 条件つきで包む。full 側は to_keys が root も無条件に包むので、その
+            # 外側の 1 組を外してから揃える。外さずに比べると、内部では何も
+            # 省いていない木(例: 同順位の入れ子を全部残した木)まで「差がある」
+            # と誤判定し、優先順位を一度も踏まないケースが混入する。
+            full = full[1:-1]
+        if minimal == full:
+            # 省くものが無い。この木は何も新しいことを試さない。
+            dropped_nothing += 1
+            continue
+        try:
+            if not _within_range(node):
+                continue
+            value = evaluate(node)
+        except OutOfShard:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"prec-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_minimal_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
 def write(name: str, payload: dict) -> None:
     path = CORPUS / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,6 +318,7 @@ def main() -> None:
     started = time.monotonic()
     write("scientific-000.json", build_shard(seed=20260815, count=count))
     write("equivalence-000.json", build_equivalences(seed=20260816, count=count))
+    write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
     # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。

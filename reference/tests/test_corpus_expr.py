@@ -145,6 +145,30 @@ def test_the_precedence_table_matches_the_engine() -> None:
     assert BINARY_PRECEDENCE == {"+": 1, "-": 1, "*": 2, "/": 2}
 
 
+def test_an_unknown_binary_op_as_a_child_is_loud_not_silent() -> None:
+    # 未知の演算子が子として来たときも、素の KeyError ではなく to_keys_minimal
+    # 自身が投げるのと同じ ValueError で落ちる(このモジュールの作法に揃える)。
+    node = Bin("+", Bin("%", Num(1), Num(2)), Num(3))
+    with pytest.raises(ValueError, match="unknown binary op"):
+        to_keys_minimal(node)
+
+
+def test_a_higher_precedence_binary_child_of_a_unary_still_keeps_its_parentheses() -> None:
+    # √(1×2)。単項の子は優先順位に関わらず必ず括弧を残す——もし単項側が
+    # 優先順位の判定を混ぜていたら、ここで括弧が落ちて 1 × √2 という別の式に
+    # なってしまう。危ないのは「単項の子が低い優先順位を持つ」逆方向ではなく、
+    # こちら(高い優先順位の二項を単項の子に持つ形)である。
+    node = Un("sqrt", Bin("*", Num(1), Num(2)))
+    assert to_keys_minimal(node) == [
+        "lparen",
+        "1",
+        "mul",
+        "2",
+        "rparen",
+        "sqrt",
+    ]
+
+
 def test_dropping_parentheses_never_changes_the_tokens_that_are_not_parentheses() -> None:
     # **括弧以外は 1 つも変わらない。** 片方だけ直す事故への守り(設計書 §6)。
     node = Bin("+", Num(1), Bin("*", Num(2), Un("sqrt", Num(9))))

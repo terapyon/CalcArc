@@ -147,3 +147,69 @@ def test_the_square_root_round_trip_is_the_only_form_that_needs_a_non_negative()
         assert evaluate(left) == evaluate(right) == -5
     _, squared = generate_corpus._equivalent_pair(generate_corpus.SQRT_ROUND_TRIP, node)
     assert evaluate(squared) == 5
+
+
+def _needs_precedence(keys: list[str]) -> bool:
+    """同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上あるか。
+
+    **括弧が省かれたことの観測可能な痕跡である。** 省くのは子の優先順位が親より
+    真に大きいときだけなので、省いた結果は必ず「同じ深さに異なる優先順位」になる。
+    単項の子は決して省かないので、この判定に漏れは無い。
+    """
+    from calcarc_reference.corpus_expr import BINARY_KEYS, BINARY_PRECEDENCE
+
+    key_precedence = {BINARY_KEYS[op]: precedence for op, precedence in BINARY_PRECEDENCE.items()}
+    at_depth: dict[int, set[int]] = {}
+    depth = 0
+    for key in keys:
+        if key == "lparen":
+            depth += 1
+        elif key == "rparen":
+            depth -= 1
+        elif key in key_precedence:
+            at_depth.setdefault(depth, set()).add(key_precedence[key])
+    return any(len(seen) >= 2 for seen in at_depth.values())
+
+
+def test_every_precedence_case_actually_drops_a_parenthesis() -> None:
+    # 省くものが無い木を入れると、キー列が既存シャードと同一になり、
+    # **新しいことを何も試さないケース**が混ざる(設計書 §3.3)。
+    shard = generate_corpus.build_precedence_shard(seed=11, count=200)
+    assert len(shard["cases"]) == 200
+    for case in shard["cases"]:
+        assert _needs_precedence(case["keys"]), (
+            f"{case['id']} は括弧を 1 つも省いていない: {case['expr']}"
+        )
+
+
+def test_the_helper_itself_distinguishes_the_two_forms() -> None:
+    # 上の判定が「常に真」を返す壊れ方をしていないことを固定する。
+    assert _needs_precedence(["1", "add", "2", "mul", "3", "eq"]) is True
+    assert _needs_precedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]) is False
+    assert _needs_precedence(["1", "add", "2", "eq"]) is False
+
+
+def test_the_precedence_shard_is_deterministic() -> None:
+    assert generate_corpus.build_precedence_shard(
+        seed=12, count=50
+    ) == generate_corpus.build_precedence_shard(seed=12, count=50)
+
+
+def test_precedence_cases_are_value_cases_with_both_notations() -> None:
+    shard = generate_corpus.build_precedence_shard(seed=13, count=50)
+    for case in shard["cases"]:
+        assert case["kind"] == "value"
+        assert case["expr"]
+        assert "re" in case["expect"]
+
+
+def test_precedence_ids_are_unique() -> None:
+    shard = generate_corpus.build_precedence_shard(seed=14, count=200)
+    ids = [case["id"] for case in shard["cases"]]
+    assert len(set(ids)) == len(ids)
+
+
+def test_the_precedence_envelope_matches_the_existing_convention() -> None:
+    shard = generate_corpus.build_precedence_shard(seed=15, count=10)
+    assert shard["schema"] == 1
+    assert set(shard["tolerance"]) == {"abs", "rel"}
