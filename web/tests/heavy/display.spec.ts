@@ -22,11 +22,45 @@ test("a negative sign is read", () => {
 });
 
 test("a display that is not a number is refused loudly", () => {
-  // "j2" は「負数の平方根」の探りで実際に観測した表示(4 ± √ → sqrt(-4))。
-  // CalcArc 独自の複素数表記であり、Number() で読める実数ではない。
-  // 黙って NaN を返すと、比較が「誤差の範囲外」ではなく「常に不一致」に
-  // 化けて原因が見えなくなる。
+  // どちらも実際に観測した表示である。黙って NaN を返すと、比較が
+  // 「誤差の範囲外」ではなく「常に不一致」に化けて原因が見えなくなる。
+  //
+  // "Math ERROR" は負数の平方根(4 ± √)の探りで観測した表示。
+  // **2026-08-16 の main 取り込みで "j2" から変わった**(engine が
+  // DomainError を返すようになった)。エラー表示のほうが、この層が
+  // 拒むべきものの代表として射程が広い。
+  expect(() => parseDisplay("Math ERROR")).toThrow();
+  // "j2" は `j` `2` と打つと出る CalcArc 独自の複素数表記。**この表示自体は
+  // 今も観測される**——変わったのは「負数の平方根の答えとして出るか」だけで、
+  // 実数の書式でないことは変わらない。
   expect(() => parseDisplay("j2")).toThrow();
+});
+
+test("thousands separators are read, in the places the engine puts them", () => {
+  // 2026-08-16 の main 取り込みで `format_real` が整数部を 3 桁ごとに
+  // 区切るようになった。実測: `9 9 9 9 9 9 9 9 9 9 eq` → "9,999,999,999"。
+  expect(parseDisplay("9,999,999,999")).toBe(9999999999);
+  expect(parseDisplay("1,000")).toBe(1000);
+  expect(parseDisplay("-1,234,567")).toBe(-1234567);
+  // 区切りは整数部だけ。小数部はそのまま(実測: 1,234.5678)。
+  expect(parseDisplay("1,234.5678")).toBe(1234.5678);
+  // 4 桁未満は区切られない。区切りを必須にしていないこともここで固定する。
+  expect(parseDisplay("999")).toBe(999);
+});
+
+test("a comma in a place the engine never puts one is refused", () => {
+  // **これがカンマ対応の要である。** 単に `replace(/,/g, "")` で外すと、
+  // 下の 4 つが全部通ってしまい、**区切り位置の壊れをこの層が二度と
+  // 検出できなくなる**。コーパスの目的が独立検証である以上、書式として
+  // 妥当であることを確かめてから外す。
+  //
+  // この test を赤くする編集: display.ts の REAL_DISPLAY を
+  // `/^-?[\d,]+(?:\.\d+)?$/` のような「カンマをどこでも許す」形に緩める。
+  expect(() => parseDisplay("1,2,3")).toThrow(); // 群が 3 桁でない
+  expect(() => parseDisplay("1,23,456")).toThrow(); // 途中の群が 2 桁
+  expect(() => parseDisplay("1,2345")).toThrow(); // 群が 4 桁
+  expect(() => parseDisplay(",123")).toThrow(); // 先頭がカンマ
+  expect(() => parseDisplay("1.234,5")).toThrow(); // 小数部にカンマ
 });
 
 test("everything Number() would helpfully accept is refused", () => {
