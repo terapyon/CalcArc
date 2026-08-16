@@ -263,8 +263,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        数値の扱いと丸めの規則は [docs/numerical-policy.md](../../docs/numerical-policy.md) にあります（日本語）。
-        The numerical policy and rounding rules are in [docs/numerical-policy.md](../../docs/numerical-policy.md) (Japanese only).
+        数値の扱いと丸めの規則は [docs/numerical-policy.md](https://github.com/terapyon/CalcArc/blob/main/docs/numerical-policy.md) にあります（日本語）。
+        The numerical policy and rounding rules are in [docs/numerical-policy.md](https://github.com/terapyon/CalcArc/blob/main/docs/numerical-policy.md) (Japanese only).
 
   - type: textarea
     id: body
@@ -748,8 +748,10 @@ EOF
 
 - **モジュールごとに数値の扱いが違う。** Scientific は浮動小数点、Data Scale は
   厳密整数、Finance は決定的概算（着地の 1 回だけ丸める）
-- すべての値を複素数として保持する。実数は虚部 0 の複素数である
-- 表示は有効数字 10 桁、丸めは round-half-to-even
+- **Scientific は**すべての値を複素数として保持する。実数は虚部 0 の複素数である。
+  表示は有効数字 10 桁、丸めは round-half-to-even
+- **Data Scale は厳密整数**（`u128`）で、丸めない。**Finance は円単位の整数**で、
+  丸めるのは着地の 1 回だけである
 - **表示のための丸めを、保持している値に書き戻さない。** 極形式への切り替えは
   表示の変更であって計算ではないので、丸めた値が次の計算に入り込まない
 - **計算コアは panic しない。** すべてのエラーは `Result` を通り、UI には
@@ -975,7 +977,34 @@ PWA の manifest（`name` / `short_name`）・画面のフッタ表記が同じ�
 公開先は https://calc.terapyon.net/ である。
 ```
 
-- [ ] **Step 4: 他に嘘になっている箇所が無いか grep で洗う**
+- [ ] **Step 4: `check-version.mjs` のコメントが主張している語義を直す**
+
+`web/scripts/check-version.mjs` の節を切り出す正規表現に `\Z` が入っている。
+**JavaScript に `\Z` というアンカーは無い**——字義の `Z` にマッチする。
+
+現状は fail-safe である（lazy 量指定子が節中の `Z` で止まっても、version 行が
+切り落とされて `null` 検査で明示的に落ちる。黙って誤合格する経路は無い）。
+**しかしコメントが暗にアンカーの語義を主張しており、そこだけ嘘である。**
+
+`|\Z` を**削る**だけでよい（節が最後に来ても lazy が文字列末尾まで走る）:
+
+```js
+const section = cargoToml.match(/^\[workspace\.package\]$([\s\S]*?)(?=^\[)/m);
+```
+
+**削ったあと、次の 2 つを確かめること:**
+
+```bash
+cd web && pnpm check:version
+```
+
+期待: `version 0.2.0 (Cargo.toml と web/package.json が一致)`、終了コード 0。
+
+そのうえで **`Cargo.toml` の `[workspace.package]` を一時的にファイル末尾へ移動**
+して同じコマンドを回し、**それでも版数を読めること**を確認する（`\Z` を消した
+理由そのものの検査）。**確認したら再編集で戻す**（`git checkout --` は使わない）。
+
+- [ ] **Step 5: 他に嘘になっている箇所が無いか grep で洗う**
 
 ```bash
 grep -n "Loan Calculator\|calcarc.pages.dev\|仮称" docs/base-spec.md README.md CLAUDE.md CONTRIBUTING.md
@@ -992,7 +1021,7 @@ grep -n "Loan Calculator\|calcarc.pages.dev\|仮称" docs/base-spec.md README.md
 
 **判断に迷うものが出たら、そこで止めて報告すること。**
 
-- [ ] **Step 5: コミット**
+- [ ] **Step 6: コミット**
 
 ```bash
 git add CONTRIBUTING.md CLAUDE.md docs/base-spec.md
