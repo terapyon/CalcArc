@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { describe, differences } from "./calls";
 import { type CallCase, loadCallShards } from "./corpus";
 import { openHarness } from "./harness";
 import { record, summaryName } from "./report";
@@ -16,91 +17,6 @@ import { record, summaryName } from "./report";
 
 /** 1 束あたりのケース数。往復のコストが計算のコストを覆わない大きさにする。 */
 const BATCH = 500;
-
-/**
- * wasm 側のキーを参照側の綴りに寄せる。
- *
- * **wasm は camelCase、参照実装は snake_case** である(`monthlyPayment` と
- * `monthly_payment`)。設計書 2026-08-17 §6 が予告したとおりで、**寄せるのは
- * こちら側**——参照実装を Rust に合わせて書き換えると、独立していることが
- * 検証の土台なのにその土台を崩す。
- *
- * `error: null` も落とす。wasm は成功時も `error` を `null` で持つが、
- * 参照実装は成功時にキーごと出さない。**「エラーが無い」という同じ事実の
- * 2 通りの書き方**であって、食い違いではない。
- */
-/**
- * camelCase を超える綴りの違い。**wasm 側の名前 → 参照側の名前。**
- * 増やすときは、なぜ違うのかを 1 行添えること。
- */
-const RENAMES: Record<string, string> = {
-  // `loan_term` が返す期間。wasm は `months`、参照は `n`(入力と同じ名前)。
-  months: "n",
-};
-
-function normalise(got: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(got)) {
-    if (key === "error" && value === null) {
-      continue;
-    }
-    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-    out[RENAMES[snake] ?? snake] = value;
-  }
-  return out;
-}
-
-/**
- * wasm が返した構造体と、参照実装が出した辞書を突き合わせる。
- *
- * **キーの集合も比べる。** 値だけ比べると、片方にしか無いキーを見逃す——
- * wasm が `total_interest` を返さなくなっても、残りが合っていれば緑になる。
- */
-function differences(
-  actual: unknown,
-  expected: Record<string, unknown>,
-  input: Record<string, string | number | boolean>,
-): string[] {
-  if (actual === null || typeof actual !== "object") {
-    return [`wasm returned ${JSON.stringify(actual)}, not an object`];
-  }
-  const got = normalise(actual as Record<string, unknown>);
-  const keys = new Set([...Object.keys(got), ...Object.keys(expected)]);
-  const out: string[] = [];
-  for (const key of [...keys].sort()) {
-    const a = got[key];
-    const e = expected[key];
-    // **エラー時、wasm は値の欄を `null` で埋め、参照はキーごと出さない。**
-    // 同じ事実の 2 通りの書き方なので、食い違いにしない。
-    //
-    // **ただし「wasm が null で、参照には値がある」は本物の食い違いである**
-    // ——計算できたはずのものを計算できなかった、という意味なので、
-    // ここで握りつぶすと判定がいちばん重い嘘をつく。
-    if (a === null && !(key in expected)) {
-      continue;
-    }
-    // **wasm は入力の一部を結果に含めて返す**(`compound_deposit_for` が
-    // `periods` を、`compound_periods_for` が `deposit` を)。参照実装は
-    // 出さない。返ってきた値が**入力そのもの**なら情報は増えていないので
-    // 食い違いにしない。
-    //
-    // **違う値をエコーしていたら食い違いとして報告する**——入力を歪めて
-    // 返しているという意味であり、それは黙って通してよいものではない。
-    if (
-      !(key in expected) &&
-      key in input &&
-      String(a) === String(input[key])
-    ) {
-      continue;
-    }
-    // JSON の数と文字列を混ぜない。参照側は金額を文字列で持つので、
-    // wasm が数で返していたら**それ自体が食い違い**である。
-    if (JSON.stringify(a) !== JSON.stringify(e)) {
-      out.push(`${key}: ${JSON.stringify(a)} ≠ ${JSON.stringify(e)}`);
-    }
-  }
-  return out;
-}
 
 for (const { name, shard } of loadCallShards()) {
   test(`every call in ${name} matches the reference`, async ({ page }) => {
@@ -129,7 +45,7 @@ for (const { name, shard } of loadCallShards()) {
         if (diff.length > 0) {
           mismatches.push(
             `${testCase.id} (${testCase.op} ${JSON.stringify(testCase.input)}): ` +
-              diff.join("; "),
+              describe(diff),
           );
         }
       });
