@@ -3,9 +3,11 @@
 日付: 2026-08-16
 対象: `crates/calcarc-core/src/scientific/`、`engine/{key,state,mod}.rs`、golden、盤面。
 前提: **main（`0fd4842`）から**（複利の逆算と E2E がマージされた後）。S-1 の `DomainError` に依存する。
-**状態: 設計承認済み・裁定すべて決着（§7、2026-08-16）。**
-**⚠ 未実装——このリポジトリに実装は入っていない。** 実装順と依存は
-`2026-08-16-eng-notation-design.md` §0.1 が正である。
+**状態: 実装済み（`feature/probability-keys`、2026-08-16）。**
+計画は `docs/superpowers/plans/2026-08-16-probability-keys.md`。
+実装順と依存は `2026-08-16-eng-notation-design.md` §0.1 が正である。
+
+**§4 の主張を 1 つ訂正した**（実装計画の起草時に実測）。§4 を参照。
 
 ## §0 位置づけ
 
