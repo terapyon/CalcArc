@@ -8,10 +8,3 @@
   /* iOS のホームインジケータを避ける。 */
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
-
-.version {
-  margin: 0;
-  color: var(--display-status-fg);
-  font-size: var(--display-size-status);
-  text-align: center;
-}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DataScalePanel } from "./ui/DataScale/DataScalePanel";
 import { FinancePanel } from "./ui/Finance/FinancePanel";
+import { Footer } from "./ui/Footer/Footer";
 import { type ModuleId, Nav } from "./ui/Nav/Nav";
 import { ScientificPanel } from "./ui/ScientificPanel";
 import { UpdateToast } from "./ui/UpdateToast/UpdateToast";
@@ -36,6 +37,8 @@ export function App() {
         {module === "data-scale" && <DataScalePanel />}
         {module === "finance" && <FinancePanel />}
       </main>
+      {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}
+      <Footer />
       {/* 更新の知らせはモジュールに属さない。シェルが 1 つだけ持つ。 */}
       <UpdateToast />
     </>

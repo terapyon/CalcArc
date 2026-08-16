@@ -1,0 +1,27 @@
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 4px 12px 12px;
+  /* iOS のホームインジケータを避ける(パネルの .shell と同形)。 */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+  text-align: center;
+}
+
+.link {
+  color: inherit;
+}
+
+.link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.disclaimer {
+  margin: 0;
+}
