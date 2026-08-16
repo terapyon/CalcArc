@@ -17,6 +17,7 @@ import pathlib
 import random
 import sys
 import time
+from collections.abc import Iterator
 
 import mpmath as mp
 
@@ -236,17 +237,16 @@ def build_equivalences(seed: int, count: int) -> dict:
     }
 
 
-def build_precedence_shard(seed: int, count: int) -> dict:
-    """**括弧を省いたキー列**のシャード。
+def _precedence_candidates(rng: random.Random, count: int) -> Iterator[tuple[Node, dict]]:
+    """`build_precedence_shard` の生成ループ本体。**木そのものを伴って** yield する。
 
-    式も期待値も既存シャードと同じ作り方で、変わるのは直列化だけである。
-    つまり「Rust が優先順位から構造を復元できるか」だけを分離して測れる。
-
-    **省ける括弧が 1 つも無い木は捨てる。** 省くものが無ければキー列が
-    括弧つきの形と同一になり、新しいことを何も試さないケースが混ざる
-    (設計書 §3.3)。全件が必ず優先順位を踏む。
+    シャードの `cases` はキー列と期待値しか持たない。優先順位を落とすと本当に
+    意味が変わるかを木そのもの(`corpus_eval.py` の float ではなく
+    `Node` の構造)で確かめたいテストが、独立に木を再構築せずここへ戻って
+    来られるように、ループをここへ切り出した。ループを複製すると、この生成
+    ロジックが変わったときにテスト側の複製だけ古いままになり、確かめている
+    木がコミット済みシャードのそれと黙って食い違う経路になる。
     """
-    rng = random.Random(seed)
     entries: list[dict] = []
     seen: set[str] = set()
     attempts = 0
@@ -284,16 +284,30 @@ def build_precedence_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"prec-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_minimal_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        entry = {
+            "kind": "value",
+            "id": f"prec-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_minimal_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        entries.append(entry)
+        yield node, entry
+
+
+def build_precedence_shard(seed: int, count: int) -> dict:
+    """**括弧を省いたキー列**のシャード。
+
+    式も期待値も既存シャードと同じ作り方で、変わるのは直列化だけである。
+    つまり「Rust が優先順位から構造を復元できるか」だけを分離して測れる。
+
+    **省ける括弧が 1 つも無い木は捨てる。** 省くものが無ければキー列が
+    括弧つきの形と同一になり、新しいことを何も試さないケースが混ざる
+    (設計書 §3.3)。全件が必ず優先順位を踏む。
+    """
+    rng = random.Random(seed)
+    entries = [entry for _, entry in _precedence_candidates(rng, count)]
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),

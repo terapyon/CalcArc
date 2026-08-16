@@ -7,6 +7,7 @@ import {
   type Classification,
   classify,
   countInjectedTokens,
+  type EquivalenceCase,
   loadShards,
   needsPrecedence,
   partitionCases,
@@ -609,6 +610,59 @@ for (const { name, shard, values } of partitions) {
     ).toBe("");
   });
 }
+
+test("an equivalence case counts once even when both its sequences need precedence", () => {
+  // **M4 (review round 2).** The count below (in the equivalence test loop)
+  // is `left || right`, per case — not `left`'s matches plus `right`'s
+  // matches. On the real corpus this is unexercised: 0 of the 4000
+  // equivalence-case sequences need precedence, so summing and OR-ing are
+  // indistinguishable there and nothing pins the "count once" decision.
+  // Build three synthetic cases — left-only, right-only, and both — so a
+  // regression to summing sequences (which would count the "both" case
+  // twice, for 4 total instead of 3) is caught here instead of only being
+  // silently possible on real data.
+  const needsIt = ["1", "add", "2", "mul", "3", "eq"]; // true, see tests above
+  const doesNot = ["1", "add", "2", "eq"]; // false, see tests above
+  const synthetic: EquivalenceCase[] = [
+    {
+      kind: "equivalence",
+      id: "synthetic-left-only",
+      mode: "Deg",
+      left: needsIt,
+      right: doesNot,
+    },
+    {
+      kind: "equivalence",
+      id: "synthetic-right-only",
+      mode: "Deg",
+      left: doesNot,
+      right: needsIt,
+    },
+    {
+      kind: "equivalence",
+      id: "synthetic-both",
+      mode: "Deg",
+      left: needsIt,
+      right: ["4", "mul", "5", "add", "6", "eq"], // also true
+    },
+  ];
+  const precedenceCases = synthetic.filter(
+    (c) => needsPrecedence(c.left) || needsPrecedence(c.right),
+  ).length;
+  // Per-case OR: all three cases qualify once each.
+  expect(precedenceCases).toBe(3);
+  // Not the sequence-sum a `left ? 1 : 0) + (right ? 1 : 0)` reduction would
+  // give (2 left-matches + 2 right-matches = 4, double-counting "both").
+  const wrongSequenceSum = synthetic.reduce(
+    (sum, c) =>
+      sum +
+      (needsPrecedence(c.left) ? 1 : 0) +
+      (needsPrecedence(c.right) ? 1 : 0),
+    0,
+  );
+  expect(wrongSequenceSum).toBe(4);
+  expect(precedenceCases).not.toBe(wrongSequenceSum);
+});
 
 for (const { name, shard, equivalences } of partitions) {
   if (equivalences.length === 0) {

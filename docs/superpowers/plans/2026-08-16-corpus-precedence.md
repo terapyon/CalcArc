@@ -259,11 +259,17 @@ git commit -m "Write the same tree without the parentheses it does not need"
 
 ```python
 def _needs_precedence(keys: list[str]) -> bool:
-    """同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上あるか。
+    """同じ括弧の**組**の中に、優先順位の異なる二項演算子が 2 つ以上あるか。
 
     **括弧が省かれたことの観測可能な痕跡である。** 省くのは子の優先順位が親より
-    真に大きいときだけなので、省いた結果は必ず「同じ深さに異なる優先順位」になる。
+    真に大きいときだけなので、省いた結果は必ず「同じ組に異なる優先順位」になる。
     単項の子は決して省かないので、この判定に漏れは無い。
+
+    **「組」であって「深さ」ではない。** 同じ深さでも別々の括弧の中なら、その
+    2 つの演算子は同じ式に並んでいない——反例:`377 - ((553 / 982) / (189 - 996))`
+    は `div` と `sub` がどちらも深さ 3 だが、`(553/982)` と `(189-996)` という
+    別の組である。深さで数えると全二項を括弧で囲んだ既存シャードに偽陽性が出る
+    (実装時の実測:311 件)。組で数えると 0 件になる(2026-08-16 §3.4)。
     """
     from calcarc_reference.corpus_expr import BINARY_KEYS, BINARY_PRECEDENCE
 
@@ -271,16 +277,16 @@ def _needs_precedence(keys: list[str]) -> bool:
         BINARY_KEYS[op]: precedence
         for op, precedence in BINARY_PRECEDENCE.items()
     }
-    at_depth: dict[int, set[int]] = {}
-    depth = 0
+    stack: list[set[int]] = [set()]
+    closed_groups: list[set[int]] = []
     for key in keys:
         if key == "lparen":
-            depth += 1
+            stack.append(set())
         elif key == "rparen":
-            depth -= 1
+            closed_groups.append(stack.pop())
         elif key in key_precedence:
-            at_depth.setdefault(depth, set()).add(key_precedence[key])
-    return any(len(seen) >= 2 for seen in at_depth.values())
+            stack[-1].add(key_precedence[key])
+    return any(len(group) >= 2 for group in (*closed_groups, *stack))
 
 
 def test_every_precedence_case_actually_drops_a_parenthesis() -> None:
@@ -492,13 +498,13 @@ git commit -m "Grow a shard where the engine has to recover the structure"
 ```ts
 import { needsPrecedence } from "./corpus";
 
-test("a sequence with two precedence levels at one depth needs precedence", () => {
-  // 1 + 2 × 3。深さ 0 に優先順位 1 と 2 が並ぶ。
+test("a sequence with two precedence levels in one parenthesis group needs precedence", () => {
+  // 1 + 2 × 3。トップレベルの組に優先順位 1 と 2 が並ぶ。
   expect(needsPrecedence(["1", "add", "2", "mul", "3", "eq"])).toBe(true);
 });
 
-test("parentheses separate the levels, so precedence is not needed", () => {
-  // (1 + 2) × 3。add は深さ 1、mul は深さ 0。
+test("parentheses separate the groups, so precedence is not needed", () => {
+  // (1 + 2) × 3。add は括弧の中の組、mul はトップレベルの組——別の組。
   expect(
     needsPrecedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]),
   ).toBe(false);
@@ -554,38 +560,48 @@ const BINARY_PRECEDENCE: Record<string, number> = {
 /**
  * **このキー列は、優先順位が無ければ正しく解釈できないか。**
  *
- * 判定は「同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上現れるか」。
+ * 判定は「同じ括弧の**組**の中に、優先順位の異なる二項演算子が 2 つ以上現れるか」。
  * 現れれば、engine は括弧ではなく優先順位で構造を決めたことになる。
+ *
+ * **「組」であって「深さ」ではない。** 同じ深さでも別々の括弧の中なら、その
+ * 2 つの演算子は同じ式に並んでいない——反例:`377 - ((553 / 982) / (189 - 996))`
+ * は `div` と `sub` がどちらも深さ 3 だが、`(553/982)` と `(189-996)` という
+ * 別の組である。深さで数えると全二項を括弧で囲んだ既存シャードに偽陽性が出る
+ * (実装時の実測:311 件)。組で数えると 0 件になる(2026-08-16 §3.4)。壊れた
+ * 入力(対応の無い `rparen`)は静かに読み違えず、例外にする。
  *
  * レポートの「まだ踏んでいない領域」をこの関数から導く。手書きの否定は、次に
  * 領域が埋まったとき黙って嘘になる(設計書 §3.4)。
  */
 export function needsPrecedence(keys: string[]): boolean {
-  const atDepth = new Map<number, Set<number>>();
-  let depth = 0;
+  const topLevel = new Set<number>();
+  const stack: Set<number>[] = [];
+  const closedGroups: Set<number>[] = [];
   for (const key of keys) {
     if (key === "lparen") {
-      depth += 1;
+      stack.push(new Set<number>());
       continue;
     }
     if (key === "rparen") {
-      depth -= 1;
+      const group = stack.pop();
+      if (group === undefined) {
+        throw new Error(
+          `needsPrecedence: unmatched "rparen" (more rparen than lparen) in ` +
+            `${JSON.stringify(keys)}.`,
+        );
+      }
+      closedGroups.push(group);
       continue;
     }
     const precedence = BINARY_PRECEDENCE[key];
     if (precedence === undefined) {
       continue;
     }
-    const seen = atDepth.get(depth) ?? new Set<number>();
-    seen.add(precedence);
-    atDepth.set(depth, seen);
+    (stack[stack.length - 1] ?? topLevel).add(precedence);
   }
-  for (const seen of atDepth.values()) {
-    if (seen.size >= 2) {
-      return true;
-    }
-  }
-  return false;
+  return [...closedGroups, topLevel, ...stack].some(
+    (group) => group.size >= 2,
+  );
 }
 ```
 
@@ -626,7 +642,7 @@ const precedenceCases = values.filter((c) => needsPrecedence(c.keys)).length;
         ]
       : [
           `- **括弧を省いた式——${precedence} 件が踏んでいる。** 優先順位が無ければ`,
-          "  正しく解釈できないキー列(同じ括弧の深さに優先順位の異なる二項演算子が",
+          "  正しく解釈できないキー列(同じ括弧の組に優先順位の異なる二項演算子が",
           "  2 つ以上)がこれだけある。engine は括弧ではなく優先順位で構造を決めた。",
           "  **ただし結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
           "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",

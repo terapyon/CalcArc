@@ -9,7 +9,7 @@ import sys
 import mpmath as mp
 
 from calcarc_reference.corpus_eval import evaluate
-from calcarc_reference.corpus_expr import Num, Un
+from calcarc_reference.corpus_expr import BINARY_KEYS, DIGIT_KEYS, UNARY_KEYS, Bin, Num, Un
 
 _PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "generate_corpus.py"
 _SPEC = importlib.util.spec_from_file_location("generate_corpus", _PATH)
@@ -170,7 +170,22 @@ def _needs_precedence(keys: list[str]) -> bool:
     (`web/tests/heavy/corpus.ts` の `needsPrecedence`)も同じ理由で同じ形に直した。
 
     実装は `lparen` で新しい組をスタックに push し、`rparen` で pop して確定させる。
-    トップレベル(どの括弧の外)も 1 つの組として扱う。
+    トップレベル(どの括弧の外)も 1 つの組として扱う。対応の無い `rparen` は
+    `stack.pop()` が素の `IndexError` で落ちる——騒いで落ちる。TypeScript の
+    双子は `?.` で読み飛ばしていて同じ入力を静かに `false` にしていた
+    (M1、review round 2)。いまは同じ入力で TypeScript 側も例外を投げる。
+
+    **双子について。** この関数は `test_every_precedence_case_actually_drops_a_parenthesis`
+    が `precedence-000.json` を生成する側のゲートとして使い、TypeScript の
+    `needsPrecedence`(`web/tests/heavy/corpus.ts`)が同じシャードを読んで報告書
+    (`web/heavy-report.md`)の件数を出す側として使う。**どちらかを直したら
+    両方直すこと。** ただし、二つが一致することはこの規則が正しいことの証拠には
+    ならない——深さ規則のバグは、この双子が `scientific-000.json` /
+    `equivalence-000.json` / `precedence-000.json` の 3 シャードで完全に一致した
+    まま存在した(両方が同じ設計書の同じ誤った規則を実装していたから)。突き合わせは
+    由来が独立でなければ何も保証しない。ここを正しいと確認したのは、双子の一致では
+    なく、シリアライザの一次原理からの導出と独立な意味論パーサ(review round 2)
+    だった。
     """
     from calcarc_reference.corpus_expr import BINARY_KEYS, BINARY_PRECEDENCE
 
@@ -216,6 +231,91 @@ def test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need
     case = next(c for c in shard["cases"] if c["id"] == "sci-000025")
     assert case["expr"] == "(377 - ((553 / 982) / (189 - 996)))"
     assert _needs_precedence(case["keys"]) is False
+
+
+def _parse_with_precedence(keys: list[str], precedence: dict[str, int]) -> object:
+    """`keys`(末尾の `eq` を除く)を、与えた優先順位表と左結合で木に戻す。
+
+    **後置単項は優先順位の話ではない。** `1 add 2 sqrt` は `1 + √2` であって
+    `√(1 + 2)` ではない——`sqrt` は直前の被演算子(`2`)にだけ掛かる、という
+    後置記法そのものの規則で、`precedence` に何を渡しても変わらない。ここを
+    誤ると(累積値に後置単項を適用してしまうと)優先順位が要る件数を過大に
+    数える。実測でこの誤りを踏んだ経緯があるので、`test_the_postfix_unary_trap`
+    が単独でこれを固定する。
+
+    優先順位クライミング法(Pratt parsing)そのもので、推測は無い——`min_prec`
+    を跨がない限り右へ結合を伸ばし、越えたら親へ戻る、という教科書どおりの形。
+    """
+    key_to_op = {v: k for k, v in BINARY_KEYS.items()}
+
+    def parse_atom(pos: int) -> tuple[object, int]:
+        token = keys[pos]
+        if token == "lparen":
+            node, pos = parse_expr(pos + 1, 0)
+            assert keys[pos] == "rparen", f"expected rparen at {pos} in {keys}"
+            pos += 1
+        elif token in DIGIT_KEYS:
+            start = pos
+            while pos < len(keys) and keys[pos] in DIGIT_KEYS:
+                pos += 1
+            node = Num(int("".join(keys[start:pos])))
+        else:
+            raise ValueError(f"unexpected token {token!r} at {pos} in {keys}")
+        while pos < len(keys) and keys[pos] in UNARY_KEYS:
+            node = Un(UNARY_KEYS[keys[pos]], node)
+            pos += 1
+        return node, pos
+
+    def parse_expr(pos: int, min_prec: int) -> tuple[object, int]:
+        left, pos = parse_atom(pos)
+        while pos < len(keys) and keys[pos] in key_to_op and precedence[keys[pos]] >= min_prec:
+            op_key = keys[pos]
+            pos += 1
+            right, pos = parse_expr(pos, precedence[op_key] + 1)
+            left = Bin(key_to_op[op_key], left, right)
+        return left, pos
+
+    node, pos = parse_expr(0, 0)
+    if pos != len(keys):
+        raise ValueError(f"trailing tokens after parse: {keys[pos:]} (full: {keys})")
+    return node
+
+
+def test_the_postfix_unary_trap() -> None:
+    # **Guard for the exact mistake the reviewer's own evaluator made** (fix
+    # round 2, I1): applying a postfix unary to the accumulated value instead
+    # of the current operand reads `1 add 2 sqrt` as `√(1 + 2)`. It is `1 + √2`
+    # — `sqrt` binds only to the `2` that precedes it, regardless of precedence.
+    uniform = {key: 1 for key in BINARY_KEYS.values()}
+    tree = _parse_with_precedence(["1", "add", "2", "sqrt"], uniform)
+    assert tree == Bin("+", Num(1), Un("sqrt", Num(2)))
+    assert tree != Un("sqrt", Bin("+", Num(1), Num(2)))
+
+
+def test_precedence_shard_reports_how_many_cases_change_meaning_without_precedence() -> None:
+    # **Step B of I1 (fix round 2).** R9's `needsPrecedence` proves the engine
+    # *consulted* precedence (2000/2000) — it says nothing about whether
+    # dropping precedence would have produced a *different* answer. Some drops
+    # are left-heavy (`prec-000001`: `(541 / 138) + 748`) and read identically
+    # under naive left-to-right parsing. This measures the stronger property
+    # exactly: parse each case's own committed `keys` with *no* precedence
+    # distinction (all binary operators equal, left-associative, parens and
+    # postfix unaries honoured — see `test_the_postfix_unary_trap`) and compare
+    # the result to the tree the generator actually built. No float comparison,
+    # no guessing: `_precedence_candidates` hands back the real `Node` next to
+    # the `keys` it was serialized into, so this is a structural `==` against
+    # ground truth, not against a second, independently-written parser.
+    rng = random.Random(20260817)
+    uniform = {key: 1 for key in BINARY_KEYS.values()}
+    total = 0
+    changes_meaning = 0
+    for node, entry in generate_corpus._precedence_candidates(rng, 2000):
+        total += 1
+        reparsed = _parse_with_precedence(entry["keys"][:-1], uniform)
+        if reparsed != node:
+            changes_meaning += 1
+    assert total == 2000
+    assert changes_meaning == 1101
 
 
 def test_the_precedence_shard_is_deterministic() -> None:

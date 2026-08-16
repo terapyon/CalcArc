@@ -529,15 +529,31 @@ const BINARY_PRECEDENCE: Record<string, number> = {
  * 組で数えるとどちらも 0 件になる(設計書 §3.4)。
  *
  * 実装は `lparen` で新しい組をスタックに push し、`rparen` で pop して確定させる。
- * 二項演算子は**そのとき開いている組**(スタックの先頭)に足す。トップレベル
- * (どの括弧の外)も 1 つの組として扱う——`1 add 2 mul 3 eq` のように、そもそも
- * 括弧が無いキー列も判定できなければならない。
+ * 二項演算子は**そのとき開いている組**(スタックの先頭。無ければトップレベルの組)
+ * に足す。トップレベル(どの括弧の外)も 1 つの組として扱う——`1 add 2 mul 3 eq`
+ * のように、そもそも括弧が無いキー列も判定できなければならない。ただしトップ
+ * レベルの組は `stack` には積まない別変数で持つ——**`rparen` で pop できてしまうと、
+ * 対応する `lparen` の無い `rparen`(壊れたキー列)が、それ以降のトップレベル演算子を
+ * 静かに読み捨てる経路になる**からである。壊れたキー列は捨てずに例外にする
+ * (下記)。
+ *
+ * **双子について。** `reference/tests/test_generate_corpus.py` の `_needs_precedence`
+ * が同じ規則の Python 実装で、`precedence-000.json` を生成する側のゲート
+ * (`test_every_precedence_case_actually_drops_a_parenthesis`)を持つ。こちらは
+ * その生成物を読んで報告書の件数を出す側である。**どちらかが変わったら両方
+ * 直すこと。** ただし、二つが一致することはこの規則が正しいことの証拠には
+ * ならない——深さ規則のバグは、この双子が 3 シャードで完全に一致したまま
+ * 存在した(両方が同じ設計書の同じ誤った規則を実装していたから)。突き合わせは
+ * 由来が独立でなければ何も保証しない。ここを正しいと確認したのは、双子の
+ * 一致ではなく、シリアライザの一次原理からの導出と独立な意味論パーサ(設計書
+ * 2026-08-16 のレビュー、§3.4 追記)だった。
  *
  * レポートの「まだ踏んでいない領域」をこの関数から導く。手書きの否定は、次に
  * 領域が埋まったとき黙って嘘になる(設計書 §3.4)。
  */
 export function needsPrecedence(keys: string[]): boolean {
-  const stack: Set<number>[] = [new Set<number>()];
+  const topLevel = new Set<number>();
+  const stack: Set<number>[] = [];
   const closedGroups: Set<number>[] = [];
   for (const key of keys) {
     if (key === "lparen") {
@@ -546,20 +562,32 @@ export function needsPrecedence(keys: string[]): boolean {
     }
     if (key === "rparen") {
       const group = stack.pop();
-      if (group !== undefined) {
-        closedGroups.push(group);
+      if (group === undefined) {
+        // **壊れた入力を静かに読み違えない。** `?.` で読み飛ばすと、この
+        // rparen 以降のトップレベル演算子が黙って捨てられ、間違った(多くは
+        // 偽の)答えを返す——測定済み: `["1","rparen","add","2","mul","3","eq"]`
+        // は `?.` 版だと `false` を返すが、正しい答えは判定不能である。
+        // Python の双子 `_needs_precedence` はここで素の `IndexError` になる。
+        // この関数は報告専用だが、この project の約束は「壊れた入力は騒いで
+        // 落ちる」であって、黙って数字がずれることではない。
+        throw new Error(
+          `needsPrecedence: unmatched "rparen" (more rparen than lparen) in ` +
+            `${JSON.stringify(keys)}. This key sequence has no well-formed ` +
+            "parenthesis structure to report on.",
+        );
       }
+      closedGroups.push(group);
       continue;
     }
     const precedence = BINARY_PRECEDENCE[key];
     if (precedence === undefined) {
       continue;
     }
-    stack[stack.length - 1]?.add(precedence);
+    (stack[stack.length - 1] ?? topLevel).add(precedence);
   }
-  // 閉じ損なった組(トップレベルを含む)も見る——正しく閉じているキー列では
-  // トップレベルの組だけが残る。
-  return [...closedGroups, ...stack].some((group) => group.size >= 2);
+  // 閉じた組・閉じ損なった組(開いたままの `lparen`)・トップレベルの組の
+  // すべてを見る。
+  return [...closedGroups, topLevel, ...stack].some((group) => group.size >= 2);
 }
 
 /** 大きさの分位。最近傍順位法——補間しないので、必ず実在の観測値が出る。 */

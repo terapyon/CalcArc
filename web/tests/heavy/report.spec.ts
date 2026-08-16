@@ -542,13 +542,15 @@ test("an empty run refuses to render as a green-looking report", () => {
   expect(() => renderReport([], PROVENANCE)).toThrow(/no shard/);
 });
 
-test("a sequence with two precedence levels at one depth needs precedence", () => {
-  // 1 + 2 × 3。深さ 0 に優先順位 1 と 2 が並ぶ。
+test("a sequence with two precedence levels in one parenthesis group needs precedence", () => {
+  // 1 + 2 × 3。トップレベルの組に優先順位 1 と 2 が並ぶ。
   expect(needsPrecedence(["1", "add", "2", "mul", "3", "eq"])).toBe(true);
 });
 
-test("parentheses separate the levels, so precedence is not needed", () => {
-  // (1 + 2) × 3。add は深さ 1、mul は深さ 0。
+test("parentheses separate the groups, so precedence is not needed", () => {
+  // (1 + 2) × 3。add は括弧の中の組、mul はトップレベルの組——別の組なので
+  // 合わせて数えない(M3 rename, review round 2 — this pair happens to have
+  // group and depth coincide, so the vocabulary matters more than the values).
   expect(
     needsPrecedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]),
   ).toBe(false);
@@ -585,6 +587,19 @@ test("operators in different parenthesis groups at the same depth do not need pr
   expect(needsPrecedence(sci000025.keys)).toBe(false);
 });
 
+test("an unmatched rparen fails loudly instead of silently under-counting", () => {
+  // **M1 (review round 2).** The original `?.`-guarded pop let an unmatched
+  // `rparen` empty the stack and then silently drop every operator that
+  // followed at the top level, returning `false` where the answer is
+  // actually undefined for malformed input. The Python twin
+  // (`_needs_precedence`) raises a bare `IndexError` on the same input; this
+  // makes the TS side fail loudly too, matching this project's convention of
+  // being noisy on malformed input rather than quietly wrong.
+  expect(() =>
+    needsPrecedence(["1", "rparen", "add", "2", "mul", "3", "eq"]),
+  ).toThrow(/unmatched "rparen"/);
+});
+
 test("the report says how many cases exercised precedence", () => {
   const markdown = renderReport(
     [summary({ precedenceCases: 1500 })],
@@ -596,6 +611,13 @@ test("the report says how many cases exercised precedence", () => {
 });
 
 test("zero precedence cases reads as never touched", () => {
+  // **C1 fix (review round 1).** `toContain("一度も踏んでいない")` alone is
+  // satisfied by the section *heading* ("### まだ一度も踏んでいない領域"),
+  // which renders unconditionally regardless of which branch of
+  // `parenthesisItem` ran — deleting the zero branch outright still left this
+  // green. Assert on text unique to the zero branch, and assert the
+  // non-zero branch's count phrase is absent.
   const markdown = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
-  expect(markdown).toContain("一度も踏んでいない");
+  expect(markdown).toContain("キー列は二項演算を必ず括弧で囲む");
+  expect(markdown).not.toContain("件が踏んでいる");
 });
