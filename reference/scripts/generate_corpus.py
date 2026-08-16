@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 import random
 import sys
@@ -24,6 +25,8 @@ import mpmath as mp
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_OPS,
+    COMBINATORICS_BINS,
+    COMBINATORICS_FNS,
     CONST_NAMES,
     ELEMENTARY_BINS,
     ELEMENTARY_FNS,
@@ -455,6 +458,96 @@ def build_elementary_shard(seed: int, count: int) -> dict:
     return build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
 
 
+# 組合せ論の葉の上限。**`C(1022,511) ≈ 2.2e305` を含める必要がある**——engine の
+# コメント(`scientific/mod.rs:257-264`)が「掛けてから割ると n = 1022〜1028 の
+# 中心二項係数が**答は収まるのに**落ちる」と書いており、そこに届かない上限を
+# 置くと、検証したいものが落ちる。
+COMBINATORICS_MAX_N = 1200
+# 階乗の葉の上限。171! で f64 を溢れるので、その少し先まで。
+# **大きくしすぎない**——`math.factorial(500000)` は 1.4 秒かかり、
+# 捨てられる候補にその時間を払うことになる。
+COMBINATORICS_MAX_FACT = 200
+
+
+def build_combinatorics_shard(seed: int, count: int) -> dict:
+    """階乗・順列・組合せのシャード。**帯も木の形も他の 2 つと違う。**
+
+    **帯**: `float()` が `inf` にならないことだけ。`MIN_ABS`/`MAX_ABS` を当てない
+    (設計書 §3.2.1)。既存の帯(`1e9`)を当てると `C(50,25) ≈ 1.26e14` すら入らず、
+    大きな桁のケースが一件も出ない。
+
+    **木**: 整数リテラルに演算を 1 つ、深さ 1。任意の部分木をオペランドにすると
+    「非負整数で `r <= n`」を満たす確率が実用にならない。**この系統が検証したいのは
+    式の構造ではなく、組合せ計算そのものの正しさと大きな桁の扱いである。**
+
+    **絞る条件に engine の途中値を持ち込まない**(設計書 §3.2)。答が f64 に収まる
+    限り生成し、engine が返せなければ不一致として赤くなる。それが
+    `ncr_does_not_overflow_on_the_way_to_an_answer_that_fits` を独立に検証する
+    ということである。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    rejections = dict.fromkeys(REJECTION_REASONS, 0)
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        if rng.random() < 0.25:
+            node: Node = Un(
+                rng.choice(COMBINATORICS_FNS),
+                Num(rng.randint(0, COMBINATORICS_MAX_FACT)),
+            )
+        else:
+            node = Bin(
+                rng.choice(COMBINATORICS_BINS),
+                Num(rng.randint(0, COMBINATORICS_MAX_N)),
+                Num(rng.randint(0, COMBINATORICS_MAX_N)),
+            )
+        try:
+            value = evaluate(node)
+        except OutOfShard as exc:
+            rejections[_classify_out_of_shard(str(exc))] += 1
+            continue
+        except OverflowError:
+            rejections["overflow"] += 1
+            continue
+        # **mpmath は溢れても例外を投げず `inf` に飽和する。** 実測:
+        #   float(math.factorial(1000))         -> OverflowError
+        #   float(mp.mpf(math.factorial(1000))) -> inf   (例外なし)
+        # 設計書 R4 の「`float()` が `OverflowError` を出さないこと」は Python の
+        # **整数**の性質で、`evaluate` が返す mpf には当てはまらない。`inf` で見る。
+        landed = float(value)
+        if math.isinf(landed):
+            rejections["overflow"] += 1
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            rejections["dup"] += 1
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"comb-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": landed, "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "rejections": rejections,
+        "cases": entries,
+    }
+
+
 def build_inverse_trig_shard(seed: int, count: int) -> dict:
     """逆三角関数のシャード。
 
@@ -487,6 +580,10 @@ def main() -> None:
     write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
+    write(
+        "combinatorics-000.json",
+        build_combinatorics_shard(seed=20260820, count=count),
+    )
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
     # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。

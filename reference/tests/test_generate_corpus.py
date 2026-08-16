@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import math
 import pathlib
 import random
 import sys
@@ -667,3 +668,53 @@ def test_the_inverse_trig_shard_records_why_it_threw_candidates_away() -> None:
     assert rejections["domain"] > rejections["out_of_range"], (
         "定義域より範囲外のほうが多い。asin/acos の [-1,1] が効いていない疑い"
     )
+
+
+def test_the_combinatorics_shard_presses_every_key_it_promises() -> None:
+    shard = json.loads((_CORPUS_GENERATED / "combinatorics-000.json").read_text())
+    pressed = {k for case in shard["cases"] for k in case["keys"]}
+    for token in ("n_fact", "n_p_r", "n_c_r"):
+        assert token in pressed, f"{token} は一度も押されていない"
+
+
+def test_the_combinatorics_shard_reaches_past_the_flat_display_band() -> None:
+    """**この系統をやる目的そのもの**(設計書 §3.2.1)。
+
+    既存の帯(`1e9`)に閉じ込めると `C(50,25) ≈ 1.26e14` すら入らず、
+    大きな桁のケースが一件も出ない。ここは指数表記の表示を読む唯一の経路でもある。
+
+    このテストを赤くする編集: `build_combinatorics_shard` の受理条件に
+    `_within_range(node)` を足す。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "combinatorics-000.json").read_text())
+    big = [c for c in shard["cases"] if abs(c["expect"]["re"]) > 1e9]
+    assert len(big) > 100, f"1e9 を超えるケースが {len(big)} 件しかない"
+    huge = [c for c in shard["cases"] if abs(c["expect"]["re"]) > 1e100]
+    assert len(huge) > 0, "1e100 を超えるケースが 1 件も無い"
+
+
+def test_every_combinatorics_answer_fits_in_f64() -> None:
+    """`inf` や `NaN` が期待値に混ざっていないこと。
+
+    mpmath は溢れても例外を投げず `inf` に飽和するので、`float()` の
+    `OverflowError` に頼ると `inf` がそのままコーパスに載る。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "combinatorics-000.json").read_text())
+    for case in shard["cases"]:
+        value = case["expect"]["re"]
+        assert not math.isnan(value), f"{case['id']} が NaN"
+        assert not math.isinf(value), f"{case['id']} が inf"
+
+
+def test_the_combinatorics_shard_records_why_it_threw_candidates_away() -> None:
+    """**溢れの実測はこの系統からしか取れない。**
+
+    `elementary` は帯(`1e9`)が f64 の上限よりはるかに手前なので、
+    溢れる前に `out_of_range` が捕まえてしまい `overflow` が 0 件になる。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "combinatorics-000.json").read_text())
+    rejections = shard["rejections"]
+    assert rejections["overflow"] > 0, (
+        "溢れで捨てたケースが 0 件。n の上限が低すぎて f64 の天井に届いていない"
+    )
+    assert rejections["domain"] > 0, "r > n の棄却が 0 件"
