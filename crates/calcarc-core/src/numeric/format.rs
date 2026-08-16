@@ -108,6 +108,63 @@ pub fn format_real_eng(x: f64) -> String {
     format!("{body}e{eng_exponent}")
 }
 
+/// 60 進で表示する。`3.75` → `3°45'0"`（S-4 設計書 §3）。
+///
+/// **値は 10 進のままである。** 60 進は表示の形式にすぎず、時間とも角度とも
+/// 読める——どちらの意味かは利用者の頭の中にしかない（設計書 §1）。
+/// だからこの spec は四則演算を 1 つも足していない。
+///
+/// `None` は「60 進にできない」。**呼び出し側は表示を変えない**（裁定 6）
+/// ——表示の操作でエラー状態に落とすのは重い。
+///
+/// 秒の小数桁は `DISPLAY_DIGITS` の残りを回す（裁定 7）。度が `nd` 桁、
+/// 分が 2 桁、秒の整数部が 2 桁を使うので、残りは `10 − nd − 4` 桁。
+/// 秒に小数を許さないと `0.001` 時間（`0°0'3.6"`）が表せない。
+pub fn format_sexagesimal(x: f64) -> Option<String> {
+    if !x.is_finite() {
+        return None;
+    }
+    let sign = if x < 0.0 { "-" } else { "" };
+    let a = x.abs();
+    let mut degrees = a.trunc();
+    // 度が有効数字を使い切ると、分と秒を置く場所が無い。
+    let int_digits = if degrees < 1.0 {
+        1
+    } else {
+        degrees.log10().floor() as i32 + 1
+    };
+    if int_digits + 4 > DISPLAY_DIGITS as i32 {
+        return None;
+    }
+    let rest = (a - degrees) * 60.0;
+    let mut minutes = rest.trunc();
+    let seconds = (rest - minutes) * 60.0;
+    let decimals = (DISPLAY_DIGITS as i32 - int_digits - 4).max(0) as usize;
+
+    // **先に丸めてから繰り上がりを見る。** `59.9999996` が `60` になるのは
+    // 丸めた後で、丸める前の値からは先読みできない——`format_real` が
+    // `9999999999.6 → 1e10` で踏んだのと同じ形であり、手も同じである。
+    //
+    // `unwrap_or` なのは、このクレートが panic しないと約束しているため。
+    // `format!` が作った文字列は必ず解析できるが、万一できなければ 0 と
+    // みなして繰り上げない——安全側に倒れる。
+    let mut text = format!("{:.*}", decimals, seconds);
+    if text.parse::<f64>().unwrap_or(0.0) >= 60.0 {
+        text = format!("{:.*}", decimals, 0.0);
+        minutes += 1.0;
+        if minutes >= 60.0 {
+            minutes = 0.0;
+            degrees += 1.0;
+        }
+    }
+    Some(format!(
+        "{sign}{}°{}'{}\"",
+        degrees,
+        minutes,
+        trim_zeros(&text)
+    ))
+}
+
 /// 直交形式で表示する。`3+j4` のように j を数の前に置く。
 pub fn format_rect(v: Value) -> String {
     if v.is_real() {
@@ -213,6 +270,45 @@ mod tests {
 
         assert_eq!(format_real(0.99999999996), "1");
         assert_eq!(format_real(0.99999999994), "0.9999999999");
+    }
+
+    #[test]
+    fn formats_sexagesimal() {
+        // 設計書 §1: 1.5 は 1 時間 30 分とも 1 度 30 分とも読める。
+        assert_eq!(format_sexagesimal(1.5).as_deref(), Some("1°30'0\""));
+        assert_eq!(format_sexagesimal(-3.75).as_deref(), Some("-3°45'0\""));
+        assert_eq!(format_sexagesimal(0.0).as_deref(), Some("0°0'0\""));
+        // 24 を超えてもそのまま出す(裁定 5)。経過時間なので割らない。
+        assert_eq!(format_sexagesimal(30.5).as_deref(), Some("30°30'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_seconds_may_have_decimals() {
+        // 秒に小数を許さないと 0.001 時間が表せない(設計書 §3)。
+        assert_eq!(format_sexagesimal(0.001).as_deref(), Some("0°0'3.6\""));
+        assert_eq!(format_sexagesimal(0.1).as_deref(), Some("0°6'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_carries_when_the_seconds_round_up() {
+        // **59.999... が 60 に丸まったら繰り上げる**(設計書 §3 の丸め)。
+        // format_real が 9999999999.6 → 1e10 で踏んだのと同じ形で、
+        // 手も同じ(先に丸めてから桁を決める)。
+        //
+        // 0.999999999 は秒が 59.9999996 で、5 桁に丸めると 60.00000。
+        // 分へ繰り上がって 60 分になり、さらに度へ繰り上がる——**二段**。
+        assert_eq!(format_sexagesimal(0.999999999).as_deref(), Some("1°0'0\""));
+    }
+
+    #[test]
+    fn sexagesimal_declines_what_it_cannot_show() {
+        // 裁定 6: 何もしない。呼び出し側が表示を変えない。
+        assert_eq!(format_sexagesimal(f64::INFINITY), None);
+        assert_eq!(format_sexagesimal(f64::NAN), None);
+        // 度が 10 桁を使い切ると分と秒の場所が無い。
+        assert_eq!(format_sexagesimal(1e10), None);
+        // その手前は出せる。
+        assert!(format_sexagesimal(999999.5).is_some());
     }
 
     #[test]
