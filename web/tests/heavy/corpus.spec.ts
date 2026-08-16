@@ -59,8 +59,17 @@ const overrides = loadOverrides();
 // されたまま何もせず、腐り検出(assertNoStaleOverrides、値ループの中でしか
 // 呼ばれない)にも掛からず永久に残る——`shards` からではなく、値ケースだけに
 // 絞った `partitions` から集める。
-const allCaseIds = new Set(
-  partitions.flatMap(({ values }) => values.map((c) => c.id)),
+//
+// **id ではなく式を渡す。** 上書きは `expr` を必須で持ち、コーパス側の式と
+// 一致することを確かめる。段階 3b/3c はコーパスを再生成する予定で、設計書 §11
+// が警告しているとおり `UNARY_FNS` に 1 つ足すだけで既存 4000 件が総入れ替えに
+// なる。入れ替わった後の同じ id がたまたま別の理由でシャードの rel を超えると、
+// 腐り検出にも掛からないまま上書きが効き続け、レポートはもう存在しない式の
+// 説明を印字する。式に結びつけておけば、入れ替わりは必ず赤くなる。
+const allCaseExprs = new Map(
+  partitions.flatMap(({ values }) =>
+    values.map((c) => [c.id, c.expr] as const),
+  ),
 );
 // 「id が同値ケースとして存在するのに『コーパスに無い』と言われる」誤りを
 // 避けるため、同値ケースの id 集合も別に渡す(assertOverridesAreSound が
@@ -68,7 +77,7 @@ const allCaseIds = new Set(
 const equivalenceCaseIds = new Set(
   partitions.flatMap(({ equivalences }) => equivalences.map((c) => c.id)),
 );
-assertOverridesAreSound(overrides, allCaseIds, equivalenceCaseIds);
+assertOverridesAreSound(overrides, allCaseExprs, equivalenceCaseIds);
 
 test("withinTolerance judges by relative error alone", () => {
   // ここのリテラルは withinTolerance 自身の入力であって、コーパスの許容ではない。
@@ -125,7 +134,7 @@ test("an override pointing at an equivalence case is refused, not silently accep
   // 緩めるか」の基準が無い、比較ループのコメントを見よ)。しかし同値ループは
   // overrides を一切見ないので、同値ケースを指す上書きは何もしないまま
   // 受理され、腐り検出(assertNoStaleOverrides は値ループの中でしか呼ばれない)
-  // にも掛からず**永久に残る**。allCaseIds が値ケースだけに絞られていれば、
+  // にも掛からず**永久に残る**。allCaseExprs が値ケースだけに絞られていれば、
   // 走行の頭で名指しして落ちる——実際のコーパスから取った同値ケース id で
   // 確かめる。
   const equivalenceId = partitions
@@ -139,12 +148,16 @@ test("an override pointing at an equivalence case is refused, not silently accep
   const bogus = new Map([
     [
       equivalenceId,
-      { rel: 2e-9, reason: "同値ケースを指す上書き(受理されてはならない)" },
+      {
+        rel: 2e-9,
+        expr: "(1) + (1)",
+        reason: "同値ケースを指す上書き(受理されてはならない)",
+      },
     ],
   ]);
   let message = "";
   try {
-    assertOverridesAreSound(bogus, allCaseIds, equivalenceCaseIds);
+    assertOverridesAreSound(bogus, allCaseExprs, equivalenceCaseIds);
   } catch (cause) {
     message = String(cause);
   }
@@ -232,7 +245,11 @@ test("a case that writes its own tolerance is refused, not silently ignored", ()
   // 設計書 §4.3 が約束している挙動。実測(2026-08-15 の検証ラウンド)では
   // 1 件に {abs: 1e30, rel: 1e30} を足しても 43 passed / EXIT=0、無警告だった
   // ——比較はシャード単位の tolerance しか読まないので、書いた側は効いている
-  // と思い込む。段階 3 で実装されるまでは、名指しして落ちる。
+  // と思い込む。**行き先が無いのではなく、行き先が別にある**——ケース単位の
+  // 緩和は `corpus/overrides.json` に書く(3a 設計書 §3.3)。メッセージが
+  // そこを指していること自体を押さえる。以前ここは「段階 3 で実装される」を
+  // 固定していたが、段階 3a がマグニチュード依存を否定した時点でその文言は
+  // 嘘になった(3a 設計書 §2)。
   const shard = soundShard();
   const overriding = {
     ...shard.cases[0],
@@ -247,11 +264,19 @@ test("a case that writes its own tolerance is refused, not silently ignored", ()
   );
   expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/x-009/);
   expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/1e\+30/);
-  // 「いまは未実装で、段階 3 で入る」と読めること。
+  // 正しい行き先(`corpus/overrides.json`)を指していること。
   expect(() => assertShardIsSound("made-up.json", shard)).toThrow(
-    /NOT implemented/,
+    /overrides\.json/,
   );
-  expect(() => assertShardIsSound("made-up.json", shard)).toThrow(/stage 3/);
+  // 「待てばシャードに書けるようになる」と読めてはならない。
+  let message = "";
+  try {
+    assertShardIsSound("made-up.json", shard);
+  } catch (cause) {
+    message = String(cause);
+  }
+  expect(message).not.toContain("NOT implemented");
+  expect(message).not.toContain("stage 3 together with magnitude");
   // 直接呼んでも同じ。
   expect(() =>
     assertNoCaseTolerance("made-up.json", [

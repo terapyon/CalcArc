@@ -148,9 +148,17 @@ export function assertShardIsSound(name: string, shard: Shard): void {
  * 43 passed / EXIT=0、無警告。投稿者は「効いている」と思い込み、レビュアーは
  * JSON を読んで「効いている」と読む。どちらも間違っている、という壊れ方である。
  *
- * 段階 3 のマグニチュード依存の許容と同じ機構になるので、実装はそこで一緒に
- * 行う。それまでは**黙って無視するのではなく、名指しして落ちる**(設計書 §4.3
- * が約束している挙動)。
+ * **訂正(2026-08-16、段階 3a)。** ここは以前「段階 3 のマグニチュード依存の
+ * 許容と同じ機構になるので、実装はそこで一緒に行う」と書いていた。**その行き先は
+ * 無い。** 段階 3a はマグニチュード依存を明示的に否定し(3a 設計書 §2——害を
+ * 与えていたのは `abs` の床であって `rel` ではなかった)、ケース単位の緩和は
+ * `corpus/overrides.json` として実装済みである(3a 設計書 §3.3)。
+ *
+ * **ケース単位の tolerance はシャードには書けない。** `corpus/generated/` は
+ * 再生成一致ゲートが「生成器の出力とバイト単位で一致」を毎回確かめている領域で、
+ * 人の判断を混ぜるとその保証が壊れる。人の判断による緩和は `overrides.json` に、
+ * 理由つきで書く。ガードの挙動は変わらない——**黙って無視するのではなく、
+ * 名指しして落ちる**。
  */
 export function assertNoCaseTolerance(
   name: string,
@@ -165,12 +173,15 @@ export function assertNoCaseTolerance(
       );
     throw new Error(
       `${name}: ${overriding.length} case(s) declare their own tolerance: ` +
-        `${shown.join(", ")}. Per-case tolerance is NOT implemented — the ` +
-        "comparison reads the shard-level tolerance only, so a case-level " +
-        "one would be silently ignored while looking like it applies. It is " +
-        "scheduled for stage 3 together with magnitude-dependent tolerance " +
-        "(design §4.3). Until then this suite refuses the shard instead of " +
-        "running it under a tolerance nobody applied.",
+        `${shown.join(", ")}. The comparison reads the shard-level tolerance ` +
+        "only, so a case-level one would be silently ignored while looking " +
+        "like it applies. This is not a feature waiting to be built: a shard " +
+        "under corpus/generated/ is held byte-identical to the generator's " +
+        "output by the regeneration gate, so human judgement must not be " +
+        "written into it. A case that genuinely needs a looser tolerance is " +
+        "named, with a written reason, in corpus/overrides.json (stage 3a " +
+        "design §3.3). This suite refuses the shard instead of running it " +
+        "under a tolerance nobody applied.",
     );
   }
 }

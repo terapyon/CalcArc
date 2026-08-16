@@ -18,13 +18,46 @@ export interface Override {
   /** このケースにだけ許す相対誤差。シャードの rel より緩い値。 */
   rel: number;
   /**
+   * **この上書きが指しているケースの式。コーパス側と一致すること。**
+   *
+   * 上書きを id だけで結びつけると、コーパスが総入れ替えになったときに
+   * 静かに別の式へ移る。設計書 §11 が警告しているとおり、`UNARY_FNS` に
+   * 1 つ足すだけで同じ種でも既存 4000 件が総入れ替えになり、段階 3b/3c は
+   * それをやる。入れ替わった後の `sci-000019` がたまたま別の理由で
+   * シャードの rel を超えれば、腐り検出(`assertNoStaleOverrides`)にも
+   * 掛からないまま上書きが効き続け、**レポートはもう存在しない式の説明を
+   * 印字する**。id ではなく式に結びつけておけば、入れ替わりは必ず赤くなる。
+   */
+  expr: string;
+  /**
    * **なぜ緩めてよいのか。必須。**
    *
    * 理由のない上書きは、名指しの体裁をした静かな緩和である。理由が書けない
    * なら、それは上書きすべきケースではなく直すべきバグである(設計書 §3.3)。
+   *
+   * **理由には、読み手が再計算できる数を含めること**(ulp、導関数、上界、
+   * 観測値)。散文だけの理由は、外の目に晒しても検算できない——
+   * `reason` が必須でも中身が薄ければ、上書きは実質的に静かな緩和になる
+   * (設計書 §6)。
    */
   reason: string;
 }
+
+/**
+ * 1 件の上書きが持ってよい鍵。**ここに無い鍵は throw する。**
+ *
+ * 未知の鍵を黙って捨てると、この層が一度塞いだ穴を新しいファイルで開け直す
+ * ことになる。`{"rel": 2e-9, "reason": "…", "abs": 1e-6}` と書いた人は
+ * 「期待値 0 側も緩めた」と思い、`overrides.json` を読んだレビュアも
+ * 「効いている」と読む。**どちらも間違っている**——`resolveTolerance` は
+ * `abs` を `base.abs` から取るので、書かれた `abs` は完全に無視される。
+ * これは `assertNoCaseTolerance` が拒んでいる「効いているように見えて
+ * 効かないつまみ」そのものである(設計書 §3.3)。
+ */
+const OVERRIDE_FIELDS = ["rel", "expr", "reason"] as const;
+
+/** ファイルのトップレベルが持ってよい鍵。理由は `OVERRIDE_FIELDS` と同じ。 */
+const FILE_FIELDS = ["schema", "overrides"] as const;
 
 interface OverridesFile {
   schema: number;
@@ -47,6 +80,18 @@ export function loadOverrides(): Map<string, Override> {
       { cause },
     );
   }
+  return parseOverridesFile(raw);
+}
+
+/**
+ * 読んだ文字列を上書きの表にする。**ファイルの形も、その場で確かめる。**
+ *
+ * ファイルの不在には手本のようなメッセージがある一方、`{"schema": 1}`
+ * (`overrides` の欠落)や `"overrides": []` は `Object.entries(undefined)` の
+ * 生 TypeError になっていた。防御が非対称だと、**手で書くファイルの最も
+ * ありふれた壊し方**だけが読めない例外になる。
+ */
+export function parseOverridesFile(raw: string): Map<string, Override> {
   const parsed = JSON.parse(raw) as OverridesFile;
   if (parsed.schema !== KNOWN_OVERRIDES_SCHEMA) {
     throw new Error(
@@ -54,7 +99,26 @@ export function loadOverrides(): Map<string, Override> {
         `(知っているのは ${KNOWN_OVERRIDES_SCHEMA})`,
     );
   }
-  return new Map(Object.entries(parsed.overrides));
+  const table: unknown = parsed.overrides;
+  if (typeof table !== "object" || table === null || Array.isArray(table)) {
+    throw new Error(
+      "overrides: overrides は id をキーにしたオブジェクトでなければ " +
+        `ならないが、${String(JSON.stringify(table))} である。` +
+        `上書きが無いときも {"schema": ${KNOWN_OVERRIDES_SCHEMA}, ` +
+        '"overrides": {}} と書くこと。',
+    );
+  }
+  const known: ReadonlySet<string> = new Set(FILE_FIELDS);
+  const strangers = Object.keys(parsed).filter((key) => !known.has(key));
+  if (strangers.length > 0) {
+    throw new Error(
+      `overrides: トップレベルに知らない鍵がある: ` +
+        `${strangers.map((key) => JSON.stringify(key)).join(", ")}。` +
+        `読む側は ${FILE_FIELDS.join(" と ")} しか見ないので、` +
+        `書いた鍵は黙って無視される——効いているように見えて効かない。`,
+    );
+  }
+  return new Map(Object.entries(table as Record<string, Override>));
 }
 
 /**
@@ -80,13 +144,31 @@ export function resolveTolerance(
  * 名指しで落ちる方が原因に近いためである。
  */
 export function assertOverridesAreSound(
+  /**
+   * コーパスの値ケース。**id だけでなく式も要る**——上書きは id ではなく
+   * 式に結びつく(`Override.expr` の doc を見よ)。
+   */
   overrides: Map<string, Override>,
-  valueCaseIds: Set<string>,
+  valueCaseExprs: Map<string, string>,
   equivalenceCaseIds: Set<string>,
 ): void {
   const complaints: string[] = [];
+  const knownFields: ReadonlySet<string> = new Set(OVERRIDE_FIELDS);
   for (const [caseId, override] of overrides) {
-    if (!valueCaseIds.has(caseId)) {
+    const strangers = Object.keys(override).filter(
+      (key) => !knownFields.has(key),
+    );
+    if (strangers.length > 0) {
+      complaints.push(
+        `${caseId}: 知らない鍵がある: ` +
+          `${strangers.map((key) => JSON.stringify(key)).join(", ")}。` +
+          `上書きが持てるのは ${OVERRIDE_FIELDS.join(" / ")} だけである。` +
+          `例えば abs を書いても resolveTolerance はシャードの abs を使う` +
+          `ので、書いた値は完全に無視される——効いているように見えて効かない` +
+          `つまみを、上書きの側に作らない。`,
+      );
+    }
+    if (!valueCaseExprs.has(caseId)) {
       if (equivalenceCaseIds.has(caseId)) {
         // id はコーパスに実在する——同値ケースとして。値ケースではないだけ
         // である。「このケースはコーパスに無い」は事実に反する: 探しても
@@ -103,6 +185,27 @@ export function assertOverridesAreSound(
           `${caseId}: このケースはコーパスに無い。` +
             `コーパスが変わって id が消えても上書きだけが残ると、` +
             `何を緩めているのか分からなくなる。`,
+        );
+      }
+    }
+    if (
+      typeof override.expr !== "string" ||
+      override.expr.trim().length === 0
+    ) {
+      complaints.push(
+        `${caseId}: expr が空である。上書きは id ではなく**式**に結びつく` +
+          `——id だけで結ぶと、コーパスが総入れ替えになったとき上書きが` +
+          `静かに別の式へ移り、レポートはもう存在しない式の説明を印字する。`,
+      );
+    } else {
+      const actual = valueCaseExprs.get(caseId);
+      if (actual !== undefined && actual !== override.expr) {
+        complaints.push(
+          `${caseId}: expr がコーパスと一致しない。` +
+            `上書きは ${JSON.stringify(override.expr)} と言っているが、` +
+            `コーパスのこの id は ${JSON.stringify(actual)} である。` +
+            `コーパスが入れ替わった可能性がある——理由が指している式が` +
+            `もう無いなら、その上書きは作り直すか消すこと。`,
         );
       }
     }
@@ -160,8 +263,19 @@ export function assertNoStaleOverrides(
     return;
   }
   const lines = staleIds.map((id) => {
-    const reason = overrides.get(id)?.reason ?? "(理由が読めない)";
-    return `  ${id} — 記録されている理由: ${reason}`;
+    const override = overrides.get(id);
+    if (override === undefined) {
+      // `staleIds` には呼び出し側が `overrides.has(id)` を満たしたものしか
+      // 入れない。ここへ来たら、その不変条件が壊れている。黙って
+      // 「(理由が読めない)」で埋めると、**理由についての嘘**を印字した
+      // うえで、起こりえない状態に説明を与えてしまう。大きな声で落とす。
+      throw new Error(
+        `overrides: ${id} は腐った上書きとして渡されたが、上書きの表に無い。` +
+          "呼び出し側の不変条件(overrides.has(id) を満たしたものだけを渡す)が" +
+          "壊れている。",
+      );
+    }
+    return `  ${id} — 記録されている理由: ${override.reason}`;
   });
   throw new Error(
     `overrides: 次の上書きは、もう無くてもシャードの rel で通る。\n` +

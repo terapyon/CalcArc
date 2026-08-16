@@ -147,6 +147,10 @@ test("the report counts and quotes every override", () => {
   expect(markdown).toContain("sci-001332");
   expect(markdown).toContain("4 倍");
   expect(markdown).toContain("引数の刻み幅が結果の精度を縛る");
+  // **上限があることも言う。** 倍率だけ並べると「上書きは何倍でも書けるのでは」
+  // という当然の疑いに答えられない(修正ラウンド)。
+  expect(markdown).toContain("上書きにも上限がある");
+  expect(markdown).toContain("1e-6");
 });
 
 test("no overrides is stated as zero, not omitted", () => {
@@ -158,10 +162,42 @@ test("no overrides is stated as zero, not omitted", () => {
 });
 
 test("the report discloses the known limit of huge-angle trig functions", () => {
-  const markdown = renderReport([summary()], PROVENANCE);
+  // **実例があるときに**出る説明である。以前これは「この結果が主張して
+  // いないこと」の固定文字列で、上書き 0 件の走行でも「上の『名指しで
+  // 緩めたケース』に挙がっているのはその実例であり」と印字していた
+  // ——直前の「**0 件。**」と正面から矛盾する(修正ラウンド)。
+  const markdown = renderReport(
+    [
+      summary({
+        appliedOverrides: [
+          {
+            id: "sci-001332",
+            rel: 2e-9,
+            baseRel: 5e-10,
+            reason: "巨大角度の三角関数。引数の刻み幅が結果の精度を縛る。",
+          },
+        ],
+      }),
+    ],
+    PROVENANCE,
+  );
 
   expect(markdown).toContain("この結果が主張していないこと");
   expect(markdown).toContain("引数還元");
+});
+
+test("with no override, the report does not claim examples it has none of", () => {
+  const markdown = renderReport(
+    [summary({ appliedOverrides: [] })],
+    PROVENANCE,
+  );
+
+  // 0 件と言った直後に「上に挙がっているのはその実例であり」と書かない。
+  expect(markdown).toContain("**0 件。**");
+  expect(markdown).not.toContain("上に挙がっているのは");
+  expect(markdown).not.toContain("引数還元の限界で表示精度に届かない");
+  // 但し書きの節そのものは残る(主張が弱まりうることは常に書く)。
+  expect(markdown).toContain("この結果が主張していないこと");
 });
 
 test("named overrides are not conflated with expected-zero exact matches", () => {
