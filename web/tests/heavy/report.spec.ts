@@ -34,7 +34,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     mismatches: [],
     maxRelativeError: 3.4e-12,
     maxAbsoluteError: 1.1e-11,
-    absOnlyCases: [],
+    appliedOverrides: [],
     relUndefinedCases: [],
     relMeasured: 2000,
     relUndefinedNonZeroAbs: 0,
@@ -125,35 +125,36 @@ test("failures are listed, not summarised away", () => {
   expect(markdown).toContain("sci-000001");
 });
 
-test("cases that pass only through the abs side of the OR are disclosed with id and numbers", () => {
-  // sci-001332 の裁定(2026-08-15): 絶対誤差でしか通らなかった実例をコーパスから
-  // 除外せず開示する。ここではその開示が id と数値つきで載ることだけを確かめる。
+test("the report counts and quotes every override", () => {
   const markdown = renderReport(
     [
       summary({
-        maxRelativeError: 1.34e-9,
-        maxAbsoluteError: 2.32e-10,
-        absOnlyCases: [
-          "sci-001332: cos(rad(((815 * 412) * (747 + 422)))) → -0.173648177899..., " +
-            "expected -0.17364817766693036 (rel 1.34e-9, abs 2.32e-10)",
+        appliedOverrides: [
+          {
+            id: "sci-001332",
+            rel: 2e-9,
+            baseRel: 5e-10,
+            reason: "巨大角度の三角関数。引数の刻み幅が結果の精度を縛る。",
+          },
         ],
       }),
     ],
     PROVENANCE,
   );
-
-  // 総件数(1 件)と、その 1 件の id・数値の両方が読めること。
-  expect(markdown).toContain("絶対誤差の側だけで通った");
+  // 件数が見出しに出る。
+  expect(markdown).toContain("上書き");
+  // id と緩めた倍率と理由の全文が出る。
   expect(markdown).toContain("sci-001332");
-  expect(markdown).toContain("1.34e-9");
-  expect(markdown).toContain("2.32e-10");
+  expect(markdown).toContain("4 倍");
+  expect(markdown).toContain("引数の刻み幅が結果の精度を縛る");
 });
 
-test("zero abs-only cases is stated as zero, not omitted", () => {
-  const markdown = renderReport([summary()], PROVENANCE);
-
-  expect(markdown).toContain("絶対誤差の側だけで通ったケース");
-  expect(markdown).toContain("0 件");
+test("no overrides is stated as zero, not omitted", () => {
+  const markdown = renderReport(
+    [summary({ appliedOverrides: [] })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("上書きされたケース: **0**");
 });
 
 test("the report discloses the known limit of huge-angle trig functions", () => {
@@ -163,20 +164,24 @@ test("the report discloses the known limit of huge-angle trig functions", () => 
   expect(markdown).toContain("引数還元");
 });
 
-test("real precision-limit hits are not conflated with expected-zero exact matches", () => {
-  // 修正ラウンド 1 のレビュー指摘: 「絶対誤差の側だけで通ったケース」の見出しが
-  // rel を測定できた本物の精度限界(sci-001332 相当)と、期待値が厳密に 0 で
-  // rel が定義できないだけの完全一致(sci-000023 相当)を混ぜて数えると、
-  // 「精度低下が n 件あった」という誤読を招く。二つの節・二つの見出し数字に
-  // 分かれて出ることを確かめる。
+test("named overrides are not conflated with expected-zero exact matches", () => {
+  // 修正ラウンド 1 のレビュー指摘: 名指しの上書き(rel を測定できた本物の
+  // 精度限界、sci-001332 相当)と、期待値が厳密に 0 で rel が定義できない
+  // だけの完全一致(sci-000023 相当)を混ぜて数えると、「精度低下が n 件
+  // あった」という誤読を招く。二つの節・二つの見出し数字に分かれて出ることを
+  // 確かめる。
   const markdown = renderReport(
     [
       summary({
         maxRelativeError: 1.34e-9,
         maxAbsoluteError: 2.32e-10,
-        absOnlyCases: [
-          "sci-001332: cos(rad(((815 * 412) * (747 + 422)))) → -0.1736481779, " +
-            "expected -0.17364817766693036 (rel 1.34e-9, abs 2.33e-10)",
+        appliedOverrides: [
+          {
+            id: "sci-001332",
+            rel: 2e-9,
+            baseRel: 5e-10,
+            reason: "巨大角度の三角関数。引数の刻み幅が結果の精度を縛る。",
+          },
         ],
         relUndefinedCases: [
           "sci-000023: (-(tan(rad(0))))^2 → 0, expected 0 (abs 0.00e+0)",
@@ -188,7 +193,7 @@ test("real precision-limit hits are not conflated with expected-zero exact match
   );
 
   // 見出しの数字が別々に出る(1 件と 2 件、3 件とまとめて出ない)。
-  expect(markdown).toContain("精度限界の実例): **1**");
+  expect(markdown).toContain("上書きされたケース: **1**");
   expect(markdown).toContain("厳密に 0): **2**");
   // 各節にそれぞれの id が載る。
   expect(markdown).toContain("sci-001332");
@@ -199,14 +204,21 @@ test("real precision-limit hits are not conflated with expected-zero exact match
 });
 
 test("headline numbers aggregate correctly across multiple shards", () => {
-  // 見出しの total / 最大相対誤差 / 最大絶対誤差 / abs のみ件数 / rel 未定義件数は
+  // 見出しの total / 最大相対誤差 / 最大絶対誤差 / 上書き件数 / rel 未定義件数は
   // 読み手が最初に信じる数字なので、複数シャードにわたる合算・最大化を確かめる。
   const markdown = renderReport(
     [
       summary({
         maxRelativeError: 1.34e-9,
         maxAbsoluteError: 4.36e-2,
-        absOnlyCases: ["sci-001332: ... (rel 1.34e-9, abs 2.33e-10)"],
+        appliedOverrides: [
+          {
+            id: "sci-001332",
+            rel: 1.34e-9,
+            baseRel: 5e-10,
+            reason: "巨大角度の三角関数。引数の刻み幅が結果の精度を縛る。",
+          },
+        ],
         relUndefinedCases: [
           "sci-000023: ... (abs 0.00e+0)",
           "sci-001717: ... (abs 0.00e+0)",
@@ -237,8 +249,8 @@ test("headline numbers aggregate correctly across multiple shards", () => {
   // 最大相対誤差・最大絶対誤差は 2 シャードのうち大きい方(シャード 1)を拾う。
   expect(markdown).toContain("観測された最大相対誤差: **1.34e-9**");
   expect(markdown).toContain("観測された最大絶対誤差: **4.36e-2**");
-  // abs のみ件数は合算(1 + 0 = 1)、rel 未定義件数は合算(2 + 1 = 3)。
-  expect(markdown).toContain("精度限界の実例): **1**");
+  // 上書き件数は合算(1 + 0 = 1)、rel 未定義件数は合算(2 + 1 = 3)。
+  expect(markdown).toContain("上書きされたケース: **1**");
   expect(markdown).toContain("厳密に 0): **3**");
   // 表示分解能より緩く検査された件数は合算(653 + 100)、最悪の実効相対許容は
   // 大きい方(4.15e-4)。
@@ -246,9 +258,11 @@ test("headline numbers aggregate correctly across multiple shards", () => {
   expect(markdown).toContain("最悪の実効相対許容: 4.15e-4**");
 });
 
-test("the headline discloses how loosely the OR actually checked, not just that it passed", () => {
-  // 修正ラウンド 2 の Critical: abs/rel の OR は |期待値| < 1 のところで
-  // rel より緩い検査になる。件数と最悪値を見出しに出し、分布を節に出す。
+test("the headline discloses how loosely overrides actually checked, not just that it passed", () => {
+  // 判定を rel だけに締めたので、シャードの rel より緩い帯に落ちるケースが
+  // あるとすれば、それは名指しの上書きが効いているときだけである。件数と
+  // 最悪値を見出しに出し、分布を節に出す。この節が「絶対誤差の側だけで
+  // 通った」を語っていた OR 時代とは違い、緩みの理由は上書きの節を指す。
   const markdown = renderReport(
     [
       summary({
@@ -274,111 +288,12 @@ test("the headline discloses how loosely the OR actually checked, not just that 
   expect(markdown).toContain("1347");
   expect(markdown).toContain("| 257 |");
   expect(markdown).toContain("| 22 |");
-  // abs の下駄が何をしているかも一緒に書く — 開示であって設計変更ではない。
-  expect(markdown).toContain("abs の下駄は何を救っているか");
-  // 「主張していないこと」が実態に合っている。
-  expect(markdown).toContain("有効数字 4 桁");
-});
-
-test("the abs floor's justification is written from what this run measured", () => {
-  // 敵対者レビュー(2026-08-15): 以前ここには「1e9 級から 1e-6 級への桁落ちが
-  // 起きたケースの偽陽性を abs の下駄が防いでいる」と固定文字列で書いてあった。
-  // 実測がこれを否定した——{abs: 0, rel: 1.5e-9} で全 4000 件が通る。
-  // 同じ嘘を二度書かないために、この節は走行の実測から判定を導く。
-  const noFloorNeeded = renderReport(
-    [
-      summary({
-        maxRelativeError: 1.34e-9,
-        relMeasured: 1996,
-        relUndefinedNonZeroAbs: 0,
-        relUndefinedCases: ["sci-000023: (0)^2 → 0, expected 0 (abs 0.00e+0)"],
-      }),
-    ],
-    PROVENANCE,
+  // 緩みの理由は「名指しで緩めたケース」の節を指す — 開示であって設計変更ではない。
+  expect(markdown).toContain("名指しで緩めたケース");
+  // 「主張していないこと」も上書きの分だけ弱いと書く。
+  expect(markdown).toContain(
+    "名指しで緩めたケースの分だけ、この層の主張は弱い",
   );
-  expect(noFloorNeeded).toContain("abs の下駄は一件も救っていない");
-  expect(noFloorNeeded).toContain("1.34e-9");
-  // 裏付けの無い主張は落ちている。
-  expect(noFloorNeeded).not.toContain("その偽陽性を防いでいる");
-  // 想定の領域であることは明記する。
-  expect(noFloorNeeded).toContain("観測されていない想定の領域");
-
-  // 期待値 0 のケースに 0 でない絶対誤差が出たら、判定が反転する。
-  const floorEarnsIt = renderReport(
-    [
-      summary({
-        maxRelativeError: 1.34e-9,
-        relMeasured: 1996,
-        relUndefinedNonZeroAbs: 3,
-        relUndefinedCases: [
-          "sci-000023: (0)^2 → 1e-12, expected 0 (abs 1e-12)",
-        ],
-      }),
-    ],
-    PROVENANCE,
-  );
-  expect(floorEarnsIt).toContain("abs の側は実際に効いている");
-});
-
-test("the abs verdict cannot contradict the abs-only cases the same report lists", () => {
-  // **検証ラウンド(2026-08-15)の C1。** absVerdict は maxRelativeError と
-  // relUndefinedNonZeroAbs だけを見ていて、absOnlyCases を見ていなかった。
-  // その結果、同じ文書が「abs の下駄は一件も救っていない」「したがって abs を
-  // 0 にした許容でも全 4000 件が通る」と、「絶対誤差の側だけで通ったケース:
-  // 2 件」を**同時に印字した**。実測では abs を実質 0 にして rel を据え置くと
-  // 2 件が不一致になる——下駄はちょうどその 2 件を救っている。
-  //
-  // 元の主張が成り立つのは「rel も観測された最大相対誤差以上に上げる」という
-  // 反実仮想の下だけで、太字の結論はその条件を落としていた。
-  const markdown = renderReport(
-    [
-      summary({
-        maxRelativeError: 1.34e-9,
-        relMeasured: 3995,
-        relUndefinedNonZeroAbs: 0,
-        absOnlyCases: [
-          "sci-000019: ... (rel 7.65e-10, abs 1.1e-11)",
-          "sci-001332: ... (rel 1.34e-9, abs 2.32e-10)",
-        ],
-      }),
-    ],
-    PROVENANCE,
-  );
-
-  // **無条件の否定が出ていないこと。** ここが本丸。
-  expect(markdown).not.toContain("abs の下駄は一件も救っていない");
-  // 「abs を 0 にすれば通る」を、rel を上げる条件抜きで言っていないこと。
-  expect(markdown).not.toContain("`abs` を 0 にした許容でも全 2000 件が通る");
-  // 救っている件数が、下の節に列挙されている件数と一致すること。
-  expect(markdown).toContain("abs の側は実際に効いている");
-  expect(markdown).toContain("2 件を救っている");
-  expect(markdown).toContain("rel を据え置いたまま `abs` を 0 にすれば");
-  expect(markdown).toContain("精度限界の実例): **2**");
-  // 外すための条件が具体値つきで出ること。
-  expect(markdown).toContain("rel を 1.34e-9");
-  expect(markdown).toContain("以上に上げる必要がある");
-  // どちらを取るかが許容の設計の話で、段階 3 の主題だと書く。
-  expect(markdown).toContain("許容の設計の問題");
-  expect(markdown).toContain("段階 3 の主題");
-});
-
-test("a run that saves nothing through abs still states the condition on rel", () => {
-  // 逆側。absOnly が 0 のときの「一件も救っていない」は残ってよいが、
-  // 「abs を 0 にしても通る」には rel を上げる条件が付いていること。
-  const markdown = renderReport(
-    [
-      summary({
-        maxRelativeError: 3.4e-12,
-        relMeasured: 1996,
-        relUndefinedNonZeroAbs: 0,
-        absOnlyCases: [],
-      }),
-    ],
-    PROVENANCE,
-  );
-
-  expect(markdown).toContain("abs の下駄は一件も救っていない");
-  expect(markdown).toContain("rel を 3.40e-12 以上に取ったうえで");
 });
 
 test("an incomplete run says so before it says anything else", () => {

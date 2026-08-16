@@ -44,12 +44,29 @@ export interface ShardSummary {
   mismatches: string[];
   maxRelativeError: number;
   maxAbsoluteError: number;
-  // 相対誤差(rel)が測定できた(期待値 ≠ 0)うえで rel の許容は超えたが、
-  // 絶対誤差(abs)の許容には収まったケース。**精度限界の実例。**
-  // 事前に整形済みの説明文字列を、corpus.spec.ts が詰める(mismatches と同じ流儀)。
-  absOnlyCases: string[];
+  /**
+   * このシャードで実際に適用された、名指しの上書き。
+   *
+   * 前の判定(絶対誤差と相対誤差の二者択一)では、この集合は「相対誤差(rel)
+   * が測定できた(期待値 ≠ 0)うえで rel の許容は超えたが、絶対誤差(abs)の
+   * 許容には収まったケース」という、絶対誤差の側だけを見る名前のフィールドで
+   * 現れていた。判定を rel だけに締めたいま、シャードの rel を超えて合格する
+   * 経路は名指しの上書きしか残っていないので、**同じ集合を、実際に起きて
+   * いること(上書きが適用された)で呼ぶ。** 改名ではなく統合——古い名前の
+   * まま値だけ変えると、「絶対誤差の側で通った」という嘘の説明が残る。
+   *
+   * **件数と理由の全文をレポートに出す**——外の読み手が「何件が特別扱いされ、
+   * なぜか」を数えられることが要件である(設計書 §3.5)。2 件が 200 件に増えたら
+   * この層が壊れている兆候で、レポートを読めばそれが分かる。
+   */
+  appliedOverrides: {
+    id: string;
+    rel: number;
+    baseRel: number;
+    reason: string;
+  }[];
   // 期待値が厳密に 0 で、相対誤差が数学的に定義できない(0 除算になる)ケース。
-  // absOnlyCases と混ぜて数えると「精度低下が n 件あった」という誤読を招くため、
+  // appliedOverrides と混ぜて数えると「精度低下が n 件あった」という誤読を招くため、
   // 別に集計する(修正ラウンド 1 のレビュー指摘)。
   relUndefinedCases: string[];
   /**
@@ -64,9 +81,10 @@ export interface ShardSummary {
    * 「ほとんどは完全一致」を手書きせず、実測から書くために持つ。
    */
   relUndefinedNonZeroAbs: number;
-  // **実際にどこまでの精度で検査したか。** abs/rel の OR は |期待値| < 1 の
-  // ところで abs の側が緩い方になり、実効的な相対許容が rel より広がる。
-  // 集計しないと報告書の主張が実態より強くなる(修正ラウンド 2)。
+  // **実際にどこまでの精度で検査したか。** 判定は rel だけで行うので、
+  // シャードが宣言する rel より緩く検査されたケースがあるとすれば、それは
+  // 名指しの上書きが効いているときだけである。集計しないと報告書の
+  // 「表示される桁まで正しい」が実態より強い主張になる(修正ラウンド 2)。
   looserThanDisplay: number;
   worstEffectiveRelTolerance: number;
   bands: Record<ToleranceBand, number>;
@@ -256,8 +274,8 @@ export function renderReport(
     (sum, entry) => sum + entry.mismatches.length,
     0,
   );
-  const absOnly = entries.reduce(
-    (sum, entry) => sum + entry.absOnlyCases.length,
+  const overrideCount = entries.reduce(
+    (sum, entry) => sum + entry.appliedOverrides.length,
     0,
   );
   const relUndefined = entries.reduce(
@@ -325,7 +343,7 @@ export function renderReport(
     `- 不一致: **${failed}**`,
     `- 観測された最大相対誤差: **${relativeQuantity(maxRelativeError, relMeasured)}**`,
     `- 観測された最大絶対誤差: **${exponential(maxAbsoluteError)}**`,
-    `- 絶対誤差の側だけで通ったケース(精度限界の実例): **${absOnly}**`,
+    `- 上書きされたケース: **${overrideCount}**`,
     `- 相対誤差が定義できないケース(期待値が厳密に 0): **${relUndefined}**`,
     `- **表示分解能より緩く検査されたケース: ${looser}** ` +
       `(全 ${total} 件中 ${((looser / total) * 100).toFixed(1)}%)`,
@@ -415,7 +433,7 @@ export function renderReport(
     "## シャード別",
     "",
     "| シャード | 総数 | 値 | 同値 | 不一致 | 最大相対誤差 | 最大絶対誤差 | " +
-      "absのみ(精度限界) | rel未定義(期待値0) | 表示分解能より緩い | 最悪の実効相対許容 | 許容 |",
+      "上書き | rel未定義(期待値0) | 表示分解能より緩い | 最悪の実効相対許容 | 許容 |",
     "|---|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const entry of entries) {
@@ -423,7 +441,7 @@ export function renderReport(
       `| ${entry.name} | ${entry.total} | ${entry.values} | ${entry.equivalences} | ` +
         `${entry.mismatches.length} | ` +
         `${relativeQuantity(entry.maxRelativeError, entry.relMeasured)} | ` +
-        `${exponential(entry.maxAbsoluteError)} | ${entry.absOnlyCases.length} | ` +
+        `${exponential(entry.maxAbsoluteError)} | ${entry.appliedOverrides.length} | ` +
         `${entry.relUndefinedCases.length} | ${entry.looserThanDisplay} | ` +
         `${relativeQuantity(entry.worstEffectiveRelTolerance, entry.relMeasured)} | ` +
         `abs ${entry.tolerance.abs} / rel ${entry.tolerance.rel} |`,
@@ -439,49 +457,13 @@ export function renderReport(
 
   lines.push(
     ...renderEffectiveTolerance(entries, {
-      total,
       looser,
       worstEffective,
       relMeasured,
-      maxRelativeError,
-      absOnly,
-      relUndefinedNonZeroAbs: entries.reduce(
-        (sum, entry) => sum + entry.relUndefinedNonZeroAbs,
-        0,
-      ),
     }),
   );
   lines.push(...renderDistribution(entries));
-
-  // abs/rel は OR で判定している。abs の側だけで通ったケースを黙って合格に
-  // 混ぜると、「rel の許容に収まっている」という主張が実態より緩くなる。
-  // 0 件でもここに明記する — 省略すると「確かめていない」のか「0 件だった」
-  // のか読み手が区別できない。
-  //
-  // **精度限界の実例(rel を測定でき、かつ超えた)と、rel が数学的に定義できない
-  // 完全一致(期待値が厳密に 0)は別の節に分ける。** 混ぜて 1 つの件数にすると、
-  // 「精度低下が n 件あった」と読み手に伝わるが、多くは 0 対 0 の完全一致であり
-  // 精度低下ではない。数字を混ぜると数字が嘘をつく(修正ラウンド 1 のレビュー指摘)。
-  lines.push("", "## 絶対誤差の側だけで通ったケース(精度限界の実例)", "");
-  if (absOnly === 0) {
-    lines.push(
-      "**0 件。** 相対誤差(rel)を測定できたケースはすべて rel の許容内にも",
-      "収まっており、abs/rel の OR 判定が精度の実態を覆い隠している所見は無い。",
-      "",
-      "**ただしこれは「rel の精度で検査した」という意味ではない。** 実効的な",
-      "相対許容がどこまで広がっていたかは上の節を見ること。",
-    );
-  } else {
-    lines.push(
-      `**${absOnly} 件。** 相対誤差(rel)を測定でき、rel の許容は超えたが、` +
-        "絶対誤差(abs)の許容には収まった。abs/rel の OR 判定は「通った」としか" +
-        "言わないので、id と数値をここに開示する。",
-      "",
-      ...entries.flatMap((entry) =>
-        entry.absOnlyCases.map((line) => `- \`${entry.name}\` ${line}`),
-      ),
-    );
-  }
+  lines.push(...renderOverrides(entries));
 
   lines.push("", "## 相対誤差が定義できないケース(期待値が厳密に 0)", "");
   if (relUndefined === 0) {
@@ -519,41 +501,31 @@ export function renderReport(
 
 /**
  * **実効的な相対許容の開示。** この節が無いと、報告書の「表示される桁まで
- * 正しい」が、期待値の小さいケースについて偽になる(修正ラウンド 2 の Critical)。
+ * 正しい」が、名指しで緩めたケースについて偽になる。
+ *
+ * 前は abs/rel の OR のせいで |期待値| < 1 のところが常に rel より緩く
+ * 検査されていた(4000 件中 1315 件、最悪 4.15e-4)。判定を rel だけに締めた
+ * いま、シャードの rel より緩い帯に落ちるケースがあるとすれば、それは
+ * **名指しの上書きが効いているときだけ**である。この節はその分布を出す。
  */
-interface Aggregate {
-  total: number;
-  looser: number;
-  worstEffective: number;
-  relMeasured: number;
-  maxRelativeError: number;
-  /**
-   * **abs の側だけで通ったケース数。** `absVerdict` はこれを見なければ
-   * ならない——見ないまま `maxRelativeError` と `relUndefinedNonZeroAbs`
-   * だけで判定していたとき、同じ文書が「abs の下駄は一件も救っていない」と
-   * 「絶対誤差の側だけで通ったケース: 2 件」を**同時に印字した**。
-   */
-  absOnly: number;
-  relUndefinedNonZeroAbs: number;
-}
-
 function renderEffectiveTolerance(
   entries: ShardSummary[],
-  aggregate: Aggregate,
+  aggregate: { looser: number; worstEffective: number; relMeasured: number },
 ): string[] {
   const { looser, worstEffective, relMeasured } = aggregate;
   const lines = [
     "",
     "## 実効的な相対許容の分布",
     "",
-    "合否は `|実測 - 期待| ≤ abs` **または** `|実測 - 期待| / |期待| ≤ rel` で",
-    "判定している。この二つは OR なので、**|期待値| が 1 未満のところでは abs の",
-    "側が常に緩い方になる**。そのとき実際に許されている相対誤差は rel ではなく",
-    "`abs / |期待値|` である。これを「実効的な相対許容」と呼び、ここに全件の",
-    "分布を出す。",
+    "合否は `|実測 - 期待| / |期待| ≤ rel` で判定している(期待値が厳密に 0 の",
+    "ときだけ `|実測 - 期待| ≤ abs` を使う——相対誤差が数学的に定義できない",
+    "場合の専用経路であって、rel の代わりではない)。**上書きが無い限り、",
+    "実際に検査に使われる相対許容はシャードが宣言する rel そのものである。**",
+    "ここでシャードの rel より緩い帯に落ちるケースがあるとすれば、それは",
+    "名指しの上書きで rel を差し替えたケースだけである。ここに全件の分布を出す。",
     "",
-    `**${looser} 件が rel より緩く検査されている。最悪の実効相対許容は ` +
-      `${relativeQuantity(worstEffective, relMeasured)}。**`,
+    `**${looser} 件がシャードの rel より緩く検査されている(すべて名指しの` +
+      `上書きによる)。最悪の実効相対許容は ${relativeQuantity(worstEffective, relMeasured)}。**`,
     "",
     ...(relMeasured === 0
       ? [
@@ -577,9 +549,7 @@ function renderEffectiveTolerance(
   }
   lines.push(
     "",
-    "### abs の下駄は何を救っているか",
-    "",
-    ...absVerdict(aggregate),
+    "件数・id・理由の全文は「名指しで緩めたケース」の節にある。",
     "",
     "なお、実効的な相対許容は「そこまでの誤差なら通してしまう」という上限で",
     "あって、観測された誤差ではない。誤差が 0 だったケースでは、許容がどれだけ",
@@ -590,116 +560,47 @@ function renderEffectiveTolerance(
 }
 
 /**
- * **abs の下駄の正当化を、実測から書く。**
+ * **名指しで緩めたケースの開示。**
  *
- * 以前ここには「1e9 級から 1e-6 級への桁落ちが起きたケースの偽陽性を abs の
- * 下駄が防いでいる」という説明が固定文字列で入っていた。**測ったらそうでは
- * なかった**——敵対者レビュー(2026-08-15)は `{abs: 0, rel: 1.5e-9}` で全
- * 4000 件が通ることを実証した。abs の下駄は一件も救っていない。
- *
- * 同じ嘘を二度書かないために、この節は判定を走行の実測から導く。abs を 0 に
- * しても全件通るかどうかは、走行の数字だけで決まる:
- *
- * - **abs の側だけで通ったケース**(rel の許容を超えたが abs には収まった)が
- *   1 件でもあれば、いまの rel のままで abs を 0 にすればその件数が落ちる。
- *   下駄は**実際にその件数を救っている。**
- * - 期待値が厳密に 0 のケースは、絶対誤差が 0 なら `|差| ≤ 0` で abs = 0
- *   でも通る。0 でないものが 1 件でもあれば、abs は実際に効いている。
- * - どちらも 0 件のときにだけ「一件も救っていない」が成り立つ。
- *
- * **条件を落とさない。** ここには一度、条件付きの前提から結論だけを抜き出した
- * 文が印字されていた——「abs の下駄は一件も救っていない」「したがって abs を 0 に
- * した許容でも全件が通る」を、`absOnlyCases` が 2 件ある走行で。元の敵対的検証が
- * 通したのは `{abs: 0, rel: 1.5e-9}`、つまり **rel も同時に上げた**反実仮想で
- * あって、rel を据え置いたまま abs を外した世界ではない(実測: `abs` を実質 0 に
- * して `rel` を 5e-10 のままにすると 2 件が不一致になる)。**成果物が自分の
- * データと矛盾する主張を印字するのは、どんな数値の誤りよりも重い。**
- *
- * **許容の設計は変えていない。** ここでしているのは開示だけである。
+ * 前の判定(abs/rel の OR)では、この情報は「絶対誤差の側だけで通ったケース
+ * (精度限界の実例)」という節に、id と数値だけの整形済み文字列で現れていた。
+ * 判定を rel だけに締めたいま、シャードの rel を超えて合格する経路は名指しの
+ * 上書きしか残っていないので、同じ情報を、それが実際に起きていること
+ * (上書きが適用された)として、id・緩めた倍率・理由の全文つきで開示する。
+ * 外の読み手が「何件が特別扱いされ、なぜか」を数えられることが要件である
+ * (設計書 §3.5)。
  */
-function absVerdict(aggregate: Aggregate): string[] {
-  const {
-    total,
-    absOnly,
-    maxRelativeError,
-    relMeasured,
-    relUndefinedNonZeroAbs,
-  } = aggregate;
-  const closing = [
-    "",
-    "桁落ちで相対誤差が膨らむ領域が**あるかもしれない**ことは否定しない。",
-    "ただしそれは**観測されていない想定の領域**であって、いまの許容を裏付ける",
-    "実測ではない。マグニチュード依存の許容は段階 3 の主題である。",
-    "",
-    "ここでしているのは許容の設計変更ではなく、**その下駄が実際に何件をどこまで",
-    "緩めているかの開示**である。",
-  ];
-  if (relMeasured === 0) {
+function renderOverrides(entries: ShardSummary[]): string[] {
+  const all = entries.flatMap((entry) =>
+    entry.appliedOverrides.map((o) => ({ shard: entry.name, ...o })),
+  );
+  if (all.length === 0) {
     return [
-      "この走行では相対誤差を測定できたケースが 1 件も無いため、abs の下駄が",
-      "何を救っているかを実測から言えない。",
-      ...closing,
+      "",
+      "## 名指しで緩めたケース",
+      "",
+      "**0 件。** すべてのケースがシャードの許容そのままで判定された。",
+      "",
     ];
   }
-  if (absOnly > 0 || relUndefinedNonZeroAbs > 0) {
-    const detail: string[] = [];
-    if (absOnly > 0) {
-      detail.push(
-        `- **rel をいまのまま(シャードが宣言する値)に据え置くなら、abs の下駄は ` +
-          `${absOnly} 件を救っている。**` +
-          "相対誤差の許容は超えたが絶対誤差の許容には収まった、と判定された" +
-          "ケースがこれだけある。id と数値は下の「絶対誤差の側だけで通った" +
-          "ケース(精度限界の実例)」の節に全件が挙がっている。" +
-          "**rel を据え置いたまま `abs` を 0 にすれば、この分が不一致になる。**",
-        `- **abs を外したいなら、rel を ${exponential(maxRelativeError)}` +
-          "(この走行で観測された最大相対誤差)以上に上げる必要がある。**" +
-          "二つを同時にした許容——rel をそこまで上げ、かつ abs を 0 にする——" +
-          `でなら、全 ${total} 件が通る。この条件を落として結論だけを取り出すと、` +
-          "**この文書は自分のデータと矛盾する。**",
-      );
-    }
-    if (relUndefinedNonZeroAbs > 0) {
-      detail.push(
-        `- **期待値が厳密に 0 のケースのうち ${relUndefinedNonZeroAbs} 件は` +
-          "絶対誤差が 0 でない。** そこでは相対誤差が数学的に定義できないので、" +
-          "rel をいくら上げても判定できない。この分は rel の引き上げでは" +
-          "代替できず、abs を外すと落ちる。",
-      );
-    }
-    return [
-      "**abs の側は実際に効いている。** この走行の数字がそう言っている。",
-      "",
-      ...detail,
-      "",
-      "**どちらを取るかは許容の設計の問題であって、この走行が答えを出す話では",
-      "ない。** rel を据え置いて abs の下駄を残すか、rel を上げて abs を外すか",
-      "——マグニチュード依存の許容と合わせて段階 3 の主題である。その代償として",
-      `いま払っているのが、上の表に開示している「rel より緩く検査された ` +
-        `${aggregate.looser} 件」と「最悪の実効相対許容 ` +
-        `${relativeQuantity(aggregate.worstEffective, relMeasured)}」である。`,
-      ...closing,
-    ];
-  }
-  return [
-    `**この走行では abs の下駄は一件も救っていない。**` +
-      "abs の側だけで通ったケースが 0 件で、期待値が厳密に 0 のケースも" +
-      "全件が絶対誤差 0 だった、という実測からそう言える。",
+  const lines = [
     "",
-    `- 相対誤差を測定できた ${relMeasured} 件の最大は ` +
-      `**${exponential(maxRelativeError)}** で、rel をそれ以上に取れば` +
-      "全部が rel の側だけで通る。",
-    "- 期待値が厳密に 0 のケースは全件が絶対誤差 0 なので、`abs` を **0** に",
-    "  しても `|差| ≤ 0` で通る。",
-    `- したがって **rel を ${exponential(maxRelativeError)} 以上に取ったうえで ` +
-      `\`abs\` を 0 にした許容でも、全 ${total} 件が通る**。`,
+    "## 名指しで緩めたケース",
     "",
-    "**それでも abs を残しているのは、期待値が厳密に 0 のケースに相対誤差が",
-    "定義できないためである。** 将来そこに 0 でない誤差が出たとき、rel だけでは",
-    "判定できない。その保険の代償が、上の表に開示している「rel より緩く検査",
-    `された ${aggregate.looser} 件」と「最悪の実効相対許容 ` +
-      `${relativeQuantity(aggregate.worstEffective, relMeasured)}」である。`,
-    ...closing,
+    `**${all.length} 件。** 下のケースは、シャードの許容では落ちるが、` +
+      "理由を添えて個別に緩めてある。緩めた分だけこの層の主張は弱い。",
+    "",
   ];
+  for (const o of all) {
+    const factor = Math.round(o.rel / o.baseRel);
+    lines.push(
+      `- \`${o.shard}\` **${o.id}** — rel ${o.rel.toExponential(2)}` +
+        `（シャードの ${o.baseRel.toExponential(2)} の **${factor} 倍**）`,
+      `  - ${o.reason}`,
+    );
+  }
+  lines.push("");
+  return lines;
 }
 
 /** 設計書 §11:「分布そのものを報告書に載せて、外から検証可能にする。」 */
@@ -823,18 +724,16 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "倍精度の最後の桁まで正しいことではない。より深い精度は Rust 側の",
     "単体テストと golden(Layer 1〜4)の担当である。",
     "",
-    "**さらに、期待値の絶対値が 1 未満のケースでは abs の下駄が効き、その分だけ",
-    "検査は緩い。最小マグニチュード帯(|期待値| が 1e-6 級)では、有効数字 4 桁",
-    "相当までしか主張していない。** 件数と最悪値は「実効的な相対許容の分布」の",
-    "節にある。表示は 10 桁出るが、その 10 桁すべてを検査したとは言っていない。",
+    "**名指しで緩めたケースの分だけ、この層の主張は弱い。** 件数と理由の全文は",
+    "「名指しで緩めたケース」の節にある。0 件ならその節がそう書く。",
     "",
     "巨大な角度を三角関数に渡すとき、角度をラジアンに直す時点で f64 の",
     "刻み幅が引数そのものの不確かさになる。刻み幅は角度の大きさに比例して",
     "広がるので、大きな角度ほど入力の精度が落ち、結果の精度もそれを超えられ",
     "ない。これはバグではなく、**巨大角度の三角関数が引数還元の限界で表示",
-    "精度に届かない、既知の領域**である。上の「絶対誤差の側だけで通った",
-    "ケース(精度限界の実例)」はその実例であり、コーパスから除外せず、",
-    "ここに開示することを裁定している。",
+    "精度に届かない、既知の領域**である。上の「名指しで緩めたケース」に挙がって",
+    "いるのはその実例であり、全体を緩めて通すのではなく、そこに挙げた分だけを",
+    "名指しで緩めてここに開示することを裁定している。",
     "",
     "### まだ一度も踏んでいない領域",
     "",

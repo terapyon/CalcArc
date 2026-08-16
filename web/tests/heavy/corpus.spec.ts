@@ -52,8 +52,15 @@ const overrides = loadOverrides();
 // 上書きが指す id がコーパスに実在するか、reason が書かれているかを
 // **走行の頭で**確かめる。あとで「なぜか緩い」と気づくより、その場で
 // 名指しで落ちる方が原因に近い。
+//
+// **値ケースの id だけを「実在する」とみなす。** 同値ケースは上書きの対象外
+// (下の比較ループのコメントを見よ)で、同値ループは overrides を一切見ない。
+// ここで同値ケースの id も許してしまうと、同値ケースを指す上書きが受理
+// されたまま何もせず、腐り検出(assertNoStaleOverrides、値ループの中でしか
+// 呼ばれない)にも掛からず永久に残る——`shards` からではなく、値ケースだけに
+// 絞った `partitions` から集める。
 const allCaseIds = new Set(
-  shards.flatMap(({ shard }) => shard.cases.map((c) => c.id)),
+  partitions.flatMap(({ values }) => values.map((c) => c.id)),
 );
 assertOverridesAreSound(overrides, allCaseIds);
 
@@ -105,6 +112,33 @@ test("an overridden case lands in a looser band", () => {
 
 test("at least one shard is present", () => {
   expect(shards.length).toBeGreaterThan(0);
+});
+
+test("an override pointing at an equivalence case is refused, not silently accepted", () => {
+  // 同値ケースは上書きの対象外である(外の期待値を持たないので「どこまで
+  // 緩めるか」の基準が無い、比較ループのコメントを見よ)。しかし同値ループは
+  // overrides を一切見ないので、同値ケースを指す上書きは何もしないまま
+  // 受理され、腐り検出(assertNoStaleOverrides は値ループの中でしか呼ばれない)
+  // にも掛からず**永久に残る**。allCaseIds が値ケースだけに絞られていれば、
+  // 走行の頭で名指しして落ちる——実際のコーパスから取った同値ケース id で
+  // 確かめる。
+  const equivalenceId = partitions
+    .flatMap(({ equivalences }) => equivalences.map((c) => c.id))
+    .at(0);
+  if (equivalenceId === undefined) {
+    throw new Error(
+      "no equivalence case found in the loaded corpus to test against",
+    );
+  }
+  const bogus = new Map([
+    [
+      equivalenceId,
+      { rel: 2e-9, reason: "同値ケースを指す上書き(受理されてはならない)" },
+    ],
+  ]);
+  expect(() => assertOverridesAreSound(bogus, allCaseIds)).toThrow(
+    new RegExp(equivalenceId),
+  );
 });
 
 test("the half that is checked against an outside reference is still here", () => {
@@ -291,7 +325,18 @@ test("every case in every shard declares the one mode this stage runs", () => {
  */
 interface Tally {
   mismatches: string[];
-  absOnlyCases: string[];
+  /**
+   * このシャードで実際に適用された、名指しの上書き。
+   * report.ts の `ShardSummary.appliedOverrides` にそのまま渡す
+   * (詳しい経緯はそちらの doc コメントを見よ——以前は「絶対誤差の側だけで
+   * 通ったケース」という名前のフィールドで、値だけを詰めていた場所である)。
+   */
+  appliedOverrides: {
+    id: string;
+    rel: number;
+    baseRel: number;
+    reason: string;
+  }[];
   relUndefinedCases: string[];
   /**
    * **相対誤差を測定できたケース数**(期待値 ≠ 0)。0 のとき、最大相対誤差も
@@ -318,7 +363,7 @@ function newTally(): Tally {
   }
   return {
     mismatches: [],
-    absOnlyCases: [],
+    appliedOverrides: [],
     relUndefinedCases: [],
     relMeasured: 0,
     relUndefinedNonZeroAbs: 0,
@@ -342,7 +387,8 @@ function tally(
   into.maxRelativeError = Math.max(into.maxRelativeError, result.relativeError);
   into.bands[result.bucket] += 1;
   if (result.bucket !== "display" && result.bucket !== "undefined") {
-    // 表示分解能(rel)より緩く検査されたケース。abs の下駄が効いている。
+    // 表示分解能(rel)より緩く検査されたケース。判定は rel だけで行うので、
+    // ここに来るのは名指しの上書きが効いているときだけである。
     into.looserThanDisplay += 1;
   }
   if (Number.isFinite(result.effectiveRelTolerance)) {
@@ -354,21 +400,37 @@ function tally(
   } else if (result.absoluteError > 0) {
     into.relUndefinedNonZeroAbs += 1;
   }
-  // withinTolerance は abs/rel を OR で判定する。abs の側だけで通った
-  // ケースを黙って合格に混ぜると、「rel の許容に収まっている」という
-  // 主張が実態より緩くなる(sci-001332 の裁定、設計書 §11)。
+  // withinTolerance は rel だけで判定する(期待値が厳密に 0 のときだけ abs を
+  // 使う——rel が数学的に定義できない場合の専用経路であって、rel の代わりでは
+  // ない)。だから、相対誤差を測定できて(期待値 ≠ 0)シャードの rel は超えた
+  // のに合格する経路は、名指しの上書きしか無い。上書きが適用されたケースを
+  // 黙って合格に混ぜると、「rel の許容に収まっている」という主張が実態より
+  // 緩くなる(sci-001332 の裁定、設計書 §3.5)。
   //
   // 期待値が厳密に 0 のケースは rel が数学的に定義できないだけで、
-  // 精度限界とは別物(修正ラウンド 1 のレビュー指摘)。別に集計する。
+  // 上書きとは別物(修正ラウンド 1 のレビュー指摘)。別に集計する。
   if (result.passed && result.bucket === "undefined") {
     into.relUndefinedCases.push(
       `${id}: ${description} (abs ${result.absoluteError.toExponential(2)})`,
     );
   } else if (result.passed && result.relativeError > tolerance.rel) {
-    into.absOnlyCases.push(
-      `${id}: ${description} (rel ${result.relativeError.toExponential(2)}, ` +
-        `abs ${result.absoluteError.toExponential(2)})`,
-    );
+    // rel だけの判定でここに来るのは、この id に上書きが登録されていて、
+    // 上書き後の rel で通ったときだけである。overrides に登録が無いのに
+    // ここへ来たら、判定のどこかが名指しの上書き以外の経路で緩んでいる
+    // ——黙って通さず、その場で落とす。
+    const override = overrides.get(id);
+    if (override === undefined) {
+      throw new Error(
+        `${id}: shard の rel を超えて合格したが、overrides に登録が無い。` +
+          "rel だけで判定しているので、上書き以外にこれが起こる経路は無いはずである。",
+      );
+    }
+    into.appliedOverrides.push({
+      id,
+      rel: override.rel,
+      baseRel: tolerance.rel,
+      reason: override.reason,
+    });
   }
   if (!result.passed) {
     into.mismatches.push(`${id}: ${description}`);
@@ -478,7 +540,7 @@ for (const { name, shard, values } of partitions) {
       mismatches: into.mismatches,
       maxRelativeError: into.maxRelativeError,
       maxAbsoluteError: into.maxAbsoluteError,
-      absOnlyCases: into.absOnlyCases,
+      appliedOverrides: into.appliedOverrides,
       relUndefinedCases: into.relUndefinedCases,
       relMeasured: into.relMeasured,
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
@@ -569,7 +631,12 @@ for (const { name, shard, equivalences } of partitions) {
       mismatches: into.mismatches,
       maxRelativeError: into.maxRelativeError,
       maxAbsoluteError: into.maxAbsoluteError,
-      absOnlyCases: into.absOnlyCases,
+      // **同値ケースは上書きの対象外**(上の tally 呼び出しが shard.tolerance を
+      // そのまま使っていることを見よ)。overrides を見ないので rel だけの判定で
+      // シャードの rel を超えて合格することが無く、into.appliedOverrides は
+      // 常に空になる——ここで [] を書かずに into.appliedOverrides を渡すのは、
+      // その不変条件を tally() の中で言わせるためである。
+      appliedOverrides: into.appliedOverrides,
       relUndefinedCases: into.relUndefinedCases,
       relMeasured: into.relMeasured,
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,

@@ -66,6 +66,39 @@ test("an override that is not looser than nothing is refused", () => {
   expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
 });
 
+test("an override looser than the sanity ceiling is refused", () => {
+  // シャードの許容には TOLERANCE_CEILING(1e-6)の正気検査が既にある
+  // (corpus.ts の assertToleranceIsSane)。上書きは名指しの体裁をした静かな
+  // 緩和になりうる——`rel: 1e-3` にもっともらしい理由を付ければ、reason と
+  // 有限性の検査だけを見るこの関数は素通ししてしまう。同じ上限を上書きにも
+  // 課す(設計書 §3.4 の「腐った上書きは大きな声で落とす」と同じ原則:
+  // 緩すぎる上書きも静かに紛れ込ませない)。
+  const overrides = new Map([
+    [
+      "sci-000019",
+      { rel: 1e-3, reason: "もっともらしいが緩すぎる理由をつけてみる" },
+    ],
+  ]);
+  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
+  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/1e-6/);
+});
+
+test("an override exactly at the sanity ceiling is fine, one past it is refused", () => {
+  // 現行の上書きは 1e-9 と 2e-9 で、1e-6 との間に 500 倍の余裕がある。
+  // 境界の扱いはシャードの許容(assertToleranceIsSane)と揃える——あちらは
+  // `value > TOLERANCE_CEILING` だけを弾くので、ちょうど 1e-6 は通る。
+  // 上書きだけ境界の意味を変える理由が無い。
+  const atCeiling = new Map([
+    ["sci-000019", { rel: 1e-6, reason: "境界ちょうど" }],
+  ]);
+  expect(() => assertOverridesAreSound(atCeiling, IDS)).not.toThrow();
+
+  const overCeiling = new Map([
+    ["sci-000019", { rel: 1.000001e-6, reason: "境界のすぐ外" }],
+  ]);
+  expect(() => assertOverridesAreSound(overCeiling, IDS)).toThrow(/rel/);
+});
+
 test("an override whose rel is a string is refused", () => {
   // `overrides.json` は**人が手で書く**ファイルなので、型違いは最も
   // 起こりやすい誤りである。`"2e-9"` は JSON として妥当で、`> 0` の比較も

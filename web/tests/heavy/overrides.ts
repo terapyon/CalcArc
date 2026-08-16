@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Tolerance } from "./corpus";
+import { TOLERANCE_CEILING, type Tolerance } from "./corpus";
 
 /**
  * **緩めた例外を、名指しで、理由を添えて残す場所。**
@@ -110,6 +110,17 @@ export function assertOverridesAreSound(
       complaints.push(
         `${caseId}: rel が ${String(override.rel)} である。` +
           `正の有限値でなければならない。`,
+      );
+    } else if (override.rel > TOLERANCE_CEILING) {
+      // シャードの許容には TOLERANCE_CEILING の正気検査が既にある
+      // (corpus.ts の assertToleranceIsSane)。上書きは reason と有限性しか
+      // 見ていなければ、`rel: 1e-3` にもっともらしい理由を付けるだけで
+      // 全ゲートを通ってしまう——名指しの体裁をした静かな緩和になる。
+      // 同じ上限を上書きにも課す。
+      complaints.push(
+        `${caseId}: rel が ${override.rel} である。上書きも ` +
+          `${TOLERANCE_CEILING.toExponential()}(この層が主張しうる精度の外)より` +
+          "緩くはできない。",
       );
     }
   }
