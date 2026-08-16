@@ -5,6 +5,7 @@ import math
 import mpmath as mp
 import pytest
 
+from calcarc_reference import corpus_eval
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import Bin, Const, Num, Un
 
@@ -89,6 +90,13 @@ def test_inverse_trig_returns_degrees() -> None:
     assert evaluate(Un("asin", Num(1))) == 90
     assert evaluate(Un("acos", Num(1))) == 0
     assert evaluate(Un("atan", Num(0))) == 0
+    # acos(1)==0 と atan(0)==0 はラジアンでも真なので、この 2 つだけでは
+    # 単位を取り違えても気付けない。単位によって値そのものが変わる
+    # ケースを足して、3 つの assert すべてに意味を持たせる。
+    # asin(1/2) は超越関数の丸めが最後の桁に乗るので、他のテストと同じ
+    # 許容誤差付きの比較にする(等値比較にしない)。
+    assert abs(evaluate(Un("asin", Un("recip", Num(2)))) - 30) < mp.mpf("1e-40")
+    assert evaluate(Un("acos", Un("neg", Num(1)))) == 180
 
 
 def test_inverse_trig_needs_an_argument_in_range() -> None:
@@ -142,3 +150,33 @@ def test_an_unknown_function_is_refused_loudly() -> None:
         evaluate(Un("cbrt", Num(8)))
     with pytest.raises(ValueError):
         evaluate(Bin("%", Num(5), Num(2)))
+
+
+def test_a_name_known_but_undispatched_still_refuses_instead_of_falling_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # KNOWN_UNARY_FNS / KNOWN_BINARY_OPS は 4 系統のタプルから組み立てて
+    # いて、後続の段階がタプルへ名前を足していく。**名前だけ足して分岐を
+    # 足し忘れる**、という壊れ方を再現する——分岐の最後が
+    # `getattr(mp, ...)` や素の除算への素通しなら、mpmath がたまたま
+    # 持つ同名関数や無関係な演算に化けて、それらしい値を静かに返して
+    # しまう。ここでは実際に `evaluate` を通して落ちることを確認する
+    # (private のディスパッチ関数を直接叩くのではない)。
+    monkeypatch.setattr(corpus_eval, "KNOWN_UNARY_FNS", corpus_eval.KNOWN_UNARY_FNS | {"cbrt"})
+    with pytest.raises(ValueError, match="no dispatch branch"):
+        evaluate(Un("cbrt", Num(8)))
+
+    monkeypatch.setattr(corpus_eval, "KNOWN_BINARY_OPS", corpus_eval.KNOWN_BINARY_OPS | {"%"})
+    with pytest.raises(ValueError, match="no dispatch branch"):
+        evaluate(Bin("%", Num(5), Num(2)))
+
+
+def test_a_combinatorial_answer_past_the_f64_ceiling_saturates_to_inf() -> None:
+    # R4 (設計書 §3.2) は「float() が OverflowError を出したら捨てる」を
+    # 唯一の判定にしている。**それは Python の int の性質であって、
+    # evaluate が返す値の性質ではない**——ここは正確な int を mpmath に
+    # 変換してから返すので (line 165 相当)、float() は例外を投げず inf に
+    # 飽和する。Task 5 の生成器はこの挙動(inf を弾く)を当てにする前提
+    # なので、その前提をここに留め置く。
+    result = evaluate(Bin("nCr", Num(4000), Num(2000)))
+    assert math.isinf(float(result))

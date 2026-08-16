@@ -51,6 +51,12 @@ def _as_non_negative_integer(value: mp.mpf, what: str) -> int:
     engine は f64 で判定しているが、こちらは Python の整数で持つ。
     同じ判定を写すのではなく、**数学的な定義域**をそのまま書いている。
     """
+    if not mp.isfinite(value):
+        # +inf はここまで通り抜ける——`< 0` は False、`floor(inf) == inf`
+        # で整数判定も通る。`int()` はここで裸の `ValueError` を投げるが、
+        # それは evaluate が「未知の名前」の合図に使っている型と同じなので、
+        # 区別が付かなくなる。ここで OutOfShard として先に止める。
+        raise OutOfShard(f"{what} of a non-finite number")
     if value < 0:
         raise OutOfShard(f"{what} of a negative number")
     if value != mp.floor(value):
@@ -73,7 +79,8 @@ def _power(base: mp.mpf, exponent: mp.mpf) -> mp.mpf:
         if exponent > 0:
             return mp.mpf(0)
         if exponent == 0:
-            # 0^0 = 1。電卓の慣行(設計書 §4.1)。
+            # 0^0 = 1。電卓の慣行
+            # (2026-08-16-scientific-real-functions-design.md §4.1)。
             return mp.mpf(1)
         raise OutOfShard("zero to a negative power")
     if base < 0 and exponent != mp.floor(exponent):
@@ -124,8 +131,15 @@ def evaluate(node: Node) -> mp.mpf:
             # **厳密な整数で計算する。** engine は f64 の反復積なので、
             # 同じ形で書くと同じ誤差が両側に入る(CLAUDE.md)。
             return mp.mpf(math.factorial(_as_non_negative_integer(value, "factorial")))
-        # ここに残るのは sin/cos/tan だけ。角度は度。ラジアンに直してから渡す。
-        return getattr(mp, node.fn)(value * mp.pi / 180)
+        if node.fn in ("sin", "cos", "tan"):
+            # 角度は度。ラジアンに直してから渡す。
+            return getattr(mp, node.fn)(value * mp.pi / 180)
+        # KNOWN_UNARY_FNS に名前はあるのに、ここまでのどの分岐にも
+        # 一致しなかった。四系統のタプルは後続の段階が増やしていくので、
+        # 名前だけ足して分岐を足し忘れると、かつてここが `getattr(mp, ...)`
+        # に素通ししていた形に戻ってしまう——mpmath がたまたま同名の関数を
+        # 持っていれば、無関係な値を静かに返す。最後の網としてここで落ちる。
+        raise ValueError(f"unary fn {node.fn!r} is known but has no dispatch branch")
     if node.op not in KNOWN_BINARY_OPS:
         # 未知の op を通すと、下の節が黙って除算を実行してしまう
         # ——違う演算の名の下にそれらしい数を返す、一番静かな壊れ方。
@@ -149,6 +163,11 @@ def evaluate(node: Node) -> mp.mpf:
         # こちらが同じ手順を踏むと独立性が消える。
         exact = math.perm(n, r) if node.op == "nPr" else math.comb(n, r)
         return mp.mpf(exact)
-    if right == 0:
-        raise OutOfShard("division by zero")
-    return left / right
+    if node.op == "/":
+        if right == 0:
+            raise OutOfShard("division by zero")
+        return left / right
+    # KNOWN_BINARY_OPS に名前はあるのに、ここまでのどの分岐にも一致しな
+    # かった。同上——名前だけ足して分岐を足し忘れると、かつてここが
+    # 黙って除算を実行していた形に戻ってしまう。最後の網としてここで落ちる。
+    raise ValueError(f"binary op {node.op!r} is known but has no dispatch branch")
