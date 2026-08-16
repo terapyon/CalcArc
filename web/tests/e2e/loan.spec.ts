@@ -26,7 +26,10 @@ test.beforeEach(async ({ page }) => {
 test("the nav now carries three tabs and aria-current follows", async ({
   page,
 }) => {
-  await expect(page.getByRole("link")).toHaveCount(3);
+  // **ナビの中だけを数える。** 以前はページ全体のリンクを数えていて、
+  // 0.2.0 でフッタに GitHub へのリンクが付いた瞬間に 4 になった
+  // ——数えたかったのはタブの数である。
+  await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
   await nav(page, "Finance").click();
   await expect(page).toHaveURL(/#finance$/);
   await expect(nav(page, "Finance")).toHaveAttribute("aria-current", "page");
