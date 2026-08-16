@@ -72,3 +72,76 @@ export function resolveTolerance(
   const override = overrides.get(caseId);
   return override === undefined ? base : { abs: base.abs, rel: override.rel };
 }
+
+/**
+ * 上書きが正気であることを、読み込んだ時点で確かめる。
+ *
+ * ここで throw するのは、あとで「なぜか緩い」と気づくより、その場で
+ * 名指しで落ちる方が原因に近いためである。
+ */
+export function assertOverridesAreSound(
+  overrides: Map<string, Override>,
+  knownCaseIds: Set<string>,
+): void {
+  const complaints: string[] = [];
+  for (const [caseId, override] of overrides) {
+    if (!knownCaseIds.has(caseId)) {
+      complaints.push(
+        `${caseId}: このケースはコーパスに無い。` +
+          `コーパスが変わって id が消えても上書きだけが残ると、` +
+          `何を緩めているのか分からなくなる。`,
+      );
+    }
+    if (
+      typeof override.reason !== "string" ||
+      override.reason.trim().length === 0
+    ) {
+      complaints.push(
+        `${caseId}: reason が空である。理由のない上書きは、名指しの体裁を ` +
+          `した静かな緩和である。理由が書けないなら、それは上書きすべき ` +
+          `ケースではなく直すべきバグである。`,
+      );
+    }
+    if (
+      typeof override.rel !== "number" ||
+      !Number.isFinite(override.rel) ||
+      override.rel <= 0
+    ) {
+      complaints.push(
+        `${caseId}: rel が ${String(override.rel)} である。` +
+          `正の有限値でなければならない。`,
+      );
+    }
+  }
+  if (complaints.length > 0) {
+    throw new Error(`overrides:\n${complaints.join("\n")}`);
+  }
+}
+
+/**
+ * **要らなくなった上書きを赤にする。**
+ *
+ * 上書きは放っておくと溜まる。溜まった上書きは、誰も見に行かないまま層の
+ * 主張を削る。「ガードは緑のまま理由が嘘になる」形で腐るので、腐ったら
+ * 赤くする(設計書 §3.4)。
+ *
+ * @param staleIds 上書き**なし**の許容で通ったケースの id
+ */
+export function assertNoStaleOverrides(
+  staleIds: string[],
+  overrides: Map<string, Override>,
+): void {
+  if (staleIds.length === 0) {
+    return;
+  }
+  const lines = staleIds.map((id) => {
+    const reason = overrides.get(id)?.reason ?? "(理由が読めない)";
+    return `  ${id} — 記録されている理由: ${reason}`;
+  });
+  throw new Error(
+    `overrides: 次の上書きは、もう無くてもシャードの rel で通る。\n` +
+      `${lines.join("\n")}\n` +
+      `corpus/overrides.json から消すこと。要らない上書きを残すと、` +
+      `層の主張が理由なく弱いままになる。`,
+  );
+}
