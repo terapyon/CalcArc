@@ -37,7 +37,7 @@ pub fn format_real(x: f64) -> String {
     // 小数点以下の桁数 = 有効数字 10 桁 - 整数部の桁数。
     // 指数が -1 なら 0.ddd… なので 10 桁ぶん小数が要る。
     let decimals = (DISPLAY_DIGITS as i32 - 1 - exponent).max(0) as usize;
-    trim_zeros(&format!("{:.*}", decimals, x))
+    group_integer_part(&trim_zeros(&format!("{:.*}", decimals, x)))
 }
 
 fn trim_zeros(s: &str) -> String {
@@ -45,6 +45,33 @@ fn trim_zeros(s: &str) -> String {
         return s.to_string();
     }
     s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// 整数部だけを 3 桁ごとに区切る。**小数部と指数部には入れない**(設計書 §3.3)。
+///
+/// `data_scale::format::group_digits` と見た目は同じだが共通化しない——あちらは
+/// `u128` の整数で定義域も用途も違い、**同じ見た目のものを 1 つにまとめると
+/// 片方の都合がもう片方に効く**。5 行の処理であり、共有する価値より結合の害が大きい。
+fn group_integer_part(text: &str) -> String {
+    let (sign, rest) = match text.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", text),
+    };
+    let (int_part, frac) = match rest.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (rest, None),
+    };
+    let mut grouped = String::with_capacity(int_part.len() + int_part.len() / 3);
+    for (i, c) in int_part.chars().enumerate() {
+        if i != 0 && (int_part.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    match frac {
+        Some(f) => format!("{sign}{grouped}.{f}"),
+        None => format!("{sign}{grouped}"),
+    }
 }
 
 /// 直交形式で表示する。`3+j4` のように j を数の前に置く。
@@ -136,7 +163,7 @@ mod tests {
         // 丸めると 1e10 に繰り上がる。表記の判断は丸めた後の値で行うので、
         // 11 桁の "10000000000" ではなく "1e10" になる。
         assert_eq!(format_real(9999999999.6), "1e10");
-        assert_eq!(format_real(9999999999.4), "9999999999");
+        assert_eq!(format_real(9999999999.4), "9,999,999,999");
     }
 
     #[test]
@@ -189,5 +216,15 @@ mod tests {
             try_format_polar(Value::new(f64::MAX, f64::MAX), AngleMode::Deg),
             None
         );
+    }
+
+    #[test]
+    fn thousands_separators_group_only_the_integer_part() {
+        assert_eq!(format_real(1234567.0), "1,234,567");
+        assert_eq!(format_real(1234.5678), "1,234.5678"); // 小数部は刻まない
+        assert_eq!(format_real(-1234567.0), "-1,234,567"); // 符号は先頭
+        assert_eq!(format_real(999.0), "999"); // 4 桁未満は変わらない
+        assert_eq!(format_real(1000.0), "1,000"); // 境界の両側
+        assert_eq!(format_real(1.5e12), "1.5e12"); // 指数表記には入らない
     }
 }

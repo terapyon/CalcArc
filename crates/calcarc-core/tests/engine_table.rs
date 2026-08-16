@@ -103,10 +103,10 @@ fn j_after_digits_turns_the_entry_imaginary() {
 fn exp_enters_an_exponent() {
     // 設計書 §2。1.5 Exp 3 = 1500。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "3"]), "1.5e3");
-    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1500");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "eq"]), "1,500");
     // 仮数なしの Exp は仮数 1。表示にも 1 が出る(空の "e3" にはしない)。
     assert_eq!(main_of(&["exp", "3"]), "1e3");
-    assert_eq!(main_of(&["exp", "3", "eq"]), "1000");
+    assert_eq!(main_of(&["exp", "3", "eq"]), "1,000");
     // 連打は無視。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "exp"]), "1.5e");
     // 指数は整数。小数点は無視する。
