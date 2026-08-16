@@ -11,14 +11,16 @@ const shift = (page: Page) =>
 const key = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true });
 
-test("the factorial key is reachable behind the digit 7", async ({ page }) => {
-  // **数字キーの第 2 面はこのリポジトリで初めて**(設計書 §7 の裁定 2)。
+test("the factorial key is reachable behind the opening paren", async ({
+  page,
+}) => {
+  // **数字の裏ではなく括弧の裏**(0.2.0 設計書 §9)。Shift 中も数字は打てる。
   await key(page, "5").click();
   await shift(page).click();
   await key(page, "階乗").click();
   await expect(page.getByTestId("display-main")).toHaveText("120");
-  // ワンショット: 面は戻り、7 は数字に戻っている。
-  await expect(key(page, "7")).toBeEnabled();
+  // ワンショット: 面は戻り、( は括弧に戻っている。
+  await expect(key(page, "開き括弧")).toBeEnabled();
 });
 
 test("nPr and nCr compute through the browser", async ({ page }) => {
@@ -44,27 +46,18 @@ test("combinations bind tighter than multiplication, in the browser", async ({
   await expect(page.getByTestId("display-main")).toHaveText("30");
 });
 
-test("the shifted digits look different, not just read differently", async ({
+test("the digits stay reachable while the second face is up", async ({
   page,
 }) => {
-  // **裁定 2 の発見性そのもの。** 数字キーの上で面が変わったことが色で
-  // 分かるか。jsdom はアクセシビリティツリーも計算スタイルも持たない
+  // **移した理由そのもの。** 以前は Shift 中に 7/8/9 が数え上げの関数に
+  // 化けて、数字が打てなかった。jsdom はアクセシビリティツリーを組まない
   // ので、ここは実ブラウザでしか確かめられない(CLAUDE.md)。
-  const background = (el: HTMLElement) => getComputedStyle(el).backgroundColor;
-  const asDigit = await key(page, "7").evaluate(background);
-
   await shift(page).click();
-  const factorial = key(page, "階乗");
-  await expect(factorial).toBeEnabled();
-  const asFunction = await factorial.evaluate(background);
-
-  // 同じ位置のキーが、面によって違う色で描かれている。
-  expect(asFunction).not.toBe(asDigit);
-
-  // **裏を持たない数字は変わらない**——変わったのが 7/8/9 だけであることを
-  // 押さえないと、「全部の色が変わった」でもこの検査は通ってしまう。
-  const four = await key(page, "4").evaluate(background);
-  expect(four).toBe(asDigit);
+  for (const digit of ["7", "8", "9"]) {
+    await expect(key(page, digit)).toBeEnabled();
+  }
+  // 面はまだ立っている——数字を確かめただけでは降りない。
+  await expect(key(page, "階乗")).toBeEnabled();
 });
 
 test("the counting keys keep their 44px touch targets", async ({ page }) => {

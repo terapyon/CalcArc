@@ -5,16 +5,11 @@
   max-width: var(--shell-max-width);
   margin: 0 auto;
   padding: 12px;
-  /* iOS のホームインジケータを避ける。ScientificPanel の .shell と同形。 */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-}
-
-/* 項目行は 6 列で 1 枠 54px。既定の関数キー文字(0.9375rem)だと「ボーナス」の
-   4 文字が折り返して読めなくなる。**この行だけ**小さくする——Scientific の
-   関数列(同じ half の区画)は短いラベルなので、共通の値を下げると向こうの
-   見た目が理由もなく縮む。区画名で狙い撃つ。 */
-.panel :global(fieldset[aria-label="入力する項目"]) button {
-  font-size: 0.75rem;
+  /* **下端はフッタが持つ**(Footer.module.css)。ホームインジケータを避けるのも
+     あちらの仕事である——0.2.0 でシェルにフッタが入り、パネルは画面の最下端
+     ではなくなった。ここで env(safe-area-inset-bottom) を吸うと二重になり、
+     standalone 起動でだけ下が 44px 伸びる。 */
+  padding-bottom: 12px;
 }
 
 /* モード行も 6 列で 1 枠 54px。「借入可能」「必要積立」「必要年数」の 4 文字
@@ -22,7 +17,9 @@
    している——`white-space` の既定(normal)は改行文字を空白に畳んでしまう
    ので、`pre-line` で改行を活かす。**この行だけ**に当てる(区画名で狙い撃つ。
    上の「入力する項目」と同じ流儀)——他の half 区画(Scientific の関数列や
-   Finance の項目行そのもの)は自動折り返しのままでよい。 */
+   Finance の項目行そのもの)は自動折り返しのままでよい。
+   **行の高さは double である**(0.2.0 設計書 §8)——以前は半高で、この
+   改行がボタンからはみ出していた。 */
 .panel :global(fieldset[aria-label="計算の種類"]) button {
   white-space: pre-line;
 }

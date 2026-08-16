@@ -9,7 +9,6 @@ import { useKeyboard } from "./useKeyboard";
 export function ScientificPanel() {
   const [calc, setCalc] = useState<Calc | null>(null);
   const [step, setStep] = useState<Step | null>(null);
-  const [version, setVersion] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   // press が calc の state を読むと、読み込み完了で press が作り直され、
@@ -26,7 +25,6 @@ export function ScientificPanel() {
         calcRef.current = loaded;
         setCalc(loaded);
         setStep(loaded.initial());
-        setVersion(loaded.version());
       },
       () => {
         // WASM が読めなければ電卓は何もできない。読み込み中の表示のまま
@@ -59,7 +57,7 @@ export function ScientificPanel() {
     );
   }
 
-  if (!calc || !step || version === null) {
+  if (!calc || !step) {
     return <p>Loading…</p>;
   }
 
@@ -67,9 +65,6 @@ export function ScientificPanel() {
     <div className={styles.shell}>
       <Display display={step.display} />
       <Keypad sections={SCIENTIFIC_SECTIONS} onPress={press} />
-      <p className={styles.version} data-testid="core-version">
-        calcarc-core {version}
-      </p>
     </div>
   );
 }

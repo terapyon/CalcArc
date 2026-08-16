@@ -62,9 +62,9 @@ describe("Finance のキー集合", () => {
     expect(pad.keys[4]?.token).toBe("ac");
   });
 
-  it("keeps the mode and field rows half height", () => {
-    expect(section("計算の種類").height).toBe("half");
-    expect(section("入力する項目").height).toBe("half");
+  it("keeps the mode and field rows double height", () => {
+    expect(section("計算の種類").height).toBe("double");
+    expect(section("入力する項目").height).toBe("double");
     // ローン 3 + 複利 1 + 複利の逆算 2 (設計書 §11)。
     expect(section("計算の種類").keys).toHaveLength(6);
     expect(section("計算の種類").columns).toBe(6);

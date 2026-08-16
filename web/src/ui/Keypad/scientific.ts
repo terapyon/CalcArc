@@ -133,30 +133,19 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
   columns: 5,
   height: "square",
   keys: [
-    { token: "lparen", label: "(", ariaLabel: "開き括弧", variant: "function" },
-    { token: "rparen", label: ")", ariaLabel: "閉じ括弧", variant: "function" },
-    {
-      token: "neg",
-      label: "+/−",
-      ariaLabel: "符号を反転",
-      variant: "function",
-    },
-    { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
-    { token: "ac", label: "AC", ariaLabel: "全消去", variant: "danger" },
-
-    // **数字キーに第 2 面が付くのはここが初めてである**(S-3 設計書 §7 の
-    // 裁定 2)。3 つを隣り合わせに置ける場所が他に無い——関数列の裏は
-    // S-1 が意味の対応(√→ln、sin→asin など)で埋めており、そこに割り込むと
-    // 対応が壊れる。
+    // **数え上げの 3 つはここの裏に居る**(0.2.0 設計書 §9)。最初は
+    // 7/8/9 の裏に置いたが、Shift 中に数字が打てなくなるほうが害が
+    // 大きい。括弧と符号は 3 つとも裏が空いていて、隣り合っている。
     //
-    // **第 2 面の variant を "function" にするのは意図的**。数字キーの上で
-    // 面が変わったことが**色で分かる**ようにするためで、裁定 2 の
-    // 「発見性」への答えである。E2E が実ブラウザで背景色を比べている。
+    // **面が変わったことは色ではなくラベルで分かる**。7 の裏に置いた
+    // ときは、数字キーが関数の色に変わることが手がかりだった——数字が
+    // 消えることの埋め合わせである。数字を消すのをやめたので、埋め合わせ
+    // も要らない。
     {
-      token: "7",
-      label: "7",
-      ariaLabel: "7",
-      variant: "digit",
+      token: "lparen",
+      label: "(",
+      ariaLabel: "開き括弧",
+      variant: "function",
       shift: {
         token: "n_fact",
         label: "n!",
@@ -165,10 +154,10 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
       },
     },
     {
-      token: "8",
-      label: "8",
-      ariaLabel: "8",
-      variant: "digit",
+      token: "rparen",
+      label: ")",
+      ariaLabel: "閉じ括弧",
+      variant: "function",
       shift: {
         token: "n_p_r",
         label: "nPr",
@@ -177,10 +166,10 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
       },
     },
     {
-      token: "9",
-      label: "9",
-      ariaLabel: "9",
-      variant: "digit",
+      token: "neg",
+      label: "+/−",
+      ariaLabel: "符号を反転",
+      variant: "function",
       shift: {
         token: "n_c_r",
         label: "nCr",
@@ -188,6 +177,12 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
         variant: "function",
       },
     },
+    { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
+    { token: "ac", label: "AC", ariaLabel: "全消去", variant: "danger" },
+
+    { token: "7", label: "7", ariaLabel: "7", variant: "digit" },
+    { token: "8", label: "8", ariaLabel: "8", variant: "digit" },
+    { token: "9", label: "9", ariaLabel: "9", variant: "digit" },
     { token: "div", label: "÷", ariaLabel: "割る", variant: "operator" },
     { token: "j", label: "j", ariaLabel: "虚数単位", variant: "function" },
 

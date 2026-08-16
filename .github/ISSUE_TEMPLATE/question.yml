@@ -1,0 +1,19 @@
+name: 質問・要望 / Question or request
+description: 使い方の質問、機能の要望、仕様への疑問 / Ask how to use it, request a feature, question a decision
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        数値の扱いと丸めの規則は [docs/numerical-policy.md](https://github.com/terapyon/CalcArc/blob/main/docs/numerical-policy.md) にあります（日本語）。
+        The numerical policy and rounding rules are in [docs/numerical-policy.md](https://github.com/terapyon/CalcArc/blob/main/docs/numerical-policy.md) (Japanese only).
+
+  - type: textarea
+    id: body
+    attributes:
+      label: 内容 / What is it
+      description: |
+        自由に書いてください。計算に関わる話なら、押したキーの順があると早いです。
+        Write freely. If it involves a calculation, the keys you pressed will speed things up.
+    validations:
+      required: true

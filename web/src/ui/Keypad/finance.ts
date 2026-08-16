@@ -73,7 +73,9 @@ export type FinanceField =
 const MODES: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "計算の種類",
   columns: 6,
-  height: "half",
+  // **4 文字ラベルが 2 行になる**(借入可能 / 必要積立 / 必要年数)。半高だと
+  // 2 行がボタンからはみ出す(0.2.0 設計書 §8)。
+  height: "double",
   keys: [
     {
       token: "mode:payment",
@@ -126,7 +128,9 @@ const MODES: KeypadSection<FinanceKeyToken> = {
 const FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  height: "half",
+  // 「ボーナス」の 4 文字。**以前は 0.75rem に縮めて収めていた**が、
+  // 器を広げたので読める大きさに戻した(0.2.0 設計書 §8)。
+  height: "double",
   keys: [
     {
       token: "field:principal",
@@ -178,7 +182,7 @@ const FIELDS: KeypadSection<FinanceKeyToken> = {
 const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  height: "half",
+  height: "double",
   keys: [
     {
       token: "field:principal",

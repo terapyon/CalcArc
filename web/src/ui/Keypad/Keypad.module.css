@@ -27,3 +27,11 @@
   min-height: var(--function-row-height);
   font-size: var(--key-font-size-function);
 }
+
+/* 2 行のラベルを持つ行。**文字は half と同じ**で、器だけを倍にする
+   (0.2.0 設計書 §8)。縮めて収める代わりに広げる、という判断である。 */
+.double > button {
+  height: var(--function-row-height-double);
+  min-height: var(--function-row-height-double);
+  font-size: var(--key-font-size-function);
+}

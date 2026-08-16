@@ -51,14 +51,12 @@ export function Readout({ entries, main, error, status }: ReadoutProps) {
   return (
     <section className={styles.readout}>
       <div className={styles.echo} data-testid="display-echo">
-        {active && (
-          <div
-            className={styles.entryActive}
-            data-testid="display-entry-active"
-          >
-            {text(active)}
-          </div>
-        )}
+        {/* **空でも場所を残す。** 下の入力済みの行と同じ方針である
+            ——打ち始めた瞬間にこの行が生えると、盤面が 22px 下がって
+            指の下でキーが動く。 */}
+        <div className={styles.entryActive} data-testid="display-entry-active">
+          {active ? text(active) : ""}
+        </div>
         {/* **入力済みの行は空でも場所を残す。** 項目を切り替えたときに
             行数が変わると、下にある盤面ごと動いて押す位置がずれる
             (実測 19px)——打っている最中に指の下でキーが動くのは事故になる。 */}

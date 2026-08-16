@@ -27,15 +27,17 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
   }
 });
 
-test("the mode and field rows are half height but wide enough", async ({
-  page,
-}) => {
+test("the mode and field rows now clear 44px, both ways", async ({ page }) => {
+  // **この検査は主張が反転した。** 以前は「半高であること」(`< 44px`)を
+  // 守っていた——4 文字ラベルを 0.75rem に縮めて 34px に収めていた頃の話で
+  // ある。0.2.0 で器を倍にしたので(設計書 §8)、この 2 行は **44px を割る
+  // 例外ではなくなった**。縦を戻す変更が入ったらここで気づける。
   for (const name of ["計算の種類", "入力する項目"]) {
     const row = panel(page).getByRole("group", { name });
     for (const button of await row.getByRole("button").all()) {
       const box = await button.boundingBox();
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-      expect(box?.height ?? 0).toBeLessThan(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
   }
 });

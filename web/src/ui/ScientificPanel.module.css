@@ -5,13 +5,9 @@
   max-width: var(--shell-max-width);
   margin: 0 auto;
   padding: 12px;
-  /* iOS のホームインジケータを避ける。 */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-}
-
-.version {
-  margin: 0;
-  color: var(--display-status-fg);
-  font-size: var(--display-size-status);
-  text-align: center;
+  /* **下端はフッタが持つ**(Footer.module.css)。ホームインジケータを避けるのも
+     あちらの仕事である——0.2.0 でシェルにフッタが入り、パネルは画面の最下端
+     ではなくなった。ここで env(safe-area-inset-bottom) を吸うと二重になり、
+     standalone 起動でだけ下が 44px 伸びる。 */
+  padding-bottom: 12px;
 }

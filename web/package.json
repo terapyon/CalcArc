@@ -1,7 +1,7 @@
 {
   "name": "calcarc-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
@@ -18,7 +18,9 @@
     "heavy:ui": "pnpm wasm && playwright test --config playwright.heavy-ui.config.ts",
     "heavy:power": "node scripts/detection-power.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "check:sw": "node scripts/check-sw.mjs"
+    "ogp": "node scripts/generate-ogp.mjs",
+    "check:sw": "node scripts/check-sw.mjs",
+    "check:version": "node scripts/check-version.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

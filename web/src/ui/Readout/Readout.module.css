@@ -9,19 +9,39 @@
   font-family: var(--display-font);
 }
 
-/* 入力の一覧。行の場所は入力が無くても確保する(設計書 §5)。 */
+/* 入力の一覧。行の場所は入力が無くても確保する(設計書 §5)。
+ *
+ * **高さの下限を「打っている行 1 行 + 入力済み 2 行」で固定する**
+ * (0.2.0 設計書 §6)。入力・確定のたびにここが伸び縮みすると、下にある
+ * 盤面ごと動いて押す位置がずれる。
+ *
+ * **全パネルで同じ値**にする。パネルごとに詰めるとタブを切り替えるたびに
+ * 盤面の位置が変わり、直そうとしているのと同じ不快さが別の形で出る。
+ *
+ * **height ではなく min-height。** これを超える内容が来たときだけ伸びる
+ * ——「表示できないときだけずれを許容する」という指定である。 */
 .echo {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 1.2em;
+  min-height: calc(
+    1.2 *
+    var(--key-font-size) +
+    2px +
+    2 *
+    1.2 *
+    var(--display-size-status)
+  );
   text-align: right;
 }
 
 /* いま打っている項目。**入力の主表示**なので大きく濃く出す(設計書 §2)
-   ——Finance と Data Scale では、打った数字はここにしか出ない。 */
+   ——Finance と Data Scale では、打った数字はここにしか出ない。
+   **空でも 1 行ぶんの場所を残す**(0.2.0 設計書 §6)。 */
 .entryActive {
   overflow-x: auto;
+  min-height: 1.2em;
+  line-height: 1.2;
   font-size: var(--key-font-size);
   white-space: nowrap;
 }
@@ -53,8 +73,15 @@
   letter-spacing: 0.08em;
 }
 
+/* 答えの表示。**空でも 1 行ぶんの場所を残す**(0.2.0 設計書 §6)。
+   Scientific は常に "0" などが入るので気づかないが、**Finance は答えが
+   出るまで空**で、計算が走った瞬間に 0px から 1 行ぶん伸びて盤面ごと
+   押し下げていた(実測 45px)。line-height を固定するのは、既定のままだと
+   空と非空で数 px 違うため——.entriesDone が同じ理由で同じことをしている。 */
 .main {
   overflow-x: auto;
+  min-height: 1.2em;
+  line-height: 1.2;
   font-size: var(--display-size-main);
   text-align: right;
   white-space: nowrap;
