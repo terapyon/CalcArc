@@ -8,6 +8,7 @@ import {
   classify,
   countInjectedTokens,
   loadShards,
+  needsPrecedence,
   partitionCases,
   quantiles,
   type Shard,
@@ -570,6 +571,9 @@ for (const { name, shard, values } of partitions) {
 
     // **expect より先に記録する。** 落ちたときこそレポートが要るのに、
     // 先に expect を書くとそこで打ち切られてレポートが空になる。
+    const precedenceCases = values.filter((c) =>
+      needsPrecedence(c.keys),
+    ).length;
     record({
       name: `${name} (values)`,
       total: values.length,
@@ -584,6 +588,7 @@ for (const { name, shard, values } of partitions) {
       relMeasured: into.relMeasured,
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
+      precedenceCases,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       shape: summarizeShape(values.map((c) => c.keys)),
@@ -661,6 +666,14 @@ for (const { name, shard, equivalences } of partitions) {
     }
 
     // **expect より先に記録する。** 理由は値ケース側と同じ。
+    //
+    // 左右のキー列を合わせて 1 件として数える——同値ケースは 1 件が左右
+    // 二本のキー列を持つので、どちらか一方でも優先順位が無ければ解釈できない
+    // なら、そのケースは「優先順位を踏んだ」でよい。左右を別々に数えて
+    // 足すと 1 件が 2 件に化ける。
+    const precedenceCases = equivalences.filter(
+      (c) => needsPrecedence(c.left) || needsPrecedence(c.right),
+    ).length;
     record({
       name: `${name} (equivalences)`,
       total: equivalences.length,
@@ -680,6 +693,7 @@ for (const { name, shard, equivalences } of partitions) {
       relMeasured: into.relMeasured,
       relUndefinedNonZeroAbs: into.relUndefinedNonZeroAbs,
       looserThanDisplay: into.looserThanDisplay,
+      precedenceCases,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、

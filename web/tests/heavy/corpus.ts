@@ -499,6 +499,57 @@ export interface Quantiles {
   max: number;
 }
 
+/**
+ * 二項演算子の優先順位。**判定には使わない——報告のためだけの目盛りである。**
+ *
+ * 正は `crates/calcarc-core/src/engine/state.rs` で、Add|Sub = 1、Mul|Div = 2。
+ * ここが間違っていても合否は動かず、報告の件数がずれるだけである(合否を決めるのは
+ * コーパスの期待値と `withinTolerance` で、この表は一切関与しない)。
+ */
+const BINARY_PRECEDENCE: Record<string, number> = {
+  add: 1,
+  sub: 1,
+  mul: 2,
+  div: 2,
+};
+
+/**
+ * **このキー列は、優先順位が無ければ正しく解釈できないか。**
+ *
+ * 判定は「同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上現れるか」。
+ * 現れれば、engine は括弧ではなく優先順位で構造を決めたことになる。
+ *
+ * レポートの「まだ踏んでいない領域」をこの関数から導く。手書きの否定は、次に
+ * 領域が埋まったとき黙って嘘になる(設計書 §3.4)。
+ */
+export function needsPrecedence(keys: string[]): boolean {
+  const atDepth = new Map<number, Set<number>>();
+  let depth = 0;
+  for (const key of keys) {
+    if (key === "lparen") {
+      depth += 1;
+      continue;
+    }
+    if (key === "rparen") {
+      depth -= 1;
+      continue;
+    }
+    const precedence = BINARY_PRECEDENCE[key];
+    if (precedence === undefined) {
+      continue;
+    }
+    const seen = atDepth.get(depth) ?? new Set<number>();
+    seen.add(precedence);
+    atDepth.set(depth, seen);
+  }
+  for (const seen of atDepth.values()) {
+    if (seen.size >= 2) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** 大きさの分位。最近傍順位法——補間しないので、必ず実在の観測値が出る。 */
 export function quantiles(values: number[]): Quantiles {
   if (values.length === 0) {

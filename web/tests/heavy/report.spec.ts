@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { ToleranceBand } from "./corpus";
+import { needsPrecedence } from "./corpus";
 import { type Provenance, renderReport, type ShardSummary } from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
@@ -39,6 +40,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     relMeasured: 2000,
     relUndefinedNonZeroAbs: 0,
     looserThanDisplay: 0,
+    precedenceCases: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -538,4 +540,35 @@ test("an empty run refuses to render as a green-looking report", () => {
   // 「総ケース数 0 / 不一致 0」は緑に見える。一件も回っていないことと、
   // 全件通ったことが同じ見た目になってはならない(修正ラウンド 2)。
   expect(() => renderReport([], PROVENANCE)).toThrow(/no shard/);
+});
+
+test("a sequence with two precedence levels at one depth needs precedence", () => {
+  // 1 + 2 × 3。深さ 0 に優先順位 1 と 2 が並ぶ。
+  expect(needsPrecedence(["1", "add", "2", "mul", "3", "eq"])).toBe(true);
+});
+
+test("parentheses separate the levels, so precedence is not needed", () => {
+  // (1 + 2) × 3。add は深さ 1、mul は深さ 0。
+  expect(
+    needsPrecedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]),
+  ).toBe(false);
+});
+
+test("one operator alone never needs precedence", () => {
+  expect(needsPrecedence(["1", "add", "2", "eq"])).toBe(false);
+});
+
+test("the report says how many cases exercised precedence", () => {
+  const markdown = renderReport(
+    [summary({ precedenceCases: 1500 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("1500");
+  // 踏んだことを書いても、結合方向は踏んでいないと言い続ける。
+  expect(markdown).toContain("結合方向");
+});
+
+test("zero precedence cases reads as never touched", () => {
+  const markdown = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
+  expect(markdown).toContain("一度も踏んでいない");
 });
