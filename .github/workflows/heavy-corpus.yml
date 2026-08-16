@@ -55,6 +55,19 @@ jobs:
         run: uv run pytest tests/test_corpus_reproducibility.py -q
         working-directory: reference
 
+      - name: Measure what this corpus can detect
+        # **「不一致 0 件」の意味を決める段である。** engine に既知の壊れ方を
+        # 一時的に入れ、何件が赤くなるかを数える。**赤くならないことを期待した
+        # 変異も含む**——レポートが「この領域は踏んでいない」と書いているなら、
+        # その主張はここで確かめられている。
+        #
+        # 変異はコミットされない(測ったあと原文に戻し、バイト一致を確かめる)。
+        # この段の結果が次の段のレポートに載る。
+        run: pnpm heavy:power
+        working-directory: web
+        env:
+          CI: "1"
+
       - name: Run the heavy corpus
         # CI=1 で wasm を作り直し、プレビューも立て直す
         # (前の走行のサーバを掴んだまま「緑」にしない)。

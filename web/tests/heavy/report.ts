@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
 import type {
@@ -407,6 +407,85 @@ export function verdictOf(
  * 判定と一緒に件数を出すのは、**試していない領域に「正しい」と書かないため**で
  * ある。判定だけを並べると、`検証していない` が他の 3 段と同じ重さに見える。
  */
+/**
+ * `pnpm heavy:power` の測定結果を読む。**無ければ `null`。**
+ *
+ * 無いときに黙って節を省くと、「測ったが 0 件だった」と「測っていない」が
+ * 同じ見た目になる。`renderDetectionPower` は `null` でもその旨の節を出す。
+ */
+function readDetectionPower(): DetectionPower | null {
+  const path = join(dirname(SUMMARY_DIR), "detection-power.json");
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as DetectionPower;
+  } catch {
+    return null;
+  }
+}
+
+/** `pnpm heavy:power` が書く測定結果。無ければ節ごと出さない。 */
+export interface DetectionPower {
+  results: {
+    id: string;
+    what: string;
+    expect: string;
+    caught: Record<string, number>;
+    total: number;
+    ok: boolean;
+    why: string;
+  }[];
+}
+
+/**
+ * **「不一致 0 件」の意味を決める節である。**
+ *
+ * 0 件は、それだけでは「見つからなかった」しか言っていない。壊れたものを
+ * 実際に入れて何件が赤くなるかを測って初めて、**「これだけの壊れ方を検出
+ * できる網で 0 件だった」**と言える。
+ *
+ * **赤くならないことを期待した変異も載せる。** レポートが「この領域は
+ * 踏んでいない」と書いているなら、その主張はこの表で確かめられている。
+ */
+export function renderDetectionPower(power: DetectionPower | null): string[] {
+  if (power === null || power.results.length === 0) {
+    return [
+      "",
+      "## この検査は壊れたものを見つけられるのか",
+      "",
+      "**測っていない。** `pnpm heavy:power` を走らせると、engine に既知の",
+      "壊れ方を一時的に入れて何件が赤くなるかを測り、ここに表が出る。",
+      "**それが無い限り、上の「不一致 0 件」は「見つからなかった」以上のことを",
+      "言っていない。**",
+    ];
+  }
+  const rows = power.results.map((r) => {
+    const where =
+      Object.keys(r.caught).length === 0
+        ? "—"
+        : Object.entries(r.caught)
+            .map(([shard, n]) => `${shard.replace(/\.json$/, "")}: ${n}`)
+            .join("<br>");
+    return `| ${r.what} | ${where} | **${r.total}** | ${r.ok ? "期待どおり" : "**期待と違う**"} |`;
+  });
+  return [
+    "",
+    "## この検査は壊れたものを見つけられるのか",
+    "",
+    "**engine に既知の壊れ方を一時的に入れて、何件が赤くなるかを測った。**",
+    "変異はコミットされない——測ったあと原文に戻し、バイト単位で一致を確かめている。",
+    "",
+    "| 入れた壊れ方 | 赤くなったシャード | 件数 | 判定 |",
+    "|---|---|---:|---|",
+    ...rows,
+    "",
+    "**件数が 0 の行は失敗ではない。** 「その領域はこのコーパスが踏んでいない」と",
+    "レポートが書いているなら、**0 であることがその主張の裏付け**である。",
+    "0 でなければ、レポートのほうが間違っていたことになる。",
+    "",
+    "**この表があって初めて、上の「不一致 0 件」に意味がある**——",
+    "「何も見つからなかった」ではなく、**「これだけの壊れ方を検出できる網で 0 件だった」**。",
+  ];
+}
+
 export function renderVerdicts(entries: ShardSummary[]): string[] {
   const rows = AREAS.map((area) => {
     const own = entries.filter((entry) => areaOfShard(entry.name) === area);
@@ -538,6 +617,7 @@ export function renderReport(
     "# 重量級コーパスの実行結果",
     "",
     ...renderVerdicts(entries),
+    ...renderDetectionPower(readDetectionPower()),
     "",
     `- **二経路で照合したケース(値): ${valueCases}** ` +
       "— Rust の計算コアと Python の mpmath が独立に同じ数に着くことを確かめた件数",

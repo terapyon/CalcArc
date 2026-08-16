@@ -13,3 +13,6 @@ __pycache__/
 test-results/
 playwright-report/
 .superpowers/
+
+# 検出力の測定結果。pnpm heavy:power が毎回書き直す。
+web/detection-power.json

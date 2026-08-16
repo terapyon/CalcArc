@@ -9,6 +9,7 @@ import {
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
   type Provenance,
+  renderDetectionPower,
   renderReport,
   type ShardSummary,
   summaryName,
@@ -951,6 +952,69 @@ test("the injected-token share is derived from the same counts the table renders
   );
   expect(markdown).not.toContain("2122");
   expect(markdown).not.toContain("74.2%");
+});
+
+test("without a detection-power measurement, the report says so plainly", () => {
+  // **「測ったが 0 件」と「測っていない」を同じ見た目にしない。**
+  // 黙って節を省くと、読み手は「不一致 0 件」を額面どおり受け取る。
+  const markdown = renderDetectionPower(null).join("\n");
+  expect(markdown).toContain("測っていない");
+  expect(markdown).toContain("heavy:power");
+});
+
+test("a mutation that was expected to be caught, and was, reads as such", () => {
+  const markdown = renderDetectionPower({
+    results: [
+      {
+        id: "x",
+        what: "優先順位を潰す",
+        expect: "precedence only",
+        caught: { "precedence-000.json": 1099 },
+        total: 1099,
+        ok: true,
+        why: "括弧を省いたシャードだけが反応した",
+      },
+    ],
+  }).join("\n");
+  expect(markdown).toContain("1099");
+  expect(markdown).toContain("期待どおり");
+});
+
+test("a mutation nothing caught is shown as a zero, not hidden", () => {
+  // **0 件の行こそ載せる価値がある。** それが「この領域は踏んでいない」と
+  // いう主張の裏付けだからである。省くと主張が裏付けを失う。
+  const markdown = renderDetectionPower({
+    results: [
+      {
+        id: "assoc",
+        what: "結合方向を反転する",
+        expect: "nothing",
+        caught: {},
+        total: 0,
+        ok: true,
+        why: "赤くならなかった",
+      },
+    ],
+  }).join("\n");
+  expect(markdown).toContain("結合方向を反転する");
+  expect(markdown).toContain("**0**");
+});
+
+test("a mutation that came out against expectation is called out", () => {
+  const markdown = renderDetectionPower({
+    results: [
+      {
+        id: "assoc",
+        what: "結合方向を反転する",
+        expect: "nothing",
+        caught: { "scientific-000.json": 5 },
+        total: 5,
+        ok: false,
+        why: "赤くなった。レポートの「踏んでいない」が嘘である",
+      },
+    ],
+  }).join("\n");
+  expect(markdown).toContain("**期待と違う**");
 });
 
 test("an area with no cases is never called correct", () => {
