@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { ToleranceBand } from "./corpus";
-import { needsPrecedence } from "./corpus";
+import { loadShards, needsPrecedence, partitionCases } from "./corpus";
 import { type Provenance, renderReport, type ShardSummary } from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
@@ -556,6 +556,33 @@ test("parentheses separate the levels, so precedence is not needed", () => {
 
 test("one operator alone never needs precedence", () => {
   expect(needsPrecedence(["1", "add", "2", "eq"])).toBe(false);
+});
+
+test("operators in different parenthesis groups at the same depth do not need precedence", () => {
+  // **Regression for the depth-based bug (fix round 1).** `div` and `sub` in
+  // `377 - ((553 / 982) / (189 - 996))` both sit at bracket depth 3, but in two
+  // *different* groups — `(553 / 982)` and `(189 - 996)`. A depth-only rule
+  // wrongly called this "needs precedence" (191 false positives measured on
+  // `scientific-000.json` alone). Pull the key sequence verbatim from the real
+  // shard on disk rather than hand-authoring it, so this test tracks the actual
+  // case that exposed the bug rather than a stand-in for it.
+  const scientific = loadShards().find(
+    ({ name }) => name === "scientific-000.json",
+  );
+  if (scientific === undefined) {
+    throw new Error("scientific-000.json is not present in corpus/generated/");
+  }
+  const { values } = partitionCases(scientific.name, scientific.shard.cases);
+  const sci000025 = values.find((c) => c.id === "sci-000025");
+  if (sci000025 === undefined) {
+    throw new Error(
+      "sci-000025 is not present in scientific-000.json — this test needs " +
+        "that exact case (or an equivalent regression fixture) to guard the " +
+        "same-depth-different-group bug",
+    );
+  }
+  expect(sci000025.expr).toBe("(377 - ((553 / 982) / (189 - 996)))");
+  expect(needsPrecedence(sci000025.keys)).toBe(false);
 });
 
 test("the report says how many cases exercised precedence", () => {

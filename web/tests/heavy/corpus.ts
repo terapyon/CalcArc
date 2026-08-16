@@ -516,38 +516,50 @@ const BINARY_PRECEDENCE: Record<string, number> = {
 /**
  * **このキー列は、優先順位が無ければ正しく解釈できないか。**
  *
- * 判定は「同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上現れるか」。
+ * 判定は「同じ括弧の**組**の中に、優先順位の異なる二項演算子が 2 つ以上現れるか」。
  * 現れれば、engine は括弧ではなく優先順位で構造を決めたことになる。
+ *
+ * **「組」であって「深さ」ではない。** 初版はここを「同じ括弧の深さ」で判定していたが、
+ * それは誤りだった——深さが同じでも別々の括弧の中なら、その 2 つの演算子は同じ式に
+ * 並んでいない。実測した反例(`scientific-000.json` の `sci-000025`、
+ * `377 - ((553 / 982) / (189 - 996))`):`div` と `sub` はどちらも深さ 3 だが、
+ * `(553/982)` と `(189-996)` という**別の組**である。構造は括弧が完全に決めており、
+ * 優先順位は一切要らない。深さで数えると、全二項を括弧で囲んでいる既存シャードから
+ * 311 件の偽陽性が出た(`scientific` 191 件 + `equivalence` 4000 キー列中 120 件)。
+ * 組で数えるとどちらも 0 件になる(設計書 §3.4)。
+ *
+ * 実装は `lparen` で新しい組をスタックに push し、`rparen` で pop して確定させる。
+ * 二項演算子は**そのとき開いている組**(スタックの先頭)に足す。トップレベル
+ * (どの括弧の外)も 1 つの組として扱う——`1 add 2 mul 3 eq` のように、そもそも
+ * 括弧が無いキー列も判定できなければならない。
  *
  * レポートの「まだ踏んでいない領域」をこの関数から導く。手書きの否定は、次に
  * 領域が埋まったとき黙って嘘になる(設計書 §3.4)。
  */
 export function needsPrecedence(keys: string[]): boolean {
-  const atDepth = new Map<number, Set<number>>();
-  let depth = 0;
+  const stack: Set<number>[] = [new Set<number>()];
+  const closedGroups: Set<number>[] = [];
   for (const key of keys) {
     if (key === "lparen") {
-      depth += 1;
+      stack.push(new Set<number>());
       continue;
     }
     if (key === "rparen") {
-      depth -= 1;
+      const group = stack.pop();
+      if (group !== undefined) {
+        closedGroups.push(group);
+      }
       continue;
     }
     const precedence = BINARY_PRECEDENCE[key];
     if (precedence === undefined) {
       continue;
     }
-    const seen = atDepth.get(depth) ?? new Set<number>();
-    seen.add(precedence);
-    atDepth.set(depth, seen);
+    stack[stack.length - 1]?.add(precedence);
   }
-  for (const seen of atDepth.values()) {
-    if (seen.size >= 2) {
-      return true;
-    }
-  }
-  return false;
+  // 閉じ損なった組(トップレベルを含む)も見る——正しく閉じているキー列では
+  // トップレベルの組だけが残る。
+  return [...closedGroups, ...stack].some((group) => group.size >= 2);
 }
 
 /** 大きさの分位。最近傍順位法——補間しないので、必ず実在の観測値が出る。 */

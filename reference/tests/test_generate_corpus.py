@@ -1,6 +1,7 @@
 """生成器。**同じ種から常に同じコーパスが出ること**が最重要である。"""
 
 import importlib.util
+import json
 import pathlib
 import random
 import sys
@@ -16,6 +17,8 @@ assert _SPEC is not None and _SPEC.loader is not None
 generate_corpus = importlib.util.module_from_spec(_SPEC)
 sys.modules["generate_corpus"] = generate_corpus
 _SPEC.loader.exec_module(generate_corpus)
+
+_CORPUS_GENERATED = pathlib.Path(__file__).resolve().parents[2] / "corpus" / "generated"
 
 
 def test_the_same_seed_gives_the_same_shard() -> None:
@@ -150,25 +153,38 @@ def test_the_square_root_round_trip_is_the_only_form_that_needs_a_non_negative()
 
 
 def _needs_precedence(keys: list[str]) -> bool:
-    """同じ括弧の深さに、優先順位の異なる二項演算子が 2 つ以上あるか。
+    """同じ括弧の**組**の中に、優先順位の異なる二項演算子が 2 つ以上あるか。
 
     **括弧が省かれたことの観測可能な痕跡である。** 省くのは子の優先順位が親より
-    真に大きいときだけなので、省いた結果は必ず「同じ深さに異なる優先順位」になる。
+    真に大きいときだけなので、省いた結果は必ず「同じ組に異なる優先順位」になる。
     単項の子は決して省かないので、この判定に漏れは無い。
+
+    **「組」であって「深さ」ではない。** 初版は「同じ括弧の深さ」で判定していたが、
+    それは誤りだった——深さが同じでも別々の括弧の中なら、その 2 つの演算子は
+    同じ式に並んでいない。実測した反例(`scientific-000.json` の `sci-000025`、
+    `377 - ((553 / 982) / (189 - 996))`):`div` と `sub` はどちらも深さ 3 だが、
+    `(553/982)` と `(189-996)` という**別の組**である。構造は括弧が完全に決めており、
+    優先順位は一切要らない。深さで数えると、全二項を括弧で囲んでいる既存シャードから
+    311 件の偽陽性が出た(`scientific` 191 件 + `equivalence` 4000 キー列中 120 件)。
+    組で数えるとどちらも 0 件になる(設計書 §3.4)。TypeScript の双子
+    (`web/tests/heavy/corpus.ts` の `needsPrecedence`)も同じ理由で同じ形に直した。
+
+    実装は `lparen` で新しい組をスタックに push し、`rparen` で pop して確定させる。
+    トップレベル(どの括弧の外)も 1 つの組として扱う。
     """
     from calcarc_reference.corpus_expr import BINARY_KEYS, BINARY_PRECEDENCE
 
     key_precedence = {BINARY_KEYS[op]: precedence for op, precedence in BINARY_PRECEDENCE.items()}
-    at_depth: dict[int, set[int]] = {}
-    depth = 0
+    stack: list[set[int]] = [set()]
+    closed_groups: list[set[int]] = []
     for key in keys:
         if key == "lparen":
-            depth += 1
+            stack.append(set())
         elif key == "rparen":
-            depth -= 1
+            closed_groups.append(stack.pop())
         elif key in key_precedence:
-            at_depth.setdefault(depth, set()).add(key_precedence[key])
-    return any(len(seen) >= 2 for seen in at_depth.values())
+            stack[-1].add(key_precedence[key])
+    return any(len(group) >= 2 for group in (*closed_groups, *stack))
 
 
 def test_every_precedence_case_actually_drops_a_parenthesis() -> None:
@@ -187,6 +203,19 @@ def test_the_helper_itself_distinguishes_the_two_forms() -> None:
     assert _needs_precedence(["1", "add", "2", "mul", "3", "eq"]) is True
     assert _needs_precedence(["lparen", "1", "add", "2", "rparen", "mul", "3", "eq"]) is False
     assert _needs_precedence(["1", "add", "2", "eq"]) is False
+
+
+def test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need_precedence() -> None:
+    # **Regression for the depth-based bug (fix round 1).** `div` と `sub` は
+    # `377 - ((553 / 982) / (189 - 996))` でどちらも括弧の深さ 3 にあるが、
+    # `(553 / 982)` と `(189 - 996)` という**別の組**である。深さだけで判定すると
+    # ここが誤って真になり、`scientific-000.json` 単体で 191 件の偽陽性を出した。
+    # 手で作らず、コミット済みの実シャードから該当ケースを読んで確かめる。
+    with (_CORPUS_GENERATED / "scientific-000.json").open(encoding="utf-8") as f:
+        shard = json.load(f)
+    case = next(c for c in shard["cases"] if c["id"] == "sci-000025")
+    assert case["expr"] == "(377 - ((553 / 982) / (189 - 996)))"
+    assert _needs_precedence(case["keys"]) is False
 
 
 def test_the_precedence_shard_is_deterministic() -> None:
