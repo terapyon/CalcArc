@@ -95,6 +95,17 @@ def build_scientific() -> dict:
                 "expect": scientific_ref.sqrt_real(x),
             }
         )
+    for name, x, mode in cases.REAL_FN_INPUTS:
+        fn = getattr(scientific_ref, name)
+        entries.append(
+            {
+                "id": f"{name}/{mode}/{x}",
+                "op": name,
+                "mode": mode,
+                "input": {"x": x},
+                "expect": fn(x, mode),
+            }
+        )
     return _envelope(entries)
 
 

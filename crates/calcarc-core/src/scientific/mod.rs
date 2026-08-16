@@ -81,6 +81,61 @@ fn is_tan_pole(v: Value, mode: AngleMode) -> bool {
     a >= 90.0 && (a - 90.0) % 180.0 == 0.0
 }
 
+/// 自然対数。定義域は `x > 0`（設計書 §3）。
+pub fn ln(v: Value) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    if x <= 0.0 {
+        return Err(CalcError::DomainError);
+    }
+    Value::real(x.ln()).finalize()
+}
+
+/// 常用対数。定義域は `x > 0`。
+pub fn log10(v: Value) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    if x <= 0.0 {
+        return Err(CalcError::DomainError);
+    }
+    Value::real(x.log10()).finalize()
+}
+
+/// e の x 乗。
+///
+/// **`Key::Exp`（指数入力 EE）とは別物である。** 名前が紛らわしいので、
+/// この関数もキーのトークンも `exp_e` で通す（設計書 §3）。
+/// 定義域は全実数で、落ちるのは結果が f64 を溢れたときだけ。
+pub fn exp_e(v: Value) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    Value::real(x.exp()).finalize()
+}
+
+/// 逆正弦。定義域は `−1 ≤ x ≤ 1`。
+///
+/// **返す角度は `AngleMode` に従う。** `sin` などが `AngleMode` で引数を
+/// 解釈しているのと対称である（設計書 §3）。
+pub fn asin(v: Value, mode: AngleMode) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    if !(-1.0..=1.0).contains(&x) {
+        return Err(CalcError::DomainError);
+    }
+    Value::real(mode.angle_of(x.asin())).finalize()
+}
+
+/// 逆余弦。定義域は `−1 ≤ x ≤ 1`。
+pub fn acos(v: Value, mode: AngleMode) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    if !(-1.0..=1.0).contains(&x) {
+        return Err(CalcError::DomainError);
+    }
+    Value::real(mode.angle_of(x.acos())).finalize()
+}
+
+/// 逆正接。定義域は全実数。
+pub fn atan(v: Value, mode: AngleMode) -> CalcResult<Value> {
+    let x = real_arg(v)?;
+    Value::real(mode.angle_of(x.atan())).finalize()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +213,67 @@ mod tests {
         );
         // 極でない値は通る。
         assert!(tan(Value::real(89.0), AngleMode::Deg).is_ok());
+    }
+
+    #[test]
+    fn natural_log_of_e_is_one() {
+        close(ln(Value::real(std::f64::consts::E)).unwrap().re, 1.0);
+    }
+
+    #[test]
+    fn natural_log_is_undefined_at_zero_and_below() {
+        assert_eq!(ln(Value::real(0.0)), Err(CalcError::DomainError));
+        assert_eq!(ln(Value::real(-1.0)), Err(CalcError::DomainError));
+    }
+
+    #[test]
+    fn common_log_of_a_power_of_ten() {
+        close(log10(Value::real(1000.0)).unwrap().re, 3.0);
+        assert_eq!(log10(Value::real(0.0)), Err(CalcError::DomainError));
+    }
+
+    #[test]
+    fn exp_e_is_the_inverse_of_ln() {
+        close(exp_e(Value::real(1.0)).unwrap().re, std::f64::consts::E);
+        // 定義域は全実数。落ちるのは溢れたときだけ（設計書 §3）。
+        assert_eq!(exp_e(Value::real(1e5)), Err(CalcError::Overflow));
+    }
+
+    #[test]
+    fn inverse_trig_returns_the_angle_in_the_current_mode() {
+        close(asin(Value::real(0.5), AngleMode::Deg).unwrap().re, 30.0);
+        close(acos(Value::real(0.5), AngleMode::Deg).unwrap().re, 60.0);
+        close(atan(Value::real(1.0), AngleMode::Deg).unwrap().re, 45.0);
+        close(asin(Value::real(1.0), AngleMode::Rad).unwrap().re, PI / 2.0);
+    }
+
+    #[test]
+    fn inverse_sine_and_cosine_are_bounded_by_one() {
+        assert_eq!(
+            asin(Value::real(1.0000001), AngleMode::Deg),
+            Err(CalcError::DomainError)
+        );
+        assert_eq!(
+            acos(Value::real(-1.0000001), AngleMode::Deg),
+            Err(CalcError::DomainError)
+        );
+        // 境界そのものは定義域の中。
+        assert!(asin(Value::real(1.0), AngleMode::Deg).is_ok());
+        assert!(acos(Value::real(-1.0), AngleMode::Deg).is_ok());
+        // atan は全実数。
+        assert!(atan(Value::real(1e300), AngleMode::Deg).is_ok());
+    }
+
+    #[test]
+    fn the_new_functions_reject_complex_arguments() {
+        // 裁定 4: 実部だけ使う案は黙って別の計算をするので採らない。
+        let z = Value::new(3.0, 4.0);
+        assert_eq!(ln(z), Err(CalcError::DomainError));
+        assert_eq!(log10(z), Err(CalcError::DomainError));
+        assert_eq!(exp_e(z), Err(CalcError::DomainError));
+        assert_eq!(asin(z, AngleMode::Deg), Err(CalcError::DomainError));
+        assert_eq!(acos(z, AngleMode::Deg), Err(CalcError::DomainError));
+        assert_eq!(atan(z, AngleMode::Deg), Err(CalcError::DomainError));
     }
 
     #[test]

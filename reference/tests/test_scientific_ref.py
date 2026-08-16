@@ -1,6 +1,14 @@
 import math
 
-from calcarc_reference.scientific_ref import cos, sin, sqrt_real, tan
+from calcarc_reference.scientific_ref import (
+    asin,
+    cos,
+    exp_e,
+    ln,
+    sin,
+    sqrt_real,
+    tan,
+)
 
 
 def test_sine_in_degrees() -> None:
@@ -28,3 +36,18 @@ def test_square_root_of_a_negative_leaves_the_reals() -> None:
     # 写すのではなく、mpmath が mpc を返したことを定義域の外の判定に使う。
     assert sqrt_real(-4.0) == {"error": "DomainError"}
     assert sqrt_real(4.0) == {"re": 2.0, "im": 0.0}
+
+
+def test_ln_is_undefined_at_zero_and_below() -> None:
+    assert ln(0.0, "Deg") == {"error": "DomainError"}
+    assert ln(-1.0, "Deg") == {"error": "DomainError"}
+
+
+def test_inverse_sine_is_bounded_by_one() -> None:
+    assert asin(1.0000001, "Deg") == {"error": "DomainError"}
+    assert math.isclose(asin(1.0, "Deg")["re"], 90.0, abs_tol=1e-13)
+
+
+def test_exp_overflows_rather_than_leaving_the_domain() -> None:
+    # e^x は全実数で定義されている。f64 に入らないだけ（設計書 §3）。
+    assert exp_e(710.0, "Deg") == {"error": "Overflow"}

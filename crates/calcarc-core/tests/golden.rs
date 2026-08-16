@@ -198,6 +198,12 @@ fn scientific_functions_match_the_reference() {
             "cos" => scientific::cos(x, mode),
             "tan" => scientific::tan(x, mode),
             "sqrt" => scientific::sqrt(x),
+            "ln" => scientific::ln(x),
+            "log10" => scientific::log10(x),
+            "exp_e" => scientific::exp_e(x),
+            "asin" => scientific::asin(x, mode),
+            "acos" => scientific::acos(x, mode),
+            "atan" => scientific::atan(x, mode),
             other => panic!("{}: unknown op {other}", case.id),
         };
 

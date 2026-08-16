@@ -74,6 +74,54 @@ UNARY_INPUTS: list[tuple[str, float, str]] = [
 # sqrt の入力（実数のみ）
 SQRT_INPUTS: list[float] = [0.0, 1.0, 4.0, 2.0, 0.25, -4.0, -1.0, 1e-8, 1e8]
 
+# S-1 で足した実数の関数（設計書 §3）。**定義域の境界を必須で含める**（§8）。
+# 戻り値が dict なので UNARY_INPUTS とは別のループが読む。
+REAL_FN_INPUTS: list[tuple[str, float, str]] = [
+    # 自然対数: 既知値 / 境界 0 / 定義域の外 / 極大・極小
+    ("ln", 1.0, "Deg"),
+    ("ln", 2.718281828459045, "Deg"),
+    ("ln", 2.0, "Deg"),
+    ("ln", 0.5, "Deg"),
+    ("ln", 0.0, "Deg"),
+    ("ln", -1.0, "Deg"),
+    ("ln", 1e-300, "Deg"),
+    ("ln", 1e300, "Deg"),
+    # 常用対数
+    ("log10", 1.0, "Deg"),
+    ("log10", 100.0, "Deg"),
+    ("log10", 0.001, "Deg"),
+    ("log10", 2.0, "Deg"),
+    ("log10", 0.0, "Deg"),
+    ("log10", -1.0, "Deg"),
+    # e^x: 全実数。溢れる側の境界も置く(709.78 あたりが f64 の限界)
+    ("exp_e", 0.0, "Deg"),
+    ("exp_e", 1.0, "Deg"),
+    ("exp_e", -1.0, "Deg"),
+    ("exp_e", 2.0, "Deg"),
+    ("exp_e", 709.0, "Deg"),
+    ("exp_e", 710.0, "Deg"),
+    ("exp_e", -745.0, "Deg"),
+    # 逆三角: 両モード / 定義域の境界ちょうど / その外側
+    ("asin", 0.0, "Deg"),
+    ("asin", 0.5, "Deg"),
+    ("asin", 1.0, "Deg"),
+    ("asin", -1.0, "Deg"),
+    ("asin", 1.0000001, "Deg"),
+    ("asin", -1.0000001, "Deg"),
+    ("asin", 0.5, "Rad"),
+    ("acos", 0.0, "Deg"),
+    ("acos", 0.5, "Deg"),
+    ("acos", 1.0, "Deg"),
+    ("acos", -1.0, "Deg"),
+    ("acos", 1.0000001, "Deg"),
+    ("acos", 0.5, "Rad"),
+    ("atan", 0.0, "Deg"),
+    ("atan", 1.0, "Deg"),
+    ("atan", -1.0, "Deg"),
+    ("atan", 1e300, "Deg"),
+    ("atan", 1.0, "Rad"),
+]
+
 # ((a_re, a_im), (b_re, b_im))。各ペアに 4 演算すべてを生成する。
 # 設計基準は spec §2: Smith 法の両分岐、単体テストの極端値、四象限・軸上、
 # 成分比の偏り。結果が inf/nan になるペアは入れない(generate.py が
