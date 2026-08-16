@@ -69,9 +69,14 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
  *
  * ENG 以外は**予約スロット**である。S-1(実数の関数)と S-4(60 進)が埋める。
  * 格子の形を崩さないために置く——Finance の周期・税の面と同じ形。
+ *
+ * 区画名は 1 段目「関数キー」を**含まない**名前にする。Playwright の
+ * `getByRole` は部分一致なので、「関数キー 2 段目」のような名前だと
+ * `{ name: "関数キー" }` に当たってしまい、1 要素を期待する将来の E2E
+ * locator が strict-mode エラーで詰まる(書いた本人には理由が見えない)。
  */
 const FUNCTIONS_SECOND: KeypadSection<KeyToken> = {
-  ariaLabel: "関数キー 2 段目",
+  ariaLabel: "第 2 関数列",
   columns: 7,
   height: "half",
   keys: [

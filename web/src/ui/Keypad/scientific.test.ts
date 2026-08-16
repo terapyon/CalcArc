@@ -81,7 +81,7 @@ describe("Scientific のキー集合", () => {
   it("puts ENG on the first face, not behind Shift", () => {
     // 「押しやすくしたい」(ユーザー)——Shift の裏では要件を満たさない。
     const second = SCIENTIFIC_SECTIONS.find(
-      (s) => s.ariaLabel === "関数キー 2 段目",
+      (s) => s.ariaLabel === "第 2 関数列",
     );
     expect(second?.columns).toBe(7);
     expect(second?.height).toBe("half");
@@ -97,5 +97,17 @@ describe("Scientific のキー集合", () => {
     );
     expect(pad?.columns).toBe(5);
     expect(pad?.keys).toHaveLength(25);
+  });
+
+  it("does not let one section name match another", () => {
+    // Playwright の getByRole は**部分一致**である。区画名が他の区画名の
+    // 部分文字列になっていると、1 要素を期待する locator が strict-mode で
+    // 落ちる——しかも書いた人には理由が見えない。
+    const names = SCIENTIFIC_SECTIONS.map((s) => s.ariaLabel);
+    for (const a of names) {
+      for (const b of names) {
+        if (a !== b) expect(b.includes(a)).toBe(false);
+      }
+    }
   });
 });
