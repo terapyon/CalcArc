@@ -20,12 +20,14 @@ export function Footer() {
       >
         CalcArc {__APP_VERSION__} @terapyon
       </a>
-      {/* **Finance の画面内免責とは役割が違う**(0.2.0 設計書 §5)。あちらは
+      {/* **1 行に収める**——2 行だと Finance が 390×844 に 3px 収まらなかった
+          (実測)。文言は縮めず、フォントを落として収める(ユーザー裁定)。
+          **Finance の画面内免責とは役割が違う**(0.2.0 設計書 §5)。あちらは
           ローンの数字が決定的概算であること、こちらはツール全体が無保証で
           あること。両方残す。 */}
-      <p className={styles.disclaimer} data-testid="footer-disclaimer">
-        計算結果は無保証です。重要な判断の根拠にしないでください。
-      </p>
+      <span className={styles.disclaimer} data-testid="footer-disclaimer">
+        ・計算結果は無保証です。重要な判断の根拠にしないでください。
+      </span>
     </footer>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import styles from "./ui/App.module.css";
 import { DataScalePanel } from "./ui/DataScale/DataScalePanel";
 import { FinancePanel } from "./ui/Finance/FinancePanel";
 import { Footer } from "./ui/Footer/Footer";
@@ -36,14 +37,16 @@ export function App() {
 
   return (
     <>
-      <Nav current={module} />
-      <main>
-        {module === "scientific" && <ScientificPanel />}
-        {module === "data-scale" && <DataScalePanel />}
-        {module === "finance" && <FinancePanel />}
-      </main>
-      {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}
-      <Footer />
+      <div className={styles.shell}>
+        <Nav current={module} />
+        <main className={styles.main}>
+          {module === "scientific" && <ScientificPanel />}
+          {module === "data-scale" && <DataScalePanel />}
+          {module === "finance" && <FinancePanel />}
+        </main>
+        {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}
+        <Footer />
+      </div>
       {/* 更新の知らせはモジュールに属さない。シェルが 1 つだけ持つ。 */}
       <UpdateToast />
     </>
