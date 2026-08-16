@@ -33,6 +33,8 @@ pub enum Key {
     AngleToggle,
     /// 工学表記(ENG)のトグル。表示の切り替えであって計算ではない(設計書 §4)。
     EngToggle,
+    /// xʸ。二項演算子であって後置関数ではない(S-1 設計書 §3.1)。
+    Pow,
 }
 
 impl Key {
@@ -72,6 +74,7 @@ impl Key {
             "del" => Key::Del,
             "angle_toggle" => Key::AngleToggle,
             "eng" => Key::EngToggle,
+            "pow" => Key::Pow,
             _ => return None,
         })
     }
@@ -112,6 +115,7 @@ impl Key {
             Key::Del => "del",
             Key::AngleToggle => "angle_toggle",
             Key::EngToggle => "eng",
+            Key::Pow => "pow",
         }
     }
 }
@@ -122,7 +126,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 33] = [
+    pub const ALL: [Key; 34] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -156,6 +160,7 @@ impl Key {
         Key::Del,
         Key::AngleToggle,
         Key::EngToggle,
+        Key::Pow,
     ];
 }
 

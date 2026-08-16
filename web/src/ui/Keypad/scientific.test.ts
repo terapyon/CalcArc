@@ -90,8 +90,17 @@ describe("Scientific のキー集合", () => {
     // "every" は空配列でも真になり、予約スロットを消しても緑のまま
     // 通ってしまう(§7.3 が予約スロットを置く理由が守られない)。
     expect(second?.keys).toHaveLength(7);
-    // 残りは予約スロット。S-1 と S-4 が埋める。
-    expect(second?.keys.slice(1).every((k) => k.token === null)).toBe(true);
+    // 2 段目の並びは設計書 §7 の確定盤面。予約は S-1 の単項（1〜4）と
+    // S-4 の `°'"`（7 番目）。
+    expect(second?.keys.map((k) => k.token)).toEqual([
+      "eng",
+      null,
+      null,
+      null,
+      null,
+      "pow",
+      null,
+    ]);
   });
 
   it("does not move the main grid", () => {

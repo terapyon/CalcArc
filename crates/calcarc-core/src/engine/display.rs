@@ -177,6 +177,7 @@ fn op_symbol(op: BinOp) -> &'static str {
         BinOp::Sub => "−",
         BinOp::Mul => "×",
         BinOp::Div => "÷",
+        BinOp::Pow => "^",
     }
 }
 

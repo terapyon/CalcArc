@@ -86,12 +86,21 @@ const FUNCTIONS_SECOND: KeypadSection<KeyToken> = {
       ariaLabel: "工学表記に切り替え",
       variant: "function",
     },
-    ...Array.from({ length: 6 }, () => ({
+    // 1〜4 番目は S-1 の単項が埋める（同ブランチの後続タスク）。
+    ...Array.from({ length: 4 }, () => ({
       token: null,
       label: "—",
       ariaLabel: "空き",
       variant: "function" as const,
     })),
+    { token: "pow", label: "xʸ", ariaLabel: "べき乗", variant: "function" },
+    // 7 番目は S-4 の `°'"` が埋める。
+    {
+      token: null,
+      label: "—",
+      ariaLabel: "空き",
+      variant: "function" as const,
+    },
   ],
 };
 

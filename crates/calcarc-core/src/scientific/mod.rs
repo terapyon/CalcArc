@@ -136,6 +136,39 @@ pub fn atan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     Value::real(mode.angle_of(x.atan())).finalize()
 }
 
+/// x の y 乗。**二項演算子であって後置関数ではない**（設計書 §3.1）。
+///
+/// 実数の範囲で答が一意に決まるものは返し、そうでないものは `DomainError` に
+/// する。判定を `f64::powf` に任せない——`powf` は `(-8)^(1/3)` を NaN に
+/// するが `(-2)^3` は −8 を返すので、**どちらが定義域の外なのかを powf は
+/// 区別していない**。判定を先に書き、通ったものにだけ powf を使う。
+pub fn pow(base: Value, exponent: Value) -> CalcResult<Value> {
+    let x = real_arg(base)?;
+    let y = real_arg(exponent)?;
+    if !y.is_finite() {
+        return Err(CalcError::DomainError);
+    }
+    if x == 0.0 {
+        return match y.partial_cmp(&0.0) {
+            // 0^0 = 1。電卓の慣行に従う（設計書 §4.1）。
+            Some(std::cmp::Ordering::Equal) => Ok(Value::real(1.0)),
+            Some(std::cmp::Ordering::Greater) => Ok(Value::ZERO),
+            // 0^(負) は 0 除算だが、設計書 §4 の表は DomainError と定める。
+            _ => Err(CalcError::DomainError),
+        };
+    }
+    if x < 0.0 && y.fract() != 0.0 {
+        // 複素数になる（裁定 1）。
+        return Err(CalcError::DomainError);
+    }
+    let r = x.powf(y);
+    if r.is_nan() {
+        // 判定漏れを黙って通さないための最後の網。
+        return Err(CalcError::DomainError);
+    }
+    Value::real(r).finalize()
+}
+
 /// 逆数。**`x = 0` は `DomainError` ではなく `DivisionByZero`**（設計書 §3.0）。
 ///
 /// `DomainError` は「その値には定義が無い」を言うために新設した名前で、
@@ -274,6 +307,70 @@ mod tests {
         assert!(acos(Value::real(-1.0), AngleMode::Deg).is_ok());
         // atan は全実数。
         assert!(atan(Value::real(1e300), AngleMode::Deg).is_ok());
+    }
+
+    #[test]
+    fn power_of_a_positive_base() {
+        close(pow(Value::real(2.0), Value::real(10.0)).unwrap().re, 1024.0);
+        close(
+            pow(Value::real(2.0), Value::real(0.5)).unwrap().re,
+            2.0_f64.sqrt(),
+        );
+        close(pow(Value::real(2.0), Value::real(-1.0)).unwrap().re, 0.5);
+    }
+
+    #[test]
+    fn zero_to_the_zero_is_one() {
+        // 数学的には不定形だが、電卓は 1 を返すのが慣行である（設計書 §4.1）。
+        // DomainError にすると x^0 の一様性が x = 0 でだけ崩れ、利用者には
+        // 理由が見えない。
+        assert_eq!(
+            pow(Value::real(0.0), Value::real(0.0)).unwrap(),
+            Value::real(1.0)
+        );
+    }
+
+    #[test]
+    fn zero_to_a_positive_power_is_zero_and_to_a_negative_one_is_undefined() {
+        assert_eq!(
+            pow(Value::real(0.0), Value::real(3.0)).unwrap(),
+            Value::ZERO
+        );
+        assert_eq!(
+            pow(Value::real(0.0), Value::real(-1.0)),
+            Err(CalcError::DomainError)
+        );
+    }
+
+    #[test]
+    fn a_negative_base_needs_an_integer_exponent() {
+        // (-2)^3 は実数で一意。これをエラーにすると普段やる計算が落ちる。
+        close(pow(Value::real(-2.0), Value::real(3.0)).unwrap().re, -8.0);
+        close(pow(Value::real(-2.0), Value::real(2.0)).unwrap().re, 4.0);
+        // 非整数の指数は複素数になる（裁定 1）。
+        assert_eq!(
+            pow(Value::real(-2.0), Value::real(0.5)),
+            Err(CalcError::DomainError)
+        );
+        assert_eq!(
+            pow(Value::real(-8.0), Value::real(1.0 / 3.0)),
+            Err(CalcError::DomainError)
+        );
+    }
+
+    #[test]
+    fn power_rejects_complex_operands() {
+        let z = Value::new(3.0, 4.0);
+        assert_eq!(pow(z, Value::real(2.0)), Err(CalcError::DomainError));
+        assert_eq!(pow(Value::real(2.0), z), Err(CalcError::DomainError));
+    }
+
+    #[test]
+    fn power_overflows_rather_than_returning_infinity() {
+        assert_eq!(
+            pow(Value::real(10.0), Value::real(400.0)),
+            Err(CalcError::Overflow)
+        );
     }
 
     #[test]

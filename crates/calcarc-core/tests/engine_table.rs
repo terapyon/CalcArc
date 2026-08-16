@@ -240,6 +240,40 @@ fn same_precedence_operators_fold_from_the_left_in_the_answer() {
 }
 
 #[test]
+fn the_power_operator_folds_from_the_right() {
+    // 数学の慣行（S-1 設計書 §3.1 の裁定 3）。左結合なら (2^3)^2 = 64 になる。
+    assert_eq!(main_of(&["2", "pow", "3", "pow", "2", "eq"]), "512");
+}
+
+#[test]
+fn the_power_operator_binds_tighter_than_multiplication() {
+    // 2 × 3² = 18。優先順位 4（S-1 設計書 §3.1）。
+    assert_eq!(main_of(&["2", "mul", "3", "pow", "2", "eq"]), "18");
+    assert_eq!(main_of(&["2", "pow", "3", "mul", "2", "eq"]), "16");
+}
+
+#[test]
+fn the_power_operator_takes_a_negative_base_with_an_integer_exponent() {
+    // (-2)^3 = -8 は実数で一意（S-1 設計書 §4）。
+    assert_eq!(main_of(&["2", "neg", "pow", "3", "eq"]), "-8");
+    // 非整数の指数は複素数になるので落とす。
+    assert_eq!(
+        main_of(&["2", "neg", "pow", "0", "dot", "5", "eq"]),
+        "Math ERROR"
+    );
+}
+
+#[test]
+fn zero_to_the_zero_is_one_on_the_keypad() {
+    assert_eq!(main_of(&["0", "pow", "0", "eq"]), "1");
+}
+
+#[test]
+fn the_echo_shows_the_power_operator() {
+    assert_eq!(echo_of(&["2", "pow"]), "2 ^");
+}
+
+#[test]
 fn subtracts_and_divides() {
     assert_eq!(main_of(&["1", "0", "sub", "4", "eq"]), "6");
     assert_eq!(main_of(&["7", "div", "2", "eq"]), "3.5");
@@ -497,6 +531,10 @@ fn every_error_kind_reaches_the_display() {
         Some(CalcError::DivisionByZero)
     );
     assert_eq!(run(&["9", "0", "tan"]).error, Some(CalcError::TrigPole));
+    assert_eq!(
+        run(&["4", "neg", "sqrt"]).error,
+        Some(CalcError::DomainError)
+    );
     assert_eq!(run(&["rparen"]).error, Some(CalcError::SyntaxError));
     let mut keys = vec!["9"];
     keys.extend(std::iter::repeat_n("sqr", 10));

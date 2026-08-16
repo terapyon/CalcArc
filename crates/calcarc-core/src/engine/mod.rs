@@ -45,7 +45,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         // `del_returns_to_the_pending_operator`）。
         next.operator_pending = next.error.is_none()
             && match key {
-                Key::Add | Key::Sub | Key::Mul | Key::Div => true,
+                Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Pow => true,
                 // 値を確定させるキーは、その場を演算子の直後ではなくす。
                 Key::Eq
                 | Key::RParen
@@ -88,6 +88,7 @@ fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
         BinOp::Sub => lhs.checked_sub(rhs),
         BinOp::Mul => lhs.checked_mul(rhs),
         BinOp::Div => lhs.checked_div(rhs),
+        BinOp::Pow => scientific::pow(lhs, rhs),
     }
 }
 
@@ -138,9 +139,14 @@ fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
     state.operands.push(state.current);
     // `state.operators.last()` の借用を while の条件式で終わらせてから
     // `reduce_top(&mut state)` を呼ぶ。matches! の中に閉じ込めるのがその手段。
+    //
+    // **`>=` ではない。** 同順位のときに畳むかどうかを結合方向が決める
+    // ——左結合なら畳み（`10 − 3 − 2` は `(10−3)−2`）、右結合なら積む
+    // （`2 xʸ 3 xʸ 2` は `2^(3^2)`）。S-1 設計書 §3.1。
     while matches!(
         state.operators.last(),
-        Some(OpToken::Op(top)) if top.precedence() >= op.precedence()
+        Some(OpToken::Op(top)) if top.precedence() > op.precedence()
+            || (top.precedence() == op.precedence() && !op.is_right_associative())
     ) {
         reduce_top(state)?;
     }
@@ -278,6 +284,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Sub => push_binop(state, BinOp::Sub)?,
         Key::Mul => push_binop(state, BinOp::Mul)?,
         Key::Div => push_binop(state, BinOp::Div)?,
+        Key::Pow => push_binop(state, BinOp::Pow)?,
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
