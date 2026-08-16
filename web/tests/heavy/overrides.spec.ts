@@ -44,17 +44,40 @@ test("an override replaces rel and leaves abs alone", () => {
 });
 
 const IDS = new Set(["sci-000019", "sci-001332"]);
+const EQUIVALENCE_IDS = new Set(["equiv-000001"]);
 
 test("an override without a reason is refused", () => {
   const overrides = new Map([["sci-000019", { rel: 2e-9, reason: "  " }]]);
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/reason/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/reason/);
 });
 
-test("an override pointing at a case that does not exist is refused", () => {
+test("an override pointing at a case that does not exist anywhere is refused, and says so", () => {
   const overrides = new Map([
     ["sci-999999", { rel: 2e-9, reason: "存在しないケースを指している" }],
   ]);
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/sci-999999/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/sci-999999.*コーパスに無い/);
+});
+
+test("an override pointing at an equivalence case is refused, but not told it is missing", () => {
+  // その id はコーパスに実在する——同値ケースとして。値ケースではないだけ
+  // である。「このケースはコーパスに無い」と言うのは事実に反する
+  // (allCaseIds が値ケースだけに絞られている経緯は corpus.spec.ts を見よ)。
+  const overrides = new Map([
+    ["equiv-000001", { rel: 2e-9, reason: "同値ケースを指している" }],
+  ]);
+  let message = "";
+  try {
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS);
+  } catch (cause) {
+    message = String(cause);
+  }
+  expect(message).toContain("equiv-000001");
+  expect(message).not.toContain("コーパスに無い");
+  expect(message).toContain("値ケース");
 });
 
 test("an override that is not looser than nothing is refused", () => {
@@ -63,7 +86,9 @@ test("an override that is not looser than nothing is refused", () => {
   const overrides = new Map([
     ["sci-000019", { rel: 0, reason: "何も通らない値" }],
   ]);
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/rel/);
 });
 
 test("an override looser than the sanity ceiling is refused", () => {
@@ -79,8 +104,12 @@ test("an override looser than the sanity ceiling is refused", () => {
       { rel: 1e-3, reason: "もっともらしいが緩すぎる理由をつけてみる" },
     ],
   ]);
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/1e-6/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/rel/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/1e-6/);
 });
 
 test("an override exactly at the sanity ceiling is fine, one past it is refused", () => {
@@ -91,12 +120,16 @@ test("an override exactly at the sanity ceiling is fine, one past it is refused"
   const atCeiling = new Map([
     ["sci-000019", { rel: 1e-6, reason: "境界ちょうど" }],
   ]);
-  expect(() => assertOverridesAreSound(atCeiling, IDS)).not.toThrow();
+  expect(() =>
+    assertOverridesAreSound(atCeiling, IDS, EQUIVALENCE_IDS),
+  ).not.toThrow();
 
   const overCeiling = new Map([
     ["sci-000019", { rel: 1.000001e-6, reason: "境界のすぐ外" }],
   ]);
-  expect(() => assertOverridesAreSound(overCeiling, IDS)).toThrow(/rel/);
+  expect(() =>
+    assertOverridesAreSound(overCeiling, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/rel/);
 });
 
 test("an override whose rel is a string is refused", () => {
@@ -107,7 +140,9 @@ test("an override whose rel is a string is refused", () => {
   const overrides = new Map([
     ["sci-000019", { rel: "2e-9", reason: "型が違う" }],
   ]) as unknown as Map<string, { rel: number; reason: string }>;
-  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).toThrow(/rel/);
 });
 
 test("every complaint is reported, not just the first", () => {
@@ -118,7 +153,7 @@ test("every complaint is reported, not just the first", () => {
   ]) as unknown as Map<string, { rel: number; reason: string }>;
   let message = "";
   try {
-    assertOverridesAreSound(overrides, IDS);
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS);
   } catch (cause) {
     message = String(cause);
   }
@@ -138,7 +173,9 @@ test("a sound override passes", () => {
       },
     ],
   ]);
-  expect(() => assertOverridesAreSound(overrides, IDS)).not.toThrow();
+  expect(() =>
+    assertOverridesAreSound(overrides, IDS, EQUIVALENCE_IDS),
+  ).not.toThrow();
 });
 
 test("an override whose case now passes without it is refused", () => {

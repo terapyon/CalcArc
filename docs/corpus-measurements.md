@@ -2,6 +2,36 @@
 
 設計書 `2026-08-15-heavy-corpus-e2e-design.md` §6.3 / §11 の未知を実測した記録。
 
+## 許容判定を相対誤差だけに締め直した結果（2026-08-16 実測、Task 5）
+
+設計書 `2026-08-16-corpus-tolerance-design.md` の実装後、`cd web && pnpm heavy` が
+書き出した `web/heavy-report.md` からそのまま写す（予想や見積りではない）。
+
+- **表示分解能より緩く検査されたケース**: 1315 → **2**（全 4000 件中 0.1%。以前は
+  32.9%）
+- **最悪の実効相対許容**: 4.15e-4 → **2.00e-9**
+- **名指しで緩めたケース（上書き）**: 2 件
+  - `scientific-000.json (values)` **sci-000019** — rel 1.00e-9（シャードの
+    5.00e-10 の **2 倍**）。巨大角度の三角関数
+    `tan(rad(376 × 788²))`（角度 233,474,944 度）。観測された相対誤差
+    7.65e-10
+  - `scientific-000.json (values)` **sci-001332** — rel 2.00e-9（シャードの
+    5.00e-10 の **4 倍**）。巨大角度の三角関数
+    `cos(rad((815×412)×(747+422)))`（角度 392,526,820 度）。観測された相対誤差
+    1.34e-9
+  - 理由の全文は `corpus/overrides.json` と `web/heavy-report.md` の
+    「名指しで緩めたケース」節にある
+- **観測された最大相対誤差**: 1.34e-9（上と同じ `sci-001332`。上書き後の rel
+  2.00e-9 の内側）
+- **観測された最大絶対誤差**: 4.36e-2
+- **判定ロジックは変えたが、コーパス自身は 1 バイトも変わっていない。**
+  `{abs: 5e-10, rel: 5e-10}` という値は生成時のままで、変わったのは判定側の
+  解釈（`abs` が OR の片側から「期待値が厳密に 0 のときの専用経路」に
+  格下げされたこと）だけである。再生成一致ゲート
+  （`reference/tests/test_corpus_reproducibility.py`）は無変更のまま緑だった。
+  経緯は `docs/superpowers/specs/2026-08-16-corpus-tolerance-design.md` §5 の
+  訂正を見よ。
+
 ## 表示書式（2026-08-15 実測）
 
 `cd web && pnpm exec playwright test --config playwright.heavy.config.ts tests/heavy/measure.spec.ts`

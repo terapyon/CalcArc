@@ -62,7 +62,13 @@ const overrides = loadOverrides();
 const allCaseIds = new Set(
   partitions.flatMap(({ values }) => values.map((c) => c.id)),
 );
-assertOverridesAreSound(overrides, allCaseIds);
+// 「id が同値ケースとして存在するのに『コーパスに無い』と言われる」誤りを
+// 避けるため、同値ケースの id 集合も別に渡す(assertOverridesAreSound が
+// 二つの拒否理由を区別する)。
+const equivalenceCaseIds = new Set(
+  partitions.flatMap(({ equivalences }) => equivalences.map((c) => c.id)),
+);
+assertOverridesAreSound(overrides, allCaseIds, equivalenceCaseIds);
 
 test("withinTolerance judges by relative error alone", () => {
   // ここのリテラルは withinTolerance 自身の入力であって、コーパスの許容ではない。
@@ -136,9 +142,17 @@ test("an override pointing at an equivalence case is refused, not silently accep
       { rel: 2e-9, reason: "同値ケースを指す上書き(受理されてはならない)" },
     ],
   ]);
-  expect(() => assertOverridesAreSound(bogus, allCaseIds)).toThrow(
-    new RegExp(equivalenceId),
-  );
+  let message = "";
+  try {
+    assertOverridesAreSound(bogus, allCaseIds, equivalenceCaseIds);
+  } catch (cause) {
+    message = String(cause);
+  }
+  expect(message).toContain(equivalenceId);
+  // この id は実在する——同値ケースとして。「コーパスに無い」は事実誤認
+  // なので言ってはならない。「値ケースにしか効かない」が正しい理由である。
+  expect(message).not.toContain("コーパスに無い");
+  expect(message).toContain("値ケース");
 });
 
 test("the half that is checked against an outside reference is still here", () => {

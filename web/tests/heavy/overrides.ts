@@ -81,16 +81,30 @@ export function resolveTolerance(
  */
 export function assertOverridesAreSound(
   overrides: Map<string, Override>,
-  knownCaseIds: Set<string>,
+  valueCaseIds: Set<string>,
+  equivalenceCaseIds: Set<string>,
 ): void {
   const complaints: string[] = [];
   for (const [caseId, override] of overrides) {
-    if (!knownCaseIds.has(caseId)) {
-      complaints.push(
-        `${caseId}: このケースはコーパスに無い。` +
-          `コーパスが変わって id が消えても上書きだけが残ると、` +
-          `何を緩めているのか分からなくなる。`,
-      );
+    if (!valueCaseIds.has(caseId)) {
+      if (equivalenceCaseIds.has(caseId)) {
+        // id はコーパスに実在する——同値ケースとして。値ケースではないだけ
+        // である。「このケースはコーパスに無い」は事実に反する: 探しても
+        // 見つからない、という誤った印象を読み手に与える。上書きが値ケース
+        // にしか効かない理由は、同値ケースが期待値を持たず、「どこまで
+        // 緩めるか」の基準が無いことにある(比較ループのコメントを見よ)。
+        complaints.push(
+          `${caseId}: このケースは同値ケースとして存在する。上書きは値` +
+            `ケースにしか効かない——同値ケースは期待値を持たないので、` +
+            `どこまで緩めるかの基準が無い。`,
+        );
+      } else {
+        complaints.push(
+          `${caseId}: このケースはコーパスに無い。` +
+            `コーパスが変わって id が消えても上書きだけが残ると、` +
+            `何を緩めているのか分からなくなる。`,
+        );
+      }
     }
     if (
       typeof override.reason !== "string" ||
