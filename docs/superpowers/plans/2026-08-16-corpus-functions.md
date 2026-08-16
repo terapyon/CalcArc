@@ -1248,7 +1248,8 @@ Expected: FAIL — `FileNotFoundError`。
 - [ ] **Step 3: 生成器を足す**
 
 `reference/scripts/generate_corpus.py` の import に `COMBINATORICS_BINS` /
-`COMBINATORICS_FNS` を足し、`build_inverse_trig_shard` の後ろに追加:
+`COMBINATORICS_FNS` を足し（**`import math` も要る**——溢れの判定に `math.isinf` を使う）、
+`build_inverse_trig_shard` の後ろに追加:
 
 ```python
 # 組合せ論の葉の上限。**`C(1022,511) ≈ 2.2e305` を含める必要がある**——
@@ -1293,12 +1294,15 @@ def build_combinatorics_shard(seed: int, count: int) -> dict:
         except OutOfShard as exc:
             rejections[_classify_out_of_shard(str(exc))] += 1
             continue
-        try:
-            landed = float(value)
-        except OverflowError:
-            rejections["overflow"] += 1
-            continue
-        if landed in (float("inf"), float("-inf")):
+        # **mpmath は溢れても例外を投げず `inf` に飽和する。** 実測:
+        #   float(math.factorial(1000))         -> OverflowError
+        #   float(mp.mpf(math.factorial(1000))) -> inf   (例外なし)
+        # 設計書 R4 は「`float()` が `OverflowError` を出さないこと」と
+        # 書いているが、それは Python の**整数**の性質であって、
+        # `evaluate` が返す mpf には当てはまらない。**判定は `inf` で行う。**
+        # (Task 2 のレビューが見つけた。`test_corpus_eval.py` がこの前提を固定している。)
+        landed = float(value)
+        if math.isinf(landed):
             rejections["overflow"] += 1
             continue
         expr = to_expr_text(node)
