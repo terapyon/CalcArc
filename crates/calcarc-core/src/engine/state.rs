@@ -7,9 +7,11 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 最初から持たせておく（設計書 §4.4）。
 /// 4: `Buffer` に指数部が入った(設計書 §2)。直列化の形が変わったので上げた。
 /// 5: `EngineState` に `notation`(ENG トグル)が入った(設計書 §4)。
+/// 6: `Buffer` に 60 進の段が、`EngineState` に 60 進表示の一時状態が
+///    入った(S-4 設計書 §3.2)。**3 つ目の入力モード**である。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 5;
+pub const STATE_SCHEMA: u32 = 6;
 
 /// 入力欄に打ち込める最大文字数。
 const MAX_ENTRY_LEN: usize = 12;
@@ -118,6 +120,13 @@ pub struct Buffer {
     pub imaginary: bool,
     /// `Exp` を押してから確定するまでの指数部(設計書 §2)。
     pub exponent: Option<Exponent>,
+    /// 60 進で**確定した段**(S-4 設計書 §3)。`digits` が今打っている段である。
+    /// `1 °'" 30 °'"` なら `["1", "30"]` で `digits` は空。
+    ///
+    /// **最大 2 つ**——度・分・秒の 3 段なので、確定するのは 2 つまで。
+    /// **指数とは排他**である(下の `push_sexagesimal_separator` を見ること)。
+    #[serde(default)]
+    pub sexagesimal: Vec<String>,
 }
 
 /// `backspace` が何を消したか。
@@ -144,6 +153,28 @@ impl Buffer {
     /// **打鍵の途中ではなく、値になる瞬間に返す**——`1e30` を打つ途中に
     /// `1e3` を経由するのと同じで、途中経過をエラーにはしない。
     pub fn value(&self) -> CalcResult<Value> {
+        // 60 進は段を畳む。`1 °'" 30 °'"` は秒を省いた形で 1.5(設計書 §3)。
+        if !self.sexagesimal.is_empty() {
+            let mut total = 0.0_f64;
+            let mut scale = 1.0_f64;
+            for stage in self.sexagesimal.iter().chain(std::iter::once(&self.digits)) {
+                let n: f64 = if stage.is_empty() {
+                    0.0
+                } else {
+                    stage.parse().map_err(|_| CalcError::SyntaxError)?
+                };
+                total += n / scale;
+                scale *= 60.0;
+            }
+            if !total.is_finite() {
+                return Err(CalcError::Overflow);
+            }
+            return Ok(if self.imaginary {
+                Value::imag(total)
+            } else {
+                Value::real(total)
+            });
+        }
         let mantissa = if self.digits.is_empty() {
             "1".to_string()
         } else {
@@ -171,6 +202,19 @@ impl Buffer {
 
     /// 入力中に表示する文字列。打鍵した通りに見せる。
     pub fn text(&self) -> String {
+        // 60 進は `°` で繋いで打った通りに見せる(S-4)。**十進でも 60 進の
+        // 完成形でもない、打鍵の途中の姿**である。
+        if !self.sexagesimal.is_empty() {
+            let head = if self.imaginary { "j" } else { "" };
+            let body = self
+                .sexagesimal
+                .iter()
+                .map(String::as_str)
+                .chain(std::iter::once(self.digits.as_str()))
+                .collect::<Vec<_>>()
+                .join("°");
+            return format!("{head}{body}");
+        }
         let mantissa = if !self.digits.is_empty() {
             self.digits.clone()
         } else if self.exponent.is_some() {
@@ -237,8 +281,29 @@ impl Buffer {
     }
 
     /// `Exp`。すでに指数入力中なら何もしない(連打は無視)。
+    ///
+    /// **60 進入力中も何もしない**(S-4)。指数と 60 進は別の入力モードで、
+    /// 混ぜると意味が決まらない——`push_dot` が「指数は整数。小数点は
+    /// 無視する(打ち間違いで計算を止めない)」と決めているのと同じ理由で、
+    /// **エラーにもモード切替にもしない**。
     pub fn push_exponent(&mut self) {
+        if !self.sexagesimal.is_empty() {
+            return;
+        }
         self.exponent.get_or_insert_with(Exponent::default);
+    }
+
+    /// `°'"` を入力中に押したときの区切り(S-4 設計書 §3)。
+    ///
+    /// 打てたら true。**指数入力中と、段が 3 つ埋まっているときは false**
+    /// ——前者は排他(上の `push_exponent` と対)、後者は度・分・秒で
+    /// 打ち止めだからである(裁定 3)。
+    pub fn push_sexagesimal_separator(&mut self) -> bool {
+        if self.exponent.is_some() || self.sexagesimal.len() >= 2 {
+            return false;
+        }
+        self.sexagesimal.push(std::mem::take(&mut self.digits));
+        true
     }
 
     /// `+/−`。指数入力中なら指数の符号を反転して true を返す。そうでなければ
@@ -287,9 +352,15 @@ impl Buffer {
             return Backspace::Removed;
         }
         if self.digits.pop().is_some() {
-            if self.digits.is_empty() && !self.imaginary {
+            if self.digits.is_empty() && !self.imaginary && self.sexagesimal.is_empty() {
                 return Backspace::Exhausted;
             }
+            return Backspace::Removed;
+        }
+        // 60 進の区切りを 1 つ戻す。段の文字が尽きてから区切りが消えるので、
+        // `1 °'" 30` は 3 回で `1` に戻る(I7: 一度に 1 段だけ)。
+        if let Some(previous) = self.sexagesimal.pop() {
+            self.digits = previous;
             return Backspace::Removed;
         }
         // 数字はもう無い。残っているのは j だけなので、これで破棄してよい。
@@ -359,6 +430,87 @@ impl EngineState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sexagesimal_buffer_folds_its_stages() {
+        // 1 °'" 30 °'" 0 → 1.5(S-4 設計書 §3)
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        assert!(b.push_sexagesimal_separator());
+        b.push_digit(3);
+        b.push_digit(0);
+        assert!(b.push_sexagesimal_separator());
+        b.push_digit(0);
+        assert_eq!(b.value().unwrap(), Value::real(1.5));
+    }
+
+    #[test]
+    fn the_last_sexagesimal_stage_may_be_omitted() {
+        // 1 °'" 30 °'" で秒を省ける(設計書 §3)。
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        assert!(b.push_sexagesimal_separator());
+        b.push_digit(3);
+        b.push_digit(0);
+        assert!(b.push_sexagesimal_separator());
+        assert_eq!(b.value().unwrap(), Value::real(1.5));
+    }
+
+    #[test]
+    fn a_fourth_sexagesimal_stage_is_refused() {
+        // 段は 3 つまで(裁定 3)。4 つ目の区切りは打てない。
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        assert!(b.push_sexagesimal_separator());
+        assert!(b.push_sexagesimal_separator());
+        assert!(!b.push_sexagesimal_separator());
+    }
+
+    #[test]
+    fn sexagesimal_and_the_exponent_do_not_mix() {
+        // **両方向とも無視する**(S-4 の実装計画で明文化)。エラーにも
+        // モード切替にもしない——push_dot の「打ち間違いで計算を止めない」
+        // と同じ理由であり、切り替えるなら既に打った桁の読み直しを決めねば
+        // ならないが、その答えが無い(1.5e3 の 3 は指数か秒か)。
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        assert!(b.push_sexagesimal_separator());
+        b.push_exponent();
+        assert!(b.exponent.is_none());
+
+        let mut c = Buffer::default();
+        c.push_digit(1);
+        c.push_exponent();
+        assert!(!c.push_sexagesimal_separator());
+        assert!(c.sexagesimal.is_empty());
+    }
+
+    #[test]
+    fn a_sexagesimal_buffer_shows_what_was_typed() {
+        // 入力中は打った通りに見せる(既存の規則)。
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        b.push_sexagesimal_separator();
+        b.push_digit(3);
+        b.push_digit(0);
+        assert_eq!(b.text(), "1°30");
+    }
+
+    #[test]
+    fn backspace_walks_out_of_the_sexagesimal_stages() {
+        // 段は 1 つずつ戻る(I7)。1 °'" 30 から 3 回で 1 に戻る。
+        let mut b = Buffer::default();
+        b.push_digit(1);
+        b.push_sexagesimal_separator();
+        b.push_digit(3);
+        b.push_digit(0);
+        assert_eq!(b.backspace(), Backspace::Removed);
+        assert_eq!(b.text(), "1°3");
+        assert_eq!(b.backspace(), Backspace::Removed);
+        assert_eq!(b.text(), "1°");
+        assert_eq!(b.backspace(), Backspace::Removed);
+        assert_eq!(b.text(), "1");
+    }
 
     #[test]
     fn push_digit_ignores_an_out_of_range_digit() {
