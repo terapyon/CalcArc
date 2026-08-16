@@ -66,9 +66,15 @@ test("functions apply to the displayed value immediately", async ({ page }) => {
   await expect(main(page)).toHaveText("0.5");
 });
 
-test("the square root of a negative number is imaginary", async ({ page }) => {
+test("the square root of a negative number is a domain error", async ({
+  page,
+}) => {
+  // **かつては j2 だった。** 関数を実数に閉じる裁定で落とした
+  // (S-1 設計書 §1 の裁定 1)。複素数は入力と四則と表示の機能であって、
+  // 関数の値域ではない——下の複素数の行はそのまま生きている。
   await press(page, ["4", "符号を反転", "平方根"]);
-  await expect(main(page)).toHaveText("j2");
+  await expect(main(page)).toHaveText("Math ERROR");
+  await expect(main(page)).toHaveAttribute("data-error", "DomainError");
 });
 
 test("an error is shown and cleared with AC", async ({ page }) => {
