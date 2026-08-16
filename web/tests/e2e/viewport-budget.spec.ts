@@ -41,25 +41,29 @@ test("the footer sits at the same place on every tab", async ({ page }) => {
   ).toBe(1);
 });
 
-test("the tallest tab keeps room between the keypad and the footer", async ({
-  page,
-}) => {
-  // **「余裕を持って」の実体。** いちばん背の高い Finance で、盤面の下端と
-  // フッタの上端が詰まっていないこと。
+test("the tallest tab still has slack inside the screen", async ({ page }) => {
+  // **「余裕を持って」の実体。** 測るのは `<main>` の高さとパネルの高さの差
+  // ——これが**本当に何も置かれていない縦**である。
   //
-  // **この区間は空ではない。** 間に Finance の画面内免責(「実際の返済額は
-  // 金融機関の計算方法により異なります。」)とパネルの余白が入っており、
-  // 実測 67px のうち何もないのは 20〜27px ほどである。それでも測る意味は
-  // ある——盤面が伸びればこの区間から削られるので、詰まったことに気づける。
-  // **「まだ 67px 足せる」とは読まないこと。**
+  // 当初は「盤面の下端とフッタの上端の距離」を測っていたが、あれは違う
+  // ものを測っていた。100dvh のシェルでは、盤面が伸びた分はその区間では
+  // なく**画面の外**へ出る。実際、広げた行を 4 倍・8 倍にしても距離は
+  // 67px から動かなかった(実測)。あの検査が捕まえていたのは、あいだに
+  // 挟まる画面内免責やパネル余白が縮んだ場合だけだった。
   await page.goto("/#finance");
-  const pad = await page
-    .getByRole("group", { name: "数字と演算のキー" })
-    .boundingBox();
-  const footer = await page.getByTestId("footer-disclaimer").boundingBox();
-  const room = (footer?.y ?? 0) - ((pad?.y ?? 0) + (pad?.height ?? 0));
+  await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
+
+  const slack = await page.evaluate(() => {
+    const main = document.querySelector("main");
+    const panel = main?.firstElementChild;
+    if (!main || !panel) return -1;
+    return (
+      main.getBoundingClientRect().height - panel.getBoundingClientRect().height
+    );
+  });
+
   expect(
-    room,
-    `only ${room}px between the keypad and the footer`,
+    slack,
+    `only ${slack}px of slack left on Finance`,
   ).toBeGreaterThanOrEqual(8);
 });
