@@ -680,5 +680,10 @@ fn eng_stays_on_for_the_next_answer() {
 fn eng_does_not_touch_what_you_are_typing() {
     // 入力中は buffer.text() の経路で、format_real を通らない(設計書 §3.2)。
     // ENG に入れても打っている数字はそのまま見える。
+    //
+    // **数字を打ってから eng を押すこと。** 逆順だと commit_entry を足す変異が
+    // 空バッファへの no-op になり、この検査は緑のまま何も主張しない。
+    assert_eq!(main_of(&["1", "2", "3", "4", "5", "eng"]), "12345");
+    // ENG を先に入れてから打っても同じ(モードは入力中の表示に効かない)。
     assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5"]), "12345");
 }
