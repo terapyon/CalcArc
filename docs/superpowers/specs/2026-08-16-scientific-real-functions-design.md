@@ -2,7 +2,7 @@
 
 日付: 2026-08-16
 対象: `crates/calcarc-core/src/scientific/`、`engine/key.rs`、golden、Scientific の盤面。
-前提: main（`f9cac72`）から。
+前提: **main（`0fd4842`）から**（複利の逆算と E2E がマージされた後）。
 **状態: 裁定すべて決着（§1、2026-08-16）。実装待ち。**
 
 ## §0 位置づけ
