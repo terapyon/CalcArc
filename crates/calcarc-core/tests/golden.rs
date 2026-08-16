@@ -205,6 +205,8 @@ fn scientific_functions_match_the_reference() {
             "acos" => scientific::acos(x, mode),
             "atan" => scientific::atan(x, mode),
             "recip" => scientific::recip(x),
+            // pow だけ 2 引数。x は上で作ってある。
+            "pow" => scientific::pow(x, Value::real(field(&case.input, "y"))),
             other => panic!("{}: unknown op {other}", case.id),
         };
 

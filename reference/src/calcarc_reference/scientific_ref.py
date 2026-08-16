@@ -93,6 +93,33 @@ def atan(x: float, mode: str) -> dict:
     return _real_or_domain_error(_from_radians(mp.atan(mp.mpf(str(x))), mode))
 
 
+def pow_real(x: float, y: float) -> dict:
+    """x の y 乗を実数の範囲で。
+
+    **定義域の判定を Rust から写さない。** mpmath に計算させ、返ってきたのが
+    複素数なら「実数の答が無い」と判定する。Rust は `y.fract() == 0.0` で
+    整数指数を先に判定しており、**書き方がまるで違う**——そこに突き合わせる
+    価値がある。
+
+    **1 か所だけ規約を直に書いている**: `0^(y<0)` である。mpmath は
+    ZeroDivisionError を投げるが、設計書 §4 の表はここを DomainError と
+    定めている（`1/x` の 0 が DivisionByZero なのとは別の裁定）。
+    数学からは導けないので、規約として書く。
+    """
+    if x == 0.0 and y < 0.0:
+        return {"error": "DomainError"}
+    try:
+        r = mp.power(mp.mpf(str(x)), mp.mpf(str(y)))
+    except ZeroDivisionError:
+        return {"error": "DomainError"}
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    v = float(r.real if isinstance(r, mp.mpc) else r)
+    if math.isinf(v):
+        return {"error": "Overflow"}
+    return {"re": v, "im": 0.0}
+
+
 def recip(x: float, mode: str) -> dict:
     """逆数。0 は DivisionByZero（設計書 §3.0）。
 

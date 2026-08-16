@@ -5,6 +5,7 @@ from calcarc_reference.scientific_ref import (
     cos,
     exp_e,
     ln,
+    pow_real,
     recip,
     sin,
     sqrt_real,
@@ -52,6 +53,16 @@ def test_inverse_sine_is_bounded_by_one() -> None:
 def test_reciprocal_of_zero_is_a_division_by_zero() -> None:
     # DomainError と取り違えると、golden が Rust の裁定違いを見逃す。
     assert recip(0.0, "Deg") == {"error": "DivisionByZero"}
+
+
+def test_zero_to_the_zero_is_one() -> None:
+    assert pow_real(0.0, 0.0)["re"] == 1.0
+
+
+def test_a_negative_base_with_a_fractional_exponent_leaves_the_reals() -> None:
+    assert pow_real(-2.0, 0.5) == {"error": "DomainError"}
+    # 整数指数なら実数で一意。
+    assert pow_real(-2.0, 3.0)["re"] == -8.0
 
 
 def test_exp_overflows_rather_than_leaving_the_domain() -> None:

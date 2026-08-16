@@ -142,6 +142,17 @@ pub fn atan(v: Value, mode: AngleMode) -> CalcResult<Value> {
 /// する。判定を `f64::powf` に任せない——`powf` は `(-8)^(1/3)` を NaN に
 /// するが `(-2)^3` は −8 を返すので、**どちらが定義域の外なのかを powf は
 /// 区別していない**。判定を先に書き、通ったものにだけ powf を使う。
+///
+/// **`fract` の判定と NaN の網は、実測すると互いに冗長である**
+/// （2026-08-16、S-1 の赤確認）。`x < 0` かつ非整数の指数で `powf` は必ず
+/// NaN を返し、逆に NaN が出るのはその場合だけなので、**片方を消しても
+/// テストは 1 件も赤くならない**。両方消すと `pow/-2.0/0.5` が
+/// `Overflow`（`finalize` が NaN を弾いた結果）になって golden が赤くなる。
+///
+/// つまりこの 2 つが守っているのは**答えの正しさではなく、エラーの名前**で
+/// ある——どちらが欠けても答えは出ず、欠けたときの違いは `DomainError` が
+/// `Overflow` に化けることだけ。**「片方はテストが守っている」と思って
+/// 消さないこと。** どちらも単独ではテストに守られていない。
 pub fn pow(base: Value, exponent: Value) -> CalcResult<Value> {
     let x = real_arg(base)?;
     let y = real_arg(exponent)?;

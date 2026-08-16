@@ -106,6 +106,15 @@ def build_scientific() -> dict:
                 "expect": fn(x, mode),
             }
         )
+    for x, y in cases.POW_INPUTS:
+        entries.append(
+            {
+                "id": f"pow/{x}/{y}",
+                "op": "pow",
+                "input": {"x": x, "y": y},
+                "expect": scientific_ref.pow_real(x, y),
+            }
+        )
     return _envelope(entries)
 
 
