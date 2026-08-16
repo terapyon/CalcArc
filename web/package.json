@@ -15,6 +15,7 @@
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
     "heavy": "pnpm wasm && playwright test --config playwright.heavy.config.ts",
+    "heavy:ui": "pnpm wasm && playwright test --config playwright.heavy-ui.config.ts",
     "icons": "node scripts/generate-icons.mjs",
     "check:sw": "node scripts/check-sw.mjs"
   },
