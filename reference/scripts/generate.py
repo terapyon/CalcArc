@@ -115,6 +115,26 @@ def build_scientific() -> dict:
                 "expect": scientific_ref.pow_real(x, y),
             }
         )
+    for x in cases.FACTORIAL_INPUTS:
+        entries.append(
+            {
+                "id": f"factorial/{x}",
+                "op": "factorial",
+                "input": {"x": x},
+                "expect": scientific_ref.factorial(x, "Deg"),
+            }
+        )
+    for x, y in cases.PAIR_INPUTS:
+        for name in ("npr", "ncr"):
+            fn = getattr(scientific_ref, name)
+            entries.append(
+                {
+                    "id": f"{name}/{x}/{y}",
+                    "op": name,
+                    "input": {"x": x, "y": y},
+                    "expect": fn(x, y),
+                }
+            )
     return _envelope(entries)
 
 
