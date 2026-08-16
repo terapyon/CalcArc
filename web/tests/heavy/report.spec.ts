@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { ToleranceBand } from "./corpus";
-import { loadShards, needsPrecedence, partitionCases } from "./corpus";
+import {
+  loadCallShards,
+  loadShards,
+  needsPrecedence,
+  partitionCases,
+} from "./corpus";
 import {
   areaOfShard,
   expectedSummaryNames,
@@ -876,6 +881,45 @@ test("the gate name is one the corpus actually produces", () => {
   expect(expectedSummaryNames()).toContain(
     summaryName(PRECEDENCE_SHARD, "values"),
   );
+});
+
+test("the completeness guard covers the call shards too", () => {
+  // **実在したバグ(2026-08-17)。** `expectedSummaryNames` は `loadShards()` を
+  // 使っており、そちらが call シャードを除外した結果、**金融とデータスケールが
+  // 「揃うはずの集計」から丸ごと外れていた**——それらのテストが走らなくても
+  // 報告書は「完全である」と名乗り、判定表は「検証していない」と出て、
+  // その食い違いを誰も咎めない。完全性ガードが存在する理由そのものが抜けていた。
+  //
+  // このテストを赤くする編集: `expectedSummaryNames` の
+  // `for (const { name } of loadCallShards())` のループを消す。
+  const expected = expectedSummaryNames();
+  const callShards = loadCallShards();
+  expect(
+    callShards.length,
+    "no call shard on disk — this test would pass vacuously",
+  ).toBeGreaterThan(0);
+  for (const { name } of callShards) {
+    expect(expected).toContain(summaryName(name, "calls"));
+  }
+});
+
+test("the exponent-notation count is reported, and says zero means never left the band", () => {
+  // 段階 3b-A の前はこの数が 0 だった。0 と 0 でないときで文が変わる。
+  const none = renderReport([summary({ exponentDisplayCases: 0 })], PROVENANCE);
+  expect(none).toContain("平坦表示の帯を一度も出ていない");
+  const some = renderReport(
+    [summary({ exponentDisplayCases: 1940 })],
+    PROVENANCE,
+  );
+  expect(some).toContain("1940 件が読んでいる");
+  expect(some).not.toContain("平坦表示の帯を一度も出ていない");
+});
+
+test("the report keeps saying the power operator's associativity is untested", () => {
+  // `xʸ` はこのプロジェクト唯一の右結合だが、キー列は二項を必ず括弧で囲むので
+  // 踏んでいない。**踏んでいないと言い続ける**(設計書 2026-08-16-corpus-functions §3.5)。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(markdown).toContain("`xʸ` の右結合と優先順位 4");
 });
 
 test("a disclosure of two cases in six thousand is not rounded away to 0.0%", () => {

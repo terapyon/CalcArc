@@ -26,6 +26,16 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("display-main")).toHaveText("0");
 });
 
+test("no key token is claimed by two buttons", () => {
+  // `BUTTON_FOR` は同じトークンが 2 度現れたら例外を投げる——**どちらを
+  // 押すかが不定になり、駆動側が任意に選んでしまう**ためである。
+  // ここは「その検査が実データ(盤面の定義)に対して通っている」ことを固定する。
+  //
+  // **`BUTTON_FOR` を読むだけで検査が走る**（モジュールの初期化時に構築する）。
+  // 例外が投げられていればこのテストに到達しない。
+  expect(BUTTON_FOR.size).toBeGreaterThan(0);
+});
+
 test("every key token the engine accepts has a button on the keypad", async () => {
   // **これは盤面の定義だけで決まるので、ブラウザを開く前に分かる。**
   // それでもここに置くのは、下の 2 つと同じ「届くか」の話だからである。

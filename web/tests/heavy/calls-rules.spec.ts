@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { differences, normalise } from "./calls";
+import { loadCallShards } from "./corpus";
 
 /**
  * **比較の規則そのものを敵対的に確かめる。**
@@ -113,6 +114,49 @@ test("two wasm keys mapping to one reference key is refused, not silently merged
   expect(() =>
     normalise({ monthlyPayment: "1", monthly_payment: "2" }),
   ).toThrow();
+});
+
+test("every call shard on disk carries only call cases", () => {
+  // `loadCallShards` は schema・空・kind を読んだその場で確かめる。
+  // **その検証が実データに対して実際に走っている**ことをここで固定する
+  // ——検証があっても呼ばれていなければ何も守らない。
+  const shards = loadCallShards();
+  expect(shards.length).toBeGreaterThan(0);
+  for (const { name, shard } of shards) {
+    expect(shard.cases.length, `${name} is empty`).toBeGreaterThan(0);
+    for (const testCase of shard.cases) {
+      expect(testCase.kind, `${name}: ${testCase.id}`).toBe("call");
+    }
+    // **`tolerance` を持たない。** 持たせると「緩めれば通る」余地が生まれる。
+    expect(
+      (shard as unknown as { tolerance?: unknown }).tolerance,
+      `${name} carries a tolerance — these are exact integer comparisons`,
+    ).toBeUndefined();
+  }
+});
+
+test("every call case names an op the harness knows how to run", () => {
+  // **未知の op は harness が投げる**が、それは走らせてみるまで分からない。
+  // シャードの側で先に確かめておけば、原因が「op の綴り」だと即分かる。
+  const known = new Set([
+    "data_scale",
+    "loan_forward",
+    "loan_principal",
+    "loan_term",
+    "loan_bonus_forward",
+    "loan_bonus_principal",
+    "compound_grow",
+    "compound_deposit_for",
+    "compound_periods_for",
+  ]);
+  for (const { name, shard } of loadCallShards()) {
+    for (const testCase of shard.cases) {
+      expect(
+        known.has(testCase.op),
+        `${name}: ${testCase.id} ${testCase.op}`,
+      ).toBe(true);
+    }
+  }
 });
 
 test("the rename table is applied, so loan_term's period is compared at all", () => {
