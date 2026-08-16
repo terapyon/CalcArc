@@ -4,8 +4,13 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
+import pkg from "./package.json";
 
 export default defineConfig({
+  // **版数はビルド時に埋める**(0.2.0 設計書 §4)。フッタはシェルが持ち、
+  // シェルは WASM を読まないので、core_version() の非同期な経路では
+  // 最初の描画に間に合わない。
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // Cloudflare Pages はルート配信なので base はそのまま。
   base: "/",
   plugins: [

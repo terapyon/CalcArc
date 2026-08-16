@@ -1,7 +1,7 @@
 {
   "name": "calcarc-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
@@ -15,7 +15,8 @@
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
     "icons": "node scripts/generate-icons.mjs",
-    "check:sw": "node scripts/check-sw.mjs"
+    "check:sw": "node scripts/check-sw.mjs",
+    "check:version": "node scripts/check-version.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
