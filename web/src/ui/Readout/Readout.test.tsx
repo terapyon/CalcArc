@@ -20,6 +20,15 @@ describe("Readout", () => {
     expect(screen.getByTestId("display-echo")).toHaveTextContent("");
   });
 
+  it("keeps the active line as a place even when nothing is being typed", () => {
+    // **打っている行は、打っていなくても場所を残す。** 入力済みの行が
+    // 既に採っている方針(空でも 1 行ぶん残す)と同じにする——この行だけ
+    // 要素ごと消えると、打ち始めた瞬間に 22px ぶん盤面が下がる。
+    render(<Readout entries={[]} main="0" status={status} />);
+    expect(screen.getByTestId("display-entry-active")).toBeInTheDocument();
+    expect(screen.getByTestId("display-entry-active")).toHaveTextContent("");
+  });
+
   it("shows a single unnamed entry the way Scientific always did", () => {
     // Scientific は式を 1 件で渡す。**名前が無いので見た目は変わらない**
     // ——ここが崩れると S2 のエコーが壊れる(設計書 §2)。
