@@ -18,16 +18,18 @@ const root = join(web, "..");
 const pkg = JSON.parse(readFileSync(join(web, "package.json"), "utf8")).version;
 
 // workspace.package の version を読む。TOML パーサを足さずに済ませる——
-// この 1 行のためだけに依存を増やす理由がない。**節を見てから読む**のは、
-// 将来ほかの節が先に来たときに黙って別の値を比べないためである。行の形が
-// 変わったらマッチしなくなり、下の null 検査でその場で落ちる。
+// この 1 行のためだけに依存を増やす理由がない。**節を切り出してから読む**のは、
+// 将来ほかの節が先に来たときに黙って別の値を比べないためである。
+//
+// **先読みではなく分割で切る。** `(?=^\[)` は次の節の存在を要求するので、
+// `[workspace.package]` がファイル末尾の節だと読めない(実測)。分割なら
+// 末尾でも読める。行の形が変わったらマッチせず、下の null 検査で落ちる。
 const cargoToml = readFileSync(join(root, "Cargo.toml"), "utf8");
-const section = cargoToml.match(
-  /^\[workspace\.package\]$([\s\S]*?)(?=^\[)/m,
-);
-const matched = section?.[1]?.match(/^version\s*=\s*"([^"]+)"/m);
+const afterHeading = cargoToml.split(/^\[workspace\.package\]\s*$/m)[1] ?? "";
+const section = afterHeading.split(/^\[/m)[0];
+const matched = section.match(/^version\s*=\s*"([^"]+)"/m);
 
-if (matched === null || matched === undefined) {
+if (matched === null) {
   console.error(
     "Cargo.toml から version を読めなかった。行の形が変わっていないか確認すること。",
   );
