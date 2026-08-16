@@ -74,6 +74,36 @@ fn group_integer_part(text: &str) -> String {
     }
 }
 
+/// 工学表記。**指数は常に 3 の倍数**で、仮数は 1 以上 1000 未満(設計書 §3)。
+///
+/// `log10` を使わないのは `format_real` と同じ理由である——10 の冪の近くで
+/// 1 桁ずれ、丸めの繰り上がりを先読みできない。**丸めた後の値から指数を決める。**
+pub fn format_real_eng(x: f64) -> String {
+    if x == 0.0 {
+        return "0".to_string();
+    }
+    let scientific = format!("{:.*e}", DISPLAY_DIGITS - 1, x);
+    let (mantissa, exponent_text) = match scientific.split_once('e') {
+        Some(parts) => parts,
+        None => return scientific,
+    };
+    let exponent: i32 = exponent_text.parse().unwrap_or(0);
+    // 3 の倍数へ**下向きに**丸める。-1 → -3、1 → 0、-4 → -6。
+    let eng_exponent = exponent.div_euclid(3) * 3;
+    let shift = exponent - eng_exponent; // 0, 1, 2 のいずれか
+    // 仮数を 10^shift 倍する。小数点を動かすだけなので精度は落ちない。
+    let value: f64 = mantissa.parse().unwrap_or(0.0) * 10f64.powi(shift);
+    // 有効数字 10 桁から、整数部が使うぶんを引いた残りを小数に回す。
+    let int_digits = shift + 1;
+    let decimals = (DISPLAY_DIGITS as i32 - int_digits).max(0) as usize;
+    let body = trim_zeros(&format!("{:.*}", decimals, value));
+    if eng_exponent == 0 {
+        // 指数 0 は書かない(設計書 §3.1)。通常の 10 進と同じ扱いにする。
+        return group_integer_part(&body);
+    }
+    format!("{body}e{eng_exponent}")
+}
+
 /// 直交形式で表示する。`3+j4` のように j を数の前に置く。
 pub fn format_rect(v: Value) -> String {
     if v.is_real() {
@@ -226,5 +256,32 @@ mod tests {
         assert_eq!(format_real(999.0), "999"); // 4 桁未満は変わらない
         assert_eq!(format_real(1000.0), "1,000"); // 境界の両側
         assert_eq!(format_real(1.5e12), "1.5e12"); // 指数表記には入らない
+    }
+
+    #[test]
+    fn engineering_notation_keeps_the_exponent_a_multiple_of_three() {
+        assert_eq!(format_real_eng(1000.0), "1e3");
+        assert_eq!(format_real_eng(12345.0), "12.345e3");
+        assert_eq!(format_real_eng(0.0022), "2.2e-3");
+        assert_eq!(format_real_eng(1500000.0), "1.5e6");
+        assert_eq!(format_real_eng(1.5e11), "150e9"); // 仮数は 1000 未満
+        assert_eq!(format_real_eng(0.0), "0");
+        assert_eq!(format_real_eng(-1500000.0), "-1.5e6");
+    }
+
+    #[test]
+    fn engineering_notation_omits_a_zero_exponent() {
+        // **`999e0` とは書かない**(設計書 §3.1)。指数が 0 なら通常の 10 進。
+        // つまり ENG に入れても見た目が変わらない値がある——それは仕様である。
+        assert_eq!(format_real_eng(999.0), "999");
+        assert_eq!(format_real_eng(1.5), "1.5");
+        assert_eq!(format_real_eng(0.5), "500e-3"); // 1 未満は指数が付く
+    }
+
+    #[test]
+    fn engineering_notation_decides_the_exponent_after_rounding() {
+        // 先に指数を決めて丸めると 999.99999999e0 が 1000e0 になり、
+        // 仮数の範囲(1 以上 1000 未満)を破る(設計書「有効数字」)。
+        assert_eq!(format_real_eng(999.99999999), "1e3");
     }
 }
