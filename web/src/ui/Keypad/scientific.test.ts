@@ -25,10 +25,15 @@ describe("Scientific のキー集合", () => {
     expect(laidOut).toEqual([...KEY_TOKENS].sort());
   });
 
-  it("has no reserved slots left on the first face", () => {
-    // S2 で 000 と Exp が有効になった。残る予約は第 2 面の空きだけ。
-    const reserved = allKeys.filter((k) => k.token === null && !k.kind);
-    expect(reserved).toEqual([]);
+  it("has no reserved slots in the function row or main grid", () => {
+    // S2 で 000 と Exp が有効になった。関数列 2 段目には ENG 以外に 6 つの
+    // 予約がある(S-1/S-4 が後で埋める)ので、そこだけ対象から外す。
+    for (const name of ["関数キー", "数字と演算のキー"]) {
+      const reserved = section(name).keys.filter(
+        (k) => k.token === null && !k.kind,
+      );
+      expect(reserved).toEqual([]);
+    }
   });
 
   it("gives every key an accessible label", () => {
@@ -71,5 +76,26 @@ describe("Scientific のキー集合", () => {
       "x²",
       "DRG",
     ]);
+  });
+
+  it("puts ENG on the first face, not behind Shift", () => {
+    // 「押しやすくしたい」(ユーザー)——Shift の裏では要件を満たさない。
+    const second = SCIENTIFIC_SECTIONS.find(
+      (s) => s.ariaLabel === "関数キー 2 段目",
+    );
+    expect(second?.columns).toBe(7);
+    expect(second?.height).toBe("half");
+    expect(second?.keys[0]?.token).toBe("eng");
+    // 残りは予約スロット。S-1 と S-4 が埋める。
+    expect(second?.keys.slice(1).every((k) => k.token === null)).toBe(true);
+  });
+
+  it("does not move the main grid", () => {
+    // **3 タブで揃えた 5×5**。ここを崩すと Finance / Data Scale と食い違う。
+    const pad = SCIENTIFIC_SECTIONS.find(
+      (s) => s.ariaLabel === "数字と演算のキー",
+    );
+    expect(pad?.columns).toBe(5);
+    expect(pad?.keys).toHaveLength(25);
   });
 });
