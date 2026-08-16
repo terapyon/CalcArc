@@ -222,8 +222,7 @@ def _needs_precedence(keys: list[str]) -> bool:
         elif key == "rparen":
             if not stack:
                 raise ValueError(
-                    f'_needs_precedence: unmatched "rparen" (more rparen than '
-                    f"lparen) in {keys!r}."
+                    f'_needs_precedence: unmatched "rparen" (more rparen than lparen) in {keys!r}.'
                 )
             closed_groups.append(stack.pop())
         elif key in key_precedence:
@@ -283,7 +282,9 @@ def test_malformed_rparen_always_raises_not_only_when_an_operator_follows() -> N
     assert _needs_precedence(["lparen", "1", "add", "2", "mul", "3", "eq"]) is True
 
 
-def test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need_precedence() -> None:
+def test_operators_in_different_parenthesis_groups_at_the_same_depth_do_not_need_precedence() -> (
+    None
+):
     # **Regression for the depth-based bug (fix round 1).** `div` と `sub` は
     # `377 - ((553 / 982) / (189 - 996))` でどちらも括弧の深さ 3 にあるが、
     # `(553 / 982)` と `(189 - 996)` という**別の組**である。深さだけで判定すると
