@@ -109,9 +109,10 @@ The main points:
 - **Finance returns a deterministic approximation.** Matching the exact figures of any
   particular lender is not a goal. Where and how rounding happens is defined by
   [docs/numerical-policy.md](docs/numerical-policy.md)
-- **The expression entered per field is not rounded partway through.** It is evaluated as
-  a rational number and rounded exactly once at the end, so entering the same answer via a
-  different sequence of keystrokes does not change the result
+- **Expressions typed into the Finance and Data Scale fields are not rounded partway
+  through.** They are evaluated as a rational number and rounded exactly once at the end,
+  so entering the same answer via a different sequence of keystrokes does not change the
+  result
 - **Rounding done for display is not written back into the held value.** Switching to
   polar form is a display change, not a calculation, so the rounded value never leaks into
   the next calculation

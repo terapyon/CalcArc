@@ -23,7 +23,7 @@ const pkg = JSON.parse(readFileSync(join(web, "package.json"), "utf8")).version;
 // 変わったらマッチしなくなり、下の null 検査でその場で落ちる。
 const cargoToml = readFileSync(join(root, "Cargo.toml"), "utf8");
 const section = cargoToml.match(
-  /^\[workspace\.package\]$([\s\S]*?)(?=^\[|\Z)/m,
+  /^\[workspace\.package\]$([\s\S]*?)(?=^\[)/m,
 );
 const matched = section?.[1]?.match(/^version\s*=\s*"([^"]+)"/m);
 
