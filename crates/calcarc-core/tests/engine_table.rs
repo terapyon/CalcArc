@@ -274,6 +274,42 @@ fn the_echo_shows_the_power_operator() {
 }
 
 #[test]
+fn the_real_functions_apply_immediately_like_the_others() {
+    // 単項は後置。式には積まれない（設計書 D6）。
+    assert_eq!(main_of(&["2", "ln"]), "0.6931471806");
+    assert_eq!(main_of(&["1", "0", "0", "log10"]), "2");
+    assert_eq!(main_of(&["1", "exp_e"]), "2.718281828");
+    assert_eq!(main_of(&["4", "recip"]), "0.25");
+}
+
+#[test]
+fn the_inverse_trig_functions_follow_the_angle_mode() {
+    assert_eq!(main_of(&["0", "dot", "5", "asin"]), "30");
+    assert_eq!(main_of(&["0", "dot", "5", "acos"]), "60");
+    assert_eq!(main_of(&["1", "atan"]), "45");
+    // Rad に切り替えると同じ入力がラジアンで返る。
+    assert_eq!(main_of(&["angle_toggle", "1", "atan"]), "0.7853981634");
+}
+
+#[test]
+fn the_domain_boundaries_show_an_error() {
+    use calcarc_core::CalcError;
+    assert_eq!(main_of(&["0", "ln"]), "Math ERROR");
+    assert_eq!(main_of(&["1", "neg", "log10"]), "Math ERROR");
+    assert_eq!(main_of(&["2", "asin"]), "Math ERROR");
+    // 1/0 は DivisionByZero。表示は同じでも種類が違う（S-1 設計書 §3.0）。
+    assert_eq!(run(&["0", "recip"]).error, Some(CalcError::DivisionByZero));
+    assert_eq!(run(&["0", "ln"]).error, Some(CalcError::DomainError));
+}
+
+#[test]
+fn e_is_a_value_not_an_entry() {
+    // π と同じ扱い（S-1 設計書 §3）。
+    assert_eq!(main_of(&["e"]), "2.718281828");
+    assert_eq!(main_of(&["e", "ln"]), "1");
+}
+
+#[test]
 fn subtracts_and_divides() {
     assert_eq!(main_of(&["1", "0", "sub", "4", "eq"]), "6");
     assert_eq!(main_of(&["7", "div", "2", "eq"]), "3.5");

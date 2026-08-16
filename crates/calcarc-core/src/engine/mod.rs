@@ -50,11 +50,19 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 Key::Eq
                 | Key::RParen
                 | Key::Pi
+                | Key::E
                 | Key::Sqrt
                 | Key::Sqr
                 | Key::Sin
                 | Key::Cos
                 | Key::Tan
+                | Key::Ln
+                | Key::Log10
+                | Key::ExpE
+                | Key::Recip
+                | Key::Asin
+                | Key::Acos
+                | Key::Atan
                 // Key::Ac はここに到達しない（reduce の冒頭で先に処理される）が、
                 // match の網羅性のために腕は残す。値はどちらでも同じ。
                 | Key::Ac => false,
@@ -313,9 +321,30 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             let mode = state.angle;
             apply_unary(state, |v| scientific::tan(v, mode))?;
         }
+        Key::Ln => apply_unary(state, scientific::ln)?,
+        Key::Log10 => apply_unary(state, scientific::log10)?,
+        Key::ExpE => apply_unary(state, scientific::exp_e)?,
+        Key::Recip => apply_unary(state, scientific::recip)?,
+        Key::Asin => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::asin(v, mode))?;
+        }
+        Key::Acos => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::acos(v, mode))?;
+        }
+        Key::Atan => {
+            let mode = state.angle;
+            apply_unary(state, |v| scientific::atan(v, mode))?;
+        }
         Key::Pi => {
             state.buffer = None;
             state.current = Value::real(std::f64::consts::PI);
+        }
+        Key::E => {
+            // π と同じ。入力中のバッファを捨てて値そのものを置く。
+            state.buffer = None;
+            state.current = Value::real(std::f64::consts::E);
         }
         Key::AngleToggle => {
             // 保持している値は変えない。表示と以後の三角関数にだけ効く。

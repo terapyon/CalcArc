@@ -35,6 +35,19 @@ pub enum Key {
     EngToggle,
     /// xʸ。二項演算子であって後置関数ではない(S-1 設計書 §3.1)。
     Pow,
+    /// 自然対数。
+    Ln,
+    /// 常用対数。
+    Log10,
+    /// e の x 乗。**`Key::Exp`(指数入力 EE)とは別物**(S-1 設計書 §3)。
+    ExpE,
+    /// 逆数。
+    Recip,
+    Asin,
+    Acos,
+    Atan,
+    /// 自然対数の底。π と同じ「値そのもの」のキー。
+    E,
 }
 
 impl Key {
@@ -75,6 +88,14 @@ impl Key {
             "angle_toggle" => Key::AngleToggle,
             "eng" => Key::EngToggle,
             "pow" => Key::Pow,
+            "ln" => Key::Ln,
+            "log10" => Key::Log10,
+            "exp_e" => Key::ExpE,
+            "recip" => Key::Recip,
+            "asin" => Key::Asin,
+            "acos" => Key::Acos,
+            "atan" => Key::Atan,
+            "e" => Key::E,
             _ => return None,
         })
     }
@@ -116,6 +137,14 @@ impl Key {
             Key::AngleToggle => "angle_toggle",
             Key::EngToggle => "eng",
             Key::Pow => "pow",
+            Key::Ln => "ln",
+            Key::Log10 => "log10",
+            Key::ExpE => "exp_e",
+            Key::Recip => "recip",
+            Key::Asin => "asin",
+            Key::Acos => "acos",
+            Key::Atan => "atan",
+            Key::E => "e",
         }
     }
 }
@@ -126,7 +155,7 @@ impl Key {
     /// トークン表と fuzz テストがこれを参照する。キーを増やしたときに
     /// ここを直し忘れると `tokens_round_trip` が落ちるので、fuzz が
     /// 新しいキーを黙って生成しなくなる事故を防げる。
-    pub const ALL: [Key; 34] = [
+    pub const ALL: [Key; 42] = [
         Key::Digit(0),
         Key::Digit(1),
         Key::Digit(2),
@@ -161,6 +190,14 @@ impl Key {
         Key::AngleToggle,
         Key::EngToggle,
         Key::Pow,
+        Key::Ln,
+        Key::Log10,
+        Key::ExpE,
+        Key::Recip,
+        Key::Asin,
+        Key::Acos,
+        Key::Atan,
+        Key::E,
     ];
 }
 

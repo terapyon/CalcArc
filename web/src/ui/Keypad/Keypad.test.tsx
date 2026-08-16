@@ -123,15 +123,14 @@ describe("Keypad の Shift（Scientific の盤面で）", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("shows the empty second-face slots as reserved", async () => {
-    // 第 2 面は今回ほぼ空(設計書 §3)。空きスロットは場所だけ示す。
+  it("shows the one remaining reserved slot as reserved", () => {
+    // 第 2 面の空きは S-1 で全部埋まった(sin/cos/tan の裏が asin/acos/atan に
+    // なった)。残るのは第 2 関数列の 1 枠——S-4 の `°'"` が入る。
+    // 無効表示の意味論はそこで守る。
     render(<Keypad sections={SCIENTIFIC_SECTIONS} onPress={vi.fn()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "第2面に切り替え" }),
-    );
-    const empty = screen.getAllByRole("button", { name: "第2面（準備中）" });
-    expect(empty).toHaveLength(3); // sin / cos / tan の裏
-    for (const slot of empty) expect(slot).toBeDisabled();
+    const empty = screen.getAllByRole("button", { name: "空き" });
+    expect(empty).toHaveLength(1);
+    expect(empty[0]).toBeDisabled();
   });
 
   it("keeps keys without a second face unchanged, and still releases", async () => {

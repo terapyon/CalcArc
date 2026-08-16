@@ -57,6 +57,14 @@ export const KEY_TOKENS = [
   "angle_toggle",
   "eng",
   "pow",
+  "ln",
+  "log10",
+  "exp_e",
+  "recip",
+  "asin",
+  "acos",
+  "atan",
+  "e",
 ] as const;
 
 export type KeyToken = (typeof KEY_TOKENS)[number];

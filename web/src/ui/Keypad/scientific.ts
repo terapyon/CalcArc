@@ -1,5 +1,5 @@
 import type { KeyToken } from "../../calc";
-import type { KeypadSection, ShiftFace } from "./types";
+import type { KeypadSection } from "./types";
 
 // Scientific のキー集合。
 //
@@ -8,14 +8,6 @@ import type { KeypadSection, ShiftFace } from "./types";
 //
 // 関数列は上段の半高、メイングリッドは 5×5 でちょうど 25 キー。複素数まわり
 // (j・▸∠)は右端の列、四則はその左、制御(AC・DEL)は右上。
-
-/** 第 2 面の空きスロット。押しても何も起きない(設計書 §3)。 */
-const EMPTY_FACE: ShiftFace<KeyToken> = {
-  token: null,
-  label: "—",
-  ariaLabel: "第2面（準備中）",
-  variant: "function",
-};
 
 const FUNCTION_ROW: KeypadSection<KeyToken> = {
   ariaLabel: "関数キー",
@@ -29,28 +21,44 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
       variant: "function",
       kind: "shift",
     },
-    // 第 2 面は今回ほぼ空である(設計書 §3)。本命の asin/acos/atan は M3
-    // 後半に入る。空きスロットは無効表示で「そこに何か来る」ことだけ示す。
+    // 第 2 面に逆三角を置く(S-1 設計書 §7)。使用頻度が低く、sin/cos/tan の
+    // 裏という対応が自然だからである。**S-1 で「準備中」の空き面は全部
+    // 埋まった**——残る予約は第 2 関数列の 1 枠(S-4 の `°'"`)だけ。
     {
       token: "sin",
       label: "sin",
       ariaLabel: "サイン",
       variant: "function",
-      shift: EMPTY_FACE,
+      shift: {
+        token: "asin",
+        label: "asin",
+        ariaLabel: "アークサイン",
+        variant: "function",
+      },
     },
     {
       token: "cos",
       label: "cos",
       ariaLabel: "コサイン",
       variant: "function",
-      shift: EMPTY_FACE,
+      shift: {
+        token: "acos",
+        label: "acos",
+        ariaLabel: "アークコサイン",
+        variant: "function",
+      },
     },
     {
       token: "tan",
       label: "tan",
       ariaLabel: "タンジェント",
       variant: "function",
-      shift: EMPTY_FACE,
+      shift: {
+        token: "atan",
+        label: "atan",
+        ariaLabel: "アークタンジェント",
+        variant: "function",
+      },
     },
     { token: "sqrt", label: "√", ariaLabel: "平方根", variant: "function" },
     { token: "sqr", label: "x²", ariaLabel: "2乗", variant: "function" },
@@ -67,8 +75,9 @@ const FUNCTION_ROW: KeypadSection<KeyToken> = {
  * 関数列の 2 段目。**横に 8 列へ広げると 44px を割る**ので縦に増やした
  * (設計書 §7.1: 390px で 8 列は 38.75px)。キー幅は 45.43px のまま。
  *
- * ENG 以外は**予約スロット**である。S-1(実数の関数)と S-4(60 進)が埋める。
- * 格子の形を崩さないために置く——Finance の周期・税の面と同じ形。
+ * **よく使う関数を第 1 面に出す**(S-1 設計書 §7)——関数電卓で `ln` や `log` が
+ * Shift の裏なのは不便であり、空きを予約スロットで埋めたまま隠すのは本末転倒
+ * である。残る 1 枠は S-4 の `°'"`(60 進)が埋める。
  *
  * 区画名は 1 段目「関数キー」を**含まない**名前にする。Playwright の
  * `getByRole` は部分一致なので、「関数キー 2 段目」のような名前だと
@@ -86,13 +95,27 @@ const FUNCTIONS_SECOND: KeypadSection<KeyToken> = {
       ariaLabel: "工学表記に切り替え",
       variant: "function",
     },
-    // 1〜4 番目は S-1 の単項が埋める（同ブランチの後続タスク）。
-    ...Array.from({ length: 4 }, () => ({
-      token: null,
-      label: "—",
-      ariaLabel: "空き",
-      variant: "function" as const,
-    })),
+    { token: "ln", label: "ln", ariaLabel: "自然対数", variant: "function" },
+    {
+      token: "log10",
+      label: "log",
+      ariaLabel: "常用対数",
+      variant: "function",
+    },
+    { token: "recip", label: "1/x", ariaLabel: "逆数", variant: "function" },
+    {
+      token: "exp_e",
+      label: "eˣ",
+      ariaLabel: "指数関数",
+      variant: "function",
+      // **同じ e。`eˣ` を Shift すると底そのものが出る**(S-1 設計書 §7)。
+      shift: {
+        token: "e",
+        label: "e",
+        ariaLabel: "自然対数の底",
+        variant: "function",
+      },
+    },
     { token: "pow", label: "xʸ", ariaLabel: "べき乗", variant: "function" },
     // 7 番目は S-4 の `°'"` が埋める。
     {

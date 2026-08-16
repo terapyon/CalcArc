@@ -90,17 +90,40 @@ describe("Scientific のキー集合", () => {
     // "every" は空配列でも真になり、予約スロットを消しても緑のまま
     // 通ってしまう(§7.3 が予約スロットを置く理由が守られない)。
     expect(second?.keys).toHaveLength(7);
-    // 2 段目の並びは設計書 §7 の確定盤面。予約は S-1 の単項（1〜4）と
-    // S-4 の `°'"`（7 番目）。
+    // 2 段目の並びは S-1 設計書 §7 の確定盤面。残る予約は 7 番目だけで、
+    // S-4 の `°'"` が入る。長さの検査が無いと "every" は空配列でも真になり、
+    // 予約スロットを消しても緑のまま通ってしまう。
     expect(second?.keys.map((k) => k.token)).toEqual([
       "eng",
-      null,
-      null,
-      null,
-      null,
+      "ln",
+      "log10",
+      "recip",
+      "exp_e",
       "pow",
       null,
     ]);
+  });
+
+  it("puts the inverse trig functions behind their own first face", () => {
+    // sin の裏が asin という対応が自然だから第 2 面に置いた(S-1 設計書 §7)。
+    const pairs = section("関数キー").keys.map((k) => [k.token, k.shift?.token]);
+    expect(pairs).toContainEqual(["sin", "asin"]);
+    expect(pairs).toContainEqual(["cos", "acos"]);
+    expect(pairs).toContainEqual(["tan", "atan"]);
+  });
+
+  it("puts the base of the natural logarithm behind e to the x", () => {
+    // ユーザーの質問への答え: 同じ e。eˣ を Shift すると底そのものが出る。
+    const key = section("第 2 関数列").keys.find((k) => k.token === "exp_e");
+    expect(key?.shift?.token).toBe("e");
+  });
+
+  it("has one reserved slot left, and it is the one S-4 fills", () => {
+    // 第 2 面の「準備中」は S-1 で全部埋まった。無効表示の意味論を守る
+    // 対象は、第 2 関数列に残る 1 枠だけになる。
+    const reserved = allKeys.filter((k) => k.token === null && !k.kind);
+    expect(reserved).toHaveLength(1);
+    expect(reserved[0]?.ariaLabel).toBe("空き");
   });
 
   it("does not move the main grid", () => {
