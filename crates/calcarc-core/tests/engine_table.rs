@@ -383,6 +383,30 @@ fn the_echo_shows_the_counting_operators() {
 }
 
 #[test]
+fn a_three_tier_stack_folds_from_the_inside_out() {
+    // **網羅列挙が届かない形をここで押さえる。** 長さ 6 では二項演算子が
+    // 2 個までしか積めないので、3 段（× < nCr < xʸ）が同時に立った形は
+    // engine_robustness の網には現れない（あちらの FOCUS のコメント参照）。
+    //
+    // 2 × 3 nCr 2 xʸ 2 = 2 × (3 nCr (2²)) = 2 × (3 nCr 4) → r > n でエラー。
+    // 段がどれか 1 つでも入れ替わると別の答えになる。
+    assert_eq!(
+        main_of(&["2", "mul", "3", "n_c_r", "2", "pow", "2", "eq"]),
+        "Math ERROR"
+    );
+    // 3 段が全部生きて答えが出る形。2 × (5 nCr (2²)) = 2 × 5 = 10。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "eq"]),
+        "10"
+    );
+    // DEL は演算子を消さないので、3 段積んだまま右辺だけ差し替わる。
+    assert_eq!(
+        main_of(&["2", "mul", "5", "n_c_r", "2", "pow", "2", "del", "1", "eq"]),
+        "20"
+    );
+}
+
+#[test]
 fn combinations_do_not_overflow_on_the_way_to_an_answer_that_fits() {
     // S-3 設計書 §4（訂正版）。素直な n!/(r!(n−r)!) はここで落ちる。
     assert_eq!(

@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 27ca4d676b8b137315790dd35484c59ab8f18a919f84a8cae4d72dea0a4b7e0d # shrinks to indices = [17, 14]
 cc de32f35b512c78f0ea007f3db9364a4df87b165ac7dc75cb383538953ce3775a # shrinks to keys = [Add, Mul]
+cc 3dfae589b03da8bd2ed107446fef6b9ac09dee2d5cd965e671f330ca08880a3d # shrinks to indices = [0, 1, 14, 14]
