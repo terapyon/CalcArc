@@ -10,6 +10,11 @@ pub enum CalcError {
     Overflow,
     /// tan の極（Deg モードの 90 + 180n 度）での評価。
     TrigPole,
+    /// その値にはその関数が定義されていない。`ln(0)` や `sqrt(-4)` など。
+    ///
+    /// `SyntaxError` と混ぜない。「打ち方が悪い」と「その値には定義が無い」は
+    /// 利用者にとって別の話で、`ln(-1)` を SyntaxError と言われても直しようがない。
+    DomainError,
     /// 対応しない `)` や `.` の重複など、入力列として不正。
     SyntaxError,
 }

@@ -56,6 +56,23 @@ fn load(name: &str) -> Golden {
     golden
 }
 
+/// `expect` にエラーが書かれていればその名前。値のケースでは None。
+fn expected_error(case: &Case) -> Option<&str> {
+    case.expect.get("error").and_then(|e| e.as_str())
+}
+
+/// CalcError を golden の綴りに写す。
+fn error_name(e: calcarc_core::CalcError) -> &'static str {
+    use calcarc_core::CalcError::*;
+    match e {
+        DivisionByZero => "DivisionByZero",
+        Overflow => "Overflow",
+        TrigPole => "TrigPole",
+        DomainError => "DomainError",
+        SyntaxError => "SyntaxError",
+    }
+}
+
 fn field(v: &serde_json::Value, key: &str) -> f64 {
     v.get(key)
         .and_then(|x| x.as_f64())
@@ -182,15 +199,23 @@ fn scientific_functions_match_the_reference() {
             "tan" => scientific::tan(x, mode),
             "sqrt" => scientific::sqrt(x),
             other => panic!("{}: unknown op {other}", case.id),
-        }
-        .unwrap_or_else(|e| panic!("{}: unexpected error {e:?}", case.id));
+        };
 
-        close_complex(
-            actual,
-            field(&case.expect, "re"),
-            field(&case.expect, "im"),
-            golden.tolerance,
-            &case.id,
-        );
+        match (actual, expected_error(case)) {
+            (Ok(v), None) => close_complex(
+                v,
+                field(&case.expect, "re"),
+                field(&case.expect, "im"),
+                golden.tolerance,
+                &case.id,
+            ),
+            (Err(e), Some(expected)) => {
+                assert_eq!(error_name(e), expected, "{}: error kind", case.id)
+            }
+            (Ok(v), Some(expected)) => {
+                panic!("{}: expected {expected} but got {v:?}", case.id)
+            }
+            (Err(e), None) => panic!("{}: unexpected error {e:?}", case.id),
+        }
     }
 }

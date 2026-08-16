@@ -1,22 +1,28 @@
 use crate::{AngleMode, CalcError, CalcResult, Value};
 
-/// 平方根の主値。
+/// 実数の平方根。**負の実数と複素数は定義域の外**である（S-1 設計書 §1 の裁定 1）。
 ///
-/// 実数は専用の経路で扱う。負の実数を極形式経由で計算すると
-/// 実部に 1.2e-16 程度の残差が出て `1.224646799e-16+j2` と表示されるため、
-/// 実数のときは虚軸上の値をそのまま構成する。
+/// 以前は負の実数を虚軸に載せて `sqrt(-4) = j2` を返していた。関数を実数に
+/// 閉じる裁定でそれを落とした。**複素数は入力と四則と表示の機能であって、
+/// 関数の値域ではない。** `sqr` と `neg` は複素数のままである——2 乗は乗算、
+/// 符号反転は減算であり、どちらも四則の側にある。
 pub fn sqrt(v: Value) -> CalcResult<Value> {
-    if v.is_real() {
-        return if v.re >= 0.0 {
-            Value::real(v.re.sqrt()).finalize()
-        } else {
-            Value::imag((-v.re).sqrt()).finalize()
-        };
+    let x = real_arg(v)?;
+    if x < 0.0 {
+        return Err(CalcError::DomainError);
     }
-    let p = v.to_polar();
-    let r = p.r.sqrt();
-    let half = p.theta_rad / 2.0;
-    Value::new(r * half.cos(), r * half.sin()).finalize()
+    Value::real(x.sqrt()).finalize()
+}
+
+/// 関数の引数を実数として取り出す。複素数は `DomainError`（設計書 §1 の裁定 4）。
+///
+/// 実部だけ使う案は**黙って別の計算をする**ので採らない。
+fn real_arg(v: Value) -> CalcResult<f64> {
+    if v.is_real() {
+        Ok(v.re)
+    } else {
+        Err(CalcError::DomainError)
+    }
 }
 
 pub fn sqr(v: Value) -> CalcResult<Value> {
@@ -87,18 +93,14 @@ mod tests {
     }
 
     #[test]
-    fn square_root_of_a_negative_real_is_exactly_imaginary() {
-        // 極形式を経由すると実部に 1.2e-16 が残る。実数の負値は
-        // 専用の経路で扱い、ちょうど j2 を返す。
-        assert_eq!(sqrt(Value::real(-4.0)).unwrap(), Value::imag(2.0));
+    fn square_root_of_a_negative_real_is_a_domain_error() {
+        assert_eq!(sqrt(Value::real(-4.0)), Err(CalcError::DomainError));
     }
 
     #[test]
-    fn square_root_of_a_complex_number() {
-        // sqrt(3+j4) = 2+j1
-        let r = sqrt(Value::new(3.0, 4.0)).unwrap();
-        close(r.re, 2.0);
-        close(r.im, 1.0);
+    fn square_root_of_a_complex_number_is_a_domain_error() {
+        // 極形式経由で答えられたが、関数は実数に閉じる（設計書 §5）。
+        assert_eq!(sqrt(Value::new(3.0, 4.0)), Err(CalcError::DomainError));
     }
 
     #[test]

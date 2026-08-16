@@ -23,6 +23,8 @@ def test_radian_mode() -> None:
     assert math.isclose(sin(math.pi / 6, "Rad"), 0.5, abs_tol=1e-15)
 
 
-def test_square_root_of_a_negative_is_imaginary() -> None:
-    assert sqrt_real(-4.0) == (0.0, 2.0)
-    assert sqrt_real(4.0) == (2.0, 0.0)
+def test_square_root_of_a_negative_leaves_the_reals() -> None:
+    # 関数は実数に閉じる（S-1 設計書 §1 の裁定 1）。参照実装は Rust の分岐を
+    # 写すのではなく、mpmath が mpc を返したことを定義域の外の判定に使う。
+    assert sqrt_real(-4.0) == {"error": "DomainError"}
+    assert sqrt_real(4.0) == {"re": 2.0, "im": 0.0}

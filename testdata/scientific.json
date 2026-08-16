@@ -302,8 +302,7 @@
     },
     {
       "expect": {
-        "im": 2.0,
-        "re": 0.0
+        "error": "DomainError"
       },
       "id": "sqrt/-4.0",
       "input": {
@@ -314,8 +313,7 @@
     },
     {
       "expect": {
-        "im": 1.0,
-        "re": 0.0
+        "error": "DomainError"
       },
       "id": "sqrt/-1.0",
       "input": {

@@ -12,6 +12,7 @@ export type CalcErrorCode =
   | "DivisionByZero"
   | "Overflow"
   | "TrigPole"
+  | "DomainError"
   | "SyntaxError";
 
 /** calcarc-core の engine::state::BinOp に対応。 */

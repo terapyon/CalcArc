@@ -32,9 +32,13 @@ def tan(x: float, mode: str) -> float:
     return float(mp.tan(_to_radians(x, mode)))
 
 
-def sqrt_real(x: float) -> tuple[float, float]:
-    """実数の平方根。負なら虚部として返す。"""
-    v = mp.mpf(str(x))
-    if v >= 0:
-        return float(mp.sqrt(v)), 0.0
-    return 0.0, float(mp.sqrt(-v))
+def sqrt_real(x: float) -> dict:
+    """実数の平方根。
+
+    **負の実数は定義域の外**である（S-1 設計書 §1 の裁定 1）。判定は Rust の
+    分岐を写したものではなく、mpmath が mpc（複素数）を返すかどうかで決める。
+    """
+    r = mp.sqrt(mp.mpf(str(x)))
+    if isinstance(r, mp.mpc) and r.imag != 0:
+        return {"error": "DomainError"}
+    return {"re": float(r), "im": 0.0}

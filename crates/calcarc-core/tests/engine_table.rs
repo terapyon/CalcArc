@@ -352,9 +352,10 @@ fn functions_apply_immediately_to_the_displayed_value() {
 }
 
 #[test]
-fn square_root_of_a_negative_gives_an_imaginary_result() {
-    // 従来機が Math ERROR を返す入力に、複素数対応の電卓は答えられる。
-    assert_eq!(main_of(&["4", "neg", "sqrt"]), "j2");
+fn square_root_of_a_negative_is_a_domain_error() {
+    // 関数は実数に閉じる（設計書 §1 の裁定 1）。複素数は入力と四則と
+    // 表示の機能であって、関数の値域ではない。
+    assert_eq!(main_of(&["4", "neg", "sqrt"]), "Math ERROR");
 }
 
 #[test]

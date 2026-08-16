@@ -86,14 +86,13 @@ def build_scientific() -> dict:
             }
         )
     for x in cases.SQRT_INPUTS:
-        re, im = scientific_ref.sqrt_real(x)
         entries.append(
             {
                 "id": f"sqrt/{x}",
                 "op": "sqrt",
                 "mode": "Deg",
                 "input": {"x": x},
-                "expect": {"re": re, "im": im},
+                "expect": scientific_ref.sqrt_real(x),
             }
         )
     return _envelope(entries)

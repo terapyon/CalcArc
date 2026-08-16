@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, Value, render};
+    use calcarc_core::{DisplayState, EngineState, Key, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -181,27 +181,17 @@ mod invariants {
             && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
     }
 
-    /// この打鍵が作用する値。入力中なら確定前のバッファの値。
+    /// I3: 実軸は演算で閉じており、虚軸への出口は `j` キーだけ。
     ///
-    /// 指数が f64 の範囲を超えているバッファは、まだ値になっていない
-    /// (確定した瞬間に Overflow になる。設計書 §2)。その場合はこの観測点
-    /// としては確定値を使う——I3 が見ているのは実軸と虚軸の話であって、
-    /// 大きさではない。
-    fn acting_on(state: &EngineState) -> Value {
-        state
-            .buffer
-            .as_ref()
-            .and_then(|b| b.value().ok())
-            .unwrap_or(state.current)
-    }
-
-    /// I3 / I3b: 実軸は演算で閉じており、虚軸への出口は 2 つだけ。
+    /// `j` は入力なので「実数のみの入力」という前提から外れる。これを例外と
+    /// して認めないと、網羅列挙が `j` を踏んだ瞬間にバグでないものが落ちる
+    /// テストになる。
     ///
-    /// 出口 1 は `j` キーで、これは入力なので「実数のみの入力」という
-    /// 前提から外れる。出口 2 は負の実数の sqrt で、`sqrt(-4) = j2` を
-    /// 返すのは設計上の機能である（Vertical Slice 設計書 §4.1）。
-    /// この 2 つを例外として認めないと、網羅列挙が `−` `√` を踏んだ
-    /// 瞬間にバグでないものが落ちるテストになる。
+    /// **かつては出口が 2 つあった。** `sqrt(-4) = j2` を返すのが設計上の機能
+    /// だったためで、負の実数の sqrt に I3b という例外を置いていた。関数を
+    /// 実数に閉じる裁定（S-1 設計書 §1）でその機能が消え、例外も消えた
+    /// ——いまの `sqrt` はエラーを返すので、上の `after.error.is_some()` に
+    /// 吸収される。
     fn real_axis_is_closed(step: &Step<'_>) -> Result<(), String> {
         let (before, after) = (step.before, step.after);
         if !all_real(before) || after.error.is_some() {
@@ -217,22 +207,6 @@ mod invariants {
                 ));
             }
             return Ok(());
-        }
-        if step.key == Key::Sqrt && acting_on(before).re < 0.0 {
-            // I3b: 純虚数でなければならない。極形式を経由する実装だと
-            // 実部に 1.2e-16 が残り、j2 が 1.224646799e-16+j2 になる。
-            //
-            // 網羅列挙がここへ届くのは `− 3 = √` や `0 − 3 = √` で、
-            // 二項演算の低優先クラスの代表を `+` ではなく `−` にして
-            // ある理由がこれである（設計書 §5.2）。
-            return if after.current.re == 0.0 {
-                Ok(())
-            } else {
-                Err(format!(
-                    "I3b: sqrt of a negative real left re={}",
-                    after.current.re
-                ))
-            };
         }
         if !all_real(after) {
             return Err(format!(
@@ -426,10 +400,10 @@ mod invariants {
 /// 構造の網。表示トグルと定数を外すぶん、長さ 7 まで届く。
 ///
 /// 二項演算子の代表が `−` と `÷` なのは、同じ等価類のうち**射程が広いほう**
-/// を選んでいるからである。`−` は負の実数を作れるので `√` の I3b 経路に
-/// 届き、`÷` は畳み込みの途中で失敗できる唯一の二項演算子で、被演算数を
-/// 消費した後にエラーになった状態の形を網に入れる。`+` `×` を代表にすると
-/// どちらの形も一度も通らない。
+/// を選んでいるからである。`−` は負の実数を作れるので、負の値を単項関数に
+/// 通す経路（`0 − 3 = √` が `DomainError` になる形）に届き、`÷` は畳み込みの
+/// 途中で失敗できる唯一の二項演算子で、被演算数を消費した後にエラーになった
+/// 状態の形を網に入れる。`+` `×` を代表にするとどちらの形も一度も通らない。
 const STRUCTURE: [Key; 10] = [
     Key::Digit(3),
     Key::Dot,
@@ -445,8 +419,9 @@ const STRUCTURE: [Key; 10] = [
 
 /// 全等価類の網。表示トグル・後置関数・定数・ゼロを足すぶん長さ 6 まで。
 ///
-/// `√` を後置関数の代表にするのは、sqrt だけが負の実数用の専用経路を持ち
-/// （I3b）、他の単項関数と違う分岐を通るためである。`0 − 3 = √` で届く。
+/// `√` を後置関数の代表にするのは、**エラーを返しうる単項関数**の代表だから
+/// である（`0 − 3 = √` で `DomainError` に届く）。エラーに落ちた後の状態の形を
+/// 網に入れられるのは、この経路だけである。
 ///
 /// 表示トグルの代表は `▸∠` にする。`DRG` と `▸∠` は状態への作用こそ同じ
 /// だが、`angle` は三角関数と極形式の角度にしか効かず、この網は単項関数を
