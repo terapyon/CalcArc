@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import type { ToleranceBand } from "./corpus";
 import { loadShards, needsPrecedence, partitionCases } from "./corpus";
 import {
+  areaOfShard,
   expectedSummaryNames,
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
@@ -11,6 +12,7 @@ import {
   renderReport,
   type ShardSummary,
   summaryName,
+  verdictOf,
 } from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
@@ -949,4 +951,58 @@ test("the injected-token share is derived from the same counts the table renders
   );
   expect(markdown).not.toContain("2122");
   expect(markdown).not.toContain("74.2%");
+});
+
+test("an area with no cases is never called correct", () => {
+  // **これが判定でいちばん重い嘘になりうる。** 3 領域のうち 2 領域が
+  // 現に 0 件なので、0 件が「完全に正しい」に落ちると報告書が破綻する。
+  //
+  // このテストを赤くする編集: verdictOf の `caseCount === 0` の枝を消す
+  // (誤差 0 として扱われ「完全に正しい」になる)。
+  expect(verdictOf(0, 0, 0)).toBe("検証していない");
+});
+
+test("the verdict ladder cuts where the display cuts", () => {
+  // 表示は有効数字 10 桁なので、境界は 5e-10。
+  expect(verdictOf(100, 0, 0)).toBe("完全に正しい");
+  expect(verdictOf(100, 5e-10, 0)).toBe("完全に正しい");
+  // f64 由来のずれ。**警告であって不合格ではない**(ユーザ裁定 2026-08-16)。
+  expect(verdictOf(100, 1.34e-9, 0)).toBe("ある程度正しい");
+  expect(verdictOf(100, 9.9e-7, 0)).toBe("ある程度正しい");
+  // 有効数字の上位が違う。
+  expect(verdictOf(100, 1e-6, 0)).toBe("多少疑問がある");
+  expect(verdictOf(100, 0.5, 0)).toBe("多少疑問がある");
+  // 桁が違う。
+  expect(verdictOf(100, 1, 0)).toBe("間違っている");
+  expect(verdictOf(100, 1e6, 0)).toBe("間違っている");
+});
+
+test("a structural failure outweighs a small numeric error", () => {
+  // 不一致が 1 件でもあれば、誤差がいくら小さくても「間違っている」。
+  // 有限の答があるのに inf/NaN/エラーになった場合がこれに当たる。
+  //
+  // このテストを赤くする編集: verdictOf の structuralFailures の条件を外す。
+  expect(verdictOf(100, 0, 1)).toBe("間違っている");
+});
+
+test("a shard whose area is unknown is refused instead of guessed", () => {
+  // **黙って scientific に落とすと、新しい領域の結果が科学計算の判定に
+  // 混ざって見えなくなる。**
+  expect(areaOfShard("scientific-000.json")).toBe("scientific");
+  expect(areaOfShard("combinatorics-000.json")).toBe("scientific");
+  expect(areaOfShard("finance-000.json")).toBe("finance");
+  expect(areaOfShard("data-scale-000.json")).toBe("data_scale");
+  expect(() => areaOfShard("something-new-000.json")).toThrow();
+});
+
+test("the verdict table names every area, including the untested ones", () => {
+  const markdown = renderReport(
+    [summary({ name: "scientific-000.json" })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("scientific");
+  // **試していない領域を表から省かない。** 省くと「載っている領域が全部」に見える。
+  expect(markdown).toContain("data_scale");
+  expect(markdown).toContain("finance");
+  expect(markdown).toContain("検証していない");
 });

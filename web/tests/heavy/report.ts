@@ -318,6 +318,139 @@ function percentage(part: number, whole: number): string {
  * 外の人が読んで「これなら大丈夫だ」と判断できる材料を出す。
  * **緑のチェックは何件どこまでの精度で確かめたかを答えない**(設計書 §8)。
  */
+/**
+ * 電卓の機能領域。**`crates/calcarc-core/src/` の区画がそのまま正である。**
+ *
+ * 判定は領域ごとに出す。「この電卓は正しいか」は 1 つの答えを持たない——
+ * 科学計算が全件一致していても、金融が一件も試されていなければ、
+ * **その 2 つを混ぜた 1 つの判定は嘘になる。**
+ */
+export const AREAS = ["scientific", "data_scale", "finance"] as const;
+export type Area = (typeof AREAS)[number];
+
+/**
+ * シャード名から領域を決める。
+ *
+ * **未知の接頭辞は黙って `scientific` に落とさない。** 落とすと、新しい領域の
+ * シャードを足したときに、その結果が科学計算の判定に混ざって見えなくなる。
+ */
+export function areaOfShard(shardName: string): Area {
+  const stem = shardName.replace(/\.json$/, "").replace(/ \(.*\)$/, "");
+  if (/^(finance|loan|compound)-/.test(stem)) {
+    return "finance";
+  }
+  if (/^(data-scale|datascale|bytes)-/.test(stem)) {
+    return "data_scale";
+  }
+  if (
+    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics|cancellation)-/.test(
+      stem,
+    )
+  ) {
+    return "scientific";
+  }
+  throw new Error(
+    `report: shard ${JSON.stringify(shardName)} does not match any known ` +
+      "area prefix. Add it to areaOfShard rather than letting it fall into " +
+      "an area it does not belong to — a silent default would hide a whole " +
+      "new area inside another area's verdict.",
+  );
+}
+
+/** 判定の 4 段。閾値は表示(有効数字 10 桁)から導く。 */
+export const VERDICTS = [
+  "完全に正しい",
+  "ある程度正しい",
+  "多少疑問がある",
+  "間違っている",
+  "検証していない",
+] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
+/**
+ * 判定の閾値。**桁で切る。**
+ *
+ * - `完全に正しい` — 表示 10 桁がすべて一致(相対誤差 ≤ 5e-10)
+ * - `ある程度正しい` — 差はあるが 1e-6 未満。**表示の末尾数桁だけ違う。**
+ *   f64 の丸めや桁落ちで説明でき、桁は合っている。**警告であって不合格ではない**
+ * - `多少疑問がある` — 1e-6 以上 1 未満。有効数字の上位が違うが、桁は同じ
+ * - `間違っている` — 相対誤差 1 以上、符号違い、桁違い、有限の答があるのに
+ *   `inf`/`NaN`/エラー。**全然違う数**
+ */
+export const VERDICT_EDGES = { correct: 5e-10, mild: 1e-6, wrong: 1 } as const;
+
+export function verdictOf(
+  caseCount: number,
+  worstRelativeError: number,
+  structuralFailures: number,
+): Verdict {
+  if (caseCount === 0) {
+    // **「一件も試していない」を「正しい」と書かない。** これが 3 領域のうち
+    // 2 領域の現状であり、混同すると報告書がいちばん重い嘘をつく。
+    return "検証していない";
+  }
+  if (structuralFailures > 0 || worstRelativeError >= VERDICT_EDGES.wrong) {
+    return "間違っている";
+  }
+  if (worstRelativeError >= VERDICT_EDGES.mild) {
+    return "多少疑問がある";
+  }
+  if (worstRelativeError > VERDICT_EDGES.correct) {
+    return "ある程度正しい";
+  }
+  return "完全に正しい";
+}
+
+/**
+ * 領域ごとの判定表。**この報告書でいちばん先に読まれる部分である。**
+ *
+ * 判定と一緒に件数を出すのは、**試していない領域に「正しい」と書かないため**で
+ * ある。判定だけを並べると、`検証していない` が他の 3 段と同じ重さに見える。
+ */
+export function renderVerdicts(entries: ShardSummary[]): string[] {
+  const rows = AREAS.map((area) => {
+    const own = entries.filter((entry) => areaOfShard(entry.name) === area);
+    const cases = own.reduce((sum, entry) => sum + entry.total, 0);
+    const worst = Math.max(0, ...own.map((entry) => entry.maxRelativeError));
+    const mismatches = own.reduce(
+      (sum, entry) => sum + entry.mismatches.length,
+      0,
+    );
+    return {
+      area,
+      cases,
+      worst,
+      mismatches,
+      verdict: verdictOf(cases, worst, mismatches),
+    };
+  });
+  return [
+    "## 判定",
+    "",
+    "**領域ごとに出す。** 「この電卓は正しいか」に 1 つの答えは無い——",
+    "科学計算が全件一致していても、金融を一件も試していなければ、",
+    "その 2 つを混ぜた判定は嘘になる。",
+    "",
+    "| 領域 | 判定 | 照合した件数 | 最大相対誤差 | 不一致 |",
+    "|---|---|---:|---:|---:|",
+    ...rows.map(
+      (row) =>
+        `| \`${row.area}\` | **${row.verdict}** | ${row.cases} | ` +
+        `${row.cases === 0 ? "—" : exponential(row.worst)} | ${row.mismatches} |`,
+    ),
+    "",
+    "判定の意味:",
+    "",
+    "- **完全に正しい** — 表示される 10 桁がすべて一致した",
+    "- **ある程度正しい** — 表示の末尾数桁だけ違う(相対誤差 1e-6 未満)。",
+    "  f64 の丸めや桁落ちで説明でき、桁は合っている。**警告であって不合格ではない**",
+    "- **多少疑問がある** — 有効数字の上位が違う(1e-6 以上)。桁は同じ",
+    "- **間違っている** — 桁違い・符号違い、または有限の答があるのに",
+    "  `inf`/`NaN`/エラー。**全然違う数**",
+    "- **検証していない** — このコーパスに 1 件も無い。**「正しい」ではない**",
+  ];
+}
+
 export function renderReport(
   entries: ShardSummary[],
   provenance: Provenance,
@@ -403,6 +536,8 @@ export function renderReport(
           "",
         ]),
     "# 重量級コーパスの実行結果",
+    "",
+    ...renderVerdicts(entries),
     "",
     `- **二経路で照合したケース(値): ${valueCases}** ` +
       "— Rust の計算コアと Python の mpmath が独立に同じ数に着くことを確かめた件数",
