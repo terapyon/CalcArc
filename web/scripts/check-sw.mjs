@@ -32,7 +32,17 @@ if (!/\.wasm/.test(sw)) {
   fail("precache に .wasm が無い(glob か上限を確認。オフラインで計算不能になる)");
 }
 
-// 3. manifest の中身。
+// 3. navigation fallback に除外があること。
+//    これが無いと、アドレスバーに /ogp.png と打ったときに SW が
+//    index.html を返し、画像やアイコンが直接開けなくなる。curl では
+//    SW を通らないので、この層でしか捕まらない。
+if (!sw.includes("denylist")) {
+  fail(
+    "sw.js の navigation fallback に除外が無い(navigateFallbackDenylist を確認。/ogp.png のような実ファイルが index.html にすり替わる)",
+  );
+}
+
+// 4. manifest の中身。
 const manifestPath = resolve(dist, "manifest.webmanifest");
 if (!existsSync(manifestPath)) fail("manifest.webmanifest が無い");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

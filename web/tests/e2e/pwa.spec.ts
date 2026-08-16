@@ -85,6 +85,20 @@ test("Scientific and Data Scale keep working once the network drops, after one c
   await expect(main(page)).toHaveText("307.2 GB");
 });
 
+test("an image path opened directly is not swallowed by the navigation fallback", async ({
+  page,
+}) => {
+  // アドレスバーに /ogp.png と打つ操作の再現。SW が active になった後で
+  // 画像パスへ直接 goto し、index.html にすり替えられず PNG がそのまま
+  // 返ることを確認する(navigateFallbackDenylist の実地確認)。
+  await page.goto("/");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+
+  const response = await page.goto("/ogp.png");
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["content-type"]).toContain("image/png");
+});
+
 test("a cold visit with the network already off fails to load (the failing twin)", async ({
   page,
   context,
