@@ -26,8 +26,8 @@ describe("Scientific のキー集合", () => {
   });
 
   it("has no reserved slots in the function row or main grid", () => {
-    // S2 で 000 と Exp が有効になった。関数列 2 段目には S-4 が埋める予約が
-    // 1 つ残っている(S-1 が他の 5 つを埋めた)ので、そこだけ対象から外す。
+    // S2 で 000 と Exp が有効になり、S-1 と S-4 が 2 段目を埋め切った。
+    // **どの区画にも予約スロットは残っていない。**
     for (const name of ["関数キー", "数字と演算のキー"]) {
       const reserved = section(name).keys.filter(
         (k) => k.token === null && !k.kind,
@@ -87,9 +87,9 @@ describe("Scientific のキー集合", () => {
     expect(second?.height).toBe("half");
     expect(second?.keys[0]?.token).toBe("eng");
     expect(second?.keys).toHaveLength(7);
-    // **並びを丸ごと主張する**(S-1 設計書 §7 の確定盤面)。残る予約は
-    // 7 番目だけで、S-4 の `°'"` が入る。`every` で書くと空配列でも真に
-    // なり、スロットを消しても緑のまま通ってしまう。
+    // **並びを丸ごと主張する**(S-1 §7 の確定盤面 + S-4 の `°'"`)。
+    // `every` で書くと空配列でも真になり、スロットを消しても緑のまま
+    // 通ってしまう。
     expect(second?.keys.map((k) => k.token)).toEqual([
       "eng",
       "ln",
@@ -97,7 +97,7 @@ describe("Scientific のキー集合", () => {
       "recip",
       "exp_e",
       "pow",
-      null,
+      "dms",
     ]);
   });
 
@@ -118,12 +118,15 @@ describe("Scientific のキー集合", () => {
     expect(key?.shift?.token).toBe("e");
   });
 
-  it("has one reserved slot left, and it is the one S-4 fills", () => {
-    // 第 2 面の「準備中」は S-1 で全部埋まった。無効表示の意味論を守る
-    // 対象は、第 2 関数列に残る 1 枠だけになる。
+  it("has no reserved slots left anywhere on the board", () => {
+    // **S-4 で最後の 1 枠(`°'"`)が埋まった。** 4 本の spec を通して
+    // 盤面に空きは 1 つも無い——Shift 自身を除けば、すべてのキーが
+    // トークンを持つ。次に機能を足す人は**置き場を作るところから**になる。
     const reserved = allKeys.filter((k) => k.token === null && !k.kind);
-    expect(reserved).toHaveLength(1);
-    expect(reserved[0]?.ariaLabel).toBe("空き");
+    expect(reserved).toEqual([]);
+    // 第 2 面にも「準備中」は残っていない。
+    const faces = allKeys.filter((k) => k.shift).map((k) => k.shift?.token);
+    expect(faces.every((t) => t !== null)).toBe(true);
   });
 
   it("puts the counting keys behind the digits, the only place three fit", () => {

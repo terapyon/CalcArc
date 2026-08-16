@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::numeric::format::{format_real, format_real_eng, try_format_polar};
+use crate::numeric::format::{format_real, format_real_eng, format_sexagesimal, try_format_polar};
 use crate::{AngleMode, CalcError, EngineState, Value};
 
 use super::state::{BinOp, DisplayForm, Notation, OpToken};
@@ -49,6 +49,11 @@ pub fn render(state: &EngineState) -> DisplayState {
         // 入力中は打鍵した通りに見せる(設計書 §3.2)。ENG を掛けるのは
         // 確定した値だけで、buffer.text() はここを経由しない。
         buffer.text()
+    } else if let Some(text) = sexagesimal_view_of(state) {
+        // **60 進は ENG より先に見る**(S-4)。どちらも表示層だが、`°'"` は
+        // 押した直後の一時状態なので、そちらを勝たせる。設計書 §9 は
+        // 「排他にする」としか書いていないので、ここで決めて表に固定した。
+        text
     } else {
         match state.form {
             DisplayForm::Rect => format_rect_notated(state.current, state.notation),
@@ -91,6 +96,20 @@ pub fn render(state: &EngineState) -> DisplayState {
         },
         error,
     }
+}
+
+/// `°'"` を押した直後なら 60 進の文字列。そうでなければ None。
+///
+/// **60 進にできない値でも None を返す**(裁定 6)——呼び出し側が通常表示に
+/// 落ちるので、**表示が変わらないだけでエラーにはならない**。
+///
+/// 複素数は 60 進にしない。時間にも角度にも読めないためで、`is_real()` で
+/// 弾く（S-1 が関数を実数に閉じたのと同じ線引きである）。
+fn sexagesimal_view_of(state: &EngineState) -> Option<String> {
+    if !state.sexagesimal_view || !state.current.is_real() {
+        return None;
+    }
+    format_sexagesimal(state.current.re)
 }
 
 /// 実数 1 つを記法に従って文字列にする。

@@ -3,9 +3,10 @@
 日付: 2026-08-16
 対象: `numeric/format.rs`、`engine/{key,state,display}.rs`、盤面、base-spec。
 前提: **main（`0fd4842`）から**（複利の逆算と E2E がマージされた後）。S-2（ENG）と**表示層で隣り合う**。
-**状態: 設計承認済み・裁定すべて決着（§2、2026-08-16）。**
-**⚠ 未実装——このリポジトリに実装は入っていない。** 実装順と依存は
-`2026-08-16-eng-notation-design.md` §0.1 が正である。
+**状態: 実装済み（`feature/sexagesimal`、2026-08-16）。**
+計画は `docs/superpowers/plans/2026-08-16-sexagesimal.md`。
+実装順と依存は `2026-08-16-eng-notation-design.md` §0.1 が正である。
+**これが 4 本の最後で、Scientific の盤面に空きスロットは 1 つも無くなった。**
 
 ## §0 位置づけ
 

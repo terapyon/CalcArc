@@ -83,8 +83,20 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 | Key::Del
                 | Key::AngleToggle
                 | Key::PolarToggle
-                | Key::EngToggle => was_pending,
+                | Key::EngToggle
+                // `°'"` は入力中なら区切り(場所は動かない)、そうでなければ
+                // 表示トグル(値に触らない)。どちらも場所を動かさない。
+                | Key::Dms => was_pending,
             };
+    }
+
+    // §3.1: **`°'"` 以外のあらゆるキーで 60 進表示を解除する。**
+    // 例外を作らない——`▸∠` は形そのものを変え、`DEG/RAD` は角度の意味を
+    // 変え、`ENG` は同じ表示層で競合する。どれも「60 進のまま保つ」と
+    // 言いにくい。**1 つの規則で言い切るほうが、利用者にも実装にも検査にも
+    // 安い。** 利用者から見ると「`°'"` は覗くためのキー」になる。
+    if key != Key::Dms {
+        next.sexagesimal_view = false;
     }
 
     let shown = display::render(&next);
@@ -360,6 +372,17 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // 表示形式だけを入れ替える。current には触れない。
             // これがあるから丸めた値が次の計算に流れ込まない。
             state.form = state.form.toggled();
+        }
+        Key::Dms => {
+            // **2 つの仕事をする**(S-4 設計書 §3)。入力中なら 60 進の区切り、
+            // そうでなければ表示の一時トグル。Casio 方式である。
+            let separated = state
+                .buffer
+                .as_mut()
+                .is_some_and(Buffer::push_sexagesimal_separator);
+            if !separated && state.buffer.is_none() {
+                state.sexagesimal_view = !state.sexagesimal_view;
+            }
         }
         Key::EngToggle => {
             // 記法だけを入れ替える。表示の切り替えであって計算ではないので、
