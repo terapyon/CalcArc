@@ -26,8 +26,8 @@ describe("Scientific のキー集合", () => {
   });
 
   it("has no reserved slots in the function row or main grid", () => {
-    // S2 で 000 と Exp が有効になった。関数列 2 段目には ENG 以外に 6 つの
-    // 予約がある(S-1/S-4 が後で埋める)ので、そこだけ対象から外す。
+    // S2 で 000 と Exp が有効になった。関数列 2 段目には S-4 が埋める予約が
+    // 1 つ残っている(S-1 が他の 5 つを埋めた)ので、そこだけ対象から外す。
     for (const name of ["関数キー", "数字と演算のキー"]) {
       const reserved = section(name).keys.filter(
         (k) => k.token === null && !k.kind,
@@ -86,13 +86,10 @@ describe("Scientific のキー集合", () => {
     expect(second?.columns).toBe(7);
     expect(second?.height).toBe("half");
     expect(second?.keys[0]?.token).toBe("eng");
-    // 予約スロットが 6 つあること自体を主張する。長さの検査が無いと
-    // "every" は空配列でも真になり、予約スロットを消しても緑のまま
-    // 通ってしまう(§7.3 が予約スロットを置く理由が守られない)。
     expect(second?.keys).toHaveLength(7);
-    // 2 段目の並びは S-1 設計書 §7 の確定盤面。残る予約は 7 番目だけで、
-    // S-4 の `°'"` が入る。長さの検査が無いと "every" は空配列でも真になり、
-    // 予約スロットを消しても緑のまま通ってしまう。
+    // **並びを丸ごと主張する**(S-1 設計書 §7 の確定盤面)。残る予約は
+    // 7 番目だけで、S-4 の `°'"` が入る。`every` で書くと空配列でも真に
+    // なり、スロットを消しても緑のまま通ってしまう。
     expect(second?.keys.map((k) => k.token)).toEqual([
       "eng",
       "ln",
@@ -106,7 +103,10 @@ describe("Scientific のキー集合", () => {
 
   it("puts the inverse trig functions behind their own first face", () => {
     // sin の裏が asin という対応が自然だから第 2 面に置いた(S-1 設計書 §7)。
-    const pairs = section("関数キー").keys.map((k) => [k.token, k.shift?.token]);
+    const pairs = section("関数キー").keys.map((k) => [
+      k.token,
+      k.shift?.token,
+    ]);
     expect(pairs).toContainEqual(["sin", "asin"]);
     expect(pairs).toContainEqual(["cos", "acos"]);
     expect(pairs).toContainEqual(["tan", "atan"]);

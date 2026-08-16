@@ -56,7 +56,9 @@ test("the second face is full now, not a row of placeholders", async ({
   await expect(
     page.getByRole("button", { name: "第2面（準備中）" }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "アークサイン" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "アークサイン" }),
+  ).toBeEnabled();
 });
 
 test("the one remaining reserved slot does nothing, and looks like it", async ({
