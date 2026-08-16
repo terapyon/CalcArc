@@ -19,6 +19,12 @@ import {
 } from "./corpus";
 import { parseDisplay } from "./display";
 import { coreVersion, openHarness, runAll } from "./harness";
+import {
+  assertNoStaleOverrides,
+  assertOverridesAreSound,
+  loadOverrides,
+  resolveTolerance,
+} from "./overrides";
 import { noteRuntime, record } from "./report";
 
 // **1 度だけ読む。** モジュールのトップレベルで 3 回呼ぶと 1.6MB の JSON を
@@ -38,35 +44,63 @@ const partitions = shards.map(({ name, shard }) => ({
   ...partitionCases(name, shard.cases),
 }));
 
-test("withinTolerance compares against the numbers it is handed", () => {
-  // ここのリテラルは **withinTolerance 自身の入力**であって、コーパスの
-  // 許容誤差ではない。実際の比較(下の test)は shard.tolerance だけを使う。
+// **上書きも 1 度だけ読む。** 判定を rel だけに締めた結果、精度の物理的な
+// 上限に当たるケースが落ちる。それを許容全体の緩和で救うと 4000 件全部が
+// 緩むので、**名指しで、理由を添えて**許す(設計書 §3)。
+const overrides = loadOverrides();
+
+// 上書きが指す id がコーパスに実在するか、reason が書かれているかを
+// **走行の頭で**確かめる。あとで「なぜか緩い」と気づくより、その場で
+// 名指しで落ちる方が原因に近い。
+const allCaseIds = new Set(
+  shards.flatMap(({ shard }) => shard.cases.map((c) => c.id)),
+);
+assertOverridesAreSound(overrides, allCaseIds);
+
+test("withinTolerance judges by relative error alone", () => {
+  // ここのリテラルは withinTolerance 自身の入力であって、コーパスの許容ではない。
+  // 実際の比較(下の test)は shard.tolerance だけを使う。
   // CLAUDE.md が禁じているのは後者をコードに書くことである。
-  const tolerance = { abs: 1e-9, rel: 1e-9 };
-  expect(withinTolerance(1, 1 + 1e-12, tolerance)).toBe(true);
+  const tolerance = { abs: 5e-10, rel: 5e-10 };
+
+  // 相対で収まれば通る。
+  expect(withinTolerance(1, 1 + 4e-10, tolerance)).toBe(true);
+  // 相対で外れれば、絶対誤差がどれだけ小さくても落ちる。
+  // **これが今回の変更の本体である**——以前は abs の OR が救っていた。
+  expect(withinTolerance(1e-6, 1e-6 + 4e-10, tolerance)).toBe(false);
+  // 大きさに依らず同じ相対で見る。
   expect(withinTolerance(1, 1.5, tolerance)).toBe(false);
-  // 相対誤差が効く大きさ。
   expect(withinTolerance(1e8, 1e8 + 1, tolerance)).toBe(false);
-  // **rel は超えたが abs で通る経路。** 実運用で実際に起きている経路なのに
-  // 未テストだった(レビュー修正ラウンド 2)。相対誤差は 4e-2 で rel の
-  // 4000 万倍だが、絶対誤差は 4e-10 で abs に収まるので「通った」になる。
-  expect(withinTolerance(1e-8, 1e-8 + 4e-10, tolerance)).toBe(true);
 });
 
-test("classify says how loosely the OR actually checked the case", () => {
-  const tolerance = { abs: 1e-9, rel: 1e-9 };
-  // |期待値| ≥ 1: abs の側は rel より厳しいので、実効的な相対許容は rel。
+test("abs is only for an expectation of exactly zero", () => {
+  const tolerance = { abs: 5e-10, rel: 5e-10 };
+  expect(withinTolerance(0, 0, tolerance)).toBe(true);
+  expect(withinTolerance(4e-10, 0, tolerance)).toBe(true);
+  expect(withinTolerance(6e-10, 0, tolerance)).toBe(false);
+});
+
+test("classify reports the relative tolerance as the effective one", () => {
+  const tolerance = { abs: 5e-10, rel: 5e-10 };
+  const small = classify(1e-6, 1e-6, tolerance);
+  // 以前はここが abs / |期待値| = 5e-4 に膨らんでいた。
+  expect(small.effectiveRelTolerance).toBe(5e-10);
+  expect(small.bucket).toBe("display");
+  // |期待値| ≥ 1 でも同じ。マグニチュードに依らない。
   const big = classify(10, 10, tolerance);
-  expect(big.effectiveRelTolerance).toBeCloseTo(1e-9, 20);
+  expect(big.effectiveRelTolerance).toBe(5e-10);
   expect(big.bucket).toBe("display");
-  // |期待値| < 1: abs の側が緩い方になる。1e-9 / 1e-3 = 1e-6。
-  const small = classify(1e-3, 1e-3, tolerance);
-  expect(small.effectiveRelTolerance).toBeCloseTo(1e-6, 12);
-  expect(small.bucket).toBe("1e-5");
-  // 期待値が厳密に 0 のときは相対の保証が無い。
+  // 期待値が厳密に 0 のときだけ、相対の保証が無い。
   const zero = classify(0, 0, tolerance);
   expect(zero.bucket).toBe("undefined");
   expect(zero.effectiveRelTolerance).toBe(Number.POSITIVE_INFINITY);
+});
+
+test("an overridden case lands in a looser band", () => {
+  const overridden = { abs: 5e-10, rel: 2e-9 };
+  const c = classify(1, 1, overridden, 5e-10);
+  expect(c.effectiveRelTolerance).toBe(2e-9);
+  expect(c.bucket).not.toBe("display");
 });
 
 test("at least one shard is present", () => {
@@ -363,6 +397,9 @@ for (const { name, shard, values } of partitions) {
     );
 
     const into = newTally();
+    // 上書きが**もう要らない**もの。上書きなしのシャードの rel で通るように
+    // なったケースを集め、ループの後で赤にする(設計書 §3.4)。
+    const stale: string[] = [];
     for (const [index, testCase] of values.entries()) {
       const result = results[index];
       if (result === undefined) {
@@ -400,12 +437,33 @@ for (const { name, shard, values } of partitions) {
       }
       const expected = testCase.expect.re;
       into.magnitudes.push(Math.abs(expected));
+      // 上書きがあれば rel だけ差し替える。帯の目盛りには**上書き前**の rel を
+      // 渡すので、緩めたケースは緩い帯に落ちる——実際に緩く検査したのだから、
+      // 報告書がその件数を数えられなければならない。
+      const effective = resolveTolerance(
+        testCase.id,
+        shard.tolerance,
+        overrides,
+      );
+      const verdict = classify(
+        actual,
+        expected,
+        effective,
+        shard.tolerance.rel,
+      );
+      if (overrides.has(testCase.id)) {
+        // 上書き**なし**でも通るなら、その上書きは理由が嘘になっている。
+        const withoutOverride = classify(actual, expected, shard.tolerance);
+        if (withoutOverride.passed) {
+          stale.push(testCase.id);
+        }
+      }
       tally(
         into,
         shard.tolerance,
         testCase.id,
         `${testCase.expr} → ${result.main}, expected ${expected}`,
-        classify(actual, expected, shard.tolerance),
+        verdict,
       );
     }
 
@@ -431,6 +489,11 @@ for (const { name, shard, values } of partitions) {
       magnitudes: quantiles(into.magnitudes),
       tolerance: shard.tolerance,
     });
+
+    // **記録の後、mismatch の expect より前。** 腐った上書きは合否とは
+    // 別の欠陥なので、不一致が 0 でも赤くする。record() の後に置くのは、
+    // ここで throw してもレポートは残したいからである。
+    assertNoStaleOverrides(stale, overrides);
 
     // 先頭 20 件だけ読ませる。端末で読める量に上限を置き、全件は
     // Task 8 のレポートが持つ(設計書 §8)。
@@ -484,6 +547,9 @@ for (const { name, shard, equivalences } of partitions) {
         continue;
       }
       into.magnitudes.push(Math.abs(expected));
+      // **同値ケースは上書きの対象外である。** 外の期待値を持たないので
+      // 「どこまで緩めるか」の基準が無い——ここで緩めても、何に対して
+      // 緩めたのかを誰も言えない。シャードの rel をそのまま使う。
       tally(
         into,
         shard.tolerance,

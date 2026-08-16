@@ -245,8 +245,18 @@ export function loadShards(): { name: string; shard: Shard }[] {
 }
 
 /**
- * 絶対誤差と相対誤差のどちらかに収まれば一致とみなす。
- * generate.py の tolerance が abs / rel の対である以上、読み方も対にする。
+ * **相対誤差だけで判定する。**
+ *
+ * 表示は有効数字 10 桁で、最下位桁の丸め幅の半分を相対で見ると 5e-11〜5e-10 に
+ * 収まり、値の大きさに依らない。だから単一の相対許容が、あらゆるマグニチュードで
+ * 表示の丸めをちょうど覆う(設計書 §2)。**許容をマグニチュード依存にする必要は
+ * 無く、2 本立てにする必要も無い。**
+ *
+ * 以前はここが abs と rel の OR だった。その形は |期待値| < 1 のところで
+ * abs の側が常に緩い方になり、実効的な相対許容が `abs / |期待値|` に膨らむ——
+ * 1e-6 の値なら 5e-4 まで許していた。4000 件中 1315 件が表示分解能より緩く
+ * 検査されており、最悪は 4.15e-4 = 有効数字 4 桁相当だった。表示は 10 桁
+ * 出るのに。害を与えていたのは abs の側であって、rel ではない。
  */
 export function withinTolerance(
   actual: number,
@@ -254,11 +264,12 @@ export function withinTolerance(
   tolerance: Tolerance,
 ): boolean {
   const difference = Math.abs(actual - expected);
-  if (difference <= tolerance.abs) {
-    return true;
-  }
   const scale = Math.abs(expected);
-  return scale > 0 && difference / scale <= tolerance.rel;
+  if (scale === 0) {
+    // 期待値が厳密に 0。相対誤差は数学的に定義できない。**ここだけが abs の出番。**
+    return difference <= tolerance.abs;
+  }
+  return difference / scale <= tolerance.rel;
 }
 
 /**
@@ -295,12 +306,14 @@ export interface Classification {
   /** 期待値が 0 のときは定義できない。その場合は 0 を入れ、bucket が "undefined" になる。 */
   relativeError: number;
   /**
-   * **OR 判定が実際に許している相対誤差の上限。**
+   * **判定が実際に許している相対誤差の上限。**
    *
-   * `withinTolerance` は abs と rel の OR なので、|期待値| が 1 未満のとき
-   * abs の側が常に緩い方になり、実効的な相対許容は `abs / |期待値|` まで
-   * 広がる。この値を集計しないと、報告書の「表示される桁まで正しい」が
-   * 実態より強い主張になる(レビュー修正ラウンド 2)。
+   * OR をやめたので、これは適用された `tolerance.rel` そのものである——
+   * 上書きされたケースでは上書き後の値になる。以前はここが
+   * `max(rel, abs / |期待値|)` で、|期待値| が 1 未満のとき abs の側が
+   * 常に緩い方になり、実効的な相対許容が `abs / |期待値|` まで広がっていた
+   * (4000 件中 1315 件、最悪 4.15e-4)。この値を集計しないと、報告書の
+   * 「表示される桁まで正しい」が実態より強い主張になる。
    * 期待値が 0 のときは Infinity——相対の保証が全く無いという意味である。
    */
   effectiveRelTolerance: number;
@@ -319,6 +332,12 @@ export function classify(
   actual: number,
   expected: number,
   tolerance: Tolerance,
+  /**
+   * 帯の目盛りに使う、**上書き前**の rel。省略時は tolerance.rel。
+   * 上書きされたケースが緩い帯に落ちるのは、それが実際に緩く検査されたからで、
+   * 報告書がその件数を数えられる必要がある。
+   */
+  baseRel: number = tolerance.rel,
 ): Classification {
   const absoluteError = Math.abs(actual - expected);
   const scale = Math.abs(expected);
@@ -332,13 +351,14 @@ export function classify(
       bucket: "undefined",
     };
   }
-  const effectiveRelTolerance = Math.max(tolerance.rel, tolerance.abs / scale);
+  // OR をやめたので、実際に許している相対誤差は rel そのものである。
+  const effectiveRelTolerance = tolerance.rel;
   return {
     passed,
     absoluteError,
     relativeError: absoluteError / scale,
     effectiveRelTolerance,
-    bucket: bandOf(effectiveRelTolerance, tolerance.rel),
+    bucket: bandOf(effectiveRelTolerance, baseRel),
   };
 }
 

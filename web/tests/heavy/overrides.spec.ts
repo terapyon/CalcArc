@@ -9,10 +9,18 @@ import {
 
 const BASE: Tolerance = { abs: 5e-10, rel: 5e-10 };
 
-test("the overrides file loads", () => {
+test("the overrides file loads and every entry says why", () => {
+  // 件数は数えない——**その数はコーパスと電卓が決める**ので、増減を
+  // テストが握ると、増えたとき「テストを直す」で済んでしまう。
+  // 件数が正当かどうかは corpus.spec.ts が実測で確かめる(上書きなしで
+  // 通るものは assertNoStaleOverrides が赤にする)。ここで押さえるのは
+  // **どの上書きにも理由が書いてある**ことである。
   const overrides = loadOverrides();
   expect(overrides).toBeInstanceOf(Map);
-  expect(overrides.size).toBe(0);
+  for (const [id, override] of overrides) {
+    expect(typeof override.rel, id).toBe("number");
+    expect(override.reason.trim().length, id).toBeGreaterThan(0);
+  }
 });
 
 test("a case with no override keeps the shard's tolerance", () => {
@@ -56,6 +64,35 @@ test("an override that is not looser than nothing is refused", () => {
     ["sci-000019", { rel: 0, reason: "何も通らない値" }],
   ]);
   expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
+});
+
+test("an override whose rel is a string is refused", () => {
+  // `overrides.json` は**人が手で書く**ファイルなので、型違いは最も
+  // 起こりやすい誤りである。`"2e-9"` は JSON として妥当で、`> 0` の比較も
+  // 文字列強制で通ってしまう——検査が typeof を見ていなければ、数でない
+  // 値がそのまま許容として使われる。
+  const overrides = new Map([
+    ["sci-000019", { rel: "2e-9", reason: "型が違う" }],
+  ]) as unknown as Map<string, { rel: number; reason: string }>;
+  expect(() => assertOverridesAreSound(overrides, IDS)).toThrow(/rel/);
+});
+
+test("every complaint is reported, not just the first", () => {
+  // 実装は不満を全部集めてから 1 回 throw する。1 件目で投げると、直しては
+  // 走らせ直す往復が違反の数だけ要る。**両方の不満がメッセージに出る**こと。
+  const overrides = new Map([
+    ["sci-000019", { rel: -1, reason: "   " }],
+  ]) as unknown as Map<string, { rel: number; reason: string }>;
+  let message = "";
+  try {
+    assertOverridesAreSound(overrides, IDS);
+  } catch (cause) {
+    message = String(cause);
+  }
+  expect(message).toContain("reason");
+  expect(message).toContain("rel");
+  // 同じケースについて 2 行出ているはず(reason の行と rel の行)。
+  expect(message.split("sci-000019").length - 1).toBe(2);
 });
 
 test("a sound override passes", () => {
