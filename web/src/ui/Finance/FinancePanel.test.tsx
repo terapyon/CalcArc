@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LoanCalc } from "../../finance/loan";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
@@ -177,6 +177,15 @@ async function fillHousingExample() {
     "0",
   ]);
 }
+
+// **モード・周期・税は保存される(このファイルの「設定の永続化」参照)。**
+// 既存のテストはモードを行き来するものが多く、localStorage を挟まないと
+// 前のテストが押したモードを次のテストが引き継いでしまう——このスイート
+// 全体で毎回まっさらから始める(ファイル先頭の beforeEach なので、下の
+// 「設定の永続化」describe にも及ぶ)。
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 describe("FinancePanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
@@ -706,5 +715,67 @@ describe("FinancePanel（電卓）", () => {
     const breakdown = screen.getByTestId("finance-breakdown");
     expect(breakdown).toHaveTextContent("手取り");
     expect(breakdown).toHaveTextContent("1,016 円");
+  });
+});
+
+describe("設定の永続化", () => {
+  beforeEach(() => {
+    // localStorage のクリアはファイル先頭の beforeEach が毎回やる。
+    // ここでは、直前の describe が initLoan を reject させたままにして
+    // いることがあるので、成功する実装に戻す(DataScalePanel.test.tsx と
+    // 同じ流儀)。initExpr / initFinance はここではモジュール factory が
+    // 常に成功を返すので、reject を持ち回らず reset は要らない。
+    vi.mocked(initLoan).mockResolvedValue(stubCalc());
+  });
+
+  it("restores the mode from the stored settings", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, finance: { mode: "compound" } }),
+    );
+    render(<FinancePanel />);
+    // モードの表示名は MODE_STATUS が持つ。「複利」だけだとモードボタンの
+    // 見た目のラベル(同じ文字)にも一致して曖昧になるので、状態行の
+    // testId で見る(既存の「names the mode...」テストと同じ流儀)。
+    expect(await screen.findByTestId("finance-mode")).toHaveTextContent(
+      "複利で増やす",
+    );
+  });
+
+  it("restores the withholding switch", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({
+        v: 1,
+        finance: { mode: "compound", withholding: true },
+      }),
+    );
+    render(<FinancePanel />);
+    // 税の面は「税の扱いを選ぶ」を押すまで描画されない(数字面・周期面・
+    // 税面はどれか 1 つだけが Keypad の 3 区画目に載る)。
+    await userEvent.click(
+      await screen.findByRole("button", { name: "税の扱いを選ぶ" }),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "源泉分離課税を引く",
+        pressed: true,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not restore the amounts", async () => {
+    // **範囲の境界**(P-1 設計書 §1-1)。モードは戻るが金額は戻らない。
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({
+        v: 1,
+        finance: { mode: "compound" },
+        amounts: { principal: "999" },
+      }),
+    );
+    render(<FinancePanel />);
+    await screen.findByTestId("finance-mode");
+    expect(screen.queryByText("999")).not.toBeInTheDocument();
   });
 });

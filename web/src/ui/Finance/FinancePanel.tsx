@@ -29,7 +29,8 @@ import {
   type Unit,
   YEAR,
 } from "../../finance/entry";
-import { initLoan, type LoanCalc, type LoanMode } from "../../finance/loan";
+import { initLoan, type LoanCalc } from "../../finance/loan";
+import type { PanelMode, PeriodsPerYear } from "../../settings";
 import {
   COMPOUND_FIELD_SECTION,
   DEPOSIT_FOR_FIELD_SECTION,
@@ -43,6 +44,7 @@ import {
 import { Keypad } from "../Keypad/Keypad";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
+import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./FinancePanel.module.css";
 
 /** 金額の項目。ここだけが万・億を受け、`entry.ts` を通る(設計書 §6)。 */
@@ -100,12 +102,6 @@ function unitFor(
 const MAX_RATE_LEN = 8;
 
 /** モードが求める値の項目。その項目は入力できない(それが答だから)。 */
-/**
- * 盤面のモード。**複利とその逆算はローンの「求めるもの」ではない**ので、
- * 型を広げる(設計書 §11)。
- */
-export type PanelMode = LoanMode | "compound" | "deposit-for" | "periods-for";
-
 const SOLVED_FOR: Record<PanelMode, FinanceField | null> = {
   payment: "payment",
   principal: "principal",
@@ -222,11 +218,32 @@ export function FinancePanel() {
   const [expr, setExpr] = useState<ExprCalc | null>(null);
   const [finance, setFinance] = useState<FinanceCalc | null>(null);
   const [failed, setFailed] = useState(false);
-  const [mode, setMode] = useState<PanelMode>("payment");
+  // **設定は保存から起こす**(P-1 設計書 §4)。amounts は保存しないので
+  // 初期値のままである。
+  const [mode, setMode] = useState<PanelMode>(
+    () => loadSettings().finance.mode,
+  );
   // 周期と税は選択。**計算に入るので盤面の中**にある(設計書 §7)。
-  const [periodsPerYear, setPeriodsPerYear] = useState<1 | 2 | 12>(12);
-  const [withholding, setWithholding] = useState(false);
+  const [periodsPerYear, setPeriodsPerYear] = useState<PeriodsPerYear>(
+    () => loadSettings().finance.periodsPerYear,
+  );
+  const [withholding, setWithholding] = useState(
+    () => loadSettings().finance.withholding,
+  );
   const [active, setActive] = useState<FinanceField>("principal");
+
+  /** 設定を 1 項目だけ書き戻す。**新しい値を使う**——state の更新は
+      非同期なので、直後に読むと 1 つ前の値を保存することになる。 */
+  function rememberFinance(patch: {
+    mode?: PanelMode;
+    periodsPerYear?: PeriodsPerYear;
+    withholding?: boolean;
+  }): void {
+    updateSettings((current) => ({
+      ...current,
+      finance: { ...current.finance, ...patch },
+    }));
+  }
   // **すべての項目を同じ構造で持つ。** 年利も期間もトークン列である
   // ——式が全項目で打てる(裁定 Q14)し、項目ごとに違う入力機構を持つと
   // `000` のような取りこぼしが生まれる(設計書 §3 の記録)。
@@ -419,6 +436,7 @@ export function FinancePanel() {
     if (token.startsWith("mode:")) {
       const next = token.slice("mode:".length) as PanelMode;
       setMode(next);
+      rememberFinance({ mode: next });
       // **次のモードで打てない項目に居たままにしない。** 求める値の項目だけ
       // でなく、そのモードが受けない項目(借入可能額モードの残価、期間モードの
       // ボーナス)も同じである——放っておくと、無効なタブが押下状態のまま
@@ -466,14 +484,21 @@ export function FinancePanel() {
         break;
       case "period:1":
       case "period:2":
-      case "period:12":
-        setPeriodsPerYear(Number(token.slice("period:".length)) as 1 | 2 | 12);
+      case "period:12": {
+        const nextPeriod = Number(
+          token.slice("period:".length),
+        ) as PeriodsPerYear;
+        setPeriodsPerYear(nextPeriod);
+        rememberFinance({ periodsPerYear: nextPeriod });
         break;
+      }
       case "tax:none":
         setWithholding(false);
+        rememberFinance({ withholding: false });
         break;
       case "tax:withholding":
         setWithholding(true);
+        rememberFinance({ withholding: true });
         break;
       case "eq": {
         // **式を評価して項目の値にする。** 項目をまたぐ式は書けない
