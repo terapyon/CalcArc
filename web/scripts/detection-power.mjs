@@ -60,7 +60,7 @@ const MUTATIONS = [
   },
   {
     id: "ncr-multiply-first",
-    what: "nCr を「掛けてから割る」に戻す(実在したバグ)",
+    what: "nCr を「掛けてから割る」順に変える(答は収まるのに途中で溢れる)",
     file: "crates/calcarc-core/src/scientific/mod.rs",
     from: "acc = acc / (i + 1.0) * (n - i);",
     to: "acc = acc * (n - i) / (i + 1.0);",
