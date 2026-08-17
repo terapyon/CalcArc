@@ -1,0 +1,113 @@
+name: Heavy corpus
+
+# **たまにしか走らせない検証である**(設計書 2026-08-15 §12 の段階 5)。
+# 毎コミットの CI は golden(手選びの数十件)を見ており、こちらは
+# 数万件の生成コーパスを独立実装と突き合わせる。
+#
+# 走らせるのは:
+#  - 手動(workflow_dispatch)——確かめたくなったとき
+#  - タグを打ったとき——リリースの記録として残す
+#  - 週 1 回——放っておいても記録が積み上がるように
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  schedule:
+    # 毎週月曜 03:00 UTC(日本時間 12:00)。
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  corpus:
+    name: Corpus vs reference
+    runs-on: ubuntu-latest
+    # 生成コーパスは 1 万件超あり、既定の 6 分では足りない。
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-web
+
+      # Rust(wasm32) + rust-cache + wasm-pack。**版の固定はこの複合アクションに
+      # 一本化されている**——写しで持つと片方だけ更新される、とあちらの説明が
+      # 自ら書いている。`pnpm heavy` が中で wasm を作り直すので、これが要る。
+      - uses: ./.github/actions/setup-wasm-pack
+
+      - name: Install Playwright's browser
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Set up Python for the reference implementation
+        # ci.yml と同じ版に揃える。
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          enable-cache: true
+
+      - run: uv sync --locked
+        working-directory: reference
+
+      - name: The committed corpus must equal a fresh generation
+        # **これが固定コーパスの土台である。** コミットされた JSON が
+        # 生成器の出力と 1 バイトでも違えば、期待値が手で触られたことになる。
+        # ここが赤いまま下の照合が緑でも、その緑は何も意味しない。
+        run: uv run pytest tests/test_corpus_reproducibility.py -q
+        working-directory: reference
+
+      - name: Measure what this corpus can detect
+        # **「不一致 0 件」の意味を決める段である。** engine に既知の壊れ方を
+        # 一時的に入れ、何件が赤くなるかを数える。**赤くならないことを期待した
+        # 変異も含む**——レポートが「この領域は踏んでいない」と書いているなら、
+        # その主張はここで確かめられている。
+        #
+        # 変異はコミットされない(測ったあと原文に戻し、バイト一致を確かめる)。
+        # この段の結果が次の段のレポートに載る。
+        run: pnpm heavy:power
+        working-directory: web
+        env:
+          CI: "1"
+
+      - name: Run the heavy corpus
+        # CI=1 で wasm を作り直し、プレビューも立て直す
+        # (前の走行のサーバを掴んだまま「緑」にしない)。
+        run: pnpm heavy
+        working-directory: web
+        env:
+          CI: "1"
+
+      - name: Type a sample on the real keypad
+        # **計算コアの経路とはブラウザに載るものが違う。** あちらは
+        # `heavy-harness.html` だけを配信するので画面が存在せず、
+        # 「そのキーが盤面のどこにあるか」を一度も通らない。ここは
+        # 本物のアプリを開いて実際にボタンを押す。
+        #
+        # **前の段が落ちても走らせる**——計算が合っているかと、盤面から
+        # 打てるかは別の問いで、片方の赤でもう片方を隠さない。
+        if: always()
+        run: pnpm heavy:ui
+        working-directory: web
+        env:
+          CI: "1"
+
+      - name: Put the verdict in the job summary
+        # **記録はここに残る。** コミットされたログファイルは作らない
+        # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。
+        if: always()
+        run: |
+          if [ -f web/heavy-report.md ]; then
+            cat web/heavy-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## 報告書が書かれなかった" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "集計が 1 つも揃わないまま走行が終わった。**結果を読まないこと。**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the report as an artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: heavy-report
+          path: web/heavy-report.md
+          if-no-files-found: warn
+          retention-days: 90

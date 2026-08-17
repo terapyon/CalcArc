@@ -15,8 +15,20 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client", "@testing-library/jest-dom/vitest"]
+    "types": ["vite/client", "@testing-library/jest-dom/vitest", "node"]
   },
-  "include": ["src", "vite.config.ts"],
-  "exclude": ["src/wasm", "tests/e2e"]
+  // **`tests` を含める。** 以前は `src` だけで、重量級コーパスのテストコードが
+  // 丸ごと型検査の外にいた——`summaryName(name, "calls")` のように**存在しない
+  // 引数**を渡していても緑だった。Playwright は esbuild で型を捨てて実行するので、
+  // 型の誤りは実行時にも出ない。**検査されない場所に検査の道具を置いていた。**
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "vite.heavy.config.ts",
+    "playwright.config.ts",
+    "playwright.heavy.config.ts",
+    "playwright.heavy-ui.config.ts"
+  ],
+  "exclude": ["src/wasm"]
 }
