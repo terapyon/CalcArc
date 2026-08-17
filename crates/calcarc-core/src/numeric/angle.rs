@@ -8,6 +8,10 @@ pub enum AngleMode {
 }
 
 impl AngleMode {
+    /// 全列挙(`Key::ALL` と同型)。TypeScript の ANGLE_MODES と
+    /// crates/calcarc-wasm/tests/token_parity.rs が対応を守る。
+    pub const ALL: [AngleMode; 2] = [AngleMode::Deg, AngleMode::Rad];
+
     /// このモードでの数値をラジアンに直す。
     pub fn radians_of(self, v: f64) -> f64 {
         match self {

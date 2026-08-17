@@ -28,6 +28,9 @@ pub enum DisplayForm {
 }
 
 impl DisplayForm {
+    /// 全列挙。TypeScript の DISPLAY_FORMS と token_parity.rs が対応を守る。
+    pub const ALL: [DisplayForm; 2] = [DisplayForm::Rect, DisplayForm::Polar];
+
     pub fn toggled(self) -> DisplayForm {
         match self {
             DisplayForm::Rect => DisplayForm::Polar,
@@ -44,6 +47,9 @@ pub enum Notation {
 }
 
 impl Notation {
+    /// 全列挙。TypeScript の NOTATIONS と token_parity.rs が対応を守る。
+    pub const ALL: [Notation; 2] = [Notation::Normal, Notation::Eng];
+
     pub fn toggled(self) -> Notation {
         match self {
             Notation::Normal => Notation::Eng,

@@ -1,11 +1,21 @@
-/** calcarc-core の numeric::angle::AngleMode に対応。 */
-export type AngleMode = "Deg" | "Rad";
+/**
+ * calcarc-core の numeric::angle::AngleMode に対応。
+ *
+ * **配列が本体で、型はそこから派生する**(DATA_TYPE_TOKENS と同型)。
+ * 設定の永続化が「取り得る値の列挙」を実行時に必要とするため
+ * (P-1 設計書 §5)。綴りは Rust の serde の出力そのもので、
+ * token_parity.rs が対応を守る。
+ */
+export const ANGLE_MODES = ["Deg", "Rad"] as const;
+export type AngleMode = (typeof ANGLE_MODES)[number];
 
 /** calcarc-core の engine::state::DisplayForm に対応。 */
-export type DisplayForm = "Rect" | "Polar";
+export const DISPLAY_FORMS = ["Rect", "Polar"] as const;
+export type DisplayForm = (typeof DISPLAY_FORMS)[number];
 
 /** calcarc-core の engine::state::Notation に対応。 */
-export type Notation = "Normal" | "Eng";
+export const NOTATIONS = ["Normal", "Eng"] as const;
+export type Notation = (typeof NOTATIONS)[number];
 
 /** calcarc-core の error::CalcError に対応。 */
 export type CalcErrorCode =
