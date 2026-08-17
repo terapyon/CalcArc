@@ -230,7 +230,6 @@ export function FinancePanel() {
   const [withholding, setWithholding] = useState(
     () => loadSettings().finance.withholding,
   );
-  const [active, setActive] = useState<FinanceField>("principal");
 
   /** 設定を 1 項目だけ書き戻す。**新しい値を使う**——state の更新は
       非同期なので、直後に読むと 1 つ前の値を保存することになる。 */
@@ -257,6 +256,23 @@ export function FinancePanel() {
     bonusPrincipal: EMPTY,
     bonusPayment: EMPTY,
   });
+
+  /**
+   * 打てる項目から始める。**モードを復元すると "principal" が求める値の
+   * 項目になっていることがある**(借入可能額モードでは借入額が答である)。
+   * そのまま始めると、無効なタブが押下状態のまま「借入額を入力中」と
+   * 名乗り、打鍵が計算に使われない欄に落ちる——モードキーの press が
+   * 切り替えのときにやっている正規化と同じものを、復元にも掛ける。
+   *
+   * **`amounts` の後に置く。** `fieldEnabledIn` は残価×ボーナスの排他で
+   * `amounts` を読む(初回描画では全部空なので排他は効かないが、順序に
+   * 頼らないほうが安全である)。
+   */
+  const [active, setActive] = useState<FinanceField>(
+    () =>
+      orderFor(mode).find((field) => fieldEnabledIn(field, mode)) ??
+      "principal",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -436,7 +452,11 @@ export function FinancePanel() {
     if (token.startsWith("mode:")) {
       const next = token.slice("mode:".length) as PanelMode;
       setMode(next);
-      rememberFinance({ mode: next });
+      // **変わっていないなら書かない。** 書き込みの契機は「設定が変わった
+      // その場」である(P-1 設計書 §6)。いま選ばれているモードをもう一度
+      // 押すのは変更ではない——書くと、設定を 1 つも変えていない利用者に
+      // 保存キーが生まれる(ScientificPanel の savedScientific と同じ規律)。
+      if (next !== mode) rememberFinance({ mode: next });
       // **次のモードで打てない項目に居たままにしない。** 求める値の項目だけ
       // でなく、そのモードが受けない項目(借入可能額モードの残価、期間モードの
       // ボーナス)も同じである——放っておくと、無効なタブが押下状態のまま
@@ -489,16 +509,19 @@ export function FinancePanel() {
           token.slice("period:".length),
         ) as PeriodsPerYear;
         setPeriodsPerYear(nextPeriod);
-        rememberFinance({ periodsPerYear: nextPeriod });
+        // 変わっていないなら書かない(モードと同じ理由)。
+        if (nextPeriod !== periodsPerYear) {
+          rememberFinance({ periodsPerYear: nextPeriod });
+        }
         break;
       }
       case "tax:none":
         setWithholding(false);
-        rememberFinance({ withholding: false });
+        if (withholding) rememberFinance({ withholding: false });
         break;
       case "tax:withholding":
         setWithholding(true);
-        rememberFinance({ withholding: true });
+        if (!withholding) rememberFinance({ withholding: true });
         break;
       case "eq": {
         // **式を評価して項目の値にする。** 項目をまたぐ式は書けない

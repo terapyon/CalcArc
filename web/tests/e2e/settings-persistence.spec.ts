@@ -82,6 +82,14 @@ test("the finance calculation mode survives a reload but the amounts do not", as
   await expect(
     panel(page).getByRole("button", { name: "借入額を入力" }),
   ).toBeDisabled();
+  // **無効になっているだけでは足りない。** 借入額は復元前から押下状態の
+  // 既定値なので、「無効」だけなら *active を直さなかった実装* でも緑に
+  // なる——そのとき盤面は「無効なタブが押下状態で、借入額を入力中と
+  // 名乗り、打鍵をそこへ捨てる」状態である。押下状態と状態行も見る。
+  await expect(
+    panel(page).getByRole("button", { name: "借入額を入力" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("finance-field")).toHaveText("年利を入力中");
   // 打った金額は残っていない。
   await expect(echo(page)).not.toContainText("3");
 });

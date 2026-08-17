@@ -742,6 +742,45 @@ describe("設定の永続化", () => {
     );
   });
 
+  it("starts on a field the restored mode lets you type into", async () => {
+    // **復元したモードでは "principal" が答の項目でありうる。** そのまま
+    // 始めると、無効なタブが押下状態で「借入額を入力中」と名乗り、打鍵が
+    // 計算に使われない欄に落ちる(モード切り替えの press はこの正規化を
+    // 既にやっている。FinancePanel.tsx の mode: の分岐)。
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, finance: { mode: "principal" } }),
+    );
+    render(<FinancePanel />);
+    // 借入可能額モードで最初に打てるのは年利である(借入額は答)。
+    expect(await screen.findByTestId("finance-field")).toHaveTextContent(
+      "年利を入力中",
+    );
+    // **押下状態と有効・無効が食い違わない。** 無効なタブが押下状態で
+    // 残っていないことを、両方の属性で見る。
+    const principal = screen.getByRole("button", { name: "借入額を入力" });
+    expect(principal).toBeDisabled();
+    expect(principal).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "年利を入力", pressed: true }),
+    ).toBeEnabled();
+  });
+
+  it("puts what you type into the field it says you are typing into", async () => {
+    // **打鍵の行き先まで見る。** 上のテストは属性の食い違いを見るだけで、
+    // 打った数字が捨てられていないことは言っていない。
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, finance: { mode: "principal" } }),
+    );
+    render(<FinancePanel />);
+    await screen.findByTestId("finance-field");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    // 年利に入る。借入額(答の項目)には入らない。
+    expect(echo()).toHaveTextContent("年利 3%");
+    expect(echo()).not.toHaveTextContent("借入額");
+  });
+
   it("restores the withholding switch", async () => {
     window.localStorage.setItem(
       "calcarc.settings",
@@ -762,6 +801,32 @@ describe("設定の永続化", () => {
         pressed: true,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("writes nothing when the buttons you press change no setting", async () => {
+    // 書き込みの契機は「設定が変わったその場」である(P-1 設計書 §6)。
+    // いま選ばれているモード・周期・税をもう一度押すのは変更ではない。
+    // **描画の後で保存を消してから押す**——押しても書かないなら、キーは
+    // 生まれ直さない。
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, finance: { mode: "compound" } }),
+    );
+    render(<FinancePanel />);
+    await screen.findByTestId("finance-mode");
+    window.localStorage.clear();
+
+    await userEvent.click(screen.getByRole("button", { name: "複利で増やす" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "複利の周期を選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "月ごとに複利" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "税の扱いを選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "税を引かない" }));
+
+    expect(window.localStorage.getItem("calcarc.settings")).toBeNull();
   });
 
   it("does not restore the amounts", async () => {
