@@ -60,6 +60,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     looserThanDisplay: 0,
     precedenceCases: 0,
     exponentDisplayCases: 0,
+    errorCases: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -1065,6 +1066,50 @@ test("a mutation that came out against expectation is called out", () => {
     ],
   }).join("\n");
   expect(markdown).toContain("**期待と違う**");
+});
+
+test("the report never says a region is untouched while also counting cases in it", () => {
+  // **読み手が実際に見つけた矛盾(2026-08-17)。** 動的な集計を足しながら
+  // 固定文を放置したため、12 行しか離れていない場所で
+  // 「指数表記を 1940 件読んだ」と「指数表記に切り替わる領域は踏んでいない」が
+  // 同居していた。エラー経路(金融 569 + データスケール 4 を照合済み)と
+  // UI(別走行が 500 件を実打鍵)も同じ形だった。
+  //
+  // **数を報告している領域について「踏んでいない」と書かない**、を固定する。
+  const markdown = renderReport(
+    [summary({ exponentDisplayCases: 1940, errorCases: 573 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("1940 件が読んでいる");
+  expect(markdown).not.toContain(
+    "表示が指数表記に切り替わる領域は踏んでいない",
+  );
+  expect(markdown).toContain("573 件は照合済み");
+  expect(markdown).not.toContain(
+    "ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
+  );
+});
+
+test("with nothing counted, the untouched wording comes back", () => {
+  // 逆向きも固定する。**0 件のときに「照合済み」と書いてはいけない。**
+  const markdown = renderReport(
+    [summary({ exponentDisplayCases: 0, errorCases: 0 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("平坦表示の帯を一度も出ていない");
+  expect(markdown).toContain("生成の時点で範囲外にしている");
+  expect(markdown).not.toContain("件は照合済み");
+});
+
+test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
+  // 但し書き自身が腐っていた——「エラー経路・指数表記…は完全に固定の文章」と
+  // 書いてあったが、その 2 つはデータ由来になっていた。
+  const markdown = renderReport([summary()], PROVENANCE);
+  const disclaimer = markdown.slice(
+    markdown.indexOf("この節は手で保守されている"),
+  );
+  expect(disclaimer).toContain("複素数・角度モード・UI・入力中の表示");
+  expect(disclaimer).not.toContain("エラー経路・複素数・指数表記");
 });
 
 test("an area with no cases is never called correct", () => {
