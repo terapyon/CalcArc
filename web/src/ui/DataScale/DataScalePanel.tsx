@@ -117,8 +117,15 @@ export function DataScalePanel() {
   }
 
   /** データ型を変え、設定に書き戻す。**新しい値を使う**——state の更新は
-   * 非同期なので、直後に dtype を読むと 1 つ前の値になる。 */
+   * 非同期なので、直後に dtype を読むと 1 つ前の値になる。
+   *
+   * **変わっていないなら書かない。** 書き込みの契機は「設定が変わった
+   * その場」である(P-1 設計書 §6)。いま選ばれている型をもう一度押す、
+   * 既定のまま型の面で AC を押す——どちらも設定は変わっていないのに、
+   * 書くと保存キーが生まれる(ScientificPanel の savedScientific が
+   * 同じ規律を持っている)。 */
   function chooseDtype(next: DataTypeToken): void {
+    if (next === dtype) return;
     setDtype(next);
     updateSettings((current) => ({
       ...current,
@@ -128,6 +135,7 @@ export function DataScalePanel() {
 
   /** 主に表示する単位系を変え、設定に書き戻す。理由は chooseDtype と同じ。 */
   function choosePrimary(next: Primary): void {
+    if (next === primary) return;
     setPrimary(next);
     updateSettings((current) => ({
       ...current,

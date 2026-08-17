@@ -350,6 +350,37 @@ describe("設定の永続化", () => {
     ).toBeInTheDocument();
   });
 
+  it("stores the data type when the user switches it", async () => {
+    // **8 項目のうち、書く側が検査されていないのはここだけだった**
+    // ——読み戻しは上のテストが見ているが、書き込みを消しても 182 件が
+    // 全部緑のままだった(レビュー指摘)。
+    render(<DataScalePanel />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "int8" }));
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.settings") as string,
+    );
+    expect(saved.dataScale.dtype).toBe("int8");
+  });
+
+  it("writes nothing when the data type does not actually change", async () => {
+    // 書き込みの契機は「設定が変わったその場」である(P-1 設計書 §6)。
+    // 型の面で AC を押すと既定(float32)へ戻すが、既に float32 なら
+    // 何も変わっていない——それでも書くと、設定を 1 つも触っていない
+    // 利用者に保存キーが生まれる。
+    render(<DataScalePanel />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "float32" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "この項目を消去" }),
+    );
+    expect(window.localStorage.getItem("calcarc.settings")).toBeNull();
+  });
+
   it("stores the primary unit system when the user switches it", async () => {
     render(<DataScalePanel />);
     await screen.findByText("10 進を主表示");
