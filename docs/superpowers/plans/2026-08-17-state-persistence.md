@@ -825,19 +825,56 @@ describe("設定の永続化", () => {
     expect(saved.scientific.angle).toBe("Rad");
   });
 
-  it("does not store anything the user typed", () => {
+  it("does not store anything the user typed", async () => {
     // **範囲の境界を検査で持つ**(P-1 設計書 §1-1)。
-    // ここが緑のままなら、式を保存する実装が紛れ込んでいない。
-    window.localStorage.setItem(
-      "calcarc.settings",
-      JSON.stringify({ v: 1, scientific: { angle: "Rad" } }),
-    );
+    //
+    // **描画して、打鍵して、そのあとで保存された物を読む。** 自分で
+    // localStorage に書いた文字列を読み直して "buffer" を含まないと
+    // 言うだけでは、**何も検査していない**——writeSettings が何を書いても
+    // 緑のままになる(この計画の初版がそう書いており、レビューで
+    // 見つかった)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "角度の単位を切り替え" }));
+    await screen.findByText("RAD");
+    for (const digit of ["1", "2", "3"]) {
+      await userEvent.click(screen.getByRole("button", { name: digit }));
+    }
+    // 打鍵が画面に届いていることを先に確かめる——届いていなければ
+    // 「保存されていない」は何も言っていない。
+    expect(screen.getByTestId("display-main")).toHaveTextContent("123");
+
     const raw = window.localStorage.getItem("calcarc.settings") as string;
+    expect(raw).toContain("Rad");
+    expect(raw).not.toContain("123");
     expect(raw).not.toContain("buffer");
     expect(raw).not.toContain("operands");
   });
+
+  it("restores every scientific setting at once", async () => {
+    // **replay は 1 つ前の結果の state を次へ渡す**(設計書 §4)。1 つだけ
+    // 復元するテストでは、3 つとも initial().state に対して送る実装
+    // ——最後の 1 つしか残らない——も緑のままになる。
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({
+        v: 1,
+        scientific: { angle: "Rad", form: "Polar", notation: "Eng" },
+      }),
+    );
+    render(<ScientificPanel />);
+    expect(await screen.findByText("RAD")).toBeInTheDocument();
+    expect(screen.getByTestId("display-form")).toHaveTextContent("∠");
+    expect(screen.getByTestId("display-notation")).toHaveTextContent("ENG");
+  });
 });
 ```
+
+**テスト用の `Calc` の偽物は、渡された `state` から次を作ること。** 累積を
+クロージャの変数に持つと `dispatch` が `state` 引数を無視していても結果が
+正しく見え、**上の replay のテストが実装の誤りを見逃す**（偽物のほうが本物より
+寛容だと、何を書いても緑になる）。`EngineState` は不透明なので中身は読まず、
+state の同一性を鍵にした `WeakMap` に表示を持たせる。
 
 - [ ] **Step 3: テストが落ちることを確認する**
 
