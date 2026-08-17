@@ -1401,10 +1401,15 @@ wasm-pack test --headless --firefox crates/calcarc-wasm
 cd web && pnpm typecheck && pnpm lint && pnpm test
 pnpm exec vite build && pnpm check:sw && pnpm check:version
 pnpm e2e
-cd ../reference && uv run ruff check . && uv run pytest
+cd ../reference && uv run --no-config ruff check . && uv run --no-config pytest
 ```
 
 Expected: 全段緑。**`--headless --chrome` は手元で落ちる**（ChromeDriver と Chrome の版ずれ。環境要因）ので firefox を使う。
+
+**`uv` には `--no-config` を付ける**（CLAUDE.md の「踏んだ罠」）。付けないと手元の
+`~/.config/uv/uv.toml` の `exclude-newer` が `uv.lock` に書き込まれ、CI の
+`uv sync --locked` が落ちる。**この計画は当初それを書き忘れており、Task 6 の
+実装者が実際に踏んで `uv.lock` を戻した。**
 
 - [ ] **Step 6: コミット**
 
