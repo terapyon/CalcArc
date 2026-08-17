@@ -13,7 +13,7 @@ No installation needed. Add it to your home screen to launch it like an app — 
 
 ## Current version
 
-**0.2.0 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
+**0.2.1 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
 each release is in [Releases](https://github.com/terapyon/CalcArc/releases).
 
 **It is a beta.** It has not been widely announced yet, and very few people are using it.
@@ -91,8 +91,8 @@ This project has a table mapping key sequences to display output as its test sui
 
 > **Note on language.** The detailed specifications under `docs/` — the numerical
 > policy, the base specification, and the design documents — are written in
-> Japanese only. Translating them is out of scope for 0.2.0. Issues and pull
-> requests are welcome in either language.
+> Japanese only, and translating them is not planned while the project is in
+> beta. Issues and pull requests are welcome in either language.
 
 ## Numerical Policy
 
