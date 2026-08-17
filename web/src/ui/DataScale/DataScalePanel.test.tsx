@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataScaleCalc, DataScaleResult } from "../../datascale";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
@@ -305,5 +305,51 @@ describe("DataScalePanel（電卓）", () => {
     render(<DataScalePanel />);
     const alert = await screen.findByTestId("datascale-load-error");
     expect(alert).toHaveAttribute("role", "alert");
+  });
+});
+
+describe("設定の永続化", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    // 直前の describe が initDataScale を reject させたままにしているので、
+    // ここで毎回、成功する実装に戻す(ScientificPanel.test.tsx と同じ流儀)。
+    vi.mocked(initDataScale).mockResolvedValue(stubCalc());
+  });
+
+  it("restores the primary unit system from the stored settings", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, dataScale: { primary: "binary" } }),
+    );
+    render(<DataScalePanel />);
+    expect(await screen.findByText("2 進を主表示")).toBeInTheDocument();
+  });
+
+  it("restores the data type from the stored settings", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, dataScale: { dtype: "int8" } }),
+    );
+    render(<DataScalePanel />);
+    // データ型のキー面は「データ型を選ぶ」を押すまで描画されない
+    // (数字面と型面はどちらか一方だけが Keypad に載る)。
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "int8", pressed: true }),
+    ).toBeInTheDocument();
+  });
+
+  it("stores the primary unit system when the user switches it", async () => {
+    render(<DataScalePanel />);
+    await screen.findByText("10 進を主表示");
+    await userEvent.click(
+      screen.getByRole("button", { name: "2 進 (KiB) を主に" }),
+    );
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.settings") as string,
+    );
+    expect(saved.dataScale.primary).toBe("binary");
   });
 });
