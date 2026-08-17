@@ -378,7 +378,7 @@ export function areaOfShard(shardName: string): Area {
     return "cancellation";
   }
   if (
-    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics)-/.test(
+    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics|typed|corrections)-/.test(
       stem,
     )
   ) {

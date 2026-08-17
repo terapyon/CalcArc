@@ -44,6 +44,7 @@ from calcarc_reference.corpus_expr import (
     to_keys,
     to_keys_minimal,
     to_minimal_key_sequence,
+    walk,
 )
 
 SCHEMA = 1
@@ -471,6 +472,268 @@ COMBINATORICS_MAX_N = 1200
 COMBINATORICS_MAX_FACT = 200
 
 
+# --- 打ち方と訂正のシャード（段階 G §3.1 / §3.3）---
+
+# 指数入力の指数は 1〜2 桁。**符号は付けない**——指数中の `+/-` は
+# 指数の符号を反転する別の挙動で、それは訂正の話ではない。
+TYPED_MAX_EXPONENT = 6
+
+
+def _typed_integer(rng: random.Random) -> Typed:
+    """既存と同じ整数。打ち方の対照群として要る。"""
+    value = rng.randint(1, 999)
+    return Typed(tuple(str(value)), str(value))
+
+
+def _typed_decimal(rng: random.Random) -> Typed:
+    """小数点を打つ。**`dot` を押す唯一の形。**"""
+    whole = rng.randint(0, 999)
+    frac = rng.randint(1, 9999)
+    text = f"{whole}.{frac}"
+    return Typed(tuple("dot" if ch == "." else ch for ch in text), text)
+
+
+def _typed_zeros3(rng: random.Random) -> Typed:
+    """`000` キーを使う。
+
+    **先頭には置かない。** 空のバッファに打つと先頭ゼロの規則で `"0"` に
+    潰れる(実測、設計書 §6)。0 でない桁を 1 つ以上打った後にだけ使う。
+    """
+    head = rng.randint(1, 999)
+    return Typed((*str(head), "zeros3"), f"{head}000")
+
+
+def _typed_exponent(rng: random.Random) -> Typed:
+    """指数入力(EE)。`1.5e3` のように打つ。"""
+    mantissa = rng.randint(1, 99)
+    frac = rng.randint(0, 9)
+    exponent = rng.randint(1, TYPED_MAX_EXPONENT)
+    text = f"{mantissa}.{frac}e{exponent}"
+    keys = (
+        *str(mantissa),
+        "dot",
+        str(frac),
+        "exp",
+        *str(exponent),
+    )
+    return Typed(keys, text)
+
+
+TYPED_FORMS = (_typed_integer, _typed_decimal, _typed_zeros3, _typed_exponent)
+
+
+def _typed_leaf(rng: random.Random) -> Typed:
+    return TYPED_FORMS[rng.randrange(len(TYPED_FORMS))](rng)
+
+
+def _is_exponent_entry(node: Node) -> bool:
+    """指数入力の途中で終わる葉か。**`neg` の意味が変わる場所である。**"""
+    return isinstance(node, Typed) and "exp" in node.keys
+
+
+def _typed_node(rng: random.Random, depth: int) -> Node:
+    """葉が `Typed` の木。**既存の `random_node` を呼ばない**(乱数の土台が別)。"""
+    if depth <= 0 or rng.random() < 0.4:
+        return _typed_leaf(rng)
+    if rng.random() < 0.35:
+        fn = rng.choice(UNARY_FNS)
+        arg = _typed_node(rng, depth - 1)
+        # **指数入力の直後の `+/-` は、値ではなく指数の符号を変える。**
+        # `84.9e1` に `neg` を打つと `84.9e-1` = 8.49 であって -849 ではない
+        # ——実際の電卓の慣行で、engine が正しい。**コーパスがこれを捕まえた**
+        # (2026-08-17、68/2000 が不一致になって発覚。壊れていたのは生成器)。
+        #
+        # ここで避けるのは**生成器が間違った期待値を作らないため**であって、
+        # engine の挙動を隠すためではない。**指数の符号を変える打ち方そのものは
+        # まだ検証していない**——レポートがそう書く。
+        if fn == "neg" and _is_exponent_entry(arg):
+            arg = _typed_decimal(rng)
+        return Un(fn, arg)
+    return Bin(
+        rng.choice(BINARY_OPS),
+        _typed_node(rng, depth - 1),
+        _typed_node(rng, depth - 1),
+    )
+
+
+# 三角関数に渡す角度の上限(度)。**f64 の刻み幅から決めた。**
+#
+# 1e6 度は約 1.7e4 ラジアンで、その大きさでの f64 の刻み幅は約 1.8e-12。
+# sin/cos の導関数は 1 以下なので、引数の丸めだけで生じる誤差は 2e-12 程度
+# ——表示分解能(5e-10)に対して 2 桁以上の余裕がある。
+#
+# **上限を置くのは、この現象を隠すためではない。** 巨大角度の三角関数は
+# `scientific` シャードで既に上書き 2 件として名指しで記録されている。
+# **同じ理由が繰り返し出るなら、上書きを何個も手書きするのではなく帯の
+# 問題である**——上書きは名指しの例外のための機構で、再現する分類には
+# 向かない(2026-08-17、9/2000 が同じ理由で外れて判明)。
+TYPED_MAX_ANGLE_DEG = mp.mpf("1e6")
+
+
+def _angle_is_reducible(node: Node) -> bool:
+    """三角関数の引数が、f64 が解像できる大きさに収まっているか。"""
+    try:
+        return abs(evaluate(node)) <= TYPED_MAX_ANGLE_DEG
+    except OutOfShard:
+        return False
+
+
+def build_typed_shard(seed: int, count: int) -> dict:
+    """**打ち方のシャード。** 同じ値への別の打ち方を通す。
+
+    `dot` / `zeros3` / `exp` はどれも値を新しくしない——**新しいのは
+    「その値にどう到達するか」**である。engine の入力バッファは
+    そこで初めて踏まれる(設計書 2026-08-17 §1)。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = _typed_node(rng, MAX_DEPTH)
+        if isinstance(node, Typed):
+            # 裸のリテラルは「打った桁が返る」ことしか確かめない。
+            continue
+        if any(
+            isinstance(sub, Un)
+            and sub.fn in ("sin", "cos", "tan")
+            and not _angle_is_reducible(sub.arg)
+            for sub in walk(node)
+        ):
+            continue
+        try:
+            if not _within_range(node):
+                continue
+            value = evaluate(node)
+        except OutOfShard:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"typed-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
+# --- 訂正（`ac` / `del`）---
+
+# でたらめに打つ列。**`ac` の後は何も残らないことを主張する**ので、
+# 中身は何でもよい。角度モードや表示形式を変えるキーは入れない
+# ——`cleared()` はそれらを保つので、同値が成り立たなくなる。
+GARBAGE_KEYS = ("7", "add", "3", "dot", "9", "mul", "lparen", "2", "sub", "8")
+
+
+def _with_typo(leaf: Typed, rng: random.Random) -> Typed:
+    """**同じ葉を、打ち間違えて直しながら打つ。**
+
+    余分な桁を 1 つ打って `del` で消す。値は変わらないので、
+    同値であることが構成から自明である。
+
+    **注入するのは葉のキー列の末尾**——そこはまだ数を打っている最中なので、
+    `del` が仮数の 1 文字を消す。バッファが空のところで `del` を打つと
+    開き括弧を消しに行き、**別の意味になる**(設計書 §3.3)。
+    """
+    extra = str(rng.randint(0, 9))
+    return Typed((*leaf.keys, extra, "del"), leaf.text)
+
+
+def _inject_typo(node: Node, rng: random.Random) -> Node:
+    """木の中の `Typed` の葉を 1 つ選んで、打ち間違いを入れる。"""
+    leaves = [sub for sub in walk(node) if isinstance(sub, Typed)]
+    if not leaves:
+        return node
+    target = leaves[rng.randrange(len(leaves))]
+    replaced = _with_typo(target, rng)
+
+    def rebuild(current: Node) -> Node:
+        if current is target:
+            return replaced
+        if isinstance(current, Bin):
+            return Bin(current.op, rebuild(current.left), rebuild(current.right))
+        if isinstance(current, Un):
+            return Un(current.fn, rebuild(current.arg))
+        return current
+
+    return rebuild(node)
+
+
+CORRECTION_FORMS = 2
+
+
+def build_corrections_shard(seed: int, count: int) -> dict:
+    """**訂正のシャード。** 打ち間違えて直した列と、打ち間違えない列。
+
+    `ac` と `del` は**打った結果を巻き戻す**キーで、値の意味を持たない。
+    だから期待値を持たず、**二つのキー列が同じ表示に着くこと**だけを主張する。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = _typed_node(rng, MAX_DEPTH - 1)
+        if isinstance(node, Typed):
+            continue
+        try:
+            if not _within_range(node):
+                continue
+        except OutOfShard:
+            continue
+        clean = to_key_sequence(node)
+        if rng.randrange(CORRECTION_FORMS) == 0:
+            # `del`: 葉の途中で打ち間違えて消す。
+            dirty = to_key_sequence(_inject_typo(node, rng))
+        else:
+            # `ac`: でたらめに打ってから全部消して打ち直す。
+            dirty = [*GARBAGE_KEYS, "ac", *clean]
+        if dirty == clean:
+            continue
+        key = (tuple(clean), tuple(dirty))
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(
+            {
+                "kind": "equivalence",
+                "id": f"fix-{len(entries):06d}",
+                "mode": "Deg",
+                "left": clean,
+                "right": dirty,
+                "expr": f"{to_expr_text(node)}(訂正あり)",
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
 # --- 桁落ちを狙うシャード（段階 G §3.4）---
 
 # **このシャードだけ許容が違う。** 表示分解能(5e-10)では実測で 99.8% が
@@ -681,6 +944,11 @@ def main() -> None:
     write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
+    write("typed-000.json", build_typed_shard(seed=20260824, count=count))
+    write(
+        "corrections-000.json",
+        build_corrections_shard(seed=20260825, count=count),
+    )
     write(
         "cancellation-000.json",
         build_cancellation_shard(seed=20260823, count=count),
