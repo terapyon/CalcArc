@@ -5,6 +5,7 @@ import { Keypad } from "./Keypad/Keypad";
 import { SCIENTIFIC_SECTIONS } from "./Keypad/scientific";
 import styles from "./ScientificPanel.module.css";
 import { useKeyboard } from "./useKeyboard";
+import { loadSettings, updateSettings } from "./useSetting";
 
 export function ScientificPanel() {
   const [calc, setCalc] = useState<Calc | null>(null);
@@ -24,7 +25,22 @@ export function ScientificPanel() {
         if (cancelled) return;
         calcRef.current = loaded;
         setCalc(loaded);
-        setStep(loaded.initial());
+        // **設定を復元する。** EngineState には触らない——角度・極形式・
+        // 記法はどれも自分の欄だけを入れ替えるトグルなので、初期状態に
+        // キーを送れば届く(P-1 設計書 §4)。復元後の状態は定義上
+        // 「利用者が押して到達できる状態」になる。
+        const wanted = loadSettings().scientific;
+        let restored = loaded.initial();
+        if (restored.display.angle !== wanted.angle) {
+          restored = loaded.dispatch(restored.state, "angle_toggle");
+        }
+        if (restored.display.form !== wanted.form) {
+          restored = loaded.dispatch(restored.state, "polar_toggle");
+        }
+        if (restored.display.notation !== wanted.notation) {
+          restored = loaded.dispatch(restored.state, "eng");
+        }
+        setStep(restored);
       },
       () => {
         // WASM が読めなければ電卓は何もできない。読み込み中の表示のまま
@@ -46,6 +62,32 @@ export function ScientificPanel() {
       ready && previous ? ready.dispatch(previous.state, token) : previous,
     );
   }, []);
+
+  // **書き戻しは effect に置く。** setStep の更新関数の中に副作用を書くと、
+  // StrictMode(main.tsx で有効)が更新関数を 2 度呼ぶので書き込みも 2 度
+  // 走る。値が同じなので実害は出ないが、副作用の置き場所として正しくない
+  // ——React は更新関数を純粋なものとして扱う。
+  //
+  // ref に直前の署名を持ち、**変わったときだけ書く**。打鍵のたびに書くと、
+  // 保存しないと決めた入力の変化にも反応することになる。
+  const savedScientific = useRef<string | null>(null);
+  useEffect(() => {
+    if (!step) return;
+    const { angle, form, notation } = step.display;
+    const signature = `${angle}/${form}/${notation}`;
+    // **復元直後の 1 回目は書かない。** 読んだ物をそのまま書き戻すことに
+    // なり、一度も設定を触っていない利用者にも保存キーが生まれる。
+    if (savedScientific.current === null) {
+      savedScientific.current = signature;
+      return;
+    }
+    if (savedScientific.current === signature) return;
+    savedScientific.current = signature;
+    updateSettings((current) => ({
+      ...current,
+      scientific: { angle, form, notation },
+    }));
+  }, [step]);
 
   useKeyboard(press);
 
