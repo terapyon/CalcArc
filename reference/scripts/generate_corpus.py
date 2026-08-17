@@ -22,6 +22,7 @@ from collections.abc import Iterator
 
 import mpmath as mp
 
+from calcarc_reference import eng_ref, sexagesimal_ref
 from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
@@ -734,6 +735,280 @@ def build_corrections_shard(seed: int, count: int) -> dict:
     }
 
 
+# --- 表示のトグルのシャード（段階 I）---
+#
+# **このシャードは「整形」を試すのであって、「計算」を試すのではない。**
+#
+# 最初の版は任意の式の答えを 60 進・工学表記に直して**文字列の厳密一致**で
+# 比べた。2000 件中 5 件が末尾 1 桁だけ食い違って落ちた——例えば
+# `sin(rad(70500070))` は engine が `-173.6481776e-3`、参照が
+# `-173.6481777e-3` である。原因は整形ではなく**値**で、7000 万度の引数還元で
+# engine の f64 が正しく丸めた値から数 ulp ずれ、それがちょうど 10 桁目の
+# 丸め境界をまたいだ。
+#
+# 帯を狭めても消えない。表示は有効数字 10 桁＝相対 1e-9 刻みの格子で、
+# 計算の相対誤差 ε に対して「境界をまたぐ確率」はおよそ 2ε/1e-9 になる
+# ——1e6 度に切って ε≈2e-11 でも 2000 件中 80 件、1e4 度に切っても数件残る。
+# **厳密一致と、計算誤差を含む値は、原理的に両立しない。**
+#
+# だから 3 つに分ける:
+#
+# - **A 整形ケース(`display`、厳密一致)** — 値は**打った数そのもの**。
+#   十進→f64 の変換は Python も Rust も正しく丸めるので**ビットまで同一**で、
+#   食い違えば整形の欠陥である。工学表記と 60 進の分岐を狙って値を選ぶ。
+# - **B 往復ケース(`equivalence`)** — 任意の式に対し、
+#   **トグルを 2 回押すと元の表示に戻る**。両側とも engine なので ulp の
+#   揺れを受けず、任意の式を使える。
+# - **C 落下ケース(`equivalence`)** — 60 進にできない値では `dms` を押しても
+#   表示が動かない。通常表示を予測する参照実装を書かずに済ませるための形。
+
+# 工学表記と 60 進の分岐を狙って手で選んだ値。**乱数では踏めない場所**である。
+#
+# 各要素は「打つ十進の文字列」。キー列は `_literal_keys` が組む。
+DISPLAY_EDGE_LITERALS = (
+    "1",  # 指数 0。`e0` を書かないことの確認
+    "10",  # 指数 1。仮数 10
+    "100",  # 指数 2。仮数 100
+    "1000",  # 指数 3 ちょうど。`1e3`
+    "999.9999999",  # 10 桁に丸めると 1000 に繰り上がり、指数が 1 つ上がる
+    "999999999.9",  # 10 桁ちょうど、繰り上がりで 1e9
+    "0.5",  # 1 未満。`500e-3`。60 進では 0°30'00"
+    "0.001",  # 指数 -3 ちょうど
+    "0.0001234",  # 指数 -4。3 の倍数へ**下向き**に丸める側
+    "0.0000001",  # 指数 -7 → `100e-9`
+    "1234.5678",  # 指数 3、仮数に小数部が残る
+    "123456789",  # 指数 8 → `123.456789e6`
+    "0.999999999",  # 1 未満のまま 10 桁
+    "1.000000001",  # 末尾だけが 1
+    "12.34",  # 小さな端数
+    "90",  # 60 進の代表(90°00'00")
+    "1.5",  # 1°30'00"
+    "0.0002777777",  # 1 秒に近い
+    # --- 60 進の秒が丸めで 60 になり、分へ繰り上がる値 ---
+    #
+    # **手で探した。** 秒は「10 桁 − 度の桁数 − 4」桁に丸めてから 60 と
+    # 比べる規則なので、繰り上がりが起きる窓は度の桁数によって変わる
+    # (1 桁なら 59.999995 以上、3 桁なら 59.9995 以上)。乱数がこの窓に
+    # 落ちる確率は 1e-5 程度で、**2000 件引いても踏めない。**
+    #
+    # 繰り上がりを止める変異を入れて測ったところ、最初の版はこの窓を
+    # 1 件しか持っておらず、検出が乱数 1 回に懸かっていた。だから
+    # **並びとして固定し、下の生成器が必ず全部を出す。**
+    "0.016666666",  # 生の秒 59.9999976 → 0°1'0"
+    "0.30000000",  # 生の秒 59.9999999 → 0°18'0"
+    "3.766666666",  # 生の秒 59.9999976 → 3°46'0"
+    "0.983333332",  # 生の秒 59.9999952 → 0°59'0"
+    "12.58333332",  # 度が 2 桁、秒は 4 桁に丸める → 12°35'0"
+    "89.13333332",  # 度が 2 桁 → 89°8'0"
+    "123.01666657",  # 度が 3 桁、秒は 3 桁に丸める → 123°1'0"
+    # **分も 60 になり、度へ繰り上がる。** 繰り上がりが 2 段続く唯一の形で、
+    # 359°59'59.9996…" が 360°0'0" になる。
+    "359.99999991",
+)
+
+
+def _literal_keys(text: str) -> tuple[str, ...]:
+    """十進の文字列を、**打った通りのキー列**にする。"""
+    return tuple("dot" if ch == "." else ch for ch in text)
+
+
+def _display_literal(rng: random.Random) -> Typed:
+    """整形ケースの値。**打った数そのもの**で、計算を挟まない。
+
+    十進→f64 は Python(`float`)も Rust(`str::parse`)も正しく丸めるので、
+    両側の f64 は**ビットまで同じ**である。だから厳密一致で比べてよい。
+    """
+    which = rng.randrange(5) + 1
+    if which == 1:
+        text = str(rng.randint(1, 999999))
+        return Typed(_literal_keys(text), text)
+    if which == 2:
+        text = f"{rng.randint(0, 999)}.{rng.randint(1, 999999)}"
+        return Typed(_literal_keys(text), text)
+    if which == 3:
+        # `000` キー。**先頭には置かない**(先頭ゼロの規則で潰れる)。
+        head = rng.randint(1, 999)
+        return Typed((*str(head), "zeros3"), f"{head}000")
+    mantissa = rng.randint(1, 99)
+    frac = rng.randint(0, 9)
+    exponent = rng.randint(1, 20)
+    if which == 4:
+        return Typed(
+            (*str(mantissa), "dot", str(frac), "exp", *str(exponent)),
+            f"{mantissa}.{frac}e{exponent}",
+        )
+    # **指数入力の途中の `+/-` は指数の符号を変える。** 段階 G で
+    # 「まだ検証していない」と書いた打ち方を、ここで実際に踏む
+    # ——`84.9e1` に `neg` を打つと `84.9e-1` である。
+    return Typed(
+        (*str(mantissa), "dot", str(frac), "exp", *str(exponent), "neg"),
+        f"{mantissa}.{frac}e-{exponent}",
+    )
+
+
+def _display_node(rng: random.Random, depth: int) -> Node:
+    """往復ケースの木。**値は何でもよい**——両側とも engine で比べるので、
+    計算誤差はそもそも比較に入らない。"""
+    if depth <= 0 or rng.random() < 0.45:
+        return _typed_leaf(rng)
+    if rng.random() < 0.3:
+        fn = rng.choice(UNARY_FNS)
+        arg = _display_node(rng, depth - 1)
+        if fn == "neg" and _is_exponent_entry(arg):
+            arg = _typed_decimal(rng)
+        return Un(fn, arg)
+    return Bin(
+        rng.choice(BINARY_OPS),
+        _display_node(rng, depth - 1),
+        _display_node(rng, depth - 1),
+    )
+
+
+def build_display_shard(seed: int, count: int) -> dict:
+    """**表示のトグルのシャード。値ではなく表示文字列を比べる。**
+
+    `eng` と `dms` はどちらも値を変えない。値だけを見ている限り、押しても
+    押さなくても同じ答えになる——**押した効果を主張できるのは表示だけ**である。
+
+    参照は `sexagesimal_ref.format_sexagesimal`(f64 のビットから `Fraction`)と
+    `eng_ref.format_real_eng`(`Decimal` の厳密な十進値から指数を直に求める)。
+    どちらも Rust の「一度 `{:.9e}` で整形してから読み直す」手順を写していない。
+
+    ケースの内訳は上のコメントの A / B / C を見よ。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+
+    # **手で選んだ値は、乱数に引かせず必ず全部出す。**
+    #
+    # 以前はこれらも `_display_literal` の 1 分岐として抽選しており、
+    # `seen` の重複除去と合わせて 1 つの値は多くても 1 回しか出ず、
+    # そのうえ eng と dms のどちらに回るかも乱数任せだった。結果として
+    # 60 進の繰り上がりを踏むケースがシャード全体で 1 件しかなく、
+    # **検出が乱数 1 回に懸かっていた**(検出力の測定で判明)。
+    #
+    # 並びを先頭に固定し、**1 つの値につき eng と dms を両方**作る。
+    # 種を変えても、木の作り方を変えても、この 2n 件は動かない。
+    for text in DISPLAY_EDGE_LITERALS:
+        landed = float(text)
+        keys = to_key_sequence(Typed(_literal_keys(text), text))
+        entries.append(
+            {
+                "kind": "display",
+                "id": f"disp-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": [*keys, "eng"],
+                "expr": f"{text} を工学表記で",
+                "expect": {"main": eng_ref.format_real_eng(landed)},
+            }
+        )
+        shown = sexagesimal_ref.format_sexagesimal(landed)
+        entries.append(
+            {
+                "kind": "display",
+                "id": f"disp-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": [*keys, "dms"],
+                "expr": f"{text} を 60 進で",
+                "expect": {"main": shown},
+            }
+            if shown is not None
+            else {
+                "kind": "equivalence",
+                "id": f"disp-{len(entries):06d}",
+                "mode": "Deg",
+                "left": keys,
+                "right": [*keys, "dms"],
+                "expr": f"{text} は 60 進にできないので表示が変わらない",
+            }
+        )
+        seen.add(text)
+
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        index = len(entries)
+        # A を半分、B を 4 割、C は A のうち 60 進にできなかったものが回る。
+        if rng.random() < 0.6:
+            leaf = _display_literal(rng)
+            expr = leaf.text
+            if expr in seen:
+                continue
+            landed = float(expr)
+            keys = to_key_sequence(leaf)
+            if rng.random() < 0.5:
+                entry = {
+                    "kind": "display",
+                    "id": f"disp-{index:06d}",
+                    "mode": "Deg",
+                    "keys": [*keys, "eng"],
+                    "expr": f"{expr} を工学表記で",
+                    "expect": {"main": eng_ref.format_real_eng(landed)},
+                }
+            else:
+                shown = sexagesimal_ref.format_sexagesimal(landed)
+                if shown is None:
+                    # C: 60 進にできない値。engine は通常表示に落ちるので、
+                    # 「押しても表示が変わらない」を同値として主張する。
+                    entry = {
+                        "kind": "equivalence",
+                        "id": f"disp-{index:06d}",
+                        "mode": "Deg",
+                        "left": keys,
+                        "right": [*keys, "dms"],
+                        "expr": f"{expr} は 60 進にできないので表示が変わらない",
+                    }
+                else:
+                    entry = {
+                        "kind": "display",
+                        "id": f"disp-{index:06d}",
+                        "mode": "Deg",
+                        "keys": [*keys, "dms"],
+                        "expr": f"{expr} を 60 進で",
+                        "expect": {"main": shown},
+                    }
+            seen.add(expr)
+            entries.append(entry)
+            continue
+
+        # B: 往復。**任意の式でよい。**
+        node = _display_node(rng, MAX_DEPTH - 1)
+        if isinstance(node, Typed):
+            continue
+        try:
+            if not _within_range(node):
+                continue
+            evaluate(node)
+        except OutOfShard:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        toggle = "eng" if rng.random() < 0.5 else "dms"
+        keys = to_key_sequence(node)
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "equivalence",
+                "id": f"disp-{index:06d}",
+                "mode": "Deg",
+                "left": keys,
+                "right": [*keys, toggle, toggle],
+                "expr": f"{expr} で {toggle} を 2 回押すと元の表示に戻る",
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 # --- 角度モードのシャード（段階 H）---
 
 # ラジアンの葉の帯。**度の 0〜999 をそのまま使うと 999 rad = 159 回転**になり、
@@ -1041,6 +1316,7 @@ def main() -> None:
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
     write("typed-000.json", build_typed_shard(seed=20260824, count=count))
+    write("display-000.json", build_display_shard(seed=20260827, count=count))
     write(
         "angle-mode-000.json",
         build_angle_mode_shard(seed=20260826, count=count),

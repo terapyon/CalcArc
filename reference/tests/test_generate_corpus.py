@@ -6,6 +6,7 @@ import math
 import pathlib
 import random
 import sys
+from fractions import Fraction
 
 import mpmath as mp
 
@@ -718,3 +719,103 @@ def test_the_combinatorics_shard_records_why_it_threw_candidates_away() -> None:
         "溢れで捨てたケースが 0 件。n の上限が低すぎて f64 の天井に届いていない"
     )
     assert rejections["domain"] > 0, "r > n の棄却が 0 件"
+
+
+def _typed_text_of(keys: list[str]) -> str:
+    """キー列の先頭の「打った数」を十進の文字列に戻す。`eq` の手前まで。
+
+    **数字以外のキーも全部扱う。** 最初の版は `dot` だけを戻していて、
+    `zeros3` を打ったケースで `'241zeros3'` という文字列を作り `float()` が
+    落ちた——**キーを取りこぼしても、落ちるまでは静かに間違った文字列**を
+    返すので、ここは網羅する。知らないキーは黙って通さず例外にする。
+    """
+    text = ""
+    for key in keys[: keys.index("eq")]:
+        if key.isdigit():
+            text += key
+        elif key == "dot":
+            text += "."
+        elif key == "zeros3":
+            text += "000"
+        elif key == "exp":
+            text += "e"
+        elif key == "neg":
+            # 指数入力の途中の `+/-` は**指数の符号**を変える(engine の慣行)。
+            head, _, exponent = text.partition("e")
+            text = f"{head}e-{exponent}"
+        else:
+            raise AssertionError(f"打った数のキー列に未知のキー {key!r} がある")
+    return text
+
+
+def _is_bare_typed_number(keys: list[str]) -> bool:
+    """`=` の手前が「数を打っただけ」か。演算子も関数も括弧も含まないこと。
+
+    往復ケース(任意の式に `eng` を 2 回)と整形ケース(打った数に `eng` を
+    1 回)は、どちらも末尾がトグルなので**末尾だけでは区別できない**。
+    """
+    if "eq" not in keys:
+        return False
+    literal = {"dot", "zeros3", "exp", "neg"}
+    return all(key.isdigit() or key in literal for key in keys[: keys.index("eq")])
+
+
+def test_the_display_shard_carries_every_hand_picked_literal() -> None:
+    """**手で選んだ値が、乱数の都合で消えていないこと。**
+
+    `DISPLAY_EDGE_LITERALS` は工学表記と 60 進の分岐を狙って手で探した値で、
+    乱数では踏めない場所にある。以前はこれらも抽選の 1 分岐だったため、
+    1 つの値は多くても 1 回しか出ず、eng と dms のどちらに回るかも運任せだった。
+
+    いまは生成器が先頭で**全部を、両方のトグルで**出す。この検査はそれが
+    実際にシャードに載っていることを、コミット済みの JSON から確かめる
+    ——生成器のコードではなく**結果**を見ることが要点である。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "display-000.json").read_text())
+    pressed: dict[str, set[str]] = {}
+    for case in shard["cases"]:
+        keys = case["keys"] if case["kind"] == "display" else case["right"]
+        if keys[-1] not in ("eng", "dms") or not _is_bare_typed_number(keys):
+            continue
+        pressed.setdefault(_typed_text_of(keys), set()).add(keys[-1])
+
+    missing = [
+        text
+        for text in generate_corpus.DISPLAY_EDGE_LITERALS
+        if pressed.get(text) != {"eng", "dms"}
+    ]
+    assert not missing, (
+        f"{len(missing)} 件の手選びの値が両方のトグルで踏まれていない: {missing[:5]}。"
+        "生成器の先頭の並びが壊れている"
+    )
+
+
+def test_the_display_shard_actually_reaches_the_sexagesimal_carry() -> None:
+    """**秒が 60 に繰り上がるケースが、実際に何件かあること。**
+
+    繰り上がりは「秒を丸めてから 60 と比べる」規則でしか起きず、丸める前の
+    値からは先読みできない。engine の `format_sexagesimal` はそのために
+    順序を守っているが、**踏まないテストはその順序を何も主張しない。**
+
+    検出力の測定(`web/scripts/detection-power.mjs` の `sexagesimal-no-carry`)で、
+    最初の版がこの窓を 1 件しか持っていないことが分かった——検出が乱数 1 回に
+    懸かっていたということである。ここで下限を置いて、次に減ったら赤くする。
+    """
+    shard = json.loads((_CORPUS_GENERATED / "display-000.json").read_text())
+    carried = 0
+    for case in shard["cases"]:
+        if case["kind"] != "display" or case["keys"][-1] != "dms":
+            continue
+        if not _is_bare_typed_number(case["keys"]):
+            continue
+        a = Fraction(abs(float(_typed_text_of(case["keys"]))))
+        degrees = a.numerator // a.denominator
+        rest = (a - degrees) * 60
+        minutes = rest.numerator // rest.denominator
+        seconds = float((rest - minutes) * 60)
+        # 丸める前の秒が 60 のすぐ手前なら、丸めで 60 になりうる。
+        if seconds > 59.9:
+            carried += 1
+    assert carried >= 8, (
+        f"秒が繰り上がりうるケースが {carried} 件しかない。この経路の検出が乱数任せになっている"
+    )

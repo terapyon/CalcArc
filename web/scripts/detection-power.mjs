@@ -67,6 +67,29 @@ const MUTATIONS = [
     // 中心二項係数の帯だけ。答は f64 に収まるのに途中で溢れる。
     expect: "combinatorics only",
   },
+  {
+    id: "eng-exponent-toward-zero",
+    what: "工学表記の指数を 0 方向に丸める(`div_euclid` を `/` に戻す)",
+    file: "crates/calcarc-core/src/numeric/format.rs",
+    from: "let eng_exponent = exponent.div_euclid(3) * 3;",
+    to: "let eng_exponent = (exponent / 3) * 3;",
+    // **1 未満の値だけが壊れる。** `-1 / 3` は Rust で `0` なので
+    // `0.5` が `500e-3` ではなく `0.5` と出る。正の指数は影響を受けない。
+    // 値は 1 ビットも変わらないので、**表示のシャード以外は何も気づかない**
+    // ——それがこの段階を足した理由そのものである。
+    expect: "display only",
+  },
+  {
+    id: "sexagesimal-no-carry",
+    what: "60 進の秒の繰り上がりを止める",
+    file: "crates/calcarc-core/src/numeric/format.rs",
+    from: "if text.parse::<f64>().unwrap_or(0.0) >= 60.0 {",
+    to: "if text.parse::<f64>().unwrap_or(0.0) >= 600.0 {",
+    // 桁を 1 つ間違えた形。秒は丸めても 60 を超えないので、繰り上がりが
+    // **一度も起きなくなる**——`59'60\"` と出る。
+    // これも値は変わらないので、表示のシャードにしか見えない。
+    expect: "display only",
+  },
 ];
 
 function run(command, args, options = {}) {
@@ -92,7 +115,7 @@ function measure() {
   // 「every case in <shard> matches the reference」のテストが落ちたとき、
   // メッセージに「N of M cases disagree」が出る。
   const pattern =
-    /every (?:case|call) in ([\w.-]+) matches the reference[\s\S]{0,400}?(\d+) of (\d+) (?:cases|calls) disagree/g;
+    /every (?:case|call|display) in ([\w.-]+) matches the reference[\s\S]{0,400}?(\d+) of (\d+) (?:cases|calls|displays) disagree/g;
   for (const match of output.matchAll(pattern)) {
     caught[match[1]] = Number(match[2]);
   }
@@ -122,6 +145,19 @@ function verdictFor(expectation, caught) {
         others.length === 0
           ? "括弧を省いたシャードだけが反応した"
           : `全括弧のシャードまで反応した(${others.join(", ")})`,
+    };
+  }
+  if (expectation === "display only") {
+    // **表示のシャードだけが反応するはず。** 値は 1 ビットも変わらないので、
+    // 他のシャードが反応したらそれは「表示の変異が値にも漏れている」か、
+    // 変異の書き方が広すぎるかのどちらかで、どちらも欠陥である。
+    const others = shards.filter((s) => !s.startsWith("display-"));
+    return {
+      ok: others.length === 0,
+      why:
+        others.length === 0
+          ? "表示のシャードだけが反応した——値を見るテストには見えない欠陥である"
+          : `値を見るシャードまで反応した(${others.join(", ")})`,
     };
   }
   if (expectation === "combinatorics only") {

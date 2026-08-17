@@ -72,7 +72,13 @@ function angleToggles(keys: string[]): number {
  * 見る——`Deg` は偶数回(押していないか、押して戻した)、`Rad` は奇数回である。
  * 緩めると「2 回押して `Rad` と名乗るケース」が通り、それは `Deg` で評価される。
  */
-export function assertSupportedMode(name: string, cases: CorpusCase[]): void {
+export function assertSupportedMode(
+  name: string,
+  // **構造で受ける。** 本体は既に `"keys" in testCase` で鍵の有無を見ており、
+  // `CorpusCase` に固定する理由が無い。固定したままだと表示のシャードが
+  // この番人を通れず、**角度モードの検査だけが静かに掛からない**シャードが増える。
+  cases: readonly { id: string; mode: string }[],
+): void {
   const offenders: string[] = [];
   for (const testCase of cases) {
     const mode = testCase.mode;
@@ -293,6 +299,81 @@ export function partitionCases(
  */
 export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
 
+/**
+ * 表示のトグルのシャード。**値ではなく表示文字列を比べる。**
+ *
+ * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
+ * (設計書 2026-08-17-display §3.1)。
+ */
+export const DISPLAY_SHARD_PATTERN = /^display-\d+\.json$/;
+
+/** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
+export interface DisplayCase {
+  kind: "display";
+  id: string;
+  mode: string;
+  keys: string[];
+  expr: string;
+  expect: { main: string };
+}
+
+/**
+ * 表示のシャードの同値ケース。**`expr` を必ず持つ。**
+ *
+ * 既存の `EquivalenceCase` は `expr` を持たない——括弧の有無だけが違う
+ * 2 本のキー列で、式は 1 つしか無いからである。こちらは「この値は 60 進に
+ * できないので `dms` を押しても表示が変わらない」という主張で、
+ * **どの値についての主張かが読めないと不合格の報告が意味をなさない。**
+ */
+export interface DisplayEquivalenceCase extends EquivalenceCase {
+  expr: string;
+}
+
+export interface DisplayShard {
+  schema: number;
+  generated_by: string;
+  cases: (DisplayCase | DisplayEquivalenceCase)[];
+}
+
+/**
+ * 表示のシャードを読む。**`tolerance` を持たない**——文字列の厳密一致なので
+ * 許容誤差の概念が無く、持たせると「緩めれば通る」余地が生まれる。
+ */
+export function loadDisplayShards(): { name: string; shard: DisplayShard }[] {
+  const shards = readdirSync(CORPUS)
+    .filter((name) => DISPLAY_SHARD_PATTERN.test(name))
+    .sort()
+    .map((name) => ({
+      name,
+      shard: JSON.parse(
+        readFileSync(join(CORPUS, name), "utf-8"),
+      ) as DisplayShard,
+    }));
+  for (const { name, shard } of shards) {
+    if (shard.schema !== KNOWN_SCHEMA) {
+      throw new Error(
+        `${name}: schema ${JSON.stringify(shard.schema)} is unknown`,
+      );
+    }
+    if (!Array.isArray(shard.cases) || shard.cases.length === 0) {
+      throw new Error(
+        `${name}: the shard carries no cases. An empty shard runs green ` +
+          "while verifying nothing, so it is refused here.",
+      );
+    }
+    const strangers = shard.cases.filter(
+      (c) => c.kind !== "display" && c.kind !== "equivalence",
+    );
+    if (strangers.length > 0) {
+      throw new Error(
+        `${name}: ${strangers.length} case(s) are neither "display" nor ` +
+          '"equivalence" — they would be dropped without a warning.',
+      );
+    }
+  }
+  return shards;
+}
+
 /** 関数呼び出しのケース 1 件。 */
 export interface CallCase {
   kind: "call";
@@ -349,6 +430,7 @@ export function loadShards(): { name: string; shard: Shard }[] {
   const shards = readdirSync(CORPUS)
     .filter((name) => name.endsWith(".json"))
     .filter((name) => !CALL_SHARD_PATTERN.test(name))
+    .filter((name) => !DISPLAY_SHARD_PATTERN.test(name))
     .sort()
     .map((name) => ({
       name,

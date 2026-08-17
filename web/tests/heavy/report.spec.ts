@@ -1104,12 +1104,59 @@ test("with nothing counted, the untouched wording comes back", () => {
 test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
   // 但し書き自身が腐っていた——「エラー経路・指数表記…は完全に固定の文章」と
   // 書いてあったが、その 2 つはデータ由来になっていた。
-  const markdown = renderReport([summary()], PROVENANCE);
-  const disclaimer = markdown.slice(
-    markdown.indexOf("この節は手で保守されている"),
+  //
+  // **そして、それを見張っていたはずのこのテスト自身も腐っていた。**
+  // 以前ここは `toContain("複素数・角度モード・UI・入力中の表示")` の 1 行で、
+  // **但し書きに書いてある文字列が但し書きに書いてあること**しか確かめて
+  // いなかった。段階 H が `angle_toggle` を 2000 本のキー列で押し、
+  // 段階 I が `eng`/`dms` を押しても、この行は緑のままだった——項目の側は
+  // データ由来に切り替わっているのに、但し書きは「角度モードは完全に固定の
+  // 文章」と言い続けていた(2026-08-17)。
+  //
+  // いまは**入力を変えて、出力が変わることを見る**。押した集計を持つ走行と
+  // 持たない走行で、但し書きの一覧が動かなければ嘘である。
+  const untouched = renderReport([summary()], PROVENANCE);
+  const disclaimerOf = (markdown: string) =>
+    markdown.slice(markdown.indexOf("この節は手で保守されている"));
+
+  expect(disclaimerOf(untouched)).toContain("角度モード");
+  expect(disclaimerOf(untouched)).toContain("表示の記法");
+  expect(disclaimerOf(untouched)).not.toContain("エラー経路・複素数・指数表記");
+
+  const pressed = summary();
+  pressed.shape = {
+    ...pressed.shape,
+    tokens: { ...pressed.shape.tokens, angle_toggle: 7, eng: 3, dms: 4 },
+  };
+  const touched = renderReport([pressed], PROVENANCE);
+  // 踏んだ走行では、その 2 項目は「完全に固定」の一覧から外れる。
+  expect(disclaimerOf(touched)).not.toContain("角度モード");
+  expect(disclaimerOf(touched)).not.toContain("表示の記法");
+  // 外れたぶん、一覧は短くなる(数え上げも同じ述語から出ている)。
+  expect(disclaimerOf(touched)).toContain("複素数・UI・入力中の表示の 3 行");
+  expect(disclaimerOf(untouched)).toContain(
+    "複素数・角度モード・表示の記法・UI・入力中の表示の 5 行",
   );
-  expect(disclaimer).toContain("複素数・角度モード・UI・入力中の表示");
-  expect(disclaimer).not.toContain("エラー経路・複素数・指数表記");
+});
+
+test("the angle-mode and notation items say what the run actually pressed", () => {
+  // **項目の側も、押した集計から出ていること。** 但し書きだけを直しても、
+  // 本文が「一度も押していない」と言い続けたら矛盾は残る(読み手が実際に
+  // 指摘したのはこの形の矛盾である)。
+  const untouched = renderReport([summary()], PROVENANCE);
+  expect(untouched).toContain("`angle_toggle` を一度も");
+  expect(untouched).toContain("`ENG` も `°'\"` も一度も押していない");
+
+  const pressed = summary();
+  pressed.shape = {
+    ...pressed.shape,
+    tokens: { ...pressed.shape.tokens, angle_toggle: 7, eng: 3, dms: 4 },
+  };
+  const touched = renderReport([pressed], PROVENANCE);
+  expect(touched).toContain("7 本のキー列が `angle_toggle` を押している");
+  // eng と dms は合算して数える(どちらも「値を変えない表示のキー」である)。
+  expect(touched).toContain("7 本のキー列が `ENG` か `°'\"` を押している");
+  expect(touched).not.toContain("`angle_toggle` を一度も");
 });
 
 test("an area with no cases is never called correct", () => {

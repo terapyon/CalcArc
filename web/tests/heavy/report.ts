@@ -17,6 +17,7 @@ import type {
 } from "./corpus";
 import {
   loadCallShards,
+  loadDisplayShards,
   loadShards,
   partitionCases,
   SHAPE_TOKENS,
@@ -197,7 +198,7 @@ function summaryFileName(name: string): string {
  */
 export function summaryName(
   shardName: string,
-  kind: "values" | "equivalences" | "calls",
+  kind: "values" | "equivalences" | "calls" | "displays",
 ): string {
   return `${shardName} (${kind})`;
 }
@@ -289,6 +290,10 @@ export function expectedSummaryNames(): string[] {
   for (const { name } of loadCallShards()) {
     names.push(summaryName(name, "calls"));
   }
+  // **表示のシャードも数える。** `loadShards()` はこれも除外する。
+  for (const { name } of loadDisplayShards()) {
+    names.push(summaryName(name, "displays"));
+  }
   return names;
 }
 
@@ -354,6 +359,7 @@ export const AREAS = [
   "cancellation",
   "data_scale",
   "finance",
+  "display",
 ] as const;
 export type Area = (typeof AREAS)[number];
 
@@ -370,6 +376,12 @@ export function areaOfShard(shardName: string): Area {
   }
   if (/^(data-scale|datascale|bytes)-/.test(stem)) {
     return "data_scale";
+  }
+  if (/^display-/.test(stem)) {
+    // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
+    // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
+    // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
+    return "display";
   }
   if (/^cancellation-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードは桁落ちを**狙って**作った
@@ -530,14 +542,24 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
       (sum, entry) => sum + entry.mismatches.length,
       0,
     );
+    // **その領域が「許容で」比べたのか「厳密に」比べたのかを区別する。**
+    //
+    // 表の「最大相対誤差」が 0.00e+0 のとき、意味は 2 通りある——
+    // 許容で比べて 1 件も外れなかったのか、そもそも誤差という概念が無い
+    // 比較(整数の一致、文字列の一致)なのか。**後者のほうが強い主張**なのに、
+    // 同じ `0.00e+0` に見えると「測っていないから 0 なのだろう」と読める。
+    // 誤差を 1 件も測っていない(`relMeasured === 0`)領域がそれである。
+    const measured = own.reduce((sum, entry) => sum + entry.relMeasured, 0);
     return {
       area,
       cases,
       worst,
       mismatches,
+      exact: cases > 0 && measured === 0,
       verdict: verdictOf(cases, worst, mismatches),
     };
   });
+  const exactAreas = rows.filter((row) => row.exact).map((row) => row.area);
   return [
     "## 判定",
     "",
@@ -550,9 +572,19 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
     ...rows.map(
       (row) =>
         `| \`${row.area}\` | **${row.verdict}** | ${row.cases} | ` +
-        `${row.cases === 0 ? "—" : exponential(row.worst)} | ${row.mismatches} |`,
+        `${row.cases === 0 ? "—" : row.exact ? "厳密一致" : exponential(row.worst)} | ` +
+        `${row.mismatches} |`,
     ),
     "",
+    ...(exactAreas.length === 0
+      ? []
+      : [
+          `**${exactAreas.map((area) => `\`${area}\``).join(" と ")} は「厳密一致」である** ` +
+            "——相対誤差が小さかったのではなく、**誤差という概念が無い比較**である。",
+          "金融とデータスケールは円とバイト数の整数、表示のシャードは表示文字列そのもの",
+          "を突き合わせている。1 円違えば、1 文字違えば、不一致になる。",
+          "",
+        ]),
     "判定の意味:",
     "",
     "- **完全に正しい** — 表示される 10 桁がすべて一致した",
@@ -1084,18 +1116,21 @@ function renderDistribution(entries: ShardSummary[]): string[] {
  * 同値ケースの右辺が付け足したキーも押されてはいるので、`addedByTransform`
  * の側も足して数える(分布表では分けるが、「踏んだか」は合わせて見る)。
  */
-function unusedKeyTokens(entries: ShardSummary[]): string[] {
-  const pressed = new Set<string>();
+function pressedCounts(entries: ShardSummary[]): Record<string, number> {
+  const pressed: Record<string, number> = {};
   for (const entry of entries) {
     for (const source of [entry.shape.tokens, entry.addedByTransform ?? {}]) {
       for (const [token, count] of Object.entries(source)) {
-        if (count > 0) {
-          pressed.add(token);
-        }
+        pressed[token] = (pressed[token] ?? 0) + count;
       }
     }
   }
-  return KEY_TOKENS.filter((token) => !pressed.has(token));
+  return pressed;
+}
+
+function unusedKeyTokens(entries: ShardSummary[]): string[] {
+  const pressed = pressedCounts(entries);
+  return KEY_TOKENS.filter((token) => (pressed[token] ?? 0) === 0);
 }
 
 /**
@@ -1179,6 +1214,61 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           "  (設計書 2026-08-16-corpus-functions §3.2.1)。表示は指数表記でも",
           "  有効数字 10 桁なので、許容はそのまま効く。",
         ];
+  // **角度モードと表示のトグルは、押した回数から導く。**
+  //
+  // ここは長らく「全ケースが Deg で、`angle_toggle` を一度も押していない」と
+  // 固定文で書かれていた。段階 H が Rad のシャードを 2000 件足した時点で
+  // **その一行だけが嘘になった**——検査は全部緑のまま、報告書が自分の
+  // コーパスについて事実と違うことを言う、という壊れ方である
+  // (同じ形の矛盾を読み手が 3 件指摘したのが 2026-08-17)。
+  //
+  // 押した回数はキーの集計から出るので、**手で消し忘れることがない。**
+  const pressed = pressedCounts(entries);
+  const angleToggles = pressed.angle_toggle ?? 0;
+  const angleItem =
+    angleToggles === 0
+      ? [
+          "- **Deg 以外の角度モード。** 全ケースが Deg で、`angle_toggle` を一度も",
+          "  押していない。**角度モードは Deg と Rad の 2 つ**で、Rad の",
+          "  三角関数はこの層の外である。",
+        ]
+      : [
+          `- **角度モード——${angleToggles} 本のキー列が \`angle_toggle\` を押している。**`,
+          "  **角度モードは Deg と Rad の 2 つ**(`numeric/angle.rs`)で、両方を踏んでいる。",
+          "  押した回数の偶奇がケースの宣言する `mode` と一致することを",
+          "  `assertSupportedMode` が確かめる——押さずに `Rad` と名乗るケースは、",
+          "  黙って Deg の答えと比べられてしまうので受け付けない。",
+        ];
+  const notationPresses = (pressed.eng ?? 0) + (pressed.dms ?? 0);
+  const notationItem =
+    notationPresses === 0
+      ? [
+          "- **表示の記法。** `ENG` も `°'\"` も一度も押していない。**値を変えない",
+          "  キーなので、値だけを見るケースでは押しても押さなくても同じ答えになる**",
+          "  ——踏んだことを主張するには表示文字列そのものを比べる必要がある。",
+        ]
+      : [
+          `- **表示の記法——${notationPresses} 本のキー列が \`ENG\` か \`°'"\` を押している。**`,
+          "  この 2 つは**値を変えない**ので、値だけを見るケースでは押しても",
+          "  押さなくても同じ答えになる。だから `display` のシャードだけは",
+          "  **表示文字列そのものを厳密一致で比べる**。期待値は Python の別実装",
+          "  (`sexagesimal_ref` と `eng_ref`)が出しており、どちらも Rust の",
+          "  手順を写していない。",
+          "",
+          "  **そのシャードの値は「打った数そのもの」に限っている。** 計算を挟むと、",
+          "  engine と参照の f64 が数 ulp 違うだけで表示の 10 桁目が変わり、",
+          "  整形の欠陥と計算の丸めを区別できなくなる(実測 5/2000)。",
+          "  計算を挟む式には「トグルを 2 回押すと元の表示に戻る」ことだけを主張させた。",
+        ];
+  // **但し書きが名指しする「完全に固定の文章」の一覧。**
+  // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
+  const fixedItems = [
+    "複素数",
+    ...(angleToggles === 0 ? ["角度モード"] : []),
+    ...(notationPresses === 0 ? ["表示の記法"] : []),
+    "UI",
+    "入力中の表示",
+  ];
   const parenthesisItem =
     parenthesis.kind === "untouched"
       ? [
@@ -1318,9 +1408,8 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     ...errorItem,
     "- **複素数。** 負数の平方根は範囲外で、`j` も `▸∠` も一度も押していない。",
     "  複素数の表示(`j2` のような形)を読んだケースは 1 件も無い。",
-    "- **Deg 以外の角度モード。** 全ケースが Deg で、`angle_toggle` を一度も",
-    "  押していない。**角度モードは Deg と Rad の 2 つ**で、Rad の",
-    "  三角関数はこの層の外である。",
+    ...angleItem,
+    ...notationItem,
     "- **UI(この走行では)。** ここが呼ぶのは計算コアの `dispatch` と wasm の",
     "  関数だけで、ボタンもキーボードも通らない。**この走行のブラウザには",
     "  アプリの画面が存在しない**——`web/vite.heavy.config.ts` は React を",
@@ -1388,9 +1477,16 @@ function renderCaveats(entries: ShardSummary[]): string[] {
             "> ここが食い違えば `report.spec.ts` が赤くなる)。",
           ]),
     "> 「エラー経路」と「指数表記」の 2 行も、件数を実データから導いている。",
-    "> **完全に固定の文章なのは、複素数・角度モード・UI・入力中の表示の 4 行**",
+    // **一覧を手で書かない(2026-08-17)。** ここは長らく
+    // 「複素数・角度モード・UI・入力中の表示の 4 行」と固定で書かれており、
+    // 段階 H が Rad を、段階 I が表示のトグルを踏んだ時点で嘘になった。
+    // 見張っていたはずの `report.spec.ts` のテストは**この文字列がそこに
+    // あること**を確かめていただけで、項目側が実データ由来になったかどうかを
+    // 一切見ていない——つまり腐っても緑のままだった。
+    // いま一覧は、項目の分岐と**同じ述語**から組み立てる。
+    `> **完全に固定の文章なのは、${fixedItems.join("・")}の ${fixedItems.length} 行**`,
     "> である——どれもこのコーパスが 1 件も踏んでいないので、数える対象が無い。",
-    "> **その 4 つのどれかを踏むようになったら、ここを書き換えること。**",
+    `> **その ${fixedItems.length} つのどれかを踏むようになったら、ここを書き換えること。**`,
     "> 書き換えを忘れると、この報告書は実際には埋まった領域を",
     "> 「守備範囲の外」と言い続ける。**信憑性を目的とした文書でそれが起きると、",
     "> 数字が正しくても文書全体が信用を失う。**",
