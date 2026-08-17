@@ -766,16 +766,25 @@ describe("設定の永続化", () => {
 
   it("does not restore the amounts", async () => {
     // **範囲の境界**(P-1 設計書 §1-1)。モードは戻るが金額は戻らない。
+    // amounts のキーは実際の入れ物の名前(amountKey)に合わせる——複利
+    // モードの元本は "compound:principal"。active の既定は "principal"
+    // なので、万一 amounts が復元されればここが echo の先頭行に出る。
     window.localStorage.setItem(
       "calcarc.settings",
       JSON.stringify({
         v: 1,
         finance: { mode: "compound" },
-        amounts: { principal: "999" },
+        amounts: { "compound:principal": "999" },
       }),
     );
     render(<FinancePanel />);
     await screen.findByTestId("finance-mode");
-    expect(screen.queryByText("999")).not.toBeInTheDocument();
+    // **echo は 1 つのテキストノードにまとめて出す**(Readout.tsx の
+    // text()。「元本 999円」のように)。screen.queryByText("999") は
+    // ノード全体が "999" と完全一致する要素しか見ないので、この形の echo
+    // には絶対にヒットせず、何を復元させても常に green になる
+    // ——比較していないのと同じだった(レビュー指摘)。echo の中身を
+    // 部分一致で見る。
+    expect(echo()).not.toHaveTextContent("999");
   });
 });

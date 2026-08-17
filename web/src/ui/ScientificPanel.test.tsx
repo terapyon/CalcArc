@@ -59,6 +59,14 @@ function fakeCalc(): Calc {
   };
 }
 
+// **角度・極形式・記法は保存される(このファイルの「設定の永続化」参照)。**
+// このスイート全体で毎回まっさらから始める(ファイル先頭の beforeEach なので、
+// 下の「設定の永続化」describe にも及ぶ)。Finance/DataScale と同種の
+// テスト間汚染を避けるため(レビュー指摘)。
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 describe("ScientificPanel", () => {
   it("says so when the calculation engine cannot be loaded", async () => {
     // 読み込みに失敗したまま Loading の表示で固まると、利用者には
@@ -72,9 +80,9 @@ describe("ScientificPanel", () => {
 
 describe("設定の永続化", () => {
   beforeEach(() => {
-    window.localStorage.clear();
-    // 直前の describe が initCalc を reject させたままにしているので、
-    // ここで毎回、成功する実装に戻す。
+    // localStorage のクリアはファイル先頭の beforeEach が毎回やる。
+    // ここでは、直前の describe が initCalc を reject させたままにして
+    // いるので、成功する実装に戻す。
     vi.mocked(initCalc).mockImplementation(() => Promise.resolve(fakeCalc()));
   });
 

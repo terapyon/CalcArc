@@ -97,6 +97,14 @@ async function fillHeadline() {
   ]);
 }
 
+// **データ型・主表示は保存される(このファイルの「設定の永続化」参照)。**
+// このスイート全体で毎回まっさらから始める(ファイル先頭の beforeEach なので、
+// 下の「設定の永続化」describe にも及ぶ)。Finance/Scientific と同種の
+// テスト間汚染を避けるため(レビュー指摘)。
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 describe("DataScalePanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
     await renderPanel();
@@ -310,9 +318,10 @@ describe("DataScalePanel（電卓）", () => {
 
 describe("設定の永続化", () => {
   beforeEach(() => {
-    window.localStorage.clear();
-    // 直前の describe が initDataScale を reject させたままにしているので、
-    // ここで毎回、成功する実装に戻す(ScientificPanel.test.tsx と同じ流儀)。
+    // localStorage のクリアはファイル先頭の beforeEach が毎回やる。
+    // ここでは、直前の describe が initDataScale を reject させたままに
+    // していることがあるので、成功する実装に戻す
+    // (ScientificPanel.test.tsx と同じ流儀)。
     vi.mocked(initDataScale).mockResolvedValue(stubCalc());
   });
 
