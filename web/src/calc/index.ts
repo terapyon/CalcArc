@@ -13,13 +13,16 @@ import init, {
 import type { EngineState, KeyToken, Step } from "./types";
 
 export type {
+  AngleMode,
   BinOpName,
+  DisplayForm,
   DisplayState,
   EngineState,
   KeyToken,
+  Notation,
   Step,
 } from "./types";
-export { KEY_TOKENS } from "./types";
+export { ANGLE_MODES, DISPLAY_FORMS, KEY_TOKENS, NOTATIONS } from "./types";
 
 export interface Calc {
   /** 初期状態とその表示。 */

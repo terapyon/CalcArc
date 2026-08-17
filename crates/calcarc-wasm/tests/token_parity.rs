@@ -8,8 +8,10 @@
 //! wasm でも E2E でもなくホストの cargo test なのは意図的である。
 //! include_str! は TS 側のファイル移動をコンパイルエラーに変える。
 
+use calcarc_core::AngleMode;
 use calcarc_core::Key;
 use calcarc_core::data_scale::DataType;
+use calcarc_core::engine::state::{DisplayForm, Notation};
 
 /// `marker` で始まる配列リテラルの文字列要素を、ファイル `src` から抜き出す。
 ///
@@ -52,5 +54,54 @@ fn data_scale_tokens_match_between_typescript_and_rust() {
     assert_eq!(
         ts, rust,
         "web/src/datascale/types.ts の DATA_TYPE_TOKENS と DataType::ALL の token() が食い違っている"
+    );
+}
+
+/// serde が書く綴りを取り出す。
+///
+/// **手で書かない。** 保存される文字列は DisplayState 経由で TS へ渡った
+/// serde の出力そのものなので(P-1 設計書 §8)、ここで serde に書かせると
+/// 「実際に渡る綴り」と「白リストが受け付ける綴り」を直接突き合わせる
+/// ことになる。手で並べると、その 2 つが一致している保証が消える。
+fn serde_names<T: serde::Serialize>(values: &[T]) -> Vec<String> {
+    values
+        .iter()
+        .map(|v| match serde_json::to_value(v) {
+            Ok(serde_json::Value::String(s)) => s,
+            other => panic!("unit variant は文字列になるはず: {other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn angle_modes_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/calc/types.ts");
+    let ts = tokens_in_ts_array(src, "export const ANGLE_MODES = [");
+    assert_eq!(
+        ts,
+        serde_names(&AngleMode::ALL),
+        "web/src/calc/types.ts の ANGLE_MODES と AngleMode::ALL が食い違っている"
+    );
+}
+
+#[test]
+fn display_forms_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/calc/types.ts");
+    let ts = tokens_in_ts_array(src, "export const DISPLAY_FORMS = [");
+    assert_eq!(
+        ts,
+        serde_names(&DisplayForm::ALL),
+        "web/src/calc/types.ts の DISPLAY_FORMS と DisplayForm::ALL が食い違っている"
+    );
+}
+
+#[test]
+fn notations_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/calc/types.ts");
+    let ts = tokens_in_ts_array(src, "export const NOTATIONS = [");
+    assert_eq!(
+        ts,
+        serde_names(&Notation::ALL),
+        "web/src/calc/types.ts の NOTATIONS と Notation::ALL が食い違っている"
     );
 }

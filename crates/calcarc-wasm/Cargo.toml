@@ -23,4 +23,5 @@ console_error_panic_hook = ["dep:console_error_panic_hook"]
 
 [dev-dependencies]
 js-sys = "0.3"
+serde_json = { workspace = true }
 wasm-bindgen-test = "0.3"

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataScaleCalc, DataScaleResult } from "../../datascale";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
@@ -96,6 +96,14 @@ async function fillHeadline() {
     "8",
   ]);
 }
+
+// **データ型・主表示は保存される(このファイルの「設定の永続化」参照)。**
+// このスイート全体で毎回まっさらから始める(ファイル先頭の beforeEach なので、
+// 下の「設定の永続化」describe にも及ぶ)。Finance/Scientific と同種の
+// テスト間汚染を避けるため(レビュー指摘)。
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 describe("DataScalePanel（電卓）", () => {
   it("names the panel and its sections in Japanese", async () => {
@@ -305,5 +313,83 @@ describe("DataScalePanel（電卓）", () => {
     render(<DataScalePanel />);
     const alert = await screen.findByTestId("datascale-load-error");
     expect(alert).toHaveAttribute("role", "alert");
+  });
+});
+
+describe("設定の永続化", () => {
+  beforeEach(() => {
+    // localStorage のクリアはファイル先頭の beforeEach が毎回やる。
+    // ここでは、直前の describe が initDataScale を reject させたままに
+    // していることがあるので、成功する実装に戻す
+    // (ScientificPanel.test.tsx と同じ流儀)。
+    vi.mocked(initDataScale).mockResolvedValue(stubCalc());
+  });
+
+  it("restores the primary unit system from the stored settings", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, dataScale: { primary: "binary" } }),
+    );
+    render(<DataScalePanel />);
+    expect(await screen.findByText("2 進を主表示")).toBeInTheDocument();
+  });
+
+  it("restores the data type from the stored settings", async () => {
+    window.localStorage.setItem(
+      "calcarc.settings",
+      JSON.stringify({ v: 1, dataScale: { dtype: "int8" } }),
+    );
+    render(<DataScalePanel />);
+    // データ型のキー面は「データ型を選ぶ」を押すまで描画されない
+    // (数字面と型面はどちらか一方だけが Keypad に載る)。
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "int8", pressed: true }),
+    ).toBeInTheDocument();
+  });
+
+  it("stores the data type when the user switches it", async () => {
+    // **8 項目のうち、書く側が検査されていないのはここだけだった**
+    // ——読み戻しは上のテストが見ているが、書き込みを消しても 182 件が
+    // 全部緑のままだった(レビュー指摘)。
+    render(<DataScalePanel />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "int8" }));
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.settings") as string,
+    );
+    expect(saved.dataScale.dtype).toBe("int8");
+  });
+
+  it("writes nothing when the data type does not actually change", async () => {
+    // 書き込みの契機は「設定が変わったその場」である(P-1 設計書 §6)。
+    // 型の面で AC を押すと既定(float32)へ戻すが、既に float32 なら
+    // 何も変わっていない——それでも書くと、設定を 1 つも触っていない
+    // 利用者に保存キーが生まれる。
+    render(<DataScalePanel />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "データ型を選ぶ" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "float32" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "この項目を消去" }),
+    );
+    expect(window.localStorage.getItem("calcarc.settings")).toBeNull();
+  });
+
+  it("stores the primary unit system when the user switches it", async () => {
+    render(<DataScalePanel />);
+    await screen.findByText("10 進を主表示");
+    await userEvent.click(
+      screen.getByRole("button", { name: "2 進 (KiB) を主に" }),
+    );
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.settings") as string,
+    );
+    expect(saved.dataScale.primary).toBe("binary");
   });
 });

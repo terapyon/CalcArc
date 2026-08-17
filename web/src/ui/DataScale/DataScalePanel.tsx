@@ -18,6 +18,7 @@ import {
   text,
 } from "../../datascale/entry";
 import { type ExprCalc, initExpr } from "../../expr";
+import type { Primary } from "../../settings";
 import {
   DATA_SCALE_SECTIONS,
   type DataScaleField,
@@ -26,6 +27,7 @@ import {
 } from "../Keypad/dataScale";
 import { Keypad } from "../Keypad/Keypad";
 import { Readout } from "../Readout/Readout";
+import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./DataScalePanel.module.css";
 
 /** 既定のデータ型。フォーム時代の select の初期値を引き継ぐ(設計書 §5)。 */
@@ -40,9 +42,6 @@ const FIELD_LABELS: Record<DataScaleField, string> = {
   dtype: "データ型",
 };
 
-/** 主に表示する単位系。表示だけの切り替えで、計算には触れない(設計書 §6)。 */
-type Primary = "decimal" | "binary";
-
 const PRIMARY_STATUS: Record<Primary, string> = {
   decimal: "10 進を主表示",
   binary: "2 進を主表示",
@@ -55,8 +54,14 @@ export function DataScalePanel() {
   const [active, setActive] = useState<DataScaleField>("count");
   const [count, setCount] = useState<Entry>(EMPTY);
   const [dimensions, setDimensions] = useState<Entry>(EMPTY);
-  const [dtype, setDtype] = useState<DataTypeToken>(DEFAULT_TYPE);
-  const [primary, setPrimary] = useState<Primary>("decimal");
+  // **設定は保存から起こす**(P-1 設計書 §4)。打鍵中の値(count /
+  // dimensions)は保存しないので、上の 2 つは初期値のままである。
+  const [dtype, setDtype] = useState<DataTypeToken>(
+    () => loadSettings().dataScale.dtype,
+  );
+  const [primary, setPrimary] = useState<Primary>(
+    () => loadSettings().dataScale.primary,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -111,13 +116,40 @@ export function DataScalePanel() {
     return undefined;
   }
 
+  /** データ型を変え、設定に書き戻す。**新しい値を使う**——state の更新は
+   * 非同期なので、直後に dtype を読むと 1 つ前の値になる。
+   *
+   * **変わっていないなら書かない。** 書き込みの契機は「設定が変わった
+   * その場」である(P-1 設計書 §6)。いま選ばれている型をもう一度押す、
+   * 既定のまま型の面で AC を押す——どちらも設定は変わっていないのに、
+   * 書くと保存キーが生まれる(ScientificPanel の savedScientific が
+   * 同じ規律を持っている)。 */
+  function chooseDtype(next: DataTypeToken): void {
+    if (next === dtype) return;
+    setDtype(next);
+    updateSettings((current) => ({
+      ...current,
+      dataScale: { ...current.dataScale, dtype: next },
+    }));
+  }
+
+  /** 主に表示する単位系を変え、設定に書き戻す。理由は chooseDtype と同じ。 */
+  function choosePrimary(next: Primary): void {
+    if (next === primary) return;
+    setPrimary(next);
+    updateSettings((current) => ({
+      ...current,
+      dataScale: { ...current.dataScale, primary: next },
+    }));
+  }
+
   function press(token: DataScaleKeyToken) {
     if (token.startsWith("field:")) {
       setActive(token.slice("field:".length) as DataScaleField);
       return;
     }
     if (token.startsWith("dtype:")) {
-      setDtype(token.slice("dtype:".length) as DataTypeToken);
+      chooseDtype(token.slice("dtype:".length) as DataTypeToken);
       return;
     }
     if (token.startsWith("digit:")) {
@@ -148,7 +180,7 @@ export function DataScalePanel() {
       case "ac":
         // AC はいま打っている項目を最初に戻す。型は既定へ(設計書 §5)。
         if (numberField) setEntry(EMPTY);
-        else setDtype(DEFAULT_TYPE);
+        else chooseDtype(DEFAULT_TYPE);
         break;
     }
   }
@@ -236,7 +268,7 @@ export function DataScalePanel() {
             key={system}
             type="button"
             aria-pressed={primary === system}
-            onClick={() => setPrimary(system)}
+            onClick={() => choosePrimary(system)}
           >
             {system === "decimal" ? "10 進 (KB) を主に" : "2 進 (KiB) を主に"}
           </button>
