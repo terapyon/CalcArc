@@ -34,6 +34,16 @@ export default defineConfig({
         // 備えで、成果物側の番人は scripts/check-sw.mjs(設計書 §7)。
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: "index.html",
+        // **拡張子を持つパスは navigation fallback の対象にしない。**
+        // アドレスバーに /ogp.png と打つのは navigation リクエストなので、
+        // 除外しないと SW が index.html(アプリ本体)を返し、画像が見られない
+        // (curl では SW を通らないので気づけない)。このアプリはハッシュで
+        // タブを切り替えるのでパスにドットが入る経路が無く、SPA の動作には
+        // 影響しない。オフラインの `/` のフォールバックもそのまま効く。
+        // **判定対象は pathname + search(クエリを含む。ハッシュは含まない)。**
+        // `?v=1.2.3` のようなドット入りのクエリを持つリンクを足すと、その 1 本
+        // だけ SPA フォールバックが外れる——足すときはここを見ること。
+        navigateFallbackDenylist: [/\.[^/]+$/],
       },
       manifest: {
         name: "CalcArc",
