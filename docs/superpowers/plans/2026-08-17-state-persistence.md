@@ -878,39 +878,38 @@ import { loadSettings, updateSettings } from "./useSetting";
       },
 ```
 
-`press` の中で、設定が変わったら書き戻す。`press`（42〜48 行目）を次で置き換える:
+**`press` は変更しない。** 書き戻しは `useEffect` で行う。`press` の定義
+（42〜48 行目）の直後に、次を足す:
 
 ```tsx
-  // 依存を空にして同一性を固定する。ここが変わると useKeyboard が
-  // リスナを貼り直し、その隙間の打鍵が落ちる。
-  const press = useCallback((token: KeyToken) => {
-    const ready = calcRef.current;
-    // 状態は不変値なので、直前の状態から次を作るだけでよい。
-    setStep((previous) => {
-      if (!ready || !previous) return previous;
-      const next = ready.dispatch(previous.state, token);
-      // **設定が変わったときだけ書く。** 打鍵のたびに書くと、
-      // 保存しないと決めた入力の変化にも反応することになる。
-      const before = previous.display;
-      const after = next.display;
-      if (
-        before.angle !== after.angle ||
-        before.form !== after.form ||
-        before.notation !== after.notation
-      ) {
-        updateSettings((current) => ({
-          ...current,
-          scientific: {
-            angle: after.angle,
-            form: after.form,
-            notation: after.notation,
-          },
-        }));
-      }
-      return next;
-    });
-  }, []);
+  // **書き戻しは effect に置く。** setStep の更新関数の中に副作用を書くと、
+  // StrictMode(main.tsx で有効)が更新関数を 2 度呼ぶので書き込みも 2 度
+  // 走る。値が同じなので実害は出ないが、副作用の置き場所として正しくない
+  // ——React は更新関数を純粋なものとして扱う。
+  //
+  // ref に直前の署名を持ち、**変わったときだけ書く**。打鍵のたびに書くと、
+  // 保存しないと決めた入力の変化にも反応することになる。
+  const savedScientific = useRef<string | null>(null);
+  useEffect(() => {
+    if (!step) return;
+    const { angle, form, notation } = step.display;
+    const signature = `${angle}/${form}/${notation}`;
+    // **復元直後の 1 回目は書かない。** 読んだ物をそのまま書き戻すことに
+    // なり、一度も設定を触っていない利用者にも保存キーが生まれる。
+    if (savedScientific.current === null) {
+      savedScientific.current = signature;
+      return;
+    }
+    if (savedScientific.current === signature) return;
+    savedScientific.current = signature;
+    updateSettings((current) => ({
+      ...current,
+      scientific: { angle, form, notation },
+    }));
+  }, [step]);
 ```
+
+`useRef` は既に import されている（1 行目）。`useEffect` も同様。
 
 - [ ] **Step 5: テストが通ることを確認する**
 
