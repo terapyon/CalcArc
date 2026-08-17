@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { type ComplexValue, magnitude, parseComplexDisplay } from "./complex";
 import {
   assertNoCaseTolerance,
   assertShardIsSound,
@@ -6,6 +7,7 @@ import {
   assertToleranceIsSane,
   type Classification,
   classify,
+  classifyComplex,
   countInjectedTokens,
   type EquivalenceCase,
   equivalenceNeedsPrecedence,
@@ -560,19 +562,19 @@ for (const { name, shard, values } of partitions) {
         );
         continue;
       }
-      if (testCase.expect.im !== 0) {
-        // 型に im があるのに比較していない、では「虚部も確かめた」と読まれる。
-        // このシャードは実数しか扱わない。虚部があるケースが混ざったら、
-        // 黙って実部だけ見ずに落とす(レビュー修正ラウンド 2)。
-        into.mismatches.push(
-          `${testCase.id}: ${testCase.expr} expects a non-zero imaginary part ` +
-            `(${testCase.expect.im}), which this stage does not compare`,
-        );
-        continue;
-      }
-      let actual: number;
+      // **読み手を期待値で選ぶ。`parseDisplay` を広げない**(設計書
+      // 2026-08-17-complex §3.3)。あれは実数の書式だけを受け付ける関数で、
+      // 狭いことに価値がある——実数しか出ないはずのシャードで電卓が `j2` を
+      // 表示するようになったら、あそこで落ちてほしい。広げるとその番人が消える。
+      //
+      // だから**虚部を持つケースだけ**が複素の読み手を通る。実数のシャードは
+      // 段階 J の前とまったく同じ経路をたどる。
+      const complexExpected = testCase.expect.im !== 0;
+      let actual: ComplexValue;
       try {
-        actual = parseDisplay(result.main);
+        actual = complexExpected
+          ? parseComplexDisplay(result.main)
+          : { re: parseDisplay(result.main), im: 0 };
       } catch (cause) {
         // parseDisplay が投げる条件は「電卓が実数以外を表示するようになった」
         // ——**まさにこの層が捕まえるべき回帰**である。生の例外でスイートが
@@ -584,7 +586,8 @@ for (const { name, shard, values } of partitions) {
         continue;
       }
       const expected = testCase.expect.re;
-      into.magnitudes.push(Math.abs(expected));
+      const expectedValue = { re: expected, im: testCase.expect.im };
+      into.magnitudes.push(magnitude(expected, testCase.expect.im));
       // 上書きがあれば rel だけ差し替える。帯の目盛りには**上書き前**の rel を
       // 渡すので、緩めたケースは緩い帯に落ちる——実際に緩く検査したのだから、
       // 報告書がその件数を数えられなければならない。
@@ -593,15 +596,19 @@ for (const { name, shard, values } of partitions) {
         shard.tolerance,
         overrides,
       );
-      const verdict = classify(
+      const verdict = classifyComplex(
         actual,
-        expected,
+        expectedValue,
         effective,
         shard.tolerance.rel,
       );
       if (overrides.has(testCase.id)) {
         // 上書き**なし**でも通るなら、その上書きは理由が嘘になっている。
-        const withoutOverride = classify(actual, expected, shard.tolerance);
+        const withoutOverride = classifyComplex(
+          actual,
+          expectedValue,
+          shard.tolerance,
+        );
         if (withoutOverride.passed) {
           stale.push(testCase.id);
         }
@@ -610,7 +617,10 @@ for (const { name, shard, values } of partitions) {
         into,
         shard.tolerance,
         testCase.id,
-        `${testCase.expr} → ${result.main}, expected ${expected}`,
+        `${testCase.expr} → ${result.main}, expected ` +
+          (complexExpected
+            ? `${expected}${testCase.expect.im < 0 ? "-" : "+"}j${Math.abs(testCase.expect.im)}`
+            : `${expected}`),
         verdict,
       );
     }

@@ -21,9 +21,15 @@ import time
 from collections.abc import Iterator
 
 import mpmath as mp
+import sympy as sp
 
-from calcarc_reference import eng_ref, sexagesimal_ref
+from calcarc_reference import corpus_complex, eng_ref, real_ref, sexagesimal_ref
 from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
+from calcarc_reference.corpus_complex import (
+    COMPLEX_BINARY_OPS,
+    COMPLEX_UNARY_FNS,
+    NotComplexSafe,
+)
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_OPS,
@@ -36,6 +42,7 @@ from calcarc_reference.corpus_expr import (
     UNARY_FNS,
     Bin,
     Const,
+    Imag,
     Node,
     Num,
     Typed,
@@ -71,6 +78,24 @@ def _provenance() -> str:
     """
     return (
         f"mpmath {mp.__version__} ({mp.mp.dps} dps), "
+        f"Python {sys.version_info.major}.{sys.version_info.minor}"
+    )
+
+
+def _provenance_sympy() -> str:
+    """複素数のシャードの素性。**こちらは本当に SymPy が値を作っている。**
+
+    `_provenance` は「SymPy を書かない」ことを規律にしている——あれが名乗る
+    シャードは mpmath だけで評価されており、関与していない依存の版を書くのは
+    不正確だからである。**同じ理由で、こちらは SymPy を書かなければならない。**
+    `corpus_complex` は SymPy の厳密有理数で木を組み、`sp.N` で 1 度だけ
+    落としている(設計書 2026-08-17-complex §6)。
+
+    素性が 2 種類あることそのものが、**どのシャードを何が作ったか**を
+    読み手に伝える。1 つに統一すると、どちらかが嘘になる。
+    """
+    return (
+        f"sympy {sp.__version__} ({corpus_complex.PRECISION} dps), "
         f"Python {sys.version_info.major}.{sys.version_info.minor}"
     )
 
@@ -735,6 +760,349 @@ def build_corrections_shard(seed: int, count: int) -> dict:
     }
 
 
+# --- 複素数のシャード（段階 J）---
+#
+# **未押下キーの最後の 2 個(`j` と `▸∠`)を押す。** これで 46 キーすべてが押される。
+#
+# この電卓は複素数を持っている——`j` で虚数単位を打ち、四則が複素数のまま動き、
+# `▸∠` で極形式に切り替わる。コーパスはそこに一度も触れていなかった。
+#
+# ## 関数の定義域について（実測 2026-08-17）
+#
+# 設計書は「関数は実数に閉じている」と書いていたが、**それは広すぎた。**
+# 実測すると:
+#
+# | 単項 | 複素数を渡すと |
+# |---|---|
+# | `sqrt` `ln` `log10` `recip` `n_fact` | `DomainError`（`real_arg` が弾く） |
+# | `sin` `cos` `tan` | **複素数のまま計算する**（`scientific/mod.rs:54`） |
+# | `neg` `sqr` | 複素数のまま（減算・乗算だから） |
+#
+# 三角関数が複素数を受け付けるのは意図された実装である——コード自身が
+# 「複素数の引数でも実部・虚部の両方を同じ係数で変換する」と書いている。
+# **設計書の想定より検証できる範囲が広い**ので、三角関数も含める。
+#
+# ## 2 つに分ける理由
+#
+# 段階 I と同じ理由である。**計算を挟んだ値と厳密一致は両立しない。**
+#
+# - `complex-000.json` — **計算した値**。`{re, im}` を許容付きで突き合わせる
+# - `complex-display-000.json` — **打った数そのもの**。直交形式と極形式の
+#   表示文字列を厳密一致で突き合わせる
+#
+# 極形式は `hypot` と `atan2` を通るので厳密ではないが、**入力が打った数そのもの
+# なら誤差は 1 ulp 程度**(1e-16)で、表示 10 桁の丸め格子(相対 1e-9)をまたぐ
+# 確率は 2e-7/件——2000 件で 4e-4 件である。段階 I が踏んだ帯(引数還元で
+# ε≈1e-9)とは 7 桁違う。
+
+#: 複素数の葉に打つ桁数の上限。**入力バッファは 12 桁で打ち切る**
+#: (`MAX_ENTRY_LEN`、実測 2026-08-17: 13 桁打つと 13 桁目が捨てられる)。
+#: 超えると参照が「打ったはずの値」を評価して食い違い、**それは整形でも
+#: 計算でもなく打鍵の話**になる。余裕を取って 6 桁に収める。
+COMPLEX_MAX_DIGITS = 6
+
+#: 複素数の大きさの帯。実数側の `MIN_ABS`/`MAX_ABS` と同じ考え方で、
+#: 途中値が溢れたり潰れたりする形を生成の時点で捨てる。
+COMPLEX_MIN_ABS = mp.mpf("1e-6")
+COMPLEX_MAX_ABS = mp.mpf("1e9")
+
+#: 三角関数に渡す角度の上限（度）。段階 G と同じ理由で、引数還元の f64 誤差が
+#: 表示分解能に効いてくる帯を避ける。**複素数では虚部にも同じ係数が掛かり、
+#: `cosh`/`sinh` が指数的に伸びる**ので、実数のときよりずっと手前で切る
+#: ——`cosh(710)` は f64 で溢れる。ラジアンで 100 = 5730 度あたりが実用上限で、
+#: そこから 2 桁の余裕を取る。
+COMPLEX_MAX_TRIG_DEG = mp.mpf("360")
+
+
+def _complex_real_leaf(rng: random.Random) -> Typed:
+    """実数の葉。**桁数を抑える**(上の `COMPLEX_MAX_DIGITS`)。"""
+    if rng.random() < 0.5:
+        text = str(rng.randint(0, 10**COMPLEX_MAX_DIGITS - 1))
+    else:
+        whole = rng.randint(0, 999)
+        frac = rng.randint(1, 999)
+        text = f"{whole}.{frac}"
+    return Typed(tuple("dot" if ch == "." else ch for ch in text), text)
+
+
+def _complex_imag_leaf(rng: random.Random) -> Imag:
+    """虚数の葉。**`j` を先に押す形と後に押す形の両方を出す。**
+
+    engine は桁が無ければ虚数として始め、桁があれば実部⇄虚部を切り替える
+    (`engine/mod.rs:283`)。**同じ値への別の打ち方**なので、値からは
+    どちらを打ったか分からない——だからキー列を持つ。
+    """
+    if rng.random() < 0.5:
+        text = str(rng.randint(1, 10**COMPLEX_MAX_DIGITS - 1))
+    else:
+        whole = rng.randint(0, 999)
+        frac = rng.randint(1, 999)
+        text = f"{whole}.{frac}"
+    digits = tuple("dot" if ch == "." else ch for ch in text)
+    if rng.random() < 0.5:
+        return Imag(("j", *digits), text)  # j を先に押す
+    return Imag((*digits, "j"), text)  # 桁を打ってから j で切り替える
+
+
+def _complex_leaf(rng: random.Random) -> Node:
+    return _complex_imag_leaf(rng) if rng.random() < 0.45 else _complex_real_leaf(rng)
+
+
+def _complex_node(rng: random.Random, depth: int) -> Node:
+    """複素数の木。**engine が複素数を受け付ける演算だけ**で組む。
+
+    `sqrt`/`ln`/`recip`/`n_fact` を混ぜても `DomainError` で全部捨てられるだけで、
+    棄却率が上がる以外に何も確かめない(設計書 §3.1)。
+    """
+    if depth <= 0 or rng.random() < 0.45:
+        return _complex_leaf(rng)
+    if rng.random() < 0.35:
+        return Un(rng.choice(COMPLEX_UNARY_FNS), _complex_node(rng, depth - 1))
+    return Bin(
+        rng.choice(COMPLEX_BINARY_OPS),
+        _complex_node(rng, depth - 1),
+        _complex_node(rng, depth - 1),
+    )
+
+
+def _complex_within_range(node: Node) -> bool:
+    """部分木の大きさを**葉から先に**見る。実数側の `_within_range` と同じ形。
+
+    三角関数の引数は別に上限を持つ——複素の三角は虚部に `cosh`/`sinh` が
+    掛かるので、実数より遥かに手前で溢れる。
+    """
+    for sub in _subtrees_leaves_first(node):
+        if isinstance(sub, Un) and sub.fn in ("sin", "cos", "tan"):
+            re, im = corpus_complex.evaluate(sub.arg)
+            if max(abs(re), abs(im)) > COMPLEX_MAX_TRIG_DEG:
+                return False
+        re, im = corpus_complex.evaluate(sub)
+        magnitude = mp.sqrt(mp.mpf(re) ** 2 + mp.mpf(im) ** 2)
+        if magnitude != 0 and not (COMPLEX_MIN_ABS <= magnitude <= COMPLEX_MAX_ABS):
+            return False
+    return True
+
+
+def _uses_imaginary(node: Node) -> bool:
+    """`j` を含むか。**含まない木は複素数を一度も踏まない**ので捨てる。"""
+    return any(isinstance(sub, Imag) for sub in walk(node))
+
+
+def build_complex_shard(seed: int, count: int) -> dict:
+    """**複素数のシャード。値を許容付きで突き合わせる。**
+
+    期待値は `corpus_complex` が SymPy の厳密有理数で木全体を計算し、
+    **最後に 1 度だけ** f64 に落としたものである。engine は f64 の対で
+    演算ごとに丸める——アルゴリズムを共有していない。
+
+    **値ケースだけを置く。** `▸∠` の往復は「2 回押すと**同じ表示に戻る**」で
+    あって数値の主張ではないので、表示のシャード側に置く(段階 I と同じ形)。
+    値の同値ループは表示を実数として読み直すため、複素数の表示を渡すと
+    `parseDisplay` が落ちる——そしてその番人は**残しておきたい**(実数しか
+    出ないはずのシャードで `j2` が出たら落ちてほしい)。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = _complex_node(rng, MAX_DEPTH - 1)
+        if not _uses_imaginary(node):
+            continue
+        try:
+            if not _complex_within_range(node):
+                continue
+            re, im = corpus_complex.evaluate(node)
+        except NotComplexSafe, OutOfShard, ValueError, ZeroDivisionError:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"cplx-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": re, "im": im},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance_sympy(),
+        "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
+#: 極形式と直交形式の分岐を狙って手で選んだ複素数。**乱数では踏めない場所**である。
+#: `(実部の文字列 or None, 虚部の文字列 or None)`——`None` はその成分を打たない。
+COMPLEX_EDGE_VALUES = (
+    ("3", "4"),  # 5 ∠ 53.13010235。教科書の 3-4-5
+    ("1", "1"),  # ∠ 45
+    ("1", "-1"),  # ∠ -45
+    ("-1", "1"),  # ∠ 135
+    ("-1", "-1"),  # ∠ -135
+    ("1", None),  # 実軸の正。∠ 0
+    ("-1", None),  # **実軸の負。∠ 180 か ∠ -180 か**(虚部の 0 の符号が効く)
+    (None, "1"),  # 虚軸の正。∠ 90
+    (None, "-1"),  # 虚軸の負。∠ -90
+    ("0.001", "-0.001"),  # 小さい。∠ -45
+    ("123456", "789"),  # 大きい実部に小さい虚部
+    ("789", "123456"),  # その逆
+    ("5", "0"),  # **虚部が 0。`j0` とは出ず実数として表示される**
+    ("0", "5"),  # 実部が 0
+    ("999.999", "999.999"),  # 桁が揃った端数
+    ("2", "2"),
+    ("100", "1"),
+    ("1", "100"),
+)
+
+
+def _edge_node(re_text: str | None, im_text: str | None) -> Node:
+    """手で選んだ複素数を式木にする。**負号は `neg` キーで打つ。**"""
+
+    def leaf(text: str, imaginary: bool) -> Node:
+        negative = text.startswith("-")
+        body = text[1:] if negative else text
+        digits = tuple("dot" if ch == "." else ch for ch in body)
+        node: Node = Imag(("j", *digits), body) if imaginary else Typed(digits, body)
+        return Un("neg", node) if negative else node
+
+    if re_text is None:
+        if im_text is None:
+            raise ValueError("both components are None")
+        return leaf(im_text, imaginary=True)
+    if im_text is None:
+        return leaf(re_text, imaginary=False)
+    return Bin("+", leaf(re_text, imaginary=False), leaf(im_text, imaginary=True))
+
+
+def build_complex_display_shard(seed: int, count: int) -> dict:
+    """**複素数の表示のシャード。表示文字列を厳密一致で比べる。**
+
+    値は**打った数そのもの**に近い——実部と虚部をそれぞれ打ち、足すだけである。
+    十進→f64 は Python も Rust も正しく丸めるので**両成分ともビットまで同一**で、
+    直交形式の表示は完全に厳密に比べられる。
+
+    極形式は `hypot` と `atan2` を通るので厳密ではないが、入力が打った数なら
+    誤差は 1 ulp 程度(1e-16)で、表示 10 桁の丸め格子(相対 1e-9)をまたぐ確率は
+    **1 件あたり 2e-7**——2000 件で 4e-4 件である。段階 I が踏んだ帯
+    (引数還元で ε≈1e-9)とは 7 桁違うので、厳密一致で比べてよい。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+
+    def emit(node: Node) -> None:
+        re, im = corpus_complex.evaluate(node)
+        keys = to_key_sequence(node)
+        expr = to_expr_text(node)
+        entries.append(
+            {
+                "kind": "display",
+                "id": f"cdsp-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": keys,
+                "expr": f"{expr} を直交形式で",
+                "expect": {"main": real_ref.format_rect(re, im)},
+            }
+        )
+        r, theta = corpus_complex.to_polar(re, im)
+        entries.append(
+            {
+                "kind": "display",
+                "id": f"cdsp-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": [*keys, "polar_toggle"],
+                "expr": f"{expr} を極形式で",
+                "expect": {"main": real_ref.format_polar(r, theta)},
+            }
+        )
+        # **`▸∠` を 2 回押すと元の表示に戻る。** 値の主張ではなく表示の主張
+        # なので、参照実装を通さず engine の 2 本のキー列だけで比べる。
+        entries.append(
+            {
+                "kind": "equivalence",
+                "id": f"cdsp-{len(entries):06d}",
+                "mode": "Deg",
+                "left": keys,
+                "right": [*keys, "polar_toggle", "polar_toggle"],
+                "expr": f"{expr} で ▸∠ を 2 回押すと元の表示に戻る",
+            }
+        )
+
+    def emit_typing_equivalence(text: str) -> None:
+        """**`j` を先に押す形と後に押す形が同じ値に着く。**
+
+        engine は桁が無ければ虚数として始め、桁があれば実部⇄虚部を切り替える
+        (`engine/mod.rs:283`)。**2 つの経路が同じ場所に着くこと**は engine の
+        自己整合の主張で、参照実装は要らない。
+        """
+        digits = tuple("dot" if ch == "." else ch for ch in text)
+        entries.append(
+            {
+                "kind": "equivalence",
+                "id": f"cdsp-{len(entries):06d}",
+                "mode": "Deg",
+                "left": ["j", *digits, "eq"],
+                "right": [*digits, "j", "eq"],
+                "expr": f"j{text} は j を先に押しても後に押しても同じ",
+            }
+        )
+
+    # **手で選んだ値は乱数に引かせず、必ず全部出す**(段階 I で学んだ形)。
+    for re_text, im_text in COMPLEX_EDGE_VALUES:
+        node = _edge_node(re_text, im_text)
+        seen.add(to_expr_text(node))
+        emit(node)
+    for text in ("1", "2", "0.5", "123.456", "999999", "0.001"):
+        emit_typing_equivalence(text)
+
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        re_leaf = _complex_real_leaf(rng)
+        im_leaf = _complex_imag_leaf(rng)
+        which = rng.randrange(4)
+        if which == 0:
+            node: Node = im_leaf
+        elif which == 1:
+            node = Un("neg", im_leaf)
+        elif which == 2:
+            node = Bin("+", re_leaf, im_leaf)
+        else:
+            node = Bin("-", re_leaf, im_leaf)
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        try:
+            re, im = corpus_complex.evaluate(node)
+        except NotComplexSafe, ValueError:
+            continue
+        magnitude = mp.sqrt(mp.mpf(re) ** 2 + mp.mpf(im) ** 2)
+        if magnitude != 0 and not (COMPLEX_MIN_ABS <= magnitude <= COMPLEX_MAX_ABS):
+            continue
+        seen.add(expr)
+        emit(node)
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance_sympy(),
+        "cases": entries,
+    }
+
+
 # --- 表示のトグルのシャード（段階 I）---
 #
 # **このシャードは「整形」を試すのであって、「計算」を試すのではない。**
@@ -1317,6 +1685,11 @@ def main() -> None:
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
     write("typed-000.json", build_typed_shard(seed=20260824, count=count))
     write("display-000.json", build_display_shard(seed=20260827, count=count))
+    write("complex-000.json", build_complex_shard(seed=20260901, count=count))
+    write(
+        "complex-display-000.json",
+        build_complex_display_shard(seed=20260902, count=count),
+    )
     write(
         "angle-mode-000.json",
         build_angle_mode_shard(seed=20260826, count=count),

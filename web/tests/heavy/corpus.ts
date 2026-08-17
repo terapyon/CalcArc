@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
+import { type ComplexValue, magnitude, zeroComponentsAgree } from "./complex";
 
 /** 許容誤差。**値はコーパスの JSON が持つ**(CLAUDE.md の規約)。 */
 export interface Tolerance {
@@ -305,7 +306,7 @@ export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
  * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
  * (設計書 2026-08-17-display §3.1)。
  */
-export const DISPLAY_SHARD_PATTERN = /^display-\d+\.json$/;
+export const DISPLAY_SHARD_PATTERN = /^(display|complex-display)-\d+\.json$/;
 
 /** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
 export interface DisplayCase {
@@ -537,9 +538,45 @@ export function classify(
    */
   baseRel: number = tolerance.rel,
 ): Classification {
-  const absoluteError = Math.abs(actual - expected);
-  const scale = Math.abs(expected);
-  const passed = withinTolerance(actual, expected, tolerance);
+  // **実数は虚部 0 の複素数である。** 判定を 2 本持つと片方だけ直る。
+  // `magnitude` が虚部 0 のとき `Math.abs` に落ちるので、この委譲で
+  // 既存 21379 件の判定は 1 件も動かない(`complex-rules.spec.ts` が検査する)。
+  return classifyComplex(
+    { re: actual, im: 0 },
+    { re: expected, im: 0 },
+    tolerance,
+    baseRel,
+  );
+}
+
+/**
+ * 複素数 1 件の比較。**判定は複素平面上の距離で行う**
+ * (設計書 2026-08-17-complex §3.3)。
+ *
+ * 実部と虚部を別々に相対誤差で見ると、片方が 0 のとき(純虚数など)に
+ * 相対誤差が定義できなくなる。距離なら定義できる。
+ *
+ * **ただし距離だけでは足りない。** 小さいほうの成分の誤りは、大きいほうに
+ * 隠れて距離を動かさない。いちばん重い形——あるはずの成分が消える、
+ * 無いはずの成分が生える——は `zeroComponentsAgree` が別に見る。
+ */
+export function classifyComplex(
+  actual: ComplexValue,
+  expected: ComplexValue,
+  tolerance: Tolerance,
+  baseRel: number = tolerance.rel,
+): Classification {
+  const absoluteError = magnitude(
+    actual.re - expected.re,
+    actual.im - expected.im,
+  );
+  const scale = magnitude(expected.re, expected.im);
+  const withinDistance =
+    scale === 0
+      ? // 期待値が厳密に 0。相対誤差は数学的に定義できない。**ここだけが abs の出番。**
+        absoluteError <= tolerance.abs
+      : absoluteError / scale <= tolerance.rel;
+  const passed = withinDistance && zeroComponentsAgree(actual, expected);
   if (scale === 0) {
     return {
       passed,

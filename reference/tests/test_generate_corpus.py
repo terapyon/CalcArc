@@ -760,6 +760,55 @@ def _is_bare_typed_number(keys: list[str]) -> bool:
     return all(key.isdigit() or key in literal for key in keys[: keys.index("eq")])
 
 
+#: 入力バッファが受け付ける桁数。`engine/state.rs` の `MAX_ENTRY_LEN`。
+#: **先頭のゼロも数える**(実測 2026-08-17)。
+MAX_ENTRY_LEN = 12
+
+
+def test_no_case_types_more_digits_than_the_buffer_accepts() -> None:
+    """**打鍵が 12 桁を超えると、engine は超えたぶんを黙って捨てる。**
+
+    実測(2026-08-17): `1234567890123` と打つと engine は `1.23456789e11` を
+    出す——13 桁目が入らず、値は `123456789012` である。参照実装は打った
+    文字列をそのまま評価するので、**「打ったはずの値」と「engine が持った値」
+    が食い違う**。
+
+    そのとき赤くなるのは計算でも整形でもなく**打鍵**であり、原因が分かりにくい。
+    実際にこの探りで 1 件踏んで、整形の差だと勘違いしかけた。
+
+    ここは全シャードのキー列を走査して、**連続した数字の並び**が上限を
+    超えていないことを確かめる。`add` などの演算子で区切られるので、
+    1 つの数に何桁打っているかはキー列から数えられる。
+    """
+    offenders: list[str] = []
+    for path in sorted(_CORPUS_GENERATED.glob("*.json")):
+        shard = json.loads(path.read_text())
+        for case in shard["cases"]:
+            sequences = (
+                [case["keys"]] if "keys" in case else [case.get("left", []), case.get("right", [])]
+            )
+            for keys in sequences:
+                run = 0
+                for key in keys:
+                    if key.isdigit():
+                        run += 1
+                    elif key == "zeros3":
+                        run += 3
+                    elif key in ("dot", "j", "neg"):
+                        # 数の途中に来るが桁ではない。並びは切れない。
+                        pass
+                    else:
+                        run = 0
+                    if run > MAX_ENTRY_LEN:
+                        offenders.append(f"{path.name}:{case['id']} ({run} 桁)")
+                        break
+    assert not offenders, (
+        f"{len(offenders)} 件が入力バッファの上限({MAX_ENTRY_LEN} 桁)を超えて打っている: "
+        f"{offenders[:5]}。engine は超えたぶんを捨てるので、参照が評価した値を"
+        "engine は一度も持たない"
+    )
+
+
 def test_the_display_shard_carries_every_hand_picked_literal() -> None:
     """**手で選んだ値が、乱数の都合で消えていないこと。**
 

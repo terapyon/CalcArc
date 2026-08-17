@@ -90,6 +90,27 @@ const MUTATIONS = [
     // これも値は変わらないので、表示のシャードにしか見えない。
     expect: "display only",
   },
+  {
+    id: "complex-multiply-sign",
+    what: "複素数の乗算の実部の符号を反転する(i² = +1 にしてしまう)",
+    file: "crates/calcarc-core/src/value.rs",
+    from: "self.re * rhs.re - self.im * rhs.im,",
+    to: "self.re * rhs.re + self.im * rhs.im,",
+    // **実数には一切影響しない。** 虚部が両方 0 なら `- 0` も `+ 0` も同じで、
+    // 既存 11 シャード 26000 件は 1 件も気づかない。複素数の乗算・除算・
+    // 2 乗だけが変わる(`(j2)^2` が `-4` ではなく `4` になる)。
+    expect: "complex only",
+  },
+  {
+    id: "polar-angle-flipped",
+    what: "極形式の偏角の引数を入れ替える(atan2(re, im) にする)",
+    file: "crates/calcarc-core/src/polar.rs",
+    from: "theta_rad: self.im.atan2(self.re),",
+    to: "theta_rad: self.re.atan2(self.im),",
+    // **半径は変わらない。** 角度だけが余角になる(53.13 が 36.87 に)。
+    // `▸∠` を押した表示しか見ない欠陥で、直交形式の表示も値も動かない。
+    expect: "complex only",
+  },
 ];
 
 function run(command, args, options = {}) {
@@ -145,6 +166,19 @@ function verdictFor(expectation, caught) {
         others.length === 0
           ? "括弧を省いたシャードだけが反応した"
           : `全括弧のシャードまで反応した(${others.join(", ")})`,
+    };
+  }
+  if (expectation === "complex only") {
+    // **複素数のシャードだけが反応するはず。** 実数の経路が反応したら、
+    // 複素数のための変更が実数にも漏れていることになる——それ自体が
+    // 報告に値する事実である。
+    const others = shards.filter((s) => !s.startsWith("complex-"));
+    return {
+      ok: others.length === 0,
+      why:
+        others.length === 0
+          ? "複素数のシャードだけが反応した——実数だけのテストには見えない欠陥である"
+          : `実数のシャードまで反応した(${others.join(", ")})`,
     };
   }
   if (expectation === "display only") {
@@ -216,6 +250,22 @@ for (const mutation of MUTATIONS) {
     ok: verdict.ok,
     why: verdict.why,
   });
+}
+
+// **最後に wasm を作り直す。**
+//
+// 原文は毎回戻しているが、**戻したあとに一度もビルドしていない**ので
+// `web/src/wasm/` には最後の変異が入ったままになる。`pnpm heavy` と
+// `pnpm heavy:ui` は先頭で `pnpm wasm` を回すので気づかないが、
+// ビルドを挟まずに playwright を直に叩くと**変異した engine を本物として
+// 測ることになる**——実際にそれを踏んだ(2026-08-17)。極形式の角度が
+// すべて `90 − 期待値` になり、engine の欠陥かと思って調べた。
+//
+// 走行の後始末として作り直しておけば、次に何を回しても原文の engine になる。
+if (MUTATIONS.length > 0) {
+  process.stderr.write("原文の wasm を作り直しています ... ");
+  run("pnpm", ["wasm"]);
+  process.stderr.write("done\n");
 }
 
 writeFileSync(OUT, `${JSON.stringify({ results }, null, 2)}\n`);

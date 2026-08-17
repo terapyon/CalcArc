@@ -110,7 +110,24 @@ class Typed:
     text: str
 
 
-Node = Num | Const | Typed | Bin | Un
+@dataclass(frozen=True)
+class Imag:
+    """**虚数の葉**（段階 J）。`j` を押して打った数。
+
+    `Typed` と同じく**打鍵の列そのもの**を持つ。`j` は打つ位置で意味が変わる
+    ——桁が無ければ虚数として始め、桁があれば実部⇄虚部を切り替える
+    （`engine/mod.rs:283`）。どちらの打ち方も同じ値に着くが、
+    **どちらを打ったかは値に残らない**ので、キー列を持つ。
+
+    `text` は虚部の大きさの十進文字列で、**符号を含まない**——負の虚数は
+    `Un("neg", Imag(...))` で作る（engine も `+/-` を別のキーとして扱う）。
+    """
+
+    keys: tuple[str, ...]
+    text: str
+
+
+Node = Num | Const | Typed | Imag | Bin | Un
 
 
 def walk(node: Node) -> Iterator[Node]:
@@ -136,9 +153,10 @@ def to_keys(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
-    if isinstance(node, Typed):
+    if isinstance(node, Typed | Imag):
         # **打鍵の列をそのまま返す。** 値から復元しない——`5 zeros3` と
         # `5 0 0 0` は同じ値の別の打ち方で、どちらを打ったかは値に残らない。
+        # `Imag` も同じ——`j` `2` と `2` `j` は同じ値の別の打ち方である。
         return list(node.keys)
     if isinstance(node, Un):
         return [*to_keys(node.arg), UNARY_KEYS[node.fn]]
@@ -179,7 +197,7 @@ def to_keys_minimal(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
-    if isinstance(node, Typed):
+    if isinstance(node, Typed | Imag):
         return list(node.keys)
     if isinstance(node, Un):
         return [*_unary_operand_keys(node.arg), UNARY_KEYS[node.fn]]
@@ -238,6 +256,9 @@ def to_expr_text(node: Node) -> str:
         return node.name
     if isinstance(node, Typed):
         return node.text
+    if isinstance(node, Imag):
+        # 表示と同じ書き方にする(`j2`)。読み手が engine の画面と見比べられる。
+        return f"j{node.text}"
     if isinstance(node, Un):
         inner = to_expr_text(node.arg)
         if node.fn == "sqr":

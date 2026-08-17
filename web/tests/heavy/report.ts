@@ -360,6 +360,7 @@ export const AREAS = [
   "data_scale",
   "finance",
   "display",
+  "complex",
 ] as const;
 export type Area = (typeof AREAS)[number];
 
@@ -376,6 +377,12 @@ export function areaOfShard(shardName: string): Area {
   }
   if (/^(data-scale|datascale|bytes)-/.test(stem)) {
     return "data_scale";
+  }
+  if (/^complex-/.test(stem)) {
+    // **`complex-display-` もここに入る。** `display-` の規則より先に見る
+    // ——後ろに置くと、複素数の表示のシャードが `display` 領域に落ちて
+    // 「複素数を検証した」件数が別の領域の数字に混ざる。
+    return "complex";
   }
   if (/^display-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
@@ -1239,6 +1246,32 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           "  `assertSupportedMode` が確かめる——押さずに `Rad` と名乗るケースは、",
           "  黙って Deg の答えと比べられてしまうので受け付けない。",
         ];
+  // **複素数も押した回数から導く。** 角度モード・表示の記法と同じ理由である
+  // ——固定文にしておくと、踏んだ瞬間にレポートだけが古い否定を言い続ける。
+  const imaginaryPresses = pressed.j ?? 0;
+  const polarPresses = pressed.polar_toggle ?? 0;
+  const complexItem =
+    imaginaryPresses === 0 && polarPresses === 0
+      ? [
+          "- **複素数。** 負数の平方根は範囲外で、`j` も `▸∠` も一度も押していない。",
+          "  複素数の表示(`j2` のような形)を読んだケースは 1 件も無い。",
+        ]
+      : [
+          `- **複素数——\`j\` を ${imaginaryPresses} 本、\`▸∠\` を ${polarPresses} 本のキー列が押している。**`,
+          "  この電卓は複素数を持っている——`j` で虚数単位を打ち、四則が複素数のまま",
+          "  動き、`▸∠` で極形式に切り替わる。期待値は Python の SymPy が**厳密な",
+          "  有理数**で木全体を計算し、最後に 1 度だけ f64 に落としたものである",
+          "  (engine は f64 の対で、演算ごとに丸める)。",
+          "",
+          "  **関数の定義域は一様ではない**(実測 2026-08-17)。`sqrt` `ln` `log10`",
+          "  `recip` `n!` は複素数を `DomainError` で弾くが、**`sin` `cos` `tan` は",
+          "  複素数のまま計算する**——実部・虚部の両方を同じ係数でラジアンに直す、",
+          "  と実装自身が書いている。コーパスは受け付けるほうだけを踏む。",
+          "",
+          "  **負数の平方根は依然として範囲外である。** `√(-4)` は `j2` ではなく",
+          "  `Math ERROR` を返す。`j2` という表示は出るが、それは `j` `2` と",
+          "  打ったときであって、平方根の答えとしてではない。",
+        ];
   const notationPresses = (pressed.eng ?? 0) + (pressed.dms ?? 0);
   const notationItem =
     notationPresses === 0
@@ -1263,7 +1296,7 @@ function renderCaveats(entries: ShardSummary[]): string[] {
   // **但し書きが名指しする「完全に固定の文章」の一覧。**
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
   const fixedItems = [
-    "複素数",
+    ...(imaginaryPresses === 0 && polarPresses === 0 ? ["複素数"] : []),
     ...(angleToggles === 0 ? ["角度モード"] : []),
     ...(notationPresses === 0 ? ["表示の記法"] : []),
     "UI",
@@ -1406,8 +1439,7 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
     "  ——結合方向を反転する変異で 1 件も赤くならない。",
     ...errorItem,
-    "- **複素数。** 負数の平方根は範囲外で、`j` も `▸∠` も一度も押していない。",
-    "  複素数の表示(`j2` のような形)を読んだケースは 1 件も無い。",
+    ...complexItem,
     ...angleItem,
     ...notationItem,
     "- **UI(この走行では)。** ここが呼ぶのは計算コアの `dispatch` と wasm の",
