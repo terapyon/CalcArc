@@ -89,7 +89,18 @@ def _power(base: mp.mpf, exponent: mp.mpf) -> mp.mpf:
     return base**exponent
 
 
-def evaluate(node: Node) -> mp.mpf:
+def evaluate(node: Node, mode: str = "Deg") -> mp.mpf:
+    """式木を評価する。
+
+    **`mode` の既定は `Deg` で、既存の呼び出しを 1 つも変えない**
+    ——変えれば全シャードが再生成の対象になる(設計書 2026-08-17-angle §3.3)。
+    再生成一致ゲートが「変えていない」ことを機械的に確かめる。
+
+    **角度モードは `Deg` と `Rad` の 2 つだけ。** `Grad` は存在しない
+    (`numeric/angle.rs:5`)。
+    """
+    if mode not in ("Deg", "Rad"):
+        raise ValueError(f"unknown angle mode: {mode!r}")
     if isinstance(node, Num):
         return mp.mpf(node.value)
     if isinstance(node, Const):
@@ -106,7 +117,7 @@ def evaluate(node: Node) -> mp.mpf:
             # 未知の fn を通すと、mpmath がたまたま同名の関数を持っていた
             # 場合に無関係な値を返してしまう(例: "cbrt" は mp.cbrt に化ける)。
             raise ValueError(f"unknown unary fn: {node.fn!r}")
-        value = evaluate(node.arg)
+        value = evaluate(node.arg, mode)
         if node.fn == "sqrt":
             if value < 0:
                 raise OutOfShard("sqrt of a negative number")
@@ -130,16 +141,19 @@ def evaluate(node: Node) -> mp.mpf:
             if not (-1 <= value <= 1):
                 raise OutOfShard(f"{node.fn} outside [-1, 1]")
             fn = mp.asin if node.fn == "asin" else mp.acos
-            return _degrees(fn(value))
+            # **Rad なら度に直さない。** engine の `angle_of` と対称である。
+            return fn(value) if mode == "Rad" else _degrees(fn(value))
         if node.fn == "atan":
-            return _degrees(mp.atan(value))
+            return mp.atan(value) if mode == "Rad" else _degrees(mp.atan(value))
         if node.fn == "fact":
             # **厳密な整数で計算する。** engine は f64 の反復積なので、
             # 同じ形で書くと同じ誤差が両側に入る(CLAUDE.md)。
             return mp.mpf(math.factorial(_as_non_negative_integer(value, "factorial")))
         if node.fn in ("sin", "cos", "tan"):
-            # 角度は度。ラジアンに直してから渡す。
-            return getattr(mp, node.fn)(value * mp.pi / 180)
+            # **Deg なら度をラジアンに直す。Rad ならすでにラジアン。**
+            # engine の `radians_of` と対称である。
+            radians = value if mode == "Rad" else value * mp.pi / 180
+            return getattr(mp, node.fn)(radians)
         # KNOWN_UNARY_FNS に名前はあるのに、ここまでのどの分岐にも
         # 一致しなかった。四系統のタプルは後続の段階が増やしていくので、
         # 名前だけ足して分岐を足し忘れると、かつてここが `getattr(mp, ...)`
@@ -150,8 +164,8 @@ def evaluate(node: Node) -> mp.mpf:
         # 未知の op を通すと、下の節が黙って除算を実行してしまう
         # ——違う演算の名の下にそれらしい数を返す、一番静かな壊れ方。
         raise ValueError(f"unknown binary op: {node.op!r}")
-    left = evaluate(node.left)
-    right = evaluate(node.right)
+    left = evaluate(node.left, mode)
+    right = evaluate(node.right, mode)
     if node.op == "+":
         return left + right
     if node.op == "-":

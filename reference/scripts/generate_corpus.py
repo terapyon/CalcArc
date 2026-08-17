@@ -734,6 +734,102 @@ def build_corrections_shard(seed: int, count: int) -> dict:
     }
 
 
+# --- 角度モードのシャード（段階 H）---
+
+# ラジアンの葉の帯。**度の 0〜999 をそのまま使うと 999 rad = 159 回転**になり、
+# 引数還元の限界に当たる(段階 G で 1e6 度に切ったのと同じ問題)。
+# ラジアンでは 2π ≈ 6.28 が 1 周なので、数周ぶんに収める。
+RAD_MAX = 20
+
+
+def _rad_leaf(rng: random.Random) -> Typed:
+    """ラジアン用の葉。**小数を打つ**——`0`〜`20` の整数だけでは
+    三角関数の引数として粗すぎて、同じ値ばかりになる。"""
+    whole = rng.randint(0, RAD_MAX)
+    frac = rng.randint(0, 999)
+    text = f"{whole}.{frac:03d}"
+    return Typed(tuple("dot" if ch == "." else ch for ch in text), text)
+
+
+def _rad_node(rng: random.Random, depth: int) -> Node:
+    if depth <= 0 or rng.random() < 0.45:
+        return _rad_leaf(rng)
+    if rng.random() < 0.5:
+        return Un(rng.choice(UNARY_FNS), _rad_node(rng, depth - 1))
+    return Bin(
+        rng.choice(BINARY_OPS),
+        _rad_node(rng, depth - 1),
+        _rad_node(rng, depth - 1),
+    )
+
+
+def _uses_trig(node: Node) -> bool:
+    """三角関数を含むか。**含まない木は角度モードを一切踏まない**ので捨てる。"""
+    return any(isinstance(sub, Un) and sub.fn in ("sin", "cos", "tan") for sub in walk(node))
+
+
+def _within_range_mode(node: Node, mode: str) -> bool:
+    """`_within_range` のモード付き。葉から先に見るのは同じ。"""
+    for sub in _subtrees_leaves_first(node):
+        value = evaluate(sub, mode)
+        if value != 0 and not (MIN_ABS <= abs(value) <= MAX_ABS):
+            return False
+    return True
+
+
+def build_angle_mode_shard(seed: int, count: int) -> dict:
+    """**ラジアンのシャード。`angle_toggle` を実際に押す。**
+
+    `mode` を `"Rad"` と書くだけでは嘘になる——harness はキー列を流すだけで、
+    押さなければ engine は既定の `Deg` のまま評価する。だから
+    **キー列の先頭で実際に押す**(設計書 2026-08-17-angle §3.1)。
+
+    `assertSupportedMode` はそれを「奇数回押していること」で確かめる。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = _rad_node(rng, MAX_DEPTH)
+        if isinstance(node, Typed) or not _uses_trig(node):
+            # 三角関数を含まない木は、Rad にしても Deg と同じ答えになる
+            # ——角度モードを一切踏まないので、確かめることが無い。
+            continue
+        try:
+            if not _within_range_mode(node, "Rad"):
+                continue
+            value = evaluate(node, "Rad")
+        except OutOfShard:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"rad-{len(entries):06d}",
+                "mode": "Rad",
+                # **先頭で押す。** これが無いと engine は Deg で評価する。
+                "keys": ["angle_toggle", *to_key_sequence(node)],
+                "expr": expr,
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
 # --- 桁落ちを狙うシャード（段階 G §3.4）---
 
 # **このシャードだけ許容が違う。** 表示分解能(5e-10)では実測で 99.8% が
@@ -945,6 +1041,10 @@ def main() -> None:
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
     write("typed-000.json", build_typed_shard(seed=20260824, count=count))
+    write(
+        "angle-mode-000.json",
+        build_angle_mode_shard(seed=20260826, count=count),
+    )
     write(
         "corrections-000.json",
         build_corrections_shard(seed=20260825, count=count),

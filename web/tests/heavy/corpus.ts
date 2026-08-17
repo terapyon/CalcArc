@@ -53,15 +53,58 @@ const CORPUS = join(HERE, "..", "..", "..", "corpus", "generated");
  */
 export const SUPPORTED_MODE = "Deg";
 
+/** 電卓が持つ角度モード。**2 つだけ**——`Grad` は存在しない(`numeric/angle.rs:5`)。 */
+export const ANGLE_MODES = ["Deg", "Rad"] as const;
+
+/** そのキー列が `angle_toggle` を何回押すか。 */
+function angleToggles(keys: string[]): number {
+  return keys.filter((key) => key === "angle_toggle").length;
+}
+
+/**
+ * ケースが宣言したモードと、キー列が実際に作るモードが一致しているか。
+ *
+ * **`mode` を書くだけでは嘘になる。** harness はキー列を流すだけなので、
+ * `angle_toggle` を押さなければ engine は既定の `Deg` で評価する
+ * ——宣言が `Rad` でも黙って `Deg` の答えと比べることになる。
+ *
+ * **番人を「押していれば何でも許す」に緩めない。** 押した**回数の偶奇**まで
+ * 見る——`Deg` は偶数回(押していないか、押して戻した)、`Rad` は奇数回である。
+ * 緩めると「2 回押して `Rad` と名乗るケース」が通り、それは `Deg` で評価される。
+ */
 export function assertSupportedMode(name: string, cases: CorpusCase[]): void {
-  const others = cases.filter((c) => c.mode !== SUPPORTED_MODE);
-  if (others.length > 0) {
-    const ids = others.slice(0, 5).map((c) => `${c.id} (${c.mode})`);
+  const offenders: string[] = [];
+  for (const testCase of cases) {
+    const mode = testCase.mode;
+    if (!(ANGLE_MODES as readonly string[]).includes(mode)) {
+      offenders.push(
+        `${testCase.id}: mode ${JSON.stringify(mode)} is not one of ${ANGLE_MODES.join(", ")}`,
+      );
+      continue;
+    }
+    const keys =
+      "keys" in testCase && Array.isArray(testCase.keys)
+        ? (testCase.keys as string[])
+        : [
+            ...((testCase as { left?: string[] }).left ?? []),
+            ...((testCase as { right?: string[] }).right ?? []),
+          ];
+    const odd = angleToggles(keys) % 2 === 1;
+    if (mode === "Rad" && !odd) {
+      offenders.push(
+        `${testCase.id}: declares Rad but presses angle_toggle an even number of times, so the engine evaluates it in Deg`,
+      );
+    }
+    if (mode === "Deg" && odd) {
+      offenders.push(
+        `${testCase.id}: declares Deg but presses angle_toggle an odd number of times, so the engine evaluates it in Rad`,
+      );
+    }
+  }
+  if (offenders.length > 0) {
     throw new Error(
-      `${name}: this stage runs every case in ${SUPPORTED_MODE} only, but ` +
-        `${others.length} case(s) declare another mode: ${ids.join(", ")}. ` +
-        "The harness never presses angle_toggle, so those cases would be " +
-        "silently evaluated in the engine's default mode.",
+      `${name}: ${offenders.length} case(s) declare an angle mode the key ` +
+        `sequence does not produce: ${offenders.slice(0, 5).join("; ")}`,
     );
   }
 }

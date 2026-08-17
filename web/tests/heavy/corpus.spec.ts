@@ -340,24 +340,68 @@ test("every shard on disk holds exactly the cases the report will count", () => 
   }
 });
 
-test("every case in every shard declares the one mode this stage runs", () => {
-  // 段階 2 は Deg だけ。ハーネスは angle_toggle を押さない。
+test("every case declares the mode its key sequence actually produces", () => {
   for (const { name, shard } of shards) {
     assertSupportedMode(name, shard.cases);
   }
-  // 宣言が守られていないコーパスを渡したら、黙って既定のモードで回さずに落ちる。
+});
+
+/** 1 件だけのシャードを作る。モードとキー列を試すため。 */
+function modeCase(mode: string, keys: string[]) {
+  return [
+    {
+      kind: "value" as const,
+      id: "x-000",
+      mode,
+      keys,
+      expr: "1",
+      expect: { re: 1, im: 0 },
+    },
+  ];
+}
+
+test("declaring Rad without pressing the key is refused", () => {
+  // **これが番人の本体である。** `mode` を書くだけでは嘘になる——harness は
+  // キー列を流すだけなので、押さなければ engine は既定の Deg で評価する。
   expect(() =>
-    assertSupportedMode("made-up.json", [
-      {
-        kind: "value",
-        id: "x-000",
-        mode: "Rad",
-        keys: ["1"],
-        expr: "1",
-        expect: { re: 1, im: 0 },
-      },
-    ]),
+    assertSupportedMode("made-up.json", modeCase("Rad", ["1"])),
   ).toThrow(/Rad/);
+});
+
+test("pressing the key twice and calling it Rad is refused", () => {
+  // **緩めると必ず見逃す形。** 「押していれば何でも許す」にすると、
+  // 2 回押して Deg に戻ったケースが `Rad` を名乗って通り、
+  // **Deg の答えと Rad の期待値を比べる**ことになる。
+  expect(() =>
+    assertSupportedMode(
+      "made-up.json",
+      modeCase("Rad", ["angle_toggle", "angle_toggle", "1"]),
+    ),
+  ).toThrow(/even number/);
+});
+
+test("pressing the key once and calling it Deg is refused", () => {
+  // 逆向きも塞ぐ。押したのに Deg と名乗るのも嘘である。
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Deg", ["angle_toggle", "1"])),
+  ).toThrow(/odd number/);
+});
+
+test("Rad with one press, and Deg with none, are both accepted", () => {
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Rad", ["angle_toggle", "1"])),
+  ).not.toThrow();
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Deg", ["1"])),
+  ).not.toThrow();
+});
+
+test("a mode the calculator does not have is refused", () => {
+  // **`Grad` は存在しない**(`numeric/angle.rs` は Deg と Rad の 2 つだけ)。
+  // 私は一度レポートに「Rad と Grad」と書いて誤りを入れた(2026-08-17 訂正)。
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Grad", ["1"])),
+  ).toThrow(/not one of/);
 });
 
 /**
