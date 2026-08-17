@@ -60,6 +60,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     looserThanDisplay: 0,
     precedenceCases: 0,
     exponentDisplayCases: 0,
+    errorCases: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -101,7 +102,7 @@ test("the report explains what the two routes are, so it stands on its own", () 
   // 見せて「何を確かめたのか」を書かないと、判断する材料にならない。
   const markdown = renderReport([summary()], PROVENANCE);
 
-  expect(markdown).toContain("何をどう確かめたか");
+  expect(markdown).toContain("どうやって確かめているか");
   expect(markdown).toContain("mpmath");
   expect(markdown).toContain("キー列");
   // 同値ケースが期待値を持たないことも書く。
@@ -122,9 +123,10 @@ test("the report says mpmath evaluated the tree, not the printed expression", ()
   // expr が検証に使われていないことを明言する。
   expect(markdown).toContain("検証に使われていない");
   expect(markdown).toContain("`expr` の記法に誤りがあっても");
-  // 段階 5 で審判の入口になることと、その参照先。
-  expect(markdown).toContain("段階 5");
-  expect(markdown).toContain("§7.4");
+  // **設計書の節番号を本文に書かない(2026-08-17 の整理)。** 外の読み手には
+  // 辿れない参照で、意味の分からない記号として残るだけである。
+  expect(markdown).not.toContain("§7.4");
+  expect(markdown).not.toContain("設計書");
   // 古い言い方が残っていないこと。
   expect(markdown).not.toContain("数式(`(3 + 4)`)は Python の mpmath");
 });
@@ -383,7 +385,7 @@ test("an incomplete run says so before it says anything else", () => {
   // 欠落の宣言が、結果の見出しより**先**に出ること。
   expect(markdown.indexOf("この走行は不完全である")).toBeGreaterThanOrEqual(0);
   expect(markdown.indexOf("この走行は不完全である")).toBeLessThan(
-    markdown.indexOf("# 重量級コーパスの実行結果"),
+    markdown.indexOf("# CalcArc 計算検証レポート"),
   );
   // 何が欠けているかを名指しすること。
   expect(markdown).toContain("scientific-000.json (values)");
@@ -430,7 +432,7 @@ test("the equivalence blind spot is disclosed, not implied by the headline", () 
     PROVENANCE,
   );
 
-  expect(markdown).toContain("定数を返すだけのものが自明に満たす");
+  expect(markdown).toContain("同じ値を返すだけの");
   expect(markdown).toContain("それを捕まえるのは値ケースの側である");
   // 同値ケースの誤差 0 が構造的な必然であることも書く。
   expect(markdown).toContain("選んだ形の必然");
@@ -513,7 +515,9 @@ test("the unused key tokens are derived from the run, not hand-written", () => {
   expect(markdown).toContain("`angle_toggle`");
   // 踏んだキーは載らない(既定の見本は add / eq / lparen / 1 を踏んでいる)。
   expect(markdown).not.toContain("`add` `sub`");
-  expect(markdown).toContain("`KEY_TOKENS` の差分から導いている");
+  // 導出であることは、下の 2 つの走行で**出力が変わる**ことが示す
+  // ——文言そのものを固定しても「手書きでないこと」の証拠にはならない。
+  expect(markdown).toContain("実データから導いている");
 
   // 押されたキーが増えれば、その分だけ「使っていない」から消える。
   const withPi = renderReport(
@@ -544,11 +548,87 @@ test("the unused key tokens are derived from the run, not hand-written", () => {
   expect(injectedOnly).not.toContain("`pi`");
 });
 
-test("the hand-maintained half of the caveats says it is hand-maintained", () => {
+test("the report reads as a result, not as a change log", () => {
+  // **利用者の指摘(2026-08-17)。** 「過去の経緯で修正した物を言い訳して
+  // いたり、このレポートを初めて見た人に意味がわかりにくい表現が入っている」。
+  //
+  // この文書は**外の読み手に結果を伝えるためのもの**で、開発の経緯を残す
+  // ためのものではない。経緯はコード側のコメントと `docs/` に置く
+  // ——そこは保守する人が読む場所で、こちらは初めて見る人が読む場所である。
+  //
+  // 語彙で見張る。ここに挙げた語が本文に出たら、それは「読み手には辿れない
+  // 内部の話」が漏れた印である。
+  const forbidden = [
+    "敵対者レビュー",
+    "修正ラウンド",
+    "レビュー修正",
+    "設計書",
+    "段階 3",
+    "段階 5",
+    "Layer 1",
+    "Layer 5",
+    "実在したバグ",
+    "fix round",
+    "review round",
+  ];
+  // 上書きが有る走行・無い走行の両方を見る(理由の全文が載る経路が違う)。
+  for (const entry of [
+    summary(),
+    summary({
+      appliedOverrides: [
+        {
+          id: "sci-001332",
+          rel: 2e-9,
+          baseRel: 5e-10,
+          reason: "巨大角度の三角関数。引数の刻み幅が結果の精度を縛る。",
+        },
+      ],
+    }),
+  ]) {
+    const markdown = renderReport([entry], PROVENANCE);
+    for (const word of forbidden) {
+      expect(
+        markdown,
+        `report still says ${JSON.stringify(word)}`,
+      ).not.toContain(word);
+    }
+  }
+});
+
+test("the real corpus and its overrides carry no development history either", () => {
+  // 上のテストは見本のシャードで見ている。**理由の全文はコーパス側の
+  // `overrides.json` から来る**ので、実物も見る——`sci-000019` の理由には
+  // 「再計算して半 ulp を使うと下の数字とは一致しないが、それは意図した
+  // 安全マージンである」という、過去の訂正の言い訳が入っていた。
+  const overrides = JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL("../../../corpus/overrides.json", import.meta.url)),
+      "utf-8",
+    ),
+  ) as { overrides: Record<string, { reason: string }> };
+  const reasons = Object.entries(overrides.overrides);
+  expect(
+    reasons.length,
+    "no override was read, so this test asserted nothing",
+  ).toBeGreaterThan(0);
+  for (const [id, { reason }] of reasons) {
+    expect(reason, `${id} の理由`).not.toContain("意図した安全マージン");
+    expect(reason, `${id} の理由`).not.toContain("下の数字とは一致しない");
+    expect(reason, `${id} の理由`).not.toContain("レビュー");
+  }
+});
+
+test("the caveats section says its counts come from the run", () => {
+  // **以前ここは「この節は手で保守されている」を確かめていた。** その時点では
+  // 本当にほとんどが手書きだった。いまは件数がすべて実データ由来で、固定なのは
+  // 「1 件も踏んでいないので数える対象が無い」項目だけである
+  // ——読み手に伝えるべきことが逆になったので、確かめることも入れ替える。
   const markdown = renderReport([summary()], PROVENANCE);
 
-  expect(markdown).toContain("この節は手で保守されている");
-  expect(markdown).toContain("段階 3");
+  expect(markdown).toContain("実データから導いている");
+  // 開発の経緯や設計書の節番号を本文に残さない。
+  expect(markdown).not.toContain("段階 3");
+  expect(markdown).not.toContain("レビュー");
 });
 
 test("the report tells the reader how to check it themselves", () => {
@@ -809,11 +889,14 @@ test("the parenthesis item and its disclaimer never describe different things", 
   // life before this task — the item was 100% fixed prose containing no count
   // at all, while the disclaimer described it as 「見出しの件数だけの、
   // 完全にデータ由来の行である」. Both now read one `parenthesis.kind`.
+  // **確かめるのは 3 状態が食い違わないことである。** 但し書きは、固定された
+  // 数値(1101)を伴う段落が出る走行でだけ、その数値の出どころを言う。
   const untouched = renderReport([summary({ precedenceCases: 0 })], PROVENANCE);
   expect(untouched).toContain("キー列は二項演算を必ず括弧で囲む");
-  expect(untouched).toContain("この走行では**完全に固定の文章**である");
-  expect(untouched).not.toContain("完全にデータ由来の行である");
-  expect(untouched).not.toContain("**半分だけ**データ由来");
+  expect(untouched).not.toContain("件が意味を変える");
+  expect(untouched).not.toContain(
+    "Python 側のテストが構文木で数えて固定した値",
+  );
 
   const counted = renderReport(
     [
@@ -825,9 +908,9 @@ test("the parenthesis item and its disclaimer never describe different things", 
     PROVENANCE,
   );
   expect(counted).toContain("7 件が踏んでいる");
-  expect(counted).toContain("見出しの件数だけの、完全にデータ由来の行である");
-  expect(counted).not.toContain("この走行では**完全に固定の文章**である");
-  expect(counted).not.toContain("**半分だけ**データ由来");
+  // 内訳の元になるシャードがこの走行に無いので、固定された数値は出ない。
+  expect(counted).not.toContain("件が意味を変える");
+  expect(counted).not.toContain("Python 側のテストが構文木で数えて固定した値");
 
   const pinned = renderReport(
     [
@@ -838,11 +921,10 @@ test("the parenthesis item and its disclaimer never describe different things", 
     ],
     PROVENANCE,
   );
-  expect(pinned).toContain("**半分だけ**データ由来");
-  expect(pinned).not.toContain("この走行では**完全に固定の文章**である");
-  expect(pinned).not.toContain(
-    "見出しの件数だけの、完全にデータ由来の行である",
-  );
+  // ここでだけ、固定された数値とその出どころが両方出る。
+  expect(pinned).toContain(`${PRECEDENCE_CHANGES_MEANING} 件`);
+  expect(pinned).toContain("件が意味を変える");
+  expect(pinned).toContain("Python 側のテストが構文木で数えて固定した値");
 });
 
 test("the qualification stays attached to the precedence claim in every branch", () => {
@@ -946,9 +1028,7 @@ test("the adversarial-fake measurement says when it was taken and over what", ()
   // one-off 2026-08-15 measurement rendered in the present tense, four lines
   // under a headline that now says 4000 value cases.
   const markdown = renderReport([summary()], PROVENANCE);
-  expect(markdown).toContain(
-    "**2026-08-15 の測定時点、当時の値ケース 2000 件中 1996 件**",
-  );
+  expect(markdown).toContain("**当時の値ケース 2000 件中 1996 件**");
   expect(markdown).toContain("この走行で測り直した数字ではない");
 });
 
@@ -1065,6 +1145,96 @@ test("a mutation that came out against expectation is called out", () => {
     ],
   }).join("\n");
   expect(markdown).toContain("**期待と違う**");
+});
+
+test("the report never says a region is untouched while also counting cases in it", () => {
+  // **読み手が実際に見つけた矛盾(2026-08-17)。** 動的な集計を足しながら
+  // 固定文を放置したため、12 行しか離れていない場所で
+  // 「指数表記を 1940 件読んだ」と「指数表記に切り替わる領域は踏んでいない」が
+  // 同居していた。エラー経路(金融 569 + データスケール 4 を照合済み)と
+  // UI(別走行が 500 件を実打鍵)も同じ形だった。
+  //
+  // **数を報告している領域について「踏んでいない」と書かない**、を固定する。
+  const markdown = renderReport(
+    [summary({ exponentDisplayCases: 1940, errorCases: 573 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("1940 件が読んでいる");
+  expect(markdown).not.toContain(
+    "表示が指数表記に切り替わる領域は踏んでいない",
+  );
+  expect(markdown).toContain("573 件は照合済み");
+  expect(markdown).not.toContain(
+    "ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
+  );
+});
+
+test("with nothing counted, the untouched wording comes back", () => {
+  // 逆向きも固定する。**0 件のときに「照合済み」と書いてはいけない。**
+  const markdown = renderReport(
+    [summary({ exponentDisplayCases: 0, errorCases: 0 })],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("平坦表示の帯を一度も出ていない");
+  expect(markdown).toContain("生成の時点で範囲外にしている");
+  expect(markdown).not.toContain("件は照合済み");
+});
+
+test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
+  // 但し書き自身が腐っていた——「エラー経路・指数表記…は完全に固定の文章」と
+  // 書いてあったが、その 2 つはデータ由来になっていた。
+  //
+  // **そして、それを見張っていたはずのこのテスト自身も腐っていた。**
+  // 以前ここは `toContain("複素数・角度モード・UI・入力中の表示")` の 1 行で、
+  // **但し書きに書いてある文字列が但し書きに書いてあること**しか確かめて
+  // いなかった。段階 H が `angle_toggle` を 2000 本のキー列で押し、
+  // 段階 I が `eng`/`dms` を押しても、この行は緑のままだった——項目の側は
+  // データ由来に切り替わっているのに、但し書きは「角度モードは完全に固定の
+  // 文章」と言い続けていた(2026-08-17)。
+  //
+  // いまは**入力を変えて、出力が変わることを見る**。押した集計を持つ走行と
+  // 持たない走行で、但し書きの一覧が動かなければ嘘である。
+  const untouched = renderReport([summary()], PROVENANCE);
+  const disclaimerOf = (markdown: string) =>
+    markdown.slice(markdown.indexOf("この節の件数は、この走行の実データから"));
+
+  expect(disclaimerOf(untouched)).toContain("角度モード");
+  expect(disclaimerOf(untouched)).toContain("表示の記法");
+
+  const pressed = summary();
+  pressed.shape = {
+    ...pressed.shape,
+    tokens: { ...pressed.shape.tokens, angle_toggle: 7, eng: 3, dms: 4 },
+  };
+  const touched = renderReport([pressed], PROVENANCE);
+  // 踏んだ走行では、その 2 項目は「完全に固定」の一覧から外れる。
+  expect(disclaimerOf(touched)).not.toContain("角度モード");
+  expect(disclaimerOf(touched)).not.toContain("表示の記法");
+  // 外れたぶん、一覧は短くなる(数え上げも同じ述語から出ている)。
+  expect(disclaimerOf(touched)).toContain("複素数・UI・入力中の表示の 3 行");
+  expect(disclaimerOf(untouched)).toContain(
+    "複素数・角度モード・表示の記法・UI・入力中の表示の 5 行",
+  );
+});
+
+test("the angle-mode and notation items say what the run actually pressed", () => {
+  // **項目の側も、押した集計から出ていること。** 但し書きだけを直しても、
+  // 本文が「一度も押していない」と言い続けたら矛盾は残る(読み手が実際に
+  // 指摘したのはこの形の矛盾である)。
+  const untouched = renderReport([summary()], PROVENANCE);
+  expect(untouched).toContain("`angle_toggle` を一度も");
+  expect(untouched).toContain("`ENG` も `°'\"` も一度も押していない");
+
+  const pressed = summary();
+  pressed.shape = {
+    ...pressed.shape,
+    tokens: { ...pressed.shape.tokens, angle_toggle: 7, eng: 3, dms: 4 },
+  };
+  const touched = renderReport([pressed], PROVENANCE);
+  expect(touched).toContain("7 本のキー列が `angle_toggle` を押している");
+  // eng と dms は合算して数える(どちらも「値を変えない表示のキー」である)。
+  expect(touched).toContain("7 本のキー列が `ENG` か `°'\"` を押している");
+  expect(touched).not.toContain("`angle_toggle` を一度も");
 });
 
 test("an area with no cases is never called correct", () => {

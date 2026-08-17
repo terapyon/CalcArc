@@ -1,7 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { KeyToken } from "../../src/calc";
+import { type ComplexValue, parseComplexDisplay } from "../heavy/complex";
 import {
-  classify,
+  classifyComplex,
+  type DisplayCase,
+  loadDisplayShards,
   loadShards,
   partitionCases,
   type ValueCase,
@@ -49,9 +52,47 @@ async function pressCase(page: Page, keys: string[]): Promise<void> {
   // 実在しない「オールクリア」を押しに行き、存在しないボタンを待ち続けた
   // ——実際の名前は「全消去」だった。**手書きは 1 箇所でも腐る。**
   await pressToken(page, "ac");
+  await resetDisplayState(page);
   for (const key of keys) {
     await pressToken(page, key);
   }
+}
+
+/**
+ * **表示の状態を初期値に戻す。`AC` では戻らない。**
+ *
+ * `AC` が消すのは値と保留演算で、**角度モードと記法は残る**——電卓として
+ * 正しい挙動である(利用者が Rad にしたのに、消すたび Deg に戻ったら困る)。
+ *
+ * ここはそれを踏んだ。角度モードのシャードは各ケースの先頭で
+ * `angle_toggle` を 1 回押すので、1 件目で Rad、2 件目で Deg、3 件目で Rad…
+ * と交互になり、**100 件中 50 件が Deg で評価されて落ちた**(2026-08-17)。
+ * コアの経路は 1 ケースごとに engine を作り直すので同じ問題が起きず、
+ * **盤面を通る走行にしか現れない欠陥**だった。
+ *
+ * 直し方として「押した回数を数えて辻褄を合わせる」は採らない——それは
+ * ケース側の知識を harness に写すことで、写し損ねれば静かにずれる。
+ * **画面に出ている状態を読んで、既定に戻す。**
+ */
+async function resetDisplayState(page: Page): Promise<void> {
+  if ((await page.getByTestId("display-angle").innerText()).trim() !== "DEG") {
+    await pressToken(page, "angle_toggle");
+  }
+  if ((await page.getByTestId("display-notation").innerText()).trim() !== "") {
+    await pressToken(page, "eng");
+  }
+  // **表示形式も残る。** 段階 J で `▸∠` を押すようになって同じことが起きた
+  // ——直交形式を期待するケースが `511,105 ∠ 0` を見せ、極形式を期待する
+  // ケースが `j410,758` を見せた。前のケースが極形式のまま終わっていたのが
+  // 原因で、engine の欠陥ではない(モードが残るのは電卓として正しい)。
+  if ((await page.getByTestId("display-form").innerText()).trim() !== "") {
+    await pressToken(page, "polar_toggle");
+  }
+  // **戻ったことを確かめる。** 戻らないまま進むと、以後の全ケースが
+  // 静かに別のモードで評価される。
+  await expect(page.getByTestId("display-angle")).toHaveText("DEG");
+  await expect(page.getByTestId("display-notation")).toHaveText("");
+  await expect(page.getByTestId("display-form")).toHaveText("");
 }
 
 /** キートークンを 1 つ押す。**名前は必ず対応表から引く。** */
@@ -105,9 +146,15 @@ for (const { name, shard } of loadShards()) {
     for (const testCase of sample) {
       await pressCase(page, testCase.keys);
       const shown = await main(page).innerText();
-      let actual: number;
+      // **読み手は期待値が選ぶ。コアの経路とまったく同じ規則である**
+      // (`corpus.spec.ts` の同じ箇所を見よ)。`parseDisplay` は実数の書式
+      // だけを受け付ける番人なので、実数のシャードはこれまでどおりそこを通る。
+      const complexExpected = testCase.expect.im !== 0;
+      let actual: ComplexValue;
       try {
-        actual = parseDisplay(shown);
+        actual = complexExpected
+          ? parseComplexDisplay(shown)
+          : { re: parseDisplay(shown), im: 0 };
       } catch (cause) {
         mismatches.push(
           `${testCase.id} (${testCase.expr}): display ${JSON.stringify(shown)} ` +
@@ -115,12 +162,15 @@ for (const { name, shard } of loadShards()) {
         );
         continue;
       }
-      const verdict = classify(actual, testCase.expect.re, shard.tolerance);
+      const verdict = classifyComplex(actual, testCase.expect, shard.tolerance);
       if (!verdict.passed) {
         mismatches.push(
           `${testCase.id} (${testCase.expr}): typed on the keypad it shows ` +
-            `${shown}, but the reference says ${testCase.expect.re} ` +
-            `(relative error ${verdict.relativeError.toExponential(3)})`,
+            `${shown}, but the reference says ${testCase.expect.re}` +
+            (complexExpected
+              ? `${testCase.expect.im < 0 ? "-" : "+"}j${Math.abs(testCase.expect.im)}`
+              : "") +
+            ` (relative error ${verdict.relativeError.toExponential(3)})`,
         );
       }
     }
@@ -131,6 +181,79 @@ for (const { name, shard } of loadShards()) {
         "typed on the real keypad. The core path runs the same cases without " +
         "the UI — if that one is green and this one is not, the fault is " +
         "between the keypad and the display, not in the calculation.",
+    ).toEqual([]);
+  });
+}
+
+test("AC clears the value but not the angle mode — which is why each case resets", async ({
+  page,
+}) => {
+  // **`resetDisplayState` が要る理由を、実物で固定する。**
+  //
+  // これが無いと、`resetDisplayState` は「念のため」の一手に見える。実際には
+  // これを外した瞬間、角度モードのシャードは 1 件おきに Deg で評価され、
+  // 100 件中 50 件が落ちた。**「AC で戻る」という思い込みが原因**だったので、
+  // 戻らないことそのものをここで主張する。
+  //
+  // これは engine の欠陥ではない——利用者が Rad にしたのに消すたび Deg に
+  // 戻る電卓のほうが困る。**harness の側が合わせるべき**という裁定である。
+  await page.goto("/");
+  await expect(page.getByTestId("display-angle")).toHaveText("DEG");
+
+  await pressToken(page, "angle_toggle");
+  await expect(page.getByTestId("display-angle")).toHaveText("RAD");
+
+  await pressToken(page, "ac");
+  await expect(main(page)).toHaveText("0");
+  // **値は消えたが、モードは残っている。**
+  await expect(page.getByTestId("display-angle")).toHaveText("RAD");
+
+  // `resetDisplayState` はこれを画面から読んで戻す。
+  await resetDisplayState(page);
+  await expect(page.getByTestId("display-angle")).toHaveText("DEG");
+});
+
+for (const { name, shard } of loadDisplayShards()) {
+  const shown = shard.cases.filter(
+    (c): c is DisplayCase =>
+      c.kind === "display" &&
+      c.keys.every((k) => BUTTON_FOR.has(k as KeyToken)),
+  );
+  const sample = spread(shown, SAMPLE);
+  if (sample.length === 0) {
+    continue;
+  }
+
+  test(`${name}: ${sample.length} displays typed on the real keypad`, async ({
+    page,
+  }) => {
+    // **表示のトグルは、盤面を通してこそ意味がある。**
+    //
+    // `ENG` と `°'"` は値を変えないので、コアの経路では「押した効果」を
+    // 表示文字列でしか主張できない。その表示を**本物の画面から読む**のが
+    // ここである——`parseDisplay` は通さない。通すと桁区切りや指数の
+    // 書き方の違いが消えてしまい、確かめたいことがちょうど失われる。
+    await page.goto("/");
+    await expect(main(page)).toHaveText("0");
+
+    const mismatches: string[] = [];
+    for (const testCase of sample) {
+      await pressCase(page, testCase.keys);
+      const got = (await main(page).innerText()).trim();
+      if (got !== testCase.expect.main) {
+        mismatches.push(
+          `${testCase.id} (${testCase.expr}): the screen shows ` +
+            `${JSON.stringify(got)}, the reference expected ` +
+            `${JSON.stringify(testCase.expect.main)}`,
+        );
+      }
+    }
+
+    expect(
+      mismatches,
+      `${name}: ${mismatches.length} of ${sample.length} displays disagreed ` +
+        "when typed on the real keypad. These are exact string comparisons of " +
+        "what a person would actually see on screen.",
     ).toEqual([]);
   });
 }

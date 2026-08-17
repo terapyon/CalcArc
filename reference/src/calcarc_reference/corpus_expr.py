@@ -90,7 +90,44 @@ class Const:
     name: str
 
 
-Node = Num | Const | Bin | Un
+@dataclass(frozen=True)
+class Typed:
+    """**打った通りのキーと、その厳密な十進の文字列**(設計書 2026-08-17 §3.1)。
+
+    `Num` との違いは、`Num` が「整数の値」を持ちキー列をそこから作るのに対し、
+    こちらは**打鍵の列そのもの**を持つことである。小数点・`000`・指数入力は
+    どれも「同じ値への別の打ち方」なので、値から復元できない。
+
+    **`Num` は 1 文字も触らない。** あれは既存 16000 件の乱数と直列化の土台で、
+    振る舞いを変えれば全シャードが総入れ替えになる(要件 R3b)。
+
+    `text` は `"1.5"` や `"1.5e3"` のような十進の文字列である。
+    **参照側はこれを文字列のまま読む**——`float()` を挟むと生成の時点で
+    engine と同じ丸めが入り、両側が同じ誤差を持つ(要件 R2)。
+    """
+
+    keys: tuple[str, ...]
+    text: str
+
+
+@dataclass(frozen=True)
+class Imag:
+    """**虚数の葉**（段階 J）。`j` を押して打った数。
+
+    `Typed` と同じく**打鍵の列そのもの**を持つ。`j` は打つ位置で意味が変わる
+    ——桁が無ければ虚数として始め、桁があれば実部⇄虚部を切り替える
+    （`engine/mod.rs:283`）。どちらの打ち方も同じ値に着くが、
+    **どちらを打ったかは値に残らない**ので、キー列を持つ。
+
+    `text` は虚部の大きさの十進文字列で、**符号を含まない**——負の虚数は
+    `Un("neg", Imag(...))` で作る（engine も `+/-` を別のキーとして扱う）。
+    """
+
+    keys: tuple[str, ...]
+    text: str
+
+
+Node = Num | Const | Typed | Imag | Bin | Un
 
 
 def walk(node: Node) -> Iterator[Node]:
@@ -116,6 +153,11 @@ def to_keys(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
+    if isinstance(node, Typed | Imag):
+        # **打鍵の列をそのまま返す。** 値から復元しない——`5 zeros3` と
+        # `5 0 0 0` は同じ値の別の打ち方で、どちらを打ったかは値に残らない。
+        # `Imag` も同じ——`j` `2` と `2` `j` は同じ値の別の打ち方である。
+        return list(node.keys)
     if isinstance(node, Un):
         return [*to_keys(node.arg), UNARY_KEYS[node.fn]]
     return [
@@ -155,6 +197,8 @@ def to_keys_minimal(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
+    if isinstance(node, Typed | Imag):
+        return list(node.keys)
     if isinstance(node, Un):
         return [*_unary_operand_keys(node.arg), UNARY_KEYS[node.fn]]
     if node.op not in BINARY_PRECEDENCE:
@@ -210,6 +254,11 @@ def to_expr_text(node: Node) -> str:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return node.name
+    if isinstance(node, Typed):
+        return node.text
+    if isinstance(node, Imag):
+        # 表示と同じ書き方にする(`j2`)。読み手が engine の画面と見比べられる。
+        return f"j{node.text}"
     if isinstance(node, Un):
         inner = to_expr_text(node.arg)
         if node.fn == "sqr":

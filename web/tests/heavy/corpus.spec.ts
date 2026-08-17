@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { type ComplexValue, magnitude, parseComplexDisplay } from "./complex";
 import {
   assertNoCaseTolerance,
   assertShardIsSound,
@@ -6,6 +7,7 @@ import {
   assertToleranceIsSane,
   type Classification,
   classify,
+  classifyComplex,
   countInjectedTokens,
   type EquivalenceCase,
   equivalenceNeedsPrecedence,
@@ -340,24 +342,68 @@ test("every shard on disk holds exactly the cases the report will count", () => 
   }
 });
 
-test("every case in every shard declares the one mode this stage runs", () => {
-  // 段階 2 は Deg だけ。ハーネスは angle_toggle を押さない。
+test("every case declares the mode its key sequence actually produces", () => {
   for (const { name, shard } of shards) {
     assertSupportedMode(name, shard.cases);
   }
-  // 宣言が守られていないコーパスを渡したら、黙って既定のモードで回さずに落ちる。
+});
+
+/** 1 件だけのシャードを作る。モードとキー列を試すため。 */
+function modeCase(mode: string, keys: string[]) {
+  return [
+    {
+      kind: "value" as const,
+      id: "x-000",
+      mode,
+      keys,
+      expr: "1",
+      expect: { re: 1, im: 0 },
+    },
+  ];
+}
+
+test("declaring Rad without pressing the key is refused", () => {
+  // **これが番人の本体である。** `mode` を書くだけでは嘘になる——harness は
+  // キー列を流すだけなので、押さなければ engine は既定の Deg で評価する。
   expect(() =>
-    assertSupportedMode("made-up.json", [
-      {
-        kind: "value",
-        id: "x-000",
-        mode: "Rad",
-        keys: ["1"],
-        expr: "1",
-        expect: { re: 1, im: 0 },
-      },
-    ]),
+    assertSupportedMode("made-up.json", modeCase("Rad", ["1"])),
   ).toThrow(/Rad/);
+});
+
+test("pressing the key twice and calling it Rad is refused", () => {
+  // **緩めると必ず見逃す形。** 「押していれば何でも許す」にすると、
+  // 2 回押して Deg に戻ったケースが `Rad` を名乗って通り、
+  // **Deg の答えと Rad の期待値を比べる**ことになる。
+  expect(() =>
+    assertSupportedMode(
+      "made-up.json",
+      modeCase("Rad", ["angle_toggle", "angle_toggle", "1"]),
+    ),
+  ).toThrow(/even number/);
+});
+
+test("pressing the key once and calling it Deg is refused", () => {
+  // 逆向きも塞ぐ。押したのに Deg と名乗るのも嘘である。
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Deg", ["angle_toggle", "1"])),
+  ).toThrow(/odd number/);
+});
+
+test("Rad with one press, and Deg with none, are both accepted", () => {
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Rad", ["angle_toggle", "1"])),
+  ).not.toThrow();
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Deg", ["1"])),
+  ).not.toThrow();
+});
+
+test("a mode the calculator does not have is refused", () => {
+  // **`Grad` は存在しない**(`numeric/angle.rs` は Deg と Rad の 2 つだけ)。
+  // 私は一度レポートに「Rad と Grad」と書いて誤りを入れた(2026-08-17 訂正)。
+  expect(() =>
+    assertSupportedMode("made-up.json", modeCase("Grad", ["1"])),
+  ).toThrow(/not one of/);
 });
 
 /**
@@ -516,19 +562,19 @@ for (const { name, shard, values } of partitions) {
         );
         continue;
       }
-      if (testCase.expect.im !== 0) {
-        // 型に im があるのに比較していない、では「虚部も確かめた」と読まれる。
-        // このシャードは実数しか扱わない。虚部があるケースが混ざったら、
-        // 黙って実部だけ見ずに落とす(レビュー修正ラウンド 2)。
-        into.mismatches.push(
-          `${testCase.id}: ${testCase.expr} expects a non-zero imaginary part ` +
-            `(${testCase.expect.im}), which this stage does not compare`,
-        );
-        continue;
-      }
-      let actual: number;
+      // **読み手を期待値で選ぶ。`parseDisplay` を広げない**(設計書
+      // 2026-08-17-complex §3.3)。あれは実数の書式だけを受け付ける関数で、
+      // 狭いことに価値がある——実数しか出ないはずのシャードで電卓が `j2` を
+      // 表示するようになったら、あそこで落ちてほしい。広げるとその番人が消える。
+      //
+      // だから**虚部を持つケースだけ**が複素の読み手を通る。実数のシャードは
+      // 段階 J の前とまったく同じ経路をたどる。
+      const complexExpected = testCase.expect.im !== 0;
+      let actual: ComplexValue;
       try {
-        actual = parseDisplay(result.main);
+        actual = complexExpected
+          ? parseComplexDisplay(result.main)
+          : { re: parseDisplay(result.main), im: 0 };
       } catch (cause) {
         // parseDisplay が投げる条件は「電卓が実数以外を表示するようになった」
         // ——**まさにこの層が捕まえるべき回帰**である。生の例外でスイートが
@@ -540,7 +586,8 @@ for (const { name, shard, values } of partitions) {
         continue;
       }
       const expected = testCase.expect.re;
-      into.magnitudes.push(Math.abs(expected));
+      const expectedValue = { re: expected, im: testCase.expect.im };
+      into.magnitudes.push(magnitude(expected, testCase.expect.im));
       // 上書きがあれば rel だけ差し替える。帯の目盛りには**上書き前**の rel を
       // 渡すので、緩めたケースは緩い帯に落ちる——実際に緩く検査したのだから、
       // 報告書がその件数を数えられなければならない。
@@ -549,15 +596,19 @@ for (const { name, shard, values } of partitions) {
         shard.tolerance,
         overrides,
       );
-      const verdict = classify(
+      const verdict = classifyComplex(
         actual,
-        expected,
+        expectedValue,
         effective,
         shard.tolerance.rel,
       );
       if (overrides.has(testCase.id)) {
         // 上書き**なし**でも通るなら、その上書きは理由が嘘になっている。
-        const withoutOverride = classify(actual, expected, shard.tolerance);
+        const withoutOverride = classifyComplex(
+          actual,
+          expectedValue,
+          shard.tolerance,
+        );
         if (withoutOverride.passed) {
           stale.push(testCase.id);
         }
@@ -566,7 +617,10 @@ for (const { name, shard, values } of partitions) {
         into,
         shard.tolerance,
         testCase.id,
-        `${testCase.expr} → ${result.main}, expected ${expected}`,
+        `${testCase.expr} → ${result.main}, expected ` +
+          (complexExpected
+            ? `${expected}${testCase.expect.im < 0 ? "-" : "+"}j${Math.abs(testCase.expect.im)}`
+            : `${expected}`),
         verdict,
       );
     }
@@ -598,6 +652,8 @@ for (const { name, shard, values } of partitions) {
       looserThanDisplay: into.looserThanDisplay,
       precedenceCases,
       exponentDisplayCases,
+      // 定義域外は生成の時点で捨てているので、期待値がエラーのケースは無い。
+      errorCases: 0,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       shape: summarizeShape(values.map((c) => c.keys)),
@@ -785,6 +841,7 @@ for (const { name, shard, equivalences } of partitions) {
       precedenceCases,
       // 同値ケースは期待値を持たないので、指数表記かどうかを言えない。
       exponentDisplayCases: 0,
+      errorCases: 0,
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、

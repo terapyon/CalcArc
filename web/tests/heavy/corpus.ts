@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
+import { type ComplexValue, magnitude, zeroComponentsAgree } from "./complex";
 
 /** 許容誤差。**値はコーパスの JSON が持つ**(CLAUDE.md の規約)。 */
 export interface Tolerance {
@@ -53,15 +54,64 @@ const CORPUS = join(HERE, "..", "..", "..", "corpus", "generated");
  */
 export const SUPPORTED_MODE = "Deg";
 
-export function assertSupportedMode(name: string, cases: CorpusCase[]): void {
-  const others = cases.filter((c) => c.mode !== SUPPORTED_MODE);
-  if (others.length > 0) {
-    const ids = others.slice(0, 5).map((c) => `${c.id} (${c.mode})`);
+/** 電卓が持つ角度モード。**2 つだけ**——`Grad` は存在しない(`numeric/angle.rs:5`)。 */
+export const ANGLE_MODES = ["Deg", "Rad"] as const;
+
+/** そのキー列が `angle_toggle` を何回押すか。 */
+function angleToggles(keys: string[]): number {
+  return keys.filter((key) => key === "angle_toggle").length;
+}
+
+/**
+ * ケースが宣言したモードと、キー列が実際に作るモードが一致しているか。
+ *
+ * **`mode` を書くだけでは嘘になる。** harness はキー列を流すだけなので、
+ * `angle_toggle` を押さなければ engine は既定の `Deg` で評価する
+ * ——宣言が `Rad` でも黙って `Deg` の答えと比べることになる。
+ *
+ * **番人を「押していれば何でも許す」に緩めない。** 押した**回数の偶奇**まで
+ * 見る——`Deg` は偶数回(押していないか、押して戻した)、`Rad` は奇数回である。
+ * 緩めると「2 回押して `Rad` と名乗るケース」が通り、それは `Deg` で評価される。
+ */
+export function assertSupportedMode(
+  name: string,
+  // **構造で受ける。** 本体は既に `"keys" in testCase` で鍵の有無を見ており、
+  // `CorpusCase` に固定する理由が無い。固定したままだと表示のシャードが
+  // この番人を通れず、**角度モードの検査だけが静かに掛からない**シャードが増える。
+  cases: readonly { id: string; mode: string }[],
+): void {
+  const offenders: string[] = [];
+  for (const testCase of cases) {
+    const mode = testCase.mode;
+    if (!(ANGLE_MODES as readonly string[]).includes(mode)) {
+      offenders.push(
+        `${testCase.id}: mode ${JSON.stringify(mode)} is not one of ${ANGLE_MODES.join(", ")}`,
+      );
+      continue;
+    }
+    const keys =
+      "keys" in testCase && Array.isArray(testCase.keys)
+        ? (testCase.keys as string[])
+        : [
+            ...((testCase as { left?: string[] }).left ?? []),
+            ...((testCase as { right?: string[] }).right ?? []),
+          ];
+    const odd = angleToggles(keys) % 2 === 1;
+    if (mode === "Rad" && !odd) {
+      offenders.push(
+        `${testCase.id}: declares Rad but presses angle_toggle an even number of times, so the engine evaluates it in Deg`,
+      );
+    }
+    if (mode === "Deg" && odd) {
+      offenders.push(
+        `${testCase.id}: declares Deg but presses angle_toggle an odd number of times, so the engine evaluates it in Rad`,
+      );
+    }
+  }
+  if (offenders.length > 0) {
     throw new Error(
-      `${name}: this stage runs every case in ${SUPPORTED_MODE} only, but ` +
-        `${others.length} case(s) declare another mode: ${ids.join(", ")}. ` +
-        "The harness never presses angle_toggle, so those cases would be " +
-        "silently evaluated in the engine's default mode.",
+      `${name}: ${offenders.length} case(s) declare an angle mode the key ` +
+        `sequence does not produce: ${offenders.slice(0, 5).join("; ")}`,
     );
   }
 }
@@ -250,6 +300,81 @@ export function partitionCases(
  */
 export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
 
+/**
+ * 表示のトグルのシャード。**値ではなく表示文字列を比べる。**
+ *
+ * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
+ * (設計書 2026-08-17-display §3.1)。
+ */
+export const DISPLAY_SHARD_PATTERN = /^(display|complex-display)-\d+\.json$/;
+
+/** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
+export interface DisplayCase {
+  kind: "display";
+  id: string;
+  mode: string;
+  keys: string[];
+  expr: string;
+  expect: { main: string };
+}
+
+/**
+ * 表示のシャードの同値ケース。**`expr` を必ず持つ。**
+ *
+ * 既存の `EquivalenceCase` は `expr` を持たない——括弧の有無だけが違う
+ * 2 本のキー列で、式は 1 つしか無いからである。こちらは「この値は 60 進に
+ * できないので `dms` を押しても表示が変わらない」という主張で、
+ * **どの値についての主張かが読めないと不合格の報告が意味をなさない。**
+ */
+export interface DisplayEquivalenceCase extends EquivalenceCase {
+  expr: string;
+}
+
+export interface DisplayShard {
+  schema: number;
+  generated_by: string;
+  cases: (DisplayCase | DisplayEquivalenceCase)[];
+}
+
+/**
+ * 表示のシャードを読む。**`tolerance` を持たない**——文字列の厳密一致なので
+ * 許容誤差の概念が無く、持たせると「緩めれば通る」余地が生まれる。
+ */
+export function loadDisplayShards(): { name: string; shard: DisplayShard }[] {
+  const shards = readdirSync(CORPUS)
+    .filter((name) => DISPLAY_SHARD_PATTERN.test(name))
+    .sort()
+    .map((name) => ({
+      name,
+      shard: JSON.parse(
+        readFileSync(join(CORPUS, name), "utf-8"),
+      ) as DisplayShard,
+    }));
+  for (const { name, shard } of shards) {
+    if (shard.schema !== KNOWN_SCHEMA) {
+      throw new Error(
+        `${name}: schema ${JSON.stringify(shard.schema)} is unknown`,
+      );
+    }
+    if (!Array.isArray(shard.cases) || shard.cases.length === 0) {
+      throw new Error(
+        `${name}: the shard carries no cases. An empty shard runs green ` +
+          "while verifying nothing, so it is refused here.",
+      );
+    }
+    const strangers = shard.cases.filter(
+      (c) => c.kind !== "display" && c.kind !== "equivalence",
+    );
+    if (strangers.length > 0) {
+      throw new Error(
+        `${name}: ${strangers.length} case(s) are neither "display" nor ` +
+          '"equivalence" — they would be dropped without a warning.',
+      );
+    }
+  }
+  return shards;
+}
+
 /** 関数呼び出しのケース 1 件。 */
 export interface CallCase {
   kind: "call";
@@ -306,6 +431,7 @@ export function loadShards(): { name: string; shard: Shard }[] {
   const shards = readdirSync(CORPUS)
     .filter((name) => name.endsWith(".json"))
     .filter((name) => !CALL_SHARD_PATTERN.test(name))
+    .filter((name) => !DISPLAY_SHARD_PATTERN.test(name))
     .sort()
     .map((name) => ({
       name,
@@ -412,9 +538,45 @@ export function classify(
    */
   baseRel: number = tolerance.rel,
 ): Classification {
-  const absoluteError = Math.abs(actual - expected);
-  const scale = Math.abs(expected);
-  const passed = withinTolerance(actual, expected, tolerance);
+  // **実数は虚部 0 の複素数である。** 判定を 2 本持つと片方だけ直る。
+  // `magnitude` が虚部 0 のとき `Math.abs` に落ちるので、この委譲で
+  // 既存 21379 件の判定は 1 件も動かない(`complex-rules.spec.ts` が検査する)。
+  return classifyComplex(
+    { re: actual, im: 0 },
+    { re: expected, im: 0 },
+    tolerance,
+    baseRel,
+  );
+}
+
+/**
+ * 複素数 1 件の比較。**判定は複素平面上の距離で行う**
+ * (設計書 2026-08-17-complex §3.3)。
+ *
+ * 実部と虚部を別々に相対誤差で見ると、片方が 0 のとき(純虚数など)に
+ * 相対誤差が定義できなくなる。距離なら定義できる。
+ *
+ * **ただし距離だけでは足りない。** 小さいほうの成分の誤りは、大きいほうに
+ * 隠れて距離を動かさない。いちばん重い形——あるはずの成分が消える、
+ * 無いはずの成分が生える——は `zeroComponentsAgree` が別に見る。
+ */
+export function classifyComplex(
+  actual: ComplexValue,
+  expected: ComplexValue,
+  tolerance: Tolerance,
+  baseRel: number = tolerance.rel,
+): Classification {
+  const absoluteError = magnitude(
+    actual.re - expected.re,
+    actual.im - expected.im,
+  );
+  const scale = magnitude(expected.re, expected.im);
+  const withinDistance =
+    scale === 0
+      ? // 期待値が厳密に 0。相対誤差は数学的に定義できない。**ここだけが abs の出番。**
+        absoluteError <= tolerance.abs
+      : absoluteError / scale <= tolerance.rel;
+  const passed = withinDistance && zeroComponentsAgree(actual, expected);
   if (scale === 0) {
     return {
       passed,

@@ -70,6 +70,9 @@ for (const { name, shard } of loadCallShards()) {
       looserThanDisplay: 0,
       precedenceCases: 0,
       exponentDisplayCases: 0,
+      // **エラーを期待値として持つケース。** 金融とデータスケールは入力の
+      // 検証が仕事の一部なので、エラーになること自体が仕様である。
+      errorCases: cases.filter((c: CallCase) => "error" in c.expect).length,
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,
