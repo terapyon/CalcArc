@@ -8,6 +8,29 @@
   display: grid;
   grid-template-columns: repeat(var(--keypad-columns), 1fr);
   gap: var(--key-gap);
+  /* **狭い画面では横の隙間のほうが譲る。** キーには min-width: 44px が
+     効いており(Key.module.css)、grid の 1fr は minmax(auto, 1fr) なので
+     **列は 44px より細くならない**。列数 × 44px + gap が画面に入らない幅
+     では、行は縮まずそのまま外へはみ出す——360px の Scientific で実際に
+     8px 出ていた(関数列は 7 列で、390px の実測 45.4px だけを見て決まって
+     いた)。
+     残り幅を gap に配り直し、44px は守る。分母は列数 - 1 なので 1 列の
+     区画には使えないが、この部品の区画はすべて 2 列以上である。
+     Footer が font-size を vw で頭打ちにしているのと同じ考え方で、
+     ブレークポイントを増やさずに連続的に縮ませる。
+     320px では右辺が負になり gap が 0 になるが、それでも 7 × 44px = 308px
+     は 296px に入らない。**320px は対象外**で、繰り越しは
+     docs/definition-of-done.md にある。 */
+  column-gap: min(
+    var(--key-gap),
+    max(
+      0px,
+      calc(
+        (100% - var(--keypad-columns) * var(--touch-target-min)) /
+        (var(--keypad-columns) - 1)
+      )
+    )
+  );
   /* <fieldset> の既定枠線・余白を打ち消す。role=group な <div> だと
      WAI-ARIA の推奨要素チェックに引っかかるため、意味の合う <fieldset>
      を使い、見た目だけリセットする。 */
