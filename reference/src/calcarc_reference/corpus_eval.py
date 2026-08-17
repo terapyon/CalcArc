@@ -26,6 +26,7 @@ from .corpus_expr import (
     Const,
     Node,
     Num,
+    Typed,
     Un,
 )
 
@@ -95,6 +96,11 @@ def evaluate(node: Node) -> mp.mpf:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return mp.pi if node.name == "pi" else mp.e
+    if isinstance(node, Typed):
+        # **文字列のまま読む。** `float(node.text)` を挟むと、生成の時点で
+        # engine と同じ丸めが入り、**両側が同じ誤差を持つ**——桁落ちを測る
+        # シャードでは、測りたいものがそこで消える(設計書 2026-08-17 §3.2)。
+        return mp.mpf(node.text)
     if isinstance(node, Un):
         if node.fn not in KNOWN_UNARY_FNS:
             # 未知の fn を通すと、mpmath がたまたま同名の関数を持っていた

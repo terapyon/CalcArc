@@ -37,6 +37,7 @@ from calcarc_reference.corpus_expr import (
     Const,
     Node,
     Num,
+    Typed,
     Un,
     to_expr_text,
     to_key_sequence,
@@ -470,6 +471,105 @@ COMBINATORICS_MAX_N = 1200
 COMBINATORICS_MAX_FACT = 200
 
 
+# --- 桁落ちを狙うシャード（段階 G §3.4）---
+
+# **このシャードだけ許容が違う。** 表示分解能(5e-10)では実測で 99.8% が
+# 外れ、スイートが永久に赤くなる——永久に赤いスイートは無視されるように
+# なるので、それが最悪の結果である。**判定表は実測の最悪値をそのまま出す**
+# ので、テストが緑でも報告は正直なままになる。
+CANCELLATION_TOLERANCE = {"abs": 5e-10, "rel": 1e-6}
+
+
+def _typed(text: str) -> Typed:
+    """十進の文字列から打鍵の列を作る。**`.` は `dot` キー。**"""
+    return Typed(tuple("dot" if ch == "." else ch for ch in text), text)
+
+
+def _near_subtraction(rng: random.Random) -> Node:
+    """近接する 2 数の減算。**桁落ちの主役。**"""
+    base = rng.randint(10**5, 10**7)
+    frac = rng.randint(1, 999)
+    delta = rng.randint(1, 9)
+    return Bin(
+        "-",
+        _typed(f"{base}.{frac:03d}"),
+        _typed(f"{base}.{max(frac - delta, 0):03d}"),
+    )
+
+
+def _sqrt_difference(rng: random.Random) -> Node:
+    """`sqrt(a) - sqrt(b)` で a と b が近い形。"""
+    base = rng.randint(10**6, 10**9)
+    return Bin("-", Un("sqrt", _typed(str(base + 1))), Un("sqrt", _typed(str(base))))
+
+
+def _log_near_one(rng: random.Random) -> Node:
+    """1 に近いところの対数。引数の丸めがそのまま結果に出る。"""
+    tail = rng.randint(1, 999)
+    return Un("ln", _typed(f"1.000000{tail:03d}"))
+
+
+def _absorption(rng: random.Random) -> Node:
+    """大小の吸収。小さいほうが丸めで消える。"""
+    big = rng.randint(10**6, 10**9)
+    small = rng.randint(1, 999)
+    return Bin("+", _typed(str(big)), _typed(f"0.000{small:03d}"))
+
+
+CANCELLATION_SHAPES = (
+    _near_subtraction,
+    _sqrt_difference,
+    _log_near_one,
+    _absorption,
+)
+
+
+def build_cancellation_shard(seed: int, count: int) -> dict:
+    """**「結果は出るが間違っている」を狙い撃つシャード。**
+
+    エラーは自分で名乗るが、もっともらしく間違った数は名乗らない——
+    独立実装が唯一の武器になるのはそこである(設計書 2026-08-17 §3.4)。
+
+    **乱択では桁落ちはほとんど起きない。** 近い 2 数が偶然選ばれる確率が
+    低いためで、だから狙って作る。
+    """
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(
+                f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
+            )
+        node = CANCELLATION_SHAPES[rng.randrange(len(CANCELLATION_SHAPES))](rng)
+        try:
+            value = evaluate(node)
+        except OutOfShard:
+            continue
+        expr = to_expr_text(node)
+        if expr in seen:
+            continue
+        seen.add(expr)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"canc-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": expr,
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": CANCELLATION_TOLERANCE,
+        "cases": entries,
+    }
+
+
 def build_combinatorics_shard(seed: int, count: int) -> dict:
     """階乗・順列・組合せのシャード。**帯も木の形も他の 2 つと違う。**
 
@@ -581,6 +681,10 @@ def main() -> None:
     write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
     write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
     write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
+    write(
+        "cancellation-000.json",
+        build_cancellation_shard(seed=20260823, count=count),
+    )
     write(
         "combinatorics-000.json",
         build_combinatorics_shard(seed=20260820, count=count),

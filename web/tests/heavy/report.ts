@@ -349,7 +349,12 @@ function percentage(part: number, whole: number): string {
  * 科学計算が全件一致していても、金融が一件も試されていなければ、
  * **その 2 つを混ぜた 1 つの判定は嘘になる。**
  */
-export const AREAS = ["scientific", "data_scale", "finance"] as const;
+export const AREAS = [
+  "scientific",
+  "cancellation",
+  "data_scale",
+  "finance",
+] as const;
 export type Area = (typeof AREAS)[number];
 
 /**
@@ -366,8 +371,14 @@ export function areaOfShard(shardName: string): Area {
   if (/^(data-scale|datascale|bytes)-/.test(stem)) {
     return "data_scale";
   }
+  if (/^cancellation-/.test(stem)) {
+    // **`scientific` に混ぜない。** このシャードは桁落ちを**狙って**作った
+    // 入力で、普通の式ではない。混ぜると「わざと難しくした入力の結果」が
+    // 「普通の入力の判定」を下げてしまい、どちらの数字も読めなくなる。
+    return "cancellation";
+  }
   if (
-    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics|cancellation)-/.test(
+    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics)-/.test(
       stem,
     )
   ) {

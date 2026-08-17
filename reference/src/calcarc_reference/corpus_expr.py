@@ -90,7 +90,27 @@ class Const:
     name: str
 
 
-Node = Num | Const | Bin | Un
+@dataclass(frozen=True)
+class Typed:
+    """**打った通りのキーと、その厳密な十進の文字列**(設計書 2026-08-17 §3.1)。
+
+    `Num` との違いは、`Num` が「整数の値」を持ちキー列をそこから作るのに対し、
+    こちらは**打鍵の列そのもの**を持つことである。小数点・`000`・指数入力は
+    どれも「同じ値への別の打ち方」なので、値から復元できない。
+
+    **`Num` は 1 文字も触らない。** あれは既存 16000 件の乱数と直列化の土台で、
+    振る舞いを変えれば全シャードが総入れ替えになる(要件 R3b)。
+
+    `text` は `"1.5"` や `"1.5e3"` のような十進の文字列である。
+    **参照側はこれを文字列のまま読む**——`float()` を挟むと生成の時点で
+    engine と同じ丸めが入り、両側が同じ誤差を持つ(要件 R2)。
+    """
+
+    keys: tuple[str, ...]
+    text: str
+
+
+Node = Num | Const | Typed | Bin | Un
 
 
 def walk(node: Node) -> Iterator[Node]:
@@ -116,6 +136,10 @@ def to_keys(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
+    if isinstance(node, Typed):
+        # **打鍵の列をそのまま返す。** 値から復元しない——`5 zeros3` と
+        # `5 0 0 0` は同じ値の別の打ち方で、どちらを打ったかは値に残らない。
+        return list(node.keys)
     if isinstance(node, Un):
         return [*to_keys(node.arg), UNARY_KEYS[node.fn]]
     return [
@@ -155,6 +179,8 @@ def to_keys_minimal(node: Node) -> list[str]:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return [CONST_KEYS[node.name]]
+    if isinstance(node, Typed):
+        return list(node.keys)
     if isinstance(node, Un):
         return [*_unary_operand_keys(node.arg), UNARY_KEYS[node.fn]]
     if node.op not in BINARY_PRECEDENCE:
@@ -210,6 +236,8 @@ def to_expr_text(node: Node) -> str:
         if node.name not in CONST_KEYS:
             raise ValueError(f"unknown constant: {node.name!r}")
         return node.name
+    if isinstance(node, Typed):
+        return node.text
     if isinstance(node, Un):
         inner = to_expr_text(node.arg)
         if node.fn == "sqr":
