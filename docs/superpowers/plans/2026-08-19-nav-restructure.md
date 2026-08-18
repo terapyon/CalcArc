@@ -237,7 +237,7 @@ EOF
 
 **Interfaces:**
 - Consumes: `ModuleId` from `web/src/route.ts`（Task 1）
-- Produces: `Nav({ current }: { current: ModuleId })`。**`Nav.tsx` は `ModuleId` を export しなくなる**
+- Produces: `Nav({ current }: { current: ModuleId })`。**`Nav.tsx` は `ModuleId` を一時的に再 export する**（Task 3 で消す。理由は Step 3）
 
 - [ ] **Step 1: Write the failing test**
 
@@ -329,6 +329,12 @@ Expected: FAIL — `Unable to find an accessible element with the role "link" an
 import type { ModuleId } from "../../route";
 import styles from "./Nav.module.css";
 
+// **一時的な再 export。Task 3 で消す。**
+// これが無いと、まだ Nav から ModuleId を取っている App.tsx が Task 2 の
+// コミット時点で型検査に落ちる。**全コミットを緑に保つ**ためだけの 1 行で、
+// 恒久的な依存ではない(ハッシュの語彙はルーティングの持ち物である)。
+export type { ModuleId };
+
 // タブの表示ラベルはモジュールの固有名詞なので英語のまま
 // (アクセシブルネームは <nav> 側の aria-label で日本語にする)。
 //
@@ -362,10 +368,11 @@ export function Nav({ current }: { current: ModuleId }) {
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd web && pnpm vitest run src/ui/Nav/Nav.test.tsx
+cd web && pnpm vitest run src/ui/Nav/Nav.test.tsx && pnpm typecheck && pnpm lint
 ```
 
-Expected: 5 tests PASS。**`App.tsx` はまだ `ModuleId` を `Nav` から import しているので `pnpm typecheck` は落ちる。** Task 3 で直す（この時点では正常）。
+Expected: 5 tests PASS、**typecheck も緑**。一時的な再 export が `App.tsx` の
+既存 import を生かしているためである。**このコミットも緑のまま**で、bisect が効く。
 
 - [ ] **Step 5: Commit**
 
@@ -587,6 +594,8 @@ export function App() {
   );
 }
 ```
+
+**`Nav.tsx` の一時的な再 export（`export type { ModuleId };` とその上のコメント 4 行）を削除する。** App が `route.ts` から直接取るようになったので、役目が終わる。**消し忘れると「Nav がハッシュの語彙を持っている」という嘘が残る。**
 
 **`App.tsx` 冒頭にあった `moduleFromHash` の長いコメント（`#loan` の互換を足さなかった経緯）は削除する。** 同じ判断の記録は `route.ts` と `docs/base-spec.md` §8（Task 6）が持つ。
 
@@ -812,9 +821,24 @@ cd web && pnpm e2e
 
 Expected: 全件 PASS。**落ちたら直す前に「何が落ちたか」を読む**——`viewport-budget` の `#convert` が落ちるなら、それは spec §8 が予告した「通らなければそれ自体が発見」である。**その場合は勝手に閾値を緩めず、実測値を記録して報告する。**
 
-- [ ] **Step 6: 赤確認**
+- [ ] **Step 6: 赤確認（2 件）**
 
-一時コミットを置いてから `ConvertPanel.module.css` の `color: var(--display-fg)` を `color: var(--display-bg)` にする（白地に白）→ `the placeholder text is actually readable` が赤になることを確認する。**赤にならなければ、その検査は 0.2.0 のトーストを捕まえられない。** 実出力を記録し、再編集で戻して `git reset --soft HEAD~1`。
+一時コミット（`git add -A && git commit -m "wip: 赤確認"`）を置いてから、2 つ当てる。
+
+**(a) 見え方**——`ConvertPanel.module.css` の `color: var(--display-fg)` を
+`color: var(--display-bg)` にする（白地に白）→ `the placeholder text is actually
+readable` が赤。**赤にならなければ、その検査は 0.2.0 のトーストを捕まえられない。**
+
+**(b) ルーティングの退行を E2E 段が捕まえるか**——`route.ts` の
+`DEFAULT_CATEGORY.scale` を `null` にする（Task 1 と同じ変異）→ **`data-scale.spec.ts`
+が赤になる**ことを確認する。
+
+**(b) が要る理由**: spec §8 の赤確認 1 は「`routeFromHash` の `scale` の分岐を落とす
+→ **E2E が赤**」と、**E2E 段の判別力**を主張している。Task 1 の赤確認は vitest 段の
+話なので、**それだけでは spec の主張を実測していない**。`data-scale.spec.ts` は
+hash を移行した側の安全網であり、**その安全網が本当に張れているか**がここの対象である。
+
+**両方とも実出力を記録してから**、変異箇所を再編集で戻し `git reset --soft HEAD~1`。
 
 - [ ] **Step 7: Commit**
 
@@ -861,7 +885,11 @@ Task 4 の `nav.spec.ts` の 360px 3 件が緑なら**何も変えない**。落
 cd web && pnpm exec vite build && pnpm preview &
 ```
 
-`web/` に一時スクリプトを置き、**390×844 と 360×640 の 2 枚**を撮る（`chromium.launch()` → `setViewportSize` → `#scientific` と `#convert` → `screenshot`）。`Read` で開き、**4 タブがはみ出していないか**と**準備中が読めるか**を目で見る。
+`web/` に一時スクリプトを置き、**4 枚**撮る——**2 つの幅（390×844 / 360×640）× 2 つの画面（`#scientific` / `#convert`）**（`chromium.launch()` → `setViewportSize` → `goto` → `screenshot`）。
+
+（spec §8 は「2 枚」と書いているが、**それは幅の数であって枚数ではない**。準備中の見えを両方の幅で見るなら 4 枚になる。**spec §8 の「2 枚」を「2 つの幅 × 2 画面 = 4 枚」に訂正印つきで直す**——Step 4 で spec を触るので、そこで一緒に。）
+
+`Read` で開き、**4 タブがはみ出していないか**（`#scientific` の両幅）と**準備中が読めるか**（`#convert` の両幅）を目で見る。
 
 **撮り終えたら preview を落とす:**
 
@@ -874,6 +902,8 @@ fuser -k 4179/tcp && ss -ltn | grep 4179
 - [ ] **Step 4: spec に実測値を追記**
 
 `2026-08-19-nav-restructure-design.md` §4 の「どれを採ったかは、実測値と一緒に実装時に spec へ追記する」に応える。**採らなかった段（例: font-size は下げずに済んだ）も書く。**
+
+**あわせて §8 の「撮る: 390×844 と 360×640 の 2 枚」を「2 つの幅 × 2 画面 = 4 枚」に直す**（Step 3 の訂正）。
 
 - [ ] **Step 5: Commit**
 
@@ -971,4 +1001,4 @@ EOF
 - **`git diff origin/main --stat -- crates/` が空であること**
 - **360px で採った手**（gap を詰めたか、font-size まで下げたか、何もしなくて済んだか）と実測値
 - **スクリーンショット 2 枚を見た結果**
-- **赤確認 3 件の実出力**（Task 1 / Task 3 / Task 4）。**赤にならなかったものがあれば正直に報告する**
+- **赤確認 4 件の実出力**（Task 1 の 2 段 / Task 3 / Task 4 の (a) と (b)）。**赤にならなかったものがあれば正直に報告する**
