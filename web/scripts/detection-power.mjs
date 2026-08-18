@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const WEB = dirname(dirname(fileURLToPath(import.meta.url)));
 const ROOT = dirname(WEB);
 const OUT = join(WEB, "detection-power.json");
+const RUN_JSON = join(WEB, "heavy-run.json");
 
 /**
  * 壊し方の一覧。
@@ -123,24 +124,76 @@ function run(command, args, options = {}) {
   });
 }
 
-/** `pnpm heavy` を回して、シャードごとの不一致件数を読む。 */
-function measure() {
-  let output = "";
+/**
+ * 読み取り段だけを切り出した純関数。
+ *
+ * `measure()` から分けたのは、ここだけを単体テストするため。**プロセスを
+ * 起動しないのでテストできる。** `run === null` は「heavy-run.json が無い」、
+ * つまり `globalTeardown` まで走らなかった(ビルドで倒れた／
+ * playwright 自体が起動しなかった)ことの印である。
+ */
+export function readMeasurement({ buildOk, playwrightExitCode, run }) {
+  if (run === null) {
+    return {
+      buildOk,
+      playwrightExitCode,
+      runJsonFound: false,
+      ranTests: false,
+      expected: [],
+      shardsSeen: [],
+      mismatchesByShard: {},
+      totalsByShard: {},
+    };
+  }
+  const mismatchesByShard = {};
+  const totalsByShard = {};
+  for (const shard of run.shards) {
+    mismatchesByShard[shard.name] = shard.mismatches;
+    totalsByShard[shard.name] = shard.total;
+  }
+  return {
+    buildOk,
+    playwrightExitCode,
+    runJsonFound: true,
+    ranTests: run.ranTests,
+    expected: run.expected,
+    shardsSeen: run.shards.map((shard) => shard.name),
+    mismatchesByShard,
+    totalsByShard,
+  };
+}
+
+/**
+ * **走行を 3 段に分ける。**
+ *
+ * `pnpm heavy` は `pnpm wasm && playwright test` の合成なので、合成のまま
+ * 呼ぶと**ビルド失敗とテスト失敗が同じ非ゼロ終了**になる。分けて呼べば、
+ * どちらで倒れたかが別々の事実として残る。
+ */
+export function measure() {
+  let buildOk = true;
   try {
-    output = run("pnpm", ["heavy"]);
-  } catch (error) {
-    // 赤くなるのが目的なので、失敗は想定内。出力だけ取る。
-    output = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+    run("pnpm", ["wasm"]);
+  } catch {
+    buildOk = false;
   }
-  const caught = {};
-  // 「every case in <shard> matches the reference」のテストが落ちたとき、
-  // メッセージに「N of M cases disagree」が出る。
-  const pattern =
-    /every (?:case|call|display) in ([\w.-]+) matches the reference[\s\S]{0,400}?(\d+) of (\d+) (?:cases|calls|displays) disagree/g;
-  for (const match of output.matchAll(pattern)) {
-    caught[match[1]] = Number(match[2]);
+  let playwrightExitCode = null;
+  if (buildOk) {
+    try {
+      run("pnpm", ["exec", "playwright", "test", "--config", "playwright.heavy.config.ts"]);
+      playwrightExitCode = 0;
+    } catch (error) {
+      // **赤くなるのが目的なので、失敗は想定内。** 終了コードだけ取る。
+      playwrightExitCode = typeof error.status === "number" ? error.status : 1;
+    }
   }
-  return caught;
+  let parsed = null;
+  try {
+    parsed = JSON.parse(readFileSync(RUN_JSON, "utf-8"));
+  } catch {
+    parsed = null;
+  }
+  return readMeasurement({ buildOk, playwrightExitCode, run: parsed });
 }
 
 export function verdictFor(expectation, caught) {
@@ -227,9 +280,9 @@ function main() {
     }
     process.stderr.write(`[${mutation.id}] ${mutation.what} ... `);
     writeFileSync(path, original.replace(mutation.from, mutation.to));
-    let caught;
+    let measurement;
     try {
-      caught = measure();
+      measurement = measure();
     } finally {
       // **必ず戻す。** 戻したことをバイトで確かめる。
       writeFileSync(path, original);
@@ -237,6 +290,16 @@ function main() {
         throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
       }
     }
+    // **`verdictFor` はまだ `Measurement` を知らない(Task 5 で直す)。**
+    // 旧 `measure()` は「実際に不一致が出たシャード」だけを返していたので、
+    // ここでも 0 件のシャードを削って同じ形に合わせる。`buildOk` が false や
+    // `runJsonFound` が false のとき(ビルドが壊れた・playwright が
+    // 起動しなかった)は空の `{}` になり、`verdictFor` にはそれが
+    // 「何も引っかからなかった」としか見えない——ビルド失敗を誤って
+    // 「反応なし」と判定しうるが、`verdictFor` を直すのは Task 5 の仕事。
+    const caught = Object.fromEntries(
+      Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
+    );
     const verdict = verdictFor(mutation.expect, caught);
     if (!verdict.ok) {
       failed += 1;
