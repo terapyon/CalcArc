@@ -150,8 +150,57 @@ const REPORT_PATH = fileURLToPath(
   new URL("../../heavy-report.md", import.meta.url),
 );
 
+const RUN_PATH = fileURLToPath(
+  new URL("../../heavy-run.json", import.meta.url),
+);
+
+/** 走行 1 回ぶんの機械可読な要約。**欠陥注入の測定はこれだけを読む。** */
+export interface HeavyRunShard {
+  name: string;
+  total: number;
+  /** 不一致の**件数**。全文は `.heavy-summaries/` にある。 */
+  mismatches: number;
+}
+
+export interface HeavyRun {
+  schema: 1;
+  /** 集計が 1 枚でも書かれたか。false は「テストが 1 本も走っていない」。 */
+  ranTests: boolean;
+  /** この走行に居るはずだったシャード(`expectedSummaryNames()`)。 */
+  expected: string[];
+  /** 実際に走ったシャード。**不一致 0 のものも載る。** */
+  shards: HeavyRunShard[];
+}
+
+/**
+ * **純関数。** ディスクを触らないので、走行の外からテストできる。
+ *
+ * `writeReport()` と違って**何があっても投げない**——投げてしまうと
+ * 「走行が失敗した」という事実そのものが残らず、測定側は理由を知る手段を失う。
+ */
+export function buildRun(
+  recorded: RecordedShard[],
+  expected: string[],
+): HeavyRun {
+  return {
+    schema: 1,
+    ranTests: recorded.length > 0,
+    expected,
+    shards: recorded.map((entry) => ({
+      name: entry.summary.name,
+      total: entry.summary.total,
+      mismatches: entry.summary.mismatches.length,
+    })),
+  };
+}
+
+export function writeRunJson(): void {
+  const run = buildRun(readRecorded(), expectedSummaryNames());
+  writeFileSync(RUN_PATH, `${JSON.stringify(run, null, 2)}\n`, "utf-8");
+}
+
 /** ディスクに落とす 1 枚分。素性もここに入れる(これもワーカーごとの状態だった)。 */
-interface RecordedShard {
+export interface RecordedShard {
   summary: ShardSummary;
   runtime: { coreVersion: string; browser: string };
 }
@@ -236,6 +285,9 @@ export function resetRun(): void {
   rmSync(SUMMARY_DIR, { recursive: true, force: true });
   mkdirSync(SUMMARY_DIR, { recursive: true });
   rmSync(REPORT_PATH, { force: true });
+  // **前回の走行の要約も消す。** 残っていると、今回ビルドで落ちた走行が
+  // 前回の数字を見せる——`heavy-report.md` を消すのとまったく同じ理由である。
+  rmSync(RUN_PATH, { force: true });
 }
 
 export function record(summary: ShardSummary): void {

@@ -1,4 +1,4 @@
-import { writeReport } from "./report";
+import { writeReport, writeRunJson } from "./report";
 
 /**
  * **報告書は走行の最後に 1 度だけ書く。**
@@ -15,5 +15,9 @@ import { writeReport } from "./report";
  * ワーカーが書いた分も残っている。
  */
 export default function globalTeardown(): void {
+  // **要約を先に書く。** `writeReport()` は集計が 1 枚も無いと投げるので、
+  // 後回しにすると**走行が失敗した走行ほど要約が残らない**——測定側が
+  // 一番知りたい場合に、一番何も分からなくなる。
+  writeRunJson();
   writeReport();
 }

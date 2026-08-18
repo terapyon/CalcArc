@@ -10,10 +10,12 @@ import {
 } from "./corpus";
 import {
   areaOfShard,
+  buildRun,
   expectedSummaryNames,
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
   type Provenance,
+  type RecordedShard,
   renderDetectionPower,
   renderReport,
   type ShardSummary,
@@ -1289,4 +1291,45 @@ test("the verdict table names every area, including the untested ones", () => {
   expect(markdown).toContain("data_scale");
   expect(markdown).toContain("finance");
   expect(markdown).toContain("検証していない");
+});
+
+function recorded(
+  name: string,
+  total: number,
+  mismatches: number,
+): RecordedShard {
+  return {
+    summary: summary({
+      name,
+      total,
+      mismatches: Array.from({ length: mismatches }, (_, i) => `${name}#${i}`),
+    }),
+    runtime: { coreVersion: "0.2.1", browser: "chromium" },
+  };
+}
+
+test("the run summary carries every shard that ran, including the quiet ones", () => {
+  // **不一致 0 のシャードも載る。** ここが載らないと「0 件」と「走らなかった」が
+  // 区別できず、欠陥注入の判定が「ビルド失敗」を「検出なし」と呼ぶ。
+  const run = buildRun(
+    [
+      recorded("a-000.json (values)", 2000, 0),
+      recorded("b-000.json (values)", 2000, 7),
+    ],
+    ["a-000.json (values)", "b-000.json (values)"],
+  );
+  expect(run.ranTests).toBe(true);
+  expect(run.shards).toEqual([
+    { name: "a-000.json (values)", total: 2000, mismatches: 0 },
+    { name: "b-000.json (values)", total: 2000, mismatches: 7 },
+  ]);
+  expect(run.expected).toEqual(["a-000.json (values)", "b-000.json (values)"]);
+});
+
+test("a run where nothing was recorded says so instead of looking empty and calm", () => {
+  const run = buildRun([], ["a-000.json (values)"]);
+  expect(run.ranTests).toBe(false);
+  expect(run.shards).toEqual([]);
+  // **期待は残る。** 何が居るはずだったかを、走らなかった走行こそが持っている。
+  expect(run.expected).toEqual(["a-000.json (values)"]);
 });
