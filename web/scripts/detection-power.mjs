@@ -15,7 +15,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const WEB = dirname(dirname(fileURLToPath(import.meta.url)));
 const ROOT = dirname(WEB);
@@ -28,7 +28,7 @@ const OUT = join(WEB, "detection-power.json");
  * **どこも赤くならないはず**という主張で、それはレポートの
  * 「この領域は踏んでいない」と同じことを言っている。
  */
-const MUTATIONS = [
+export const MUTATIONS = [
   {
     id: "display-digits",
     what: "表示の有効桁数を 10 から 9 に減らす",
@@ -143,7 +143,7 @@ function measure() {
   return caught;
 }
 
-function verdictFor(expectation, caught) {
+export function verdictFor(expectation, caught) {
   const shards = Object.keys(caught);
   const total = Object.values(caught).reduce((a, b) => a + b, 0);
   if (expectation === "nothing") {
@@ -207,70 +207,78 @@ function verdictFor(expectation, caught) {
   return { ok: shards.length >= 3, why: `${shards.length} シャードが反応した` };
 }
 
-const results = [];
-let failed = 0;
+function main() {
+  const results = [];
+  let failed = 0;
 
-for (const mutation of MUTATIONS) {
-  const path = join(ROOT, mutation.file);
-  const original = readFileSync(path, "utf-8");
-  if (!original.includes(mutation.from)) {
-    // **黙って飛ばさない。** 変異が当たらなくなったのに緑で終わると、
-    // 「検出力を測った」という記録だけが残って中身が空になる。
-    console.error(
-      `detection-power: ${mutation.id} の変異元が ${mutation.file} に無い。` +
-        "engine が変わったので、変異を書き直すこと。",
-    );
-    failed += 1;
-    results.push({ ...mutation, error: "mutation site not found" });
-    continue;
-  }
-  process.stderr.write(`[${mutation.id}] ${mutation.what} ... `);
-  writeFileSync(path, original.replace(mutation.from, mutation.to));
-  let caught;
-  try {
-    caught = measure();
-  } finally {
-    // **必ず戻す。** 戻したことをバイトで確かめる。
-    writeFileSync(path, original);
-    if (readFileSync(path, "utf-8") !== original) {
-      throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
+  for (const mutation of MUTATIONS) {
+    const path = join(ROOT, mutation.file);
+    const original = readFileSync(path, "utf-8");
+    if (!original.includes(mutation.from)) {
+      // **黙って飛ばさない。** 変異が当たらなくなったのに緑で終わると、
+      // 「検出力を測った」という記録だけが残って中身が空になる。
+      console.error(
+        `detection-power: ${mutation.id} の変異元が ${mutation.file} に無い。` +
+          "engine が変わったので、変異を書き直すこと。",
+      );
+      failed += 1;
+      results.push({ ...mutation, error: "mutation site not found" });
+      continue;
     }
+    process.stderr.write(`[${mutation.id}] ${mutation.what} ... `);
+    writeFileSync(path, original.replace(mutation.from, mutation.to));
+    let caught;
+    try {
+      caught = measure();
+    } finally {
+      // **必ず戻す。** 戻したことをバイトで確かめる。
+      writeFileSync(path, original);
+      if (readFileSync(path, "utf-8") !== original) {
+        throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
+      }
+    }
+    const verdict = verdictFor(mutation.expect, caught);
+    if (!verdict.ok) {
+      failed += 1;
+    }
+    process.stderr.write(`${verdict.ok ? "ok" : "NG"} — ${verdict.why}\n`);
+    results.push({
+      id: mutation.id,
+      what: mutation.what,
+      expect: mutation.expect,
+      caught,
+      total: Object.values(caught).reduce((a, b) => a + b, 0),
+      ok: verdict.ok,
+      why: verdict.why,
+    });
   }
-  const verdict = verdictFor(mutation.expect, caught);
-  if (!verdict.ok) {
-    failed += 1;
+
+  // **最後に wasm を作り直す。**
+  //
+  // 原文は毎回戻しているが、**戻したあとに一度もビルドしていない**ので
+  // `web/src/wasm/` には最後の変異が入ったままになる。`pnpm heavy` と
+  // `pnpm heavy:ui` は先頭で `pnpm wasm` を回すので気づかないが、
+  // ビルドを挟まずに playwright を直に叩くと**変異した engine を本物として
+  // 測ることになる**——実際にそれを踏んだ(2026-08-17)。極形式の角度が
+  // すべて `90 − 期待値` になり、engine の欠陥かと思って調べた。
+  //
+  // 走行の後始末として作り直しておけば、次に何を回しても原文の engine になる。
+  if (MUTATIONS.length > 0) {
+    process.stderr.write("原文の wasm を作り直しています ... ");
+    run("pnpm", ["wasm"]);
+    process.stderr.write("done\n");
   }
-  process.stderr.write(`${verdict.ok ? "ok" : "NG"} — ${verdict.why}\n`);
-  results.push({
-    id: mutation.id,
-    what: mutation.what,
-    expect: mutation.expect,
-    caught,
-    total: Object.values(caught).reduce((a, b) => a + b, 0),
-    ok: verdict.ok,
-    why: verdict.why,
-  });
+
+  writeFileSync(OUT, `${JSON.stringify({ results }, null, 2)}\n`);
+  console.error(`detection-power: wrote ${OUT}`);
+  if (failed > 0) {
+    console.error(`detection-power: ${failed} の変異が期待どおりでなかった`);
+    process.exit(1);
+  }
 }
 
-// **最後に wasm を作り直す。**
-//
-// 原文は毎回戻しているが、**戻したあとに一度もビルドしていない**ので
-// `web/src/wasm/` には最後の変異が入ったままになる。`pnpm heavy` と
-// `pnpm heavy:ui` は先頭で `pnpm wasm` を回すので気づかないが、
-// ビルドを挟まずに playwright を直に叩くと**変異した engine を本物として
-// 測ることになる**——実際にそれを踏んだ(2026-08-17)。極形式の角度が
-// すべて `90 − 期待値` になり、engine の欠陥かと思って調べた。
-//
-// 走行の後始末として作り直しておけば、次に何を回しても原文の engine になる。
-if (MUTATIONS.length > 0) {
-  process.stderr.write("原文の wasm を作り直しています ... ");
-  run("pnpm", ["wasm"]);
-  process.stderr.write("done\n");
-}
-
-writeFileSync(OUT, `${JSON.stringify({ results }, null, 2)}\n`);
-console.error(`detection-power: wrote ${OUT}`);
-if (failed > 0) {
-  console.error(`detection-power: ${failed} の変異が期待どおりでなかった`);
-  process.exit(1);
+// **import されたときは走らない。** テストがこのファイルを読むだけで
+// 変異が始まっては困る。
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main();
 }

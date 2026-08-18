@@ -75,6 +75,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     // E2E は Playwright が回すので vitest からは外す。
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // `tests/unit` は Playwright の testDir(`tests/heavy`) の外にある——
+    // **中に置くと `**\/*.test.*` の既定に当たって両方が拾う。**
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "tests/unit/**/*.test.ts",
+    ],
   },
 });

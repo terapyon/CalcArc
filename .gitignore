@@ -16,4 +16,5 @@ playwright-report/
 
 # 検出力の測定結果。pnpm heavy:power が毎回書き直す。
 web/detection-power.json
+# 走行の要約。pnpm heavy のたびに globalTeardown が上書きする。
 web/heavy-run.json
