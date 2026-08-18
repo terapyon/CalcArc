@@ -211,7 +211,9 @@ Expected: 9 tests PASS、lint も緑
 git add -A && git commit -m "wip: 赤確認"
 ```
 
-`route.ts` の `CATEGORIES.scale` を `[]` にする → `#scale/data-scale` が既定カテゴリに落ちるだけなので**このテストは緑のまま**。次に `DEFAULT_CATEGORY.scale` を `null` にする → 3 件が赤になることを確認する。
+`route.ts` の `CATEGORIES.scale` を `[]` にする → `#scale/data-scale` が既定カテゴリに落ちるだけなので**このテストは緑のまま**。次に `DEFAULT_CATEGORY.scale` を `null` にする → **2 件**（`#scale` と `#scale/nope`）が赤になることを確認する。
+
+**`#scale/data-scale` は緑のままであることに注意**——カテゴリが `CATEGORIES` に明示一致するので `DEFAULT_CATEGORY` を参照しない。**2 つの表が別々の入口を守っている**ことが、この 2 段でちょうど見える。
 
 **両方の実出力を記録してから**、変異箇所を再編集で戻し、`git reset --soft HEAD~1` で一時コミットを解く。
 
