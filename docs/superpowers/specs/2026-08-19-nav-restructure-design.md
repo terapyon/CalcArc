@@ -80,6 +80,10 @@ U-0 でやるのは**器だけ**である。Convert の中身は U-1、Scale の
 現れる `data-scale` は**シャードの領域名**であって URL ではない
 （`corpus.ts:301` の `CALL_SHARD_PATTERN`）。**ナビを変えてもコーパスは無傷である。**
 
+**設定の永続化はタブを保存していない。** `web/src/settings/types.ts:62` が
+「式・途中の数字・答・`active`・`sexagesimal_view`・`error`・履歴は保存しない」と
+明記しており、route も保存対象に無い。**hash を 2 段にしても保存データには触らない。**
+
 **縦の予算は 390×844 しか測っていない**（`viewport-budget.spec.ts`）。360×640 では
 3 タブとも 1 画面に収まっていないことが 0.2.1 の調査で分かっているが
 （`docs/definition-of-done.md`）、**U-0 の管轄ではない**（§9）。
@@ -110,6 +114,11 @@ export type ModuleId = "scientific" | "convert" | "scale" | "finance";
 export type Route = { module: ModuleId; category: string | null };
 ```
 
+**タブの `href` は既定カテゴリまで書く**——Scale タブは `#scale` ではなく
+**`#scale/data-scale`** を指す。どちらでも転落規則で同じ画面が出るが、`#scale` に
+すると**同じ画面に 2 つの URL** ができ、E2E の `toHaveURL` 期待と `Nav.test.tsx` の
+href 表がその曖昧さを引き継ぐ。押した後の URL と深いリンクの URL を一致させる。
+
 `routeFromHash` は 2 段に分けて読む。**カテゴリが無い・知らないときは、その系統の
 既定カテゴリに倒す**（`scale` の既定は `data-scale`。U-0 ではそれしか無い）。この
 規則があるので、U-1 が `#convert/length` を足すときに `routeFromHash` の形は変わらない。
@@ -127,7 +136,7 @@ export type Route = { module: ModuleId; category: string | null };
 | 幅 | 3 タブ | 4 タブ |
 |---|---|---|
 | 360px | (360 − 24 − 16) ÷ 3 ≈ **107px** | (360 − 24 − 24) ÷ 4 = **78px** |
-| 480px 以上（`--shell-max-width`） | ≈ 144px | 108px |
+| 480px 以上（`--shell-max-width`） | ≈ 147px | 108px |
 
 **360px で 1 枚 78px に `Scientific` が入るとは考えにくい**（`padding: 8px` × 2 を
 引くと文字に使えるのは 62px）。入らなければ `white-space: nowrap` によって
@@ -206,7 +215,8 @@ CHANGELOG に書くのは**利用者から見えた変更**である（そのフ
 |---|---|
 | `Nav.test.tsx` | リンク 3 → 4、`href` の表、`aria-current` の対象 |
 | `App.test.tsx` | `routeFromHash` の表（2 段・既定への転落・旧 hash が Scientific に落ちること） |
-| `data-scale.spec.ts` / `data-scale-keypad.spec.ts` / `footer.spec.ts` / `viewport-budget.spec.ts` | hash を `#scale/data-scale` へ |
+| `data-scale.spec.ts` / `data-scale-keypad.spec.ts` | hash を `#scale/data-scale` へ |
+| `footer.spec.ts` / `viewport-budget.spec.ts` | hash の置換に加え、**ループに `#convert` を足す**——フッタ表示と縦の予算を新しいパネルにも回す。準備中パネルは短いので通るはずで、**通らなければそれ自体が発見である** |
 | `nav.spec.ts` | 4 タブ、押下で系統が変わること |
 
 **足すもの:** Convert の準備中を見る E2E 1 本（遷移・アクセシブルネーム・
@@ -230,6 +240,9 @@ computed style の色差）。
 - **縦が短い端末で 1 画面に収まらない問題。** 0.2.1 が見つけて未解決のまま
   （`definition-of-done.md`）。U-0 は**悪化させないことだけ**守る——Nav は横に
   分割するだけで高さが変わらないので、悪化しない
+- **パネル内のカテゴリ選択 UI。** §1-1 は「カテゴリはパネルの中で選ぶ」と決めたが、
+  U-0 時点の Scale はカテゴリが 1 つしか無いので選択 UI は要らない。**器の形の裁定で
+  あって、U-0 の作業ではない**——各系統の中身の spec が持つ
 - **§36 Favorite / Recent、§42 のトップページのカード**
 
 ## §10 ユーザーに確認したいこと
