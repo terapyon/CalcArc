@@ -20,7 +20,7 @@ E2E 6 本と vitest 2 本、`docs/base-spec.md` §8、版数 5 箇所。
 
 ## §0 位置づけ
 
-`docs/unit-data-sscal-spec.md`（43 節）が起点である。全体を 5 つに分解した:
+`docs/unit-convert-scale-spec.md`（43 節）が起点である。全体を 5 つに分解した:
 
 | | 中身 | 外部依存 |
 |---|---|---|
@@ -245,11 +245,10 @@ computed style の色差）。
   あって、U-0 の作業ではない**——各系統の中身の spec が持つ
 - **§36 Favorite / Recent、§42 のトップページのカード**
 
-## §10 ユーザーに確認したいこと
+## §10 起点の設計書
 
-**起点の設計書 `docs/unit-data-sscal-spec.md` が未追跡である。** この spec が
-参照している以上、追跡下に置きたい。2 点:
+**`docs/unit-convert-scale-spec.md` を追跡下に置いた**（ユーザー裁定、2026-08-19）。
+この spec が参照している以上、リポジトリの外に置いたままにはできない。
 
-1. コミットしてよいか（この U-0 ブランチに同乗させる）
-2. ファイル名の `sscal` は `scale` の打ち間違いに見える。改名してよいか
-   （`docs/unit-convert-scale-spec.md` を提案）
+**ファイル名だけ直した**——元は `unit-data-sscal-spec.md` で、`sscal` は `scale` の
+打ち間違いである。**中身は 1 文字も触っていない**（43 節、1,570 行のまま）。
