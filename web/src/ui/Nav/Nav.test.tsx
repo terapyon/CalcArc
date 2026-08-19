@@ -4,9 +4,6 @@ import { Nav } from "./Nav";
 
 describe("Nav", () => {
   it("names the nav landmark in Japanese, matching the rest of the UI", () => {
-    // Display/Keypad/DataScalePanel のアクセシブルネームはすべて日本語
-    // (「角度の単位」「電卓キーパッド」「データスケール計算」等)。ここだけ
-    // 英語だと読み上げの言語が揃わない(Task 4 のレビューで固定された流儀)。
     render(<Nav current="scientific" />);
     expect(
       screen.getByRole("navigation", { name: "計算機の切り替え" }),
@@ -19,15 +16,21 @@ describe("Nav", () => {
       "href",
       "#scientific",
     );
-    expect(screen.getByRole("link", { name: "Data Scale" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Convert" })).toHaveAttribute(
       "href",
-      "#data-scale",
+      "#convert",
+    );
+    // **既定カテゴリまで書く**(設計書 §3)。`#scale` にすると同じ画面に
+    // 2 つの URL ができ、押した後の URL と深いリンクが食い違う。
+    expect(screen.getByRole("link", { name: "Scale" })).toHaveAttribute(
+      "href",
+      "#scale/data-scale",
     );
     expect(screen.getByRole("link", { name: "Finance" })).toHaveAttribute(
       "href",
       "#finance",
     );
-    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getAllByRole("link")).toHaveLength(4);
   });
 
   it("marks only the current tab with aria-current", () => {
@@ -36,21 +39,29 @@ describe("Nav", () => {
       "aria-current",
       "page",
     );
-    for (const name of ["Scientific", "Data Scale"]) {
+    for (const name of ["Scientific", "Convert", "Scale"]) {
       expect(screen.getByRole("link", { name })).not.toHaveAttribute(
         "aria-current",
       );
     }
   });
 
-  it("marks the data scale tab when that is the current one", () => {
-    render(<Nav current="data-scale" />);
-    expect(screen.getByRole("link", { name: "Data Scale" })).toHaveAttribute(
+  it("marks the scale tab when that is the current one", () => {
+    render(<Nav current="scale" />);
+    expect(screen.getByRole("link", { name: "Scale" })).toHaveAttribute(
       "aria-current",
       "page",
     );
     expect(
       screen.getByRole("link", { name: "Scientific" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks the convert tab when that is the current one", () => {
+    render(<Nav current="convert" />);
+    expect(screen.getByRole("link", { name: "Convert" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });

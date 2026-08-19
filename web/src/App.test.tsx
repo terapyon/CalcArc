@@ -50,7 +50,7 @@ describe("App", () => {
   });
 
   it("shows Data Scale when the hash says so", () => {
-    window.location.hash = "#data-scale";
+    window.location.hash = "#scale/data-scale";
     render(<App />);
     expect(screen.getByTestId("datascale-panel")).toBeInTheDocument();
   });

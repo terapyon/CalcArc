@@ -40,7 +40,7 @@ function isModuleId(text: string): text is ModuleId {
 }
 
 export function routeFromHash(hash: string): Route {
-  const [head, category] = hash.replace(/^#/, "").split("/");
+  const [head = "", category] = hash.replace(/^#/, "").split("/");
   // **知らない先頭は既定へ倒す。** 旧 `#data-scale` も `#loan` もここに
   // 落ちる——互換分岐は作らない(設計書 §1-4)。
   if (!isModuleId(head)) return { module: "scientific", category: null };
