@@ -125,15 +125,39 @@ function run(command, args, options = {}) {
 }
 
 /**
+ * `run` が期待した形をしているか。
+ *
+ * **壊れた要約は、無い要約と同じだけ何も言っていない。** `schema` が
+ * 違う・`shards` や `expected` が配列でない(将来のスキーマ変更、書き込み
+ * 途中でのプロセス終了、あるいは単に `heavy-run.json` の中身が `5` だった、
+ * 等)場合に `run.shards` をそのまま走査すると `TypeError` が
+ * `measure()` を突き抜けて `main()` ごと落ちる。この関数の目的は
+ * 「測定が失敗した」を例外にせず構造化された事実(`runJsonFound: false`)
+ * にすること――それがこの spec の存在理由なので、ここで例外を許すわけには
+ * いかない。
+ */
+function isWellFormedRun(run) {
+  return (
+    run !== null &&
+    typeof run === "object" &&
+    run.schema === 1 &&
+    Array.isArray(run.shards) &&
+    Array.isArray(run.expected)
+  );
+}
+
+/**
  * 読み取り段だけを切り出した純関数。
  *
  * `measure()` から分けたのは、ここだけを単体テストするため。**プロセスを
- * 起動しないのでテストできる。** `run === null` は「heavy-run.json が無い」、
- * つまり `globalTeardown` まで走らなかった(ビルドで倒れた／
- * playwright 自体が起動しなかった)ことの印である。
+ * 起動しないのでテストできる。** 「見つからなかった」扱いになるのは 2 通り
+ * ある――`run === null`(`heavy-run.json` が無い。`globalTeardown` まで
+ * 走らなかった)と、`run` はあるが形が壊れている場合(`isWellFormedRun`
+ * 参照)。どちらも読み手には同じ「測定に失敗した」でしかないので、
+ * 同じ結果を返す。
  */
 export function readMeasurement({ buildOk, playwrightExitCode, run }) {
-  if (run === null) {
+  if (!isWellFormedRun(run)) {
     return {
       buildOk,
       playwrightExitCode,
@@ -164,6 +188,28 @@ export function readMeasurement({ buildOk, playwrightExitCode, run }) {
 }
 
 /**
+ * `execFileSync` が投げた `error` から、playwright の終了コードを取り出す。
+ *
+ * `error.status` が数値なら「走って、その終了コードで落ちた」――テストが
+ * 赤くなるのが目的なので想定内。数値でないのは「そもそも起動できなかった」
+ * (`ENOENT` など、spawn 自体の失敗)ということで、これは「走って落ちた」
+ * とは別の事実である。ここで安易に `1` を返すと「playwright が終了コード 1
+ * で落ちた」と読めてしまい、実際には一度も走っていないのに走ったことになる
+ * ――このリポジトリが繰り返し踏んでいる「検査は緑のまま理由だけが嘘になる」
+ * 形そのもの。`null` を返して「走らなかった」を保つ。
+ *
+ * **注意: `null` は 2 つの意味を持つ。** ビルドで止まって一度も呼ばれ
+ * なかった場合(`measure()` の `buildOk === false` のときの初期値)と、
+ * ここで spawn 自体に失敗した場合の両方が `null` になる。どちらも
+ * `heavy-run.json` は書かれないので `runJsonFound: false` に落ち、
+ * 判定側(Task 5)はそれで「測定失敗」と読める――が、両者を区別したく
+ * なったら `playwrightExitCode` だけでは足りない。
+ */
+export function exitCodeFrom(error) {
+  return typeof error.status === "number" ? error.status : null;
+}
+
+/**
  * **走行を 3 段に分ける。**
  *
  * `pnpm heavy` は `pnpm wasm && playwright test` の合成なので、合成のまま
@@ -183,8 +229,9 @@ export function measure() {
       run("pnpm", ["exec", "playwright", "test", "--config", "playwright.heavy.config.ts"]);
       playwrightExitCode = 0;
     } catch (error) {
-      // **赤くなるのが目的なので、失敗は想定内。** 終了コードだけ取る。
-      playwrightExitCode = typeof error.status === "number" ? error.status : 1;
+      // 赤くなるのが目的なので、失敗そのものは想定内。取り出し方は
+      // `exitCodeFrom` を参照。
+      playwrightExitCode = exitCodeFrom(error);
     }
   }
   let parsed = null;
