@@ -22,25 +22,31 @@ test.beforeEach(async ({ page }) => {
   await expect(panel(page)).toBeVisible();
 });
 
-test("both faces keep 44px touch targets", async ({ page }) => {
+test("all three faces keep 44px touch targets", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。**誤爆の実害に比例させる**
-  // (設計書 §8): 数字・単位・型の押し間違いは答えを壊すので、メインの
-  // 枠に載る二面はどちらも守る。項目の列だけは押し直せば戻るので縦を詰める。
-  for (const button of await face_(page, "数字と演算のキー")
-    .getByRole("button")
-    .all()) {
-    const box = await button.boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-  }
-
-  await press(page, ["データ型を選ぶ"]);
-  for (const button of await face_(page, "データ型のキー")
-    .getByRole("button")
-    .all()) {
-    const box = await button.boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  // (設計書 §8): 数字・単位・型・次元数の候補の押し間違いは答えを壊すので、
+  // メインの枠に載る三面はどれも守る。項目の列だけは押し直せば戻るので
+  // 縦を詰める。**測ったキーの件数も主張する**——0 件でも緑になる書き方は
+  // しない(予約スロットも disabled な <button> として描かれるので、
+  // 面ごとの総数はキー配列の長さと一致する)。
+  const checks: Array<
+    [string, "数字と演算のキー" | "データ型のキー" | "次元数の候補キー", number]
+  > = [
+    ["件数を入力", "数字と演算のキー", 25],
+    ["次元数を入力", "次元数の候補キー", 15],
+    ["データ型を選ぶ", "データ型のキー", 15],
+  ];
+  for (const [field, name, expectedCount] of checks) {
+    await press(page, [field]);
+    const buttons = await face_(page, name).getByRole("button").all();
+    expect(buttons, `${name} should render its full key set`).toHaveLength(
+      expectedCount,
+    );
+    for (const button of buttons) {
+      const box = await button.boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
   }
 });
 
@@ -56,7 +62,11 @@ test("the field row is half height but wide enough", async ({ page }) => {
 test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   // **同じ枠に載る**(設計書 §2 の【訂正】: 5 列 × 5 行)。候補面は 15 セルで
   // 3 行しか描かれないため、枠は CSS の aspect-ratio が押さえている。
-  const seen: { face: string; box: { width: number; height: number } }[] = [];
+  const seen: {
+    face: string;
+    box: { width: number; height: number };
+    del: { x: number; y: number };
+  }[] = [];
   for (const [field, face] of [
     ["件数を入力", "数字と演算のキー"],
     ["次元数を入力", "次元数の候補キー"],
@@ -65,17 +75,22 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
     await press(page, [field]);
     const box = await face_(page, face).boundingBox();
     const del = await panel(page)
-      .getByRole("button", { name: "1文字消去" })
+      .getByRole("button", { name: "1文字消去", exact: true })
       .boundingBox();
     seen.push({
       face,
       box: { width: box?.width ?? 0, height: box?.height ?? 0 },
+      // **DEL の位置も控える。** 名前が「と DEL」と言っている以上、
+      // 在ることではなく**動かないこと**を測る(元の検査がそうだった)。
+      del: { x: del?.x ?? -1, y: del?.y ?? -1 },
     });
-    expect(del, `DEL is missing on ${face}`).not.toBeNull();
   }
   expect(seen).toHaveLength(3);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
+  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
+  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
 });
 
 test("the unit keys open only when the entry can take them", async ({
@@ -123,6 +138,24 @@ test("AC returns the type to its default without touching the numbers", async ({
   // 件数はそのまま——AC は打っている項目だけを戻す(設計書 §5)。
   await press(page, ["件数を入力"]);
   await expect(echo(page)).toHaveText("件数 100M");
+});
+
+test("the candidate face has nothing for DEL to delete", async ({ page }) => {
+  await press(page, ["次元数を入力"]);
+  await expect(
+    panel(page).getByRole("button", { name: "1文字消去", exact: true }),
+  ).toBeDisabled();
+});
+
+test("AC clears the dimensions without leaving the candidate face", async ({
+  page,
+}) => {
+  await press(page, ["次元数を入力", "768"]);
+  await expect(echo(page)).toHaveText("次元数 768");
+  await press(page, ["この項目を消去"]);
+  // 面は変えない——次元数だけが空に戻る(型の AC とは違う挙動)。
+  await expect(echo(page)).toHaveText("次元数");
+  await expect(face_(page, "次元数の候補キー")).toBeVisible();
 });
 
 test("the primary-system toggle changes the emphasis, not the bytes", async ({

@@ -237,6 +237,24 @@ describe("DataScalePanel（電卓）", () => {
     expect(screen.queryByRole("button", { name: "候補から選ぶ" })).toBeNull();
   });
 
+  it("has nothing for DEL to delete on the candidate face", async () => {
+    await renderPanel();
+    await press(["次元数を入力"]);
+    expect(screen.getByRole("button", { name: "1文字消去" })).toBeDisabled();
+  });
+
+  it("AC clears the dimensions without leaving the candidate face", async () => {
+    await renderPanel();
+    await press(["次元数を入力", "768"]);
+    expect(echo()).toHaveTextContent("次元数 768");
+    await press(["この項目を消去"]);
+    // 面は変えない——次元数だけが空に戻る(型の AC とは違う挙動)。
+    expect(echo()).not.toHaveTextContent("768");
+    expect(
+      screen.getByRole("group", { name: "次元数の候補キー" }),
+    ).toBeInTheDocument();
+  });
+
   it("replaces a reserved slot, not a live key", () => {
     // 「選択」キーは数字面の**予約スロット**に入る(5 行 3 列目)。
     // 生きているキーを潰していないことを、位置ではなく事実で押さえる。
