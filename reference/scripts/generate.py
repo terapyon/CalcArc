@@ -17,6 +17,7 @@ from calcarc_reference import (
     cases,
     complex_ref,
     compound_ref,
+    convert_ref,
     data_scale_ref,
     expr_ref,
     llm_ref,
@@ -223,6 +224,38 @@ def build_transfer() -> dict:
     }
 
 
+def build_convert() -> dict:
+    """単位換算の golden。
+
+    **`tolerance` を持たない**(spec §6)。有理数の厳密計算を 10 桁の文字列にするので、
+    誤差の概念が無い——`data_scale` / `finance` と同じ強さになる。
+    """
+    entries = []
+    for value, category, src, dst in cases.CONVERT_INPUTS:
+        result = convert_ref.compute(value, category, src, dst)
+        entries.append(
+            {
+                "id": f"convert/{category}/{value}{src}to{dst}",
+                "op": "convert",
+                "input": {
+                    "value": value,
+                    "category": category,
+                    "from": src,
+                    "to": dst,
+                },
+                "expect": result,
+            }
+        )
+    ids = [entry["id"] for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise ValueError("convert の id が重複している")
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _resolve_placeholders(params: dict) -> dict:
     """期間逆算の境界に使う元本を、参照実装に解かせて埋める。
 
@@ -322,6 +355,7 @@ def main() -> None:
     write("data_scale.json", build_data_scale())
     write("llm.json", build_llm())
     write("transfer.json", build_transfer())
+    write("convert.json", build_convert())
     write("finance.json", build_finance())
 
 
