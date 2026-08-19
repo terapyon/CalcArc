@@ -17,6 +17,8 @@ Rust の f64 / u64 とは別物である。**ここで計算し直さない**—
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 
 from . import compound_ref, data_scale_ref, loan_ref
@@ -121,31 +123,166 @@ LOAN_OPS = (
 )
 COMPOUND_OPS = ("compound_grow", "compound_deposit_for", "compound_periods_for")
 
+
+@dataclass(frozen=True)
+class Stratum:
+    """コーパスの 1 件が属する層(設計書 §4.1)。
+
+    コーパスの 1 件は必ずちょうど 1 つの層に属する。層の識別子 `key`
+    (`"{op}/{name}"`)は、§9 の最低件数テスト・§6 の変異・D+E のレポートが
+    共有する文字列である。**3 か所が別々に組み立てないよう、層の一覧は
+    ここ(`corpus_calls.py`)に 1 つだけ置く。**
+
+    `minimum` はこの Task(層の骨格を作るだけ)ではすべて 0 にしてある。
+    `residual_zero` に本来の下限 100、`bonus_zero` に 30 を入れると現在の
+    生成器では実測 2 件・1 件しか無く落ちる——それを直すのは Task 6 である。
+    骨格の段階で赤いテストを抱えないため、値は Task 6 で入れる。
+    """
+
+    op: str
+    name: str
+    expect: str  # "ok" | "SyntaxError" | "Overflow"
+    minimum: int
+    build: Callable[[random.Random, int], dict]
+
+    @property
+    def key(self) -> str:
+        return f"{self.op}/{self.name}"
+
+
 # **境界は乱択に任せない。名指しで列挙して全部入れる**(設計書 §3.5)。
 # 乱択は境界をほぼ引かない——0 円、金利 0%、期間 1、u64 の上限、残価 = 元本。
-FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
-    ("loan_forward", {"principal": "100000", "rate": "0", "n": 1, "residual": "0"}),
-    (
+#
+# この Task では既存の名指し境界を層に移すだけで、**ケースの中身(input)を
+# 1 件も変えていない**。`build` は乱数を消費しない(既存のケースが乱択で
+# 作られたものではなかったので、消費すると Task 2 までで固定した乱択列が
+# ずれる)。`expect` は参照実装を実際に呼んで確かめた実測である。
+FINANCE_STRATA: tuple[Stratum, ...] = (
+    Stratum(
         "loan_forward",
-        {"principal": "3000000", "rate": "2.0", "n": 36, "residual": "3000000"},
+        "residual_zero",
+        "ok",
+        0,
+        lambda rng, i: {"principal": "100000", "rate": "0", "n": 1, "residual": "0"},
     ),
-    ("loan_forward", {"principal": U64_MAX_TEXT, "rate": "0", "n": 600, "residual": "0"}),
-    ("loan_forward", {"principal": U64_MAX_TEXT, "rate": "1.5", "n": 1, "residual": "0"}),
-    ("loan_forward", {"principal": "1", "rate": "20.0", "n": 480, "residual": "0"}),
-    ("loan_principal", {"payment": "1", "rate": "0", "n": 1}),
-    ("loan_principal", {"payment": str(PAYMENT_MAX), "rate": "20.0", "n": 480}),
-    ("loan_term", {"principal": "100000", "rate": "0", "payment": "100000"}),
-    # 返済額が利息に届かず、永久に終わらない入力。**エラーになること自体が仕様。**
-    ("loan_term", {"principal": "500000000", "rate": "20.0", "payment": "1"}),
-    ("loan_bonus_forward", {"principal": "5000000", "bonus_principal": "0", "rate": "0", "n": 12}),
-    (
+    Stratum(
+        "loan_forward",
+        "residual_equals_principal",
+        "SyntaxError",
+        0,
+        lambda rng, i: {
+            "principal": "3000000",
+            "rate": "2.0",
+            "n": 36,
+            "residual": "3000000",
+        },
+    ),
+    Stratum(
+        "loan_forward",
+        "principal_u64_max_no_interest",
+        "ok",
+        0,
+        lambda rng, i: {
+            "principal": U64_MAX_TEXT,
+            "rate": "0",
+            "n": 600,
+            "residual": "0",
+        },
+    ),
+    Stratum(
+        "loan_forward",
+        "principal_u64_max_overflow",
+        "Overflow",
+        0,
+        lambda rng, i: {
+            "principal": U64_MAX_TEXT,
+            "rate": "1.5",
+            "n": 1,
+            "residual": "0",
+        },
+    ),
+    Stratum(
+        "loan_forward",
+        "monthly_payment_below_interest",
+        "SyntaxError",
+        0,
+        lambda rng, i: {"principal": "1", "rate": "20.0", "n": 480, "residual": "0"},
+    ),
+    Stratum(
+        "loan_principal",
+        "single_payment_no_interest",
+        "ok",
+        0,
+        lambda rng, i: {"payment": "1", "rate": "0", "n": 1},
+    ),
+    Stratum(
+        "loan_principal",
+        "payment_max_high_rate",
+        "ok",
+        0,
+        lambda rng, i: {"payment": str(PAYMENT_MAX), "rate": "20.0", "n": 480},
+    ),
+    Stratum(
+        "loan_term",
+        "immediate_payoff",
+        "ok",
+        0,
+        lambda rng, i: {"principal": "100000", "rate": "0", "payment": "100000"},
+    ),
+    Stratum(
+        "loan_term",
+        # 返済額が利息に届かず、永久に終わらない入力。**エラーになること自体が仕様。**
+        "payment_below_interest_diverges",
+        "SyntaxError",
+        0,
+        lambda rng, i: {
+            "principal": "500000000",
+            "rate": "20.0",
+            "payment": "1",
+        },
+    ),
+    Stratum(
         "loan_bonus_forward",
-        {"principal": "5000000", "bonus_principal": "5000000", "rate": "2.7", "n": 84},
+        "bonus_zero",
+        "ok",
+        0,
+        lambda rng, i: {
+            "principal": "5000000",
+            "bonus_principal": "0",
+            "rate": "0",
+            "n": 12,
+        },
     ),
-    ("loan_bonus_principal", {"monthly_payment": "1", "bonus_payment": "0", "rate": "0", "n": 1}),
-    (
+    Stratum(
+        "loan_bonus_forward",
+        "bonus_exceeds_half",
+        "SyntaxError",
+        0,
+        lambda rng, i: {
+            "principal": "5000000",
+            "bonus_principal": "5000000",
+            "rate": "2.7",
+            "n": 84,
+        },
+    ),
+    Stratum(
+        "loan_bonus_principal",
+        "single_payment_no_interest",
+        "ok",
+        0,
+        lambda rng, i: {
+            "monthly_payment": "1",
+            "bonus_payment": "0",
+            "rate": "0",
+            "n": 1,
+        },
+    ),
+    Stratum(
         "compound_grow",
-        {
+        "principal_and_deposit_zero",
+        "SyntaxError",
+        0,
+        lambda rng, i: {
             "principal": "0",
             "deposit": "0",
             "rate": "0",
@@ -154,9 +291,12 @@ FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
             "tax": False,
         },
     ),
-    (
+    Stratum(
         "compound_grow",
-        {
+        "principal_u64_max_no_interest",
+        "ok",
+        0,
+        lambda rng, i: {
             "principal": U64_MAX_TEXT,
             "deposit": "0",
             "rate": "0",
@@ -165,9 +305,12 @@ FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
             "tax": True,
         },
     ),
-    (
+    Stratum(
         "compound_grow",
-        {
+        "long_horizon_high_rate_taxed",
+        "ok",
+        0,
+        lambda rng, i: {
             "principal": "1000000",
             "deposit": "0",
             "rate": "20.0",
@@ -176,9 +319,12 @@ FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
             "tax": True,
         },
     ),
-    (
+    Stratum(
         "compound_deposit_for",
-        {
+        "minimal_target",
+        "ok",
+        0,
+        lambda rng, i: {
             "principal": "0",
             "target": "1",
             "rate": "0",
@@ -187,9 +333,12 @@ FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
             "tax": False,
         },
     ),
-    (
+    Stratum(
         "compound_periods_for",
-        {
+        "target_met_immediately",
+        "ok",
+        0,
+        lambda rng, i: {
             "principal": "1000000",
             "deposit": "0",
             "target": "1000000",
@@ -198,10 +347,13 @@ FINANCE_BOUNDARIES: tuple[tuple[str, dict], ...] = (
             "tax": False,
         },
     ),
-    # 金利 0% で目標が元本より大きい——永久に届かない。エラーが仕様。
-    (
+    Stratum(
         "compound_periods_for",
-        {
+        # 金利 0% で目標が元本より大きい——永久に届かない。エラーが仕様。
+        "target_unreachable_zero_rate",
+        "SyntaxError",
+        0,
+        lambda rng, i: {
             "principal": "1000000",
             "deposit": "0",
             "target": "2000000",
@@ -269,8 +421,18 @@ class ReferenceGaveUp(Exception):
         self.reason = reason
 
 
-def _finance_entry(index: int, op: str, params: dict) -> dict:
-    """1 件を組み立てる。**期待値は参照実装がそのまま返した辞書である。**"""
+def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
+    """1 件を組み立てる。**期待値は参照実装がそのまま返した辞書である。**
+
+    `stratum` はケースが属する層の識別子(`"{op}/{name}"`。乱択で作られた
+    ケースは `"{op}/random"`)。**`SCHEMA` は上げない**——`corpus_calls.SCHEMA`
+    は 15 シャードが共有する 1 つの定数で、上げると無関係な 14 枚の golden が
+    バイト単位で書き換わる(設計書 §4.8)。読み手(`web/tests/heavy/corpus.ts`)は
+    未知のキーを弾かないので、フィールドの追加は後方互換である。「schema 1
+    なのに必須フィールドがある」が根拠のない例外に見えないよう書いておくと、
+    全 finance ケースが `stratum` を持つことは**スキーマ番号ではなく
+    `test_generate_corpus.py` のテストが契約として担う**(設計書 §4.11 の 10)。
+    """
     compute = loan_ref.compute if op.startswith("loan_") else compound_ref.compute
     try:
         expect = compute(op, params)
@@ -292,6 +454,7 @@ def _finance_entry(index: int, op: str, params: dict) -> dict:
         "op": op,
         "input": params,
         "expect": expect,
+        "stratum": stratum,
     }
 
 
@@ -304,9 +467,10 @@ def build_finance_shard(seed: int, count: int) -> dict:
         "dup": 0,
         "reference_gave_up": {reason.value: 0 for reason in GaveUpReason},
     }
-    for op, params in FINANCE_BOUNDARIES:
-        entries.append(_finance_entry(len(entries), op, params))
-        seen.add(repr((op, sorted(params.items()))))
+    for stratum in FINANCE_STRATA:
+        params = stratum.build(rng, 0)
+        entries.append(_finance_entry(len(entries), stratum.op, params, stratum.key))
+        seen.add(repr((stratum.op, sorted(params.items()))))
     ops = LOAN_OPS + COMPOUND_OPS
     attempts = 0
     while len(entries) < count:
@@ -323,7 +487,7 @@ def build_finance_shard(seed: int, count: int) -> dict:
             continue
         seen.add(key)
         try:
-            entries.append(_finance_entry(len(entries), op, params))
+            entries.append(_finance_entry(len(entries), op, params, f"{op}/random"))
         except ReferenceGaveUp as gave_up:
             rejections["reference_gave_up"][gave_up.reason.value] += 1
     return {

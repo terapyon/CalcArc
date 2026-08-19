@@ -382,6 +382,15 @@ export interface CallCase {
   op: string;
   input: Record<string, string | number | boolean>;
   expect: Record<string, unknown>;
+  /**
+   * このケースが属する層の識別子(`"{op}/{name}"`)。乱択で作られたケースは
+   * `"{op}/random"`(設計書 §4.1・§4.8)。**finance の全ケースが持つが、
+   * `CallCase` は data-scale とも共有する型で、data-scale のケースには無い**
+   * ので `optional` にする。いま読み手はこのフィールドを使わないが、
+   * 宣言を実物に合わせておく——持たせずにおくと、`rejections` の型が実物と
+   * 食い違っていたのと同じ壊れ方になる。
+   */
+  stratum?: string;
 }
 
 export interface CallShard {

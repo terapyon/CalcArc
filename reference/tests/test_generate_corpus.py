@@ -892,6 +892,7 @@ def test_unclassified_reference_gave_up_stops_the_generator(
             0,
             "loan_forward",
             {"principal": "1", "rate": "0", "n": 1, "residual": "0"},
+            "loan_forward/random",
         )
 
 
@@ -909,3 +910,38 @@ def test_the_current_generator_gives_up_only_for_one_classified_reason() -> None
     assert reasons["near_yen_boundary"] == 3
     assert reasons["compound_deposit_search_limit"] == 0
     assert reasons["other"] == 0
+
+
+def test_every_finance_case_carries_a_known_stratum() -> None:
+    """設計書 §4.11 の 10。**層の一覧は `corpus_calls.FINANCE_STRATA` から読む**
+    ——テストに写しを持たない。乱択で作られたケースだけが `"{op}/random"` に
+    入ることも合わせて確かめる。
+    """
+    known_keys = {stratum.key for stratum in corpus_calls.FINANCE_STRATA}
+    random_keys = {f"{op}/random" for op in corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS}
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    strata_seen = {case["stratum"] for case in shard["cases"]}
+    assert strata_seen <= known_keys | random_keys
+    # 名指し層は全部使われている(骨格を移した Task で 1 件も落としていない)
+    named_strata_seen = strata_seen & known_keys
+    assert named_strata_seen == known_keys
+
+
+def test_every_stratum_meets_its_minimum() -> None:
+    """設計書 §4.11 の 1。**下限はこの Task ではすべて 0**(Task 3 のスコープ外の
+    値は Task 6 で入る)。
+
+    このテストが「1 つでも下限を満たさない層があれば落ちる」ことを主張できて
+    いるかは、下限 0 のままでは検証できない——**反証可能性は架空の層を
+    一時的に足して手元で確かめてあり**(実装報告に記録)、テスト本体には
+    架空の層を残さない。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        counts[case["stratum"]] = counts.get(case["stratum"], 0) + 1
+    for stratum in corpus_calls.FINANCE_STRATA:
+        assert counts.get(stratum.key, 0) >= stratum.minimum, (
+            f"{stratum.key} の下限 {stratum.minimum} を満たさない"
+            f"(実測 {counts.get(stratum.key, 0)})"
+        )
