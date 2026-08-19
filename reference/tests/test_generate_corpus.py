@@ -945,3 +945,151 @@ def test_every_stratum_meets_its_minimum() -> None:
             f"{stratum.key} の下限 {stratum.minimum} を満たさない"
             f"(実測 {counts.get(stratum.key, 0)})"
         )
+
+
+# --- Task 4: 因子と水準・名指し異常系 -------------------------------------
+
+
+def _finance_stratum_mismatches(strata: tuple) -> list[tuple[str, str, str]]:
+    """`strata` それぞれの `build()` が作る入力を参照実装へ通し、返ってきた
+    種別が `expect` と食い違う層を集める。**「エラーになるはず」と書いた
+    入力が実は正常だった、を緑のまま許さないガード**(設計書 §4.5 の末尾・
+    Task 4 Step 4)。全 18+ 層(骨格 Task が作ったものを含む)に掛かる。
+    """
+    mismatches = []
+    for stratum in strata:
+        params = stratum.build(random.Random(0), 0)
+        compute = (
+            corpus_calls.loan_ref.compute
+            if stratum.op.startswith("loan_")
+            else corpus_calls.compound_ref.compute
+        )
+        result = compute(stratum.op, params)
+        actual = result.get("error", "ok")
+        if actual != stratum.expect:
+            mismatches.append((stratum.key, stratum.expect, actual))
+    return mismatches
+
+
+def test_every_finance_stratum_expect_matches_the_reference_output() -> None:
+    """設計書 §4.5 の末尾。全 finance 層(既存 18 + Task 4 で足した層)の
+    `expect` を、参照実装が実際に返す種別と突き合わせる。
+    """
+    mismatches = _finance_stratum_mismatches(corpus_calls.FINANCE_STRATA)
+    assert not mismatches, f"expect が実測と食い違う層: {mismatches}"
+
+
+def test_the_expect_guard_actually_catches_a_wrong_expect() -> None:
+    """反証可能性: 上のガードは、1 つの層の `expect` を意図的に間違えると
+    本当に落ちるか。**架空に壊した層を直接このテストに食わせて確かめる**
+    ——本体のガードには壊れた層を残さない。
+    """
+    real = corpus_calls.FINANCE_STRATA[0]
+    wrong_expect = "SyntaxError" if real.expect == "ok" else "ok"
+    broken = corpus_calls.Stratum(real.op, real.name, wrong_expect, real.minimum, real.build)
+    mismatches = _finance_stratum_mismatches((broken,))
+    assert mismatches == [(broken.key, wrong_expect, real.expect)]
+
+
+def test_all_seventeen_error_paths_are_named_and_appear_in_the_corpus() -> None:
+    """設計書 §4.5(2026-08-19 訂正後)・§4.11 の 4。経路は 17(16 ではない
+    ——「残価に届く前に完済」の行番号訂正で 1 行が 2 行に分かれた)。各経路が
+    `ERROR_PATH_STRATA` で層に対応づき、その層が生成されたコーパスに実際に
+    現れることを確かめる。**表に無い経路を推測で足していない**——この表は
+    Rust のガードから数え上げたもの。
+    """
+    assert len(corpus_calls.ERROR_PATHS) == 17
+    assert set(corpus_calls.ERROR_PATH_STRATA) == {
+        name for name, _source in corpus_calls.ERROR_PATHS
+    }
+    known_keys = {s.key for s in corpus_calls.FINANCE_STRATA}
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    strata_seen = {case["stratum"] for case in shard["cases"]}
+    for name, _source in corpus_calls.ERROR_PATHS:
+        stratum_keys = set(corpus_calls.ERROR_PATH_STRATA[name])
+        assert stratum_keys, f"{name} に層が割り当てられていない"
+        assert stratum_keys <= known_keys, (
+            f"{name} の層が FINANCE_STRATA に無い: {stratum_keys - known_keys}"
+        )
+        assert stratum_keys & strata_seen, f"{name} がコーパスに1件も現れない"
+
+
+def test_periods_per_year_four_never_appears_in_the_random_layer() -> None:
+    """設計書 §4.11 の 5。`4` は乱択から外し、名指しのエラー層に移した
+    (`rate.rs:32` が受け付けるのは 1・2・12 だけ)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    compound_ops = set(corpus_calls.COMPOUND_OPS)
+    for case in shard["cases"]:
+        if case["stratum"].endswith("/random") and case["op"] in compound_ops:
+            assert case["input"]["periods_per_year"] != 4
+
+
+def test_periods_per_year_1_2_12_are_roughly_balanced_in_the_random_layer() -> None:
+    """設計書 §4.11 の 5。最小の層が最大の層の 0.8 倍以上。"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    compound_ops = set(corpus_calls.COMPOUND_OPS)
+    counts: dict[int, int] = {}
+    for case in shard["cases"]:
+        if case["stratum"].endswith("/random") and case["op"] in compound_ops:
+            ppy = case["input"]["periods_per_year"]
+            counts[ppy] = counts.get(ppy, 0) + 1
+    assert set(counts) == {1, 2, 12}
+    assert min(counts.values()) >= max(counts.values()) * 0.8, counts
+
+
+def test_rate_covers_the_sub_0_1_percent_band_and_four_decimal_digits() -> None:
+    """設計書 §4.11 の 6。`0 < r < 0.1` の正常が 1 件以上、小数 4 桁が 1 件以上。"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    low_rate_ok = 0
+    four_decimal_ok = 0
+    for case in shard["cases"]:
+        if "error" in case["expect"]:
+            continue
+        rate = case["input"].get("rate")
+        if rate is None:
+            continue
+        try:
+            value = float(rate)
+        except ValueError:
+            continue
+        if 0 < value < 0.1:
+            low_rate_ok += 1
+        if len(rate.partition(".")[2]) == 4:
+            four_decimal_ok += 1
+    assert low_rate_ok >= 1
+    assert four_decimal_ok >= 1
+
+
+def test_all_sixteen_named_term_levels_appear() -> None:
+    """設計書 §4.11 の 7。名指し期間 16 種がすべて 1 件以上現れる。"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    seen_terms = {case["input"]["n"] for case in shard["cases"] if "n" in case["input"]}
+    needed = {n for n, _expect in corpus_calls.TERM_LEVELS}
+    assert needed <= seen_terms, needed - seen_terms
+
+
+def test_loan_term_1201_is_ok_but_compound_periods_1201_is_syntax_error() -> None:
+    """設計書 §4.2 の訂正の核心。loan の期間に上限のガードは無い
+    (`MAX_TERM_MONTHS` は逆算探索の打ち切りであって入力の契約ではない)ので
+    `1201` は loan では正常。複利は `compound.rs:33` が `periods > 1200` を
+    見るので `1201` は SyntaxError。**この 2 つが食い違ったら実装ではなく
+    この訂正を疑う。**
+    """
+    loan_result = corpus_calls.loan_ref.compute(
+        "loan_forward", {"principal": "1000000", "rate": "2.0", "n": 1201, "residual": "0"}
+    )
+    assert "error" not in loan_result
+
+    compound_result = corpus_calls.compound_ref.compute(
+        "compound_grow",
+        {
+            "principal": "1000000",
+            "deposit": "0",
+            "rate": "2.0",
+            "periods_per_year": 1,
+            "periods": 1201,
+            "tax": False,
+        },
+    )
+    assert compound_result == {"error": "SyntaxError"}
