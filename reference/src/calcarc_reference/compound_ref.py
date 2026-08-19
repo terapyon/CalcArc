@@ -232,7 +232,23 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
 
     **二分探索しない**——Rust がそれをやる。ここは Decimal 閉形式の種から
     証明書を満たすまで歩く。
+
+    定義域は兄弟の `periods_for` と同じ理屈で先に落とす。目標が正でなければ
+    「いくら積み立てれば届くか」という問い自体が立たず、期数が 0 なら積み立てる
+    機会が無い。`grow` が同じ期数の定義域を宣言している（`periods <= 0 or
+    periods > MAX_PERIODS`）ので、ここはその宣言を入口で読んでいるだけである。
+
+    **入口で落とすのは、歩きの中で落ちるのを待つと種の計算が先に壊れるから。**
+    `principal == 0` かつ `periods == 0` だと `_deposit_seed` の
+    `growth - 1` が 0 になり、`decimal.DivisionByZero` が上がる。あれは
+    `ValueError` ではないので `corpus_calls._finance_entry` の分類に当てはまらず、
+    **生成器ごと落ちる**（2026-08-20 実測）。他の期数 0 は歩きが `grow` に届いて
+    `SyntaxError` になっていたので、**1 つの入力の組だけが別の壊れ方をしていた。**
     """
+    if target <= 0:
+        raise CompoundError("SyntaxError")
+    if periods <= 0 or periods > MAX_PERIODS:
+        raise CompoundError("SyntaxError")
     answer, _steps = _deposit_search(principal, num, den, periods, target, taxed)
     return answer
 

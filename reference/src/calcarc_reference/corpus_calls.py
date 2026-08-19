@@ -828,11 +828,16 @@ def _rate_over_max_strata() -> tuple[Stratum, ...]:
 
 
 def _compound_periods_out_of_range_strata() -> tuple[Stratum, ...]:
-    """複利の期数が 0 または 1200 超(ERROR_PATHS の 5 番目)。**`0` は
-    `compound_deposit_for` に使わない**——`principal=0` と組むと
-    `_deposit_seed` が `growth - 1 == 0` で `DivisionByZero` を投げ、
-    `_finance_entry` の分類(`ValueError`)にも当てはまらず生成器ごと落ちる
-    (`compound_ref.py` の実測バグ。実装報告に記録)。
+    """複利の期数が 0 または 1200 超(ERROR_PATHS の 5 番目)。
+
+    **`compound_deposit_for` の `principal=0` かつ `periods=0` をここに入れて
+    ある。** Task 4 の時点ではこの組だけが `_deposit_seed` の
+    `growth - 1 == 0` で `decimal.DivisionByZero` を投げ、`_finance_entry` の
+    分類(`ValueError`)にも当てはまらず生成器ごと落ちていた。`deposit_for` の
+    入口に定義域のガードを置いて直したので、いまは他の期数 0 と同じ
+    `SyntaxError` になる。**直したことを、この 1 件がコーパスの中で見張る**
+    ——Rust も同じ入力を `SyntaxError` にする(`compound_inverse.rs:67`)ので、
+    退行すれば `pnpm heavy` が両実装の食い違いとして落とす。
     """
     return (
         Stratum(
@@ -902,6 +907,21 @@ def _compound_periods_out_of_range_strata() -> tuple[Stratum, ...]:
                 "rate": "2.0",
                 "periods_per_year": 1,
                 "periods": 1201,
+                "tax": False,
+            },
+        ),
+        # **生成器を落としていた 1 件。** docstring を見よ。元本 0・期数 0 の組。
+        Stratum(
+            "compound_deposit_for",
+            "periods_zero_without_principal",
+            "SyntaxError",
+            1,
+            lambda rng, i: {
+                "principal": "0",
+                "target": "1000000",
+                "rate": "2.0",
+                "periods_per_year": 1,
+                "periods": 0,
                 "tax": False,
             },
         ),

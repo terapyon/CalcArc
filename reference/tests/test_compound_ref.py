@@ -254,3 +254,36 @@ def test_deposit_for_reaches_every_tax_seed_miss_case_within_a_few_steps() -> No
             int(case["principal"]), num, den, int(case["periods"]), int(case["target"]), taxed=True
         )
         assert steps <= 4, f"{case} が {steps} 歩かかった(上限 4、実測最大は 2)"
+
+
+def test_no_principal_and_no_periods_is_a_syntax_error_not_a_crash() -> None:
+    # **2026-08-20 の実測バグ。** `principal=0` かつ `periods=0` のときだけ、
+    # `_deposit_seed` の `growth - 1` が 0 になって `decimal.DivisionByZero` が
+    # 上がっていた。あれは `ValueError` ではないので `_finance_entry` の分類
+    # (`near_yen_boundary` / `compound_deposit_search_limit` / `other`)に
+    # 当てはまらず、**生成器ごと落ちる**。
+    #
+    # 他の期数 0 は歩きが `grow` に届いて `SyntaxError` になっていたので、
+    # **1 つの入力の組だけが別の壊れ方をしていた**——だから誰も踏まなかった。
+    #
+    # Rust も同じ入力を `SyntaxError` にする(`compound_inverse.rs:67` の
+    # `target == 0 || periods == 0 || periods > MAX_PERIODS`)。ここが
+    # 例外を投げると両実装が食い違う。
+    num, den = compound_ref.rate_fraction("2.0", 1)
+    with pytest.raises(compound_ref.CompoundError) as caught:
+        compound_ref.deposit_for(0, num, den, 0, 1_000_000, taxed=False)
+    assert caught.value.code == "SyntaxError"
+
+
+def test_a_target_of_zero_is_refused_at_the_entry_of_both_inverse_ops() -> None:
+    # 兄弟の `periods_for` は最初からこれを落としていた。`deposit_for` だけが
+    # 落としていなかった——**同じ問いの 2 つの入口で定義域の宣言が食い違って
+    # いた**のが、上のバグが隠れていた場所である。
+    num, den = compound_ref.rate_fraction("2.0", 1)
+    for call in (
+        lambda: compound_ref.deposit_for(1_000_000, num, den, 12, 0, taxed=False),
+        lambda: compound_ref.periods_for(1_000_000, 1_000, num, den, 0, taxed=False),
+    ):
+        with pytest.raises(compound_ref.CompoundError) as caught:
+            call()
+        assert caught.value.code == "SyntaxError"
