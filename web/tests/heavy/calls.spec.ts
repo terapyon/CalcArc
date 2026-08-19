@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { describe, differences } from "./calls";
+import {
+  compoundDepositForProbes,
+  compoundPeriodsForProbes,
+  countDegenerateLoanPrincipalCases,
+  loanPrincipalProbes,
+  loanTermProbes,
+  type Probe,
+  runProbes,
+} from "./certificates";
 import { type CallCase, loadCallShards } from "./corpus";
 import { openHarness } from "./harness";
 import { record, summaryName } from "./report";
@@ -18,7 +27,9 @@ import { record, summaryName } from "./report";
 /** 1 束あたりのケース数。往復のコストが計算のコストを覆わない大きさにする。 */
 const BATCH = 500;
 
-for (const { name, shard } of loadCallShards()) {
+const SHARDS = loadCallShards();
+
+for (const { name, shard } of SHARDS) {
   test(`every call in ${name} matches the reference`, async ({ page }) => {
     await openHarness(page);
     const cases = shard.cases;
@@ -95,3 +106,78 @@ for (const { name, shard } of loadCallShards()) {
     ).toEqual([]);
   });
 }
+
+/**
+ * 逆算証明書(設計書 2026-08-19 §4.10)。
+ *
+ * 上のループは「答が参照実装と同じ値である」ことを見る。ここでは
+ * **その答が境界そのものであること**を、`loan_forward` / `compound_grow`
+ * の正算だけを使って heavy ハーネス経由で確かめる。詳しくは `certificates.ts`
+ * のコメントを見よ。
+ *
+ * 必要期間の証明書だけが n 回(答の期数ぶん)の呼び出しになる。既存の
+ * `BATCH`(500)より大きな束で流す——束の数がそのまま往復の回数になる。
+ */
+const CERT_BATCH = 5000;
+
+const FINANCE_SHARD = SHARDS.find(({ name }) => name === "finance-000.json");
+if (FINANCE_SHARD === undefined) {
+  throw new Error(
+    "calls.spec.ts: finance-000.json is not among the call shards — the " +
+      "inverse certificates have nothing to certify.",
+  );
+}
+const FINANCE_CASES = FINANCE_SHARD.shard.cases;
+
+const CERTIFICATES: { op: string; build: (cases: CallCase[]) => Probe[] }[] = [
+  { op: "loan_principal", build: loanPrincipalProbes },
+  { op: "loan_term", build: loanTermProbes },
+  { op: "compound_deposit_for", build: compoundDepositForProbes },
+  { op: "compound_periods_for", build: compoundPeriodsForProbes },
+];
+
+for (const { op, build } of CERTIFICATES) {
+  test(`${op}'s answer is the boundary, not just a number`, async ({
+    page,
+  }) => {
+    await openHarness(page);
+    const probes = build(FINANCE_CASES);
+    expect(
+      probes.length,
+      `${op}: built zero boundary checks — either the corpus has no normal ` +
+        `${op} cases, or the certificate is not wired up`,
+    ).toBeGreaterThan(0);
+
+    const mismatches = await runProbes(page, probes, CERT_BATCH);
+
+    expect(
+      mismatches,
+      `${op}: ${mismatches.length} of ${probes.length} boundary checks ` +
+        "failed. Each line says which case, and which side of the boundary " +
+        "(the answer itself, or one step past it), broke.",
+    ).toEqual([]);
+  });
+}
+
+test("loan_principal's degenerate answers are counted, not silently dropped", () => {
+  // `loan_forward` は「n 期を使い切る」前提の月額しか計算できない。予算に
+  // 余裕があって n 期より早く払い終わる(縮退)答は、`loan_forward` では
+  // 再現できず、境界証明書から除かれる(`certificates.ts` の
+  // `isDegenerateLoanPrincipal` のコメントに実例がある)。**その除外を
+  // 黙って通さない。** 件数を毎回言わせ、全数除外(証明書が何も見ていない)
+  // になっていないことを確かめる。
+  const total = FINANCE_CASES.filter(
+    (c) => c.op === "loan_principal" && !("error" in c.expect),
+  ).length;
+  const excluded = countDegenerateLoanPrincipalCases(FINANCE_CASES);
+  console.log(
+    `loan_principal: ${excluded} of ${total} normal cases are degenerate ` +
+      "(rows_paid < n) and excluded from the boundary certificate.",
+  );
+  expect(excluded).toBeGreaterThanOrEqual(0);
+  expect(
+    excluded,
+    "every normal loan_principal case was excluded — the certificate " +
+      "above would have certified nothing",
+  ).toBeLessThan(total);
+});

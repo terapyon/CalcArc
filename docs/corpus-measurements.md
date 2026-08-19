@@ -1271,3 +1271,112 @@ finance alone: 3500 cases in 1932.53ms (0.5522ms each)
 | `paid_off_before_residual_3` | 7 | 99.0 | 9 | 2 |
 | `paid_off_before_residual_4` | 8 | 80.0 | 10 | 1 |
 | `paid_off_before_residual_5` | 8 | 99.9999 | 10 | 2 |
+
+## Heavy の逆算証明書（2026-08-20 実測、spec B+C Task 10）
+
+`finance-000.json` の正常な逆算ケース（`loan_principal` / `loan_term` /
+`compound_deposit_for` / `compound_periods_for`）に対し、「その答が参照実装と
+一致する」だけでなく「その答が境界そのものである」ことを、既存の
+`loan_forward` / `compound_grow`（正算）だけを使って heavy ハーネス経由で
+確かめる証明書を `web/tests/heavy/certificates.ts` に足した
+（設計書 §4.10・計画 Task 10）。
+
+### 対象件数と、実際に発行した wasm 呼び出し回数（実測）
+
+呼び出し回数は `web/tests/heavy/calls.spec.ts` の証明書テストに
+`probes.length` を一時的に出力させて実測した（推定ではない）。
+
+| op | 正常件数 | 証明書の対象 | 呼び出し回数（実測） |
+|---|---:|---:|---:|
+| `loan_principal` | 432 | 415（縮退 17 件を除く。下記） | 830 |
+| `loan_term` | 407 | 407 | 802 |
+| `compound_deposit_for` | 404 | 404 | 808 |
+| `compound_periods_for` | 304 | 304 | 67,675 |
+| 合計 | 1,547 | 1,530 | 70,115 |
+
+`compound_periods_for` の 67,675 回は答の期数の合計と一致する（必要期間の
+証明書だけが O(n) の全走査になる設計どおり）。`loan_term` の 802 回は
+407 × 2 − 12（答が 1 期のケースは「0 期」を構成できないので下限側を測らない。
+実測 12 件）。
+
+### `loan_principal` の 17 件は `loan_forward` で証明できない（縮退）
+
+**設計書の想定（`loan_forward` を 2 回呼ぶだけ）どおりには組めなかった。**
+実装中に 2 種類の実測との食い違いが見つかった。
+
+1. **タイ。** 元利均等の月額は理論値を円未満で切り捨てるので、隣り合う元本が
+   同じ切り捨て値に落ちることがある（実測 34 件）。`monthlyPayment` の大小
+   だけで比べると、この 34 件で「答 + 1 円でも超えない」という誤った不一致に
+   なる。`loan_forward` が返す `finalPayment`（タイのときに限り
+   `schedule::clears_within` と同じ表になる）まで見る比較に直して解消した
+   （`certificates.ts` の `clearsBudget` のコメントに実例がある: `rate=12.0%
+   n=121 payment=3,360,445` で、答の元本も答 + 1 円も `monthlyPayment` は
+   同じ `3,360,445` だが、`finalPayment` は答で `3,360,445`（払い切れる）、
+   答 + 1 円で `3,360,451`（超える））。
+
+2. **縮退（432 件中 17 件）。** `loan_principal` 自身は「予算 `payment` を
+   最大 `n` 回払う」表を走らせて答を確定するが、予算に余裕がある入力では
+   その表が `n` 回を使い切る前に払い終わる（`rows_paid < n`）。
+   `loan_forward` はこれを再現できない——`loan_forward` は「`n` 期を
+   ちょうど使い切る」前提で**自分で**月額を導くので、縮退したのと同じ
+   `(元本, 金利, n)` を渡すと、その月額は理論上とても小さくなり、しばしば
+   初回利息の切り捨てと一致するか下回って `schedule::run_schedule` の
+   発散ガードに落ち、答の元本でも答 + 1 円でも `SyntaxError` が返る。
+   実例（`fin-000524`、Python 参照実装でも同一挙動を確認済み）:
+   `principal=3,599,999 rate=100% n=1,199 payment=300,000`
+   （`rows_paid=164 < n=1,199`）で、`loan_forward(3,599,999, …)` も
+   `loan_forward(3,600,000, …)` も `SyntaxError`。
+
+   `loan_forward` だけでは境界を確かめられないので、この 17 件は証明書から
+   除外した。**除外を黙って通さない**——`certificates.ts` の
+   `countDegenerateLoanPrincipalCases` で件数を読めるようにし、
+   `calls.spec.ts` に専用のテスト（除外数が 0 件でも全数でもないことを
+   確かめる）を足した。`pnpm heavy` の実行ログには毎回
+   `loan_principal: 17 of 432 normal cases are degenerate (rows_paid < n)
+   and excluded from the boundary certificate.` が出る。
+
+`loan_term` では同種の縮退は起きない（`n` は探索で決まる答であり、常に
+「ちょうど payment を使い切る」最小値になるため、`rows_paid < n` には
+ならない）。`compound_deposit_for` の下限側（答 − 1 円）が構成できない
+ケース（答が 0 円）は実測 0 件だった。
+
+### `pnpm heavy` の所要時間: 証明書なし / あり
+
+いずれも `cd web && pnpm heavy`（wasm ビルド込み）の壁時計時間。
+
+| | passed | 時間 |
+|---|---:|---:|
+| 証明書なし（ベースライン、git stash で退避して計測） | 157 | 25.8 秒 |
+| 証明書あり（1 回目） | 162 | 25.9 秒 |
+| 証明書あり（2 回目） | 162 | 25.7 秒 |
+| 証明書あり（赤確認 4 件を戻した後、最終確認） | 162 | 26.4 秒 |
+
+増分は 0〜0.6 秒で、設計書 §4.10 が言う「10 秒を超えたら層の代表に絞る」の
+閾値に遠く及ばない。**層の代表には絞っていない**——67,675 回の
+`compound_grow` 呼び出しを 1 束 5,000 件（既存の `BATCH`＝500 より大きい束）
+で流したことで、往復の回数を抑えられている（`compound_periods_for` 単体は
+7.5〜7.7 秒）。絞る判断は測ってから下す指示だったので、まず測り、増分が
+無視できる大きさだったので絞らなかった。
+
+### 赤確認（4 件、すべて実施・すべて再編集で戻した）
+
+| 証明書 | 壊した内容 | 結果 |
+|---|---|---|
+| `loan_principal` | 答 + 1 円 → 答 + 0 円 | 赤。34 件が `"fin-XXXXXX: at answer + 1 yen (principal=…) expected NOT to clear within the payment budget …, but loan_forward's schedule does settle within it"` |
+| `loan_term` | 答 − 1 期 → 答（同じ期） | 赤。14 件が同型のメッセージ（`at answer - 1 period (n=…) expected NOT to clear …`） |
+| `compound_deposit_for` | 答 − 1 円 → 答 − 0 円 | 赤。14 件が `"at answer - 1 yen (deposit=…) expected NOT to reach target … yet, but compound_grow gave …"` |
+| `compound_periods_for` | ループ境界 `k < n` → `k <= n` | 赤。14 件が `"at k=… of n=… (not yet) expected NOT to reach target … yet, but compound_grow gave …"` |
+
+4 件とも、壊した箇所に対応する具体的なケース ID と数値つきのメッセージで
+落ちることを確認した。戻しはすべて再編集（`git checkout` は使っていない）。
+
+### やり残し・不安点
+
+- `loan_term` に縮退相当の問題が本当に起きないことは、`n` が探索で決まる
+  答であることからの推論であり、`loan_principal` のように総当たりで
+  確かめてはいない（実測では 407 件全部が通ったので、少なくともこの
+  コーパスでは起きていない）。
+- `loan_principal` の 17 件（縮退）は境界の証明が無いまま「参照実装と一致
+  する」ことだけが確認されている状態が残る。`loan_forward` 以外の手段
+  （`loan_term` を使う、など）を使えば証明できる可能性があるが、今回の
+  制約（`loan_forward` / `compound_grow` のみ）の外にある。
