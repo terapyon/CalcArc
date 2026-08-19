@@ -1665,6 +1665,14 @@ def build_inverse_trig_shard(seed: int, count: int) -> dict:
 
 
 def write(name: str, payload: dict) -> None:
+    """1 枚を書き出す。**書き出す先を差し替えられる純粋な出口にしておく。**
+
+    `test_corpus_reproducibility.py` はこの関数を捕獲用の関数に差し替えて
+    `main()` を呼び、ディスクに触れずに「生成器が今日書くはずのもの」を
+    受け取る。だからここに件数の累計のような状態を持たせてはならない
+    ——差し替えた瞬間にその状態が更新されなくなる。総件数は `main` が
+    payload から数える。
+    """
     path = CORPUS / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # generate.py と同じ整形。差分を安定させ、nan / inf を書き出さない。
@@ -1675,6 +1683,29 @@ def write(name: str, payload: dict) -> None:
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 
+def _summary_line(total_cases: int, elapsed: float) -> str:
+    """末尾の要約 1 行。**分母は CLI 引数の `count` ではなく、実際に書き出した総件数**。
+
+    生成時間はコーパスの上限を決める(設計書 §11)ので必ず表に出す。ただし
+    以前のこの行は 15 シャード合計の経過時間を `count`(既定 2000)で割って
+    いた。finance だけ `FINANCE_COUNT`(3,500)を渡すようになった時点で、
+    件数もケースあたりの時間も嘘になった——他の 14 枚に `count` を渡す限り
+    総件数は `14 * count + FINANCE_COUNT` であって `count` ではない。
+    実測では合計 5629.60ms のうち finance 単独が 3500 件で 1932.53ms
+    (34%)を占めており、ずれは無視できる大きさではない。
+
+    ここは道具が印字する一次資料で、他所の台帳に事実として写される。
+    合わない分母を置かない。
+
+    `%.1f` 秒だと数千件までは `0.0s` に丸まって無意味になる(レビュー修正
+    ラウンド 1)ので、ミリ秒で出す。
+    """
+    return (
+        f"generated {total_cases} cases in {elapsed * 1000:.2f}ms "
+        f"({elapsed / total_cases * 1000:.4f}ms each)"
+    )
+
+
 # finance シャードだけの目標総件数(設計書 §4.7)。他の 14 シャードは CLI 引数
 # `count`(既定 2000)を共有するが、finance は名指し層の下限合計(1,307 件)を
 # 大きく超える件数が要る。ここを `count` に連動させると、他の 14 枚を増やす
@@ -1682,49 +1713,46 @@ def write(name: str, payload: dict) -> None:
 FINANCE_COUNT = 3500
 
 
-def main() -> None:
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
-    started = time.monotonic()
-    write("scientific-000.json", build_shard(seed=20260815, count=count))
-    write("equivalence-000.json", build_equivalences(seed=20260816, count=count))
-    write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
-    write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
-    write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
-    write("typed-000.json", build_typed_shard(seed=20260824, count=count))
-    write("display-000.json", build_display_shard(seed=20260827, count=count))
-    write("complex-000.json", build_complex_shard(seed=20260901, count=count))
-    write(
-        "complex-display-000.json",
-        build_complex_display_shard(seed=20260902, count=count),
-    )
-    write(
-        "angle-mode-000.json",
-        build_angle_mode_shard(seed=20260826, count=count),
-    )
-    write(
-        "corrections-000.json",
-        build_corrections_shard(seed=20260825, count=count),
-    )
-    write(
-        "cancellation-000.json",
-        build_cancellation_shard(seed=20260823, count=count),
-    )
-    write(
-        "combinatorics-000.json",
-        build_combinatorics_shard(seed=20260820, count=count),
-    )
+def _shards(count: int) -> Iterator[tuple[str, dict]]:
+    """書き出す 15 枚を、名前と中身の対で 1 枚ずつ生む。
+
+    **書き出す枚数はここが唯一の一覧である。** 1 枚足せば、書き出しにも
+    末尾の要約行の分母にも自動でついてくる——`main` の側に写しの件数を
+    持たせない理由がこれで、以前は `count` という写しを分母にしていて
+    finance だけ件数が変わった時点で嘘になった。
+
+    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。15 枚
+    ぶんの payload を同時に抱えない。
+    """
+    yield "scientific-000.json", build_shard(seed=20260815, count=count)
+    yield "equivalence-000.json", build_equivalences(seed=20260816, count=count)
+    yield "precedence-000.json", build_precedence_shard(seed=20260817, count=count)
+    yield "elementary-000.json", build_elementary_shard(seed=20260818, count=count)
+    yield "inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count)
+    yield "typed-000.json", build_typed_shard(seed=20260824, count=count)
+    yield "display-000.json", build_display_shard(seed=20260827, count=count)
+    yield "complex-000.json", build_complex_shard(seed=20260901, count=count)
+    yield "complex-display-000.json", build_complex_display_shard(seed=20260902, count=count)
+    yield "angle-mode-000.json", build_angle_mode_shard(seed=20260826, count=count)
+    yield "corrections-000.json", build_corrections_shard(seed=20260825, count=count)
+    yield "cancellation-000.json", build_cancellation_shard(seed=20260823, count=count)
+    yield "combinatorics-000.json", build_combinatorics_shard(seed=20260820, count=count)
     # 金融とデータスケール。**科学計算とは別の領域**で、期待値は整数なので
     # 厳密一致で比べる(設計書 2026-08-17 §3.2)。finance だけ `count` を使わず
     # `FINANCE_COUNT`(3,500)を渡す。理由は上の定義を見よ。
-    write("finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT))
-    write("data-scale-000.json", build_data_scale_shard(seed=20260822, count=count))
+    yield "finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT)
+    yield "data-scale-000.json", build_data_scale_shard(seed=20260822, count=count)
+
+
+def main() -> None:
+    count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
+    started = time.monotonic()
+    total_cases = 0
+    for name, payload in _shards(count):
+        total_cases += len(payload["cases"])
+        write(name, payload)
     elapsed = time.monotonic() - started
-    # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
-    # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。
-    # ミリ秒単位で出す。
-    print(
-        f"generated {count} cases in {elapsed * 1000:.2f}ms ({elapsed / count * 1000:.4f}ms each)"
-    )
+    print(_summary_line(total_cases, elapsed))
 
 
 if __name__ == "__main__":

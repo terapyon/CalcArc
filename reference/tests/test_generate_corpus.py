@@ -5,6 +5,7 @@ import json
 import math
 import pathlib
 import random
+import re
 import sys
 from fractions import Fraction
 
@@ -1560,3 +1561,54 @@ def test_finance_shard_refuses_to_silently_drop_a_stratum() -> None:
     # 境界ちょうどでは落ちない(下限合計そのものは満たせる件数である)。
     shard = corpus_calls.build_finance_shard(seed=1, count=named_minimum_total)
     assert len(shard["cases"]) == named_minimum_total
+
+
+def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """末尾の要約行の分母は、CLI 引数の `count` ではなく実際に書き出した総件数。
+
+    以前のこの行は 15 シャード合計の経過時間を `count` で割っていた。件数の
+    ほうも `count` をそのまま印字していたので、**印字された件数もケース
+    あたりの時間も嘘だった**。finance だけ `FINANCE_COUNT` を渡す変更が入った
+    時点で嘘になったが、緑のまま気づけなかった。この行は道具が印字する
+    一次資料で、他所の台帳に事実として写される。
+
+    `main` を実際に走らせて、書き出されたファイルを数え直して突き合わせる
+    ——`_summary_line` を直接呼ぶだけでは、「`main` が総件数ではなく `count`
+    を渡す」という元の壊れ方そのものを捕まえられない。
+
+    finance は下限合計まで、他の 14 枚は 5 件まで落として速く回す(分母の
+    正しさは件数の大小によらない)。
+    """
+    monkeypatch.setattr(generate_corpus, "CORPUS", tmp_path)
+    monkeypatch.setattr(
+        generate_corpus,
+        "FINANCE_COUNT",
+        sum(max(1, stratum.minimum) for stratum in corpus_calls.FINANCE_STRATA),
+    )
+    cli_count = 5
+    monkeypatch.setattr(sys, "argv", ["generate_corpus.py", str(cli_count)])
+
+    generate_corpus.main()
+
+    written = sorted(tmp_path.glob("*.json"))
+    expected_total = sum(
+        len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
+    )
+    # 15 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 数字のままなので、枚数も見る。
+    assert len(written) == 15
+    # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
+    # する取り方では、どちらか一方を分母にする退行を捕まえられない。
+    assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)
+
+    line = capsys.readouterr().out.strip().splitlines()[-1]
+    match = re.fullmatch(r"generated (\d+) cases in ([\d.]+)ms \(([\d.]+)ms each\)", line)
+    assert match is not None, line
+    printed_total, elapsed_ms, each_ms = int(match[1]), float(match[2]), float(match[3])
+
+    assert printed_total == expected_total
+    # 印字した 2 つの数の割り算が、印字した 3 つ目と合うこと。表示桁は
+    # 4 桁なので、そこに丸めてから比べる。
+    assert round(elapsed_ms / printed_total, 4) == each_ms
