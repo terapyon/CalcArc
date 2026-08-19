@@ -92,7 +92,13 @@ def convert_value(value: Fraction, category: str, src: str, dst: str) -> Fractio
 _DIGITS = 10
 # **受け付ける値は 10 進リテラルだけ**（式は Rust 側の評価器が持つ。golden で
 # 二重に持たない）。指数表記の入力は受けない——盤面にその打ち方が無い。
-_LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z")
+#
+# **`re.ASCII` が要る。** Python の `\d` は既定で Unicode の数字を含むので、
+# 付けないと全角の `１２３` やアラビア数字の `١٢٣` が通ってしまう
+# （`Fraction()` も `int()` もそれらを受け付けるので、値まで出てしまう）。
+# **Rust 側は ASCII しか受けない**ので、そういう値が golden に入ると
+# 2 実装が静かに食い違う。
+_LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z", re.ASCII)
 
 
 def format_rational(value: Fraction) -> str:

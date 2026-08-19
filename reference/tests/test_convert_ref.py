@@ -70,6 +70,12 @@ def test_commas_go_in_the_integer_part_only() -> None:
     assert format_rational(Fraction(-1234567)) == "-1,234,567"
 
 
+def test_a_negative_value_wears_all_three_at_once() -> None:
+    # 負号・カンマ・小数部は上の 3 本に散っていて、**同時に踏む値が 1 つも無かった**。
+    # 符号はカンマの外側（`-1,234.5678`）で、小数部にはカンマが入らない。
+    assert format_rational(Fraction(-12345678, 10000)) == "-1,234.5678"
+
+
 def test_the_big_boundary_is_ten_to_the_tenth() -> None:
     # 10^10 ちょうどは指数表記、その 1 つ下は固定小数点。
     assert format_rational(Fraction(10**10)) == "1e10"
@@ -104,3 +110,13 @@ def test_compute_is_the_entry_point() -> None:
     assert compute("", "length", "km", "m") == {"error": "SyntaxError"}
     assert compute("1e3", "length", "km", "m") == {"error": "SyntaxError"}
     assert compute("--1", "length", "km", "m") == {"error": "SyntaxError"}
+
+
+def test_only_ascii_digits_are_digits() -> None:
+    # Python の `\d` は既定で Unicode の数字を含み、`Fraction()` もそれを受ける。
+    # **Rust 側は ASCII しか受けない**ので、全角が通ると 2 実装が静かに食い違う。
+    assert compute("１２３", "length", "m", "m") == {"error": "SyntaxError"}
+    assert compute("١٢٣", "length", "m", "m") == {"error": "SyntaxError"}
+    assert compute("1．5", "length", "m", "m") == {"error": "SyntaxError"}
+    # ASCII は今までどおり通る。
+    assert compute("123", "length", "m", "m") == {"text": "123"}
