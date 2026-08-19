@@ -182,10 +182,26 @@ min-content 幅（ラベル文字数で決まる）に余白を等しく足す�
 
 **これは「いまは通る」の理由であって、「これからも通る」の保証ではない。**
 ラベルを 1 文字でも伸ばせば nav も伸びる。360px で使える余白は 17px しかない
-——`nav.spec.ts` の 360px 3 件が見張っているのはここである。0.2.1 の 360px 修正では 3 タブでも
-`gap` を詰める必要があったのに対し、**今回は 4 タブに増やしても `gap` /
-`--nav-font-size` / ラベルのどれも譲らずに収まった**——3 タブ時よりラベルの
-文字数の合計が有利だったことと、`--shell-max-width` の余裕が効いている。
+——`nav.spec.ts` の 360px 3 件が見張っているのはここである。**4 タブに増やしても
+`gap` / `--nav-font-size` / ラベルのどれも譲らずに収まった。**
+
+**【訂正 2026-08-19】** ここには当初「0.2.1 の 360px 修正では 3 タブでも `gap` を
+詰める必要があったのに対し」「3 タブ時よりラベルの文字数の合計が有利だった」と
+書いていた。**どちらも事実ではない。**
+
+- 0.2.1 の 360px 修正（5ce18be「Let the gap give way so 44px does not, at 360px」）が
+  `gap` を詰めたのは **Keypad の関数列**である（7 列 × 44px ＋ gap 8px × 6 = 356px が
+  336px に入らず 8px 溢れた）。**nav は 1 行も触っていない**——diff は
+  `docs/definition-of-done.md` / `docs/superpowers/specs/2026-08-13-scientific-shell-design.md` /
+  `web/src/ui/Keypad/Keypad.module.css` / `web/tests/e2e/viewport-budget.spec.ts` の
+  4 ファイルで、CSS は Keypad だけである。**nav は 3 タブ時代から何も譲らずに
+  収まっていた。**
+- 文字数も逆である。3 タブは `Scientific` / `Data Scale` / `Finance` の 27 文字、
+  4 タブは `Scientific` / `Convert` / `Scale` / `Finance` の 29 文字で、gap も 1 つ
+  増えている。**3 タブ時代の nav 幅は実測していない**ので、この spec は 3 タブとの
+  比較を主張しない。
+
+**測って言えるのは「4 タブ・343.06px・360px との余白 16.94px」だけ**である。
 
 ## §5 Convert の準備中
 
