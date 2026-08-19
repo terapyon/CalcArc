@@ -5,6 +5,7 @@ import {
   CANDIDATE_VALUES,
   LLM_FIELD_LABELS,
   LLM_FIELD_SECTION,
+  type LlmKeyToken,
   llmPad,
 } from "./llm";
 
@@ -12,7 +13,7 @@ describe("LLM のキー集合", () => {
   it("puts all seven fields in one two-row section", () => {
     const tokens = LLM_FIELD_SECTION.keys
       .map((k) => k.token)
-      .filter((t): t is string => t !== null);
+      .filter((t): t is LlmKeyToken => t !== null);
     expect(tokens).toHaveLength(7);
     expect(LLM_FIELD_SECTION.columns).toBe(4);
     // 4 列 × 2 段 = 8 セル。7 項目 + 恒久の空き 1。
@@ -97,7 +98,7 @@ describe("LLM のキー集合", () => {
     const of = (name: "weight" | "kvPrecision") =>
       CANDIDATE_SECTIONS[name].keys
         .map((k) => k.token)
-        .filter((t): t is string => t?.startsWith("precision:") ?? false)
+        .filter((t): t is LlmKeyToken => t?.startsWith("precision:") ?? false)
         .map((t) => t.slice("precision:".length));
     expect(of("weight")).toEqual(["fp32", "fp16", "bf16", "int8", "int4"]);
     expect(of("kvPrecision")).toEqual(["fp16", "bf16", "fp32", "int8"]);
@@ -121,7 +122,7 @@ describe("LLM のキー集合", () => {
     const units = (field: Parameters<typeof llmPad>[0]) =>
       llmPad(field)
         .keys.map((k) => k.token)
-        .filter((t): t is string => t?.startsWith("unit:") ?? false);
+        .filter((t): t is LlmKeyToken => t?.startsWith("unit:") ?? false);
     // パラメータ数の手入力にだけ接尾辞キーが立つ(spec §4.3)。
     expect(units("parameters")).toEqual(["unit:b", "unit:m"]);
     // 層数は手入力だけの項目で、単位を持たない。

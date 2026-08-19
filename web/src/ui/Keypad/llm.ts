@@ -86,15 +86,7 @@ export type LlmKeyToken =
   | `ctx:${ContextValue}`
   | `precision:${PrecisionToken}`
   | "entry:manual"
-  | "entry:choose"
-  // llm.test.ts は `(t): t is string => …` でトークンを絞り込む(§赤確認の
-  // 対象になっている `keeps the token and the spoken number in step` など)。
-  // 閉じたリテラル合併に対して `t is string` を書くと、predicate の型が
-  // 元の型に代入できず TS2677 で赤くなる——**リテラル合併と `string` は
-  // 代入方向が逆**だからである。`string & {}` は「既知の候補は補完で出しつつ、
-  // 任意の文字列も受け付ける」定番のブランド技法(素の `string` に丸めるのとは
-  // 違い、リテラル部分の入力補完は残る)で、ここに限って噛み合わせている。
-  | (string & Record<never, never>);
+  | "entry:choose";
 
 /** 項目の表示名(項目行のラベル・面の見出しに使う)。 */
 export const LLM_FIELD_LABELS: Record<LlmField, string> = {
