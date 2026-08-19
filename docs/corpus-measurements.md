@@ -1111,3 +1111,142 @@ CI は `heavy:power` の直後に `heavy` を回すので、このままなら�
 なったのは、spec A が作ろうとしていた区別が働いたということである。** 以前の
 実装なら、走行が壊れたことと「どこも反応しなかった」が同じ `ok` に潰れ、
 この変異は**緑として報告されていた**（Task 3 で実測した誤成功そのものである）。
+
+## Finance を 2,000 → 3,500 に引き上げた（2026-08-20 実測、spec B+C Task 9）
+
+`finance-000.json` だけを 3,500 件に引き上げて再生成した。他の 14 シャードは
+`count`（既定 2000）のまま触っていない——`git status --short corpus/` の差分は
+`corpus/generated/finance-000.json` 1 枚だけである。
+
+`generate_corpus.py` の `main()` は 15 シャードすべてに同じ `count` を渡して
+いたが、finance の行だけ `FINANCE_COUNT = 3500` という独自の定数を渡すように
+した。他の 14 枚を 3,500 に増やすと golden が全部書き換わり、この spec（finance
+の層別化）と無関係な差分になるため。
+
+### 層の下限の合計が総件数を超えたら落ちることをテストで固定した
+
+`build_finance_shard` は Task 3 の時点で「名指し層の下限合計 > count なら
+`RuntimeError`」というガード（`corpus_calls.py:2840`）を既に持っていたが、
+それを主張するテストが無かった。`test_finance_shard_refuses_to_silently_drop_a_stratum`
+（`reference/tests/test_generate_corpus.py`）を足した。**総件数を定数で決め打たない**
+——`FINANCE_STRATA` から実測した下限合計（1,307）を使い、`count = 1306` で
+落ちる／`count = 1307` ちょうどでは通ることの両方を見て、境界のどちら側で
+落ちるかを固定した。ガードを一時的に外して赤くなることを確認済み。
+
+### 実測表（設計書 §1 と同じ形。2,000 → 3,500）
+
+| | 2,000 件 | 3,500 件 |
+|---|---:|---:|
+| 正常 | 1,789 | 3,139 |
+| SyntaxError | 164 | 270 |
+| Overflow | 47 | 91 |
+
+op 別の正常件数（`total` は全件、`normal` はエラー/Overflow を除いた件数）:
+
+| op | total (2,000) | normal (2,000) | total (3,500) | normal (3,500) |
+|---|---:|---:|---:|---:|
+| `loan_forward` | 407 | 368 | 599 | 560 |
+| `loan_principal` | 249 | 248 | 433 | 432 |
+| `loan_term` | 232 | 213 | 426 | 407 |
+| `loan_bonus_forward` | 277 | 215 | 456 | 301 |
+| `loan_bonus_principal` | 225 | 217 | 412 | 391 |
+| `compound_grow` | 250 | 195 | 439 | 340 |
+| `compound_deposit_for` | 234 | 218 | 420 | 404 |
+| `compound_periods_for` | 126 | 115 | 315 | 304 |
+
+数え方: `corpus/generated/finance-000.json` を読み、`expect` に `error` キーが
+あるかどうかで正常/異常を分け、`op` ごとに集計するワンライナーで数えた
+（コミットしていない使い捨てスクリプト、出力をそのまま貼っている）。
+
+### 層別の内訳
+
+名指し層の下限合計は 1,307 件（境界・税境界・8 op のペアワイズ・エラー経路
+17 種など）。3,500 件のうち残り 2,193 件が乱択層に入る。2,000 件のときは
+乱択層が 2,000 − 1,307 = 693 件しかなかった（下限合計が総件数の 65%を占めて
+いた）ので、3,500 件への引き上げは乱択層の広さを約 3.2 倍にした。
+
+`minimum` を持つ 2 層は 3,500 件でも下限をちょうど満たしている（`build` が
+`i` を振って複数件作る層なので、件数を増やしても増減しない）:
+
+- `loan_forward/residual_zero`: 100 件
+- `loan_bonus_forward/bonus_zero`: 30 件
+
+### `reference_gave_up` の理由別内訳——計画の見込みとは違う実測
+
+計画のこの Task の記述は「10 → 0」と書いているが、**これは Task 2（種の改善）
+が入る前、spec 起票時の見込みであり、測定ではない。** Task 2 の実装で
+`compound_deposit_search_limit` は既に 10 → 0 になっている。3,500 件への
+引き上げで実際に動いたのは `near_yen_boundary` である:
+
+| 理由 | 2,000 件 | 3,500 件 |
+|---|---:|---:|
+| `compound_deposit_search_limit` | 0 | 0 |
+| `near_yen_boundary` | 2 | 7 |
+| `other` | 0 | 0 |
+
+`near_yen_boundary` は `loan_ref._guard_boundary` の意図的な棄却で、設計書
+§4.9 は「0 件必須にしない」としている。乱択層が約 3.2 倍に広がった分だけ
+円境界近接の棄却を引く回数も増えた——`_guard_boundary` 自体の挙動でも乱数列
+の並びでもなく、乱択層の試行回数が増えたことの影響である。
+
+### 生成時間（一次資料）
+
+`cd reference && uv run python scripts/generate_corpus.py` の CLI 出力（15
+シャード全量、finance は 3,500 件・他 14 枚は 2,000 件）:
+
+```
+wrote .../corpus/generated/finance-000.json (3500 cases)
+generated 2000 cases in 5629.60ms (2.8148ms each)
+```
+
+**末尾の `generated 2000 cases in …` は finance を含む 15 シャード全部の合計
+経過時間だが、割り算の分母 `count` は他の 14 枚が共有する 2,000 のままである**
+——finance が余分に生成した 1,500 件は分子（経過時間）には乗るが分母には
+乗らない。この行の「each」は実態を表さないので、finance 単体の時間を
+`build_finance_shard` を `time.monotonic` で直接計測して別に取った:
+
+```
+finance alone: 3500 cases in 1932.53ms (0.5522ms each)
+```
+
+15 シャード合計 5.63 秒のうち finance が 1.93 秒（34%）を占める。前回の実測
+（`## 生成時間`、2026-08-15、count=2000 で 15 シャード合計 112.73ms）と比べて
+15 シャード合計が大きく伸びているのは、finance の総当たり探索（税境界の
+決定的探索・ペアワイズ割付）が入ったためで、この Task で新たに生じた増分
+ではない——finance の 2,000 件時点の時間は計測していないため、増分の内訳は
+分からない。
+
+### 避けて通っていた入力は、両実装が一度も突き合わせていない入力でもあった
+
+（Task 2 からの持ち越し。実例は commit `74cd4e0`。）`compound_deposit_for` に
+`principal="0"` かつ `periods=0` を渡すと、参照実装の `_deposit_seed` が
+`growth - 1 = 0` で割ることになり `decimal.DivisionByZero` で落ちる。これは
+`ValueError` ではないので `near_yen_boundary` / `compound_deposit_search_limit`
+のどちらの分類にも当てはまらず、生成器ごと落ちる。Task 4 の実装者はその組を
+避けて層を作り、コメントに記録して先へ進んでいた。**避けるのではなく参照実装の
+定義域ガードを直し**（兄弟の `periods_for` が既に持っていた
+`periods <= 0` のガードを `deposit_for` の入口にも置いた）、その入力を
+コーパスに入れた。Rust 側は `compound_inverse.rs:67` の
+`if target == 0 || periods == 0 || periods > MAX_PERIODS` が同じ入力を
+`SyntaxError` にするので、退行すれば `pnpm heavy` が両実装の食い違いとして
+落とす。
+
+### 「残価に届く前に完済」の 5 件は代替ではなく本物の到達例である
+
+（Task 4 からの持ち越し。`corpus_calls.py` の `_paid_off_before_residual_strata`
+に実装者の申告として記録されているものを、事実として確認した。）通常の元本
+（`PRINCIPAL_MIN` 以上）では annuity が残価ちょうどに届くよう払込額を較正する
+ため、定例回の途中で先に払い切ってしまうことは構造的に起きない。実装者は
+元本 1,000〜10^9・金利 0.1〜99%・n 3〜50 で 20 万回の乱択探索を行い、1 件も
+再現しなかったと申告している。極小の元本（1〜2 桁円）でだけ、円未満切り捨て
+の比率が annuity の較正を崩して再現する。実際にコーパスへ入っている 5 件
+（`loan_forward`、`paid_off_before_residual_1`〜`_5`）は総当たりで実測した
+値そのものである:
+
+| stratum | principal | rate | n | residual |
+|---|---:|---:|---:|---:|
+| `paid_off_before_residual_1` | 6 | 99.0 | 8 | 1 |
+| `paid_off_before_residual_2` | 7 | 80.0 | 9 | 1 |
+| `paid_off_before_residual_3` | 7 | 99.0 | 9 | 2 |
+| `paid_off_before_residual_4` | 8 | 80.0 | 10 | 1 |
+| `paid_off_before_residual_5` | 8 | 99.9999 | 10 | 2 |

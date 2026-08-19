@@ -1675,6 +1675,13 @@ def write(name: str, payload: dict) -> None:
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 
+# finance シャードだけの目標総件数(設計書 §4.7)。他の 14 シャードは CLI 引数
+# `count`(既定 2000)を共有するが、finance は名指し層の下限合計(1,307 件)を
+# 大きく超える件数が要る。ここを `count` に連動させると、他の 14 枚を増やす
+# つもりの変更が finance の golden も一緒に動かしてしまう。
+FINANCE_COUNT = 3500
+
+
 def main() -> None:
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
     started = time.monotonic()
@@ -1707,8 +1714,9 @@ def main() -> None:
         build_combinatorics_shard(seed=20260820, count=count),
     )
     # 金融とデータスケール。**科学計算とは別の領域**で、期待値は整数なので
-    # 厳密一致で比べる(設計書 2026-08-17 §3.2)。
-    write("finance-000.json", build_finance_shard(seed=20260821, count=count))
+    # 厳密一致で比べる(設計書 2026-08-17 §3.2)。finance だけ `count` を使わず
+    # `FINANCE_COUNT`(3,500)を渡す。理由は上の定義を見よ。
+    write("finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT))
     write("data-scale-000.json", build_data_scale_shard(seed=20260822, count=count))
     elapsed = time.monotonic() - started
     # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。

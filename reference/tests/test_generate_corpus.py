@@ -1543,3 +1543,20 @@ def test_a_bisection_over_this_case_returns_the_wrong_period() -> None:
     # 実測値も焼き付ける——「違う」だけだと、谷の形が変わって別の誤り方に
     # なったことに気づけない。
     assert (high, correct) == (21, 19)
+
+
+def test_finance_shard_refuses_to_silently_drop_a_stratum() -> None:
+    """設計書 §4.7:「層の下限の合計が総件数を超えたら生成器がその場で落ちる
+    (黙って層を削らない)」。総件数を定数で決め打たず、`FINANCE_STRATA` から
+    実測した下限合計を 1 件だけ下回る `count` を渡して確かめる——ちょうど
+    下限合計と同じ `count` は通ることも合わせて見て、境界のどちら側で落ちる
+    かを固定する。
+    """
+    named_minimum_total = sum(max(1, stratum.minimum) for stratum in corpus_calls.FINANCE_STRATA)
+
+    with pytest.raises(RuntimeError, match="下限合計"):
+        corpus_calls.build_finance_shard(seed=1, count=named_minimum_total - 1)
+
+    # 境界ちょうどでは落ちない(下限合計そのものは満たせる件数である)。
+    shard = corpus_calls.build_finance_shard(seed=1, count=named_minimum_total)
+    assert len(shard["cases"]) == named_minimum_total
