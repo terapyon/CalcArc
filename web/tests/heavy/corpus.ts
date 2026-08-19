@@ -387,7 +387,18 @@ export interface CallCase {
 export interface CallShard {
   schema: number;
   generated_by: string;
-  rejections?: Record<string, number>;
+  /**
+   * 生成器が捨てた件数。**`reference_gave_up` は理由別の内訳を持つ**——
+   * `near_yen_boundary`(意図的な棄却)・`compound_deposit_search_limit`
+   * (参照実装の探索限界)・`other`(未分類。1 件でも出たら生成器が落ちる)。
+   *
+   * `Record<string, number>` と書いてあった。内訳が入った日にこの宣言だけが
+   * 静かに嘘になる——**いま誰も読んでいなくても、宣言は実物と合っていること。**
+   */
+  rejections?: {
+    dup: number;
+    reference_gave_up: Record<string, number>;
+  };
   cases: CallCase[];
 }
 

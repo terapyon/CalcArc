@@ -34925,7 +34925,11 @@
   "generated_by": "calcarc_reference (exact integers / Decimal), Python 3.14",
   "rejections": {
     "dup": 0,
-    "reference_gave_up": 13
+    "reference_gave_up": {
+      "compound_deposit_search_limit": 10,
+      "near_yen_boundary": 3,
+      "other": 0
+    }
   },
   "schema": 1
 }
