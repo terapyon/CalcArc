@@ -34,7 +34,10 @@ const RUN_JSON = join(WEB, "heavy-run.json");
  * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
  * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
  *
- * 値は 2026-08-17 の実測から導いた暫定値。Task 7 が実走して取り直す。
+ * 値は 2026-08-19（Task 7）に `pnpm heavy:power` を実走して確定した。
+ * 反応件数は 2026-08-17 の走行（設計書 §4.6）と 1 件も違わなかった——
+ * コーパスも変異の効き方もその後動いていないということ。記録は
+ * `docs/corpus-measurements.md` の「実測から `minRate` を確定する」節。
  */
 export const MUTATIONS = [
   {
@@ -43,8 +46,16 @@ export const MUTATIONS = [
     file: "crates/calcarc-core/src/numeric/format.rs",
     from: "pub const DISPLAY_DIGITS: usize = 10;",
     to: "pub const DISPLAY_DIGITS: usize = 9;",
-    // **値シャードすべて、ではない。** `cancellation-000.json` は値シャード
-    // だが反応しない。名前ではなく実測で書く。
+    // **値シャードすべて、ではない。** 値シャードは 9 枚あり、反応するのは
+    // 8 枚。`cancellation-000.json` だけが反応しない。名前ではなく実測で書く。
+    //
+    // 理由は測って分かった。このシャードだけ `tolerance.rel` が 1e-6 で、
+    // 他の 8 枚は 5e-10 である。比較は表示文字列を読み直して相対誤差で行う
+    // (`classifyComplex`。期待値が厳密に 0 のときだけ abs を見るが、この
+    // シャードに期待値 0 のケースは 1 件も無い)。有効桁を 10 から 9 に落として
+    // 生じる相対誤差は半 ulp——5e-9 以下——なので、1e-6 の閾値を**跨ぎようが
+    // ない**。たまたま反応しなかったのではなく、この変異では原理的に反応しない。
+    // 詳細は設計書 §4.6 追記。
     expectShards: [
       "angle-mode-000.json (values)",
       "combinatorics-000.json (values)",
