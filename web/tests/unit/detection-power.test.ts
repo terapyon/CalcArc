@@ -3,6 +3,7 @@ import {
   exitCodeFrom,
   MUTATIONS,
   readMeasurement,
+  resultRecord,
   verdictFor,
 } from "../../scripts/detection-power.mjs";
 
@@ -281,5 +282,71 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
       }),
     );
     expect(v.ok).toBe(true);
+  });
+});
+
+describe("resultRecord builds the JSON that report.ts reads", () => {
+  // **`report.ts` の `DetectionPower` 契約を実データで確かめる。** 型検査は
+  // ここを見ない――`report.ts` 側は `JSON.parse(...) as DetectionPower` で
+  // キャストしているだけなので、項目が欠けても `tsc` は黙って通す。この
+  // テストが赤くならない限り、次に誰かが項目名を変えても気づけない。
+  const ok = { ok: true, kind: "ok", why: "healthy" };
+
+  it("keeps zero-count shards out of caught", () => {
+    const r = resultRecord(
+      aExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 5, "b (values)": 0 },
+      }),
+      ok,
+    );
+    expect(r.caught).toEqual({ "a (values)": 5 });
+  });
+
+  it("sums caught into total", () => {
+    const r = resultRecord(
+      { id: "m", expectShards: ["a (values)", "b (values)"], minRate: {} },
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 5, "b (values)": 3 },
+      }),
+      ok,
+    );
+    expect(r.total).toBe(8);
+  });
+
+  it('writes expect as the string "nothing" when expectShards is empty', () => {
+    const r = resultRecord(nothingExpected, measurement(), ok);
+    expect(r.expect).toBe("nothing");
+  });
+
+  it("writes expect as a joined string when expectShards is not empty", () => {
+    const r = resultRecord(
+      { id: "m", expectShards: ["a (values)", "b (values)"], minRate: {} },
+      measurement(),
+      ok,
+    );
+    expect(r.expect).toBe("a (values), b (values)");
+  });
+
+  it("has every field report.ts's DetectionPower type reads", () => {
+    // **本命。** id / what / expect / caught / total / ok / why が全部揃って
+    // いることを、型ではなく実データで主張する。
+    const r = resultRecord(aExpected, measurement(), ok);
+    for (const field of [
+      "id",
+      "what",
+      "expect",
+      "caught",
+      "total",
+      "ok",
+      "why",
+    ]) {
+      expect(r, `missing field: ${field}`).toHaveProperty(field);
+    }
+    expect(typeof r.expect).toBe("string");
+    expect(typeof r.caught).toBe("object");
+    expect(typeof r.total).toBe("number");
   });
 });

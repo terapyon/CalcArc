@@ -346,6 +346,41 @@ export function verdictFor(mutation, m) {
   return { ok: true, kind: "ok", why: `期待したシャードだけが反応した(${reacted.sort().join(", ")})` };
 }
 
+/**
+ * `results.push` に積む 1 件を組み立てる。
+ *
+ * **ここは `web/tests/heavy/report.ts` が読む JSON の契約を守るためだけの
+ * 関数で、判定には一切関与しない。** `verdictFor` には常に完全な
+ * `measurement`(0 件のシャードを含む)を渡す――それをここで先に間引いて
+ * しまうと、Task 4 で消したはずの shim が判定側に戻ってくる(§4.2 が
+ * 名指しで禁じた「ビルド失敗が反応なしに化ける」形そのもの)。この関数が
+ * 間引くのは判定が終わったあとの**表示専用**の値である。
+ *
+ * `report.ts` の `DetectionPower` 型は `expect: string` /
+ * `caught: Record<string, number>` / `total: number` を要求する。
+ * `MUTATIONS` を `expectShards`/`minRate` に変えた(Task 5)際に
+ * `mutation.expect` を消したので、ここで文字列に戻して書く。`caught` は
+ * `mismatchesByShard` のうち非ゼロのシャードだけ(レポートの「赤くなった
+ * シャード」欄が表示するのはこれ)、`total` はその合計。`kind` は契約に
+ * 無い追加項目――D+E がレポートで 5 種の失敗を区別するために使う。
+ */
+export function resultRecord(mutation, measurement, verdict) {
+  const caught = Object.fromEntries(
+    Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
+  );
+  const total = Object.values(caught).reduce((a, b) => a + b, 0);
+  return {
+    id: mutation.id,
+    what: mutation.what,
+    expect: mutation.expectShards.length === 0 ? "nothing" : mutation.expectShards.join(", "),
+    caught,
+    total,
+    ok: verdict.ok,
+    kind: verdict.kind,
+    why: verdict.why,
+  };
+}
+
 function main() {
   const results = [];
   let failed = 0;
@@ -381,16 +416,7 @@ function main() {
       failed += 1;
     }
     process.stderr.write(`${verdict.ok ? "ok" : "NG"} — ${verdict.why}\n`);
-    results.push({
-      id: mutation.id,
-      what: mutation.what,
-      expectShards: mutation.expectShards,
-      mismatchesByShard: measurement.mismatchesByShard,
-      totalsByShard: measurement.totalsByShard,
-      ok: verdict.ok,
-      kind: verdict.kind,
-      why: verdict.why,
-    });
+    results.push(resultRecord(mutation, measurement, verdict));
   }
 
   // **最後に wasm を作り直す。**
