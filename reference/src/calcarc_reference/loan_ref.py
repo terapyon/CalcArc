@@ -46,6 +46,15 @@ class LoanError(Exception):
         self.code = code
 
 
+class NearYenBoundaryError(ValueError):
+    """`_guard_boundary` が投げる、円境界近接による棄却。
+
+    `corpus_calls._finance_entry` はこの**型**を見て
+    `GaveUpReason.NEAR_YEN_BOUNDARY` に分類する。メッセージでは分類しない
+    ——メッセージを直した日に静かに `other` へ落ちる事故を避けるため。
+    """
+
+
 def _syntax() -> LoanError:
     return LoanError("SyntaxError")
 
@@ -163,7 +172,7 @@ def _guard_boundary(value: Decimal) -> None:
     distance = min(value - below, below + 1 - value)  # 最も近い円境界までの距離
     limit = max(GUARD_ABSOLUTE, abs(value) * GUARD_RELATIVE)
     if distance < limit:
-        raise ValueError(f"monthly payment {value} sits within {limit} of a yen boundary")
+        raise NearYenBoundaryError(f"monthly payment {value} sits within {limit} of a yen boundary")
 
 
 def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -> int:

@@ -17,6 +17,7 @@ Rust の f64 / u64 とは別物である。**ここで計算し直さない**—
 from __future__ import annotations
 
 import random
+from enum import Enum
 
 from . import compound_ref, data_scale_ref, loan_ref
 
@@ -235,17 +236,37 @@ DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
 )
 
 
+class GaveUpReason(str, Enum):
+    """`ReferenceGaveUp` の理由(設計書 §4.9)。
+
+    `near_yen_boundary` は 0 件を要求しない(意図的な棄却)。
+    `compound_deposit_search_limit` はコミット済みコーパスで 0 件が目標。
+    `other` は 1 件でも出たら生成器自身が落ちる——未分類のまま数だけ増える、
+    を許さない。
+    """
+
+    NEAR_YEN_BOUNDARY = "near_yen_boundary"
+    COMPOUND_DEPOSIT_SEARCH_LIMIT = "compound_deposit_search_limit"
+    OTHER = "other"
+
+
 class ReferenceGaveUp(Exception):
     """**参照実装が答えを出せなかった。**
 
     `compound_ref.deposit_for` は種から歩いて解を探す実装で、
-    `MAX_WALK`(10 万歩)歩いても届かないと素の `ValueError` を投げる。
-    これは定義域の話ではなく**参照実装自身の探索の限界**である。
+    `MAX_WALK`(10 万歩)歩いても届かないと `compound_ref.DepositSearchLimitError`
+    を投げる。`loan_ref._guard_boundary` は円境界に近すぎる月額を
+    `loan_ref.NearYenBoundaryError` で棄却する。どちらも定義域の話ではなく
+    **参照実装自身の探索・番人の限界**である。
 
     期待値が作れないので、そのケースは検証できない。**捨てるが、数える**——
-    「このコーパスが確かめられなかった件数」は、判定と並べて報告する価値がある。
-    金融の golden(手選び 100 件)はこの経路を一度も踏んでいなかった。
+    「このコーパスが確かめられなかった件数」は、判定と並べて理由別に報告する
+    価値がある。金融の golden(手選び 100 件)はこの経路を一度も踏んでいなかった。
     """
+
+    def __init__(self, message: str, reason: GaveUpReason) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 def _finance_entry(index: int, op: str, params: dict) -> dict:
@@ -253,10 +274,18 @@ def _finance_entry(index: int, op: str, params: dict) -> dict:
     compute = loan_ref.compute if op.startswith("loan_") else compound_ref.compute
     try:
         expect = compute(op, params)
+    except loan_ref.NearYenBoundaryError as error:
+        raise ReferenceGaveUp(f"{op}: {error}", GaveUpReason.NEAR_YEN_BOUNDARY) from error
+    except compound_ref.DepositSearchLimitError as error:
+        raise ReferenceGaveUp(
+            f"{op}: {error}", GaveUpReason.COMPOUND_DEPOSIT_SEARCH_LIMIT
+        ) from error
     except ValueError as error:
         # `CompoundError` / `LoanError` は `compute` が辞書にして返すので、
-        # ここまで来る `ValueError` は探索の失敗だけである。
-        raise ReferenceGaveUp(f"{op}: {error}") from error
+        # ここまで来る `ValueError` は上の 2 つの**型**のどちらにも当てはまらない
+        # 未分類の失敗である。メッセージでは分類しない——分類できない失敗を
+        # `other` として数だけ増やして通すのではなく、生成器自体をここで落とす。
+        raise RuntimeError(f"unclassified ReferenceGaveUp for {op}: {error}") from error
     return {
         "kind": "call",
         "id": f"fin-{index:06d}",
@@ -271,7 +300,10 @@ def build_finance_shard(seed: int, count: int) -> dict:
     rng = random.Random(seed)
     entries: list[dict] = []
     seen: set[str] = set()
-    rejections = {"dup": 0, "reference_gave_up": 0}
+    rejections: dict[str, object] = {
+        "dup": 0,
+        "reference_gave_up": {reason.value: 0 for reason in GaveUpReason},
+    }
     for op, params in FINANCE_BOUNDARIES:
         entries.append(_finance_entry(len(entries), op, params))
         seen.add(repr((op, sorted(params.items()))))
@@ -292,8 +324,8 @@ def build_finance_shard(seed: int, count: int) -> dict:
         seen.add(key)
         try:
             entries.append(_finance_entry(len(entries), op, params))
-        except ReferenceGaveUp:
-            rejections["reference_gave_up"] += 1
+        except ReferenceGaveUp as gave_up:
+            rejections["reference_gave_up"][gave_up.reason.value] += 1
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),

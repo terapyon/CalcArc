@@ -41,6 +41,16 @@ class CompoundError(Exception):
         self.code = code
 
 
+class DepositSearchLimitError(ValueError):
+    """`deposit_for` が `MAX_WALK` を使い切って諦めた、探索自身の限界。
+
+    `corpus_calls._finance_entry` はこの**型**を見て
+    `GaveUpReason.COMPOUND_DEPOSIT_SEARCH_LIMIT` に分類する。メッセージでは
+    分類しない——メッセージを直した日に静かに `other` へ落ちる事故を避ける
+    ため。
+    """
+
+
 def rate_fraction(percent: str, periods_per_year: int) -> tuple[int, int]:
     """年利のパーセント文字列 → 1 期の利率の分数 (分子, 分母)。約分しない。
 
@@ -170,7 +180,7 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
         if _reached_or_nothing(principal, d, num, den, periods, taxed) >= target:
             return d
         d += 1
-    raise ValueError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
+    raise DepositSearchLimitError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
 
 
 def periods_for(principal: int, deposit: int, num: int, den: int, target: int, taxed: bool) -> int:
