@@ -398,16 +398,49 @@
     },
     {
       "expect": {
-        "error": "Overflow"
+        "kv": {
+          "binary": null,
+          "bytes": "0",
+          "bytes_grouped": "0",
+          "decimal": null
+        },
+        "total": {
+          "binary": "38685626227668133590597632.0 TiB",
+          "bytes": "42535295865117307932921825928971026431",
+          "bytes_grouped": "42,535,295,865,117,307,932,921,825,928,971,026,431",
+          "decimal": "42535295865117307932921825.9 TB"
+        },
+        "weight": {
+          "binary": "38685626227668133590597632.0 TiB",
+          "bytes": "42535295865117307932921825928971026431",
+          "bytes_grouped": "42,535,295,865,117,307,932,921,825,928,971,026,431",
+          "decimal": "42535295865117307932921825.9 TB"
+        }
       },
-      "id": "llm/170141183460469231731687303715884105727xint8/1x1x1x0xfp16",
+      "id": "llm/42535295865117307932921825928971026431xint8/1x1x1x0xfp16",
       "input": {
         "context_length": "0",
         "head_dim": "1",
         "kv_heads": "1",
         "kv_precision": "fp16",
         "layers": "1",
-        "parameters": "170141183460469231731687303715884105727",
+        "parameters": "42535295865117307932921825928971026431",
+        "weight_precision": "int8"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "llm/42535295865117307932921825928971026432xint8/1x1x1x0xfp16",
+      "input": {
+        "context_length": "0",
+        "head_dim": "1",
+        "kv_heads": "1",
+        "kv_precision": "fp16",
+        "layers": "1",
+        "parameters": "42535295865117307932921825928971026432",
         "weight_precision": "int8"
       },
       "op": "llm"

@@ -72,3 +72,12 @@ def test_overflow_is_the_u128_contract() -> None:
 def test_unknown_precision_is_a_syntax_error() -> None:
     assert compute("1", "fp8", "1", "1", "1", "1", "fp16") == {"error": "SyntaxError"}
     assert compute("1.5", "int8", "1", "1", "1", "1", "fp16") == {"error": "SyntaxError"}
+
+
+def test_the_ceiling_is_bracketed_from_both_sides() -> None:
+    # int8 は 8 bit なので、収まる最大のパラメータ数は 2^125 - 1。
+    # **通る側とあふれる側を 2 件で挟む**——片側だけだと、上限が動いても
+    # どちらのテストも緑のままになる。
+    inside = compute(str((1 << 125) - 1), "int8", "1", "1", "1", "0", "fp16")
+    assert inside["weight"]["bytes"] == str((1 << 125) - 1)
+    assert compute(str(1 << 125), "int8", "1", "1", "1", "0", "fp16") == {"error": "Overflow"}
