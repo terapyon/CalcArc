@@ -7,6 +7,7 @@
 use crate::{CalcError, CalcResult};
 
 pub mod format;
+pub mod llm;
 
 /// 要素のデータ型(base-spec §16 の 9 種)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
