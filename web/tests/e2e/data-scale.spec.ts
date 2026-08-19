@@ -92,11 +92,14 @@ test("browser back returns to Scientific and aria-current follows", async ({
 test("a link to #scale without a category still shows the panel", async ({
   page,
 }) => {
-  // **既定カテゴリの分岐を E2E 段で踏む唯一の検査。** Nav の href は
-  // `#scale/data-scale` とカテゴリまで書いているので、この 1 件が無いと
-  // `DEFAULT_CATEGORY` は実ブラウザで一度も運動しない(実測で確認した)。
+  // このテストが守っているのは「`#scale`(カテゴリを省略したハッシュ)が
+  // Scale 系統に解決すること」である。**`DEFAULT_CATEGORY` の値そのもの
+  // (`"data-scale"` であること)を守っているのはこのテストではなく
+  // `web/src/route.test.ts` の単体テストだけ**——App.tsx は
+  // `route.module` しか読んでおらず、`route.category` を読む実装はまだ
+  // 無いので、ここでパネルが見えることは既定カテゴリの中身を検査しない。
   await page.goto("/#scale");
-  await expect(main(page)).toBeVisible();
+  await expect(panel(page)).toBeVisible();
   await expect(nav(page, "Scale")).toHaveAttribute("aria-current", "page");
 });
 

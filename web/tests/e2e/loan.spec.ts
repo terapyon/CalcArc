@@ -1,7 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const nav = (page: Page, label: "Scientific" | "Scale" | "Finance") =>
-  page.getByRole("link", { name: label, exact: true });
+const nav = (
+  page: Page,
+  label: "Scientific" | "Convert" | "Scale" | "Finance",
+) => page.getByRole("link", { name: label, exact: true });
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
 
@@ -42,7 +44,7 @@ test("the nav now carries four tabs and aria-current follows", async ({
 
 test("every nav tab is large enough to touch", async ({ page }) => {
   // --touch-target-min は 44px。4 タブになっても縮まないこと。
-  for (const label of ["Scientific", "Scale", "Finance"] as const) {
+  for (const label of ["Scientific", "Convert", "Scale", "Finance"] as const) {
     const box = await nav(page, label).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
