@@ -40,7 +40,7 @@ describe("ScalePanel", () => {
     for (const [category, name] of [
       ["data-scale", "データスケール計算"],
       ["llm", "LLM のメモリ計算"],
-      ["transfer", "データ転送（準備中）"],
+      ["transfer", "データ転送量計算"],
     ] as const) {
       const { unmount } = render(<ScalePanel category={category} />);
       expect(screen.getByRole("region", { name })).toBeInTheDocument();

@@ -8,7 +8,7 @@ test("every category has a deep link that lands on it", async ({ page }) => {
   for (const [category, region] of [
     ["data-scale", "データスケール計算"],
     ["llm", "LLM のメモリ計算"],
-    ["transfer", "データ転送（準備中）"],
+    ["transfer", "データ転送量計算"],
   ] as const) {
     await page.goto(`/#scale/${category}`);
     await expect(select(page)).toHaveValue(category);
@@ -30,7 +30,7 @@ test("choosing a category moves the hash and the panel", async ({ page }) => {
   await expect(page).toHaveURL(/#scale\/transfer$/);
   await expect(select(page)).toHaveValue("transfer");
   await expect(
-    page.getByRole("region", { name: "データ転送（準備中）" }),
+    page.getByRole("region", { name: "データ転送量計算" }),
   ).toBeVisible();
   // **前の面は消えている。** 重なって出ていないことまで見ないと、
   // 「増えただけ」を「切り替わった」と読み違える。
