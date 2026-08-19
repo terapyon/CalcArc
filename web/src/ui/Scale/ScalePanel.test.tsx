@@ -31,4 +31,22 @@ describe("ScalePanel", () => {
     // (U-0 の「hash が唯一の出所」)。
     expect(window.location.hash).toBe("#scale/llm");
   });
+
+  it("shows a different panel for each category", () => {
+    // **押せて何も起きない面を作らない**(Global Constraints)。
+    // 分岐が 3 つあるなら、3 つとも描いて確かめる——2 つを
+    // 「たぶん同じ形だから」で飛ばすと、そこだけ観測されない面になる。
+    const seen: string[] = [];
+    for (const [category, name] of [
+      ["data-scale", "データスケール計算"],
+      ["llm", "LLM のメモリ（準備中）"],
+      ["transfer", "データ転送（準備中）"],
+    ] as const) {
+      const { unmount } = render(<ScalePanel category={category} />);
+      expect(screen.getByRole("region", { name })).toBeInTheDocument();
+      seen.push(category);
+      unmount();
+    }
+    expect(seen).toHaveLength(3);
+  });
 });
