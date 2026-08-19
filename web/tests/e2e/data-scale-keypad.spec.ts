@@ -11,9 +11,11 @@ async function press(page: Page, names: string[]) {
   }
 }
 
-/** いま出ている面(数字面 or 型面)の区画。 */
-const face = (page: Page, name: "数字と演算のキー" | "データ型のキー") =>
-  panel(page).getByRole("group", { name });
+/** いま出ている面(数字面・型面・次元数の候補面)の区画。 */
+const face_ = (
+  page: Page,
+  name: "数字と演算のキー" | "データ型のキー" | "次元数の候補キー",
+) => panel(page).getByRole("group", { name });
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/#scale/data-scale");
@@ -24,7 +26,7 @@ test("both faces keep 44px touch targets", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。**誤爆の実害に比例させる**
   // (設計書 §8): 数字・単位・型の押し間違いは答えを壊すので、メインの
   // 枠に載る二面はどちらも守る。項目の列だけは押し直せば戻るので縦を詰める。
-  for (const button of await face(page, "数字と演算のキー")
+  for (const button of await face_(page, "数字と演算のキー")
     .getByRole("button")
     .all()) {
     const box = await button.boundingBox();
@@ -33,7 +35,7 @@ test("both faces keep 44px touch targets", async ({ page }) => {
   }
 
   await press(page, ["データ型を選ぶ"]);
-  for (const button of await face(page, "データ型のキー")
+  for (const button of await face_(page, "データ型のキー")
     .getByRole("button")
     .all()) {
     const box = await button.boundingBox();
@@ -52,26 +54,28 @@ test("the field row is half height but wide enough", async ({ page }) => {
 });
 
 test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
-  // **同じ枠に載る**(設計書 §2)。型面は 11 キーで 3 行しか描かれないため、
-  // 行数を CSS で押さえていないとここで枠が 1 行ぶん縮み、DEL の位置が
-  // 上にずれる。jsdom では寸法が出ないので、この検査は実ブラウザにしかない。
-  const numberBox = await face(page, "数字と演算のキー").boundingBox();
-  const delBefore = await panel(page)
-    .getByRole("button", { name: "1文字消去", exact: true })
-    .boundingBox();
-
-  await press(page, ["データ型を選ぶ"]);
-
-  const typeBox = await face(page, "データ型のキー").boundingBox();
-  const delAfter = await panel(page)
-    .getByRole("button", { name: "1文字消去", exact: true })
-    .boundingBox();
-
-  expect(
-    Math.abs((typeBox?.height ?? 0) - (numberBox?.height ?? 0)),
-  ).toBeLessThan(1);
-  expect(Math.abs((delAfter?.x ?? 0) - (delBefore?.x ?? 0))).toBeLessThan(1);
-  expect(Math.abs((delAfter?.y ?? 0) - (delBefore?.y ?? 0))).toBeLessThan(1);
+  // **同じ枠に載る**(設計書 §2 の【訂正】: 5 列 × 5 行)。候補面は 15 セルで
+  // 3 行しか描かれないため、枠は CSS の aspect-ratio が押さえている。
+  const seen: { face: string; box: { width: number; height: number } }[] = [];
+  for (const [field, face] of [
+    ["件数を入力", "数字と演算のキー"],
+    ["次元数を入力", "次元数の候補キー"],
+    ["データ型を選ぶ", "データ型のキー"],
+  ] as const) {
+    await press(page, [field]);
+    const box = await face_(page, face).boundingBox();
+    const del = await panel(page)
+      .getByRole("button", { name: "1文字消去" })
+      .boundingBox();
+    seen.push({
+      face,
+      box: { width: box?.width ?? 0, height: box?.height ?? 0 },
+    });
+    expect(del, `DEL is missing on ${face}`).not.toBeNull();
+  }
+  expect(seen).toHaveLength(3);
+  const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
+  expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
 });
 
 test("the unit keys open only when the entry can take them", async ({
@@ -125,7 +129,7 @@ test("the primary-system toggle changes the emphasis, not the bytes", async ({
   page,
 }) => {
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
-  await press(page, ["次元数を入力", "7", "6", "8"]);
+  await press(page, ["次元数を入力", "768"]);
   await expect(page.getByTestId("display-main")).toHaveText("307.2 GB");
   await expect(result(page)).toContainText("307,200,000,000 bytes");
 

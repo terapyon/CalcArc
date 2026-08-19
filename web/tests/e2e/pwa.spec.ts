@@ -81,7 +81,7 @@ test("Scientific and Scale keep working once the network drops, after one contro
   // 同じ——wasm が precache から出てきて答えを出せること。
   await page.getByRole("link", { name: "Scale", exact: true }).click();
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
-  await press(page, ["次元数を入力", "7", "6", "8"]);
+  await press(page, ["次元数を入力", "768"]);
   await expect(main(page)).toHaveText("307.2 GB");
 });
 

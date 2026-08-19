@@ -8,7 +8,7 @@ import type { KeypadSection } from "./types";
  * (base-spec §3、§12)。制御(DEL・AC)は右上、単位(K/M/G)は右下——数字の
  * 直後に押すキーなので近くに置く(設計書 §2)。
  *
- * **数字面と型面は同じ 4 列 × 4 行の枠に載る。** 型面は 11 キーで 3 行しか
+ * **数字面と型面は同じ 5 列 × 5 行の枠に載る。** 型面は 11 キーで 3 行しか
  * 描かれないため、行数はパネルの CSS が押さえる——面を入れ替えたときに
  * 画面が伸び縮みすると、押そうとした位置がずれる。
  */
@@ -39,10 +39,21 @@ export type DataScaleKeyToken =
   | "field:count"
   | "field:dimensions"
   | "field:dtype"
-  | `dtype:${DataTypeToken}`;
+  | `dtype:${DataTypeToken}`
+  | `dim:${DimensionCandidate}`
+  | "dims:manual"
+  | "dims:choose";
 
 /** 入力する項目。 */
 export type DataScaleField = "count" | "dimensions" | "dtype";
+
+/** 次元数の候補(spec §4.2)。**選択で入れた値も、手入力で打った値と同じ
+ * `Entry` になる**——面は入り口が 2 つあるだけで、下流は 1 本である。 */
+export const DIMENSION_CANDIDATES = [
+  384, 512, 768, 1024, 1536, 2048, 3072, 4096,
+] as const;
+
+export type DimensionCandidate = (typeof DIMENSION_CANDIDATES)[number];
 
 const FIELDS: KeypadSection<DataScaleKeyToken> = {
   ariaLabel: "入力する項目",
@@ -209,4 +220,97 @@ export const DATA_SCALE_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
 export const TYPE_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
   FIELDS,
   TYPES,
+];
+
+/** 次元数の候補面。DEL と AC は数字面・型面と同じ位置に置く。
+ * **余ったセルにはボタンを置かない**(恒久の空き)。 */
+const DIMENSIONS: KeypadSection<DataScaleKeyToken> = {
+  ariaLabel: "次元数の候補キー",
+  columns: 5,
+  height: "square",
+  keys: [
+    { token: "dim:384", label: "384", ariaLabel: "384", variant: "function" },
+    { token: "dim:512", label: "512", ariaLabel: "512", variant: "function" },
+    { token: "dim:768", label: "768", ariaLabel: "768", variant: "function" },
+    { token: "del", label: "DEL", ariaLabel: "1文字消去", variant: "danger" },
+    {
+      token: "ac",
+      label: "AC",
+      ariaLabel: "この項目を消去",
+      variant: "danger",
+    },
+
+    {
+      token: "dim:1024",
+      label: "1024",
+      ariaLabel: "1024",
+      variant: "function",
+    },
+    {
+      token: "dim:1536",
+      label: "1536",
+      ariaLabel: "1536",
+      variant: "function",
+    },
+    {
+      token: "dim:2048",
+      label: "2048",
+      ariaLabel: "2048",
+      variant: "function",
+    },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+
+    {
+      token: "dim:3072",
+      label: "3072",
+      ariaLabel: "3072",
+      variant: "function",
+    },
+    {
+      token: "dim:4096",
+      label: "4096",
+      ariaLabel: "4096",
+      variant: "function",
+    },
+    // **手入力への入口。** 候補に無い次元数は打てなければならない。
+    {
+      token: "dims:manual",
+      label: "手入力",
+      ariaLabel: "手入力",
+      variant: "operator",
+    },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+    { token: null, label: "—", ariaLabel: "空き", variant: "function" },
+  ],
+};
+
+/** 数字面の 5 行 3 列目。**予約スロット**であって生きたキーではない
+ * (DATA_SCALE_SECTIONS を見れば token が null であることが確かめられる)。 */
+const BACK_TO_CHOICE_INDEX = 22;
+
+/** 次元数の数字面。予約スロットに「選択に戻る」を載せる(spec §4.2)。
+ * **件数の数字面には出さない**——件数に候補面は無い(spec §8)。 */
+const DIMENSION_PAD: KeypadSection<DataScaleKeyToken> = {
+  ...PAD,
+  keys: PAD.keys.map((key, index) =>
+    index === BACK_TO_CHOICE_INDEX
+      ? {
+          token: "dims:choose" as const,
+          label: "選択",
+          ariaLabel: "候補から選ぶ",
+          variant: "operator" as const,
+        }
+      : key,
+  ),
+};
+
+export const DIMENSION_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
+  FIELDS,
+  DIMENSIONS,
+];
+
+export const DIMENSION_MANUAL_SECTIONS: KeypadSection<DataScaleKeyToken>[] = [
+  FIELDS,
+  DIMENSION_PAD,
 ];

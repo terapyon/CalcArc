@@ -9,6 +9,7 @@ import {
   canPushUnit,
   EMPTY,
   type Entry,
+  fromDigits,
   G,
   isEmpty,
   K,
@@ -23,6 +24,8 @@ import {
   DATA_SCALE_SECTIONS,
   type DataScaleField,
   type DataScaleKeyToken,
+  DIMENSION_MANUAL_SECTIONS,
+  DIMENSION_SECTIONS,
   TYPE_SECTIONS,
 } from "../Keypad/dataScale";
 import { Keypad } from "../Keypad/Keypad";
@@ -54,6 +57,10 @@ export function DataScalePanel() {
   const [active, setActive] = useState<DataScaleField>("count");
   const [count, setCount] = useState<Entry>(EMPTY);
   const [dimensions, setDimensions] = useState<Entry>(EMPTY);
+  // **既定は選択面**(spec §1-2)。保存はしない(打鍵中の値である)。
+  const [dimensionsMode, setDimensionsMode] = useState<"choose" | "manual">(
+    "choose",
+  );
   // **設定は保存から起こす**(P-1 設計書 §4)。打鍵中の値(count /
   // dimensions)は保存しないので、上の 2 つは初期値のままである。
   const [dtype, setDtype] = useState<DataTypeToken>(
@@ -96,11 +103,14 @@ export function DataScalePanel() {
     );
   }
 
-  const numberField = active !== "dtype";
+  const choosingDimensions =
+    active === "dimensions" && dimensionsMode === "choose";
+  // 数字が打てる面か。**型面と候補面では打てない。**
+  const numberField = active !== "dtype" && !choosingDimensions;
   const entry = active === "dimensions" ? dimensions : count;
   const setEntry = active === "dimensions" ? setDimensions : setCount;
 
-  /** いま押せないキー。型面では DEL に消すものが無い(設計書 §5)。 */
+  /** いま押せないキー。型面・候補面では DEL に消すものが無い(設計書 §5)。 */
   function keyDisabled(token: DataScaleKeyToken): boolean {
     if (token === "del") return !numberField;
     if (token === "k") return !numberField || !canPushUnit(entry, K);
@@ -152,6 +162,19 @@ export function DataScalePanel() {
       chooseDtype(token.slice("dtype:".length) as DataTypeToken);
       return;
     }
+    if (token.startsWith("dim:")) {
+      // **選択も手入力も、同じ Entry に着地する**(spec §4.2)。
+      setDimensions(fromDigits(token.slice("dim:".length)));
+      return;
+    }
+    if (token === "dims:manual") {
+      setDimensionsMode("manual");
+      return;
+    }
+    if (token === "dims:choose") {
+      setDimensionsMode("choose");
+      return;
+    }
     if (token.startsWith("digit:")) {
       if (numberField) setEntry(pushDigit(entry, token.slice("digit:".length)));
       return;
@@ -178,8 +201,10 @@ export function DataScalePanel() {
         if (numberField) setEntry(backspace(entry));
         break;
       case "ac":
-        // AC はいま打っている項目を最初に戻す。型は既定へ(設計書 §5)。
-        if (numberField) setEntry(EMPTY);
+        // AC はいま打っている項目を最初に戻す。型は既定へ、候補面は
+        // 次元数を空に戻す(面は変えない)(設計書 §5)。
+        if (choosingDimensions) setDimensions(EMPTY);
+        else if (numberField) setEntry(EMPTY);
         else chooseDtype(DEFAULT_TYPE);
         break;
     }
@@ -255,7 +280,15 @@ export function DataScalePanel() {
         ]}
       />
       <Keypad
-        sections={numberField ? DATA_SCALE_SECTIONS : TYPE_SECTIONS}
+        sections={
+          active === "dtype"
+            ? TYPE_SECTIONS
+            : choosingDimensions
+              ? DIMENSION_SECTIONS
+              : active === "dimensions"
+                ? DIMENSION_MANUAL_SECTIONS
+                : DATA_SCALE_SECTIONS
+        }
         onPress={press}
         pressed={keyPressed}
         disabled={keyDisabled}

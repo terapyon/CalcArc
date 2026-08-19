@@ -111,7 +111,7 @@ test("the headline case: 100M x 768 x float32 is 307.2 GB / 286.1 GiB", async ({
   await nav(page, "Scale").click();
 
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
-  await press(page, ["次元数を入力", "7", "6", "8"]);
+  await press(page, ["次元数を入力", "768"]);
   // dtype は既定の float32 のまま。
 
   await expect(main(page)).toHaveText("307.2 GB");
@@ -132,7 +132,7 @@ test("the unit keys expand into plain digits, not a rounded display value", asyn
     "件数 100M",
   );
 
-  await press(page, ["次元数を入力", "1"]);
+  await press(page, ["次元数を入力", "手入力", "1"]);
   await press(page, ["データ型を選ぶ", "int8"]);
   await expect(result(page)).toContainText("100,000,000 bytes");
 });
@@ -143,7 +143,7 @@ test("a 39-digit count survives the boundary intact", async ({ page }) => {
 
   await press(page, ["件数を入力"]);
   await typeDigits(page, "170141183460469231731687303715884105727");
-  await press(page, ["次元数を入力", "2"]);
+  await press(page, ["次元数を入力", "手入力", "2"]);
   await press(page, ["データ型を選ぶ", "uint8"]);
 
   await expect(result(page)).toContainText(
@@ -157,7 +157,7 @@ test("crossing 2^128 shows an overflow error", async ({ page }) => {
 
   await press(page, ["件数を入力"]);
   await typeDigits(page, "170141183460469231731687303715884105728");
-  await press(page, ["次元数を入力", "2"]);
+  await press(page, ["次元数を入力", "手入力", "2"]);
   await press(page, ["データ型を選ぶ", "uint8"]);
 
   await expect(main(page)).toHaveText("Math ERROR");
@@ -196,7 +196,7 @@ test("a sub-unit success shows bytes without KB/KiB lines", async ({
   await nav(page, "Scale").click();
 
   await press(page, ["件数を入力", "1"]);
-  await press(page, ["次元数を入力", "1"]);
+  await press(page, ["次元数を入力", "手入力", "1"]);
   await press(page, ["データ型を選ぶ", "int8"]);
 
   await expect(main(page)).toHaveText("1 bytes");
