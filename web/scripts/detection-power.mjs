@@ -23,6 +23,39 @@ const OUT = join(WEB, "detection-power.json");
 const RUN_JSON = join(WEB, "heavy-run.json");
 
 /**
+ * **この走行に居るべきシャードの集計名。定数で持つ。**
+ *
+ * `heavy-run.json` の `expected` は、走行が `corpus/generated/` を読んで
+ * その場で導いたものである。それと突き合わせても**シャードのファイルが
+ * 1 枚消えた走行は捕まらない**——`expected` も一緒に縮むからで、
+ * 「14 枚しか読んでいない走行が完全一致を語る」という、この検査が塞ぐはずの
+ * 穴がそのまま開く(設計書 §4.4)。
+ *
+ * 枚数だけを assert しても足りない。1 枚消えて 1 枚増えた走行が緑で通り、
+ * 壊れたときに何が消えたのかを言えない。**名前で持つ。**
+ *
+ * 正当に 16 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
+ * この定数の狙いである。
+ */
+export const ALL_SHARDS = [
+  "angle-mode-000.json (values)",
+  "cancellation-000.json (values)",
+  "combinatorics-000.json (values)",
+  "complex-000.json (values)",
+  "elementary-000.json (values)",
+  "inverse-trig-000.json (values)",
+  "precedence-000.json (values)",
+  "scientific-000.json (values)",
+  "typed-000.json (values)",
+  "corrections-000.json (equivalences)",
+  "equivalence-000.json (equivalences)",
+  "data-scale-000.json (calls)",
+  "finance-000.json (calls)",
+  "complex-display-000.json (displays)",
+  "display-000.json (displays)",
+];
+
+/**
  * 壊し方の一覧。
  *
  * `expectShards` は「どのシャードが赤くなるはずか」を名前で列挙したもの。
@@ -317,7 +350,7 @@ function sameSet(left, right) {
  * この 2 つを同じ言葉で報告すると、レポートが**測定の失敗を検証の成果として
  * 数える**——それがこの段階を足した理由そのものである。
  */
-export function verdictFor(mutation, m) {
+export function verdictFor(mutation, m, allShards = ALL_SHARDS) {
   const fail = (kind, why) => ({ ok: false, kind, why });
   if (!m.buildOk) {
     return fail("measurement-failed", "wasm のビルドが失敗した——検出の有無は測れていない");
@@ -328,11 +361,15 @@ export function verdictFor(mutation, m) {
   if (!m.ranTests) {
     return fail("measurement-failed", "テストが 1 本も走っていない");
   }
-  const missing = m.expected.filter((name) => !m.shardsSeen.includes(name));
-  if (missing.length > 0) {
+  if (!sameSet(m.shardsSeen, allShards)) {
+    const missing = allShards.filter((name) => !m.shardsSeen.includes(name));
+    const extra = m.shardsSeen.filter((name) => !allShards.includes(name));
+    const parts = [];
+    if (missing.length > 0) parts.push(`読み込まれていない(${missing.join(", ")})`);
+    if (extra.length > 0) parts.push(`知らないシャードが居る(${extra.join(", ")})`);
     return fail(
       "measurement-failed",
-      `読み込まれていないシャードがある(${missing.join(", ")})——` +
+      `${parts.join("、")}——` +
         "黙っているべきシャードが走っていない走行は、完全一致を語る資格がない",
     );
   }

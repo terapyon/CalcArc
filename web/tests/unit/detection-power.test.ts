@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  ALL_SHARDS,
   exitCodeFrom,
   MUTATIONS,
   measure,
@@ -165,6 +166,18 @@ describe("reading playwright's exit code out of a spawn error", () => {
 
 const ALL = ["a (values)", "b (values)"];
 
+/**
+ * **判定に「居るべきシャード」を注入して呼ぶ。**
+ *
+ * 既定は実物の 15 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
+ * テストは全部「14 枚足りない」で赤くなる。検査が引数に無いものに依存しない
+ * ようにした結果で、ここで偽の 2 枚を渡すのが正しい使い方である。
+ */
+const verdict = (
+  mutation: Parameters<typeof verdictFor>[0],
+  m: Parameters<typeof verdictFor>[1],
+) => verdictFor(mutation, m, ALL);
+
 function measurement(overrides = {}) {
   return {
     buildOk: true,
@@ -189,7 +202,7 @@ const aExpected = {
 describe("the verdict looks at the health of the measurement first", () => {
   it("refuses to call a failed build 'nothing was detected'", () => {
     // **指示書 §4.2 の核心。** これが緑になるなら、この層は何も保証していない。
-    const v = verdictFor(
+    const v = verdict(
       nothingExpected,
       measurement({ buildOk: false, playwrightExitCode: null }),
     );
@@ -198,7 +211,7 @@ describe("the verdict looks at the health of the measurement first", () => {
   });
 
   it("refuses a run with no run summary", () => {
-    const v = verdictFor(
+    const v = verdict(
       nothingExpected,
       measurement({
         runJsonFound: false,
@@ -212,14 +225,14 @@ describe("the verdict looks at the health of the measurement first", () => {
   });
 
   it("refuses a run where no test ran", () => {
-    const v = verdictFor(nothingExpected, measurement({ ranTests: false }));
+    const v = verdict(nothingExpected, measurement({ ranTests: false }));
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("measurement-failed");
   });
 
   it("refuses a run that is missing a shard, even when the reacting set matches", () => {
     // **完全一致は、黙っているべきシャードが実際に読まれて初めて意味を持つ。**
-    const v = verdictFor(
+    const v = verdict(
       aExpected,
       measurement({
         shardsSeen: ["a (values)"],
@@ -231,13 +244,54 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.kind).toBe("measurement-failed");
   });
 
+  it("refuses a run that carries a shard the list does not know", () => {
+    // **過剰の側も見る。** 欠けだけを見ていると、1 枚消えて 1 枚増えた走行が
+    // 緑で通る。名前で持っているので、何が増えたかも言える。
+    const v = verdict(
+      nothingExpected,
+      measurement({
+        shardsSeen: [...ALL, "c (values)"],
+        expected: [...ALL, "c (values)"],
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+    expect(v.why).toContain("c (values)");
+  });
+
+  it("does not take the run's own word for which shards should be there", () => {
+    // **これが定数を置いた理由である。** シャードのファイルが 1 枚消えると、
+    // 走行が導く `expected` も一緒に縮む。走行の自己申告と突き合わせている
+    // 限り、14 枚しか読んでいない走行が「完全一致」を語れてしまう
+    // (設計書 §4.4)。`expected` が縮んでいても赤くなること。
+    const v = verdict(
+      aExpected,
+      measurement({
+        shardsSeen: ["a (values)"],
+        expected: ["a (values)"],
+        mismatchesByShard: { "a (values)": 500 },
+        totalsByShard: { "a (values)": 2000 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+    expect(v.why).toContain("b (values)");
+  });
+
+  it("names fifteen shards, and names them once", () => {
+    // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
+    // 通してしまう**ので、重複が無いことも一緒に見る。
+    expect(ALL_SHARDS).toHaveLength(15);
+    expect(new Set(ALL_SHARDS).size).toBe(15);
+  });
+
   it("accepts a healthy run where nothing reacted", () => {
-    const v = verdictFor(nothingExpected, measurement());
+    const v = verdict(nothingExpected, measurement());
     expect(v.ok).toBe(true);
   });
 
   it("calls it a false claim when something reacted that should not have", () => {
-    const v = verdictFor(
+    const v = verdict(
       nothingExpected,
       measurement({
         playwrightExitCode: 1,
@@ -254,10 +308,7 @@ describe("the verdict looks at the health of the measurement first", () => {
     // 比較とは別の理由(タイムアウト等)で走行そのものが壊れただけ――
     // spec A §4.5 の「1〜4 は測れていない」に属するので、
     // `claim-was-false`(検出の結果)ではなく `measurement-failed` になる。
-    const v = verdictFor(
-      nothingExpected,
-      measurement({ playwrightExitCode: 1 }),
-    );
+    const v = verdict(nothingExpected, measurement({ playwrightExitCode: 1 }));
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("measurement-failed");
   });
@@ -265,7 +316,7 @@ describe("the verdict looks at the health of the measurement first", () => {
 
 describe("the expected shard set is matched exactly", () => {
   it("rejects an extra shard", () => {
-    const v = verdictFor(
+    const v = verdict(
       aExpected,
       measurement({
         playwrightExitCode: 1,
@@ -277,7 +328,7 @@ describe("the expected shard set is matched exactly", () => {
   });
 
   it("rejects a missing shard", () => {
-    const v = verdictFor(
+    const v = verdict(
       { id: "m", expectShards: ["a (values)", "b (values)"], minRate: {} },
       measurement({
         playwrightExitCode: 1,
@@ -289,7 +340,7 @@ describe("the expected shard set is matched exactly", () => {
   });
 
   it("says it caught nothing when the set is empty but something was expected", () => {
-    const v = verdictFor(aExpected, measurement());
+    const v = verdict(aExpected, measurement());
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("caught-nothing");
   });
@@ -302,7 +353,7 @@ describe("the expected shard set is matched exactly", () => {
     // ない。`caught-nothing`(コーパスの検出力の話)のままだと、隣の
     // `expectShards === []` の枝と同じ状況に違う意味論を割り当てることに
     // なる。
-    const v = verdictFor(aExpected, measurement({ playwrightExitCode: 1 }));
+    const v = verdict(aExpected, measurement({ playwrightExitCode: 1 }));
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("measurement-failed");
   });
@@ -312,14 +363,14 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
   it("passes at the same rate on a bigger shard", () => {
     // **2000 件で 200、4000 件で 400。率が同じなら緑。**
     // B+C がコーパスを 3,500 件に増やしても、この表を書き換えずに済む。
-    const small = verdictFor(
+    const small = verdict(
       aExpected,
       measurement({
         playwrightExitCode: 1,
         mismatchesByShard: { "a (values)": 200, "b (values)": 0 },
       }),
     );
-    const big = verdictFor(
+    const big = verdict(
       aExpected,
       measurement({
         playwrightExitCode: 1,
@@ -332,7 +383,7 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
   });
 
   it("fails when the rate halves", () => {
-    const v = verdictFor(
+    const v = verdict(
       aExpected,
       measurement({
         playwrightExitCode: 1,
@@ -349,7 +400,7 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
     // `expectShards` と一致する」ことだけで、それは 1 件だけ検出したことの
     // 言い換えでしかない――率を書かなければ下限は実質 1 件になる。ここでは
     // ちょうど 1 件検出しているので緑になる。
-    const v = verdictFor(
+    const v = verdict(
       { id: "m", expectShards: ["a (values)"], minRate: {} },
       measurement({
         playwrightExitCode: 1,
@@ -376,7 +427,7 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
     };
     const totals = { "a (values)": 3500, "b (values)": 2000 };
 
-    const exact = verdictFor(
+    const exact = verdict(
       rateMutation,
       measurement({
         playwrightExitCode: 1,
@@ -386,7 +437,7 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
     );
     expect(exact.ok).toBe(true);
 
-    const oneShort = verdictFor(
+    const oneShort = verdict(
       rateMutation,
       measurement({
         playwrightExitCode: 1,
