@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from calcarc_reference.data_scale_ref import U128_MAX, lines
+from calcarc_reference.data_scale_ref import U128_MAX, lines, parse_u128
 
 # 定義値(IEEE 754 binary32 / binary16、bfloat16 の 16 bit、整数型のビット幅)。
 BITS_PER_PARAMETER = {
@@ -19,13 +19,6 @@ BITS_PER_PARAMETER = {
     "int8": 8,
     "int4": 4,
 }
-
-
-def _parse(text: str) -> int | None:
-    if not text or not text.isascii() or not text.isdigit():
-        return None
-    value = int(text)
-    return value if value <= U128_MAX else None
 
 
 def _product(factors: list[int]) -> int | None:
@@ -51,7 +44,7 @@ def compute(
     context_length: str,
     kv_precision: str,
 ) -> dict:
-    numbers = [_parse(t) for t in (parameters, layers, kv_heads, head_dim, context_length)]
+    numbers = [parse_u128(t) for t in (parameters, layers, kv_heads, head_dim, context_length)]
     weight_bits_per = BITS_PER_PARAMETER.get(weight_precision)
     kv_bits_per = BITS_PER_PARAMETER.get(kv_precision)
     if any(n is None for n in numbers) or weight_bits_per is None or kv_bits_per is None:
@@ -69,6 +62,10 @@ def compute(
     weight_bytes = -(-weight_bits // 8)
     kv_bytes = -(-kv_bits // 8)
     total = weight_bytes + kv_bytes
+    # **この枝は到達しない。** weight_bytes も kv_bytes も
+    # ceil(U128_MAX / 8) = 2^125 以下なので、和は 2^126 で頭打ちになる。
+    # それでも検査を残す——「到達不能だから外す」は、証明が崩れた日に
+    # 黙って折り返す。Rust 側の checked_add も同じ形にする。
     if total > U128_MAX:
         return {"error": "Overflow"}
     return {

@@ -26,7 +26,13 @@ DECIMAL_UNITS = [("KB", 10**3), ("MB", 10**6), ("GB", 10**9), ("TB", 10**12)]
 BINARY_UNITS = [("KiB", 2**10), ("MiB", 2**20), ("GiB", 2**30), ("TiB", 2**40)]
 
 
-def _parse(text: str) -> int | None:
+def parse_u128(text: str) -> int | None:
+    """10 進数字列を u128 の範囲で読む。範囲外・空・数字以外は None。
+
+    **u128 の上限は公開契約である**（spec §3.6）。参照実装が 3 つに
+    増えても、この関数は 1 つである——写すと、上限が動いた日に
+    片方だけ直る。
+    """
     if not text or not text.isascii() or not text.isdigit():
         return None
     value = int(text)
@@ -79,8 +85,8 @@ def lines(size: int) -> dict:
 
 
 def compute(count: str, dimensions: str, dtype: str) -> dict:
-    c = _parse(count)
-    d = _parse(dimensions)
+    c = parse_u128(count)
+    d = parse_u128(dimensions)
     per = BYTES_PER_ELEMENT.get(dtype)
     if c is None or d is None or per is None:
         return {"error": "SyntaxError"}
