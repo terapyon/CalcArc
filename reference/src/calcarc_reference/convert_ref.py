@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from fractions import Fraction
 
 _ZERO = Fraction(0)
@@ -86,3 +87,77 @@ def convert_value(value: Fraction, category: str, src: str, dst: str) -> Fractio
         return None
     base = to_base(value, *table[src])
     return from_base(base, *table[dst])
+
+
+_DIGITS = 10
+# **受け付ける値は 10 進リテラルだけ**（式は Rust 側の評価器が持つ。golden で
+# 二重に持たない）。指数表記の入力は受けない——盤面にその打ち方が無い。
+_LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z")
+
+
+def format_rational(value: Fraction) -> str:
+    """有効数字 10 桁の 10 進文字列にする（numerical-policy の「表示」節）。
+
+    **log10 を使わない。** 10 の冪の近くで 1 桁ずれるうえ、丸めの繰り上がり
+    （`9999999999.5` → `1e10`）を先読みできない。10 倍・1/10 倍で正規化して
+    **丸めた後の指数**を持つ。
+    """
+    if value == 0:
+        return "0"
+    sign = "-" if value < 0 else ""
+    v = -value if value < 0 else value
+
+    # 1 <= v < 10 に正規化し、そのとき動かした冪を exponent に持つ。
+    exponent = 0
+    while v >= 10:
+        v /= 10
+        exponent += 1
+    while v < 1:
+        v *= 10
+        exponent -= 1
+
+    # 有効数字 10 桁 = 整数部 1 桁 + 小数 9 桁。10^9 倍して丸める。
+    scaled = v * 10 ** (_DIGITS - 1)
+    whole, rest = divmod(scaled.numerator, scaled.denominator)
+    twice = 2 * rest
+    if twice > scaled.denominator or (twice == scaled.denominator and whole % 2 == 1):
+        whole += 1
+    if whole == 10**_DIGITS:  # 繰り上がりで 11 桁になった
+        whole //= 10
+        exponent += 1
+
+    digits = str(whole)  # ちょうど 10 桁
+
+    # **境の判定は丸めた後の指数で行う**(spec §3.3)。
+    if exponent >= 10 or exponent <= -10:
+        mantissa = _trim(digits[0] + "." + digits[1:])
+        return f"{sign}{mantissa}e{exponent}"
+
+    if exponent >= 0:
+        integer, fraction = digits[: exponent + 1], digits[exponent + 1 :]
+    else:
+        integer, fraction = "0", "0" * (-exponent - 1) + digits
+    body = _trim(integer + "." + fraction) if fraction else integer
+    return sign + _group(body)
+
+
+def _trim(text: str) -> str:
+    """末尾の 0 と、裸になった小数点を落とす。"""
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _group(text: str) -> str:
+    """整数部だけ 3 桁ごとに区切る。**小数部には入れない**（numerical-policy）。"""
+    integer, dot, fraction = text.partition(".")
+    grouped = f"{int(integer):,}"
+    return grouped + dot + fraction
+
+
+def compute(value: str, category: str, src: str, dst: str) -> dict:
+    """入口。**エラーは例外ではなく戻り値**（他の参照実装と同じ流儀）。"""
+    if not _LITERAL.match(value):
+        return {"error": "SyntaxError"}
+    landed = convert_value(Fraction(value), category, src, dst)
+    if landed is None:
+        return {"error": "SyntaxError"}
+    return {"text": format_rational(landed)}
