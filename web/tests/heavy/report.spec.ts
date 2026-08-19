@@ -782,6 +782,34 @@ test("the precedence-specific elaboration is absent when that shard is not in th
   expect(markdown).not.toContain("同順位の入れ子は括弧を残して生成して");
 });
 
+test("the detection-power section is written from the argument, not from a file on disk", () => {
+  // **2026-08-19 の回帰。** `renderReport` は自分で `detection-power.json` を
+  // 読んでいた。変異ごとの `expect` が短い言い回し("precedence only")から
+  // シャード名の列挙に変わった時点で、**測定が済んでいる作業ツリーでだけ**
+  // 「優先順位シャードが走行に無い」検査が落ちるようになった——文書の中身が
+  // 引数に無いものに依存していたからである。CI は `heavy:power` の直後に
+  // `heavy` を回すので、これは毎回落ちる形だった。
+  const measured = renderReport([summary()], PROVENANCE, [], {
+    results: [
+      {
+        id: "precedence-collapse",
+        what: "× ÷ の優先順位を + − と同じに落とす",
+        expect: `${PRECEDENCE_SHARD} (values)`,
+        caught: { [`${PRECEDENCE_SHARD} (values)`]: 1099 },
+        total: 1099,
+        ok: true,
+        why: "期待したシャードだけが反応した",
+      },
+    ],
+  });
+  expect(measured).toContain(PRECEDENCE_SHARD);
+
+  // 渡さなければ、ディスクに測定が在っても「測っていない」と書く。
+  const unmeasured = renderReport([summary()], PROVENANCE);
+  expect(unmeasured).toContain("測っていない");
+  expect(unmeasured).not.toContain(PRECEDENCE_SHARD);
+});
+
 test("zero precedence cases reads as never touched", () => {
   // **C1 fix (review round 2).** `toContain("一度も踏んでいない")` alone was
   // satisfied by the section *heading*, which at the time literally read

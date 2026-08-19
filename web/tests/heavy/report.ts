@@ -666,6 +666,19 @@ export function renderReport(
    * なってはならない(ワーカー再起動で集計が消えた実測に対する構造的な塞ぎ)。
    */
   missing: string[] = [],
+  /**
+   * **`pnpm heavy:power` の測定結果。呼び出し側が渡す。**
+   *
+   * 既定が `null` なのは意図である。以前はここで `readDetectionPower()` を
+   * 呼んでいたが、そうすると `renderReport` の出力が**引数に無いファイル**に
+   * 依存し、測定が済んでいる作業ツリーとそうでない作業ツリーで別の文書が
+   * 出る。実際に踏んだ: 変異ごとの `expect` がシャード名を列挙するように
+   * なった時点で、`detection-power.json` が在るだけで
+   * 「優先順位シャードが走行に無いのにその名前が出ていないこと」を見る検査が
+   * 落ちるようになった(2026-08-19、Task 7 の 2 回目の走行)。
+   * 本番の読み込みは `writeReport()` が行う。
+   */
+  power: DetectionPower | null = null,
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -754,7 +767,7 @@ export function renderReport(
     "シャードごとの内訳や誤差の分布は**付録**にある。",
     "",
     ...renderVerdicts(entries),
-    ...renderDetectionPower(readDetectionPower()),
+    ...renderDetectionPower(power),
     "",
     "## 数えたもの",
     "",
@@ -1676,6 +1689,7 @@ export function writeReport(): void {
       browser: provenanceRuntime.browser,
     },
     missing,
+    readDetectionPower(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);
