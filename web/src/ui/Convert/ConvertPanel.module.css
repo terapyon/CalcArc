@@ -1,0 +1,24 @@
+/* **見え方は自動検査では捕まらない**(設計書 §5)。0.2.0 の更新トーストは
+   role も寸法もフォーカスも緑のまま、白地に白のボタンだった。だから
+   背景と文字色をトークンで明示的に持ち、E2E が computed style で見る。 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 24px 12px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}
+
+.heading {
+  font-size: 1rem;
+  font-weight: var(--key-font-weight-emphasis);
+}
+
+.detail {
+  font-size: 0.875rem;
+  color: var(--display-status-fg);
+}

@@ -10,6 +10,9 @@ vi.mock("./ui/ScientificPanel", () => ({
 vi.mock("./ui/DataScale/DataScalePanel", () => ({
   DataScalePanel: () => <p data-testid="datascale-panel" />,
 }));
+vi.mock("./ui/Convert/ConvertPanel", () => ({
+  ConvertPanel: () => <p data-testid="convert-panel" />,
+}));
 vi.mock("./ui/Finance/FinancePanel", () => ({
   FinancePanel: () => <p data-testid="finance-panel" />,
 }));
@@ -55,6 +58,19 @@ describe("App", () => {
     expect(screen.getByTestId("datascale-panel")).toBeInTheDocument();
   });
 
+  it("shows the convert placeholder when the hash says so", () => {
+    window.location.hash = "#convert";
+    render(<App />);
+    expect(screen.getByTestId("convert-panel")).toBeInTheDocument();
+  });
+
+  it("does not route the old #data-scale hash any more", () => {
+    // **互換は作らない**(設計書 §1-4)。旧 #loan と同じ扱いである。
+    window.location.hash = "#data-scale";
+    render(<App />);
+    expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
+  });
+
   it("shows Finance when the hash says so", () => {
     window.location.hash = "#finance";
     render(<App />);
@@ -62,6 +78,7 @@ describe("App", () => {
     // 1 モジュールだけが <main> に居ること(出し分けの取りこぼしを防ぐ)。
     expect(screen.queryByTestId("scientific-panel")).toBeNull();
     expect(screen.queryByTestId("datascale-panel")).toBeNull();
+    expect(screen.queryByTestId("convert-panel")).toBeNull();
   });
 
   it("does not route the old #loan hash any more", () => {

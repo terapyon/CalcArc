@@ -1,12 +1,6 @@
 import type { ModuleId } from "../../route";
 import styles from "./Nav.module.css";
 
-// **一時的な再 export。Task 3 で消す。**
-// これが無いと、まだ Nav から ModuleId を取っている App.tsx が Task 2 の
-// コミット時点で型検査に落ちる。**全コミットを緑に保つ**ためだけの 1 行で、
-// 恒久的な依存ではない(ハッシュの語彙はルーティングの持ち物である)。
-export type { ModuleId };
-
 // タブの表示ラベルはモジュールの固有名詞なので英語のまま
 // (アクセシブルネームは <nav> 側の aria-label で日本語にする)。
 //
