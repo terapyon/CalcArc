@@ -492,6 +492,22 @@
         "weight_precision": "fp8"
       },
       "op": "llm"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "llm/1xfp16/1x1x1x1xfp8",
+      "input": {
+        "context_length": "1",
+        "head_dim": "1",
+        "kv_heads": "1",
+        "kv_precision": "fp8",
+        "layers": "1",
+        "parameters": "1",
+        "weight_precision": "fp16"
+      },
+      "op": "llm"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",

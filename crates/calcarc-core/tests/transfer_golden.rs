@@ -139,5 +139,5 @@ fn transfer_matches_the_reference() {
         "some case was not compared"
     );
     assert!(ok >= 6, "only {ok} successful cases compared");
-    assert!(errors >= 3, "only {errors} error cases compared");
+    assert!(errors >= 4, "only {errors} error cases compared");
 }

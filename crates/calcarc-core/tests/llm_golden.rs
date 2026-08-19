@@ -161,5 +161,5 @@ fn llm_matches_the_reference() {
         "some case was not compared"
     );
     assert!(ok >= 12, "only {ok} successful cases compared");
-    assert!(errors >= 4, "only {errors} error cases compared");
+    assert!(errors >= 5, "only {errors} error cases compared");
 }

@@ -127,6 +127,19 @@
     },
     {
       "expect": {
+        "error": "Overflow"
+      },
+      "id": "transfer/170141183460469231731687303715884105728gbpsx0second",
+      "input": {
+        "bandwidth": "170141183460469231731687303715884105728",
+        "bandwidth_unit": "gbps",
+        "duration": "0",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
         "error": "SyntaxError"
       },
       "id": "transfer/1tbpsx1second",

@@ -860,8 +860,9 @@ LLM_INPUTS: list[tuple[str, str, str, str, str, str, str]] = [
     # あふれ 2 つ。2 件目は**掛ける順序**が効く（後ろに 0 が来ても救わない）
     (str(1 << 127), "fp32", "1", "1", "1", "0", "fp16"),
     ("1", "int8", str(1 << 127), "1", "1", "0", "fp16"),
-    # 綴りの知らない精度
+    # 綴りの知らない精度。**重み側と KV 側の 2 か所**で読むので、両方から 1 件ずつ
     ("1", "fp8", "1", "1", "1", "1", "fp16"),
+    ("1", "fp16", "1", "1", "1", "1", "fp8"),
 ]
 
 # (bandwidth, bandwidth_unit, duration, duration_unit)。
@@ -875,6 +876,9 @@ TRANSFER_INPUTS: list[tuple[str, str, str, str]] = [
     ("1", "gbps", "1", "day"),  # 10.8 TB
     ("0", "gbps", "1", "hour"),  # 0 は正当な入力
     (str(1 << 127), "gbps", "1", "second"),  # Overflow
+    # **掛ける順序が効く。** 後ろに 0 が来ても、先にあふれた分は救われない
+    # （`1 gbps × 0 second` は 0 バイトを正当に返すので、この 1 件が順序を判別する）
+    (str(1 << 127), "gbps", "0", "second"),
     ("1", "tbps", "1", "second"),  # 知らない単位は SyntaxError
     ("1", "bps", "1", "week"),
 ]

@@ -65,7 +65,7 @@ def compute(
     # **この枝は到達しない。** weight_bytes も kv_bytes も
     # ceil(U128_MAX / 8) = 2^125 以下なので、和は 2^126 で頭打ちになる。
     # それでも検査を残す——「到達不能だから外す」は、証明が崩れた日に
-    # 黙って折り返す。Rust 側の checked_add も同じ形にする。
+    # 黙って折り返す（plan の裁定 5 と同じ扱い）。
     if total > U128_MAX:
         return {"error": "Overflow"}
     return {
