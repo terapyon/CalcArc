@@ -904,10 +904,16 @@ def test_the_current_generator_gives_up_only_for_one_classified_reason() -> None
     織り込む改善)で 10 → 0 になった。種が税を見ずに組まれていたのが原因で、
     実測 10 件はすべて `tax: True` の `compound_deposit_for` だった
     （`reference/tests/test_compound_ref.py` の `TAX_SEED_MISS_CASES`）。
+
+    `near_yen_boundary` は 3 → 5 になった(Task 6)。`loan_term` /
+    `loan_principal` の乱択入力を正算の答から構成するようにしたことで、
+    `loan_forward` / `loan_bonus_forward` の乱択列(同じ `rng` を共有する)が
+    ずれ、円境界近接の棄却を引く回数がわずかに変わった——これは
+    `_guard_boundary` 自体の挙動ではなく、乱数列の並びが変わっただけである。
     """
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     reasons = shard["rejections"]["reference_gave_up"]
-    assert reasons["near_yen_boundary"] == 3
+    assert reasons["near_yen_boundary"] == 5
     assert reasons["compound_deposit_search_limit"] == 0
     assert reasons["other"] == 0
 
@@ -1175,3 +1181,46 @@ def test_the_tax_boundary_searches_are_deterministic_not_random() -> None:
     assert corpus_calls._find_tax_rounding_mismatch(
         2_648_906
     ) == corpus_calls._find_tax_rounding_mismatch(2_648_906)
+
+
+# --- Task 6: 構成による正常生成(逆算 op と残価・ボーナス) ------------------
+
+
+def test_each_op_has_at_least_100_normal_cases() -> None:
+    """設計書 §4.11 の 2。各 op の正常が 100 件以上。
+
+    `loan_term` / `loan_principal` / `compound_deposit_for` /
+    `compound_periods_for` は、逆算の入力を正算の答から構成する(設計書
+    §4.4)ようになったことで、乱択層でもほぼ確実に正常になる——`loan_term`
+    はこの変更の前は乱択の正常率が 34% ほどで、100 件の下限を満たすのが
+    ここでは危うかった。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    ok_counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        if "error" not in case["expect"]:
+            ok_counts[case["op"]] = ok_counts.get(case["op"], 0) + 1
+    for op in corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS:
+        assert ok_counts.get(op, 0) >= 100, f"{op} の正常が100件未満(実測 {ok_counts.get(op, 0)})"
+
+
+def test_residual_zero_and_bonus_zero_are_all_normal_and_meet_their_floor() -> None:
+    """設計書 §4.11 の 2。残価 0 の正常 100 件以上、ボーナス 0 の正常 30 件以上。
+
+    `residual_zero` / `bonus_zero` は定義上すべて `expect == "ok"` の層なので
+    (金利 0% に固定し、発散や払い切りの縮退を踏まない入力だけを `i` で振って
+    いる)、単に件数を数えるだけでなく**実際に生成された各ケースが `ok` で
+    あること**まで確かめる——`build` が誤って `expect` と食い違う入力を
+    混ぜても、件数だけを見るテストでは気づけない。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    residual_zero_cases = [
+        c for c in shard["cases"] if c["stratum"] == "loan_forward/residual_zero"
+    ]
+    bonus_zero_cases = [
+        c for c in shard["cases"] if c["stratum"] == "loan_bonus_forward/bonus_zero"
+    ]
+    assert len(residual_zero_cases) >= 100
+    assert all("error" not in c["expect"] for c in residual_zero_cases)
+    assert len(bonus_zero_cases) >= 30
+    assert all("error" not in c["expect"] for c in bonus_zero_cases)

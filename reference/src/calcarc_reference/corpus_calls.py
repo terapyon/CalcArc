@@ -49,6 +49,52 @@ def _rate(rng: random.Random) -> str:
     return f"{rng.randrange(0, 201) / 10:.1f}"
 
 
+# 乱択の試行上限。逆算 op の入力構成(下記)は「有効な組が引けるまで引き直す」
+# ので、理論上は無限ループになりうる——実測ではほぼ毎回 1〜2 回で当たるが
+# (設計書 §4.4)、種が壊れたときに黙って回り続けるのを避けるため上限を持つ。
+_INVERSE_CONSTRUCTION_MAX_ATTEMPTS = 10_000
+
+
+def _forward_payment(principal: int, rate: str, n: int) -> int | None:
+    """`principal`・`rate`・`n` から `loan_forward` の月額を返す。参照実装が
+    受理しない組(発散・円境界近接など)は `None`(設計書 §4.4 の構成)。
+    """
+    num, den = loan_ref.rate_fraction(rate)
+    try:
+        return loan_ref.monthly_payment(principal, num, den, n, 0)
+    except loan_ref.LoanError, ValueError:
+        return None
+
+
+def _loan_term_params(rng: random.Random) -> dict:
+    """`loan_term` の乱択入力。**逆算の入力は正算の答から作る**(設計書 §4.4)
+    ——`payment` を独立に乱択すると、初回利息を覆わない組が発散して
+    `SyntaxError` になりやすい(正常率 37%の原因)。ここで `payment` を
+    `loan_forward` の月額から作ると、`term_for` は必ずその `n` 前後で
+    完済を見つけられる。
+    """
+    for _attempt in range(_INVERSE_CONSTRUCTION_MAX_ATTEMPTS):
+        principal = rng.randint(PRINCIPAL_MIN, PRINCIPAL_MAX)
+        rate = _rate(rng)
+        n = rng.randint(MONTHS_MIN, MONTHS_MAX)
+        payment = _forward_payment(principal, rate, n)
+        if payment is not None:
+            return {"principal": str(principal), "rate": rate, "payment": str(payment)}
+    raise RuntimeError("loan_term: 有効な入力を引けなかった(構成の式を疑う)")
+
+
+def _loan_principal_params(rng: random.Random) -> dict:
+    """`loan_principal` の乱択入力。`loan_term` と同じ構成(設計書 §4.4)。"""
+    for _attempt in range(_INVERSE_CONSTRUCTION_MAX_ATTEMPTS):
+        principal = rng.randint(PRINCIPAL_MIN, PRINCIPAL_MAX)
+        rate = _rate(rng)
+        n = rng.randint(MONTHS_MIN, MONTHS_MAX)
+        payment = _forward_payment(principal, rate, n)
+        if payment is not None:
+            return {"payment": str(payment), "rate": rate, "n": n}
+    raise RuntimeError("loan_principal: 有効な入力を引けなかった(構成の式を疑う)")
+
+
 def _loan_params(rng: random.Random, op: str) -> dict:
     if op == "loan_forward":
         principal = rng.randint(PRINCIPAL_MIN, PRINCIPAL_MAX)
@@ -59,17 +105,9 @@ def _loan_params(rng: random.Random, op: str) -> dict:
             "residual": str(rng.randint(0, principal)),
         }
     if op == "loan_principal":
-        return {
-            "payment": str(rng.randint(PAYMENT_MIN, PAYMENT_MAX)),
-            "rate": _rate(rng),
-            "n": rng.randint(MONTHS_MIN, MONTHS_MAX),
-        }
+        return _loan_principal_params(rng)
     if op == "loan_term":
-        return {
-            "principal": str(rng.randint(PRINCIPAL_MIN, PRINCIPAL_MAX)),
-            "rate": _rate(rng),
-            "payment": str(rng.randint(PAYMENT_MIN, PAYMENT_MAX)),
-        }
+        return _loan_term_params(rng)
     if op == "loan_bonus_forward":
         principal = rng.randint(PRINCIPAL_MIN, PRINCIPAL_MAX)
         return {
@@ -88,13 +126,92 @@ def _loan_params(rng: random.Random, op: str) -> dict:
     raise ValueError(f"unknown loan op: {op!r}")
 
 
+def _compound_reached(
+    principal: int, deposit: int, rate: str, periods_per_year: int, periods: int, tax: bool
+) -> int | None:
+    """到達値(税 ON なら手取り、OFF なら残高。公開契約 6)。参照実装が
+    受理しない組(元本も積立も 0、期数域外など)は `None`(設計書 §4.4)。
+    """
+    try:
+        num, den = compound_ref.rate_fraction(rate, periods_per_year)
+        return compound_ref.reached(principal, deposit, num, den, periods, tax)
+    except compound_ref.CompoundError:
+        return None
+
+
+def _compound_deposit_for_params(rng: random.Random) -> dict:
+    """`compound_deposit_for` の乱択入力。**逆算の入力は正算の答から作る**
+    (設計書 §4.4)——積立額を選び、`compound_grow` の到達値を `target` にする。
+    `deposit` は 1 円以上にして「元本も積立も 0」を踏まない。
+
+    `periods_per_year` は**引き直しループの外で 1 回だけ引く**。中で引き直すと、
+    `periods_per_year = 1`(年 1 回複利)は同じ `periods` でも実質的な年数が
+    12 倍長くなり、Overflow で構成をやり直す率が他の周期より高くなる——
+    その分だけ最終的な採用に占める `1` の割合が下がり、§4.11 の 5(周期の
+    均等性)を壊す。周期を固定してから中身だけ引き直せば、この偏りは
+    起きない(実装時に実測して直した)。
+    """
+    periods_per_year = rng.choice(PERIODS_PER_YEAR_OK)
+    for _attempt in range(_INVERSE_CONSTRUCTION_MAX_ATTEMPTS):
+        principal = rng.randint(0, PRINCIPAL_MAX)
+        deposit = rng.randint(1, DEPOSIT_MAX)
+        rate = _rate(rng)
+        periods = rng.randint(1, COMPOUND_PERIODS_MAX)
+        tax = rng.random() < 0.5
+        target = _compound_reached(principal, deposit, rate, periods_per_year, periods, tax)
+        if target is not None and target > 0:
+            return {
+                "principal": str(principal),
+                "target": str(target),
+                "periods": periods,
+                "rate": rate,
+                "periods_per_year": periods_per_year,
+                "tax": tax,
+            }
+    raise RuntimeError("compound_deposit_for: 有効な入力を引けなかった(構成の式を疑う)")
+
+
+def _compound_periods_for_params(rng: random.Random) -> dict:
+    """`compound_periods_for` の乱択入力。期数 `n` を選び、`compound_grow`
+    の到達値を `target` にする(設計書 §4.4)。`target` はちょうど `n` 期での
+    到達値なので、`periods_for` は遅くとも `n` で見つける——1200 期でも
+    未達という発散を踏まない。
+
+    `periods_per_year` を引き直しループの外に出す理由は
+    `_compound_deposit_for_params` と同じ。
+    """
+    periods_per_year = rng.choice(PERIODS_PER_YEAR_OK)
+    for _attempt in range(_INVERSE_CONSTRUCTION_MAX_ATTEMPTS):
+        principal = rng.randint(0, PRINCIPAL_MAX)
+        deposit = rng.randint(0, DEPOSIT_MAX)
+        if principal == 0 and deposit == 0:
+            continue
+        rate = _rate(rng)
+        n = rng.randint(1, COMPOUND_PERIODS_MAX)
+        tax = rng.random() < 0.5
+        target = _compound_reached(principal, deposit, rate, periods_per_year, n, tax)
+        if target is not None and target > 0:
+            return {
+                "principal": str(principal),
+                "deposit": str(deposit),
+                "target": str(target),
+                "rate": rate,
+                "periods_per_year": periods_per_year,
+                "tax": tax,
+            }
+    raise RuntimeError("compound_periods_for: 有効な入力を引けなかった(構成の式を疑う)")
+
+
 def _compound_params(rng: random.Random, op: str) -> dict:
-    common = {
-        "rate": _rate(rng),
-        "periods_per_year": rng.choice(PERIODS_PER_YEAR_OK),
-        "tax": rng.random() < 0.5,
-    }
     if op == "compound_grow":
+        # 描画順は変更前と揃えてある(rate → periods_per_year → tax →
+        # principal → deposit → periods)。逆算 2 op だけを構成に差し替える
+        # Task なので、無関係な `compound_grow` の乱数列をずらさない。
+        common = {
+            "rate": _rate(rng),
+            "periods_per_year": rng.choice(PERIODS_PER_YEAR_OK),
+            "tax": rng.random() < 0.5,
+        }
         return {
             "principal": str(rng.randint(0, PRINCIPAL_MAX)),
             "deposit": str(rng.randint(0, DEPOSIT_MAX)),
@@ -102,19 +219,9 @@ def _compound_params(rng: random.Random, op: str) -> dict:
             **common,
         }
     if op == "compound_deposit_for":
-        return {
-            "principal": str(rng.randint(0, PRINCIPAL_MAX)),
-            "target": str(rng.randint(1, TARGET_MAX)),
-            "periods": rng.randint(1, COMPOUND_PERIODS_MAX),
-            **common,
-        }
+        return _compound_deposit_for_params(rng)
     if op == "compound_periods_for":
-        return {
-            "principal": str(rng.randint(0, PRINCIPAL_MAX)),
-            "deposit": str(rng.randint(0, DEPOSIT_MAX)),
-            "target": str(rng.randint(1, TARGET_MAX)),
-            **common,
-        }
+        return _compound_periods_for_params(rng)
     raise ValueError(f"unknown compound op: {op!r}")
 
 
@@ -137,10 +244,13 @@ class Stratum:
     共有する文字列である。**3 か所が別々に組み立てないよう、層の一覧は
     ここ(`corpus_calls.py`)に 1 つだけ置く。**
 
-    `minimum` はこの Task(層の骨格を作るだけ)ではすべて 0 にしてある。
-    `residual_zero` に本来の下限 100、`bonus_zero` に 30 を入れると現在の
-    生成器では実測 2 件・1 件しか無く落ちる——それを直すのは Task 6 である。
-    骨格の段階で赤いテストを抱えないため、値は Task 6 で入れる。
+    `minimum` は Task 6 で `residual_zero` に 100、`bonus_zero` に 30 が入った
+    (骨格の Task 3 ではすべて 0 だった。当時の生成器では実測 1 件・1 件しか
+    無く、赤くなることを確かめてから直した)。`build_finance_shard` は
+    `max(1, stratum.minimum)` 件を `build(rng, i)` の `i` を振って作る
+    ——`minimum` はテストの下限であると同時に、その層が実際に生成される
+    目標件数でもある。`i` を使わない `build`(大半の名指し境界層)は毎回
+    同じ入力を返すので、そのまま 1 件だけ作られる。
     """
 
     op: str
@@ -169,8 +279,18 @@ _BOUNDARY_STRATA: tuple[Stratum, ...] = (
         "loan_forward",
         "residual_zero",
         "ok",
-        0,
-        lambda rng, i: {"principal": "100000", "rate": "0", "n": 1, "residual": "0"},
+        100,
+        # `i` で元本と期間を振って 100 件の異なる入力を作る(設計書 §4.11 の 2)。
+        # 金利 0% に固定するのは、`monthly_payment` の `num == 0` 分岐が
+        # `_guard_boundary` を通らないため——ここは「残価 0」の網羅が目的で、
+        # 金利の網羅は `_rate_level_strata` が別に担う。`principal >= n` は
+        # 常に成り立つ(最小 100,000 円・最大期間 480)ので発散しない。
+        lambda rng, i: {
+            "principal": str(100_000 + i * 4_000_000),
+            "rate": "0",
+            "n": 1 + (i % MONTHS_MAX),
+            "residual": "0",
+        },
     ),
     Stratum(
         "loan_forward",
@@ -252,12 +372,16 @@ _BOUNDARY_STRATA: tuple[Stratum, ...] = (
         "loan_bonus_forward",
         "bonus_zero",
         "ok",
-        0,
+        30,
+        # `i` で元本と期間を振って 30 件の異なる入力を作る(設計書 §4.11 の 2)。
+        # `bonus_principal = 0` は `_check_bonus_share` も `n < 6` の検査も
+        # 通らない(ボーナス > 0 のときだけ効く)ので、金利 0% と合わせて
+        # 常に ok になる。
         lambda rng, i: {
-            "principal": "5000000",
+            "principal": str(5_000_000 + i * 1_000_000),
             "bonus_principal": "0",
             "rate": "0",
-            "n": 12,
+            "n": 12 + i,
         },
     ),
     Stratum(
@@ -1684,6 +1808,186 @@ def _tax_boundary_strata() -> tuple[Stratum, ...]:
     )
 
 
+def _residual_axis_strata() -> tuple[Stratum, ...]:
+    """`loan_forward` の残価 7 層のうち、Task 6 で足す 4 つ(設計書 §4.2)。
+    `residual_zero`(既存、下限 100)・`residual_equals_principal`(既存、
+    ERROR_PATH の「残価≥元本」)・`residual_exceeds_principal`(同上)と
+    合わせて 7 層になる。金利は 0% に固定してある——残価の網羅が目的で、
+    金利の網羅は `_rate_level_strata` が別に担う。
+    """
+    return (
+        Stratum(
+            "loan_forward",
+            "residual_one",
+            "ok",
+            0,
+            lambda rng, i: {"principal": "1000000", "rate": "0", "n": 24, "residual": "1"},
+        ),
+        Stratum(
+            "loan_forward",
+            "residual_40_percent",
+            "ok",
+            0,
+            lambda rng, i: {"principal": "1000000", "rate": "0", "n": 24, "residual": "400000"},
+        ),
+        Stratum(
+            "loan_forward",
+            "residual_50_percent",
+            "ok",
+            0,
+            lambda rng, i: {"principal": "2000000", "rate": "0", "n": 24, "residual": "1000000"},
+        ),
+        Stratum(
+            "loan_forward",
+            "residual_principal_minus_one",
+            "ok",
+            0,
+            # 金利 0% だと(規則的な支払いが残価の手前まで一気に落ちて)定例回の
+            # 途中で払い切ってしまい `SyntaxError` になる(実装時に実測)ので、
+            # ここだけ金利を入れて調整回を作る。
+            lambda rng, i: {"principal": "1000000", "rate": "2.0", "n": 24, "residual": "999999"},
+        ),
+    )
+
+
+def _bonus_axis_strata() -> tuple[Stratum, ...]:
+    """`loan_bonus_forward` のボーナス 9 層のうち、Task 6 で足す 6 つ
+    (設計書 §4.2)。`bonus_zero`(既存、下限 30)・`bonus_exceeds_half`
+    (既存、ERROR_PATH の「ボーナスが元本の50%超」)・`bonus_with_term_5`
+    (既存、ERROR_PATH の「ボーナスありかつn<6」の `n=5`)と合わせて 9 層に
+    なる。**50% ちょうどは正常側**(`bonus_principal * 2 > principal` は
+    `>` であって `>=` ではない、`loan_ref.py:298`)。
+    """
+    return (
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_below_half",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "5000000",
+                "bonus_principal": "1000000",
+                "rate": "0",
+                "n": 24,
+            },
+        ),
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_equals_half",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "4000000",
+                "bonus_principal": "2000000",
+                "rate": "0",
+                "n": 24,
+            },
+        ),
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_n_6",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "5000000",
+                "bonus_principal": "1000000",
+                "rate": "0",
+                "n": 6,
+            },
+        ),
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_n_7",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "5000000",
+                "bonus_principal": "1000000",
+                "rate": "0",
+                "n": 7,
+            },
+        ),
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_multiple_of_6",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "5000000",
+                "bonus_principal": "1000000",
+                "rate": "0",
+                "n": 18,
+            },
+        ),
+        Stratum(
+            "loan_bonus_forward",
+            "bonus_not_multiple_of_6",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": "5000000",
+                "bonus_principal": "1000000",
+                "rate": "0",
+                "n": 13,
+            },
+        ),
+    )
+
+
+def _inverse_answer_milestone_strata() -> tuple[Stratum, ...]:
+    """逆算の答が 480・600・1200 付近に落ちる層(設計書 §4.4)。
+
+    **答を狙う op(期間を返す `loan_term` と `compound_periods_for`)だけに
+    要る。** `loan_principal` と `compound_deposit_for` は期間ではなく金額を
+    返すので、この意味での「480/600/1200 付近」という軸を持たない。
+
+    `payment` / `target` は正算(`loan_ref.forward` / `compound_ref.reached`)
+    の答から作る——これは移植ではなく、入力を構成しているだけである
+    (設計書 §4.4 の注記)。`compound_periods_for` は `tax=False` に固定する:
+    税ありだと手取りが期数について非単調になりうる(実装時の既知の性質)ので、
+    「税 OFF なら答は残高そのもの、かつ残高は期数について単調」という条件で
+    初めて、狙った `n` がそのまま最初の到達期になることを保証できる。
+    """
+    milestones = (480, 600, 1200)
+
+    def _loan_term_milestone(n: int) -> Stratum:
+        num, den = loan_ref.rate_fraction("5.0")
+        payment = loan_ref.monthly_payment(50_000_000, num, den, n, 0)
+        return Stratum(
+            "loan_term",
+            f"answer_near_{n}",
+            "ok",
+            0,
+            lambda rng, i, payment=payment: {
+                "principal": "50000000",
+                "rate": "5.0",
+                "payment": str(payment),
+            },
+        )
+
+    def _periods_milestone(n: int) -> Stratum:
+        num, den = compound_ref.rate_fraction("2.0", 12)
+        target = compound_ref.reached(1_000_000, 10_000, num, den, n, False)
+        return Stratum(
+            "compound_periods_for",
+            f"answer_near_{n}",
+            "ok",
+            0,
+            lambda rng, i, target=target: {
+                "principal": "1000000",
+                "deposit": "10000",
+                "target": str(target),
+                "rate": "2.0",
+                "periods_per_year": 12,
+                "tax": False,
+            },
+        )
+
+    return tuple(_loan_term_milestone(n) for n in milestones) + tuple(
+        _periods_milestone(n) for n in milestones
+    )
+
+
 # **経路名 → 層の key の対応。** ERROR_PATHS の網羅テストがここを読む
 # (テスト側に写しを持たない、設計書 §4.1 と同じ理由)。骨格 Task が作った
 # 既存層(`residual_equals_principal` など)を再利用している経路は、
@@ -1813,6 +2117,9 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
     + _balance_overflow_strata()
     + _deposit_overflow_strata()
     + _tax_boundary_strata()
+    + _residual_axis_strata()
+    + _bonus_axis_strata()
+    + _inverse_answer_milestone_strata()
 )
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
@@ -1910,7 +2217,23 @@ def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
 
 
 def build_finance_shard(seed: int, count: int) -> dict:
-    """金融のシャード。**境界を先に全部入れてから、残りを乱択で埋める。**"""
+    """金融のシャード。**境界を先に全部入れてから、残りを乱択で埋める。**
+
+    名指し層は `max(1, stratum.minimum)` 件を作る(設計書 §4.11 の 1・2)。
+    `minimum` が 0 の層(大半)は `build(rng, 0)` の 1 件だけ——`i` を使わない
+    `build` は毎回同じ入力を返すので、これまでと同じ挙動になる。
+    `residual_zero`(100 件)・`bonus_zero`(30 件)のように `minimum` を
+    持つ層は `i` を 0, 1, 2, … と振って複数件作る。**同じ入力を 2 度作ると
+    `seen` の重複で捨てて次の `i` を試す**——`build` が `i` を使わずに固定値を
+    返す層で `minimum > 1` を指定すると、ここで無限に近い空振りになる
+    (設計書 §4.7 が定数決め打ちを禁じているのと同じ理由で、黙って通さない)。
+    """
+    named_minimum_total = sum(max(1, stratum.minimum) for stratum in FINANCE_STRATA)
+    if named_minimum_total > count:
+        raise RuntimeError(
+            f"名指し層の下限合計 {named_minimum_total} が総件数 {count} を超えている"
+            "(設計書 §4.7: 黙って層を削らない)"
+        )
     rng = random.Random(seed)
     entries: list[dict] = []
     seen: set[str] = set()
@@ -1919,9 +2242,25 @@ def build_finance_shard(seed: int, count: int) -> dict:
         "reference_gave_up": {reason.value: 0 for reason in GaveUpReason},
     }
     for stratum in FINANCE_STRATA:
-        params = stratum.build(rng, 0)
-        entries.append(_finance_entry(len(entries), stratum.op, params, stratum.key))
-        seen.add(repr((stratum.op, sorted(params.items()))))
+        target = max(1, stratum.minimum)
+        produced = 0
+        i = 0
+        stratum_attempts = 0
+        while produced < target:
+            stratum_attempts += 1
+            if stratum_attempts > target * 200 + 1000:
+                raise RuntimeError(
+                    f"{stratum.key}: {target} 件作るのに {stratum_attempts} 回試して"
+                    f"{produced} 件しかできなかった(build が i を活かしていないのでは)"
+                )
+            params = stratum.build(rng, i)
+            i += 1
+            key = repr((stratum.op, sorted(params.items())))
+            if key in seen:
+                continue
+            seen.add(key)
+            entries.append(_finance_entry(len(entries), stratum.op, params, stratum.key))
+            produced += 1
     ops = LOAN_OPS + COMPOUND_OPS
     attempts = 0
     while len(entries) < count:
