@@ -406,13 +406,18 @@ def test_the_boundary_is_judged_after_rounding() -> None:
 def test_the_small_boundary_is_ten_to_the_minus_ninth() -> None:
     assert format_rational(Fraction(1, 10**9)) == "0.000000001"
     assert format_rational(Fraction(1, 10**10)) == "1e-10"
+    # **小さい側も丸めた後で判定する**(spec §3.3 は「小さい側も同じ」と書いている)。
+    # 9.9999999995e-10 は丸めると 1e-9 に達するので、**固定小数点になる**。
+    assert format_rational(Fraction(99999999995, 10**20)) == "0.000000001"
 
 
 def test_half_to_even_rounds_toward_the_even_digit() -> None:
     # 11 桁目がちょうど 5 で、10 桁目が偶数なら**上げない**。
-    assert format_rational(Fraction(123456789_25, 10**9)) == "123.4567892"
+    # **分母は小数点の位置だけを決める。** 10**9 なので 12.345678925 である
+    # （下線の切り方は「有効数字 10 桁 + 11 桁目の 5」を表している）。
+    assert format_rational(Fraction(123456789_25, 10**9)) == "12.34567892"
     # 10 桁目が奇数なら上げる。
-    assert format_rational(Fraction(123456789_35, 10**9)) == "123.4567894"
+    assert format_rational(Fraction(123456789_35, 10**9)) == "12.34567894"
 
 
 def test_compute_is_the_entry_point() -> None:
