@@ -17,7 +17,7 @@ Rust の f64 / u64 とは別物である。**ここで計算し直さない**—
 from __future__ import annotations
 
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -2096,7 +2096,462 @@ def _term_zero_strata_for_remaining_ops() -> tuple[Stratum, ...]:
     )
 
 
-FINANCE_STRATA: tuple[Stratum, ...] = (
+# === Task 7: ペアワイズ割付(IPOG、設計書 §4.3) ==============================
+
+
+def pairwise(factors: dict[str, Sequence[object]]) -> list[dict[str, object]]:
+    """2 因子網羅の行を決定的に返す。**乱数を使わない。**
+
+    貪欲な集合被覆で組む: 「まだ覆っていない、2 つの因子の水準の組」のうち
+    辞書順で最小のものを 1 つ選んで行を起こし、残りの因子はその行の中で
+    「すでに決めた水準との組み合わせで、いちばん多くの未覆ペアを稼げる
+    水準」を選んで埋める(同点は各因子の水準の並び順で先に出たものを取る)。
+    すべてのペアを覆うまでこれを繰り返す。
+
+    因子の並び順・各因子の水準の並び順だけで行と行の順序が決まるので、
+    **同じ `factors` を渡せば何度呼んでも同じ行が同じ順で返る**(このモジュール
+    の呼び出し側は `dict` のキー順・タプルの並び順を固定して使っている)。
+
+    2 因子しかない場合、ペアワイズ網羅は全交差と一致する(覆うべきペアが
+    水準の組の数だけあり、1 行が高々 1 組しか覆えないため)。3 因子以上で
+    初めて、全交差より少ない行数で全ペアを覆えるようになる。
+
+    IPOG(In Parameter Order - General)のように因子を 1 つずつ順に足す
+    段階的な作り方ではなく、貪欲な被覆を直接解く——このモジュールが扱う
+    規模(最大 4 因子・水準 15 種程度)では、貪欲でも実用的な行数に収まり、
+    「全ペアを覆うまで止まらない」という正しさがループの構造からそのまま
+    読める。
+    """
+    names = list(factors)
+    if not names:
+        return []
+    if len(names) == 1:
+        only = names[0]
+        return [{only: level} for level in factors[only]]
+
+    index = {name: position for position, name in enumerate(names)}
+
+    def canonical_pair(
+        factor_a: str, level_a: object, factor_b: str, level_b: object
+    ) -> tuple[str, object, str, object]:
+        if index[factor_a] < index[factor_b]:
+            return (factor_a, level_a, factor_b, level_b)
+        return (factor_b, level_b, factor_a, level_a)
+
+    needed: set[tuple[str, object, str, object]] = set()
+    for i, factor_a in enumerate(names):
+        for factor_b in names[i + 1 :]:
+            for level_a in factors[factor_a]:
+                for level_b in factors[factor_b]:
+                    needed.add((factor_a, level_a, factor_b, level_b))
+
+    def pair_sort_key(pair: tuple[str, object, str, object]) -> tuple:
+        factor_a, level_a, factor_b, level_b = pair
+        return (index[factor_a], repr(level_a), index[factor_b], repr(level_b))
+
+    rows: list[dict[str, object]] = []
+    while needed:
+        factor_a, level_a, factor_b, level_b = min(needed, key=pair_sort_key)
+        row: dict[str, object] = {factor_a: level_a, factor_b: level_b}
+        for name in names:
+            if name in row:
+                continue
+            best_level, best_gain = None, -1
+            for level in factors[name]:
+                gain = sum(
+                    1
+                    for other_name, other_level in row.items()
+                    if canonical_pair(other_name, other_level, name, level) in needed
+                )
+                if gain > best_gain:
+                    best_gain, best_level = gain, level
+            row[name] = best_level
+        rows.append(row)
+        for i, factor_a2 in enumerate(names):
+            for factor_b2 in names[i + 1 :]:
+                needed.discard((factor_a2, row[factor_a2], factor_b2, row[factor_b2]))
+    return rows
+
+
+# 金利は RATE_LEVELS のうち ok だけ(10 種)。`"100.0001"` はエラー水準なので
+# 因子の水準に混ぜない(設計書 §4.3)。
+PAIRWISE_RATE_LEVELS: tuple[str, ...] = tuple(
+    rate for rate, expect in RATE_LEVELS if expect == "ok"
+)
+
+# 期間は op によって「ok」の意味が違う(§4.2 の訂正)。loan は `1201` も ok
+# (上限のガードが無い)。複利は `1201` がエラーなので TERM_LEVELS の宣言
+# (複利を表す)をそのまま使える。
+PAIRWISE_LOAN_TERM_LEVELS: tuple[int, ...] = tuple(n for n, _ in TERM_LEVELS if n != 0)
+PAIRWISE_COMPOUND_TERM_LEVELS: tuple[int, ...] = tuple(
+    n for n, expect in TERM_LEVELS if expect == "ok"
+)
+
+# loan の 4 op(forward・principal・bonus_forward・bonus_principal)が共有する
+# 因子表。`n` はこの 4 op ではすべて**そのまま入力に使われる**リテラルな
+# 因子である(`loan_term` だけ `n` が答なので別扱い、下記)。
+PAIRWISE_LOAN_FACTORS: dict[str, tuple] = {
+    "rate": PAIRWISE_RATE_LEVELS,
+    "n": PAIRWISE_LOAN_TERM_LEVELS,
+}
+
+# 複利の 3 op が使う因子。`compound_periods_for` だけ「期間」が答なので
+# 持たない(設計書の注記「その op が持たない因子を無理に入れない」)。
+PAIRWISE_COMPOUND_GROW_FACTORS: dict[str, tuple] = {
+    "rate": PAIRWISE_RATE_LEVELS,
+    "periods": PAIRWISE_COMPOUND_TERM_LEVELS,
+    "periods_per_year": PERIODS_PER_YEAR_OK,
+    "tax": (False, True),
+}
+PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS: dict[str, tuple] = {
+    "rate": PAIRWISE_RATE_LEVELS,
+    "periods_per_year": PERIODS_PER_YEAR_OK,
+    "tax": (False, True),
+}
+
+_PAIRWISE_LOAN_ROWS: tuple[dict[str, object], ...] = tuple(pairwise(PAIRWISE_LOAN_FACTORS))
+_PAIRWISE_COMPOUND_GROW_ROWS: tuple[dict[str, object], ...] = tuple(
+    pairwise(PAIRWISE_COMPOUND_GROW_FACTORS)
+)
+_PAIRWISE_COMPOUND_PERIODS_FOR_ROWS: tuple[dict[str, object], ...] = tuple(
+    pairwise(PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS)
+)
+# `compound_deposit_for` は `compound_grow` と同じ 4 因子(§4.4 と同じ構成の
+# 理屈で、`periods` がそのまま入力になる op どうし)。同じ因子表なので
+# `pairwise()` は同じ行を返す——2 度呼んでも計算し直すだけで結果は同じ
+# (この関数は乱数を使わないので、呼び出し回数は結果に影響しない)。
+_PAIRWISE_COMPOUND_DEPOSIT_FOR_ROWS = _PAIRWISE_COMPOUND_GROW_ROWS
+
+# loan の pairwise 行が使う元本の土台。ちょうど 20,000,000 という値自体に
+# 意味は無い(他の名指し層と重ならない、程度の良い実額)。
+_LOAN_PAIRWISE_PRINCIPAL_BASE = 20_000_000
+# 円境界(`NearYenBoundaryError`、番人)を避けるための決定的な候補列。
+# **乱択ではない**——同じ (rate, n) には毎回同じ候補を同じ順で試す。
+# 実測(2026-08-20): この列で全 150 組が円境界以外の結果(ok か本物の
+# LoanError)に落ち着く。
+_LOAN_PAIRWISE_PRINCIPAL_OFFSETS: tuple[int, ...] = (
+    0,
+    1,
+    3,
+    7,
+    13,
+    29,
+    53,
+    101,
+    199,
+    401,
+    809,
+    1601,
+)
+
+
+def _pairwise_forward_result(rate: str, n: int) -> tuple[int, int | None, str] | None:
+    """`(principal, monthly_payment または None, expect)` を返す。
+
+    候補の元本を `_LOAN_PAIRWISE_PRINCIPAL_OFFSETS` の順に試し、
+    `NearYenBoundaryError`(特定の元本にだけ起きる番人の artifact)に当たった
+    候補は飛ばして次を試す。**`LoanError`(SyntaxError/Overflow)は元本を
+    変えても消えない本物の結果なので、最初に当たった時点でそのまま採用する**
+    ——実測(2026-08-20): 金利 20% × 期間 1199 か月のような「返済額が利息に
+    収束していく」組は、元本を 10 万円から 5 億円まで振っても同じ
+    SyntaxError になる(長期・高金利の年金現価が利息収束に近づく、本物の
+    数理)。全候補が円境界だけに当たった場合は `None`(実測では起きない)。
+    """
+    num, den = loan_ref.rate_fraction(rate)
+    for offset in _LOAN_PAIRWISE_PRINCIPAL_OFFSETS:
+        principal = _LOAN_PAIRWISE_PRINCIPAL_BASE + offset
+        try:
+            result = loan_ref.forward(principal, num, den, n, 0)
+            return principal, result["monthly_payment"], "ok"
+        except loan_ref.LoanError as error:
+            return principal, None, error.code
+        except ValueError:
+            continue
+    return None
+
+
+# `loan_principal` / `loan_bonus_principal` に使う固定の月額。`principal_for`
+# には円境界の番人が無い(`_guard_boundary` は `monthly_payment` だけが呼ぶ)
+# ので、元本をずらす必要が無く、金利・期間の全 150 組がそのまま安全に使える
+# (実測、2026-08-20)。
+_PAIRWISE_LOAN_PAYMENT_FIXED = "300000"
+
+
+def _pairwise_loan_principal_strata() -> tuple[Stratum, ...]:
+    strata = []
+    index = 0
+    for row in _PAIRWISE_LOAN_ROWS:
+        params = {"payment": _PAIRWISE_LOAN_PAYMENT_FIXED, "rate": row["rate"], "n": row["n"]}
+        if not _claim_pairwise_signature("loan_principal", params):
+            continue
+        result = loan_ref.compute("loan_principal", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "loan_principal",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    return tuple(strata)
+
+
+def _pairwise_loan_bonus_principal_strata() -> tuple[Stratum, ...]:
+    strata = []
+    index = 0
+    for row in _PAIRWISE_LOAN_ROWS:
+        params = {
+            "monthly_payment": _PAIRWISE_LOAN_PAYMENT_FIXED,
+            "bonus_payment": "0",
+            "rate": row["rate"],
+            "n": row["n"],
+        }
+        if not _claim_pairwise_signature("loan_bonus_principal", params):
+            continue
+        result = loan_ref.compute("loan_bonus_principal", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "loan_bonus_principal",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    return tuple(strata)
+
+
+def _pairwise_loan_forward_like_strata(op: str, bonus_key: str | None) -> tuple[Stratum, ...]:
+    """`loan_forward` / `loan_bonus_forward`(ボーナス 0)用。`monthly_payment`
+    の計算そのものが円境界の番人を通るので、`_pairwise_forward_result` で
+    元本を決定的にずらしながら本物の結果を取る。
+    """
+    strata = []
+    index = 0
+    for row in _PAIRWISE_LOAN_ROWS:
+        rate, n = row["rate"], row["n"]
+        resolved = _pairwise_forward_result(rate, n)
+        assert resolved is not None, f"{op}: 円境界しか無い組(想定外): rate={rate} n={n}"
+        principal, _payment, expect = resolved
+        params = {"principal": str(principal), "rate": rate, "n": n, "residual": "0"}
+        if bonus_key is not None:
+            params[bonus_key] = "0"
+        if not _claim_pairwise_signature(op, params):
+            continue
+        strata.append(
+            Stratum(
+                op,
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    return tuple(strata)
+
+
+# `loan_term` の pairwise 行数(実測、2026-08-20)。`n` は `loan_term` の
+# 入力ではなく答なので、`forward` で払える月額を作れた組だけを行にする——
+# `_pairwise_forward_result` が本物の `LoanError` を返した組(元本を変えても
+# 払えない = そもそも forward が定義できない)は、この op の入力を構成する
+# 元ネタが無いので**その組だけ**飛ばす(§4.4 の構成が前提にしている「正算の
+# 答から作る」が成り立たない)。他の 4 op(forward 系・principal 系)は `n` が
+# 答ではなくそのまま入力なので、この飛ばしを持たない——同じ (rate, n) の
+# 組は必ずどれかの loan op でコーパスに現れる(集計はテストで確かめる)。
+PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 17
+
+
+def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
+    strata = []
+    index = 0
+    infeasible = 0
+    for row in _PAIRWISE_LOAN_ROWS:
+        rate, n = row["rate"], row["n"]
+        resolved = _pairwise_forward_result(rate, n)
+        if resolved is None:
+            infeasible += 1
+            continue
+        principal, payment, forward_expect = resolved
+        if forward_expect != "ok":
+            infeasible += 1
+            continue
+        params = {"principal": str(principal), "rate": rate, "payment": str(payment)}
+        if not _claim_pairwise_signature("loan_term", params):
+            continue
+        result = loan_ref.compute("loan_term", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "loan_term",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    assert infeasible == PAIRWISE_LOAN_TERM_SKIPPED_COUNT, (
+        f"loan_term pairwise: 構成できなかった数が実測({PAIRWISE_LOAN_TERM_SKIPPED_COUNT})と違う"
+        f"(実際は {infeasible})——因子表か候補列を変えたのでは"
+    )
+    return tuple(strata)
+
+
+def _pairwise_compound_grow_strata() -> tuple[Stratum, ...]:
+    """`compound_grow` は正算そのものなので、`grow()` が Overflow を投げても
+    参照実装は安全に `{"error": "Overflow"}` を返す(探索が絡まないので
+    `ReferenceGaveUp` の危険が無い)。**`expect` は決め打たない**——高金利 ×
+    長期間 × 周期 1 回/年は、元本をいくら小さくしても u64 を超える(2 の
+    べき乗の複利は元本の大きさに関係なく発散する)。これは正常値だけで
+    組んだ結果として実際に起きる Overflow であって、エラー水準を混ぜたから
+    起きたのではない——設計時に気づいた点(実装報告に記録)。
+
+    `principal` は `0` ではなく非 0 にする。**実測(2026-08-20)**:
+    `principal=0` かつ `periods=1` かつ `periods_per_year=12` の一部の金利で、
+    `compute()` の閉形式番人(`check_against_closed_form`)が `drift < 0`
+    (実測 `-4e-39` 程度)で落ちる——`(1+r)**1` を Decimal の `**` 演算子で
+    評価する際の丸めが、元本 0 で `principal_total` 側の桁を失って露出する、
+    参照実装の Decimal 精度の隅である(`grow()` 自体の整数ループは正しい)。
+    `compound_ref.py` は変更しない(Task 7 の範囲外)ので、この層の構成では
+    `principal` を非 0 にしてこの隅を踏まないようにする。
+    """
+    strata = []
+    index = 0
+    for row in _PAIRWISE_COMPOUND_GROW_ROWS:
+        params = {
+            "principal": "1000000",
+            "deposit": "10000",
+            "rate": row["rate"],
+            "periods_per_year": row["periods_per_year"],
+            "periods": row["periods"],
+            "tax": row["tax"],
+        }
+        if not _claim_pairwise_signature("compound_grow", params):
+            continue
+        result = compound_ref.compute("compound_grow", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "compound_grow",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    return tuple(strata)
+
+
+# `compound_deposit_for` の pairwise 行数(実測、2026-08-20)。§4.4 と同じ
+# 構成(積立額を選び、`compound_grow` の到達値を `target` にする)を使うが、
+# 積立額は最小の 1 円に固定する(§4.4 の「答が 480/600/1200 付近になる」の
+# ような特定の答を狙う軸ではなく、pairwise はレベルの組そのものが目的な
+# ので、積立額を動かす理由が無い——動かすと `target` が変わり、後述の
+# Overflow 判定がぶれる)。それでも高金利 × 長期間では**積立額を 1 円に
+# しても** `compound_grow` 側の正算が Overflow するので `target` を作れない
+# 組が残る——`compound_grow` の pairwise 層が同じ (rate, periods,
+# periods_per_year, tax) の組を Overflow として持っているので、コーパス
+# 全体で見ればその組は「現れている」(テストが確かめる)。
+PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 17
+
+
+def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
+    strata = []
+    index = 0
+    infeasible = 0
+    for row in _PAIRWISE_COMPOUND_DEPOSIT_FOR_ROWS:
+        target = _compound_reached(
+            0, 1, row["rate"], row["periods_per_year"], row["periods"], row["tax"]
+        )
+        if target is None or target <= 0:
+            infeasible += 1
+            continue
+        params = {
+            "principal": "0",
+            "target": str(target),
+            "periods": row["periods"],
+            "rate": row["rate"],
+            "periods_per_year": row["periods_per_year"],
+            "tax": row["tax"],
+        }
+        if not _claim_pairwise_signature("compound_deposit_for", params):
+            continue
+        result = compound_ref.compute("compound_deposit_for", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "compound_deposit_for",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    assert infeasible == PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT, (
+        f"compound_deposit_for pairwise: 構成できなかった数が実測"
+        f"({PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT})と違う(実際は {infeasible})"
+        "——因子表を変えたのでは"
+    )
+    return tuple(strata)
+
+
+def _pairwise_compound_periods_for_strata() -> tuple[Stratum, ...]:
+    """`compound_periods_for` は「期間」を答として持たない(設計書の注記)
+    ので、因子は金利・周期・税の 3 つ。答を短い期間に収めるため、積立額
+    1,000 円・期数 10 で正算した到達値を `target` にする——**期数 10 は
+    因子ではなく構成の定数**(rate=100%・periods_per_year=1 という最悪条件
+    でも 2^10 は u64 に遠く及ばないので、全 30 組で Overflow を踏まない)。
+    """
+    strata = []
+    index = 0
+    for row in _PAIRWISE_COMPOUND_PERIODS_FOR_ROWS:
+        target = _compound_reached(0, 1000, row["rate"], row["periods_per_year"], 10, row["tax"])
+        assert target is not None and target > 0, f"periods_for pairwise: 構成が失敗した {row}"
+        params = {
+            "principal": "0",
+            "deposit": "1000",
+            "target": str(target),
+            "rate": row["rate"],
+            "periods_per_year": row["periods_per_year"],
+            "tax": row["tax"],
+        }
+        if not _claim_pairwise_signature("compound_periods_for", params):
+            continue
+        result = compound_ref.compute("compound_periods_for", params)
+        expect = result.get("error", "ok")
+        strata.append(
+            Stratum(
+                "compound_periods_for",
+                f"pairwise_{index:04d}",
+                expect,
+                0,
+                lambda rng, i, params=params: params,
+            )
+        )
+        index += 1
+    return tuple(strata)
+
+
+# pairwise **より前**に決まっている全層(骨格 Task 3〜6)。pairwise の行が
+# これと同じ (op, input) を作ってしまうことがある(実測、2026-08-20:
+# `compound_deposit_for` の最初の pairwise 行が `minimal_target` と
+# 一致した——`rate=0/periods=1/periods_per_year=1/tax=False` は両方にとって
+# 「いちばん自然な最初の水準」なので、偶然ではなく起きやすい衝突である)。
+# `build_finance_shard` は同じ (op, input) の 2 件目を**個別の乱択の重複**
+# としてなら捨てられるが、`build` が `i` を使わない名指し層どうしの重複は
+# 何度リトライしても同じ入力しか返らず、そのまま詰む(設計書 §4.7 と同じ
+# 「黙って層を削らない」の裏返しで、ここは「黙って重複させない」)。
+# pairwise 側が自分より前の層と衝突していないかを**生成前に**確かめ、
+# 衝突する行は飛ばす(件数はテストで数える)。
+_NON_PAIRWISE_FINANCE_STRATA: tuple[Stratum, ...] = (
     _BOUNDARY_STRATA
     + _rate_level_strata()
     + _term_level_strata()
@@ -2120,6 +2575,44 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
     + _residual_axis_strata()
     + _bonus_axis_strata()
     + _inverse_answer_milestone_strata()
+)
+
+
+def _finance_signature(op: str, params: dict) -> str:
+    """`build_finance_shard` の重複判定と同じ形の署名(設計書に写しを
+    増やさないため、鍵の作り方はここ 1 か所)。"""
+    return repr((op, sorted(params.items())))
+
+
+# `_NON_PAIRWISE_FINANCE_STRATA` が既に使っている (op, input) の署名。
+# pairwise の行を足すたびにここへも足し、**pairwise どうしの重複**(違う
+# 水準の組が偶然同じ入力になる場合)も同じ仕組みで防ぐ。
+_PAIRWISE_CLAIMED_SIGNATURES: set[str] = {
+    _finance_signature(stratum.op, stratum.build(random.Random(0), 0))
+    for stratum in _NON_PAIRWISE_FINANCE_STRATA
+}
+
+
+def _claim_pairwise_signature(op: str, params: dict) -> bool:
+    """まだ使われていなければ署名を予約して `True`。既に使われていたら
+    `False`(呼び出し側はその行を飛ばす)。"""
+    signature = _finance_signature(op, params)
+    if signature in _PAIRWISE_CLAIMED_SIGNATURES:
+        return False
+    _PAIRWISE_CLAIMED_SIGNATURES.add(signature)
+    return True
+
+
+FINANCE_STRATA: tuple[Stratum, ...] = (
+    _NON_PAIRWISE_FINANCE_STRATA
+    + _pairwise_loan_forward_like_strata("loan_forward", None)
+    + _pairwise_loan_principal_strata()
+    + _pairwise_loan_term_strata()
+    + _pairwise_loan_forward_like_strata("loan_bonus_forward", "bonus_principal")
+    + _pairwise_loan_bonus_principal_strata()
+    + _pairwise_compound_grow_strata()
+    + _pairwise_compound_deposit_for_strata()
+    + _pairwise_compound_periods_for_strata()
 )
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (

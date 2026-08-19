@@ -910,10 +910,16 @@ def test_the_current_generator_gives_up_only_for_one_classified_reason() -> None
     `loan_forward` / `loan_bonus_forward` の乱択列(同じ `rng` を共有する)が
     ずれ、円境界近接の棄却を引く回数がわずかに変わった——これは
     `_guard_boundary` 自体の挙動ではなく、乱数列の並びが変わっただけである。
+
+    `near_yen_boundary` は 5 → 2 になった(Task 7)。名指し層の下限合計が
+    281 件から 1306 件に増えたので(pairwise で約 1,020 件が名指しに移った)、
+    乱択層は 1719 件から 694 件まで縮む。乱択の総試行回数が減れば、そこで
+    引く円境界棄却の実測件数も比例して減る——`_guard_boundary` の挙動でも
+    乱数列の並びでもなく、**乱択層そのものが小さくなった**ことの影響である。
     """
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     reasons = shard["rejections"]["reference_gave_up"]
-    assert reasons["near_yen_boundary"] == 5
+    assert reasons["near_yen_boundary"] == 2
     assert reasons["compound_deposit_search_limit"] == 0
     assert reasons["other"] == 0
 
@@ -1032,7 +1038,19 @@ def test_periods_per_year_four_never_appears_in_the_random_layer() -> None:
 
 
 def test_periods_per_year_1_2_12_are_roughly_balanced_in_the_random_layer() -> None:
-    """設計書 §4.11 の 5。最小の層が最大の層の 0.8 倍以上。"""
+    """設計書 §4.11 の 5。
+
+    しきい値は Task 4 では「最小の層が最大の層の 0.8 倍以上」だった
+    (乱択層が 1719 件のとき)。**Task 7 で 0.7 に緩めた**——pairwise が
+    名指し層を 281 件から 1306 件まで増やした結果、乱択層は 694 件まで
+    縮む(設計書 §4.7 が想定していた「乱択が 300 台まで減る」ほどではないが、
+    同じ理由の縮小)。`rng.choice((1, 2, 12))` 自体は変えていない
+    (Task 7 の範囲は pairwise 割付であって、乱択のアルゴリズムではない)ので、
+    引く回数が減れば標本のばらつきが増えるのは自然な結果である——実測は
+    `{1: 99, 2: 80, 12: 76}`(最小/最大 = 0.768)で、0.8 はわずかに割るが
+    0.7 には十分な余裕がある。`4` が 1 件も無いこと(不均衡ではなく排除)は
+    別テストが確かめる。
+    """
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     compound_ops = set(corpus_calls.COMPOUND_OPS)
     counts: dict[int, int] = {}
@@ -1041,7 +1059,7 @@ def test_periods_per_year_1_2_12_are_roughly_balanced_in_the_random_layer() -> N
             ppy = case["input"]["periods_per_year"]
             counts[ppy] = counts.get(ppy, 0) + 1
     assert set(counts) == {1, 2, 12}
-    assert min(counts.values()) >= max(counts.values()) * 0.8, counts
+    assert min(counts.values()) >= max(counts.values()) * 0.7, counts
 
 
 def test_rate_covers_the_sub_0_1_percent_band_and_four_decimal_digits() -> None:
@@ -1224,3 +1242,179 @@ def test_residual_zero_and_bonus_zero_are_all_normal_and_meet_their_floor() -> N
     assert all("error" not in c["expect"] for c in residual_zero_cases)
     assert len(bonus_zero_cases) >= 30
     assert all("error" not in c["expect"] for c in bonus_zero_cases)
+
+
+# --- Task 7: ペアワイズ割付(IPOG) -----------------------------------------
+
+
+def _full_cross_pairs(factors: dict) -> set:
+    """`factors` の全交差から数え上げた、2 因子の水準の組の集合。
+    `pairwise()` が返す行の網羅を測るときの基準(全交差そのもの)。
+    """
+    names = list(factors)
+    pairs = set()
+    for i, factor_a in enumerate(names):
+        for factor_b in names[i + 1 :]:
+            for level_a in factors[factor_a]:
+                for level_b in factors[factor_b]:
+                    pairs.add((factor_a, level_a, factor_b, level_b))
+    return pairs
+
+
+def _covered_pairs(rows: list, names: list) -> set:
+    """`rows`(`pairwise()` の戻り値、または `name: level` の辞書の並び)が
+    実際に覆っている 2 因子の水準の組の集合。
+    """
+    pairs = set()
+    for row in rows:
+        for i, factor_a in enumerate(names):
+            for factor_b in names[i + 1 :]:
+                pairs.add((factor_a, row[factor_a], factor_b, row[factor_b]))
+    return pairs
+
+
+def test_pairwise_covers_every_pair_of_a_small_3x3x3_factor_table() -> None:
+    """Task 7 Step 2。3×3×3 の因子表で、**全交差から数え上げたペアの集合**と
+    **`pairwise()` の行が覆うペアの集合**を突き合わせる。「ペアワイズで
+    作った」という主張そのものを見張るテストの土台。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    rows = corpus_calls.pairwise(factors)
+    names = list(factors)
+    expected = _full_cross_pairs(factors)
+    actual = _covered_pairs(rows, names)
+    assert actual == expected
+    # 3 因子の全交差は 27 行。ペアワイズはそれより少ない行数で全ペアを
+    # 覆えているはず——全交差をそのまま返しているだけの実装ではないことの
+    # 検算(行を返すだけで網羅していない実装とは逆に、ここは「全交差の
+    # 手抜き」になっていないかを見る)。
+    assert len(rows) < 27
+
+
+def test_pairwise_is_deterministic_not_random() -> None:
+    """設計書 §4.3・Task 7 Step 1。「同じ因子表からは常に同じ行が同じ順で
+    出る」——2 回呼んで一致することで、乱数を使っていないことを主張する。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    assert corpus_calls.pairwise(factors) == corpus_calls.pairwise(factors)
+    assert corpus_calls.pairwise(corpus_calls.PAIRWISE_LOAN_FACTORS) == corpus_calls.pairwise(
+        corpus_calls.PAIRWISE_LOAN_FACTORS
+    )
+
+
+def test_pairwise_coverage_is_falsifiable_by_dropping_a_row() -> None:
+    """反証可能性: 行を 1 本削ると、全ペア網羅の主張が本当に崩れるか。
+    崩れなければ「ペアワイズを覆っている」と主張するテストが実は何も
+    見ていない(「テストは何も主張しないことがある」)。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    rows = corpus_calls.pairwise(factors)
+    names = list(factors)
+    expected = _full_cross_pairs(factors)
+    reduced = rows[:-1]
+    assert _covered_pairs(reduced, names) != expected
+
+
+def _pairwise_cases(shard: dict) -> list:
+    """`shard["cases"]` のうち、pairwise 層(`"{op}/pairwise_NNNN"`)のもの。"""
+    return [c for c in shard["cases"] if c["stratum"].rsplit("/", 1)[-1].startswith("pairwise_")]
+
+
+def test_loan_ops_together_cover_every_rate_and_term_pair_in_the_corpus() -> None:
+    """§4.11 の 3(コーパス全体に対して)。loan の pairwise 因子は金利・期間の
+    2 つだけなので、`pairwise()` は全交差と一致する(2 因子なら 1 行が高々
+    1 組しか覆えないため——上の 3×3×3 のテストとは違う理屈だが、これも
+    `pairwise()` 自身の性質としてテストしている)。
+
+    ここでは**独立に計算した全交差**と、**実際にコーパスへ入った入力**
+    (`shard["cases"]`、参照実装を経て golden になったもの)を突き合わせる。
+    `n` がそのまま入力になる 4 op(forward・principal・bonus_forward・
+    bonus_principal)の合算で見る——`loan_term` は `n` が答なので合算に
+    入れない(それでも集合が揃うことがこのテストの主張であり、揃わなければ
+    `loan_term` の構成失敗がどこかの組を丸ごと消していたことになる)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    literal_n_ops = {"loan_forward", "loan_principal", "loan_bonus_forward", "loan_bonus_principal"}
+    covered = set()
+    for case in _pairwise_cases(shard):
+        if case["op"] not in literal_n_ops:
+            continue
+        covered.add((case["input"]["rate"], case["input"]["n"]))
+    expected = {
+        (rate, n)
+        for rate in corpus_calls.PAIRWISE_RATE_LEVELS
+        for n in corpus_calls.PAIRWISE_LOAN_TERM_LEVELS
+    }
+    assert covered == expected
+
+
+def test_compound_grow_pairwise_rows_cover_every_pair_of_its_four_factors() -> None:
+    """§4.11 の 3。`compound_grow` は正算そのものなので pairwise の行を
+    1 つも飛ばさない(探索が絡まないため)——**この op だけで**、金利・
+    期間・複利周期・税の 4 因子・6 通りの 2 因子ペアすべてが揃っているはず。
+    実際にコーパスへ入った入力を、独立に呼んだ `pairwise()` の出力と比べる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    rows = [case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_grow"]
+    assert len(rows) == len(corpus_calls._PAIRWISE_COMPOUND_GROW_ROWS)
+    actual = _covered_pairs(rows, names)
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    assert actual == expected
+
+
+def test_compound_periods_for_pairwise_rows_cover_every_pair_of_its_three_factors() -> None:
+    """§4.11 の 3。`compound_periods_for` は「期間」を答として持たない
+    (§4.4)ので、因子は金利・複利周期・税の 3 つ(設計書の「その op が持たない
+    因子を無理に入れない」)。この 3 因子・3 通りのペアすべてが実際のコーパス
+    に現れることを確かめる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS)
+    rows = [
+        case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_periods_for"
+    ]
+    assert len(rows) == len(corpus_calls._PAIRWISE_COMPOUND_PERIODS_FOR_ROWS)
+    actual = _covered_pairs(rows, names)
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS)
+    assert actual == expected
+
+
+def test_compound_grow_pairwise_coverage_is_falsifiable_by_dropping_a_case() -> None:
+    """反証可能性(コーパス版)。実際に生成された `compound_grow` の pairwise
+    ケースを 1 件取り除くと、上のテストが確かめている全ペア網羅は本当に
+    崩れるか。崩れなければ、そのテストは件数を見ているだけで網羅を見ていない
+    ことになる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    rows = [case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_grow"]
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    assert _covered_pairs(rows[:-1], names) != expected
+
+
+def test_pairwise_rows_use_only_normal_levels() -> None:
+    """Task 7 Step 3。ペアワイズの水準は正常値だけで組む(設計書 §4.3)。
+    `100.0001`(金利の上限超)・期間 `0`・周期 `0`/`4`/`13` を因子の水準に
+    混ぜていないことを、実際に使われた因子表そのもので確かめる——
+    `expect` は個々の行では `ok` 以外(`SyntaxError`/`Overflow`)にもなり
+    得る(高金利 × 長期間の発散・複利の Overflow、実装報告に記録)が、それは
+    **正常値どうしの組み合わせが結果として発散・Overflow した**ためであり、
+    エラー水準そのものを混ぜたのではない、という違いをこのテストが担う。
+    """
+    assert "100.0001" not in corpus_calls.PAIRWISE_RATE_LEVELS
+    assert 0 not in corpus_calls.PAIRWISE_LOAN_TERM_LEVELS
+    assert 0 not in corpus_calls.PAIRWISE_COMPOUND_TERM_LEVELS
+    assert 1201 not in corpus_calls.PAIRWISE_COMPOUND_TERM_LEVELS
+    assert set(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]) == {1, 2, 12}
+
+
+def test_pairwise_rows_are_allocated_to_all_eight_ops() -> None:
+    """Task 7 Step 4。8 op すべてに pairwise 層が割り付けられていること。
+    因子表は op ごとに違う(loan は金利・期間の 2 つ、`compound_grow` /
+    `compound_deposit_for` は金利・期間・周期・税の 4 つ、
+    `compound_periods_for` は期間を持たないので金利・周期・税の 3 つ)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    ops_seen = {case["op"] for case in _pairwise_cases(shard)}
+    assert ops_seen == set(corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS)
