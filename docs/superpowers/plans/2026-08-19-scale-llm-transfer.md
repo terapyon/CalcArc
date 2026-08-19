@@ -531,24 +531,21 @@ Expected: FAIL（`ModuleNotFoundError`）
 
 from __future__ import annotations
 
-from calcarc_reference.data_scale_ref import U128_MAX, lines
+from calcarc_reference.data_scale_ref import U128_MAX, lines, parse_u128
 
 BANDWIDTH_FACTOR = {"bps": 1, "kbps": 10**3, "mbps": 10**6, "gbps": 10**9}
 DURATION_FACTOR = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
 
-
-def _parse(text: str) -> int | None:
-    if not text or not text.isascii() or not text.isdigit():
-        return None
-    value = int(text)
-    return value if value <= U128_MAX else None
+# **`parse_u128` は自分で書かない**（Task 1 のレビュー指摘）。u128 の定義域の
+# 読み取りは 3 つの参照実装で 1 つである——写すと、上限が動いた日に片方だけ
+# 直る。
 
 
 def compute(
     bandwidth: str, bandwidth_unit: str, duration: str, duration_unit: str
 ) -> dict:
-    value = _parse(bandwidth)
-    seconds = _parse(duration)
+    value = parse_u128(bandwidth)
+    seconds = parse_u128(duration)
     bw = BANDWIDTH_FACTOR.get(bandwidth_unit)
     du = DURATION_FACTOR.get(duration_unit)
     if value is None or seconds is None or bw is None or du is None:
