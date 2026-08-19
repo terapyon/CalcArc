@@ -2646,6 +2646,12 @@ git add web && git commit   # 例: "Answer how much memory 27B needs, and say wh
 
 - [ ] **Step 1: テストを書く**
 
+**【Task 9 の教訓】テストのボタン名は、キー集合が実際に出している `ariaLabel` である。**
+`getByRole("button", { name })` が見るのは**アクセシブルネーム**であって、画面のラベルではない。
+候補キーはラベルと読み上げを分けているので（`8K` / `8192`）、**テストは読み上げ名で押す**。
+項目キーも `入力` と `選ぶ` の使い分けがある。`transfer.ts` はこの Task で作るので実物はまだ無い——
+**キー定義（`ariaLabel`）を先に決めてからテストを書く**。命名は `llm.ts` の実物に倣うこと。
+
 ```tsx
   it("computes the headline case: 100 Mbps for 3 hours", async () => {
     await renderPanel();
@@ -2682,6 +2688,12 @@ git add web && git commit   # 例: "Answer how much memory 27B needs, and say wh
 
   it("names every unit key in both systems", () => { /* 4 × 4 の候補が揃っていること。件数も主張する */ });
 ```
+
+**【Task 9 の教訓】既定値のある項目を手入力に切り替えたときの挙動を決めておく。**
+LLM では、既定値が入ったまま手入力面に移ると**打った数字が既定値の後ろに継ぎ足された**
+（`27B` に `3` を打つと `27B3` になる）。裁定は**手入力に切り替えたら入力を空にする**
+——白紙から打つほうが、消し方を探すより短い。**Transfer も同じにする**（値の項目に
+既定を置くなら、同じ規律で）。
 
 - [ ] **Step 2〜4: 赤 → 実装 → 緑**
 
