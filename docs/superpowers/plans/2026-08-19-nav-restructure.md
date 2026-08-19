@@ -218,7 +218,9 @@ git add -A && git commit -m "wip: 赤確認"
 
 `route.ts` の `CATEGORIES.scale` を `[]` にする → `#scale/data-scale` が既定カテゴリに落ちるだけなので**このテストは緑のまま**。次に `DEFAULT_CATEGORY.scale` を `null` にする → **2 件**（`#scale` と `#scale/nope`）が赤になることを確認する。
 
-**`#scale/data-scale` は緑のままであることに注意**——カテゴリが `CATEGORIES` に明示一致するので `DEFAULT_CATEGORY` を参照しない。**2 つの表が別々の入口を守っている**ことが、この 2 段でちょうど見える。
+**`#scale/data-scale` は緑のままであることに注意**——カテゴリが `CATEGORIES` に明示一致するので `DEFAULT_CATEGORY` を参照しない。
+
+**ただし「2 つの表が別々に守られている」とは言えない**（2026-08-19 訂正）。1 段目の変異（`CATEGORIES.scale` を空にする）は**9 件すべてが緑のまま**で、これは U-0 の `scale` の唯一のカテゴリが既定値と同値だからである。**この 2 段が示すのは「`DEFAULT_CATEGORY` は運動しているが、`CATEGORIES` は誰にも守られていない」**という非対称であって、両方が守られていることではない。`CATEGORIES` を分離できる最初の機会は U-1（`#convert/length` は既定と違う値になる）で、要求は U-1 の設計書 §6 に書いてある。
 
 **両方の実出力を記録してから**、変異箇所を再編集で戻し、`git reset --soft HEAD~1` で一時コミットを解く。
 
