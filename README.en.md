@@ -13,7 +13,7 @@ No installation needed. Add it to your home screen to launch it like an app — 
 
 ## Current version
 
-**0.2.1 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
+**0.3.0 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
 each release is in [Releases](https://github.com/terapyon/CalcArc/releases).
 
 **It is a beta.** It has not been widely announced yet, and very few people are using it.
