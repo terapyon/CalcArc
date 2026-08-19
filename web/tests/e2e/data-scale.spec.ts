@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const nav = (page: Page, label: "Scientific" | "Data Scale") =>
+const nav = (page: Page, label: "Scientific" | "Scale") =>
   page.getByRole("link", { name: label, exact: true });
 
 const panel = (page: Page) =>
@@ -34,11 +34,11 @@ test("the nav switches modules both ways and aria-current follows", async ({
   page,
 }) => {
   await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
-  await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
+  await expect(nav(page, "Scale")).not.toHaveAttribute("aria-current");
 
-  await nav(page, "Data Scale").click();
-  await expect(page).toHaveURL(/#data-scale$/);
-  await expect(nav(page, "Data Scale")).toHaveAttribute("aria-current", "page");
+  await nav(page, "Scale").click();
+  await expect(page).toHaveURL(/#scale\/data-scale$/);
+  await expect(nav(page, "Scale")).toHaveAttribute("aria-current", "page");
   await expect(nav(page, "Scientific")).not.toHaveAttribute("aria-current");
   await expect(panel(page)).toBeVisible();
   await expect(page.getByRole("main")).toBeVisible();
@@ -46,23 +46,23 @@ test("the nav switches modules both ways and aria-current follows", async ({
   await nav(page, "Scientific").click();
   await expect(page).toHaveURL(/#scientific$/);
   await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
-  await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
+  await expect(nav(page, "Scale")).not.toHaveAttribute("aria-current");
   await expect(main(page)).toBeVisible();
 });
 
-test("a direct link to #data-scale shows the panel immediately", async ({
+test("a direct link to #scale/data-scale shows the panel immediately", async ({
   page,
 }) => {
   // ハッシュルーティング採用理由の検査(a): ディープリンク。
-  await page.goto("/#data-scale");
+  await page.goto("/#scale/data-scale");
   await expect(panel(page)).toBeVisible();
 });
 
-test("reloading a #data-scale deep link keeps the panel visible", async ({
+test("reloading a #scale/data-scale deep link keeps the panel visible", async ({
   page,
 }) => {
   // ハッシュルーティング採用理由の検査(b): リロード後も同じ画面。
-  await page.goto("/#data-scale");
+  await page.goto("/#scale/data-scale");
   await expect(panel(page)).toBeVisible();
 
   await page.reload();
@@ -74,18 +74,18 @@ test("browser back returns to Scientific and aria-current follows", async ({
 }) => {
   // ハッシュルーティング採用理由の検査(c): 履歴操作(戻る)にブラウザの
   // 標準動作がそのまま乗る。前の履歴エントリを明示するため、まず
-  // #scientific へ明示的に遷移してから Data Scale へ移る。
+  // #scientific へ明示的に遷移してから Scale へ移る。
   await page.goto("/#scientific");
   await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
 
-  await nav(page, "Data Scale").click();
-  await expect(page).toHaveURL(/#data-scale$/);
-  await expect(nav(page, "Data Scale")).toHaveAttribute("aria-current", "page");
+  await nav(page, "Scale").click();
+  await expect(page).toHaveURL(/#scale\/data-scale$/);
+  await expect(nav(page, "Scale")).toHaveAttribute("aria-current", "page");
 
   await page.goBack();
   await expect(page).toHaveURL(/#scientific$/);
   await expect(nav(page, "Scientific")).toHaveAttribute("aria-current", "page");
-  await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
+  await expect(nav(page, "Scale")).not.toHaveAttribute("aria-current");
   await expect(main(page)).toBeVisible();
 });
 
@@ -94,7 +94,7 @@ test("the headline case: 100M x 768 x float32 is 307.2 GB / 286.1 GiB", async ({
 }) => {
   // 実 wasm(mock ではない)で通す(完了条件 1)。値は電卓化の前後で
   // 変わらない——変えたのは打ち方だけである。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
   await press(page, ["次元数を入力", "7", "6", "8"]);
@@ -111,7 +111,7 @@ test("the unit keys expand into plain digits, not a rounded display value", asyn
   // 100M は 100000000 として渡る(base-spec §26)。エコーは打った形
   // 「100M」を見せ、コアへ行くのは展開後の数字列である——両者が
   // 食い違わないことは、答えが 1e8 件ぶんであることで確かめる。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
   await expect(page.getByTestId("display-entry-active")).toHaveText(
@@ -125,7 +125,7 @@ test("the unit keys expand into plain digits, not a rounded display value", asyn
 
 test("a 39-digit count survives the boundary intact", async ({ page }) => {
   // 2^127-1。JS number を経由していれば 2^53 で精度を失う。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   await press(page, ["件数を入力"]);
   await typeDigits(page, "170141183460469231731687303715884105727");
@@ -139,7 +139,7 @@ test("a 39-digit count survives the boundary intact", async ({ page }) => {
 
 test("crossing 2^128 shows an overflow error", async ({ page }) => {
   // 2^127 x 2 x 1 byte = 2^128、u128 の上限を超える(base-spec §25)。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   await press(page, ["件数を入力"]);
   await typeDigits(page, "170141183460469231731687303715884105728");
@@ -153,7 +153,7 @@ test("crossing 2^128 shows an overflow error", async ({ page }) => {
 test("every field is reachable as a named key", async ({ page }) => {
   // フォームの <label> が担っていた到達性を、キーの読み上げ名が引き継ぐ
   // (設計書 §3)。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   for (const name of ["件数を入力", "次元数を入力", "データ型を選ぶ"]) {
     await expect(
@@ -165,7 +165,7 @@ test("every field is reachable as a named key", async ({ page }) => {
 test("a partly-filled panel stays neutral, no error shown", async ({
   page,
 }) => {
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   // 次元数は空のまま。
   await press(page, ["件数を入力", "1", "0", "0", "百万"]);
@@ -179,7 +179,7 @@ test("a sub-unit success shows bytes without KB/KiB lines", async ({
 }) => {
   // count=1, dimensions=1, int8 -> 1 byte。単位未満なので decimal/binary は
   // 出ず、main は bytes まで繰り上がる(設計書 §6)。
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
 
   await press(page, ["件数を入力", "1"]);
   await press(page, ["次元数を入力", "1"]);
@@ -220,7 +220,7 @@ test("the scientific keyboard listener does not survive into data-scale", async 
   await expect(main(page)).toHaveText("0");
   expect(await keydownPrevented()).toBe(true);
 
-  await nav(page, "Data Scale").click();
+  await nav(page, "Scale").click();
   await expect(panel(page)).toBeVisible();
   expect(await keydownPrevented()).toBe(false);
 
@@ -231,7 +231,7 @@ test("the scientific keyboard listener does not survive into data-scale", async 
 
 test("the nav tabs are large enough to touch", async ({ page }) => {
   // --touch-target-min は 44px(既存 e2e と同じ流儀)。
-  for (const label of ["Scientific", "Data Scale"] as const) {
+  for (const label of ["Scientific", "Scale"] as const) {
     const box = await nav(page, label).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

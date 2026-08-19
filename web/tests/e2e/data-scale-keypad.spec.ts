@@ -16,7 +16,7 @@ const face = (page: Page, name: "数字と演算のキー" | "データ型のキ
   panel(page).getByRole("group", { name });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/#data-scale");
+  await page.goto("/#scale/data-scale");
   await expect(panel(page)).toBeVisible();
 });
 

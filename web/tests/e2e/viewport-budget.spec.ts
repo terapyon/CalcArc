@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // **0.2.0 で縦に足したものが 1 画面に収まり、かつタブで揺れないこと。**
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
@@ -6,16 +6,34 @@ import { expect, test } from "@playwright/test";
 
 const TABS = [
   ["#scientific", "Scientific"],
-  ["#data-scale", "Data Scale"],
+  ["#convert", "Convert"],
+  ["#scale/data-scale", "Data Scale"],
   ["#finance", "Finance"],
 ] as const;
+
+/**
+ * パネルが描かれるのを待つ。
+ *
+ * **フッタは WASM と無関係に即描画される**ので、これが無いと Scientific は
+ * `Loading…` のままの空のページを測って緑になる。**Convert には表示器が
+ * 無い**ので、そのパネル自身の出現を待つ。
+ */
+async function waitForPanel(page: Page, hash: string) {
+  if (hash === "#convert") {
+    await expect(
+      page.getByRole("region", { name: "単位変換（準備中）" }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByTestId("display-main")).toBeVisible();
+  }
+}
 
 for (const [hash, name] of TABS) {
   test(`${name} fits in one screen at 390x844`, async ({ page }) => {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    await waitForPanel(page, hash);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
 
     const overflow = await page.evaluate(
@@ -35,7 +53,7 @@ test("the footer sits at the same place on every tab", async ({ page }) => {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    await waitForPanel(page, hash);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
     const box = await page.getByTestId("footer-disclaimer").boundingBox();
     seen.push({ name, y: box?.y ?? -1 });
@@ -93,8 +111,8 @@ for (const [hash, name] of TABS) {
     await page.setViewportSize(NARROW);
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** これが無いと `Loading…` の空のページを
-    // 測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    // 測って緑になる。**Convert には表示器が無い**ので waitForPanel に任せる。
+    await waitForPanel(page, hash);
 
     const spill = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
