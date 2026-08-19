@@ -1424,3 +1424,122 @@ def test_pairwise_rows_are_allocated_to_all_eight_ops() -> None:
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     ops_seen = {case["op"] for case in _pairwise_cases(shard)}
     assert ops_seen == set(corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS)
+
+
+# --- Task 8: 非単調層の決定的探索 -------------------------------------------
+
+
+def _non_monotone_net_stratum() -> corpus_calls.Stratum:
+    return next(
+        s
+        for s in corpus_calls.FINANCE_STRATA
+        if s.op == "compound_periods_for" and s.name == "non_monotone_net"
+    )
+
+
+def test_the_non_monotone_net_search_is_deterministic_not_random() -> None:
+    """設計書 §5.2・Task 8 Step 1。「探索は生成のたびに走ってよいが、乱数を
+    使わないこと」——同じ入力からは常に同じ `(到達, 未達, 再到達)` の期が出る。
+    """
+    args = (
+        corpus_calls._NON_MONOTONE_NET_PRINCIPAL,
+        0,
+        corpus_calls._NON_MONOTONE_NET_NUM,
+        corpus_calls._NON_MONOTONE_NET_DEN,
+    )
+    first = corpus_calls._find_non_monotone_net_valley(*args, search_limit=200)
+    second = corpus_calls._find_non_monotone_net_valley(*args, search_limit=200)
+    assert first == second
+
+
+def test_the_non_monotone_net_stratum_exists_because_mutation_9_needs_it() -> None:
+    """設計書 §5.2・Task 8 Step 3。
+
+    **これは件数を守るテストではない。** `compound_periods_for` の必要期間は
+    期数について単調ではない——税の 2 つの床(国税 15.315%・地方税 5%)が
+    同じ期に同時に跳ぶと、その期だけ手取りが前の期より下がることがある。
+    Task 11 で入る Finance 変異 #9 は `compound_inverse.rs::periods_for` の
+    前進 1 本の全走査を期数についての二分探索に置き換えるので、この谷を
+    跨ぐ探索をすると誤った期を返す。**その谷を含むケースがコーパスに 1 件も
+    無ければ、#9 はどのケースにも当たらず、静かに検出力を失う。** つまり
+    このテストが守っているのは `non_monotone_net` 層の件数そのものではなく、
+    **変異 #9 の検出力**である——件数だけでは単調なケースが紛れ込んでも
+    緑になるので、谷の形そのものは下の
+    `test_the_non_monotone_net_stratum_is_actually_a_valley` が assert する。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    cases = [c for c in shard["cases"] if c["stratum"] == "compound_periods_for/non_monotone_net"]
+    assert len(cases) >= 1
+
+
+def test_the_non_monotone_net_stratum_is_actually_a_valley() -> None:
+    """設計書 §5.2・Task 8 Step 4。件数だけを見るテストは、単調なケースが
+    紛れ込んでも緑になる。**参照実装(`compound_ref.reached`)を直接呼んで**、
+    目標との比較(到達しているか)が 3 点で `True, False, True` になっている
+    ことを確かめる——これが二分探索(変異 #9)を飛び越えさせる谷そのものである。
+    """
+    stratum = _non_monotone_net_stratum()
+    params = stratum.build(random.Random(0), 0)
+    principal = int(params["principal"])
+    deposit = int(params["deposit"])
+    target = int(params["target"])
+    assert params["tax"] is True
+    num, den = corpus_calls.compound_ref.rate_fraction(params["rate"], params["periods_per_year"])
+
+    reached_period = corpus_calls._NON_MONOTONE_NET_REACHED_PERIOD
+    dip_period = corpus_calls._NON_MONOTONE_NET_DIP_PERIOD
+    recovery_period = corpus_calls._NON_MONOTONE_NET_RECOVERY_PERIOD
+    assert dip_period == reached_period + 1
+    assert recovery_period > dip_period
+
+    def _is_reached(n: int) -> bool:
+        return corpus_calls.compound_ref.reached(principal, deposit, num, den, n, True) >= target
+
+    assert _is_reached(reached_period) is True
+    assert _is_reached(dip_period) is False
+    assert _is_reached(recovery_period) is True
+
+    # `periods_for` 自身の答は「最初に到達する期」であって谷の期ではない
+    # ——参照実装の全走査(`check_periods_certificate` と同じ定義)がそれを
+    # 正しく守っていることも、ついでに確かめる。
+    n = corpus_calls.compound_ref.periods_for(principal, deposit, num, den, target, True)
+    assert n == reached_period
+
+
+def test_a_bisection_over_this_case_returns_the_wrong_period() -> None:
+    """設計書 §5.2・Task 8。上の 3 つのテストは「谷がある」ことしか言っていない
+    ——**「その谷が変異 #9 を殺す」は主張であって測定ではない。** ここで測る。
+
+    変異 #9 は `periods_for` の前進 1 本の全走査を、同じ述語
+    (`手取り >= 目標`)についての二分探索に置き換える。その二分探索をここで
+    参照実装の上に組んで走らせ、**正解と違う期を返すこと**を確かめる。
+    谷があっても二分探索がたまたま正解に着地する入力はあり得るので、
+    谷の存在だけでは #9 の検出力は保証されない。
+
+    コメントで「飛び越えるはずだ」と書くとその根拠は静かに腐るが、この
+    assert は入力が変わって谷が消えた瞬間に赤くなる。
+    """
+    stratum = _non_monotone_net_stratum()
+    params = stratum.build(random.Random(0), 0)
+    principal = int(params["principal"])
+    target = int(params["target"])
+    num, den = corpus_calls.compound_ref.rate_fraction(params["rate"], params["periods_per_year"])
+    correct = corpus_calls._NON_MONOTONE_NET_REACHED_PERIOD
+
+    def _is_reached(n: int) -> bool:
+        return corpus_calls.compound_ref.reached(principal, 0, num, den, n, True) >= target
+
+    # `MAX_PERIODS`(compound.rs)と同じ上限から下ろす、素直な下限二分探索。
+    low, high = 0, 1200
+    assert _is_reached(high)
+    while high - low > 1:
+        mid = low + (high - low) // 2
+        if _is_reached(mid):
+            high = mid
+        else:
+            low = mid
+
+    assert high != correct
+    # 実測値も焼き付ける——「違う」だけだと、谷の形が変わって別の誤り方に
+    # なったことに気づけない。
+    assert (high, correct) == (21, 19)

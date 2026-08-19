@@ -1718,10 +1718,83 @@ def _find_tax_rounding_mismatch(start: int) -> int:
         interest += 1
 
 
+def _find_non_monotone_net_valley(
+    principal: int, deposit: int, num: int, den: int, search_limit: int
+) -> tuple[int, int, int]:
+    """`到達 → 未達 → 再到達` の形を、`compound_ref.reached` を期の昇順に
+    呼びながら決定的に探す(乱数を使わない、設計書 §5.2・Task 8)。
+
+    手取り(`net`)は期数について単調ではない——税は利息にだけ掛かり、
+    国税(15.315%)と地方税(5%)は**別々に**切り捨てる(`withholding_tax`)。
+    ある期からその次の期に移るとき、残高の増分(その期の利息そのもの)より
+    国税・地方税の床の増分の合計が大きいと、`net` は前の期より下がる。
+
+    `search_limit` 期まで昇順に `reached(taxed=True)` を呼び、**最初に前の
+    期より値が下がる期**(谷)を見つけたら、その直前の期の値を目標にして、
+    それより後の期で再びその値以上に戻る期(再到達)を探す。**見つからな
+    ければ探索を打ち切らず `RuntimeError` で止まる**——この層を黙って
+    空にすると、Task 11 の変異 #9(§5.2)が検出力を静かに失う。
+
+    返り値は `(到達した期, 未達の期, 再到達した期)`。すべて 1-indexed。
+    """
+    values = [
+        compound_ref.reached(principal, deposit, num, den, n, True)
+        for n in range(1, search_limit + 1)
+    ]
+    for dip_index in range(1, len(values)):
+        if values[dip_index] < values[dip_index - 1]:
+            reached_period = dip_index  # values[dip_index - 1] はこの期の値
+            dip_period = dip_index + 1  # values[dip_index] はこの期の値
+            target = values[dip_index - 1]
+            for recovery_index in range(dip_index + 1, len(values)):
+                if values[recovery_index] >= target:
+                    return reached_period, dip_period, recovery_index + 1
+            raise RuntimeError(
+                f"非単調層: 期 {reached_period} → {dip_period} の谷は見つかったが、"
+                f"search_limit={search_limit} 以内に再到達しない(範囲を広げる)"
+            )
+    raise RuntimeError(
+        f"非単調層: principal={principal} num={num} den={den} の"
+        f"search_limit={search_limit} 期以内に谷が見つからない(範囲を広げるか入力を見直す)"
+    )
+
+
 # 決定的な探索(乱数を使わない)。結果は corpus に焼き付き、再生成一致ゲート
 # (`test_corpus_reproducibility.py`)が固定する。
 _TAX_SIMULTANEOUS_JUMP_INTEREST = _find_simultaneous_tax_jump(21)
 _TAX_ROUNDING_MISMATCH_INTEREST = _find_tax_rounding_mismatch(2_648_906)
+
+# 非単調層の入力(設計書 §5.2・Task 8)。元本 100 万円・積立 0・年利
+# 0.0001%・年 1 回複利にすると、1 期の利息は `floor(残高 / 1,000,000)` に
+# なり、残高が 200 万円を超えるまで(1200 期の探索範囲を大きく超える)毎期
+# ちょうど 1 円ずつ積み上がる——利息の累計が期数と一致するので、国税・
+# 地方税の床の跳びを 1 円単位で狙い撃てる(`_tax_boundary_grow` と同じ
+# 手口)。谷そのものは探索が見つける——期数を決め打ちしない。
+_NON_MONOTONE_NET_PRINCIPAL = 1_000_000
+_NON_MONOTONE_NET_RATE = "0.0001"
+_NON_MONOTONE_NET_PERIODS_PER_YEAR = 1
+_NON_MONOTONE_NET_NUM, _NON_MONOTONE_NET_DEN = compound_ref.rate_fraction(
+    _NON_MONOTONE_NET_RATE, _NON_MONOTONE_NET_PERIODS_PER_YEAR
+)
+(
+    _NON_MONOTONE_NET_REACHED_PERIOD,
+    _NON_MONOTONE_NET_DIP_PERIOD,
+    _NON_MONOTONE_NET_RECOVERY_PERIOD,
+) = _find_non_monotone_net_valley(
+    _NON_MONOTONE_NET_PRINCIPAL,
+    0,
+    _NON_MONOTONE_NET_NUM,
+    _NON_MONOTONE_NET_DEN,
+    search_limit=200,
+)
+_NON_MONOTONE_NET_TARGET = compound_ref.reached(
+    _NON_MONOTONE_NET_PRINCIPAL,
+    0,
+    _NON_MONOTONE_NET_NUM,
+    _NON_MONOTONE_NET_DEN,
+    _NON_MONOTONE_NET_REACHED_PERIOD,
+    True,
+)
 
 
 def _tax_boundary_grow(principal: str) -> dict:
@@ -1804,6 +1877,47 @@ def _tax_boundary_strata() -> tuple[Stratum, ...]:
             "ok",
             0,
             lambda rng, i: _tax_boundary_grow(str(_TAX_ROUNDING_MISMATCH_INTEREST * 1_000_000)),
+        ),
+    )
+
+
+def _non_monotone_net_strata() -> tuple[Stratum, ...]:
+    """`compound_periods_for/non_monotone_net`(設計書 §5.2、Task 8)。
+
+    **これは件数を守るための層ではない。** `compound_ref.periods_for` は
+    税の 2 つの床(国税 15.315%・地方税 5%)が同じ期に同時に跳ぶと、その期
+    だけ手取り(`net`)が前の期より下がることがある——税は利息にだけ掛かり、
+    利息は残高の増分(その期の利息そのもの)だけしか押し上げないので、税の
+    増分がそれを上回るとこうなる。Task 11 で入る Finance 変異 #9
+    (`compound_inverse.rs::periods_for` を、期数についての前進 1 本の全走査
+    から二分探索に置き換える)は、この谷を飛び越えて誤った期を返す
+    ——**しかしこの層が空だと、どのコーパスのケースもその誤りを踏まない。**
+    つまりこのテストが守っているのは層の件数そのものではなく、**別の場所
+    (変異 #9)の検出力**である(§5.2)。
+
+    入力は `_find_non_monotone_net_valley` が決定的に(乱数を使わず)見つけた
+    谷: 元本 100 万円・積立 0・年利 0.0001%・年 1 回複利・税ありで、利息が
+    1 円ずつ積み上がる区間に、国税・地方税の床の最初の同時跳び(利息
+    19→20、`_find_simultaneous_tax_jump` の docstring が名指ししている
+    もの——`tax_simultaneous_jump` 層はこれを避けて 21 以降を探している)が
+    重なる。目標は谷の直前の期の手取りにする——`到達(谷の直前の期)
+    → 未達(谷の期) → 再到達(その後の期)` の形になる。期数を決め打ちにせず、
+    探索が見つけた期数をそのまま焼き付ける。
+    """
+    return (
+        Stratum(
+            "compound_periods_for",
+            "non_monotone_net",
+            "ok",
+            0,
+            lambda rng, i: {
+                "principal": str(_NON_MONOTONE_NET_PRINCIPAL),
+                "deposit": "0",
+                "target": str(_NON_MONOTONE_NET_TARGET),
+                "rate": _NON_MONOTONE_NET_RATE,
+                "periods_per_year": _NON_MONOTONE_NET_PERIODS_PER_YEAR,
+                "tax": True,
+            },
         ),
     )
 
@@ -2572,6 +2686,7 @@ _NON_PAIRWISE_FINANCE_STRATA: tuple[Stratum, ...] = (
     + _balance_overflow_strata()
     + _deposit_overflow_strata()
     + _tax_boundary_strata()
+    + _non_monotone_net_strata()
     + _residual_axis_strata()
     + _bonus_axis_strata()
     + _inverse_answer_milestone_strata()
