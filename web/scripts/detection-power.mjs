@@ -398,6 +398,17 @@ export function verdictFor(mutation, m) {
 }
 
 /**
+ * `mutation.expectShards` から `report.ts` 契約の `expect: string` を作る。
+ *
+ * `resultRecord` と、変異元が見つからなかったときの記録
+ * (`runOneMutation`)の両方がこの規則を要る。**2 か所に手で書くと、
+ * どちらか片方だけが変わって食い違う** ので、ここに畳む。
+ */
+function describeExpect(mutation) {
+  return mutation.expectShards.length === 0 ? "nothing" : mutation.expectShards.join(", ");
+}
+
+/**
  * `results.push` に積む 1 件を組み立てる。
  *
  * **ここは `web/tests/heavy/report.ts` が読む JSON の契約を守るためだけの
@@ -423,7 +434,7 @@ export function resultRecord(mutation, measurement, verdict) {
   return {
     id: mutation.id,
     what: mutation.what,
-    expect: mutation.expectShards.length === 0 ? "nothing" : mutation.expectShards.join(", "),
+    expect: describeExpect(mutation),
     caught,
     total,
     ok: verdict.ok,
@@ -432,42 +443,72 @@ export function resultRecord(mutation, measurement, verdict) {
   };
 }
 
+/**
+ * 1 変異ぶんを、変異・測定・判定・**復元**まで 1 まとまりで行う。
+ *
+ * **これは既知の欠陥の修正ではなく、構造の固定である。** 旧 `main()` も
+ * `try { measurement = measure() } finally { 復元 }` のあとで
+ * `verdictFor(mutation, measurement)` を呼んでいた――`finally` を抜けて
+ * から判定していたので、復元は判定より前に必ず終わっていた。つまり
+ * 「判定で例外が出ると変異が残る」という経路は旧構造にも無かった。
+ *
+ * それでも判定・記録の組み立てまでを `finally` の内側に閉じるのは、
+ * この 4 段(変異・測定・判定・復元)を 1 関数に閉じ込め、**将来だれかが
+ * 順序を並べ替えても復元が外れない形にする**ため。加えて `measure` を
+ * 差し替え可能にしたことで、「測定やそのあとの判定が例外を投げても
+ * ファイルは戻る」ことをテストで直接主張できるようになった――
+ * `measure`/`root` を差し替えられる形自体が、この関数を切り出した動機
+ * である。
+ */
+export function runOneMutation(mutation, { root = ROOT, measure: measureFn = measure } = {}) {
+  const path = join(root, mutation.file);
+  const original = readFileSync(path, "utf-8");
+  if (!original.includes(mutation.from)) {
+    // **黙って飛ばさない。** 変異が当たらなくなったのに緑で終わると、
+    // 「検出力を測った」という記録だけが残って中身が空になる。変異を
+    // 書いていない(まだ何も戻すものがない)ので、ここは try/finally の
+    // 外で早期リターンしてよい。`resultRecord` は使えない――
+    // `measurement` が無いので、同じ契約を手で組み立てる。
+    return {
+      id: mutation.id,
+      what: mutation.what,
+      expect: describeExpect(mutation),
+      caught: {},
+      total: 0,
+      ok: false,
+      kind: "mutation-site-missing",
+      why: `変異元が ${mutation.file} に無い。engine が変わったので変異を書き直すこと`,
+    };
+  }
+  writeFileSync(path, original.replace(mutation.from, mutation.to));
+  try {
+    const measurement = measureFn();
+    const verdict = verdictFor(mutation, measurement);
+    return resultRecord(mutation, measurement, verdict);
+  } finally {
+    // **必ず戻す。** `measureFn()` だけでなく `verdictFor`/`resultRecord`
+    // が投げた例外もここを通る――構造上そうなっているだけで、旧 `main()`
+    // でこの経路が壊れていたわけではない(上の JSDoc 参照)。
+    // 戻したことをバイトで確かめる。
+    writeFileSync(path, original);
+    if (readFileSync(path, "utf-8") !== original) {
+      throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
+    }
+  }
+}
+
 function main() {
   const results = [];
   let failed = 0;
 
   for (const mutation of MUTATIONS) {
-    const path = join(ROOT, mutation.file);
-    const original = readFileSync(path, "utf-8");
-    if (!original.includes(mutation.from)) {
-      // **黙って飛ばさない。** 変異が当たらなくなったのに緑で終わると、
-      // 「検出力を測った」という記録だけが残って中身が空になる。
-      console.error(
-        `detection-power: ${mutation.id} の変異元が ${mutation.file} に無い。` +
-          "engine が変わったので、変異を書き直すこと。",
-      );
-      failed += 1;
-      results.push({ ...mutation, error: "mutation site not found" });
-      continue;
-    }
     process.stderr.write(`[${mutation.id}] ${mutation.what} ... `);
-    writeFileSync(path, original.replace(mutation.from, mutation.to));
-    let measurement;
-    try {
-      measurement = measure();
-    } finally {
-      // **必ず戻す。** 戻したことをバイトで確かめる。
-      writeFileSync(path, original);
-      if (readFileSync(path, "utf-8") !== original) {
-        throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
-      }
-    }
-    const verdict = verdictFor(mutation, measurement);
-    if (!verdict.ok) {
+    const result = runOneMutation(mutation);
+    if (!result.ok) {
       failed += 1;
     }
-    process.stderr.write(`${verdict.ok ? "ok" : "NG"} — ${verdict.why}\n`);
-    results.push(resultRecord(mutation, measurement, verdict));
+    process.stderr.write(`${result.ok ? "ok" : "NG"} — ${result.why}\n`);
+    results.push(result);
   }
 
   // **最後に wasm を作り直す。**
