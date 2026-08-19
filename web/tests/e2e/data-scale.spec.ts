@@ -89,6 +89,17 @@ test("browser back returns to Scientific and aria-current follows", async ({
   await expect(main(page)).toBeVisible();
 });
 
+test("a link to #scale without a category still shows the panel", async ({
+  page,
+}) => {
+  // **既定カテゴリの分岐を E2E 段で踏む唯一の検査。** Nav の href は
+  // `#scale/data-scale` とカテゴリまで書いているので、この 1 件が無いと
+  // `DEFAULT_CATEGORY` は実ブラウザで一度も運動しない(実測で確認した)。
+  await page.goto("/#scale");
+  await expect(main(page)).toBeVisible();
+  await expect(nav(page, "Scale")).toHaveAttribute("aria-current", "page");
+});
+
 test("the headline case: 100M x 768 x float32 is 307.2 GB / 286.1 GiB", async ({
   page,
 }) => {

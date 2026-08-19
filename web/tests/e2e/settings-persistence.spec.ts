@@ -10,7 +10,7 @@ const main = (page: Page) => page.getByTestId("display-main");
 const echo = (page: Page) => page.getByTestId("display-echo");
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
 
-const nav = (page: Page, name: "Scientific" | "Data Scale" | "Finance") =>
+const nav = (page: Page, name: "Scientific" | "Finance") =>
   page.getByRole("link", { name, exact: true });
 
 async function press(page: Page, labels: string[]): Promise<void> {

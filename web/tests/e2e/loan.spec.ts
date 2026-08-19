@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const nav = (page: Page, label: "Scientific" | "Data Scale" | "Finance") =>
+const nav = (page: Page, label: "Scientific" | "Scale" | "Finance") =>
   page.getByRole("link", { name: label, exact: true });
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
@@ -23,26 +23,26 @@ test.beforeEach(async ({ page }) => {
   await expect(scientificMain(page)).toHaveText("0");
 });
 
-test("the nav now carries three tabs and aria-current follows", async ({
+test("the nav now carries four tabs and aria-current follows", async ({
   page,
 }) => {
   // **ナビの中だけを数える。** 以前はページ全体のリンクを数えていて、
   // 0.2.0 でフッタに GitHub へのリンクが付いた瞬間に 4 になった
   // ——数えたかったのはタブの数である。
-  await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
+  await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(4);
   await nav(page, "Finance").click();
   await expect(page).toHaveURL(/#finance$/);
   await expect(nav(page, "Finance")).toHaveAttribute("aria-current", "page");
   await expect(nav(page, "Scientific")).not.toHaveAttribute("aria-current");
-  await expect(nav(page, "Data Scale")).not.toHaveAttribute("aria-current");
+  await expect(nav(page, "Scale")).not.toHaveAttribute("aria-current");
   await expect(panel(page)).toBeVisible();
   // <main> はシェルの所有物であり、モジュールを跨いでも存在し続ける。
   await expect(page.getByRole("main")).toBeVisible();
 });
 
 test("every nav tab is large enough to touch", async ({ page }) => {
-  // --touch-target-min は 44px。3 タブになっても縮まないこと。
-  for (const label of ["Scientific", "Data Scale", "Finance"] as const) {
+  // --touch-target-min は 44px。4 タブになっても縮まないこと。
+  for (const label of ["Scientific", "Scale", "Finance"] as const) {
     const box = await nav(page, label).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
