@@ -331,7 +331,7 @@ def compute(
 - [ ] **Step 5: 緑を見る**
 
 Run: `cd reference && uv run --no-config pytest tests/test_llm_ref.py -q`
-Expected: PASS（8 件）
+Expected: PASS（7 件）
 
 - [ ] **Step 6: golden の入力を並べる**
 
@@ -419,12 +419,12 @@ cd reference && uv run --no-config python scripts/generate.py
 cd .. && git diff --exit-code testdata/data_scale.json && echo "data_scale.json は不変"
 git status --short testdata/
 ```
-Expected: `testdata/llm.json` だけが新規（17 件）。**`data_scale.json` に差分が出たら Step 3 の書き換えが値を変えている**——戻して原因を潰す。
+Expected: `testdata/llm.json` だけが新規（**16 件**）。**`data_scale.json` に差分が出たら Step 3 の書き換えが値を変えている**——戻して原因を潰す。
 
 - [ ] **Step 9: 参照側を全部回す**
 
 Run: `cd reference && uv run --no-config pytest -q`
-Expected: 既存の 233 件 + 8 件がすべて PASS
+Expected: 既存の 233 件 + 7 件がすべて PASS
 
 - [ ] **Step 10: コミット**
 
@@ -1057,7 +1057,7 @@ cargo test --workspace
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 ```
-Expected: すべて PASS。golden は 17 件を比較する
+Expected: すべて PASS。golden は **16 件**（成功 13 / エラー 3）を比較する
 
 - [ ] **Step 6: 赤確認（spec §7 の 1〜3）**
 
