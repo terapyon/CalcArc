@@ -7,7 +7,7 @@ test("every category has a deep link that lands on it", async ({ page }) => {
   const seen: string[] = [];
   for (const [category, region] of [
     ["data-scale", "データスケール計算"],
-    ["llm", "LLM のメモリ（準備中）"],
+    ["llm", "LLM のメモリ計算"],
     ["transfer", "データ転送（準備中）"],
   ] as const) {
     await page.goto(`/#scale/${category}`);

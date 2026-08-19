@@ -1,0 +1,87 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+  /* **下端はフッタが持つ**(Footer.module.css)。DataScalePanel.module.css と
+     同じ理由——ここで env(safe-area-inset-bottom) を吸うと二重になる。 */
+  padding-bottom: 12px;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  font-family: var(--display-font);
+  text-align: right;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.lineLabel {
+  margin-right: auto;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.secondary {
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+/* 免責は常設(M6 設計書 §0、Finance の免責と同じ扱い)。エラーではないので
+   alert にしない(コントローラの裁定 5)。 */
+.notice {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.notice p {
+  margin: 0;
+}
+
+/* 数字面と 6 つの候補面(パラメータ数・重み・KV ヘッド数・ヘッド次元・
+   文脈長・KV の精度)は同じ枠に載る(Global Constraints)。**7 つの面すべて
+   をここに並べる**——数字面のキー集合(`llmPad`)はどの項目でも同じ
+   aria-label「数字と演算のキー」を返すので、実際に並べる aria-label は
+   7 つ(数字面 1 + 候補面 6)である。1 つでも漏らすと、その面だけ中身の
+   行数ぶんに枠が伸び縮みする(DataScalePanel.module.css で実測済みの事故、
+   19px)。 */
+.panel :global(fieldset[aria-label="数字と演算のキー"]),
+.panel :global(fieldset[aria-label="パラメータ数の候補キー"]),
+.panel :global(fieldset[aria-label="重みの精度のキー"]),
+.panel :global(fieldset[aria-label="KVヘッド数の候補キー"]),
+.panel :global(fieldset[aria-label="ヘッド次元の候補キー"]),
+.panel :global(fieldset[aria-label="文脈長の候補キー"]),
+.panel :global(fieldset[aria-label="KVの精度のキー"]) {
+  grid-template-rows: repeat(5, 1fr);
+  aspect-ratio: 1 / 1;
+}
+
+/* 候補のラベルは文字数が多い(精度は "FP16" などの 4 文字、文脈長の候補は
+   "128K" まで)。数字面は 1 文字の数字・記号なので縮めない
+   (DataScalePanel.module.css の型面・次元数候補面と同じ判断)。 */
+.panel :global(fieldset[aria-label="パラメータ数の候補キー"]) button,
+.panel :global(fieldset[aria-label="重みの精度のキー"]) button,
+.panel :global(fieldset[aria-label="KVヘッド数の候補キー"]) button,
+.panel :global(fieldset[aria-label="ヘッド次元の候補キー"]) button,
+.panel :global(fieldset[aria-label="文脈長の候補キー"]) button,
+.panel :global(fieldset[aria-label="KVの精度のキー"]) button {
+  font-size: 0.75rem;
+}

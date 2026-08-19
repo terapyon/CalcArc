@@ -1,5 +1,6 @@
 import { SCALE_CATEGORIES, type ScaleCategory } from "../../route";
 import { DataScalePanel } from "../DataScale/DataScalePanel";
+import { LlmPanel } from "../Llm/LlmPanel";
 import styles from "./ScalePanel.module.css";
 
 /** カテゴリの表示名。**`Record` にするのは、カテゴリが増えたときに
@@ -38,13 +39,13 @@ export function ScalePanel({ category }: { category: string | null }) {
         ))}
       </select>
       {current === "data-scale" && <DataScalePanel />}
-      {current === "llm" && <ComingSoon what="LLM のメモリ" />}
+      {current === "llm" && <LlmPanel />}
       {current === "transfer" && <ComingSoon what="データ転送" />}
     </div>
   );
 }
 
-/** Task 9・10 が入るまでの中身。**押せて何も起きない面を作らない**ため、
+/** Task 10 が入るまでの中身。**押せて何も起きない面を作らない**ため、
  * 選べば画面は変わる(U-0 §5 と同じ形)。 */
 function ComingSoon({ what }: { what: string }) {
   return (

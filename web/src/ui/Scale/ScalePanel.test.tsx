@@ -39,7 +39,7 @@ describe("ScalePanel", () => {
     const seen: string[] = [];
     for (const [category, name] of [
       ["data-scale", "データスケール計算"],
-      ["llm", "LLM のメモリ（準備中）"],
+      ["llm", "LLM のメモリ計算"],
       ["transfer", "データ転送（準備中）"],
     ] as const) {
       const { unmount } = render(<ScalePanel category={category} />);
