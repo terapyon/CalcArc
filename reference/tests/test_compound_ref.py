@@ -287,3 +287,34 @@ def test_a_target_of_zero_is_refused_at_the_entry_of_both_inverse_ops() -> None:
         with pytest.raises(compound_ref.CompoundError) as caught:
             call()
         assert caught.value.code == "SyntaxError"
+
+
+def test_the_closed_form_check_survives_its_own_rounding() -> None:
+    # **2026-08-20 の実測。** `principal=0` のとき、閉形式の
+    # `(growth - 1) / r` が桁落ちして、ずれが厳密に 0 のはずの場面で
+    # Decimal が **負側**へ丸める。向きの主張（厳密ループは閉形式以下）は
+    # 数学のものなので、有限桁の評価がそれを破ったときに検査が落ちるのは
+    # 偽の失敗である。実測は相対 4e-43 程度で、15 通りの入力で出た。
+    #
+    # 本物のずれは円の尺度で出る（各期の切り捨てが 1 円未満を落として複利で
+    # 育つ）ので、下側の余裕（相対 1e-30）が本物を隠すことはない。
+    num, den = compound_ref.rate_fraction("0.0001", 12)
+    exact = compound_ref.grow(0, 1000, num, den, 1)
+    compound_ref.check_against_closed_form(exact, 0, 1000, num, den, 1)
+
+
+def test_the_closed_form_check_still_catches_a_drift_worth_a_yen() -> None:
+    # 余裕を入れたせいで検査が何も言わなくなっていないこと。**両側**を見る。
+    #
+    # 1 期のずれは実測 0.667 円なので、答を 1 円大きくすると差は -0.333 に
+    # なり、下側の余裕（相対 1e-30）を 30 桁ぶん突き抜けて落ちる。
+    # 逆に答を 100 円小さくすると差が上界（期数×(1+r)^期数 ≈ 1.002）を超える。
+    #
+    # **期数を 1 にしているのは意図的である。** 12 期だと本物のずれが 6.97 円
+    # まで育ち、上界も 12.02 円まで伸びるので、1 円動かしても範囲に収まって
+    # しまう——このテストは最初そう書いて、実際に何も主張しなかった。
+    num, den = compound_ref.rate_fraction("2.0", 12)
+    exact = compound_ref.grow(1_000_000, 1000, num, den, 1)
+    for wrong in (exact + 1, exact - 100):
+        with pytest.raises(ValueError, match="閉形式とのずれが範囲外"):
+            compound_ref.check_against_closed_form(wrong, 1_000_000, 1000, num, den, 1)

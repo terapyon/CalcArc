@@ -113,13 +113,27 @@ def check_against_closed_form(
 
     向き: 各期の切り捨ては受取を減らすので、厳密ループは閉形式**以下**。
     上界: 1 期あたり 1 円未満の損が最後まで複利で育つので 期数×(1+r)^期数。
+
+    **下側にわずかな余裕を持たせる。** 向きの主張は数学のものだが、閉形式は
+    有限桁の Decimal で評価しているので、ずれが厳密に 0 のときに丸めが
+    わずかに負へ倒すことがある。`closed_form` の `(growth - 1) / r` は
+    `growth = 1 + r` が 1 に近いほど桁落ちする——低金利では 7〜8 桁失う。
+    実測（2026-08-20）: `principal=0`・`periods=1`・`ppy=12` の 15 通りで
+    相対 4e-43 程度の負のずれが出て、**この検査が偽の失敗を出していた**。
+
+    余裕は相対 1e-30 に取る。観測された人工物より 12 桁大きく、**1 円より
+    30 桁小さい**。本物のずれは円の尺度で出る（各期の切り捨ては 1 円未満を
+    落とし、それが複利で育つ）ので、この余裕が本物を隠すことはない。
+    **これは実装間の許容誤差ではなく、Decimal の丸めの上界である。**
     """
     with localcontext() as ctx:
         ctx.prec = PRECISION
-        drift = closed_form(principal, deposit, num, den, periods) - Decimal(exact)
+        closed = closed_form(principal, deposit, num, den, periods)
+        drift = closed - Decimal(exact)
         r = Decimal(num) / Decimal(den)
         bound = Decimal(periods) * (1 + r) ** periods
-        if not 0 <= drift <= bound:
+        rounding_slack = max(Decimal(1), abs(closed)) * Decimal(10) ** -(PRECISION - 20)
+        if not -rounding_slack <= drift <= bound:
             raise ValueError(f"閉形式とのずれが範囲外: {drift}（上界 {bound}）")
 
 

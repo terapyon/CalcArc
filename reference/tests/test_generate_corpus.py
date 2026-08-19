@@ -1038,28 +1038,34 @@ def test_periods_per_year_four_never_appears_in_the_random_layer() -> None:
 
 
 def test_periods_per_year_1_2_12_are_roughly_balanced_in_the_random_layer() -> None:
-    """設計書 §4.11 の 5。
+    """設計書 §4.11 の 5。しきい値は「最小の層が最大の層の 0.8 倍以上」。
 
-    しきい値は Task 4 では「最小の層が最大の層の 0.8 倍以上」だった
-    (乱択層が 1719 件のとき)。**Task 7 で 0.7 に緩めた**——pairwise が
-    名指し層を 281 件から 1306 件まで増やした結果、乱択層は 694 件まで
-    縮む(設計書 §4.7 が想定していた「乱択が 300 台まで減る」ほどではないが、
-    同じ理由の縮小)。`rng.choice((1, 2, 12))` 自体は変えていない
-    (Task 7 の範囲は pairwise 割付であって、乱択のアルゴリズムではない)ので、
-    引く回数が減れば標本のばらつきが増えるのは自然な結果である——実測は
-    `{1: 99, 2: 80, 12: 76}`(最小/最大 = 0.768)で、0.8 はわずかに割るが
-    0.7 には十分な余裕がある。`4` が 1 件も無いこと(不均衡ではなく排除)は
-    別テストが確かめる。
+    **数えるのは正常のケースだけである。** 設計書は「**正常の** 1・2・12 が
+    ほぼ均等」と書いている。エラーまで混ぜると、測っているのは
+    「引かれた回数の均等」ではなく「引かれた回数 × その周期での失敗率」に
+    なる——`ppy=1` は同じ期数でも実時間が長く溢れやすいので(Task 6 で
+    実測した偏りと同じ原因)、エラーを含めた数え方は `1` を厚く見せる。
+
+    Task 7 でこのテストは一度 0.7 に緩められた。乱択層が 1719 件から 694 件に
+    縮んで標本のばらつきが増えた、という理由づけだった。**実測すると、緩める
+    必要は無かった。** エラーを含めた数え方では `{1: 99, 2: 80, 12: 76}` で
+    比 0.768 だが、設計書どおり正常だけで数えると
+    `{1: 85, 2: 76, 12: 76}` で **比 0.894** である。しきい値ではなく
+    数え方のほうが設計書とずれていた。
+
+    `4` が 1 件も無いこと(不均衡ではなく排除)は別テストが確かめる。
     """
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     compound_ops = set(corpus_calls.COMPOUND_OPS)
     counts: dict[int, int] = {}
     for case in shard["cases"]:
+        if "error" in case["expect"]:
+            continue
         if case["stratum"].endswith("/random") and case["op"] in compound_ops:
             ppy = case["input"]["periods_per_year"]
             counts[ppy] = counts.get(ppy, 0) + 1
     assert set(counts) == {1, 2, 12}
-    assert min(counts.values()) >= max(counts.values()) * 0.7, counts
+    assert min(counts.values()) >= max(counts.values()) * 0.8, counts
 
 
 def test_rate_covers_the_sub_0_1_percent_band_and_four_decimal_digits() -> None:
