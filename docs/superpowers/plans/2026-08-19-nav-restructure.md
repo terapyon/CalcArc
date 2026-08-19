@@ -659,7 +659,20 @@ EOF
 - Modify: `web/tests/e2e/footer.spec.ts:6`
 - Modify: `web/tests/e2e/viewport-budget.spec.ts:9`
 - Modify: `web/tests/e2e/nav.spec.ts`
+- Modify: `web/tests/e2e/loan.spec.ts`（タブのラベルとリンク数）
+- Modify: `web/tests/e2e/pwa.spec.ts`（タブのラベル）
 - Create: `web/tests/e2e/convert-placeholder.spec.ts`
+
+**一覧は 2 通りの grep から起こす（2026-08-19 訂正）。** 当初この一覧は
+`#data-scale` の grep だけで作られており、**タブの表示ラベルとリンク数で
+grep していなかった**。そのため `loan.spec.ts:32` の
+`toHaveCount(3)` と、`loan.spec.ts` / `pwa.spec.ts` の
+`{ name: "Data Scale" }` が漏れ、E2E が 3 件落ちた。
+
+```bash
+cd web && grep -rn '#data-scale' tests/e2e          # ハッシュ
+cd web && grep -rn '"Data Scale"\|toHaveCount(3)' tests/e2e   # ラベルと本数
+```
 
 **Interfaces:**
 - Consumes: Task 3 までの実装
