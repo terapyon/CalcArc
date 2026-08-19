@@ -198,10 +198,15 @@ export function routeFromHash(hash: string): Route {
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
-cd web && pnpm vitest run src/route.test.ts && pnpm lint
+cd web && pnpm vitest run src/route.test.ts && pnpm typecheck && pnpm lint
 ```
 
-Expected: 9 tests PASS、lint も緑
+Expected: 9 tests PASS、typecheck 緑、lint 緑。
+
+**`pnpm typecheck` を必ず走らせること。** `tsconfig` は `noUncheckedIndexedAccess` を
+有効にしているので、`split("/")` の結果を分割代入すると `head` が `string | undefined`
+になる。`const [head = "", category] = ...` と既定値を置く（`""` は `ModuleId` では
+ないので、既定へ倒れる振る舞いは変わらない）。
 
 - [ ] **Step 5: 赤確認（判別力の実測）**
 
@@ -236,6 +241,25 @@ EOF
 **Files:**
 - Modify: `web/src/ui/Nav/Nav.tsx`
 - Modify: `web/src/ui/Nav/Nav.test.tsx`
+- Modify: `web/src/App.tsx`（**2 行だけ**。下の「巻き込みについて」を読むこと）
+- Modify: `web/src/App.test.tsx`（**1 行だけ**）
+
+**巻き込みについて（当初の計画の欠陥。2026-08-19 訂正）:** `ModuleId` は型名だけでなく
+**メンバの値**も変わる（`"data-scale"` → `"scale"`）。一時的な再 export が守れるのは
+**型名の import** だけで、**値の改名は守れない**。したがって `App.tsx` は Task 2 の
+時点で必ず巻き込まれる。**巻き込みは最小にする**:
+
+1. `App.tsx` の `moduleFromHash` の中身を **`routeFromHash` への委譲 1 行**にする
+   （判断を 2 か所に持たない）
+2. パネルの出し分けの `module === "data-scale"` を `module === "scale"` にする
+3. `App.test.tsx` の `#data-scale` を使うテスト 1 件を `#scale/data-scale` にする
+
+**それ以外は Task 3 の仕事である。** 特に `#convert` の配線と Convert のパネルを
+ここで足さないこと。**`#convert` を開くと `<main>` が空になるのは、Task 3 までの
+正常な途中状態**である。
+
+**旧 `#data-scale` の互換分岐を書かないこと。** `#data-scale` が Scientific に
+倒れるのは**仕様**（設計書 §1-4）であり、直すべき壊れではない。
 
 **Interfaces:**
 - Consumes: `ModuleId` from `web/src/route.ts`（Task 1）
