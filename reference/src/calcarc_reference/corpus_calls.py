@@ -1556,6 +1556,134 @@ def _deposit_overflow_strata() -> tuple[Stratum, ...]:
     )
 
 
+def _find_simultaneous_tax_jump(start: int) -> int:
+    """国税・地方税の床が同じ利息で同時に跳ぶ最小の利息を `start` から昇順に
+    決定的に探す(乱数を使わない、設計書 §4.6)。名指しの 7 値(0/1/6/7/10/19/20)
+    は既に利息 19→20 でこの形(国税 2→3・地方税 0→1)を使っているので、
+    `start` はその先に置いて、別の値を探す。
+    """
+    prev_national, prev_local = compound_ref.withholding_tax(start - 1)
+    interest = start
+    while True:
+        national, local = compound_ref.withholding_tax(interest)
+        if national != prev_national and local != prev_local:
+            return interest
+        prev_national, prev_local = national, local
+        interest += 1
+
+
+def _find_tax_rounding_mismatch(start: int) -> int:
+    """合計 20.315% を 1 回切り捨てる計算と、国税 15.315%・地方税 5% を
+    別々に切り捨てる計算とで 1 円ずれる最小の利息を、`start` から昇順に
+    決定的に探す(乱数を使わない、設計書 §4.6)。`start` には `tax.rs` の
+    ユニットテストが持つ `2,648,906` を渡す。**一括の分数は
+    `compound_ref` 自身の国税・地方税の定数から組む**——20315/100000 を
+    ここに書き写すと、定数がずれたときに黙って古い値のまま検算することになる。
+    """
+    combined_num = (
+        compound_ref.NATIONAL_TAX_NUM * compound_ref.LOCAL_TAX_DEN
+        + compound_ref.LOCAL_TAX_NUM * compound_ref.NATIONAL_TAX_DEN
+    )
+    combined_den = compound_ref.NATIONAL_TAX_DEN * compound_ref.LOCAL_TAX_DEN
+    interest = start
+    while True:
+        national, local = compound_ref.withholding_tax(interest)
+        combined = interest * combined_num // combined_den
+        if national + local != combined:
+            return interest
+        interest += 1
+
+
+# 決定的な探索(乱数を使わない)。結果は corpus に焼き付き、再生成一致ゲート
+# (`test_corpus_reproducibility.py`)が固定する。
+_TAX_SIMULTANEOUS_JUMP_INTEREST = _find_simultaneous_tax_jump(21)
+_TAX_ROUNDING_MISMATCH_INTEREST = _find_tax_rounding_mismatch(2_648_906)
+
+
+def _tax_boundary_grow(principal: str) -> dict:
+    """`periods_per_year = 1`・`periods = 1`・`deposit = "0"`・
+    `rate = "0.0001"` の `compound_grow`(税あり)。1 期の利息は
+    `floor(元本 / 1,000,000)` になる(`Rate` の分母が `scale×100×ppy` =
+    10^4×100×1 = 10^6、`rate.rs` の `from_annual_percent`)。**元本を選べば
+    利息を 1 円単位で狙える**(設計書 §4.6)。
+    """
+    return {
+        "principal": principal,
+        "deposit": "0",
+        "rate": "0.0001",
+        "periods_per_year": 1,
+        "periods": 1,
+        "tax": True,
+    }
+
+
+def _tax_boundary_strata() -> tuple[Stratum, ...]:
+    """税の境界(設計書 §4.6)。狙う利息 0/1/6/7/10/19/20 は、国税の床の
+    跳び目(6→7、0→1)と地方税の床の跳び目(19→20、0→1)を挟む
+    (`tax.rs` の `withholding`)。**元本を 1 桁でも書き間違えると跳びが
+    消える**ので、`test_generate_corpus.py` は件数ではなく跳びそのものを
+    参照実装の出力から確かめる。
+
+    利息 0 は元本 0 が(元本も積立も 0 で)`SyntaxError` になるため、
+    `999,999` で代える(design table の注記どおり)。
+
+    残り 2 層は決定的探索(乱数を使わない)で見つけた:
+    - `tax_simultaneous_jump`: 国税と地方税が同じ利息で同時に跳ぶ値。
+    - `tax_rounding_mismatch`: 合計 20.315% の一括切り捨てと、国税・地方税を
+      別々に切り捨てるのとで 1 円ずれる値(`tax.rs` の `2,648,906` を起点に
+      探索。**それ自身が既にずれていた**)。
+    """
+    return (
+        Stratum(
+            "compound_grow", "tax_interest_0", "ok", 0, lambda rng, i: _tax_boundary_grow("999999")
+        ),
+        Stratum(
+            "compound_grow", "tax_interest_1", "ok", 0, lambda rng, i: _tax_boundary_grow("1000000")
+        ),
+        Stratum(
+            "compound_grow", "tax_interest_6", "ok", 0, lambda rng, i: _tax_boundary_grow("6000000")
+        ),
+        Stratum(
+            "compound_grow", "tax_interest_7", "ok", 0, lambda rng, i: _tax_boundary_grow("7000000")
+        ),
+        Stratum(
+            "compound_grow",
+            "tax_interest_10",
+            "ok",
+            0,
+            lambda rng, i: _tax_boundary_grow("10000000"),
+        ),
+        Stratum(
+            "compound_grow",
+            "tax_interest_19",
+            "ok",
+            0,
+            lambda rng, i: _tax_boundary_grow("19000000"),
+        ),
+        Stratum(
+            "compound_grow",
+            "tax_interest_20",
+            "ok",
+            0,
+            lambda rng, i: _tax_boundary_grow("20000000"),
+        ),
+        Stratum(
+            "compound_grow",
+            "tax_simultaneous_jump",
+            "ok",
+            0,
+            lambda rng, i: _tax_boundary_grow(str(_TAX_SIMULTANEOUS_JUMP_INTEREST * 1_000_000)),
+        ),
+        Stratum(
+            "compound_grow",
+            "tax_rounding_mismatch",
+            "ok",
+            0,
+            lambda rng, i: _tax_boundary_grow(str(_TAX_ROUNDING_MISMATCH_INTEREST * 1_000_000)),
+        ),
+    )
+
+
 # **経路名 → 層の key の対応。** ERROR_PATHS の網羅テストがここを読む
 # (テスト側に写しを持たない、設計書 §4.1 と同じ理由)。骨格 Task が作った
 # 既存層(`residual_equals_principal` など)を再利用している経路は、
@@ -1684,6 +1812,7 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
     + _unreachable_target_strata()
     + _balance_overflow_strata()
     + _deposit_overflow_strata()
+    + _tax_boundary_strata()
 )
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (

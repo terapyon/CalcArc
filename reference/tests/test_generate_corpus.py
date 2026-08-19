@@ -1093,3 +1093,85 @@ def test_loan_term_1201_is_ok_but_compound_periods_1201_is_syntax_error() -> Non
         },
     )
     assert compound_result == {"error": "SyntaxError"}
+
+
+# --- Task 5: 税の境界層 ---------------------------------------------------
+
+
+def _tax_boundary_stratum(name: str) -> corpus_calls.Stratum:
+    return next(
+        s for s in corpus_calls.FINANCE_STRATA if s.op == "compound_grow" and s.name == name
+    )
+
+
+def _tax_boundary_result(name: str) -> dict:
+    stratum = _tax_boundary_stratum(name)
+    params = stratum.build(random.Random(0), 0)
+    return corpus_calls.compound_ref.compute("compound_grow", params)
+
+
+def test_the_named_tax_strata_span_the_national_tax_floor_jump() -> None:
+    """設計書 §4.6。**件数ではなく跳びそのもの**を確かめる——`tax_interest_7`
+    の元本を 1 桁でも書き間違えると、利息が 7 からずれて国税が 0→1 に跳ばなく
+    なり、このテストが落ちる。「7 件入っている」だけを見るテストはこの間違いを
+    素通りさせる。
+    """
+    six = _tax_boundary_result("tax_interest_6")
+    seven = _tax_boundary_result("tax_interest_7")
+    assert six["interest"] == "6"
+    assert seven["interest"] == "7"
+    assert six["national_tax"] == "0"
+    assert seven["national_tax"] == "1"
+
+
+def test_the_named_tax_strata_span_the_local_tax_floor_jump() -> None:
+    """利息 19→20 で地方税の床が 0→1 に跳ぶ。国税と同じ理由で、跳びそのものを
+    確かめる。
+    """
+    nineteen = _tax_boundary_result("tax_interest_19")
+    twenty = _tax_boundary_result("tax_interest_20")
+    assert nineteen["interest"] == "19"
+    assert twenty["interest"] == "20"
+    assert nineteen["local_tax"] == "0"
+    assert twenty["local_tax"] == "1"
+
+
+def test_the_simultaneous_tax_jump_stratum_crosses_both_floors_at_once() -> None:
+    """`tax_simultaneous_jump` は決定的探索(乱数を使わない)で見つけた利息。
+    その利息の 1 円手前と比べて、国税と地方税が両方跳ぶことを確かめる。
+    """
+    result = _tax_boundary_result("tax_simultaneous_jump")
+    interest = int(result["interest"])
+    prev_national, prev_local = corpus_calls.compound_ref.withholding_tax(interest - 1)
+    assert int(result["national_tax"]) != prev_national
+    assert int(result["local_tax"]) != prev_local
+
+
+def test_the_tax_rounding_mismatch_stratum_differs_from_the_combined_floor() -> None:
+    """`tax_rounding_mismatch` は、国税・地方税を別々に切り捨てた合計が、
+    合計 20.315% を 1 回切り捨てた値と 1 円ずれる利息(`tax.rs` のユニット
+    テストが持つ `2,648,906` を起点に、乱数を使わず決定的に探索した)。
+    `tax.rs::the_two_taxes_are_floored_separately` と同じ数を主張する。
+    """
+    result = _tax_boundary_result("tax_rounding_mismatch")
+    interest = int(result["interest"])
+    assert interest == 2_648_906
+    separate = int(result["national_tax"]) + int(result["local_tax"])
+    combined = interest * 20315 // 100_000
+    assert result["national_tax"] == "405679"
+    assert result["local_tax"] == "132445"
+    assert separate == 538_124
+    assert combined == 538_125
+    assert separate != combined
+
+
+def test_the_tax_boundary_searches_are_deterministic_not_random() -> None:
+    """設計書 §4.6・Task 5 Step 3。「探索は生成のたびに走ってよいが、乱数を
+    使わないこと」——同じ起点からは常に同じ利息が出ることを確かめる。
+    """
+    assert corpus_calls._find_simultaneous_tax_jump(21) == corpus_calls._find_simultaneous_tax_jump(
+        21
+    )
+    assert corpus_calls._find_tax_rounding_mismatch(
+        2_648_906
+    ) == corpus_calls._find_tax_rounding_mismatch(2_648_906)
