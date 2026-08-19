@@ -124,3 +124,133 @@ def test_the_certificate_does_not_fall_into_the_zero_principal_hole() -> None:
     # 例外を出さずに通る。
     num, den = compound_ref.rate_fraction("3", 12)
     compound_ref.check_deposit_certificate(1, 0, num, den, 1, 1, taxed=False)
+
+
+# `build_finance_shard(seed=20260821, count=2000)` が棄却した `compound_deposit_for`
+# の実測 10 件（すべて `tax: True`）。種が税を見ずに組まれていたため `MAX_WALK`
+# を使い切って諦めていた（設計書 §4.9）。実測から来た入力なので、この経路が
+# 再発すれば必ず赤くなる。
+TAX_SEED_MISS_CASES: tuple[dict[str, object], ...] = (
+    {
+        "principal": 45274742,
+        "rate": "4.5",
+        "periods_per_year": 12,
+        "periods": 104,
+        "target": 755402859,
+    },
+    {
+        "principal": 63149292,
+        "rate": "8.1",
+        "periods_per_year": 12,
+        "periods": 80,
+        "target": 881006021,
+    },
+    {
+        "principal": 213948711,
+        "rate": "1.0",
+        "periods_per_year": 1,
+        "periods": 9,
+        "target": 437867318,
+    },
+    {
+        "principal": 298937362,
+        "rate": "5.1",
+        "periods_per_year": 12,
+        "periods": 99,
+        "target": 601241328,
+    },
+    {
+        "principal": 236741933,
+        "rate": "3.0",
+        "periods_per_year": 12,
+        "periods": 268,
+        "target": 661986954,
+    },
+    {
+        "principal": 45277543,
+        "rate": "3.2",
+        "periods_per_year": 2,
+        "periods": 163,
+        "target": 677913573,
+    },
+    {
+        "principal": 187627116,
+        "rate": "0.1",
+        "periods_per_year": 1,
+        "periods": 11,
+        "target": 969955332,
+    },
+    {
+        "principal": 224600998,
+        "rate": "5.3",
+        "periods_per_year": 12,
+        "periods": 214,
+        "target": 821133637,
+    },
+    {
+        "principal": 96899159,
+        "rate": "14.8",
+        "periods_per_year": 12,
+        "periods": 49,
+        "target": 807413223,
+    },
+    {
+        "principal": 391992896,
+        "rate": "6.4",
+        "periods_per_year": 12,
+        "periods": 72,
+        "target": 827929955,
+    },
+)
+
+
+def test_deposit_for_solves_every_tax_seed_miss_case() -> None:
+    # 赤確認: 種が税を見ずに組まれていたときは、この 10 件すべてが
+    # `MAX_WALK` を使い切って `DepositSearchLimitError` を投げていた。
+    for case in TAX_SEED_MISS_CASES:
+        num, den = compound_ref.rate_fraction(str(case["rate"]), int(case["periods_per_year"]))
+        d = compound_ref.deposit_for(
+            int(case["principal"]), num, den, int(case["periods"]), int(case["target"]), taxed=True
+        )
+        compound_ref.check_deposit_certificate(
+            d,
+            int(case["principal"]),
+            num,
+            den,
+            int(case["periods"]),
+            int(case["target"]),
+            taxed=True,
+        )
+
+
+def test_the_downward_walk_is_bounded_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `while d > 0 and ...` は元々上限を持たなかった(設計書 §4.9 Step 4)。
+    # **番人自身に判別力があること**を見てから信じる
+    # (`test_the_guard_rejects_a_loop_that_drifted_too_far` と同じ形)。種を
+    # 意図的に高く付け替え、下向きに長く歩かせる。`MAX_WALK` を 3 に絞れば、
+    # 10 歩の下向き修正が必要な入力は `DepositSearchLimitError` で止まる。
+    num, den = compound_ref.rate_fraction("3", 12)
+    real_seed = compound_ref._deposit_seed
+
+    def _seed_ten_too_high(
+        principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+    ) -> int:
+        return real_seed(principal, num, den, periods, target, taxed) + 10
+
+    monkeypatch.setattr(compound_ref, "_deposit_seed", _seed_ten_too_high)
+    monkeypatch.setattr(compound_ref, "MAX_WALK", 3)
+    with pytest.raises(compound_ref.DepositSearchLimitError, match="下向き"):
+        compound_ref.deposit_for(0, num, den, 240, 10_000_000, taxed=False)
+
+
+def test_deposit_for_reaches_every_tax_seed_miss_case_within_a_few_steps() -> None:
+    # 「解けた」だけでは、種が悪いまま `MAX_WALK` を上げても緑になる。税を
+    # 織り込んだ種からは、切り捨て 2 回ぶん(数円)しかずれないはずなので、
+    # 数歩で当たることを歩数そのものに主張させる。実測の最大歩数は 2
+    # （10 件中 8 件が 1 歩、2 件が 2 歩）。上限 4 はそこに余裕を持たせた値。
+    for case in TAX_SEED_MISS_CASES:
+        num, den = compound_ref.rate_fraction(str(case["rate"]), int(case["periods_per_year"]))
+        _d, steps = compound_ref._deposit_search(
+            int(case["principal"]), num, den, int(case["periods"]), int(case["target"]), taxed=True
+        )
+        assert steps <= 4, f"{case} が {steps} 歩かかった(上限 4、実測最大は 2)"

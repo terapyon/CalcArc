@@ -31,6 +31,11 @@ PERIODS_PER_YEAR = (1, 2, 12)
 
 NATIONAL_TAX_NUM, NATIONAL_TAX_DEN = 15315, 100_000  # 15.315%
 LOCAL_TAX_NUM, LOCAL_TAX_DEN = 5, 100  # 5%
+# 国税 + 地方税の合算(種の連続近似だけに使う。実際の課税は 2 回に分けて
+# 別々に切り捨てる — withholding_tax)。0.20315。
+TAX_RATE = Decimal(NATIONAL_TAX_NUM) / Decimal(NATIONAL_TAX_DEN) + Decimal(LOCAL_TAX_NUM) / Decimal(
+    LOCAL_TAX_DEN
+)
 
 
 class CompoundError(Exception):
@@ -155,32 +160,81 @@ def _reached_or_nothing(
     return reached(principal, deposit, num, den, periods, taxed)
 
 
-def deposit_for(principal: int, num: int, den: int, periods: int, target: int, taxed: bool) -> int:
-    """目標を下回らない最小の積立額（設計書 §1 の裁定 4）。
+def _deposit_seed(
+    principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+) -> int:
+    """Decimal 閉形式から積立額の種を作る。**二分探索にしない**——ここが
+    唯一の式で、ここが悪いと下の歩きが `MAX_WALK` を使い切る（設計書 §4.9）。
 
-    **二分探索しない**——Rust がそれをやる。ここは Decimal 閉形式の種から
-    証明書を満たすまで歩く。種は税を見ないので必ず下から寄る。
+    税 OFF、または利率 0（利息が常に 0 なので税も常に 0）のときは元々の式
+    （目標 == 残高）を解く。税 ON かつ利率 ≠ 0 のときは、目標と比べる値が
+    手取り（残高 − 国税 − 地方税、課税対象は利息）であることを織り込む。
+    円未満切り捨てを無視した連続近似
+
+        net ≈ balance − TAX_RATE × (balance − 投入合計)
+            = balance × (1 − TAX_RATE) + TAX_RATE × 投入合計
+
+    に `balance = principal × growth + d × (growth − 1) / r`、
+    `投入合計 = principal + d × periods` を代入し、`net = target` を
+    `d` について解く。切り捨て 2 回ぶんの誤差は数円に収まるので、
+    ここから歩けば数歩で当たる。
+    """
+    with localcontext() as ctx:
+        ctx.prec = PRECISION
+        r = Decimal(num) / Decimal(den)
+        growth = (1 + r) ** periods
+        if r == 0:
+            # 利率 0: 利息は常に 0、税があっても効かない。target == balance。
+            return int((Decimal(target) - Decimal(principal)) / Decimal(periods))
+        if not taxed:
+            remain = Decimal(target) - Decimal(principal) * growth
+            return int(remain * r / (growth - 1))
+        net_factor = 1 - TAX_RATE
+        numerator = Decimal(target) - Decimal(principal) * (net_factor * growth + TAX_RATE)
+        denominator = net_factor * (growth - 1) / r + TAX_RATE * periods
+        return int(numerator / denominator)
+
+
+def _deposit_search(
+    principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+) -> tuple[int, int]:
+    """`deposit_for` の実体。返り値は `(答, 使った歩数)`。
+
+    歩数は下向き・上向きの合計。`deposit_for` は答だけを返す——歩数は
+    「種が悪いまま歩数だけ伸ばしていないか」をテストが確かめるためだけに
+    存在する内部の値で、公開契約ではない。
     """
     if target <= 0:
         raise CompoundError("SyntaxError")
     if _reached_or_nothing(principal, 0, num, den, periods, taxed) >= target:
-        return 0
-    with localcontext() as ctx:
-        ctx.prec = PRECISION
-        r = Decimal(num) / Decimal(den)
-        remain = Decimal(target) - Decimal(principal) * (1 + r) ** periods
-        if r == 0:
-            seed = int(remain / Decimal(periods))
-        else:
-            seed = int(remain * r / ((1 + r) ** periods - 1))
+        return 0, 0
+    seed = _deposit_seed(principal, num, den, periods, target, taxed)
     d = max(seed, 0)
-    while d > 0 and _reached_or_nothing(principal, d - 1, num, den, periods, taxed) >= target:
+    steps = 0
+    while d > 0:
+        if steps >= MAX_WALK:
+            raise DepositSearchLimitError(
+                f"種から下向きに {MAX_WALK} 歩使い切っても下限に届かない（種 {seed}）"
+            )
+        if _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target:
+            break
         d -= 1
+        steps += 1
     for step in range(MAX_WALK):
         if _reached_or_nothing(principal, d, num, den, periods, taxed) >= target:
-            return d
+            return d, steps + step
         d += 1
     raise DepositSearchLimitError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
+
+
+def deposit_for(principal: int, num: int, den: int, periods: int, target: int, taxed: bool) -> int:
+    """目標を下回らない最小の積立額（設計書 §1 の裁定 4）。
+
+    **二分探索しない**——Rust がそれをやる。ここは Decimal 閉形式の種から
+    証明書を満たすまで歩く。
+    """
+    answer, _steps = _deposit_search(principal, num, den, periods, target, taxed)
+    return answer
 
 
 def periods_for(principal: int, deposit: int, num: int, den: int, target: int, taxed: bool) -> int:

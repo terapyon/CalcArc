@@ -895,16 +895,17 @@ def test_unclassified_reference_gave_up_stops_the_generator(
         )
 
 
-def test_the_current_generator_gives_up_only_for_two_classified_reasons() -> None:
-    """いまの生成器では、参照実装の棄却はこの 2 つの理由に収まる
+def test_the_current_generator_gives_up_only_for_one_classified_reason() -> None:
+    """いまの生成器では、参照実装の棄却は `near_yen_boundary` だけに収まる
     (`other` は 0 件)。
 
-    `compound_deposit_search_limit` の 10 件は Task 2(種に税を織り込む改善)
-    で 0 に変わる予定の値である——このテストが赤くなったらそれが理由で、
-    直すのは期待値のこの箇所である。
+    `compound_deposit_search_limit` は Task 2(`deposit_for` の種に税を
+    織り込む改善)で 10 → 0 になった。種が税を見ずに組まれていたのが原因で、
+    実測 10 件はすべて `tax: True` の `compound_deposit_for` だった
+    （`reference/tests/test_compound_ref.py` の `TAX_SEED_MISS_CASES`）。
     """
     shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
     reasons = shard["rejections"]["reference_gave_up"]
     assert reasons["near_yen_boundary"] == 3
-    assert reasons["compound_deposit_search_limit"] == 10
+    assert reasons["compound_deposit_search_limit"] == 0
     assert reasons["other"] == 0
