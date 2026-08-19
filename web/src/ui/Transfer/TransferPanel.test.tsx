@@ -47,6 +47,7 @@ vi.mock("../../expr", () => ({
 }));
 
 import { initDataScale } from "../../datascale";
+import { updateSettings } from "../useSetting";
 import { TransferPanel } from "./TransferPanel";
 
 /** u128 の上限。コアの着地表と同じ境界(設計書 §8)。 */
@@ -202,8 +203,15 @@ describe("TransferPanel（電卓）", () => {
     expect(main()).toHaveTextContent("135.0 GB");
   });
 
-  it("keeps the k of kbps decimal", async () => {
-    // **1 kbps = 1,000 bps**(spec §3.5)。1024 だと 117,964,800 になる。
+  it("routes the kbps key to the kbps token", async () => {
+    // **`kbps` のキーが `kbps` トークンとしてコアへ渡ることを見る。**
+    // 出ている `115,200,000` は同ファイル `BITS_PER_SECOND` の
+    // `kbps: 1_000n` ——**スタブ自身の算数**なので、この層では「k が 10 進
+    // であること」は主張しようがない。それを見るのは
+    // `crates/calcarc-core/src/data_scale/transfer.rs` の
+    // `kilo_is_a_thousand_not_1024` と `testdata/transfer.json` である。
+    // ここが守っているのは配線——別のトークン(`mbps` など)を渡せば
+    // 係数が変わって落ちる。
     await renderPanel();
     await press([FIELD_NAMES.bandwidth, "5", "1", "2"]);
     await press([FIELD_NAMES.bandwidthUnit, "kbps"]);
@@ -298,6 +306,32 @@ describe("TransferPanel（電卓）", () => {
     );
     expect(read.length, "neither value was ever evaluated").toBeGreaterThan(0);
     expect([...new Set(read.map((c) => c.unitSet))]).toEqual(["none"]);
+  });
+
+  it("follows the saved primary system, which Data Scale owns", async () => {
+    // **共有結合を 1 本で固定する**(LlmPanel.test.tsx の同名の検査と
+    // 同じ形)。Transfer は自前のトグルを持たず `settings.dataScale.primary`
+    // を読む(計画時の裁定 2)——つまり **Data Scale の設定が Transfer の
+    // 主表示を変える**。その向きが意図であることを、ここで見えるように
+    // しておく。既定(`decimal`)でしか走らないテストばかりだと、読み出しを
+    // 直書きに変えても全部が緑のまま通る。
+    //
+    // `125.7 GiB` は headline と同じ 135,000,000,000 bytes を
+    // 1024³ で割った値。**主が 2 進に倒れたときだけ main に出る。**
+    updateSettings((current) => ({
+      ...current,
+      dataScale: { ...current.dataScale, primary: "binary" },
+    }));
+    await renderPanel();
+    await press([FIELD_NAMES.bandwidth, "1", "0", "0"]);
+    await press([FIELD_NAMES.duration, "3"]);
+    expect(screen.getByTestId("transfer-result")).toHaveTextContent(
+      "135,000,000,000 bytes",
+    );
+    expect(main()).toHaveTextContent("125.7 GiB");
+    expect(screen.getByTestId("transfer-primary")).toHaveTextContent(
+      "2 進を主表示",
+    );
   });
 
   it("says nothing until both values are typed", async () => {
