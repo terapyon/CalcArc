@@ -123,8 +123,31 @@ Stratum(
 **期間（§5.5）** — 名指し 16 種: `0` `1` `2` `5` `6` `7` `11` `12` `13`
 `479` `480` `599` `600` `1199` `1200` `1201`。
 
-`0` と `1201` はエラー水準（loan は `MAX_TERM_MONTHS = 1200`、複利は
-`MAX_PERIODS = 1200`）。`5` `6` `7` はボーナスの `BONUS_INTERVAL_MONTHS = 6` の
+**期待は op に依存する。** `0` は loan・複利のどちらでもエラー水準
+（`schedule.rs:40` の `n == 0`、`compound.rs:33` の `periods == 0`）。
+`1201` は**複利だけ**がエラー水準で（`compound.rs:33` の
+`periods > MAX_PERIODS`）、**loan では正常に計算される**。
+
+**訂正（2026-08-19、実物のガードと突き合わせた）。** この節は当初
+「`0` と `1201` はエラー水準（loan は `MAX_TERM_MONTHS = 1200`、複利は
+`MAX_PERIODS = 1200`）」と書いていた。**loan について誤りである。**
+`MAX_TERM_MONTHS` は `loan/inverse.rs:21` にあり、逆算 `term_for` の
+**探索打ち切り**（`:134` の `while n < MAX_TERM_MONTHS`）であって入力のガード
+ではない。`run_schedule` が見るのは `n == 0` だけで、上限は見ていない
+（`schedule.rs:40`）。参照実装も同じ（`loan_ref.py:31` の `MAX_TERM_MONTHS` は
+逆算の探索でしか使われない）。wasm 境界にも `web/src/calc/` にもクランプは無い。
+
+**この誤りを実装に持ち込むと壊れ方が悪い。** `loan_*/term_over_max` 層を
+`expect="SyntaxError"` で作ると落ち、そこで「期待を実測に合わせる」誘惑が
+生まれる——このリポジトリが繰り返し禁じてきた形である。しかも設計書が
+「Rust のガードから起こした」と書いているぶん、実装者は自分の実装を疑う側に
+倒れる。
+
+**仕様は変えない。** ローンの期間に製品としての上限を置くかどうかは
+`calcarc-core` の実装変更であり、B+C の非目標「Finance の計算仕様・丸め慣行を
+変えない」の外側にある。置かない選択もあり得る（`run_schedule` は `n` が
+大きくてもループが伸びるだけで壊れない）。ここでは**実物どおりに層を作る**。
+`5` `6` `7` はボーナスの `BONUS_INTERVAL_MONTHS = 6` の
 両隣で、ボーナス > 0 のとき `n < 6` は SyntaxError になる（`loan_ref.py:296`）。
 
 **複利周期（§5.6）** — 正常 `1` `2` `12` を**均等に**。異常は `0` `4` `13` を
@@ -190,18 +213,26 @@ Rust のガードから起こした**（推測ではない）。
 | 金利の小数 5 桁以上 | `rate.rs:42` | SyntaxError |
 | 金利が非数字・空・負 | `rate.rs:46` | SyntaxError |
 | 金利が 100% 超 | `rate.rs:67` | SyntaxError |
-| 期間 0 / 上限超 | `compound.rs:33`, `schedule.rs:40` | SyntaxError |
+| 複利の期数が 0 または 1200 超 | `compound.rs:33` | SyntaxError |
+| ローンの期間が 0（**上限のガードは無い**） | `schedule.rs:40` | SyntaxError |
 | 元本も積立も 0 | `compound.rs:38` | SyntaxError |
 | 残価 ≥ 元本 | `schedule.rs:40` | SyntaxError |
 | 残価あり かつ n < 2 | `schedule.rs:43` | SyntaxError |
 | 月額が初回利息以下（発散） | `schedule.rs:50` | SyntaxError |
-| 残価に届く前に完済 | `schedule.rs:73` | SyntaxError |
+| 残価に届く前に完済 | `schedule.rs:74` | SyntaxError |
 | ボーナスが元本の 50% 超 | `loan_ref.py:289` | SyntaxError |
 | ボーナスあり かつ n < 6 | `loan_ref.py:296` | SyntaxError |
 | 目標 0 | `compound_inverse.rs` | SyntaxError |
 | 1200 期でも未達（発散） | `compound_inverse.rs` | SyntaxError |
 | 残高が u64 を超える | `compound.rs:44` | Overflow |
 | 積立額が u64 に収まらない | `compound_inverse.rs` | Overflow |
+
+**訂正（2026-08-19）。** 表の 11 箇所を実物と突き合わせた。10 箇所は行番号まで
+当たっていたが、2 箇所が違った。(1) 「期間 0 / 上限超」を 1 行にまとめて
+`compound.rs:33` と `schedule.rs:40` を並べていたが、**上限を見ているのは複利
+だけ**なので 2 行に分けた（§4.2 の訂正を見よ）。(2) 「残価に届く前に完済」の
+`schedule.rs:73` はコメント行で、`return Err(CalcError::SyntaxError)` は 74 行目
+——理由は正しく、行番号だけがずれていた。経路は 16 から **17** になった。
 
 **この表は実装時に「全経路が 1 件以上コーパスに現れる」テストで固定する。**
 表に書いたのに 0 件、という状態を緑のまま許さない（§9）。
