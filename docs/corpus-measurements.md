@@ -1330,8 +1330,10 @@ finance alone: 3500 cases in 1932.53ms (0.5522ms each)
    `loan_forward` だけでは境界を確かめられないので、この 17 件は証明書から
    除外した。**除外を黙って通さない**——`certificates.ts` の
    `countDegenerateLoanPrincipalCases` で件数を読めるようにし、
-   `calls.spec.ts` に専用のテスト（除外数が 0 件でも全数でもないことを
-   確かめる）を足した。`pnpm heavy` の実行ログには毎回
+   `calls.spec.ts` に専用のテスト（正常 432 件・除外 17 件を実測値として
+   焼き付ける）を足した。「全数除外でないこと」だけでは、17 件が 400 件に
+   増えた走行が緑で通ってしまう——除外は証明書の穴なので、穴の大きさが
+   動いたら気づけなければならない。`pnpm heavy` の実行ログには毎回
    `loan_principal: 17 of 432 normal cases are degenerate (rows_paid < n)
    and excluded from the boundary certificate.` が出る。
 
@@ -1339,6 +1341,35 @@ finance alone: 3500 cases in 1932.53ms (0.5522ms each)
 「ちょうど payment を使い切る」最小値になるため、`rows_paid < n` には
 ならない）。`compound_deposit_for` の下限側（答 − 1 円）が構成できない
 ケース（答が 0 円）は実測 0 件だった。
+
+### 未到達側の内訳: 計算で示せた分と、エラーで示した分（独立に検算）
+
+「答の一歩手前では届かない」側は、`compound_grow` が値を返してそれが目標を
+下回る場合と、`compound_grow` がエラーを返す場合の 2 通りで通る。後者を
+未到達として扱うのは engine 自身の流儀に合わせたもので
+（`compound_inverse.rs` の `probe` が `Err(CalcError::Overflow) => true`、
+`Err(_) => false` としている）、証明書もこれを写している
+（`certificates.ts` の `errorMeansShortOfTarget`）。**どちらでどれだけ
+通っているのかは、緑という結果からは読めない**ので数えた。
+
+数えたのは Python 参照実装（`compound_ref.compute("compound_grow", …)`）で、
+wasm とは独立の経路である。
+
+| 証明書の未到達側 | プローブ数 | 値で下回った | エラーで示した | 目標に届いてしまった |
+|---|---:|---:|---:|---:|
+| `compound_deposit_for`（答 − 1 円） | 404 | 281 | 123 | 0 |
+| `compound_periods_for`（k = 1..n−1） | 67,371 | 67,371 | 0 | 0 |
+
+- `compound_deposit_for` の 123 件は**すべて同じ形**だった: 答が 1 円で、
+  `principal = 0` かつ `deposit = 0` になる入力。engine も参照実装も
+  「入れた金がゼロ」を `SyntaxError` にする。値としては残高 0 < 目標 なので、
+  未到達として扱うのは意味の上でも正しい。
+- `compound_periods_for` は 67,371 プローブすべてが値の比較で通っており、
+  エラー経路に一度も乗っていない。必要期間の証明書は全走査そのものが
+  主張なので、ここがエラーで埋まっていないことには意味がある。
+- **「目標に届いてしまった」が両方 0** であることは、参照実装の側でも
+  境界の主張が成り立っていることを意味する（wasm 側は証明書テストが緑で
+  あることが同じことを言っている）。
 
 ### `pnpm heavy` の所要時間: 証明書なし / あり
 

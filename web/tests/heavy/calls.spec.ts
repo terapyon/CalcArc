@@ -174,10 +174,12 @@ test("loan_principal's degenerate answers are counted, not silently dropped", ()
     `loan_principal: ${excluded} of ${total} normal cases are degenerate ` +
       "(rows_paid < n) and excluded from the boundary certificate.",
   );
-  expect(excluded).toBeGreaterThanOrEqual(0);
-  expect(
-    excluded,
-    "every normal loan_principal case was excluded — the certificate " +
-      "above would have certified nothing",
-  ).toBeLessThan(total);
+  // **実測値を焼き付ける。** 「全数除外でないこと」だけを見ても、17 件が
+  // 400 件に増えた走行が緑で通り、証明書が覆う範囲が黙って縮む。除外は
+  // 証明書の穴なので、穴の大きさが動いたら気づけなければならない。
+  //
+  // ここが赤くなったときに直す先はこの数字ではなく、まず
+  // `docs/corpus-measurements.md` の「Heavy の逆算証明書」の記録である
+  // ——何件が境界の証明を持たないかは、外の読み手に対する主張の一部。
+  expect({ total, excluded }).toEqual({ total: 432, excluded: 17 });
 });
