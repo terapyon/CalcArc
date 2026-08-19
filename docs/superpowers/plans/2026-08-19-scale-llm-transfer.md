@@ -1076,11 +1076,17 @@ Expected: すべて PASS。golden は **17 件**（成功 13 / エラー 4）を
 
 | | 変異 | 落ちるはず |
 |---|---|---|
-| 1 | `memory` の `[layers, context_length, kv_heads, head_dim, kv.bits()]` を `[layers, context_length, head_dim, kv_heads, kv.bits()]` に（KV ヘッド数とヘッド次元の入れ替え） | `llm_golden`（GQA の 1 件。8 ≠ 128 なので積が変わる）と `kv_heads_is_not_the_attention_head_count` |
+| 1 | **【訂正 2026-08-19】** 当初は「`kv_heads` と `head_dim` を入れ替える」だったが、**掛け算は可換なので当てられない**（実際に入れ替えて 0 件失敗を確認した）。**代わりに `[layers, context_length, …]` を `[context_length, layers, …]` に入れ替える** | `llm_golden` の `llm/1xint8/170141183460469231731687303715884105728x1x1x0xfp16`。積は変わらないが**あふれの位置が変わる**——`2 × 0 = 0` を先に通してしまい、`Overflow` が `0` になる。**掛け算の可換性が届かないのは、あふれの位置だけである** |
 | 2 | `let mut kv_bits = 2u128;` を `= 1u128;` に（K と V の 2 本を落とす） | `llm_golden` の KV を持つ全件と `the_headline_case` |
 | 3 | `weight_bits.div_ceil(8)` を `weight_bits / 8` に（切り上げ → 切り捨て） | `a_single_int4_parameter_is_one_byte_not_zero` と `llm_golden` の `llm/1xint4/...` |
 
 **3 が赤にならなければ、端の格子を 1 件も置いていない**——緑のまま何も主張しない検査になっている（spec §7）。
+
+**なぜ 1 が差し替わったか**（Task 3 で実測して分かったこと）: `kv_heads` と `head_dim` は
+`kv_bits` の中で**掛け合わされるだけ**なので、入れ替えても積は変わらない。**2 つを
+取り違えても答えは 1 バイトも変わらない**——利用者が 2 つの欄を入れ違えて打っても
+同じ数が出る。**取り違えを検出する検査は原理的に書けない**ので、区別を担うのは
+盤面の言葉（キーのラベルと読み上げ名、Task 8・9）だけである。
 
 - [ ] **Step 7: 変異を戻し、木が綺麗なことを確かめる**
 
