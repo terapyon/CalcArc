@@ -13,7 +13,7 @@
  * 変異はコミットしない。各回のあとに原文へ戻し、バイト単位で一致を確かめる。
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -255,6 +255,16 @@ export function exitCodeFrom(error) {
  * どちらで倒れたかが別々の事実として残る。
  */
 export function measure() {
+  // **前の走行のファイルを残さない。** playwright の起動そのものが失敗
+  // すると(ビルド失敗、あるいは spawn 自体の失敗)、globalSetup
+  // (`resetRun()`)まで到達しない――`heavy-run.json` を消すのはそこだけ
+  // なので、消さずに始めると**前の変異が書いたファイルがディスクに
+  // 残ったまま**になる。`measure()` はそれをそのまま読み、`buildOk: true`
+  // / `runJsonFound: true` / `ranTests: true` / シャード完備という健全性
+  // チェックを 4 つとも素通りし、**一度も測っていない変異が前の変異の
+  // 不一致件数で判定される**。この spec が消そうとしている偽陽性そのもの
+  // なので、ビルドを試す前に必ず消す。
+  rmSync(RUN_JSON, { force: true });
   let buildOk = true;
   try {
     run("pnpm", ["wasm"]);
@@ -317,13 +327,27 @@ export function verdictFor(mutation, m) {
     .filter(([, count]) => count > 0)
     .map(([name]) => name);
   if (mutation.expectShards.length === 0) {
-    if (m.playwrightExitCode === 0 && reacted.length === 0) {
-      return { ok: true, kind: "ok", why: "赤くならなかった——レポートの「踏んでいない」が正しい" };
+    if (reacted.length > 0) {
+      // **シャードが実際に反応した。** レポートの「この領域は踏んでいない」
+      // という主張そのものが破られている――検出の結果である。
+      return fail(
+        "claim-was-false",
+        `赤くなった(${reacted.join(", ")})。レポートの「踏んでいない」が嘘である`,
+      );
     }
-    return fail(
-      "claim-was-false",
-      `赤くなった(${reacted.join(", ") || "テストが非ゼロで終了"})。レポートの「踏んでいない」が嘘である`,
-    );
+    if (m.playwrightExitCode !== 0) {
+      // **どのシャードも反応していないのに、走行は非ゼロで終わった。**
+      // これはシャード比較以外の失敗(タイムアウト等)で走行そのものが
+      // 壊れただけであり、レポートの「踏んでいない」という主張は
+      // 破られていない――spec A §4.5 が言う 1〜4 の「測れていない」に
+      // 属するので `claim-was-false` ではなく `measurement-failed` として
+      // 報告する。
+      return fail(
+        "measurement-failed",
+        `テストが非ゼロ(${m.playwrightExitCode})で終了したが、どのシャードも反応していない——走行そのものが壊れている`,
+      );
+    }
+    return { ok: true, kind: "ok", why: "赤くならなかった——レポートの「踏んでいない」が正しい" };
   }
   if (reacted.length === 0) {
     return fail("caught-nothing", "1 件も捕まえられなかった");
@@ -337,7 +361,21 @@ export function verdictFor(mutation, m) {
   for (const name of mutation.expectShards) {
     const total = m.totalsByShard[name] ?? 0;
     const rate = mutation.minRate?.[name] ?? 0;
-    const floor = Math.max(1, Math.ceil(total * rate));
+    // **`max(1, ...)` は保険であって、ここでは load-bearing ではない。**
+    // ここに来る時点で直前の `sameSet` が「反応したシャードの集合が
+    // `expectShards` と一致する」ことを確立しており、`reacted` は定義上
+    // 「件数が 0 より多いシャード」だけを含む。つまり `expectShards` の
+    // 各要素は、このループに来る時点で既に 1 件以上検出している――
+    // `max(1, ...)` が実際に効くのは考えにくい入力(負の `rate` など)に
+    // 対する保険でしかない。
+    //
+    // `- 1e-9` は浮動小数の丸め対策。`total * rate` は数学的には整数でも
+    // f64 では丸め誤差が乗る――たとえば 3500 * 0.274 は 959 のはずが
+    // `959.0000000000001` になり、素の `Math.ceil` は 960 を返す。率で
+    // 下限を持たせた目的(コーパスが増えても表を書き換えずに済む)が、
+    // 実測ちょうどの走行を「1 件足りない」と誤判定する形でまさにここで
+    // 崩れるので、微小なイプシロンを引いてから切り上げる。
+    const floor = Math.max(1, Math.ceil(total * rate - 1e-9));
     const caught = m.mismatchesByShard[name] ?? 0;
     if (caught < floor) {
       return fail("below-min-rate", `${name} は ${caught} 件で、下限 ${floor} 件(${total} 件の ${rate})に届かない`);

@@ -203,6 +203,20 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("claim-was-false");
   });
+
+  it("calls it measurement-failed, not a false claim, when the run broke but nothing reacted", () => {
+    // **走行が壊れただけでは、レポートの「踏んでいない」は破られていない。**
+    // 終了コードが非ゼロでも、どのシャードも反応していないなら、シャード
+    // 比較とは別の理由(タイムアウト等)で走行そのものが壊れただけ――
+    // spec A §4.5 の「1〜4 は測れていない」に属するので、
+    // `claim-was-false`(検出の結果)ではなく `measurement-failed` になる。
+    const v = verdictFor(
+      nothingExpected,
+      measurement({ playwrightExitCode: 1 }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
 });
 
 describe("the expected shard set is matched exactly", () => {
@@ -273,7 +287,11 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
   });
 
   it("still demands one case when no rate is named", () => {
-    // 薄い帯(ncr は 10/2000 = 0.5%)を率だけで縛ると、丸めで 0 件が通る。
+    // **`minRate` を省略しても、無条件で通るわけではない。** ここに来る
+    // 時点で直前の `sameSet` が保証しているのは「反応したシャードの集合が
+    // `expectShards` と一致する」ことだけで、それは 1 件だけ検出したことの
+    // 言い換えでしかない――率を書かなければ下限は実質 1 件になる。ここでは
+    // ちょうど 1 件検出しているので緑になる。
     const v = verdictFor(
       { id: "m", expectShards: ["a (values)"], minRate: {} },
       measurement({
@@ -282,6 +300,45 @@ describe("the detection floor is a rate, so the corpus can grow", () => {
       }),
     );
     expect(v.ok).toBe(true);
+  });
+
+  it("does not let f64 rounding turn 3500 rows at rate 0.274 into a floor of 960", () => {
+    // **本命の浮動小数の罠。** `3500 * 0.274` は数学的には 959 だが、f64 では
+    // `959.0000000000001` になる。素の `Math.ceil` はこれを 960 に切り上げて
+    // しまい、実測ちょうど 959 件の走行を「1 件足りない」と誤判定する――
+    // 率で下限を持たせた目的(コーパスが増えても表を書き換えずに済む)を、
+    // まさにこの場面で裏切る。3,500 件は B+C がコーパスを増やす予定の件数、
+    // 0.274 は `precedence-collapse` の率(spec §4.6)。
+    expect(3500 * 0.274).not.toBe(959);
+    expect(Math.ceil(3500 * 0.274)).toBe(960);
+
+    const rateMutation = {
+      id: "m",
+      expectShards: ["a (values)"],
+      minRate: { "a (values)": 0.274 },
+    };
+    const totals = { "a (values)": 3500, "b (values)": 2000 };
+
+    const exact = verdictFor(
+      rateMutation,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 959, "b (values)": 0 },
+        totalsByShard: totals,
+      }),
+    );
+    expect(exact.ok).toBe(true);
+
+    const oneShort = verdictFor(
+      rateMutation,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 958, "b (values)": 0 },
+        totalsByShard: totals,
+      }),
+    );
+    expect(oneShort.ok).toBe(false);
+    expect(oneShort.kind).toBe("below-min-rate");
   });
 });
 
