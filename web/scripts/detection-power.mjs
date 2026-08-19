@@ -350,6 +350,19 @@ export function verdictFor(mutation, m) {
     return { ok: true, kind: "ok", why: "赤くならなかった——レポートの「踏んでいない」が正しい" };
   }
   if (reacted.length === 0) {
+    if (m.playwrightExitCode !== 0) {
+      // **ここも Minor 4 と同じ誤ラベルだった。** 健全性チェック 1〜4 を
+      // 通っている以上シャードの比較自体は完了しており、非ゼロ終了は
+      // シャード比較とは別のテストが落ちたということ――走行そのものが
+      // 壊れているのであって、コーパスが検出できなかったのではない。
+      // `caught-nothing` のまま報告すると、隣り合う 2 つの枝(この枝と
+      // `expectShards === []` の枝)で同じ状況に違う意味論を割り当てる
+      // ことになる。
+      return fail(
+        "measurement-failed",
+        `テストが非ゼロ(${m.playwrightExitCode})で終了したが、どのシャードも反応していない——走行そのものが壊れている`,
+      );
+    }
     return fail("caught-nothing", "1 件も捕まえられなかった");
   }
   if (!sameSet(reacted, mutation.expectShards)) {

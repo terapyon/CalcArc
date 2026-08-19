@@ -1,11 +1,55 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import {
   exitCodeFrom,
   MUTATIONS,
+  measure,
   readMeasurement,
   resultRecord,
   verdictFor,
 } from "../../scripts/detection-power.mjs";
+
+// **`measure()` を単体テストするための唯一の口。** `detection-power.mjs`
+// は `execFileSync`(`node:child_process`)と `rmSync`/`readFileSync`/
+// `writeFileSync`(`node:fs`)を通常の名前付き import で取っているので、
+// vitest のモジュールモックで差し替えられる――`measure()` 自体を
+// テスト可能にするための再設計は要らない。この 2 つのモックは
+// ファイル全体に効くが、`measure()`/`main()` 以外のテスト対象
+// (`readMeasurement`/`verdictFor`/`resultRecord`/`exitCodeFrom`)は
+// どれも fs にも child_process にも触れない純関数なので干渉しない。
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = (await importOriginal<
+    typeof import("node:child_process")
+  >()) as Record<string, unknown>;
+  const execFileSyncMock = vi.fn();
+  return {
+    ...actual,
+    execFileSync: execFileSyncMock,
+    default: { ...(actual.default as object), execFileSync: execFileSyncMock },
+  };
+});
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = (await importOriginal<typeof import("node:fs")>()) as Record<
+    string,
+    unknown
+  >;
+  const readFileSyncMock = vi.fn();
+  const rmSyncMock = vi.fn();
+  const writeFileSyncMock = vi.fn();
+  return {
+    ...actual,
+    readFileSync: readFileSyncMock,
+    rmSync: rmSyncMock,
+    writeFileSync: writeFileSyncMock,
+    default: {
+      ...(actual.default as object),
+      readFileSync: readFileSyncMock,
+      rmSync: rmSyncMock,
+      writeFileSync: writeFileSyncMock,
+    },
+  };
+});
 
 describe("the mutation table", () => {
   it("is not empty and every entry names a real place to break", () => {
@@ -249,6 +293,19 @@ describe("the expected shard set is matched exactly", () => {
     expect(v.ok).toBe(false);
     expect(v.kind).toBe("caught-nothing");
   });
+
+  it("calls it measurement-failed, not caught-nothing, when the run broke and nothing reacted", () => {
+    // **Minor 4 と同じ誤ラベルが、こちらの枝にも残っていた。** 健全性
+    // チェック 1〜4 を通っている以上シャードの比較自体は完了している――
+    // 非ゼロ終了はシャード比較とは別のテストが落ちたということで、走行
+    // そのものが壊れているのであって、コーパスが検出できなかったのでは
+    // ない。`caught-nothing`(コーパスの検出力の話)のままだと、隣の
+    // `expectShards === []` の枝と同じ状況に違う意味論を割り当てることに
+    // なる。
+    const v = verdictFor(aExpected, measurement({ playwrightExitCode: 1 }));
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
 });
 
 describe("the detection floor is a rate, so the corpus can grow", () => {
@@ -405,5 +462,45 @@ describe("resultRecord builds the JSON that report.ts reads", () => {
     expect(typeof r.expect).toBe("string");
     expect(typeof r.caught).toBe("object");
     expect(typeof r.total).toBe("number");
+  });
+});
+
+describe("measure() removes the stale heavy-run.json before it can be misread as this mutation's result", () => {
+  // **この欠陥はテストではなくレビューが見つけた。** playwright の起動
+  // そのものが失敗すると(ビルド失敗、あるいは spawn 自体の失敗)、
+  // playwright の globalSetup(`resetRun()`)まで到達しない――
+  // `heavy-run.json` を消すのはそこだけなので、`measure()` が先に消して
+  // おかないと**前の変異が書いたファイルが残ったまま**次の測定に読まれ、
+  // 健全性チェック 4 つを全部素通りして、走っていない変異が前の変異の
+  // 不一致件数で「期待どおり」と判定される。直したのに見張るものが
+  // 無いと、次に誰かが `measure()` を書き換えたときこの形へ静かに戻る
+  // ――それがこの spec が消そうとしている偽陽性そのものである。
+  it("calls rmSync on heavy-run.json before the first execFileSync (pnpm wasm)", () => {
+    const calls: Array<[string, string]> = [];
+    vi.mocked(rmSync).mockImplementation((path) => {
+      calls.push(["rmSync", String(path)]);
+    });
+    vi.mocked(execFileSync).mockImplementation((command) => {
+      calls.push(["execFileSync", String(command)]);
+      return "";
+    });
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    });
+    vi.mocked(writeFileSync).mockImplementation(() => undefined);
+
+    measure();
+
+    expect(calls.length).toBeGreaterThan(0);
+    // **順序が本題。** 最初の呼び出しが rmSync で、対象が heavy-run.json
+    // であること。
+    const first = calls[0];
+    expect(first).toBeDefined();
+    const [firstName, firstArg] = first as [string, string];
+    expect(firstName).toBe("rmSync");
+    expect(firstArg).toMatch(/heavy-run\.json$/);
+
+    const firstExecIndex = calls.findIndex(([name]) => name === "execFileSync");
+    expect(firstExecIndex).toBeGreaterThan(0);
   });
 });
