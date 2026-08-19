@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { type Route, routeFromHash } from "./route";
 import styles from "./ui/App.module.css";
 import { ConvertPanel } from "./ui/Convert/ConvertPanel";
-import { DataScalePanel } from "./ui/DataScale/DataScalePanel";
 import { FinancePanel } from "./ui/Finance/FinancePanel";
 import { Footer } from "./ui/Footer/Footer";
 import { Nav } from "./ui/Nav/Nav";
+import { ScalePanel } from "./ui/Scale/ScalePanel";
 import { ScientificPanel } from "./ui/ScientificPanel";
 import { UpdateToast } from "./ui/UpdateToast/UpdateToast";
 
@@ -30,7 +30,7 @@ export function App() {
         <main className={styles.main}>
           {route.module === "scientific" && <ScientificPanel />}
           {route.module === "convert" && <ConvertPanel />}
-          {route.module === "scale" && <DataScalePanel />}
+          {route.module === "scale" && <ScalePanel category={route.category} />}
           {route.module === "finance" && <FinancePanel />}
         </main>
         {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}

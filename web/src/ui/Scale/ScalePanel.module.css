@@ -1,0 +1,26 @@
+.scale {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category {
+  min-height: var(--touch-target-min);
+  font-size: var(--key-font-size-function);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}
+
+/* ConvertPanel.module.css と同じ流儀(設計書 §5)——見え方は自動検査では
+   捕まらないため、背景と文字色をトークンで明示的に持つ。 */
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 24px 12px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}

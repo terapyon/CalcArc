@@ -72,4 +72,13 @@ describe("routeFromHash", () => {
       category: "data-scale",
     });
   });
+
+  it("reads the three scale categories", () => {
+    for (const category of ["data-scale", "llm", "transfer"]) {
+      expect(routeFromHash(`#scale/${category}`)).toEqual({
+        module: "scale",
+        category,
+      });
+    }
+  });
 });

@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("./ui/ScientificPanel", () => ({
   ScientificPanel: () => <p data-testid="scientific-panel" />,
 }));
-vi.mock("./ui/DataScale/DataScalePanel", () => ({
-  DataScalePanel: () => <p data-testid="datascale-panel" />,
+vi.mock("./ui/Scale/ScalePanel", () => ({
+  ScalePanel: () => <p data-testid="scale-panel" />,
 }));
 vi.mock("./ui/Convert/ConvertPanel", () => ({
   ConvertPanel: () => <p data-testid="convert-panel" />,
@@ -55,7 +55,15 @@ describe("App", () => {
   it("shows Data Scale when the hash says so", () => {
     window.location.hash = "#scale/data-scale";
     render(<App />);
-    expect(screen.getByTestId("datascale-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("scale-panel")).toBeInTheDocument();
+  });
+
+  it("shows Scale for the llm category too", () => {
+    // ScalePanel 自体がカテゴリを振り分ける。App が確かめるのは
+    // module === "scale" のときに ScalePanel が出ることだけ。
+    window.location.hash = "#scale/llm";
+    render(<App />);
+    expect(screen.getByTestId("scale-panel")).toBeInTheDocument();
   });
 
   it("shows the convert placeholder when the hash says so", () => {
@@ -77,7 +85,7 @@ describe("App", () => {
     expect(screen.getByTestId("finance-panel")).toBeInTheDocument();
     // 1 モジュールだけが <main> に居ること(出し分けの取りこぼしを防ぐ)。
     expect(screen.queryByTestId("scientific-panel")).toBeNull();
-    expect(screen.queryByTestId("datascale-panel")).toBeNull();
+    expect(screen.queryByTestId("scale-panel")).toBeNull();
     expect(screen.queryByTestId("convert-panel")).toBeNull();
   });
 

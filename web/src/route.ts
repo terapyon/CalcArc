@@ -19,11 +19,17 @@ const MODULES: readonly ModuleId[] = [
   "finance",
 ];
 
+/** Scale 系統のカテゴリ。**表はここが唯一の出所**——盤面の `<select>` も
+ * この配列から起こす(U-0 §3 の「同じ画面に 2 つの URL を作らない」)。 */
+export const SCALE_CATEGORIES = ["data-scale", "llm", "transfer"] as const;
+
+export type ScaleCategory = (typeof SCALE_CATEGORIES)[number];
+
 /** 系統ごとに存在するカテゴリ。**U-0 では scale だけが中身を持つ。** */
 const CATEGORIES: Record<ModuleId, readonly string[]> = {
   scientific: [],
   convert: [],
-  scale: ["data-scale"],
+  scale: SCALE_CATEGORIES,
   finance: [],
 };
 
