@@ -9,15 +9,30 @@ vi.mock("../../datascale", () => ({
   initDataScale: vi.fn(),
 }));
 
+/** コアに渡った (打った文字列, 単位表) の記録。**渡していること**そのものを
+ * 主張するために要る——結果だけを見ていると、`"none"` を渡していても
+ * 数字だけの項目は素通りしてしまう。 */
+const evaluated = vi.hoisted(() => [] as { text: string; unitSet: string }[]);
+
 // 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
 // コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
 // 簡易版で足りる——値の正しさは golden が見る。パラメータ数の単位だけ
 // (`B` = 10⁹、`M` = 10⁶)を持つ——LLM の他の項目は単位を持たない。
+//
+// **`unitSet` は無視しない。** 単位表そのものはコアが持ち
+// (`crates/calcarc-core/src/expr/mod.rs` の `UnitSet::Params` が `27B` を
+// 検査している)、WASM 境界の `unit_set_from_str` も Task 5 が検査済み
+// ——鎖のうち web にだけ残っているのは「パネルがどの表を渡すか」なので、
+// そこをここで見張る。`"params"` のときだけ `B`/`M` を解釈し、`"none"` で
+// 来たらコアと同じく SyntaxError を返す(第 3 引数を捨てると、パネルが
+// `"none"` を渡していても全テストが緑のままになる)。
 vi.mock("../../expr", () => ({
   initExpr: () =>
     Promise.resolve({
-      integer: (text: string, max: string) => {
-        const units: Record<string, bigint> = { B: 10n ** 9n, M: 10n ** 6n };
+      integer: (text: string, max: string, unitSet: string) => {
+        evaluated.push({ text, unitSet });
+        const units: Record<string, bigint> =
+          unitSet === "params" ? { B: 10n ** 9n, M: 10n ** 6n } : {};
         let value = 0n;
         let digits = "";
         for (const ch of text) {
@@ -38,6 +53,7 @@ vi.mock("../../expr", () => ({
 }));
 
 import { initDataScale } from "../../datascale";
+import { CANDIDATE_VALUES, LLM_FIELD_LABELS } from "../Keypad/llm";
 import { updateSettings } from "../useSetting";
 import { LlmPanel } from "./LlmPanel";
 
@@ -206,6 +222,7 @@ async function fillHeadline() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  evaluated.length = 0;
 });
 
 describe("LlmPanel（電卓）", () => {
@@ -285,5 +302,52 @@ describe("LlmPanel（電卓）", () => {
     expect(screen.getByTestId("llm-weight-bytes")).toHaveTextContent(
       "27,000,000,000 bytes",
     );
+  });
+
+  it("reads the parameter count with the params table and the rest with none", async () => {
+    // **web に残っている仕事は「どの単位表で読むか」を渡すことだけ**——
+    // 表そのものはコアが持つ(`crates/calcarc-core/src/expr/mod.rs` の
+    // `UnitSet::Params`)。渡し方が壊れても、数字しか打たない項目は素通り
+    // するので結果からは分からない。ここで渡した名前そのものを見る。
+    await renderPanel();
+    await press([FIELD_NAMES.parameters, "手入力", "2", "7", "十億"]);
+    await press([FIELD_NAMES.layers, "6", "2"]);
+
+    const forParams = evaluated.filter((call) => call.text === "27B");
+    expect(forParams.length).toBeGreaterThan(0);
+    expect([...new Set(forParams.map((c) => c.unitSet))]).toEqual(["params"]);
+
+    // 層数は単位を持たない項目。`"62"` を読ませた呼びはすべて `"none"`。
+    const forLayers = evaluated.filter((call) => call.text === "62");
+    expect(forLayers.length).toBeGreaterThan(0);
+    expect([...new Set(forLayers.map((c) => c.unitSet))]).toEqual(["none"]);
+  });
+
+  it("keeps every default among the candidates it says it matches", async () => {
+    // `LlmPanel.tsx` の既定値は「対応する候補キーを押したのと同じ Entry」
+    // だと名乗っているが、値はべた書きで `CANDIDATE_VALUES` を見ていない
+    // ——片方だけ動かしても他のテストは緑のままなので、ここで membership
+    // を主張して理由が黙って腐らないようにする(CLAUDE.md の「理由は静かに
+    // 腐る」)。
+    await renderPanel();
+    for (const field of [
+      "parameters",
+      "kvHeads",
+      "headDim",
+      "context",
+    ] as const) {
+      await press([FIELD_NAMES[field]]);
+      const label = LLM_FIELD_LABELS[field];
+      const shown =
+        screen.getByTestId("display-entry-active").textContent ?? "";
+      expect(shown.startsWith(`${label} `), `${label} の行が読めない`).toBe(
+        true,
+      );
+      const value = shown.slice(label.length + 1);
+      expect(
+        CANDIDATE_VALUES[field].map(String),
+        `${label} の既定 ${value} は候補に無い`,
+      ).toContain(value);
+    }
   });
 });

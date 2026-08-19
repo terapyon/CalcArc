@@ -40,23 +40,32 @@ test("the headline case: 27B INT4 with an 8K context", async ({ page }) => {
   await expect(page.getByTestId("display-main")).toHaveText("17.7 GB");
 });
 
+/**
+ * 7 つの面 = (項目のボタン名, 面の aria-label, その面のキー数)。
+ *
+ * **名前は `web/src/ui/Keypad/llm.ts` の実物から取っている**(`FIELD_ARIA_LABELS`
+ * と `CANDIDATE_SECTIONS` / `llmPad` の `ariaLabel`)。「KVヘッド数の候補キー」
+ * 「KVの精度のキー」に**スペースは入らない**——1 字ずれると、その面だけ
+ * 別物として扱われる。件数は `buildCandidateFace` / `llmPad` の配り方から
+ * 出た実測値(予約スロットも disabled な <button> として描かれる)。
+ */
+const FACES = [
+  ["層数を入力", "数字と演算のキー", 25],
+  ["パラメータ数を入力", "パラメータ数の候補キー", 15],
+  ["重みの精度を選ぶ", "重みの精度のキー", 10],
+  ["KVヘッド数を入力", "KVヘッド数の候補キー", 15],
+  ["ヘッド次元を入力", "ヘッド次元の候補キー", 10],
+  ["文脈長を入力", "文脈長の候補キー", 15],
+  ["KVの精度を選ぶ", "KVの精度のキー", 10],
+] as const;
+
 test("the keys hold 44px on every face", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。**7 つの面すべてを回る**
   // (Global Constraints)——LLM は面が最も多いパネルで、1 つでも漏らすと
   // その面だけ枠が伸び縮みしても誰も気づかない。**測ったキーの件数も
-  // 主張する**——0 件でも緑になる書き方はしない(件数は `llm.ts` の
-  // `buildCandidateFace` / `llmPad` から実測した値)。
-  const checks: Array<[string, string, number]> = [
-    ["層数を入力", "数字と演算のキー", 25],
-    ["パラメータ数を入力", "パラメータ数の候補キー", 15],
-    ["重みの精度を選ぶ", "重みの精度のキー", 10],
-    ["KVヘッド数を入力", "KVヘッド数の候補キー", 15],
-    ["ヘッド次元を入力", "ヘッド次元の候補キー", 10],
-    ["文脈長を入力", "文脈長の候補キー", 15],
-    ["KVの精度を選ぶ", "KVの精度のキー", 10],
-  ];
+  // 主張する**——0 件でも緑になる書き方はしない。
   let measured = 0;
-  for (const [field, faceName, expectedCount] of checks) {
+  for (const [field, faceName, expectedCount] of FACES) {
     await panel(page).getByRole("button", { name: field, exact: true }).click();
     const face = panel(page).getByRole("group", { name: faceName });
     const buttons = await face.getByRole("button").all();
@@ -72,7 +81,76 @@ test("the keys hold 44px on every face", async ({ page }) => {
   }
   // **件数の下限も主張する。** 7 面 × 実測件数の合計が 0 なら、ループが
   // 何も測っていないのに緑になる。
-  expect(measured).toBe(25 + 15 + 10 + 15 + 10 + 15 + 10);
+  expect(measured).toBe(FACES.reduce((sum, [, , n]) => sum + n, 0));
+  expect(measured, "no key was ever measured").toBeGreaterThan(0);
+});
+
+test("the field row is half height but wide enough", async ({ page }) => {
+  // 項目行は **4 列 × 2 段**(`LLM_FIELD_SECTION`)。Data Scale の 3 列 × 1 段
+  // より詰まっている側なので、幅 44px の主張はこちらにこそ要る。縦は
+  // 押し直せば戻る列なので詰める(設計書 §4 の half)。
+  const row = panel(page).getByRole("group", { name: "入力する項目" });
+  const buttons = await row.getByRole("button").all();
+  // 7 項目 + 恒久の空き 1。空きも disabled な <button> として描かれる。
+  expect(buttons, "the field row should render its 4x2 cells").toHaveLength(8);
+  for (const button of buttons) {
+    const box = await button.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    // **番兵**: 測れていなければ -1 になり、`< 44` を素通りしない。
+    expect(box?.height ?? -1).toBeGreaterThanOrEqual(0);
+    expect(box?.height ?? -1).toBeLessThan(44);
+  }
+});
+
+test("swapping faces moves neither the frame nor DEL and AC", async ({
+  page,
+}) => {
+  // **7 面が同じ枠に載る**(Global Constraints、設計書 §4.2)。
+  // `LlmPanel.module.css` は 7 つの aria-label をセレクタに並べているが、
+  // 1 面を落としても 1 字ずれても、キー 1 個ずつの 44px を見る検査は緑の
+  // まま——その面だけ中身の行数ぶんに枠が伸び縮みする(DataScale で実測
+  // 済みの事故、19px)。だから枠そのものと、枠の中で位置が動いてはいけない
+  // DEL・AC を、7 面ぶん突き合わせる。
+  const seen: {
+    face: string;
+    box: { width: number; height: number };
+    del: { x: number; y: number };
+    ac: { x: number; y: number };
+  }[] = [];
+  for (const [field, face] of FACES) {
+    await press(page, [field]);
+    const box = await panel(page)
+      .getByRole("group", { name: face })
+      .boundingBox();
+    const del = await panel(page)
+      .getByRole("button", { name: "1文字消去", exact: true })
+      .boundingBox();
+    const ac = await panel(page)
+      .getByRole("button", { name: "この項目を消去", exact: true })
+      .boundingBox();
+    seen.push({
+      face,
+      box: { width: box?.width ?? -1, height: box?.height ?? -1 },
+      // **在ることではなく動かないことを測る**(data-scale-keypad.spec.ts
+      // の同名の検査と同じ形)。
+      del: { x: del?.x ?? -1, y: del?.y ?? -1 },
+      ac: { x: ac?.x ?? -1, y: ac?.y ?? -1 },
+    });
+  }
+  expect(seen).toHaveLength(FACES.length);
+  const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
+  expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
+  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
+  const acs = new Set(seen.map((s) => `${s.ac.x},${s.ac.y}`));
+  expect(acs.size, `AC moved: ${JSON.stringify(seen)}`).toBe(1);
+  // **番兵**: 1 度も測っていなければ -1 のまま 1 通りになってしまう。
+  expect(
+    seen[0]?.box.width,
+    "the frame was never measured",
+  ).toBeGreaterThanOrEqual(0);
+  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
+  expect(seen[0]?.ac.x, "AC was never measured").toBeGreaterThanOrEqual(0);
 });
 
 test("a candidate key says its number out loud", async ({ page }) => {
