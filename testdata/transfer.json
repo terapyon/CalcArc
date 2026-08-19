@@ -1,0 +1,157 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "binary": "125.7 GiB",
+        "bytes": "135000000000",
+        "bytes_grouped": "135,000,000,000",
+        "decimal": "135.0 GB"
+      },
+      "id": "transfer/100mbpsx3hour",
+      "input": {
+        "bandwidth": "100",
+        "bandwidth_unit": "mbps",
+        "duration": "3",
+        "duration_unit": "hour"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": "109.9 MiB",
+        "bytes": "115200000",
+        "bytes_grouped": "115,200,000",
+        "decimal": "115.2 MB"
+      },
+      "id": "transfer/512kbpsx30minute",
+      "input": {
+        "bandwidth": "512",
+        "bandwidth_unit": "kbps",
+        "duration": "30",
+        "duration_unit": "minute"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": null,
+        "bytes": "1",
+        "bytes_grouped": "1",
+        "decimal": null
+      },
+      "id": "transfer/1bpsx1second",
+      "input": {
+        "bandwidth": "1",
+        "bandwidth_unit": "bps",
+        "duration": "1",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": null,
+        "bytes": "1",
+        "bytes_grouped": "1",
+        "decimal": null
+      },
+      "id": "transfer/8bpsx1second",
+      "input": {
+        "bandwidth": "8",
+        "bandwidth_unit": "bps",
+        "duration": "1",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": null,
+        "bytes": "2",
+        "bytes_grouped": "2",
+        "decimal": null
+      },
+      "id": "transfer/9bpsx1second",
+      "input": {
+        "bandwidth": "9",
+        "bandwidth_unit": "bps",
+        "duration": "1",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": "9.8 TiB",
+        "bytes": "10800000000000",
+        "bytes_grouped": "10,800,000,000,000",
+        "decimal": "10.8 TB"
+      },
+      "id": "transfer/1gbpsx1day",
+      "input": {
+        "bandwidth": "1",
+        "bandwidth_unit": "gbps",
+        "duration": "1",
+        "duration_unit": "day"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "binary": null,
+        "bytes": "0",
+        "bytes_grouped": "0",
+        "decimal": null
+      },
+      "id": "transfer/0gbpsx1hour",
+      "input": {
+        "bandwidth": "0",
+        "bandwidth_unit": "gbps",
+        "duration": "1",
+        "duration_unit": "hour"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "transfer/170141183460469231731687303715884105728gbpsx1second",
+      "input": {
+        "bandwidth": "170141183460469231731687303715884105728",
+        "bandwidth_unit": "gbps",
+        "duration": "1",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "transfer/1tbpsx1second",
+      "input": {
+        "bandwidth": "1",
+        "bandwidth_unit": "tbps",
+        "duration": "1",
+        "duration_unit": "second"
+      },
+      "op": "transfer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "transfer/1bpsx1week",
+      "input": {
+        "bandwidth": "1",
+        "bandwidth_unit": "bps",
+        "duration": "1",
+        "duration_unit": "week"
+      },
+      "op": "transfer"
+    }
+  ],
+  "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
+  "schema": 1
+}

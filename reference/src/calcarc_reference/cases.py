@@ -863,3 +863,18 @@ LLM_INPUTS: list[tuple[str, str, str, str, str, str, str]] = [
     # 綴りの知らない精度
     ("1", "fp8", "1", "1", "1", "1", "fp16"),
 ]
+
+# (bandwidth, bandwidth_unit, duration, duration_unit)。
+# **4 つの帯域幅の単位と 4 つの時間の単位が、それぞれ 1 度以上現れる。**
+TRANSFER_INPUTS: list[tuple[str, str, str, str]] = [
+    ("100", "mbps", "3", "hour"),  # spec §3.5 の headline: 135.0 GB / 125.7 GiB
+    ("512", "kbps", "30", "minute"),  # k は 10³（1024 ではない）
+    ("1", "bps", "1", "second"),  # 1 bit -> 1 byte（切り上げが発火する）
+    ("8", "bps", "1", "second"),  # ちょうど 1 byte（切り上げは発火しない）
+    ("9", "bps", "1", "second"),  # 9 bit -> 2 byte
+    ("1", "gbps", "1", "day"),  # 10.8 TB
+    ("0", "gbps", "1", "hour"),  # 0 は正当な入力
+    (str(1 << 127), "gbps", "1", "second"),  # Overflow
+    ("1", "tbps", "1", "second"),  # 知らない単位は SyntaxError
+    ("1", "bps", "1", "week"),
+]
