@@ -301,12 +301,17 @@ export function partitionCases(
 export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
 
 /**
- * 表示のトグルのシャード。**値ではなく表示文字列を比べる。**
+ * 表示文字列を比べるシャード。**値ではなく表示文字列を比べる。**
  *
  * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
- * (設計書 2026-08-17-display §3.1)。
+ * (設計書 2026-08-17-display §3.1)。`entry` は打鍵の途中の表示
+ * (設計書 2026-08-19 §4.1)——`eq` を押さないので値そのものが無く、
+ * こちらも表示文字列でしか比べられない。**`entry` をここに足し忘れると
+ * `loadShards()` が拾い、`tolerance` も `value`/`equivalence` の `kind` も
+ * 持たないシャードとして即座に落ちる**(assertShardIsSound が守る)。
  */
-export const DISPLAY_SHARD_PATTERN = /^(display|complex-display)-\d+\.json$/;
+export const DISPLAY_SHARD_PATTERN =
+  /^(display|complex-display|entry)-\d+\.json$/;
 
 /** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
 export interface DisplayCase {

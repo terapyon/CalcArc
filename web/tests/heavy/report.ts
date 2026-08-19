@@ -436,10 +436,16 @@ export function areaOfShard(shardName: string): Area {
     // 「複素数を検証した」件数が別の領域の数字に混ざる。
     return "complex";
   }
-  if (/^display-/.test(stem)) {
+  if (/^(display|entry)-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
     // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
     // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
+    //
+    // `entry-` も同じ理由でここに入る。**さらに一段弱い**——`display-` は
+    // 一度確定した値をトグルで見せ直すだけだが、`entry-` は打鍵の途中で
+    // 値がまだ存在しない(設計書 2026-08-19 §4.1)。それでも「値ではなく
+    // 表示文字列を比べる」という一致点のほうが、6 領域しか持たない
+    // `AREAS` の粒度では効いてくる。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {

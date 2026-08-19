@@ -782,9 +782,19 @@ def test_no_case_types_more_digits_than_the_buffer_accepts() -> None:
     ここは全シャードのキー列を走査して、**連続した数字の並び**が上限を
     超えていないことを確かめる。`add` などの演算子で区切られるので、
     1 つの数に何桁打っているかはキー列から数えられる。
+
+    **`entry-000.json` は対象外。** この検査が守っているのは「参照実装が
+    打った文字列をそのまま評価する結果」と「engine が実際に持つ値」の
+    食い違いであって、`entry-000.json` の期待値は評価などしていない
+    ——実測した engine の表示そのものを写している(`corpus_entry.py`
+    `_provenance`)。`max_entry_len_cases` が 20 個の `7` を打つ 1 件を
+    **わざと**含む(engine が 12 桁で頭打ちになることを主張するケース)ので、
+    ここで一緒に検査すると自分自身が守っている不変条件に自分で違反する。
     """
     offenders: list[str] = []
     for path in sorted(_CORPUS_GENERATED.glob("*.json")):
+        if path.name == "entry-000.json":
+            continue
         shard = json.loads(path.read_text())
         for case in shard["cases"]:
             sequences = (
@@ -1596,9 +1606,9 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     expected_total = sum(
         len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
     )
-    # 15 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 16 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
     # 数字のままなので、枚数も見る。
-    assert len(written) == 15
+    assert len(written) == 16
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)

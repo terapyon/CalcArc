@@ -53,6 +53,7 @@ export const ALL_SHARDS = [
   "finance-000.json (calls)",
   "complex-display-000.json (displays)",
   "display-000.json (displays)",
+  "entry-000.json (displays)",
 ];
 
 /**

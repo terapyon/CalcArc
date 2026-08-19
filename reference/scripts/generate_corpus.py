@@ -30,6 +30,7 @@ from calcarc_reference.corpus_complex import (
     COMPLEX_UNARY_FNS,
     NotComplexSafe,
 )
+from calcarc_reference.corpus_entry import build_entry_shard
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_OPS,
@@ -1714,14 +1715,14 @@ FINANCE_COUNT = 3500
 
 
 def _shards(count: int) -> Iterator[tuple[str, dict]]:
-    """書き出す 15 枚を、名前と中身の対で 1 枚ずつ生む。
+    """書き出す 16 枚を、名前と中身の対で 1 枚ずつ生む。
 
     **書き出す枚数はここが唯一の一覧である。** 1 枚足せば、書き出しにも
     末尾の要約行の分母にも自動でついてくる——`main` の側に写しの件数を
     持たせない理由がこれで、以前は `count` という写しを分母にしていて
     finance だけ件数が変わった時点で嘘になった。
 
-    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。15 枚
+    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。16 枚
     ぶんの payload を同時に抱えない。
     """
     yield "scientific-000.json", build_shard(seed=20260815, count=count)
@@ -1742,6 +1743,10 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # `FINANCE_COUNT`(3,500)を渡す。理由は上の定義を見よ。
     yield "finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT)
     yield "data-scale-000.json", build_data_scale_shard(seed=20260822, count=count)
+    # 入力途中の表示。**乱択も `count` も持たない**——engine_table.rs /
+    # state.rs から起こした固定の列挙であって、サンプリングする集合では
+    # ないので、他の 15 枚と違って seed を渡さない(設計書 §4.1)。
+    yield "entry-000.json", build_entry_shard()
 
 
 def main() -> None:
