@@ -216,6 +216,17 @@ def test_overflow_is_the_u128_contract() -> None:
 def test_unknown_precision_is_a_syntax_error() -> None:
     assert compute("1", "fp8", "1", "1", "1", "1", "fp16") == {"error": "SyntaxError"}
     assert compute("1.5", "int8", "1", "1", "1", "1", "fp16") == {"error": "SyntaxError"}
+
+
+def test_the_ceiling_is_bracketed_from_both_sides() -> None:
+    # int8 は 8 bit なので、ビット数が u128 に収まる最大のパラメータ数は
+    # 2^125 - 1（(2^125 - 1) × 8 = 2^128 - 8）。**通る側とあふれる側を
+    # 2 件で挟む**——片側だけだと、上限が動いてもどちらも緑のままになる。
+    inside = compute(str((1 << 125) - 1), "int8", "1", "1", "1", "0", "fp16")
+    assert inside["weight"]["bytes"] == str((1 << 125) - 1)
+    assert compute(str(1 << 125), "int8", "1", "1", "1", "0", "fp16") == {
+        "error": "Overflow"
+    }
 ```
 
 - [ ] **Step 2: 赤を見る**
@@ -331,7 +342,7 @@ def compute(
 - [ ] **Step 5: 緑を見る**
 
 Run: `cd reference && uv run --no-config pytest tests/test_llm_ref.py -q`
-Expected: PASS（7 件）
+Expected: PASS（8 件）
 
 - [ ] **Step 6: golden の入力を並べる**
 
@@ -366,8 +377,11 @@ LLM_INPUTS: list[tuple[str, str, str, str, str, str, str]] = [
     ("0", "int8", "1", "1", "1", "1", "fp16"),
     ("0", "int8", "1", "1", "1", "1", "bf16"),
     ("0", "int8", "1", "1", "1", "1", "int8"),
-    # u128 上限の直下は通る
-    (str((1 << 127) - 1), "int8", "1", "1", "1", "0", "fp16"),
+    # **u128 上限の直下は通る。** int8 は 1 パラメータ 8 bit なので、ビット数が
+    # 上限に収まる最大のパラメータ数は 2^125 - 1（(2^125 - 1) × 8 = 2^128 - 8）。
+    # **1 つ上の 2^125 は 2^128 ちょうどであふれる**——内側と外側で挟む。
+    (str((1 << 125) - 1), "int8", "1", "1", "1", "0", "fp16"),
+    (str(1 << 125), "int8", "1", "1", "1", "0", "fp16"),
     # あふれ 2 つ。2 件目は**掛ける順序**が効く（後ろに 0 が来ても救わない）
     (str(1 << 127), "fp32", "1", "1", "1", "0", "fp16"),
     ("1", "int8", str(1 << 127), "1", "1", "0", "fp16"),
@@ -419,12 +433,12 @@ cd reference && uv run --no-config python scripts/generate.py
 cd .. && git diff --exit-code testdata/data_scale.json && echo "data_scale.json は不変"
 git status --short testdata/
 ```
-Expected: `testdata/llm.json` だけが新規（**16 件**）。**`data_scale.json` に差分が出たら Step 3 の書き換えが値を変えている**——戻して原因を潰す。
+Expected: `testdata/llm.json` だけが新規（**17 件**）。**`data_scale.json` に差分が出たら Step 3 の書き換えが値を変えている**——戻して原因を潰す。
 
 - [ ] **Step 9: 参照側を全部回す**
 
 Run: `cd reference && uv run --no-config pytest -q`
-Expected: 既存の 233 件 + 7 件がすべて PASS
+Expected: 既存の 233 件 + 8 件がすべて PASS
 
 - [ ] **Step 10: コミット**
 
@@ -794,7 +808,7 @@ fn llm_matches_the_reference() {
 
     assert_eq!(ok + errors, golden.cases.len(), "some case was not compared");
     assert!(ok >= 12, "only {ok} successful cases compared");
-    assert!(errors >= 3, "only {errors} error cases compared");
+    assert!(errors >= 4, "only {errors} error cases compared");
 }
 ```
 
@@ -1057,7 +1071,7 @@ cargo test --workspace
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 ```
-Expected: すべて PASS。golden は **16 件**（成功 13 / エラー 3）を比較する
+Expected: すべて PASS。golden は **17 件**（成功 13 / エラー 4）を比較する
 
 - [ ] **Step 6: 赤確認（spec §7 の 1〜3）**
 
