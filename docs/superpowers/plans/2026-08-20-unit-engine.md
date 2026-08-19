@@ -126,6 +126,44 @@ spec が「factor と offset の両方が同時に効く唯一の点」と呼ん
 **golden の `value` は 10 進リテラルに限る**（`-?\d+(\.\d+)?`）。式（`5*12`）が通ることは
 既存の expr の検査が持っており、golden で二重に持たない。**盤面で式が打てることは Task 11 の UI テストが見る。**
 
+## 盤面から負号を打つ経路（**この計画の裁定 3**）
+
+**裁定 2 は core の穴を塞いだが、その一段上に同じ穴が残っている。** 実測:
+
+```ts
+// web/src/units/entry.ts:119-126
+export function pushOperator(entry: Entry, op: Operator): Entry {
+  const tail = last(entry);
+  // 演算子の連続は受けない。空の式にも置けない（単項マイナスは持たない）。
+  if (tail === undefined) return entry;
+```
+
+**盤面は空の式に `-` を置けない。** コメント自身が「単項マイナスは持たない」と宣言している。
+このままだと、裁定 2 に書いた代償——**不動点 `−40` が 1 件も打てない**——が entry 層で再現する。
+
+**裁定: 符号はパネル局所の状態で持ち、評価の直前に先頭へ付ける。`units/entry.ts` は 1 行も変えない。**
+
+```text
+UnitPanel の state:  negative: boolean（既定 false）
+±（sign）キー:        negative を反転する
+表示:                 negative かつ入力が空でないとき、打った文字の前に `-` を出す
+評価:                 calc.convert(negative && !isEmpty(entry) ? `-${text(entry)}` : text(entry), …)
+AC:                   negative を false に戻す（値を空にするのと同じ扱い）
+⇅:                    **符号も含めて値をそのまま残す**（spec §4.2）
+```
+
+**なぜ共有層を触らないか**: `units/entry.ts` は **Finance と共有している**（`web/src/finance/entry.ts:28` が
+`pushOperator` を再輸出し、`FinancePanel.tsx:497` が使っている）。
+`pushOperator` の意味を変えると、**金額や期間の欄に単項マイナスが生える**——
+負の元本や負の期間に意味が無いのに、入口だけが開く。
+**裁定 2 と同じ形にする**（局所で符号を持ち、境界へ渡す直前に付ける）ことで、共有層は不変で済む。
+
+**間違えたときの代償**: `±` を置き忘れると、温度の不動点が**盤面から到達不能なまま**になる
+——core と golden は緑のままなので、**気づくのは実機を触った人だけである。**
+
+**文字の心配は無い**: `Operator` は `"+" | "-" | "*" | "/"` の ASCII で、`text()` はそのまま出す
+（`units/entry.ts:25,48`）。付ける `-` も同じ ASCII である。
+
 ---
 
 ### Task 1: Python 参照 — 係数表とアフィン換算
@@ -1758,6 +1796,15 @@ describe("Convert のキー集合", () => {
       expect(tokens).toContain(op);
     }
   });
+
+  it("has a way to type a negative value", () => {
+    // **`units/entry.ts:119-126` は空の式に `-` を置けない**（単項マイナスを持たない）。
+    // 符号はパネルが持つ（計画の裁定 3）。**このキーが無いと不動点 −40 が打てない。**
+    const tokens = CONVERT_SECTIONS[1].keys.map((k) => k.token);
+    expect(tokens).toContain("sign");
+    const sign = CONVERT_SECTIONS[1].keys.find((k) => k.token === "sign");
+    expect(sign?.ariaLabel).toBe("符号を変える");
+  });
 });
 ```
 
@@ -1765,6 +1812,9 @@ describe("Convert のキー集合", () => {
 
 `dataScale.ts` の `PAD` を骨格に、`K`/`M`/`G` を予約スロットに置き換える
 （**単位は別の項目が持つ**ので、値の欄に単位の接尾辞は要らない。S-0 の Transfer と同じ判断）。
+
+**`±`（`sign`）は 1 行目の 3 列目**——`dataScale.ts:94` が予約スロット（`token: null`）を置いている位置に入れる。
+**DEL と AC の位置は動かさない**（1 行目の 4・5 列目）。枠の不変条件は E2E が見張る（Task 12）。
 単位面は `dataScale.ts:135-208` の `TYPES` と同じ組み方（3 列ぶんに単位、4・5 列目に DEL/AC、残りは予約）。
 
 **`unitSections(category)` は `CONVERT_UNIT_TOKENS` から `.map` で起こすこと**——手で並べない。
@@ -1836,6 +1886,18 @@ it("lets the value be an expression", async () => {
   // spec §4.3: `5*12` を打って inch を選ぶ
 });
 
+it("types the fixed point of the two temperature scales", async () => {
+  // **spec §6 が名指しした不動点。** `±` を押して `40` を打ち、°C → °F で `-40`。
+  // **これが打てないなら、core と golden が緑でも盤面から到達不能である**（計画の裁定 3）。
+  // `units/entry.ts` を変えていないことも同時に守る——変えたなら Finance への波及論証が要る。
+});
+
+it("keeps the sign when the two units are swapped", async () => {
+  // spec §4.2: ⇅ は入力値をそのまま残す。**符号も値の一部である。**
+});
+
+it("AC clears the sign as well as the digits", async () => {});
+
 it("shows an error instead of a number when the units do not match", async () => {});
 
 it("says nothing until a value is typed", async () => {});
@@ -1859,6 +1921,11 @@ it("no longer says 準備中", () => {
 ```
 
 - [ ] **Step 2〜4: 赤 → 実装 → 緑**
+
+**符号はパネル局所の state で持つ**（計画の裁定 3）。`units/entry.ts` を変えないこと——
+**Finance と共有しており**（`web/src/finance/entry.ts:28`、`FinancePanel.tsx:497`）、
+`pushOperator` の意味を変えると金額や期間の欄に単項マイナスが生える。
+**共有層を変える設計にするなら、Finance への波及を論証してから**にすること。
 
 既定の単位は **`km` → `mi`**（length）、**`kg` → `lb`**（mass）、**`degc` → `degf`**（temperature）。
 **なぜ**: どれも「日本の単位からヤード・ポンドへ」で、換算器を開く動機のいちばん多い向きである。
@@ -1902,6 +1969,10 @@ git commit   # 例: "A hundred kilometres is 62.13711922 miles"
 
 深いリンクは 3 件（`#convert/length` `#convert/mass` `#convert/temperature`）。
 `scale-categories.spec.ts:6-22` の形をそのまま使う。
+
+**不動点を実ブラウザで 1 件**: `#convert/temperature` を開き、`±` を押して `40` を打ち、
+`°C` → `°F` で **`-40`** が出ること。**vitest はモックの算数を通るだけ**なので、
+「符号が実際に境界を越えて core に届く」ことはここでしか見えない（計画の裁定 3）。
 
 さらに 1 本: **単位面の 44px**（spec §6 の「撮る」が名指ししている。⇅ も 44px あること）。
 
@@ -1983,7 +2054,7 @@ git commit   # 例: "Measure what the converter costs, and write it down"
 | §3.2 定義値の表 | Task 1・5（両方が spec の表から独立に書く） |
 | §3.3 表示 | Task 2・6（**規則は共有、実装は別**）、Task 7 の赤確認 4 |
 | §3.4 温度は点 | Task 1・5 |
-| §3.5 あふれと定義域・負値・絶対零度以下 | Task 5（`a_ratio_too_wide_for_i128…`、`below_absolute_zero_is_not_stopped`）、計画の裁定 2 |
+| §3.5 あふれと定義域・負値・絶対零度以下 | Task 5（`a_ratio_too_wide_for_i128…`、`below_absolute_zero_is_not_stopped`）、計画の裁定 2（core）と**裁定 3（盤面）**、Task 10（`±` キー）、Task 11（不動点が打てる）、Task 12（実ブラウザで 1 件） |
 | §4.1 パネル | Task 10・11 |
 | §4.2 カテゴリ 3 つ | Task 9（route）、Task 11（器） |
 | §4.3 値は式で打てる | Task 4、Task 10 の `lets the value be an expression`、Task 11 |
@@ -1998,6 +2069,9 @@ git commit   # 例: "Measure what the converter costs, and write it down"
 
 - **裁定 1**: トークンは ASCII 小文字（`um` `k` `degc` `degf`）。ラベルが記号を持つ
 - **裁定 2**: 単項マイナスは `convert` の入口が 1 つだけ剥がす。`parse.rs` は触らない
+- **裁定 3**: **盤面の符号はパネル局所の state**（`±` キー）で持ち、評価の直前に `-` を付ける。
+  `units/entry.ts` は 1 行も変えない（**Finance と共有**しており、`pushOperator` の意味を変えると
+  金額や期間の欄に単項マイナスが生える）
 - **既定の単位**（Task 11）: `km→mi` / `kg→lb` / `degc→degf`
 - **`UnitPanel` を 3 カテゴリで共有する**（パネルを 3 つ作らない）
 - **golden の `value` は 10 進リテラルに限る**（式は expr の検査が持つ）
