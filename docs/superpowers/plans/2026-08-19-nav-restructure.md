@@ -868,9 +868,20 @@ Expected: 全件 PASS。**落ちたら直す前に「何が落ちたか」を読
 `color: var(--display-bg)` にする（白地に白）→ `the placeholder text is actually
 readable` が赤。**赤にならなければ、その検査は 0.2.0 のトーストを捕まえられない。**
 
-**(b) ルーティングの退行を E2E 段が捕まえるか**——`route.ts` の
-`DEFAULT_CATEGORY.scale` を `null` にする（Task 1 と同じ変異）→ **`data-scale.spec.ts`
-が赤になる**ことを確認する。
+**(b) ルーティングの退行を E2E 段が捕まえるか**——`route.ts` の `MODULES` から
+`"scale"` を外す（`isModuleId("scale")` が偽になる）→ `#scale/data-scale` が
+Scientific に落ち、**`data-scale.spec.ts` が赤になる**ことを確認する。
+
+**当初この手順は `DEFAULT_CATEGORY.scale` を `null` にする変異を指定していた。
+それは設計書 §8 の赤確認 1 とは別のものを壊していた**（2026-08-19 訂正）。設計書は
+「`routeFromHash` の `scale` の**分岐**を落とす → `#scale/data-scale` が Scientific に
+落ちて」と書いており、対象は**モジュールの分岐**である。
+
+**`category` は U-0 では E2E から観測できない**（実測）——`route.category` を読む実装が
+1 つも無く、1 系統に 1 カテゴリしか無いので DOM が変わらない。**カテゴリ側の表を
+守るのは `route.test.ts`（単体）だけ**であり、E2E 段では原理的に検出できない。
+この空洞を埋めるのは U-1（`#convert/length` で 2 つ目のカテゴリが来る）で、
+要求は U-1 の spec §6 に記載済みである。
 
 **(b) が要る理由**: spec §8 の赤確認 1 は「`routeFromHash` の `scale` の分岐を落とす
 → **E2E が赤**」と、**E2E 段の判別力**を主張している。Task 1 の赤確認は vitest 段の
