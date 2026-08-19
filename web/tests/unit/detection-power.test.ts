@@ -3,6 +3,7 @@ import {
   exitCodeFrom,
   MUTATIONS,
   readMeasurement,
+  verdictFor,
 } from "../../scripts/detection-power.mjs";
 
 describe("the mutation table", () => {
@@ -114,5 +115,171 @@ describe("reading playwright's exit code out of a spawn error", () => {
     });
     expect(exitCodeFrom(enoent)).toBeNull();
     expect(exitCodeFrom({})).toBeNull();
+  });
+});
+
+const ALL = ["a (values)", "b (values)"];
+
+function measurement(overrides = {}) {
+  return {
+    buildOk: true,
+    playwrightExitCode: 0,
+    runJsonFound: true,
+    ranTests: true,
+    expected: ALL,
+    shardsSeen: ALL,
+    mismatchesByShard: { "a (values)": 0, "b (values)": 0 },
+    totalsByShard: { "a (values)": 2000, "b (values)": 2000 },
+    ...overrides,
+  };
+}
+
+const nothingExpected = { id: "m", expectShards: [], minRate: {} };
+const aExpected = {
+  id: "m",
+  expectShards: ["a (values)"],
+  minRate: { "a (values)": 0.1 },
+};
+
+describe("the verdict looks at the health of the measurement first", () => {
+  it("refuses to call a failed build 'nothing was detected'", () => {
+    // **指示書 §4.2 の核心。** これが緑になるなら、この層は何も保証していない。
+    const v = verdictFor(
+      nothingExpected,
+      measurement({ buildOk: false, playwrightExitCode: null }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
+
+  it("refuses a run with no run summary", () => {
+    const v = verdictFor(
+      nothingExpected,
+      measurement({
+        runJsonFound: false,
+        ranTests: false,
+        shardsSeen: [],
+        expected: [],
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
+
+  it("refuses a run where no test ran", () => {
+    const v = verdictFor(nothingExpected, measurement({ ranTests: false }));
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
+
+  it("refuses a run that is missing a shard, even when the reacting set matches", () => {
+    // **完全一致は、黙っているべきシャードが実際に読まれて初めて意味を持つ。**
+    const v = verdictFor(
+      aExpected,
+      measurement({
+        shardsSeen: ["a (values)"],
+        mismatchesByShard: { "a (values)": 500 },
+        totalsByShard: { "a (values)": 2000 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("measurement-failed");
+  });
+
+  it("accepts a healthy run where nothing reacted", () => {
+    const v = verdictFor(nothingExpected, measurement());
+    expect(v.ok).toBe(true);
+  });
+
+  it("calls it a false claim when something reacted that should not have", () => {
+    const v = verdictFor(
+      nothingExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 3, "b (values)": 0 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("claim-was-false");
+  });
+});
+
+describe("the expected shard set is matched exactly", () => {
+  it("rejects an extra shard", () => {
+    const v = verdictFor(
+      aExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 500, "b (values)": 1 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("shard-set-mismatch");
+  });
+
+  it("rejects a missing shard", () => {
+    const v = verdictFor(
+      { id: "m", expectShards: ["a (values)", "b (values)"], minRate: {} },
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 500, "b (values)": 0 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("shard-set-mismatch");
+  });
+
+  it("says it caught nothing when the set is empty but something was expected", () => {
+    const v = verdictFor(aExpected, measurement());
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("caught-nothing");
+  });
+});
+
+describe("the detection floor is a rate, so the corpus can grow", () => {
+  it("passes at the same rate on a bigger shard", () => {
+    // **2000 件で 200、4000 件で 400。率が同じなら緑。**
+    // B+C がコーパスを 3,500 件に増やしても、この表を書き換えずに済む。
+    const small = verdictFor(
+      aExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 200, "b (values)": 0 },
+      }),
+    );
+    const big = verdictFor(
+      aExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 400, "b (values)": 0 },
+        totalsByShard: { "a (values)": 4000, "b (values)": 2000 },
+      }),
+    );
+    expect(small.ok).toBe(true);
+    expect(big.ok).toBe(true);
+  });
+
+  it("fails when the rate halves", () => {
+    const v = verdictFor(
+      aExpected,
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 99, "b (values)": 0 },
+      }),
+    );
+    expect(v.ok).toBe(false);
+    expect(v.kind).toBe("below-min-rate");
+  });
+
+  it("still demands one case when no rate is named", () => {
+    // 薄い帯(ncr は 10/2000 = 0.5%)を率だけで縛ると、丸めで 0 件が通る。
+    const v = verdictFor(
+      { id: "m", expectShards: ["a (values)"], minRate: {} },
+      measurement({
+        playwrightExitCode: 1,
+        mismatchesByShard: { "a (values)": 1, "b (values)": 0 },
+      }),
+    );
+    expect(v.ok).toBe(true);
   });
 });

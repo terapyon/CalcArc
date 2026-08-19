@@ -25,9 +25,16 @@ const RUN_JSON = join(WEB, "heavy-run.json");
 /**
  * 壊し方の一覧。
  *
- * `expect` は「どのシャードが赤くなるはずか」。`[]` は
- * **どこも赤くならないはず**という主張で、それはレポートの
+ * `expectShards` は「どのシャードが赤くなるはずか」を名前で列挙したもの。
+ * `[]` は**どこも赤くならないはず**という主張で、それはレポートの
  * 「この領域は踏んでいない」と同じことを言っている。
+ *
+ * `minRate` は `expectShards` に挙げたシャードごとの下限率(不一致件数 /
+ * そのシャードの総件数)。率で持つのは、コーパスが増えても表を書き換えず
+ * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
+ * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
+ *
+ * 値は 2026-08-17 の実測から導いた暫定値。Task 7 が実走して取り直す。
  */
 export const MUTATIONS = [
   {
@@ -36,8 +43,32 @@ export const MUTATIONS = [
     file: "crates/calcarc-core/src/numeric/format.rs",
     from: "pub const DISPLAY_DIGITS: usize = 10;",
     to: "pub const DISPLAY_DIGITS: usize = 9;",
-    // 許容は表示から導いているので、値を持つシャードは全部反応する。
-    expect: "every value shard",
+    // **値シャードすべて、ではない。** `cancellation-000.json` は値シャード
+    // だが反応しない。名前ではなく実測で書く。
+    expectShards: [
+      "angle-mode-000.json (values)",
+      "combinatorics-000.json (values)",
+      "complex-000.json (values)",
+      "elementary-000.json (values)",
+      "inverse-trig-000.json (values)",
+      "precedence-000.json (values)",
+      "scientific-000.json (values)",
+      "typed-000.json (values)",
+      "complex-display-000.json (displays)",
+      "display-000.json (displays)",
+    ],
+    minRate: {
+      "angle-mode-000.json (values)": 0.254,
+      "combinatorics-000.json (values)": 0.296,
+      "complex-000.json (values)": 0.095,
+      "elementary-000.json (values)": 0.302,
+      "inverse-trig-000.json (values)": 0.183,
+      "precedence-000.json (values)": 0.244,
+      "scientific-000.json (values)": 0.199,
+      "typed-000.json (values)": 0.222,
+      "complex-display-000.json (displays)": 0.083,
+      "display-000.json (displays)": 0.103,
+    },
   },
   {
     id: "precedence-collapse",
@@ -47,7 +78,8 @@ export const MUTATIONS = [
     to: "BinOp::Mul | BinOp::Div => 1,",
     // **括弧を省いたシャードだけが反応するはず。** 全括弧のシャードは
     // 括弧が構造を決めるので、優先順位が変わっても答えが変わらない。
-    expect: "precedence only",
+    expectShards: ["precedence-000.json (values)"],
+    minRate: { "precedence-000.json (values)": 0.274 },
   },
   {
     id: "associativity-flip",
@@ -57,7 +89,8 @@ export const MUTATIONS = [
     to: "|| (top.precedence() == op.precedence() && op.is_right_associative())",
     // **どこも赤くならないはず。** レポートが「結合方向は踏んでいない」と
     // 書いており、これはその主張そのものである。赤くなったらレポートが嘘。
-    expect: "nothing",
+    expectShards: [],
+    minRate: {},
   },
   {
     id: "ncr-multiply-first",
@@ -66,7 +99,8 @@ export const MUTATIONS = [
     from: "acc = acc / (i + 1.0) * (n - i);",
     to: "acc = acc * (n - i) / (i + 1.0);",
     // 中心二項係数の帯だけ。答は f64 に収まるのに途中で溢れる。
-    expect: "combinatorics only",
+    expectShards: ["combinatorics-000.json (values)"],
+    minRate: { "combinatorics-000.json (values)": 0.0025 },
   },
   {
     id: "eng-exponent-toward-zero",
@@ -78,7 +112,8 @@ export const MUTATIONS = [
     // `0.5` が `500e-3` ではなく `0.5` と出る。正の指数は影響を受けない。
     // 値は 1 ビットも変わらないので、**表示のシャード以外は何も気づかない**
     // ——それがこの段階を足した理由そのものである。
-    expect: "display only",
+    expectShards: ["display-000.json (displays)"],
+    minRate: { "display-000.json (displays)": 0.024 },
   },
   {
     id: "sexagesimal-no-carry",
@@ -89,7 +124,8 @@ export const MUTATIONS = [
     // 桁を 1 つ間違えた形。秒は丸めても 60 を超えないので、繰り上がりが
     // **一度も起きなくなる**——`59'60\"` と出る。
     // これも値は変わらないので、表示のシャードにしか見えない。
-    expect: "display only",
+    expectShards: ["display-000.json (displays)"],
+    minRate: { "display-000.json (displays)": 0.0025 },
   },
   {
     id: "complex-multiply-sign",
@@ -100,7 +136,8 @@ export const MUTATIONS = [
     // **実数には一切影響しない。** 虚部が両方 0 なら `- 0` も `+ 0` も同じで、
     // 既存 11 シャード 26000 件は 1 件も気づかない。複素数の乗算・除算・
     // 2 乗だけが変わる(`(j2)^2` が `-4` ではなく `4` になる)。
-    expect: "complex only",
+    expectShards: ["complex-000.json (values)"],
+    minRate: { "complex-000.json (values)": 0.036 },
   },
   {
     id: "polar-angle-flipped",
@@ -110,7 +147,8 @@ export const MUTATIONS = [
     to: "theta_rad: self.re.atan2(self.im),",
     // **半径は変わらない。** 角度だけが余角になる(53.13 が 36.87 に)。
     // `▸∠` を押した表示しか見ない欠陥で、直交形式の表示も値も動かない。
-    expect: "complex only",
+    expectShards: ["complex-display-000.json (displays)"],
+    minRate: { "complex-display-000.json (displays)": 0.165 },
   },
 ];
 
@@ -243,68 +281,69 @@ export function measure() {
   return readMeasurement({ buildOk, playwrightExitCode, run: parsed });
 }
 
-export function verdictFor(expectation, caught) {
-  const shards = Object.keys(caught);
-  const total = Object.values(caught).reduce((a, b) => a + b, 0);
-  if (expectation === "nothing") {
-    return {
-      ok: shards.length === 0,
-      why:
-        shards.length === 0
-          ? "赤くならなかった——レポートの「踏んでいない」が正しい"
-          : `赤くなった(${shards.join(", ")})。レポートの「踏んでいない」が嘘である`,
-    };
+function sameSet(left, right) {
+  if (left.length !== right.length) return false;
+  const sorted = [...right].sort();
+  return [...left].sort().every((name, i) => name === sorted[i]);
+}
+
+/**
+ * **測定の健全性を先に見て、そのあとで検出を見る。**
+ *
+ * 1〜4 の赤は「測れていない」、5 以降の赤は「測った結果が期待と違う」である。
+ * この 2 つを同じ言葉で報告すると、レポートが**測定の失敗を検証の成果として
+ * 数える**——それがこの段階を足した理由そのものである。
+ */
+export function verdictFor(mutation, m) {
+  const fail = (kind, why) => ({ ok: false, kind, why });
+  if (!m.buildOk) {
+    return fail("measurement-failed", "wasm のビルドが失敗した——検出の有無は測れていない");
   }
-  if (total === 0) {
-    return { ok: false, why: "1 件も捕まえられなかった" };
+  if (!m.runJsonFound) {
+    return fail("measurement-failed", "heavy-run.json が無い——走行がレポート生成に到達していない");
   }
-  if (expectation === "precedence only") {
-    const others = shards.filter((s) => !s.startsWith("precedence-"));
-    return {
-      ok: others.length === 0,
-      why:
-        others.length === 0
-          ? "括弧を省いたシャードだけが反応した"
-          : `全括弧のシャードまで反応した(${others.join(", ")})`,
-    };
+  if (!m.ranTests) {
+    return fail("measurement-failed", "テストが 1 本も走っていない");
   }
-  if (expectation === "complex only") {
-    // **複素数のシャードだけが反応するはず。** 実数の経路が反応したら、
-    // 複素数のための変更が実数にも漏れていることになる——それ自体が
-    // 報告に値する事実である。
-    const others = shards.filter((s) => !s.startsWith("complex-"));
-    return {
-      ok: others.length === 0,
-      why:
-        others.length === 0
-          ? "複素数のシャードだけが反応した——実数だけのテストには見えない欠陥である"
-          : `実数のシャードまで反応した(${others.join(", ")})`,
-    };
+  const missing = m.expected.filter((name) => !m.shardsSeen.includes(name));
+  if (missing.length > 0) {
+    return fail(
+      "measurement-failed",
+      `読み込まれていないシャードがある(${missing.join(", ")})——` +
+        "黙っているべきシャードが走っていない走行は、完全一致を語る資格がない",
+    );
   }
-  if (expectation === "display only") {
-    // **表示のシャードだけが反応するはず。** 値は 1 ビットも変わらないので、
-    // 他のシャードが反応したらそれは「表示の変異が値にも漏れている」か、
-    // 変異の書き方が広すぎるかのどちらかで、どちらも欠陥である。
-    const others = shards.filter((s) => !s.startsWith("display-"));
-    return {
-      ok: others.length === 0,
-      why:
-        others.length === 0
-          ? "表示のシャードだけが反応した——値を見るテストには見えない欠陥である"
-          : `値を見るシャードまで反応した(${others.join(", ")})`,
-    };
+  const reacted = Object.entries(m.mismatchesByShard)
+    .filter(([, count]) => count > 0)
+    .map(([name]) => name);
+  if (mutation.expectShards.length === 0) {
+    if (m.playwrightExitCode === 0 && reacted.length === 0) {
+      return { ok: true, kind: "ok", why: "赤くならなかった——レポートの「踏んでいない」が正しい" };
+    }
+    return fail(
+      "claim-was-false",
+      `赤くなった(${reacted.join(", ") || "テストが非ゼロで終了"})。レポートの「踏んでいない」が嘘である`,
+    );
   }
-  if (expectation === "combinatorics only") {
-    const others = shards.filter((s) => !s.startsWith("combinatorics-"));
-    return {
-      ok: others.length === 0,
-      why:
-        others.length === 0
-          ? "組合せ論のシャードだけが反応した"
-          : `他のシャードまで反応した(${others.join(", ")})`,
-    };
+  if (reacted.length === 0) {
+    return fail("caught-nothing", "1 件も捕まえられなかった");
   }
-  return { ok: shards.length >= 3, why: `${shards.length} シャードが反応した` };
+  if (!sameSet(reacted, mutation.expectShards)) {
+    return fail(
+      "shard-set-mismatch",
+      `反応したのは ${reacted.sort().join(", ")}、期待は ${[...mutation.expectShards].sort().join(", ")}`,
+    );
+  }
+  for (const name of mutation.expectShards) {
+    const total = m.totalsByShard[name] ?? 0;
+    const rate = mutation.minRate?.[name] ?? 0;
+    const floor = Math.max(1, Math.ceil(total * rate));
+    const caught = m.mismatchesByShard[name] ?? 0;
+    if (caught < floor) {
+      return fail("below-min-rate", `${name} は ${caught} 件で、下限 ${floor} 件(${total} 件の ${rate})に届かない`);
+    }
+  }
+  return { ok: true, kind: "ok", why: `期待したシャードだけが反応した(${reacted.sort().join(", ")})` };
 }
 
 function main() {
@@ -337,17 +376,7 @@ function main() {
         throw new Error(`detection-power: ${mutation.file} を戻せなかった`);
       }
     }
-    // **`verdictFor` はまだ `Measurement` を知らない(Task 5 で直す)。**
-    // 旧 `measure()` は「実際に不一致が出たシャード」だけを返していたので、
-    // ここでも 0 件のシャードを削って同じ形に合わせる。`buildOk` が false や
-    // `runJsonFound` が false のとき(ビルドが壊れた・playwright が
-    // 起動しなかった)は空の `{}` になり、`verdictFor` にはそれが
-    // 「何も引っかからなかった」としか見えない——ビルド失敗を誤って
-    // 「反応なし」と判定しうるが、`verdictFor` を直すのは Task 5 の仕事。
-    const caught = Object.fromEntries(
-      Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
-    );
-    const verdict = verdictFor(mutation.expect, caught);
+    const verdict = verdictFor(mutation, measurement);
     if (!verdict.ok) {
       failed += 1;
     }
@@ -355,10 +384,11 @@ function main() {
     results.push({
       id: mutation.id,
       what: mutation.what,
-      expect: mutation.expect,
-      caught,
-      total: Object.values(caught).reduce((a, b) => a + b, 0),
+      expectShards: mutation.expectShards,
+      mismatchesByShard: measurement.mismatchesByShard,
+      totalsByShard: measurement.totalsByShard,
       ok: verdict.ok,
+      kind: verdict.kind,
       why: verdict.why,
     });
   }
