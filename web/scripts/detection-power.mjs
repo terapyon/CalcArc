@@ -196,6 +196,254 @@ export const MUTATIONS = [
     expectShards: ["complex-display-000.json (displays)"],
     minRate: { "complex-display-000.json (displays)": 0.165 },
   },
+
+  // **ここから Finance 用の 10 種(設計書 §5)。**
+  //
+  // すべて `expectShards` は `finance-000.json (calls)` の 1 枚だけである
+  // ——Finance は整数の厳密一致なので、値が 1 ビットでもずれれば必ず
+  // 不一致として出る。他の 14 枚は Finance のコードを一切通らないので、
+  // 反応したらそれ自体が「Finance の変更が漏れている」という報告になる。
+  //
+  // **変異は Rust の finance を意図的に壊す。** この走行中に
+  // `cargo test --workspace` を回すと当然赤くなる——`detection-power` は
+  // wasm ビルドと heavy しか回さないので、それとは無関係である。
+  {
+    id: "loan-interest-round-not-floor",
+    what: "毎期利息を切り捨てから四捨五入へ変える",
+    file: "crates/calcarc-core/src/finance/loan/rate.rs",
+    from: "let interest = product / self.denominator as u128;",
+    to: "let interest = (product + self.denominator as u128 / 2) / self.denominator as u128;",
+    // ローンの各行・複利の各期の両方がここを通る(`interest_floor` は
+    // `monthly_interest_floor` の別名)。四捨五入で 1 円上がる期が
+    // 1 つでもあれば、その口座の以後の残高がすべてずれる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.386 },
+  },
+  {
+    id: "loan-interest-as-f64",
+    what: "整数比の利息計算を f64 近似へ変える",
+    file: "crates/calcarc-core/src/finance/loan/rate.rs",
+    from: `    pub fn monthly_interest_floor(&self, balance: u64) -> CalcResult<u64> {
+        let product = balance as u128 * self.numerator as u128;
+        let interest = product / self.denominator as u128;
+        u64::try_from(interest).map_err(|_| CalcError::Overflow)
+    }`,
+    to: `    pub fn monthly_interest_floor(&self, balance: u64) -> CalcResult<u64> {
+        let rate = self.numerator as f64 / self.denominator as f64;
+        let interest = (balance as f64 * rate).floor();
+        if interest < 0.0 || interest > u64::MAX as f64 {
+            return Err(CalcError::Overflow);
+        }
+        Ok(interest as u64)
+    }`,
+    // f64 は仮数部 53 ビットしか持たない。残高が大きい・分母が細かい
+    // (bp 刻みの金利)口座では、厳密な床と f64 の床が 1 円単位でずれる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.015 },
+  },
+  {
+    id: "compound-deposit-at-start",
+    what: "積立を期末から期首へ動かす(その期の利息を積立額にも付ける)",
+    file: "crates/calcarc-core/src/finance/compound.rs",
+    from: `    let mut balance = principal;
+    for _ in 0..periods {
+        let interest = rate.interest_floor(balance)?;
+        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
+    }`,
+    to: `    let mut balance = principal;
+    for _ in 0..periods {
+        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
+        let interest = rate.interest_floor(balance)?;
+        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    }`,
+    // 3 行の並べ替えだけ(設計書 §5)。積立額が 0 の一括預入は影響を
+    // 受けない——`grow(P, 0, ...)` の毎期は変わらない。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.087 },
+  },
+  {
+    id: "compound-round-once-at-maturity",
+    what: "毎期切り捨てをやめ、満期時に一度だけ丸める",
+    file: "crates/calcarc-core/src/finance/compound.rs",
+    from: `    let mut balance = principal;
+    for _ in 0..periods {
+        let interest = rate.interest_floor(balance)?;
+        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
+    }`,
+    to: `    let scale: u128 = 1_000_000_000;
+    let mut scaled = principal as u128 * scale;
+    for _ in 0..periods {
+        let interest = scaled * rate.numerator as u128 / rate.denominator as u128;
+        scaled = scaled
+            .checked_add(interest)
+            .and_then(|v| v.checked_add(deposit as u128 * scale))
+            .ok_or(CalcError::Overflow)?;
+    }
+    let balance = u64::try_from(scaled / scale).map_err(|_| CalcError::Overflow)?;`,
+    // 設計書 §5.1: 残高を 10^9 スケールの分数のまま持ち回し、最後の
+    // 1 回だけ円に落とす。毎期の 1 円未満切り捨てが積み上がらないので、
+    // 期数が多い口座ほど正しい厳密値との差が大きくなる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.086 },
+  },
+  {
+    id: "rate-nominal-to-effective",
+    what: "名目換算を実効換算に変える((1+r)^(1/期) − 1 を f64 で近似する)",
+    file: "crates/calcarc-core/src/finance/loan/rate.rs",
+    from: `        let denominator = scale
+            .checked_mul(100)
+            .and_then(|v| v.checked_mul(periods_per_year as u64))
+            .ok_or(CalcError::SyntaxError)?;
+        Ok(Rate {
+            numerator,
+            denominator,
+        })
+    }`,
+    to: `        let annual = numerator as f64 / (scale as f64 * 100.0);
+        let periodic = (1.0 + annual).powf(1.0 / periods_per_year as f64) - 1.0;
+        let effective_denominator: u64 = 1_000_000_000_000;
+        let effective_numerator = (periodic * effective_denominator as f64).round() as u64;
+        Ok(Rate {
+            numerator: effective_numerator,
+            denominator: effective_denominator,
+        })
+    }`,
+    // 設計書 §5.1: 実効換算は無理数で分数に載らないので、f64 で近似して
+    // 分母 10^12 の分数に丸め直す。名目(年利÷期/年)と実効の差は
+    // `periods_per_year == 1` では 0 だが、月次・半年では複利ぶんだけ開く。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.324 },
+  },
+  {
+    id: "tax-combined-rate",
+    what: "国税・地方税を合計 20.315% の一括計算にする",
+    file: "crates/calcarc-core/src/finance/tax.rs",
+    from: `    let national = interest as u128 * NATIONAL_NUM / NATIONAL_DEN;
+    let local = interest as u128 * LOCAL_NUM / LOCAL_DEN;`,
+    to: `    let national = interest as u128 * 20_315 / 100_000;
+    let local = 0u128;`,
+    // 別々に切り捨てると 1 円ずれるケースがある(`tax.rs` のテスト
+    // `the_two_taxes_are_floored_separately` の 2,648,906 円が実例)。
+    // 一括計算はそのケースだけ違う総額を返す。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.058 },
+  },
+  {
+    id: "loan-final-row-no-adjustment",
+    what: "ローン最終回の調整を削除する(残高+利息ではなく定例額を払わせる)",
+    file: "crates/calcarc-core/src/finance/loan/schedule.rs",
+    from: `        run.pay(due, interest)?;
+        return Ok(run.finish(due));`,
+    to: `        run.pay(payment, interest)?;
+        return Ok(run.finish(payment));`,
+    // `residual == 0` の最終回だけを狙う(schedule.rs:90-91)。定例額が
+    // 端数をちょうど吸収する稀な入力以外はすべて `final_payment` と
+    // `final_balance` が真値からずれる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.232 },
+  },
+  {
+    id: "bonus-half-year-becomes-monthly",
+    what: "ボーナス列の半年利を月利にする(denominator / 6 を外す)",
+    file: "crates/calcarc-core/src/finance/loan/rate.rs",
+    from: "denominator: self.denominator / 6,",
+    to: "denominator: self.denominator,",
+    // ボーナス併用のローン・複利だけが半年利を要る。半年利が月利の
+    // 6 倍(=正しい利率の 1/6)のままになるので、半年ぶんの利息が
+    // ごく僅かにしか付かなくなる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.052 },
+  },
+  {
+    id: "periods-for-binary-search",
+    what: "必要期間を全走査から二分探索へ変える(手取りの非単調な谷を飛び越える)",
+    file: "crates/calcarc-core/src/finance/compound_inverse.rs",
+    from: `    let mut balance = principal;
+    let mut principal_total = principal;
+    for n in 1..=MAX_PERIODS {
+        balance = balance
+            .checked_add(rate.interest_floor(balance)?)
+            .and_then(|b| b.checked_add(deposit))
+            .ok_or(CalcError::Overflow)?;
+        principal_total = principal_total
+            .checked_add(deposit)
+            .ok_or(CalcError::Overflow)?;
+        // 利率は非負なので投入合計を下回らないが、契約として checked のまま引く。
+        let interest = balance
+            .checked_sub(principal_total)
+            .ok_or(CalcError::Overflow)?;
+        if reached(balance, interest, taxed)? >= target {
+            return solution(
+                deposit,
+                n,
+                Growth {
+                    final_balance: balance,
+                    principal_total,
+                    interest,
+                },
+                taxed,
+            );
+        }
+    }
+    // 1,200 期でも届かない = 事実上の発散(ローンの term_for と同じ扱い)。
+    Err(CalcError::SyntaxError)`,
+    to: `    // Overflow は「届く側」として扱う(engine 自身の流儀。
+    // \`deposit_for\` の \`probe\` と同じ: \`Err(CalcError::Overflow) => true\`)。
+    let probe = |n: u32| -> bool {
+        match grow(principal, deposit, rate, n) {
+            Ok(g) => matches!(reached(g.final_balance, g.interest, taxed), Ok(v) if v >= target),
+            Err(CalcError::Overflow) => true,
+            Err(_) => false,
+        }
+    };
+    if !probe(MAX_PERIODS) {
+        return Err(CalcError::SyntaxError);
+    }
+    let mut low = 0u32;
+    let mut high = MAX_PERIODS;
+    while high - low > 1 {
+        let mid = low + (high - low) / 2;
+        if probe(mid) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    let g = grow(principal, deposit, rate, high)?;
+    solution(deposit, high, g, taxed)`,
+    // **最初の版はここで Overflow を `?` で伝播させていて、152 件を検出
+    // していた。** 実際は谷とは無関係の別の欠陥だった: `probe(MAX_PERIODS)`
+    // を先に呼ぶので、答が小さい期(例: 10 期)のケースでも 1,200 期まで
+    // 育てて u64 を溢れさせ、前進走査なら出せたはずの答の代わりに Overflow
+    // を返していた(taxed 79 件・税なし 72 件。税なしは期数について厳密に
+    // 単調なので、税の床は原因になりようがない——溢れに前のめりなだけ)。
+    // Overflow を「届く側」として扱う `deposit_for` と同じ流儀に直したら、
+    // 差は設計書どおり **1 件**(`fin-000265`、前進 19 / 二分 21)になった。
+    // **検出数が多いことは検出力が高いことを意味しない**——152 件のうち
+    // 151 件は #9 が確かめたいはずの非単調性と無関係の人工物だった。詳細は
+    // `docs/corpus-measurements.md`。
+    //
+    // **`minRate` はここでは置かない。** 実測は 1 件だけで、率にすると
+    // 3500 件中 1 件は 3 桁の下限表現に載らない(floor が 0 になる)。
+    // `verdictFor` の `floor = Math.max(1, Math.ceil(total * rate - 1e-9))`
+    // が `rate` 未指定(=0)のときに 1 を保証するので、それに委ねる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: {},
+  },
+  {
+    id: "compound-inverse-ignores-tax-flag",
+    what: "税あり目標を手取りでなく税引前残高と比較する",
+    file: "crates/calcarc-core/src/finance/compound_inverse.rs",
+    from: "    if !taxed {",
+    to: "    if true {",
+    // `reached` が常に残高をそのまま返すようになる。税 OFF の逆算は
+    // 元々 `reached` が同じ経路(`if !taxed`)を通るので影響を受けず、
+    // **税 ON のケースだけ**が違う値と比較されて壊れる。
+    expectShards: ["finance-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.038 },
+  },
 ];
 
 function run(command, args, options = {}) {

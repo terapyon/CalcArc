@@ -431,6 +431,38 @@ Finance は整数の厳密一致なので、反応すれば必ず不一致とし
 
 ## 6. 変更するファイル
 
+### 5.3.1 実測（2026-08-20 追記、Task 11）
+
+`docs/corpus-measurements.md`「Finance 用の欠陥注入 10 種」に詳細がある。
+ここには外の読み手に対する結論だけを残す。
+
+- 10 種とも `finance-000.json (calls)` の 1 枚だけが反応し、他 14 枚は
+  反応しなかった。既存 8 変異の検出件数も Task 7 の記録から動いていない。
+- **#9 は当初、想定と違う理由で 152 件を検出していた。** `probe(MAX_PERIODS)`
+  を先に呼ぶ書き方が、答の小さいケースでも u64 を溢れさせていたためで
+  （151 件）、本節が言う非単調性（`non_monotone_net` 層、1 件）とは無関係
+  だった。`deposit_for` の `probe`（本ファイル該当節、`Overflow` を
+  「届く側」として扱う）と同じ流儀に直したところ、検出は設計どおり
+  **1 件**（`fin-000265`）になった。**検出数が多いことは検出力が高い
+  ことを意味しない**——実装時にこの言い方の逆（検出が少ないほうを疑う）
+  だけでなく、多いほうも検算することが要る。
+- **§4.10 の逆算証明書は、Finance 変異の検出数に一切現れない。**
+  `record()` を呼ぶのは shard 単位の完全一致テストだけで、証明書は
+  独立した `test(...)` なので、証明書が壊れても
+  `heavy-run.json` の `mismatches` は増えない。`verdictFor` は
+  `reacted.length === 0` のときしか `playwrightExitCode` を見ないため、
+  Finance 変異は shard 側が必ず反応するこの分岐に入らず、証明書の失敗を
+  一度も検査しない。実測（`tax-combined-rate`）では shard 側 406 件の不一致
+  と同時に `compound_deposit_for` 証明書が 57/808 件、`compound_periods_for`
+  証明書が 67/67,675 件失敗していたが、検出力レポートはそれを一切記録
+  しなかった。一方 `compound-round-once-at-maturity`（shard 側 605 件）は
+  証明書 4 本とも無傷だった——境界の不等式判定は数値の完全一致より粗いので、
+  摂動の種類によって証明書が壊れるかどうかが変わる。10 種のうち 2 種しか
+  直接確認していないので、残り（特に検出率の高い `rate-nominal-to-effective`
+  ・`loan-final-row-no-adjustment`）は未検証のまま次に送る。
+
+## 6. 変更するファイル
+
 | ファイル | 変更 |
 |---|---|
 | `reference/src/calcarc_reference/corpus_calls.py` | 層の一覧、ペアワイズ割付、構成による正常生成、`ReferenceGaveUp` の理由分類 |

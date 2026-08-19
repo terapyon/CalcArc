@@ -1411,3 +1411,163 @@ wasm とは独立の経路である。
   する」ことだけが確認されている状態が残る。`loan_forward` 以外の手段
   （`loan_term` を使う、など）を使えば証明できる可能性があるが、今回の
   制約（`loan_forward` / `compound_grow` のみ）の外にある。
+
+## Finance 用の欠陥注入 10 種（2026-08-20 実測、spec B+C Task 11）
+
+`web/scripts/detection-power.mjs` の `MUTATIONS` に、設計書 §5 の表に沿って
+Finance 用の 10 種を足した。既存 8 種と合わせて 18 変異。**すべて
+`expectShards` は `finance-000.json (calls)` の 1 枚だけ**で、他 14 枚は
+反応しないことを実測で確かめた。
+
+### 実測表（`finance-000.json` の総件数は Task 9 で確定した 3,500）
+
+| 変異 | 検出件数 | 検出率 | `minRate`(半分・3 桁切り捨て) |
+|---|---:|---:|---:|
+| `loan-interest-round-not-floor` | 2,707 | 77.34% | 0.386 |
+| `loan-interest-as-f64` | 105 | 3.00% | 0.015 |
+| `compound-deposit-at-start` | 615 | 17.57% | 0.087 |
+| `compound-round-once-at-maturity` | 605 | 17.29% | 0.086 |
+| `rate-nominal-to-effective` | 2,272 | 64.91% | 0.324 |
+| `tax-combined-rate` | 406 | 11.60% | 0.058 |
+| `loan-final-row-no-adjustment` | 1,624 | 46.40% | 0.232 |
+| `bonus-half-year-becomes-monthly` | 368 | 10.51% | 0.052 |
+| `periods-for-binary-search` | **1**(修正後。下の節を見よ) | 0.029% | 置いていない(下限は `Math.max(1, …)` に委ねる) |
+| `compound-inverse-ignores-tax-flag` | 272 | 7.77% | 0.038 |
+
+**既存 8 変異の検出件数は Task 7 の記録から 1 件も動いていない**
+（`display-digits` の 10 シャード内訳・`precedence-collapse` 1,099・
+`ncr-multiply-first` 10・`eng-exponent-toward-zero` 96・
+`sexagesimal-no-carry` 10・`complex-multiply-sign` 147・
+`polar-angle-flipped` 661・`associativity-flip` 0、すべて完全一致)。
+Finance だけを 3,500 件に増やした Task 9 の変更が他の 14 シャードに
+漏れていないことの、変異注入による裏付けになる。
+
+### #9(必要期間の二分探索)は最初の版が間違った理由で 152 件を検出していた
+
+最初に書いた `to` は次の形だった。
+
+```rust
+let probe = |n: u32| -> CalcResult<bool> {
+    let g = grow(principal, deposit, rate, n)?;
+    Ok(reached(g.final_balance, g.interest, taxed)? >= target)
+};
+if !probe(MAX_PERIODS)? { return Err(CalcError::SyntaxError); }
+```
+
+これで 1 回目・2 回目の `pnpm heavy:power` を回すと **152 件**を検出した。
+コメントには「taxed な `compound_periods_for` の正常ケース 146 件のほぼ
+全数」が原因だと書いたが、**これは検算していない当て推量で、間違って
+いた**。発注者からの指摘で Python 参照実装の上に同じロジックを u64 の
+checked 演算まで含めて写し、304 件全部を突き合わせたところ、内訳はこうだった。
+
+| 原因 | 件数 |
+|---|---:|
+| `probe(MAX_PERIODS)` が先に u64 を溢れさせ、前進走査なら出せた小さい答の代わりに `Overflow` を返す(taxed 79 + 税なし 72) | 151 |
+| 前進走査と二分探索が別の期を返す(本物の非単調性) | 1(`fin-000265`。前進 19 / 二分 21) |
+
+**税なし 72 件が決定的だった。** 税なしの到達値は残高そのもので、期数に
+ついて厳密に単調である——税の床は原因になりようがない。実際の原因は、
+`probe(MAX_PERIODS)` を先に呼ぶ二分探索の書き方そのもので、答が小さい期
+(例: 10 期)のケースでも 1,200 期まで育てて u64 を溢れさせていた
+(`fin-001295`: 前進 10 期 / 二分 `Overflow` が実例)。
+
+**直した。** `deposit_for` の `probe` が既に持っている流儀
+(`Err(CalcError::Overflow) => true` として「届く側」に倒す。
+`crates/calcarc-core/src/finance/compound_inverse.rs:72-78`)を `periods_for`
+の `probe` にも適用し、`?` で溢れを伝播させないようにした。3 回目の
+`pnpm heavy:power` で再測定すると、**検出は 1 件になった**——設計書 §5.2
+が最初から言っていた「`non_monotone_net` 層(1 件、`fin-000265`)だけが
+検出できる」のとおりである。コーパスにはこの層が実際に 1 件だけあり
+(`stratum: compound_periods_for/non_monotone_net`)、検出件数(1)と一致する。
+
+**検出数が多いことは検出力が高いことを意味しない。** 152 件のうち 151 件
+は、#9 が確かめたいはずの「手取りの非単調性を二分探索が飛び越える」性質
+とは無関係の、変異の書き方そのものの欠陥(溢れに前のめり)が生んだ人工物
+だった。`minRate` を 152 件の実測に合わせて焼き付けていたら、
+`non_monotone_net` 層をコーパスから誰かが消しても #9 は 151 件を検出して
+緑のままになり、設計書 §5.2 がまさに防ごうとした壊れ方が開いたまま
+気づかれずに残っていた。
+
+修正後の `minRate` は率を置いていない。実測が 1 件だけなので、3,500 件
+分母の率にすると 3 桁の表現に載らず(`floor(1/3500 / 2 * 1000) = 0`)、
+`verdictFor` の `floor = Math.max(1, Math.ceil(total * rate - 1e-9))` が
+`rate` 未指定(=0)のときに 1 を保証する側に委ねている。
+
+### 証明書の失敗は検出数の集計から漏れる(実測で確認)
+
+Task 10 で `calls.spec.ts` に足した 4 つの逆算証明書
+(`loan_principal` / `loan_term` / `compound_deposit_for` /
+`compound_periods_for` の「答えが境界そのものである」テスト)は、それぞれ
+独立した `test(...)` で、**`report.ts` の `record()` を 1 度も呼ばない**。
+`heavy-run.json` の `shards[].mismatches` を書くのは
+`every call in ${name} matches the reference` という別のテスト(shard 単位
+の完全一致比較)だけである。
+
+`verdictFor` は `reacted.length === 0` のときだけ `playwrightExitCode` を
+見る。Finance 変異 10 種は全部 `finance-000.json (calls)` の完全一致比較
+自体が壊れる(`reacted` が非空)ので、**この分岐に一度も入らない**——
+証明書がどれだけ壊れていても、`verdictFor` はそれを一切見ないまま `ok` を
+返す。
+
+これを実際に 2 種で確かめた(`detection-power.mjs` の外で、変異を手で当てて
+`CI=1 pnpm exec playwright test --config playwright.heavy.config.ts` を素で
+走らせ、reporter の一覧を読んだ)。
+
+- **`compound-round-once-at-maturity`**(shard 側 605 件不一致): 4 証明書
+  すべて緑(0 件失敗)。境界の判定は「目標を超えたか」という不等式なので、
+  積立の丸め方式が変わって数値そのものが数円ずれても、golden の
+  `deposit`/`periods` がちょうど境界を跨ぐ位置にある限り証明書は崩れない
+  ——数値の完全一致より粗い性質のほうが、この種の摂動に頑健だった。
+- **`tax-combined-rate`**(shard 側 406 件不一致): `compound_deposit_for`
+  証明書が 808 件中 **57 件**、`compound_periods_for` 証明書が 67,675 件中
+  **67 件**、合わせて 124 個のプローブが赤くなった(playwright の
+  reporter は `3 failed` を返した: shard 本体 + 証明書 2 本)。にもかかわらず
+  `detection-power.json` にはこの 124 件がどこにも現れない——`reacted` が
+  既に `["finance-000.json (calls)"]` と一致していたので、`verdictFor` は
+  証明書の失敗を見ないまま `ok` を返した。
+
+**証明書の失敗は検出数の集計から漏れる。** これは `detection-power.mjs` の
+バグではない(shard 単位の完全一致という元々の契約どおりに動いている)が、
+「Finance 変異 10 種の `total` 列」を読むだけでは、証明書がどれだけ壊れて
+いるかは分からない、ということは外の読み手に対する主張として残しておく
+価値がある。**10 種のうち、残り 8 種(`compound-round-once-at-maturity` と
+`tax-combined-rate` 以外)について証明書への影響は確認していない。**
+特に `rate-nominal-to-effective`(shard 側 64.91%)と
+`loan-final-row-no-adjustment`(同 46.40%)は摂動が大きく、証明書も割れて
+いる可能性が高いが、未検証のまま報告する。
+
+### 実行時間(3 回の `pnpm heavy:power`、いずれも壁時計)
+
+| 回 | 内容 | 所要時間 |
+|---|---|---:|
+| 1 回目 | 18 変異(#9 は修正前の版)。全 18 が `ok` | 558 秒(約 9.3 分) |
+| 2 回目 | `minRate` を実測の半分で埋めた版。全 18 が `ok` | 552 秒(約 9.2 分) |
+| 3 回目 | #9 を `deposit_for` の流儀に直した版。全 18 が `ok`、#9 は 1 件 | 551 秒(約 9.2 分) |
+
+計画が見積もった「1 変異あたり約 34 秒・約 10 分」(実測前)と近い実測値。
+3 回とも 9 分台前半で揃っており、#9 の修正(数行の書き換え)は所要時間に
+目立った影響を与えていない。
+
+### 変異は残っていない
+
+3 回目の走行後、`git status --short` と `git diff --stat -- crates/` は
+どちらも空だった(`web/scripts/detection-power.mjs` の変更のみが残る)。
+`runOneMutation` の `finally` が毎回バイト単位で元に戻していることを
+実測でも確認した。
+
+### やり残し・不安点
+
+- 証明書への影響を直接確認したのは 10 種のうち 2 種
+  (`compound-round-once-at-maturity`・`tax-combined-rate`)だけである。
+  残り 8 種、特に摂動の大きい `rate-nominal-to-effective` と
+  `loan-final-row-no-adjustment` は未確認のまま。
+- #9 の最初の版(152 件)が示したこと自体は無駄ではない:
+  「二分探索が壊れる経路は非単調性だけではなく、探索の書き方(先に
+  上限を試す)そのものにもある」という事実は、`periods_for` を将来
+  書き換えるときに参照する価値がある。ただしそれは #9 が測るべき
+  対象ではないので、今回は `deposit_for` と同じ流儀に揃えて排除した。
+- `loan-interest-round-not-floor`(77.34%)と `rate-nominal-to-effective`
+  (64.91%)は検出率が非常に高い。これは金利の丸め方式・換算方式が
+  ほぼ全ケースに影響するローンの構造上自然だが、`minRate` の下限
+  (それぞれ 0.386・0.324)は他の変異(0.015〜0.232)に比べて高い水準に
+  なる。コーパスが将来偏ると最初に踏む下限になりうる。
