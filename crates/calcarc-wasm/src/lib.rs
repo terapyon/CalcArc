@@ -4,6 +4,8 @@
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
+use calcarc_core::data_scale::llm::{self, Precision};
+use calcarc_core::data_scale::transfer::{self, BandwidthUnit, DurationUnit};
 use calcarc_core::data_scale::{self, DataType};
 use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
@@ -109,6 +111,122 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
             data_scale::size_in_bytes(c, d, t)
         });
+    let result = match outcome {
+        Ok(bytes) => DataScaleResult {
+            bytes: Some(bytes.to_string()),
+            bytes_grouped: Some(group_digits(bytes)),
+            decimal: format_decimal(bytes),
+            binary: format_binary(bytes),
+            error: None,
+        },
+        Err(e) => DataScaleResult {
+            bytes: None,
+            bytes_grouped: None,
+            decimal: None,
+            binary: None,
+            error: Some(e),
+        },
+    };
+    to_js_value(&result)
+}
+
+/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、DataScaleResult を
+/// そのまま 3 つ並べるのではなく、組を型にした(spec §6)。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ByteLines {
+    bytes: String,
+    bytes_grouped: String,
+    decimal: Option<String>,
+    binary: Option<String>,
+}
+
+impl ByteLines {
+    fn of(bytes: u128) -> ByteLines {
+        ByteLines {
+            bytes: bytes.to_string(),
+            bytes_grouped: group_digits(bytes),
+            decimal: format_decimal(bytes),
+            binary: format_binary(bytes),
+        }
+    }
+}
+
+/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` に対応する。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LlmResult {
+    weight: Option<ByteLines>,
+    kv: Option<ByteLines>,
+    total: Option<ByteLines>,
+    error: Option<calcarc_core::CalcError>,
+}
+
+/// 重み ＋ KV cache を見積もる。純関数で、状態を持たない。
+///
+/// 入出力が文字列なのは data_scale と同じ理由(JS の number は 2^53 を超えると
+/// u128 の定義域を境界で殺す)。**例外は投げない。**
+#[wasm_bindgen]
+pub fn llm_memory(
+    parameters: &str,
+    weight_precision: &str,
+    layers: &str,
+    kv_heads: &str,
+    head_dim: &str,
+    context_length: &str,
+    kv_precision: &str,
+) -> JsValue {
+    let outcome = (|| {
+        let parameters = data_scale::parse_count(parameters)?;
+        let layers = data_scale::parse_count(layers)?;
+        let kv_heads = data_scale::parse_count(kv_heads)?;
+        let head_dim = data_scale::parse_count(head_dim)?;
+        let context_length = data_scale::parse_count(context_length)?;
+        let weight = Precision::from_token(weight_precision).ok_or(CalcError::SyntaxError)?;
+        let kv = Precision::from_token(kv_precision).ok_or(CalcError::SyntaxError)?;
+        llm::memory(
+            parameters,
+            weight,
+            layers,
+            kv_heads,
+            head_dim,
+            context_length,
+            kv,
+        )
+    })();
+    let result = match outcome {
+        Ok(m) => LlmResult {
+            weight: Some(ByteLines::of(m.weight_bytes)),
+            kv: Some(ByteLines::of(m.kv_bytes)),
+            total: Some(ByteLines::of(m.total_bytes)),
+            error: None,
+        },
+        Err(e) => LlmResult {
+            weight: None,
+            kv: None,
+            total: None,
+            error: Some(e),
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 帯域幅 × 時間 → バイト数。**戻り値の形は data_scale と同じ**(spec §6)
+/// ——同じ 4 点なので、TypeScript 側も同じ型で受ける。
+#[wasm_bindgen]
+pub fn data_transfer(
+    bandwidth: &str,
+    bandwidth_unit: &str,
+    duration: &str,
+    duration_unit: &str,
+) -> JsValue {
+    let outcome = (|| {
+        let bandwidth_value = data_scale::parse_count(bandwidth)?;
+        let duration_value = data_scale::parse_count(duration)?;
+        let unit = BandwidthUnit::from_token(bandwidth_unit).ok_or(CalcError::SyntaxError)?;
+        let per = DurationUnit::from_token(duration_unit).ok_or(CalcError::SyntaxError)?;
+        transfer::transferred_bytes(bandwidth_value, unit, duration_value, per)
+    })();
     let result = match outcome {
         Ok(bytes) => DataScaleResult {
             bytes: Some(bytes.to_string()),

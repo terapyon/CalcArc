@@ -128,6 +128,29 @@ fn data_scale_sub_unit_success_carries_null_lines() {
 }
 
 #[wasm_bindgen_test]
+fn the_llm_headline_crosses_the_boundary() {
+    let value = calcarc_wasm::llm_memory("27000000000", "int4", "62", "16", "128", "8192", "fp16");
+    let total = get(&value, "total");
+    assert_eq!(
+        get(&total, "bytesGrouped").as_string().as_deref(),
+        Some("17,660,749,568")
+    );
+    assert_eq!(
+        get(&total, "decimal").as_string().as_deref(),
+        Some("17.7 GB")
+    );
+}
+
+#[wasm_bindgen_test]
+fn a_transfer_error_is_a_value_not_an_exception() {
+    let value = calcarc_wasm::data_transfer("1", "tbps", "1", "second");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
+
+#[wasm_bindgen_test]
 fn loan_forward_crosses_the_boundary() {
     // 住宅基準例。golden(finance.json)と同じ値が境界を越えて出る。
     let result = calcarc_wasm::loan_forward("30000000", "1.5", 420, "0");

@@ -5,11 +5,37 @@
  * import してはならない。
  */
 
-import init, { data_scale } from "../wasm/calcarc_wasm.js";
-import type { DataScaleResult, DataTypeToken } from "./types";
+import init, {
+  data_scale,
+  data_transfer,
+  llm_memory,
+} from "../wasm/calcarc_wasm.js";
+import type {
+  BandwidthUnitToken,
+  DataScaleResult,
+  DataTypeToken,
+  DurationUnitToken,
+  LlmResult,
+  PrecisionToken,
+  TransferResult,
+} from "./types";
 
-export type { DataScaleResult, DataTypeToken } from "./types";
-export { DATA_TYPE_TOKENS } from "./types";
+export type {
+  BandwidthUnitToken,
+  ByteLines,
+  DataScaleResult,
+  DataTypeToken,
+  DurationUnitToken,
+  LlmResult,
+  PrecisionToken,
+  TransferResult,
+} from "./types";
+export {
+  BANDWIDTH_UNIT_TOKENS,
+  DATA_TYPE_TOKENS,
+  DURATION_UNIT_TOKENS,
+  PRECISION_TOKENS,
+} from "./types";
 
 export interface DataScaleCalc {
   compute(
@@ -17,6 +43,22 @@ export interface DataScaleCalc {
     dimensions: string,
     dtype: DataTypeToken,
   ): DataScaleResult;
+  /** 重み ＋ KV cache。**引数はすべて 10 進の数字列**(u128 の定義域)。 */
+  llm(
+    parameters: string,
+    weightPrecision: PrecisionToken,
+    layers: string,
+    kvHeads: string,
+    headDim: string,
+    contextLength: string,
+    kvPrecision: PrecisionToken,
+  ): LlmResult;
+  transfer(
+    bandwidth: string,
+    bandwidthUnit: BandwidthUnitToken,
+    duration: string,
+    durationUnit: DurationUnitToken,
+  ): TransferResult;
 }
 
 let ready: Promise<DataScaleCalc> | null = null;
@@ -33,6 +75,31 @@ export function initDataScale(): Promise<DataScaleCalc> {
       (): DataScaleCalc => ({
         compute: (count, dimensions, dtype) =>
           data_scale(count, dimensions, dtype) as DataScaleResult,
+        llm: (
+          parameters,
+          weightPrecision,
+          layers,
+          kvHeads,
+          headDim,
+          contextLength,
+          kvPrecision,
+        ) =>
+          llm_memory(
+            parameters,
+            weightPrecision,
+            layers,
+            kvHeads,
+            headDim,
+            contextLength,
+            kvPrecision,
+          ) as LlmResult,
+        transfer: (bandwidth, bandwidthUnit, duration, durationUnit) =>
+          data_transfer(
+            bandwidth,
+            bandwidthUnit,
+            duration,
+            durationUnit,
+          ) as TransferResult,
       }),
     )
     .catch((cause: unknown) => {

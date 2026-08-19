@@ -63,7 +63,17 @@ function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
 }
 
 function stubCalc(compute?: DataScaleCalc["compute"]): DataScaleCalc {
-  return { compute: compute ?? vi.fn().mockReturnValue(result()) };
+  // llm / transfer はこのパネルではまだ使わない(別タスクで配線される)。
+  // 型を満たすためだけのスタブで、呼ばれたら失敗させて検知する。
+  return {
+    compute: compute ?? vi.fn().mockReturnValue(result()),
+    llm: vi.fn(() => {
+      throw new Error("stubCalc.llm is not wired in this test");
+    }),
+    transfer: vi.fn(() => {
+      throw new Error("stubCalc.transfer is not wired in this test");
+    }),
+  };
 }
 
 async function renderPanel(calc: DataScaleCalc = stubCalc()) {

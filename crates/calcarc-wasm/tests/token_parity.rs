@@ -11,6 +11,8 @@
 use calcarc_core::AngleMode;
 use calcarc_core::Key;
 use calcarc_core::data_scale::DataType;
+use calcarc_core::data_scale::llm::Precision;
+use calcarc_core::data_scale::transfer::{BandwidthUnit, DurationUnit};
 use calcarc_core::engine::state::{DisplayForm, Notation};
 
 /// `marker` で始まる配列リテラルの文字列要素を、ファイル `src` から抜き出す。
@@ -54,6 +56,48 @@ fn data_scale_tokens_match_between_typescript_and_rust() {
     assert_eq!(
         ts, rust,
         "web/src/datascale/types.ts の DATA_TYPE_TOKENS と DataType::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn precision_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/datascale/types.ts");
+    let ts = tokens_in_ts_array(src, "export const PRECISION_TOKENS = [");
+    let rust: Vec<String> = Precision::ALL
+        .iter()
+        .map(|p| p.token().to_owned())
+        .collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/datascale/types.ts の PRECISION_TOKENS と Precision::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn bandwidth_unit_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/datascale/types.ts");
+    let ts = tokens_in_ts_array(src, "export const BANDWIDTH_UNIT_TOKENS = [");
+    let rust: Vec<String> = BandwidthUnit::ALL
+        .iter()
+        .map(|u| u.token().to_owned())
+        .collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/datascale/types.ts の BANDWIDTH_UNIT_TOKENS と BandwidthUnit::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn duration_unit_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/datascale/types.ts");
+    let ts = tokens_in_ts_array(src, "export const DURATION_UNIT_TOKENS = [");
+    let rust: Vec<String> = DurationUnit::ALL
+        .iter()
+        .map(|u| u.token().to_owned())
+        .collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/datascale/types.ts の DURATION_UNIT_TOKENS と DurationUnit::ALL の token() が食い違っている"
     );
 }
 
