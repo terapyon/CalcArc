@@ -2548,7 +2548,9 @@ Run: `cd web && pnpm test LlmPanel`
 
 - [ ] **Step 5: `ScalePanel` に繋ぐ**
 
-`{current === "llm" && <ComingSoon what="LLM のメモリ" />}` を `<LlmPanel />` に。`ScalePanel.test.tsx` の該当検査も `region` 名で見るように直す。
+`{current === "llm" && <ComingSoon what="LLM のメモリ" />}` を `<LlmPanel />` に。
+
+**Task 6 が置いた「面ごとに中身が出る」検査が落ちます。それは意図どおりです**——`ScalePanel.test.tsx` の `shows a different panel for each category` と `scale-categories.spec.ts` の 2 本が、`LLM のメモリ（準備中）` という領域名を主張しています。**実物の領域名（`LLM のメモリ計算`）に直してください。** 落ちること自体が、面が実物になった事実をテストへ反映させる契機です。
 
 - [ ] **Step 6: E2E を書く（実 WASM で headline を通す）**
 
@@ -2666,6 +2668,8 @@ git add web && git commit   # 例: "Answer how much memory 27B needs, and say wh
 - [ ] **Step 5: `ScalePanel` に繋ぎ、`ComingSoon` を消す**
 
 **この時点で `ComingSoon` は使われなくなる。関数ごと消す**——使われないコードを「あとで使うかも」で残さない。
+
+**ここでも Task 6 の検査が落ちます**（`データ転送（準備中）` → 実物の `データ転送量計算`）。3 か所（`ScalePanel.test.tsx` 1 本、`scale-categories.spec.ts` 2 本）を実物の領域名に直してください。**`ComingSoon` が消えたあと、`準備中` という語がこのブランチの Scale 側に 1 つも残らないことを確かめる**——残っていたら、消し忘れか、検査が古い名前を見続けている。
 
 - [ ] **Step 6: E2E**
 
