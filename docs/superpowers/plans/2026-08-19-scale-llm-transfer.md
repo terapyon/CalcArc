@@ -2185,7 +2185,7 @@ Run: `cd web && pnpm test DataScalePanel`
 
 - [ ] **Step 7: 面の入れ替えで枠が動かないことを E2E で見る**
 
-`data-scale-keypad.spec.ts` の `swapping faces moves neither the frame nor DEL` を**3 面**に広げる:
+`data-scale-keypad.spec.ts` の `swapping faces moves neither the frame nor DEL` を**3 面**に広げる。**元の検査は DEL の座標を面の前後で比べていた。その主張を落とさない**——名前が「と DEL」と言っているのに存在しか見ない検査は、名前より少ないことしか測っていない:
 
 ```ts
 test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
@@ -2200,16 +2200,32 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
     await press(page, [field]);
     const box = await face_(page, face).boundingBox();
     const del = await panel(page)
-      .getByRole("button", { name: "1文字消去" })
+      .getByRole("button", { name: "1文字消去", exact: true })
       .boundingBox();
-    seen.push({ face, box: { width: box?.width ?? 0, height: box?.height ?? 0 } });
-    expect(del, `DEL is missing on ${face}`).not.toBeNull();
+    seen.push({
+      face,
+      box: { width: box?.width ?? 0, height: box?.height ?? 0 },
+      // **DEL の位置も控える。** 名前が「と DEL」と言っている以上、
+      // 在ることではなく**動かないこと**を測る（元の検査がそうだった）。
+      del: { x: del?.x ?? -1, y: del?.y ?? -1 },
+    });
   }
   expect(seen).toHaveLength(3);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
+  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
+  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
 });
 ```
+
+- [ ] **Step 7b: 新しい面を、既存の面と同じだけ測る**
+
+**面が 1 つ増えたら、面ごとの検査もそのぶん増える。** 増やさないと、新しい面だけ誰も測っていない状態になる:
+
+- `data-scale-keypad.spec.ts` の `both faces keep 44px touch targets` を**3 面**に広げ、**測ったキーの件数も主張する**（0 件でも緑になる書き方をしない）
+- 候補面の **DEL が押せない**こと（型面と同じ扱い）を、型面の検査と同じ形で置く
+- 候補面の **AC が次元数を空に戻し、面は変えない**ことを置く
 
 - [ ] **Step 8: 回す**
 
