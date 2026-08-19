@@ -63,6 +63,21 @@ def _scaled(size: int, units: list[tuple[str, int]]) -> str | None:
         return f"{whole}.{tenth} {unit}"
 
 
+def lines(size: int) -> dict:
+    """バイト数を画面の 1 組(bytes / 3 桁区切り / 10 進 / 2 進)にする。
+
+    **表示器は 1 つである**(spec §2)。LLM も Transfer もここを通る——
+    Rust 側で format.rs を共有しているのと同じ形にしておかないと、
+    「Python では揃っているのに Rust ではずれている」を検出できない。
+    """
+    return {
+        "bytes": str(size),
+        "bytes_grouped": f"{size:,}",
+        "decimal": _scaled(size, DECIMAL_UNITS),
+        "binary": _scaled(size, BINARY_UNITS),
+    }
+
+
 def compute(count: str, dimensions: str, dtype: str) -> dict:
     c = _parse(count)
     d = _parse(dimensions)
@@ -72,9 +87,4 @@ def compute(count: str, dimensions: str, dtype: str) -> dict:
     size = c * d * per
     if size > U128_MAX:
         return {"error": "Overflow"}
-    return {
-        "bytes": str(size),
-        "bytes_grouped": f"{size:,}",
-        "decimal": _scaled(size, DECIMAL_UNITS),
-        "binary": _scaled(size, BINARY_UNITS),
-    }
+    return lines(size)

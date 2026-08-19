@@ -19,6 +19,7 @@ from calcarc_reference import (
     compound_ref,
     data_scale_ref,
     expr_ref,
+    llm_ref,
     loan_ref,
     scientific_ref,
     sexagesimal_ref,
@@ -168,6 +169,35 @@ def build_data_scale() -> dict:
     }
 
 
+def build_llm() -> dict:
+    entries = []
+    for case in cases.LLM_INPUTS:
+        params, weight, layers, kv_heads, head_dim, context, kv = case
+        result = llm_ref.compute(params, weight, layers, kv_heads, head_dim, context, kv)
+        entries.append(
+            {
+                "id": f"llm/{params}x{weight}/{layers}x{kv_heads}x{head_dim}x{context}x{kv}",
+                "op": "llm",
+                "input": {
+                    "parameters": params,
+                    "weight_precision": weight,
+                    "layers": layers,
+                    "kv_heads": kv_heads,
+                    "head_dim": head_dim,
+                    "context_length": context,
+                    "kv_precision": kv,
+                },
+                "expect": result,
+            }
+        )
+    # 整数の完全一致なので tolerance を持たない(data_scale と同じ)。
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _resolve_placeholders(params: dict) -> dict:
     """期間逆算の境界に使う元本を、参照実装に解かせて埋める。
 
@@ -265,6 +295,7 @@ def main() -> None:
     write("complex.json", build_complex())
     write("scientific.json", build_scientific())
     write("data_scale.json", build_data_scale())
+    write("llm.json", build_llm())
     write("finance.json", build_finance())
 
 
