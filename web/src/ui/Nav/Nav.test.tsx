@@ -19,7 +19,7 @@ describe("Nav", () => {
     );
     expect(screen.getByRole("link", { name: "Convert" })).toHaveAttribute(
       "href",
-      "#convert",
+      "#convert/length",
     );
     // **既定カテゴリまで書く**(設計書 §3)。`#scale` にすると同じ画面に
     // 2 つの URL ができ、押した後の URL と深いリンクが食い違う。

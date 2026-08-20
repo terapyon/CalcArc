@@ -35,10 +35,29 @@ describe("routeFromHash", () => {
     });
   });
 
-  it("reads convert, which has no category yet", () => {
+  it("keeps convert's own categories, which are not the default one", () => {
+    // **U-0 の時点では CATEGORIES と DEFAULT_CATEGORY を区別できなかった**
+    // ——scale の唯一のカテゴリが既定値と同じ値だったので、CATEGORIES を空に
+    // しても振る舞いが 1 つも変わらなかった(U-1 spec §6)。
+    // **`#convert/mass` は既定(`length`)とは違う値なので、ここで穴が埋まる。**
+    expect(routeFromHash("#convert/mass")).toEqual({
+      module: "convert",
+      category: "mass",
+    });
+    expect(routeFromHash("#convert/temperature")).toEqual({
+      module: "convert",
+      category: "temperature",
+    });
+  });
+
+  it("falls back to length when the category is unknown", () => {
+    expect(routeFromHash("#convert/furlong")).toEqual({
+      module: "convert",
+      category: "length",
+    });
     expect(routeFromHash("#convert")).toEqual({
       module: "convert",
-      category: null,
+      category: "length",
     });
   });
 

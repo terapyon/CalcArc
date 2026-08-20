@@ -11,7 +11,7 @@ import styles from "./Nav.module.css";
 // typecheck が落ちるようにするため——配列だと 1 件抜けても型は通る。
 const MODULES: Record<ModuleId, { href: string; label: string }> = {
   scientific: { href: "#scientific", label: "Scientific" },
-  convert: { href: "#convert", label: "Convert" },
+  convert: { href: "#convert/length", label: "Convert" },
   scale: { href: "#scale/data-scale", label: "Scale" },
   finance: { href: "#finance", label: "Finance" },
 };

@@ -5,7 +5,9 @@ test("pressing Convert changes the screen", async ({ page }) => {
   // 押せるように見えて無反応だった。ここは押せば画面が変わる。
   await page.goto("/");
   await page.getByRole("link", { name: "Convert", exact: true }).click();
-  await expect(page).toHaveURL(/#convert$/);
+  // **href は既定カテゴリまで書く**(設計書 §3)。U-1 で convert に
+  // カテゴリが付いたので、タブの行き先は `#convert/length` である。
+  await expect(page).toHaveURL(/#convert\/length$/);
   await expect(
     page.getByRole("region", { name: "単位変換（準備中）" }),
   ).toBeVisible();

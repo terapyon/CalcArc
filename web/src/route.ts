@@ -6,7 +6,13 @@
  * ハッシュは 2 段である(設計書 §3)——先頭が系統、2 番目がカテゴリ。
  * この形にしておくと、U-1 が `#convert/length` を足すときに
  * ここの構造は変わらず、下の表に行が増えるだけになる。
+ * **U-1 で実際にそうなった**——増えたのは表の 2 行だけである。
  */
+
+import {
+  CONVERT_CATEGORY_TOKENS,
+  type ConvertCategoryToken,
+} from "./convert/types";
 
 export type ModuleId = "scientific" | "convert" | "scale" | "finance";
 
@@ -25,10 +31,18 @@ export const SCALE_CATEGORIES = ["data-scale", "llm", "transfer"] as const;
 
 export type ScaleCategory = (typeof SCALE_CATEGORIES)[number];
 
-/** 系統ごとに存在するカテゴリ。**U-0 では scale だけが中身を持つ。** */
+/** Convert 系統のカテゴリ。**配列そのものは `convert/types.ts` が持つ**
+ * ——あちらは Rust の `Category::ALL` と `token_parity.rs` が突き合わせる表で、
+ * ここで綴りを写すと機械の検査が届かない 3 つ目の写しができる。ここは
+ * SCALE_CATEGORIES と同じ名前で盤面へ渡すだけの別名である。 */
+export const CONVERT_CATEGORIES = CONVERT_CATEGORY_TOKENS;
+
+export type ConvertCategory = ConvertCategoryToken;
+
+/** 系統ごとに存在するカテゴリ。**U-1 で convert が 2 つ目の中身を持つ。** */
 const CATEGORIES: Record<ModuleId, readonly string[]> = {
   scientific: [],
-  convert: [],
+  convert: CONVERT_CATEGORIES,
   scale: SCALE_CATEGORIES,
   finance: [],
 };
@@ -36,7 +50,7 @@ const CATEGORIES: Record<ModuleId, readonly string[]> = {
 /** 系統ごとの既定カテゴリ。無い・知らないときはここへ倒す。 */
 const DEFAULT_CATEGORY: Record<ModuleId, string | null> = {
   scientific: null,
-  convert: null,
+  convert: "length",
   scale: "data-scale",
   finance: null,
 };

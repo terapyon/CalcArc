@@ -29,7 +29,9 @@ export function App() {
         <Nav current={route.module} />
         <main className={styles.main}>
           {route.module === "scientific" && <ScientificPanel />}
-          {route.module === "convert" && <ConvertPanel />}
+          {route.module === "convert" && (
+            <ConvertPanel category={route.category} />
+          )}
           {route.module === "scale" && <ScalePanel category={route.category} />}
           {route.module === "finance" && <FinancePanel />}
         </main>
