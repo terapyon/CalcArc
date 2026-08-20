@@ -1,15 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { describe, differences } from "./calls";
 import {
-  compoundDepositForProbes,
-  compoundPeriodsForProbes,
+  CERTIFICATES,
   countDegenerateLoanPrincipalCases,
-  loanPrincipalProbes,
-  loanTermProbes,
-  type Probe,
   runProbes,
 } from "./certificates";
-import { type CallCase, loadCallShards } from "./corpus";
+import { type CallCase, loadCallShards, summarizeCallShard } from "./corpus";
 import { openHarness } from "./harness";
 import { record, summaryName } from "./report";
 
@@ -109,6 +105,9 @@ for (const { name, shard } of SHARDS) {
       // 関数を直接呼ぶ)。**0 は「`=` を押さない列が無い」であって
       // 「測っていない」ではない。**
       sequencesWithoutEq: 0,
+      // **op と層とエラー種別の内訳。** 報告書の「関数呼び出しの内訳」が
+      // ここから書かれる。
+      callBreakdown: summarizeCallShard(shard),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,
@@ -153,13 +152,6 @@ if (FINANCE_SHARD === undefined) {
   );
 }
 const FINANCE_CASES = FINANCE_SHARD.shard.cases;
-
-const CERTIFICATES: { op: string; build: (cases: CallCase[]) => Probe[] }[] = [
-  { op: "loan_principal", build: loanPrincipalProbes },
-  { op: "loan_term", build: loanTermProbes },
-  { op: "compound_deposit_for", build: compoundDepositForProbes },
-  { op: "compound_periods_for", build: compoundPeriodsForProbes },
-];
 
 for (const { op, build } of CERTIFICATES) {
   test(`${op}'s answer is the boundary, not just a number`, async ({

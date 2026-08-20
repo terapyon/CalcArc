@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { CERTIFICATES } from "./certificates";
 import type {
   CallCase,
   DisplayCase,
@@ -15,11 +16,15 @@ import {
   loadShards,
   needsPrecedence,
   partitionCases,
+  summarizeCallShard,
 } from "./corpus";
 import {
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
+  CERTIFICATE_PROBES,
+  CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  type DetectionPower,
   ENTRY_SHARD,
   ERRORS_SHARD,
   type ErrorPathId,
@@ -31,6 +36,7 @@ import {
   PRECEDENCE_SHARD,
   type Provenance,
   type RecordedShard,
+  renderCallBreakdowns,
   renderDetectionPower,
   renderReport,
   runHealth,
@@ -1809,4 +1815,224 @@ test("a run where nothing was recorded says so instead of looking empty and calm
   expect(run.shards).toEqual([]);
   // **期待は残る。** 何が居るはずだったかを、走らなかった走行こそが持っている。
   expect(run.expected).toEqual(["a-000.json (values)"]);
+});
+
+/**
+ * `docs/corpus-measurements.md` の「Heavy の逆算証明書」節から、実測された
+ * 数を読み出す。**報告書に手で書いた数は、一次資料に釘で留める**
+ * (`PRECEDENCE_CHANGES_MEANING` と同じ仕掛け)。
+ */
+function measurementsDoc(): string {
+  return readFileSync(
+    fileURLToPath(
+      new URL("../../../docs/corpus-measurements.md", import.meta.url),
+    ),
+    "utf-8",
+  );
+}
+
+test("the certificate figures in the report are pinned to the measurement they came from", () => {
+  const doc = measurementsDoc();
+  // 「対象件数と、実際に発行した wasm 呼び出し回数(実測)」の表の合計行。
+  const totals = /^\| 合計 \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/m.exec(doc);
+  const probes = totals?.[1];
+  if (probes === undefined) {
+    throw new Error(
+      "docs/corpus-measurements.md no longer has the certificate probe table's " +
+        "total row — the report's probe count has lost its primary source",
+    );
+  }
+  expect(Number(probes.replace(/,/g, ""))).toBe(CERTIFICATE_PROBES);
+
+  const broken = /合わせて (\d+) 個のプローブが赤くなった/.exec(doc);
+  const count = broken?.[1];
+  if (count === undefined) {
+    throw new Error(
+      "docs/corpus-measurements.md no longer records how many probes the " +
+        "`tax-combined-rate` mutation broke — the report's example has lost " +
+        "its primary source",
+    );
+  }
+  expect(Number(count)).toBe(CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION);
+});
+
+test("the detection-power table says the certificates are not in its counts", () => {
+  // **検出数を「コーパスが見つけた件数」として出す以上、そこに含まれない
+  // ものは名指しで書く。** 証明書(`certificates.ts`)は `record()` を呼ばない
+  // ので、その失敗は `mismatchesByShard` にも `detection-power.json` にも
+  // 現れない——**見逃しではなく過小計上**である。
+  const power: DetectionPower = {
+    results: [
+      {
+        id: "tax-combined-rate",
+        what: "国税・地方税を合計 20.315% の一括計算にする",
+        expect: "finance-000.json (calls)",
+        caught: { "finance-000.json (calls)": 406 },
+        total: 406,
+        ok: true,
+        why: "期待どおり",
+      },
+    ],
+  };
+  const markdown = renderDetectionPower(power).join("\n");
+  // **本数と名前はコードから出ていること。** 手で「4 本」と書いた報告書は、
+  // 5 本目を足した日に静かに古くなる。
+  expect(markdown).toContain(`逆算の境界証明書 ${CERTIFICATES.length} 本`);
+  expect(CERTIFICATES.length).toBeGreaterThan(0);
+  for (const { op } of CERTIFICATES) {
+    expect(markdown).toContain(`\`${op}\``);
+  }
+  expect(markdown).toContain(
+    `${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブ`,
+  );
+  expect(markdown).toContain(
+    `${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちている`,
+  );
+  // **「見逃し」と読ませない。**
+  expect(markdown).toContain("過小計上");
+  expect(markdown).toContain("`record()` を呼ばない");
+});
+
+test("the finance shard is broken down by op, kind and stratum, not left as one number", () => {
+  // **実物のコーパスで見る。** シャード別の表は `finance-000.json (calls)` を
+  // 「3500」の 1 行に畳むので、それだけでは 3500 回の正常な金融計算に見える。
+  const shards = loadCallShards();
+  const entries = shards.map(({ name, shard }) =>
+    summary({
+      name: summaryName(name, "calls"),
+      total: shard.cases.length,
+      values: shard.cases.length,
+      callBreakdown: summarizeCallShard(shard),
+    }),
+  );
+  const finance = entries.find((e) => e.name === "finance-000.json (calls)");
+  if (finance?.callBreakdown === undefined) {
+    throw new Error("finance-000.json is not among the call shards");
+  }
+  const { byOp, byStratum, gaveUp } = finance.callBreakdown;
+
+  // **番兵。** op が 0 個・層が 0 個なら、下の走査は 0 周で緑になる。
+  expect(Object.keys(byOp).length, "op が 1 つも無い").toBeGreaterThan(0);
+  expect(Object.keys(byStratum).length, "層が 1 つも無い").toBeGreaterThan(0);
+
+  // **実測を焼き付ける(2026-08-20)。** 3500 件の内訳が動いたら、報告書が
+  // 外の読み手にしている主張のほうを先に見直すこと。
+  const totals: Record<string, number> = {};
+  for (const counts of Object.values(byOp)) {
+    for (const [kind, n] of Object.entries(counts)) {
+      totals[kind] = (totals[kind] ?? 0) + n;
+    }
+  }
+  expect(totals).toEqual({ ok: 3139, SyntaxError: 270, Overflow: 91 });
+  expect(
+    Object.fromEntries(
+      Object.entries(byOp).map(([op, counts]) => [
+        op,
+        Object.values(counts).reduce((sum, n) => sum + n, 0),
+      ]),
+    ),
+  ).toEqual({
+    loan_forward: 599,
+    loan_bonus_forward: 456,
+    compound_grow: 439,
+    loan_principal: 433,
+    loan_term: 426,
+    compound_deposit_for: 420,
+    loan_bonus_principal: 412,
+    compound_periods_for: 315,
+  });
+  // **`rejections` はシャードが持っている。走行は読むだけである。**
+  expect(gaveUp).toEqual({
+    dup: 0,
+    reasons: {
+      compound_deposit_search_limit: 0,
+      near_yen_boundary: 7,
+      other: 0,
+    },
+  });
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **行を 1 本だけ取り出して主張する(Task 7 の実測)。** 「どこかに 270 と
+  // 書いてある」検査は、枠を畳んだ実装でも緑になる。
+  expect(onlyLine(markdown, "3500 件のうち")).toContain(
+    "3139 件が正常で、361 件",
+  );
+  expect(onlyLine(markdown, "| `loan_bonus_forward` |")).toBe(
+    "| `loan_bonus_forward` | 456 | 301 | 0 | 155 |",
+  );
+  expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
+    "| **合計** | **3500** | **3139** | **91** | **270** |",
+  );
+  expect(onlyLine(markdown, "の層から引かれている")).toContain(
+    "3500 件は 1187 の層から引かれている",
+  );
+  expect(onlyLine(markdown, "- `near_yen_boundary`:")).toBe(
+    "- `near_yen_boundary`: 7",
+  );
+  // **その 3500 が全部正常な計算だとは読ませない。**
+  expect(markdown).toContain("電卓が計算を拒むことを期待値として");
+});
+
+test("a call shard that declares no rejections is not reported as zero rejections", () => {
+  // **`null` は「宣言していない」であって「0 件捨てた」ではない。**
+  // 実物の `data-scale-000.json` が `rejections` を持たない。
+  const shard = loadCallShards().find(
+    ({ name }) => name === "data-scale-000.json",
+  );
+  if (shard === undefined) {
+    throw new Error("data-scale-000.json is not among the call shards");
+  }
+  expect(summarizeCallShard(shard.shard).gaveUp).toBeNull();
+
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(shard.name, "calls"),
+        callBreakdown: summarizeCallShard(shard.shard),
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(markdown, "棄却の数(`rejections`)")).toContain(
+    "宣言していない",
+  );
+  expect(markdown).toContain("0 件だったという意味");
+  // 層を持たないことも、0 層と書かずに名指しする。
+  expect(onlyLine(markdown, "層の宣言を持たない")).toContain(
+    "どの境界から引かれたか",
+  );
+});
+
+test("an error kind the design did not name gets a column of its own", () => {
+  // **設計書の 3 欄(`ok` / `SyntaxError` / `Overflow`)に閉じない。** 閉じると、
+  // 金融に 4 つ目の種別が入った日にその件数がどの欄にも入らず**黙って消える**。
+  const markdown = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        total: 5,
+        values: 5,
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2, DivisionByZero: 3 } },
+          byStratum: {},
+          gaveUp: null,
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(markdown, "| `loan_forward` |")).toBe(
+    "| `loan_forward` | 5 | 2 | 3 |",
+  );
+  expect(onlyLine(markdown, "| op | 総数 |")).toContain("`DivisionByZero`");
+  expect(onlyLine(markdown, "5 件のうち")).toContain("2 件が正常で、3 件");
+});
+
+test("a run with no call shard has no call breakdown section at all", () => {
+  // **空の表を出さない。** 「op が 1 つも無い」と「記録し損ねた」が同じ
+  // 見た目になる。
+  expect(renderReport([summary()], PROVENANCE)).not.toContain(
+    "## 関数呼び出しの内訳",
+  );
+  expect(renderCallBreakdowns([summary()])).toEqual([]);
 });

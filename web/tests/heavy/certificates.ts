@@ -442,3 +442,21 @@ export async function runProbes(
   }
   return mismatches;
 }
+
+/**
+ * **発行される逆算証明書の一覧。** `calls.spec.ts` がこれを走らせ、
+ * 報告書がこれを数える。
+ *
+ * **1 か所に置く理由。** 報告書は「証明書の失敗は検出数に含まれない」と
+ * 書くが、そこで「4 つ」と手で書けば、5 つ目を足した日に**報告書だけが
+ * 静かに古くなる**。名前と本数はこの配列から出す。
+ */
+export const CERTIFICATES: {
+  op: string;
+  build: (cases: CallCase[]) => Probe[];
+}[] = [
+  { op: "loan_principal", build: loanPrincipalProbes },
+  { op: "loan_term", build: loanTermProbes },
+  { op: "compound_deposit_for", build: compoundDepositForProbes },
+  { op: "compound_periods_for", build: compoundPeriodsForProbes },
+];

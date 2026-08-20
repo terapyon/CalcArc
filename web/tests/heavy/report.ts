@@ -9,7 +9,9 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
+import { CERTIFICATES } from "./certificates";
 import type {
+  CallBreakdown,
   Quantiles,
   ShapeSummary,
   Tolerance,
@@ -135,6 +137,14 @@ export interface ShardSummary {
    * **0 は「キー列がすべて `=` を押した」であって「測っていない」ではない。**
    */
   sequencesWithoutEq: number;
+  /**
+   * **関数呼び出しのシャードだけが持つ内訳。**
+   *
+   * `undefined` は「このシャードは関数呼び出しではない」という意味である。
+   * 空のオブジェクトで埋めない——埋めると、金融のシャードが内訳を記録し
+   * 損ねた走行と、そもそも op を持たないシャードが**同じ顔**になる。
+   */
+  callBreakdown?: CallBreakdown;
   worstEffectiveRelTolerance: number;
   bands: Record<ToleranceBand, number>;
   // 設計書 §11 の「分布そのものを報告書に載せる」。
@@ -340,6 +350,29 @@ export const ASSOCIATIVITY_SHARD = "associativity-000.json";
  * 直しても、こちらだけを直しても、赤くなる。
  */
 export const PRECEDENCE_CHANGES_MEANING = 1101;
+
+/**
+ * **逆算の境界証明書が発行するプローブの総数**(2026-08-20 実測)。
+ *
+ * この走行が数えている数ではない——証明書は `pnpm heavy` の別のテストが
+ * 走らせ、集計を記録しない。数の出どころは
+ * `docs/corpus-measurements.md` の「Heavy の逆算証明書」節の表で、
+ * `calls.spec.ts` に `probes.length` を一時的に出力させて測ったものである。
+ *
+ * **手書きの数を報告書に置くときは、一次資料に釘で留める。**
+ * `report.spec.ts` の "the certificate figures are pinned to the measurement
+ * they came from" がその表を実際に読み出して照合する。どちらか一方だけを
+ * 直しても赤くなる(`PRECEDENCE_CHANGES_MEANING` と同じ仕掛け)。
+ */
+export const CERTIFICATE_PROBES = 70115;
+
+/**
+ * **`tax-combined-rate` の変異で赤くなった証明書のプローブ数**(同上、実測)。
+ *
+ * この 124 は `detection-power.json` のどこにも現れない。報告書はそれを
+ * 「検出数に証明書が含まれない」ことの実例として出す。
+ */
+export const CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION = 124;
 
 /**
  * **走行の開始時に古い残骸を消す。** 前回の走行が書いた集計が混ざると、
@@ -679,6 +712,180 @@ export function renderDetectionPower(power: DetectionPower | null): string[] {
     "",
     "**この表があって初めて、上の「不一致 0 件」に意味がある**——",
     "「何も見つからなかった」ではなく、**「これだけの壊れ方を検出できる網で 0 件だった」**。",
+    ...renderCertificateStanding(),
+  ];
+}
+
+/**
+ * **逆算の境界証明書は、この表の件数に入っていない**(B+C からの持ち越し、
+ * 設計書 §8.2)。
+ *
+ * 証明書(`web/tests/heavy/certificates.ts`)は `record()` を呼ばない。だから
+ * その失敗は `mismatchesByShard` にも `detection-power.json` にも現れず、
+ * 上の「件数」列には 1 も足さない。**表が検出数を「コーパスが見つけた件数」
+ * として出す以上、そこに含まれないものは名指しで書く**——書かなければ、
+ * 読者はこの列を「この変異で壊れた検査の全部」と読む。
+ *
+ * **見逃しではなく過小計上である。** 証明書だけが落ちる変異は、`verdictFor`
+ * の `expectShards: []` の枝で `playwrightExitCode` を見て
+ * `measurement-failed` になる(`web/scripts/detection-power.mjs`)。つまり
+ * 「緑に見えて実は赤」ではなく、「赤いのに件数が小さく出る」。
+ */
+function renderCertificateStanding(): string[] {
+  return [
+    "",
+    `**この表の件数に入っていないものが一つある——逆算の境界証明書 ${CERTIFICATES.length} 本。**`,
+    `${CERTIFICATES.map((c) => `\`${c.op}\``).join(" / ")} の答が`,
+    "**参照実装と同じ値である**ことは上の表が見ているが、**その答が境界そのもの",
+    "である**(1 円・1 期ずらすと条件が破れる)ことは、正算だけを使う別の検査が",
+    `見ている。実測 ${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブある。`,
+    "",
+    "**その検査は集計を記録しない**(`record()` を呼ばない)ので、**証明書が",
+    "何本落ちても上の「件数」列は 1 も動かない。** 実測: 税率を合算にする変異",
+    `(\`tax-combined-rate\`)では証明書が ${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちているのに、その数は`,
+    "この表のどこにも現れない。",
+    "",
+    "**見逃しではなく過小計上である。** 証明書だけが落ちる変異は、走行が非ゼロで",
+    "終わることで**測定の失敗**として報告される(`detection-power.mjs` の",
+    "`verdictFor`)。上の件数は「壊れた検査の全部」ではなく、**コーパスの照合が",
+    "数えた分**だと読むこと。",
+  ];
+}
+
+/** 乱択で引かれた層の識別子の末尾(`corpus.ts` の `CallCase.stratum` が定める)。 */
+const RANDOM_STRATUM_SUFFIX = "/random";
+
+/**
+ * **関数呼び出しのシャードの内訳**(設計書 §8.2、計画 Task 8)。
+ *
+ * ここが答えるのは「その N 件は何だったのか」である。シャード別の表は
+ * `finance-000.json (calls)` を **3500** という 1 つの数で出すが、その数は
+ * 「3500 回の正常な金融計算」ではない——1 割強は**電卓が計算を拒むこと**を
+ * 期待値として持つケースであり、残りも 8 つの op に分かれている。
+ *
+ * **内訳を持たないシャードは節ごと出さない。** 空の表を出すと「op が 1 つも
+ * 無い」と「記録し損ねた」が同じ見た目になる。
+ */
+export function renderCallBreakdowns(entries: ShardSummary[]): string[] {
+  const own = entries.filter((entry) => entry.callBreakdown !== undefined);
+  if (own.length === 0) {
+    return [];
+  }
+  const lines: string[] = ["", "## 関数呼び出しの内訳", ""];
+  lines.push(
+    "**この節は「その件数が何だったのか」を出す。** 上の表はシャードを 1 行に",
+    "畳むので、`3500` のような数が「3500 回の正常な計算」に見える。**実際には",
+    "エラーになることを期待値として持つケースが混ざっている**——入力の検証は",
+    "この領域の仕事の一部なので、それも仕様の検証である。",
+  );
+  for (const entry of own) {
+    const breakdown = entry.callBreakdown;
+    if (breakdown === undefined) {
+      continue;
+    }
+    // **種別の欄はデータから起こす。** 固定の 3 欄にすると、4 つ目の種別が
+    // 入った日にその件数がどの欄にも入らず消える。
+    const kinds = [
+      "ok",
+      ...[
+        ...new Set(
+          Object.values(breakdown.byOp).flatMap((k) => Object.keys(k)),
+        ),
+      ]
+        .filter((kind) => kind !== "ok")
+        .sort(),
+    ];
+    const totalOf = (kind: string) =>
+      Object.values(breakdown.byOp).reduce(
+        (sum, counts) => sum + (counts[kind] ?? 0),
+        0,
+      );
+    const total = kinds.reduce((sum, kind) => sum + totalOf(kind), 0);
+    const errors = total - totalOf("ok");
+    lines.push(
+      "",
+      `### ${entry.name}`,
+      "",
+      `**${total} 件のうち ${totalOf("ok")} 件が正常で、${errors} 件` +
+        `(${percentage(errors, total)})は電卓が計算を拒むことを期待値として`,
+      "持つケースである。**",
+      "",
+      `| op | 総数 | ${kinds.map((kind) => (kind === "ok" ? "正常" : `\`${kind}\``)).join(" | ")} |`,
+      `|---|---:|${kinds.map(() => "---:").join("|")}|`,
+    );
+    for (const op of Object.keys(breakdown.byOp).sort()) {
+      const counts = breakdown.byOp[op] ?? {};
+      const opTotal = Object.values(counts).reduce((sum, n) => sum + n, 0);
+      lines.push(
+        `| \`${op}\` | ${opTotal} | ` +
+          kinds.map((kind) => String(counts[kind] ?? 0)).join(" | ") +
+          " |",
+      );
+    }
+    lines.push(
+      `| **合計** | **${total}** | ` +
+        kinds.map((kind) => `**${totalOf(kind)}**`).join(" | ") +
+        " |",
+    );
+    lines.push("", ...renderStrata(breakdown), ...renderGaveUp(breakdown));
+  }
+  return lines;
+}
+
+/** 層の内訳。**全層は並べない**——実測 1,187 層で、その大半は 1 件ずつである。 */
+function renderStrata(breakdown: CallBreakdown): string[] {
+  const strata = Object.entries(breakdown.byStratum);
+  if (strata.length === 0) {
+    return [
+      "**層の宣言を持たないシャードである。** ケースがどの境界から引かれたかは、",
+      "このシャードからは読めない。",
+      "",
+    ];
+  }
+  const random = strata.filter(([name]) =>
+    name.endsWith(RANDOM_STRATUM_SUFFIX),
+  );
+  const named = strata.filter(
+    ([name]) => !name.endsWith(RANDOM_STRATUM_SUFFIX),
+  );
+  const sum = (rows: [string, number][]) =>
+    rows.reduce((into, [, n]) => into + n, 0);
+  const singletons = named.filter(([, n]) => n === 1).length;
+  return [
+    `**層。** ${sum(strata)} 件は ${strata.length} の層から引かれている` +
+      `——乱択の ${random.length} 層が ${sum(random)} 件、`,
+    `名前のついた ${named.length} 層が ${sum(named)} 件で、そのうち ` +
+      `${singletons} 層は 1 件ずつである`,
+    "(境界と組み合わせを名指しで置いた層で、**乱択では当たらない**)。",
+    "層ごとの件数は `corpus/generated/` のシャードが 1 件ずつ平文で持つ。",
+    "",
+  ];
+}
+
+/**
+ * 生成器が捨てた件数。**シャードが宣言している数で、この走行が数えたものでは
+ * ない。** 持たないシャードでは「0 件」と書かない。
+ */
+function renderGaveUp(breakdown: CallBreakdown): string[] {
+  const gaveUp = breakdown.gaveUp;
+  if (gaveUp === null) {
+    return [
+      "**このシャードは棄却の数(`rejections`)を宣言していない。**",
+      "生成器が何件を捨てたかは、ここからは読めない——**0 件だったという意味",
+      "ではない。**",
+    ];
+  }
+  const reasons = Object.entries(gaveUp.reasons).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const total = reasons.reduce((into, [, n]) => into + n, 0);
+  return [
+    `**参照実装が答を出せずに捨てた件数: ${total}。**`,
+    "**シャード自身が持っている数であり、この走行が数え直したものではない**",
+    "(`corpus/generated/*.json` の `rejections`)。",
+    "",
+    ...reasons.map(([reason, n]) => `- \`${reason}\`: ${n}`),
+    `- 重複による棄却(\`dup\`): ${gaveUp.dup}`,
   ];
 }
 
@@ -1026,6 +1233,10 @@ export function renderReport(
         `abs ${entry.tolerance.abs} / rel ${entry.tolerance.rel} |`,
     );
   }
+
+  // **シャードの 1 行を開く。** 直前の表は関数呼び出しのシャードを総数 1 つに
+  // 畳むので、その数が「全部が正常な計算」に見える。
+  lines.push(...renderCallBreakdowns(entries));
 
   lines.push(
     ...renderEffectiveTolerance(entries, {

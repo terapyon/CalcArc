@@ -430,6 +430,78 @@ export interface CallShard {
 }
 
 /**
+ * **関数呼び出しのシャードの内訳**(設計書 2026-08-19 §8.2、計画 Task 8)。
+ *
+ * これが無いと、報告書は `finance-000.json (calls)` を「3500」という 1 つの
+ * 数でしか出せない。**その 3500 件は 3500 回の正常な金融計算ではない**——
+ * 1 割強は「電卓が計算を拒むこと」を期待値として持つケースで、op も 8 つに
+ * 分かれている。1 つの数に畳んだ報告書は、読者に前者を後者として読ませる。
+ */
+export interface CallBreakdown {
+  /**
+   * op ごとの、**期待値の種別別**件数。種別は `"ok"` と、エラーコード
+   * (`"SyntaxError"` / `"Overflow"` …)。
+   *
+   * **設計書は `{ ok; SyntaxError; Overflow }` の 3 欄で書いていたが、
+   * 開いた `Record` にした。** 3 欄に閉じると、金融に 4 つ目の種別
+   * (`DivisionByZero` など)が入った日に、その件数はどの欄にも入らず
+   * **黙って消える**。`corpus.ts` の `rejections` が
+   * `Record<string, number>` と宣言されていて実物と食い違っていたのと同じ
+   * 壊れ方である。**いまの種別が 3 つであることは、`report.spec.ts` の
+   * 実コーパスの検査が固定する。**
+   */
+  byOp: Record<string, Record<string, number>>;
+  /**
+   * 層(`"{op}/{name}"`)ごとの件数。**報告書は全層を並べない**
+   * ——実測 1,187 層あり、そのうち 1,177 層は 1 件ずつである。
+   */
+  byStratum: Record<string, number>;
+  /**
+   * **シャードが宣言している棄却の数。この走行が数え直したものではない。**
+   *
+   * `null` は「このシャードは `rejections` を持たない」であって
+   * **「0 件捨てた」ではない**(`data-scale-000.json` が実際にそれ)。
+   * 理由の内訳も開いた `Record` で持つ——生成器が理由を 1 つ足した日に、
+   * 報告書がその行を落とさないため。
+   */
+  gaveUp: { dup: number; reasons: Record<string, number> } | null;
+}
+
+/**
+ * シャードから内訳を数える。**`calls.spec.ts` が記録し、報告書が出す。**
+ *
+ * **`rejections` は数え直さない。** 生成器が何件を捨てたかは生成の時点でしか
+ * 分からない(捨てられたケースはシャードに入っていない)ので、シャードが
+ * 宣言している数をそのまま運ぶ。
+ */
+export function summarizeCallShard(shard: CallShard): CallBreakdown {
+  const byOp: Record<string, Record<string, number>> = {};
+  const byStratum: Record<string, number> = {};
+  for (const testCase of shard.cases) {
+    const error = testCase.expect.error;
+    // **種別を畳まない。** 電卓の表示はどの種別でも同じ `Math ERROR` なので、
+    // ここで畳んだら二度と種別に戻せない。
+    const kind = typeof error === "string" ? error : "ok";
+    const counts = byOp[testCase.op] ?? {};
+    counts[kind] = (counts[kind] ?? 0) + 1;
+    byOp[testCase.op] = counts;
+    const stratum = testCase.stratum;
+    if (stratum !== undefined) {
+      byStratum[stratum] = (byStratum[stratum] ?? 0) + 1;
+    }
+  }
+  const rejections = shard.rejections;
+  return {
+    byOp,
+    byStratum,
+    gaveUp:
+      rejections === undefined
+        ? null
+        : { dup: rejections.dup, reasons: rejections.reference_gave_up },
+  };
+}
+
+/**
  * 関数呼び出しのシャードを読む。**期待値は厳密一致で比べる**ので、
  * `tolerance` を持たない——持たせると「緩めれば通る」余地が生まれる。
  */
