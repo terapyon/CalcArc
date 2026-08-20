@@ -1,0 +1,492 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "error": "DivisionByZero",
+        "main": "Math ERROR"
+      },
+      "expr": "1 \u00f7 0",
+      "id": "err-000000",
+      "keys": [
+        "1",
+        "div",
+        "0",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DivisionByZero",
+        "main": "Math ERROR"
+      },
+      "expr": "0 \u00f7 0",
+      "id": "err-000001",
+      "keys": [
+        "0",
+        "div",
+        "0",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DivisionByZero",
+        "main": "Math ERROR"
+      },
+      "expr": "1/0 (\u9006\u6570)",
+      "id": "err-000002",
+      "keys": [
+        "0",
+        "recip"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "ln(0)",
+      "id": "err-000003",
+      "keys": [
+        "0",
+        "ln"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "ln(-1)",
+      "id": "err-000004",
+      "keys": [
+        "1",
+        "neg",
+        "ln"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "log10(0)",
+      "id": "err-000005",
+      "keys": [
+        "0",
+        "log10"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "log10(-5)",
+      "id": "err-000006",
+      "keys": [
+        "5",
+        "neg",
+        "log10"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "sqrt(-4)",
+      "id": "err-000007",
+      "keys": [
+        "4",
+        "neg",
+        "sqrt"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "sqrt(-1)",
+      "id": "err-000008",
+      "keys": [
+        "1",
+        "neg",
+        "sqrt"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "asin(2)",
+      "id": "err-000009",
+      "keys": [
+        "2",
+        "asin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "asin(-2)",
+      "id": "err-000010",
+      "keys": [
+        "2",
+        "neg",
+        "asin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "acos(2)",
+      "id": "err-000011",
+      "keys": [
+        "2",
+        "acos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "acos(-1.5)",
+      "id": "err-000012",
+      "keys": [
+        "1",
+        "dot",
+        "5",
+        "neg",
+        "acos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(90\u00b0)",
+      "id": "err-000013",
+      "keys": [
+        "9",
+        "0",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(270\u00b0)",
+      "id": "err-000014",
+      "keys": [
+        "2",
+        "7",
+        "0",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(-90\u00b0)",
+      "id": "err-000015",
+      "keys": [
+        "9",
+        "0",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "(-1)!",
+      "id": "err-000016",
+      "keys": [
+        "1",
+        "neg",
+        "n_fact"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "(1.5)!",
+      "id": "err-000017",
+      "keys": [
+        "1",
+        "dot",
+        "5",
+        "n_fact"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "Overflow",
+        "main": "Math ERROR"
+      },
+      "expr": "(200)!",
+      "id": "err-000018",
+      "keys": [
+        "2",
+        "0",
+        "0",
+        "n_fact"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "C(5,6)",
+      "id": "err-000019",
+      "keys": [
+        "5",
+        "n_c_r",
+        "6",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "P(5,6)",
+      "id": "err-000020",
+      "keys": [
+        "5",
+        "n_p_r",
+        "6",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "C(5,-1)",
+      "id": "err-000021",
+      "keys": [
+        "5",
+        "n_c_r",
+        "1",
+        "neg",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "C(5,2.5)",
+      "id": "err-000022",
+      "keys": [
+        "5",
+        "n_c_r",
+        "2",
+        "dot",
+        "5",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "DomainError",
+        "main": "Math ERROR"
+      },
+      "expr": "C(-5,2)",
+      "id": "err-000023",
+      "keys": [
+        "5",
+        "neg",
+        "n_c_r",
+        "2",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "Overflow",
+        "main": "Math ERROR"
+      },
+      "expr": "1e309",
+      "id": "err-000024",
+      "keys": [
+        "1",
+        "exp",
+        "3",
+        "0",
+        "9",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "Overflow",
+        "main": "Math ERROR"
+      },
+      "expr": "(1e200)\u00d7(1e200)",
+      "id": "err-000025",
+      "keys": [
+        "1",
+        "exp",
+        "2",
+        "0",
+        "0",
+        "mul",
+        "1",
+        "exp",
+        "2",
+        "0",
+        "0",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "1e-325",
+      "id": "err-000026",
+      "keys": [
+        "1",
+        "exp",
+        "3",
+        "2",
+        "5",
+        "neg",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "(1e-200)\u00d7(1e-200)",
+      "id": "err-000027",
+      "keys": [
+        "1",
+        "exp",
+        "2",
+        "0",
+        "0",
+        "neg",
+        "mul",
+        "1",
+        "exp",
+        "2",
+        "0",
+        "0",
+        "neg",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError",
+        "main": "Math ERROR"
+      },
+      "expr": ")",
+      "id": "err-000028",
+      "keys": [
+        "rparen"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError",
+        "main": "Math ERROR"
+      },
+      "expr": "3 + 4)",
+      "id": "err-000029",
+      "keys": [
+        "3",
+        "add",
+        "4",
+        "rparen"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    }
+  ],
+  "generated_by": "\u6570\u5b66\u306e\u5b9a\u7fa9\u57df\u30fb\u5024\u57df\u304b\u3089\u72ec\u7acb\u306b\u6c7a\u3081\u305f\u671f\u5f85\u5024(\u8a2d\u8a08\u66f8 \u00a75.1)\u3002CalcError \u306e\u5909\u7a2e\u540d(crates/calcarc-core/src/error.rs)\u306f WASM \u5883\u754c\u306e\u516c\u958b\u5951\u7d04\u3068\u3057\u3066\u5171\u6709\u3059\u308b\u304c\u3001\u3069\u306e\u5f0f\u304c\u3069\u306e\u7a2e\u5225\u306b\u306a\u308b\u304b\u306fengine_table.rs / state.rs / expr/parse.rs \u3092\u898b\u305a\u306b\u6570\u5b66\u3060\u3051\u304b\u3089\u6c7a\u3081\u305f\u3002\u305f\u3060\u3057 2 \u4ef6(\u30a2\u30f3\u30c0\u30fc\u30d5\u30ed\u30fc\u304c\u30a8\u30e9\u30fc\u306b\u306a\u3089\u306a\u3044\u3053\u3068\u306e\u8868\u793a\"0\")\u306f real_ref.py(\u6bb5\u968e J \u306e\u72ec\u7acb\u306a\u8868\u793a\u6574\u5f62\u306e\u53c2\u7167\u5b9f\u88c5)\u3092\u4f7f\u3046\u3002SymPy/mpmath \u306f\u4f7f\u3063\u3066\u3044\u306a\u3044\u2014\u2014\u5024\u3092\u8a08\u7b97\u3059\u308b\u7d4c\u8def\u3067\u306f\u306a\u304f\u3001\u5b9a\u7fa9\u57df\u306e\u5185\u5916\u3092\u5224\u5b9a\u3059\u308b\u3060\u3051\u306e\u7d4c\u8def\u3060\u304b\u3089\u3067\u3042\u308b\u3002",
+  "schema": 1
+}

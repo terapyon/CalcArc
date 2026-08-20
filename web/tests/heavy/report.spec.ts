@@ -1,24 +1,54 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import type { ToleranceBand } from "./corpus";
+import type { HeavyUiRun } from "../heavy-ui/presses";
+import { buildRun as buildUiRun } from "../heavy-ui/presses";
+import { CERTIFICATES } from "./certificates";
+import type {
+  CallCase,
+  DisplayCase,
+  DisplayEquivalenceCase,
+  ToleranceBand,
+} from "./corpus";
 import {
+  countSequencesWithoutEq,
+  displaySequences,
   loadCallShards,
+  loadDisplayShards,
   loadShards,
   needsPrecedence,
   partitionCases,
+  summarizeCallShard,
 } from "./corpus";
 import {
+  ASSOCIATIVITY_SHARD,
   areaOfShard,
+  buildRun,
+  CERTIFICATE_PROBES,
+  CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  type DetectionPower,
+  ENTRY_SHARD,
+  ERRORS_SHARD,
+  type ErrorPathId,
+  errorCaseCount,
+  errorPaths,
   expectedSummaryNames,
+  type HeavyRun,
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
   type Provenance,
+  type RecordedShard,
+  renderCallBreakdowns,
   renderDetectionPower,
   renderReport,
+  runHealth,
   type ShardSummary,
+  SPEC_TRANSCRIPTION_MARK,
   summaryName,
+  uiHealth,
   verdictOf,
+  verificationFrameOf,
+  verificationFrames,
 } from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
@@ -42,6 +72,47 @@ function bands(counts: Partial<Record<ToleranceBand, number>>) {
   };
 }
 
+/**
+ * エラー経路の枠の見出し行を 1 本だけ取り出す。
+ *
+ * **見出しごと取り出すのが肝である。** `toContain("270 件")` で済ませると、
+ * 6 枠を 1 つに畳んだ実装——どこかに 270 と書いてあるだけの実装——でも緑に
+ * なる。枠の名前の付いた行に、その枠の数が乗っていることを見る。
+ */
+function onlyLine(markdown: string, needle: string): string {
+  const lines = markdown.split("\n").filter((line) => line.includes(needle));
+  expect(
+    lines.length,
+    `「${needle}」を含む行が 1 本ではない(${lines.length} 本)`,
+  ).toBe(1);
+  return lines[0] ?? "";
+}
+
+function errorPathLine(markdown: string, title: string): string {
+  return onlyLine(markdown, title);
+}
+
+/** 但し書き(「この節の件数は…」以降)だけを切り出す。 */
+function disclaimerOf(markdown: string): string {
+  return markdown.slice(
+    markdown.indexOf("この節の件数は、この走行の実データから"),
+  );
+}
+
+/** 期待値として持っているエラー種別ごとの件数(実コーパスから数えるとき用)。 */
+function kindsOf(
+  cases: (CallCase | DisplayCase | DisplayEquivalenceCase)[],
+): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const testCase of cases) {
+    const error = (testCase as { expect?: { error?: unknown } }).expect?.error;
+    if (typeof error === "string") {
+      kinds[error] = (kinds[error] ?? 0) + 1;
+    }
+  }
+  return kinds;
+}
+
 /** 見出し以外の欄は既定で埋める。個々のテストは見たい欄だけ上書きする。 */
 function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
   return {
@@ -60,7 +131,9 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     looserThanDisplay: 0,
     precedenceCases: 0,
     exponentDisplayCases: 0,
-    errorCases: 0,
+    errorKinds: {},
+    // 見本のシャードは `tokens.eq: 2000`——2000 本すべてが `=` を押している。
+    sequencesWithoutEq: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -314,9 +387,13 @@ test("headline numbers aggregate correctly across multiple shards", () => {
     PROVENANCE,
   );
 
-  // 合計は 2 シャードの合算(2000 + 2000)だが、**経路ごとに分けて**出る。
-  expect(markdown).toContain("二経路で照合したケース(値): 2000**");
-  expect(markdown).toContain("電卓の自己整合を見たケース(同値): 2000**");
+  // 合計は 2 シャードの合算(2000 + 2000)だが、**検証の強さごとに分けて**出る。
+  expect(markdown).toContain(
+    "外部参照——Python の独立実装と突き合わせたケース: 2000**",
+  );
+  expect(markdown).toContain(
+    "自己同値——二つのキー列が同じ表示に着くことを見たケース: 2000**",
+  );
   expect(markdown).toContain("合計: **4000**");
   // 最大相対誤差・最大絶対誤差は 2 シャードのうち大きい方(シャード 1)を拾う。
   expect(markdown).toContain("観測された最大相対誤差: **1.34e-9**");
@@ -780,6 +857,34 @@ test("the precedence-specific elaboration is absent when that shard is not in th
   expect(markdown).not.toContain("同順位の入れ子は括弧を残して生成して");
 });
 
+test("the detection-power section is written from the argument, not from a file on disk", () => {
+  // **2026-08-19 の回帰。** `renderReport` は自分で `detection-power.json` を
+  // 読んでいた。変異ごとの `expect` が短い言い回し("precedence only")から
+  // シャード名の列挙に変わった時点で、**測定が済んでいる作業ツリーでだけ**
+  // 「優先順位シャードが走行に無い」検査が落ちるようになった——文書の中身が
+  // 引数に無いものに依存していたからである。CI は `heavy:power` の直後に
+  // `heavy` を回すので、これは毎回落ちる形だった。
+  const measured = renderReport([summary()], PROVENANCE, [], {
+    results: [
+      {
+        id: "precedence-collapse",
+        what: "× ÷ の優先順位を + − と同じに落とす",
+        expect: `${PRECEDENCE_SHARD} (values)`,
+        caught: { [`${PRECEDENCE_SHARD} (values)`]: 1099 },
+        total: 1099,
+        ok: true,
+        why: "期待したシャードだけが反応した",
+      },
+    ],
+  });
+  expect(measured).toContain(PRECEDENCE_SHARD);
+
+  // 渡さなければ、ディスクに測定が在っても「測っていない」と書く。
+  const unmeasured = renderReport([summary()], PROVENANCE);
+  expect(unmeasured).toContain("測っていない");
+  expect(unmeasured).not.toContain(PRECEDENCE_SHARD);
+});
+
 test("zero precedence cases reads as never touched", () => {
   // **C1 fix (review round 2).** `toContain("一度も踏んでいない")` alone was
   // satisfied by the section *heading*, which at the time literally read
@@ -997,11 +1102,35 @@ test("the exponent-notation count is reported, and says zero means never left th
   expect(some).not.toContain("平坦表示の帯を一度も出ていない");
 });
 
-test("the report keeps saying the power operator's associativity is untested", () => {
-  // `xʸ` はこのプロジェクト唯一の右結合だが、キー列は二項を必ず括弧で囲むので
-  // 踏んでいない。**踏んでいないと言い続ける**(設計書 2026-08-16-corpus-functions §3.5)。
+test("the report says the associativity shard is exercised, and by how many cases", () => {
+  // **踏んだと言い続ける。** 以前ここは「踏んでいないと言い続ける」だった
+  // (`xʸ` はこのプロジェクト唯一の右結合だが、キー列が二項を必ず括弧で囲む
+  // ので踏めなかった)。`associativity-000.json`(設計書 2026-08-19 §6)が
+  // その否定を撤回させる——**シャードと期待とレポートの 3 つは同時に動く。**
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(ASSOCIATIVITY_SHARD, "values"),
+        total: 2000,
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("結合方向——2000 件が踏んでいる");
+  expect(markdown).not.toContain("右結合も優先順位 4 も踏んでいない");
+  // **優先順位 4 は撤回しない。** 連鎖は 1 本が同じ段に収まっているので、
+  // `2 ^ 3 × 4` のように段をまたぐ列はこのシャードにも無い。
+  expect(markdown).toContain("優先順位 4 はまだ踏んでいない");
+});
+
+test("the report keeps saying so when the associativity shard is not in the run", () => {
+  // **走行に無いものを踏んだと書かない。** 件数だけを実データから出して
+  // 文章を固定にすると、シャードを持たない走行(部分走行・将来の分割)で
+  // 報告書が自分の走行について嘘をつく。
   const markdown = renderReport([summary()], PROVENANCE);
   expect(markdown).toContain("`xʸ` の右結合と優先順位 4");
+  expect(markdown).toContain("結合方向を反転する変異で 1 件も赤くならない");
+  expect(markdown).not.toContain("件が踏んでいる。優先順位 4 はまだ");
 });
 
 test("a disclosure of two cases in six thousand is not rounded away to 0.0%", () => {
@@ -1035,7 +1164,8 @@ test("the adversarial-fake measurement says when it was taken and over what", ()
 test("the input-display caveat quotes the headline's own number", () => {
   // **F6b (fix round 4).** 「上の「4000 件通った」」 was a literal — it said
   // 4000 for a 2000-case run, and the phrase it claimed to quote never
-  // appeared above (the headline reads 「二経路で照合したケース(値): 4000」).
+  // appeared above (the headline now reads
+  // 「外部参照——Python の独立実装と突き合わせたケース: 4000」).
   const markdown = renderReport(
     [
       summary({
@@ -1047,8 +1177,9 @@ test("the input-display caveat quotes the headline's own number", () => {
     ],
     PROVENANCE,
   );
-  expect(markdown).toContain("**二経路で照合したケース(値): 1234**");
-  expect(markdown).toContain("上の「二経路で照合したケース(値): 1234」");
+  const headline = "外部参照——Python の独立実装と突き合わせたケース: 1234";
+  expect(markdown).toContain(`**${headline}**`);
+  expect(markdown).toContain(`上の「${headline}」`);
   expect(markdown).not.toContain("4000 件通った");
 });
 
@@ -1151,33 +1282,385 @@ test("the report never says a region is untouched while also counting cases in i
   // **読み手が実際に見つけた矛盾(2026-08-17)。** 動的な集計を足しながら
   // 固定文を放置したため、12 行しか離れていない場所で
   // 「指数表記を 1940 件読んだ」と「指数表記に切り替わる領域は踏んでいない」が
-  // 同居していた。エラー経路(金融 569 + データスケール 4 を照合済み)と
-  // UI(別走行が 500 件を実打鍵)も同じ形だった。
+  // 同居していた。エラー経路と UI(別走行が 500 件を実打鍵)も同じ形だった。
   //
   // **数を報告している領域について「踏んでいない」と書かない**、を固定する。
   const markdown = renderReport(
-    [summary({ exponentDisplayCases: 1940, errorCases: 573 })],
+    [
+      summary({ exponentDisplayCases: 1940 }),
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 270, Overflow: 91 },
+      }),
+    ],
     PROVENANCE,
   );
   expect(markdown).toContain("1940 件が読んでいる");
   expect(markdown).not.toContain(
     "表示が指数表記に切り替わる領域は踏んでいない",
   );
-  expect(markdown).toContain("573 件は照合済み");
-  expect(markdown).not.toContain(
-    "ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
-  );
+  expect(errorPathLine(markdown, "金融の `SyntaxError`")).toContain("270 件");
+  expect(errorPathLine(markdown, "金融の `Overflow`")).toContain("91 件");
 });
 
 test("with nothing counted, the untouched wording comes back", () => {
-  // 逆向きも固定する。**0 件のときに「照合済み」と書いてはいけない。**
+  // 逆向きも固定する。**0 件のときに件数を書いてはいけない。**
   const markdown = renderReport(
-    [summary({ exponentDisplayCases: 0, errorCases: 0 })],
+    [summary({ exponentDisplayCases: 0, errorKinds: {} })],
     PROVENANCE,
   );
   expect(markdown).toContain("平坦表示の帯を一度も出ていない");
-  expect(markdown).toContain("生成の時点で範囲外にしている");
+  for (const title of [
+    "科学計算の定義域エラー",
+    "金融の `SyntaxError`",
+    "金融の `Overflow`",
+    "データスケールの入力エラー",
+    // **枠が 6 つ目になったので、ここも 1 行増える。** 0 件の枠が
+    // 「検証していない」と書くことは、どの枠でも同じ規則である。
+    "打鍵の途中の構文エラー",
+  ]) {
+    expect(errorPathLine(markdown, title)).toContain("1 件も検証していない");
+  }
+});
+
+test("a run that counts one error path and not another says both, each on its own line", () => {
+  // **枠を分けた意味は、全部 0 でも全部非 0 でも検査されない。** 0 件の枠と
+  // 非 0 の枠が同時に出る走行でだけ、6 つを 1 つの数字に畳んだ実装と区別が
+  // 付く——畳んだ実装は「エラー経路——7 件は照合済み」と書き、どの経路を
+  // 踏んでいないのかを 1 行も持たない。
+  const markdown = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 7 },
+      }),
+      summary({ name: "data-scale-000.json (calls)", errorKinds: {} }),
+    ],
+    PROVENANCE,
+  );
+  expect(errorPathLine(markdown, "金融の `SyntaxError`")).toContain("7 件");
+  for (const untouched of [
+    "科学計算の定義域エラー",
+    "金融の `Overflow`",
+    "データスケールの入力エラー",
+    "打鍵の途中の構文エラー",
+  ]) {
+    expect(errorPathLine(markdown, untouched)).toContain(
+      "1 件も検証していない",
+    );
+  }
+  // **一括の否定が残っていないこと。** 7 件を数えている走行で「エラー経路は
+  // 生成の時点で範囲外にしている」と書けば、その場で自己矛盾する。
+  expect(markdown).not.toContain("生成の時点で範囲外にしている");
   expect(markdown).not.toContain("件は照合済み");
+});
+
+test("the SyntaxError frame and the Overflow frame are not interchangeable", () => {
+  // **エラーは種別で見る。** 電卓の表示はどちらも `Math ERROR` なので、
+  // 種別を取り違えた集計は表示を見ても分からない。数を別々に入れて、
+  // 別々の行に出ることを見る。
+  const markdown = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 11, Overflow: 29 },
+      }),
+    ],
+    PROVENANCE,
+  );
+  const syntax = errorPathLine(markdown, "金融の `SyntaxError`");
+  const overflow = errorPathLine(markdown, "金融の `Overflow`");
+  expect(syntax).toContain("11 件");
+  expect(syntax).not.toContain("29");
+  expect(overflow).toContain("29 件");
+  expect(overflow).not.toContain("11");
+});
+
+test("an error expectation that fits none of the six frames is named, not folded into one", () => {
+  // **既定の枠へ落とすと、新しい経路の件数が既存の枠に加算されて見えなく
+  // なる。** 落とさずに数え上げ、名前と件数を本文に出す。
+  //
+  // **見本は `display-000.json` に変えた。** 以前ここは `entry-000.json`
+  // だったが、そのシャードは「打鍵の途中の構文エラー」の枠を持つように
+  // なったので、番兵の見本にならない。`display-` は確定した値をトグルで
+  // 見せ直すシャードで、エラー期待値を持てばどの枠にも入らない——番兵が
+  // 見張るのは**まさにこれから生えてくる経路**である。
+  const entries = [
+    summary({
+      name: "display-000.json (displays)",
+      errorKinds: { SyntaxError: 1 },
+    }),
+  ];
+  const paths = errorPaths(entries);
+  expect(paths.frames.every((frame) => frame.cases === 0)).toBe(true);
+  expect(paths.unclassified).toEqual([
+    { shard: "display-000.json (displays)", kind: "SyntaxError", cases: 1 },
+  ]);
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(markdown).toContain("上のどの経路にも入らないものが 1 件ある");
+  expect(markdown).toContain(
+    "`display-000.json (displays)` の `SyntaxError` 1 件",
+  );
+});
+
+test("the entry shard has a frame of its own, and it is not the display frame", () => {
+  // **打鍵の途中で構文が壊れる経路は、名前のある枠である。** 件数 1 でも、
+  // 名前のある 1 は番兵の中の 1 より読者に多くを語る——番兵は「どこにも
+  // 入らなかった」としか言えず、何が起きた入力なのかを言えない。
+  //
+  // **枠はシャード名で選ぶ。** `entry-000.json` の領域は `display` なので、
+  // 領域で選ぶと `display-000.json` と同じ枠に落ちる。落ちれば「確定した
+  // 表示のエラー」と「確定に届かなかった打鍵」が 1 つの数字になる。
+  expect(areaOfShard(ENTRY_SHARD)).toBe("display");
+  const entries = [
+    summary({
+      name: summaryName(ENTRY_SHARD, "displays"),
+      errorKinds: { SyntaxError: 1 },
+    }),
+    summary({
+      name: "display-000.json (displays)",
+      errorKinds: { SyntaxError: 4 },
+    }),
+  ];
+  const paths = errorPaths(entries);
+  expect(paths.frames.find((frame) => frame.id === "entry-syntax")?.cases).toBe(
+    1,
+  );
+  // **`display-000.json` の 4 件が枠へ混ざっていないこと。** 混ざれば枠は
+  // 5 件になり、番兵は空になる。
+  expect(paths.unclassified).toEqual([
+    { shard: "display-000.json (displays)", kind: "SyntaxError", cases: 4 },
+  ]);
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(errorPathLine(markdown, "打鍵の途中の構文エラー")).toContain("1 件");
+  expect(markdown).toContain("エラーは確定の前に出る");
+});
+
+test("the scientific domain frame is fed by the errors shard, whose area is not scientific", () => {
+  // **エラー経路の軸と `AREAS` の軸は一致しない。** `errors-000.json` は
+  // 表示文字列を比べるシャードなので領域は `display` である。領域で枠を
+  // 選ぶと、科学計算の定義域エラーの枠は**どんな走行でも 0 件**になり、
+  // 「この走行は 1 件も検証していない」と書き続ける。
+  expect(areaOfShard(ERRORS_SHARD)).toBe("display");
+  const entries = [
+    summary({
+      name: summaryName(ERRORS_SHARD, "displays"),
+      errorKinds: { DomainError: 17, TrigPole: 3 },
+    }),
+  ];
+  const paths = errorPaths(entries);
+  expect(
+    paths.frames.find((frame) => frame.id === "scientific-domain")?.cases,
+  ).toBe(20);
+  expect(paths.unclassified).toEqual([]);
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(errorPathLine(markdown, "科学計算の定義域エラー")).toContain("20 件");
+  expect(markdown).toContain("`DomainError` 17 件");
+});
+
+test("the sixth frame watches the run itself, and an unreadable summary is not a clean one", () => {
+  // **最後の枠だけ出どころの種類が違う。** シャードの集計ではなく、走行
+  // そのものの要約(`heavy-run.json`)を読む。ビルドが落ちても、集計が
+  // ディスクに届かなくても、電卓の不一致は 0 件になる。
+  const clean: HeavyRun = {
+    schema: 1,
+    ranTests: true,
+    expected: ["scientific-000.json (values)"],
+    shards: [
+      { name: "scientific-000.json (values)", total: 2000, mismatches: 0 },
+    ],
+  };
+  expect(runHealth(clean)).toEqual({ state: "clean" });
+  expect(runHealth(null)).toEqual({ state: "unreadable" });
+  expect(runHealth({ ...clean, ranTests: false }).state).toBe("failed");
+
+  const lost: HeavyRun = { ...clean, shards: [] };
+  const failed = renderReport([summary()], PROVENANCE, [], null, lost);
+  expect(errorPathLine(failed, "走行そのものの失敗")).toContain("1 件");
+  expect(failed).toContain(
+    "`scientific-000.json (values)` の集計がディスクに届かなかった",
+  );
+
+  const ok = renderReport([summary()], PROVENANCE, [], null, clean);
+  expect(errorPathLine(ok, "走行そのものの失敗")).toContain("0 件");
+
+  // **読めない要約を「失敗が無かった」と書かない。**
+  const unknown = renderReport([summary()], PROVENANCE);
+  expect(errorPathLine(unknown, "走行そのものの失敗")).toContain(
+    "読めていない",
+  );
+  expect(errorPathLine(unknown, "走行そのものの失敗")).not.toContain("0 件");
+});
+
+test("every error expectation in the committed corpus lands in one of the six frames", () => {
+  // **枠 6 つ + 番兵 = 総数、そして番兵は 0。** 実物のコーパスが持つエラー
+  // 期待値は、名前のある 6 つの枠のどれかに入る。見本ではなく実物で見る。
+  //
+  // **番兵が 0 でも消さない。** 枠の集合が完全であることは証明できない
+  // ——いまのコーパスで空だというだけである。0 を固定するのは、新しい経路が
+  // 生えた日にここが赤くなるためである。
+  const entries = [
+    ...loadCallShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "calls"),
+        errorKinds: kindsOf(shard.cases),
+      }),
+    ),
+    ...loadDisplayShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "displays"),
+        errorKinds: kindsOf(shard.cases),
+      }),
+    ),
+  ];
+  const total = entries.reduce((sum, entry) => sum + errorCaseCount(entry), 0);
+  expect(
+    total,
+    "コーパスがエラー期待値を 1 件も持っていないなら、このテストは何も比べていない",
+  ).toBeGreaterThan(300);
+
+  const paths = errorPaths(entries);
+  const framed = paths.frames.reduce((sum, frame) => sum + frame.cases, 0);
+  const named = paths.unclassified.reduce((sum, one) => sum + one.cases, 0);
+  expect(framed + named, "枠にも番兵にも入らないエラー期待値がある").toBe(
+    total,
+  );
+
+  // **番兵は 0 である。** どこにも入らないエラー期待値がコーパスに在れば、
+  // ここが名前ごと印字して落ちる。**0 を主張する検査は、何も見ていなくても
+  // 緑になる常連である**——だから下の 2 つと組にする。上の等式が総数を
+  // 覆っていること、下の走査が 6 つの枠すべてに実物が流れていることが、
+  // この 0 が「枠が実物と繋がった結果の 0」であることを支えている。
+  expect(
+    paths.unclassified,
+    "どの枠にも入らないエラー期待値が在る——枠を足すか、番兵の理由を書く",
+  ).toEqual([]);
+
+  for (const id of [
+    "scientific-domain",
+    "finance-syntax",
+    "finance-overflow",
+    "data-scale-input",
+    "entry-syntax",
+  ] as ErrorPathId[]) {
+    expect(
+      paths.frames.find((frame) => frame.id === id)?.cases ?? 0,
+      `${id} の枠がこのコーパスで 0 件——枠が実物と繋がっていない`,
+    ).toBeGreaterThan(0);
+  }
+
+  // **枠は 6 つ、番兵は本文に出ていない。** エラー期待値の枠 5 つに、
+  // 走行そのものの失敗を見る枠を足して 6 つ。数だけでなく本文に 6 本の
+  // 見出しが立っていることを見る——枠を足して描き忘れた実装は、上の
+  // 算術だけなら緑で通る。
+  const markdown = renderReport(entries, PROVENANCE);
+  for (const title of [
+    "科学計算の定義域エラー",
+    "金融の `SyntaxError`",
+    "金融の `Overflow`",
+    "データスケールの入力エラー",
+    "打鍵の途中の構文エラー",
+    "走行そのものの失敗",
+  ]) {
+    expect(errorPathLine(markdown, title)).toContain("——");
+  }
+  expect(markdown).toContain("エラー経路——6 つに分けて数える");
+  expect(markdown).not.toContain("上のどの経路にも入らないものが");
+});
+
+test("the in-progress display item is counted from the corpus, not written by hand", () => {
+  // **この項目は手書きの否定だった。** 「全ケースが `=` で終わるので、確定した
+  // 値の表示しか踏んでいない」——`entry-000.json`(打鍵の途中の表示)が入った
+  // 日に**両方の半分**が偽になり、走行のたびに嘘を印字していた。いまは走行が
+  // 数える。**見本ではなく実物のコーパスで見る。**
+  //
+  // 数える基準は**末尾のキーではなく `=` の有無**である。`=` を押して値を
+  // 確定させてから `ENG`/`°'\"` を押して終わるキー列がコーパスに 3 千本余り
+  // あり、そちらが読んでいるのは確定した値の表示だから結論には反しない。
+  // 末尾で数える実装に変えると、下の内訳がその 3 千本を拾って赤くなる。
+  const entries = [
+    ...loadShards().flatMap(({ name, shard }) => {
+      const { values, equivalences } = partitionCases(name, shard.cases);
+      return [
+        ...(values.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "values"),
+                sequencesWithoutEq: countSequencesWithoutEq(
+                  values.map((c) => c.keys),
+                ),
+              }),
+            ]
+          : []),
+        ...(equivalences.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "equivalences"),
+                sequencesWithoutEq: countSequencesWithoutEq(
+                  equivalences.map((c) => c.left),
+                ),
+              }),
+            ]
+          : []),
+      ];
+    }),
+    ...loadDisplayShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "displays"),
+        sequencesWithoutEq: countSequencesWithoutEq(
+          displaySequences(shard.cases),
+        ),
+      }),
+    ),
+    ...loadCallShards().map(({ name }) =>
+      summary({ name: summaryName(name, "calls"), sequencesWithoutEq: 0 }),
+    ),
+  ];
+
+  const withoutEq = entries.reduce((sum, e) => sum + e.sequencesWithoutEq, 0);
+  // **番兵。** 1 本も無ければ項目は「踏んでいない」側の固定文になり、この
+  // テストは何も見ていない。
+  expect(
+    withoutEq,
+    "コーパスに `=` を押さないキー列が 1 本も無い——この検査は何も見ていない",
+  ).toBeGreaterThan(0);
+
+  // **実測を焼き付ける。** ここが動いたら、まず直すのはこの数字ではなく
+  // 報告書が外の読み手に対してしている主張のほうである。
+  const byShard = Object.fromEntries(
+    entries
+      .filter((e) => e.sequencesWithoutEq > 0)
+      .map((e) => [e.name, e.sequencesWithoutEq]),
+  );
+  expect(byShard).toEqual({
+    // 打鍵の途中の表示。全 36 件が `=` に届かない。
+    "entry-000.json (displays)": 36,
+    // 単項関数が `=` を待たずにその場で撥ねるケース(`0 recip` / `0 ln` など)。
+    "errors-000.json (displays)": 19,
+  });
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **行を 1 本だけ取り出して主張する。** 「どこかに数字が書いてある」検査は、
+  // 項目を畳んだ実装でも緑になる。
+  const line = onlyLine(markdown, "入力中の表示");
+  expect(line).toContain(`${withoutEq} 本のキー列が`);
+  expect(line).not.toContain("全ケースが");
+  expect(line).not.toContain("踏んでいない");
+  expect(markdown).toContain("`entry-000` 36 本・`errors-000` 19 本");
+  // **数がある項目は但し書きの一覧から外れる**——項目と一覧は同じ述語から出る。
+  expect(disclaimerOf(markdown)).not.toContain("入力中の表示");
+
+  // **逆向きも見る。** `=` を押さない列が 1 本も無い走行では、項目は否定に
+  // 戻り、一覧にも載る。入力を変えて出力が変わらないなら、この項目は
+  // データ由来ではない。
+  const allConfirmed = renderReport([summary()], PROVENANCE);
+  expect(onlyLine(allConfirmed, "- **入力中の表示。**")).toContain(
+    "どれも `=` を押しているので",
+  );
+  expect(onlyLine(allConfirmed, "確定した値の表示しか")).toContain(
+    "踏んでいない",
+  );
+  expect(disclaimerOf(allConfirmed)).toContain("入力中の表示");
 });
 
 test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
@@ -1195,8 +1678,6 @@ test("the hand-maintained disclaimer lists only the items that really are fixed"
   // いまは**入力を変えて、出力が変わることを見る**。押した集計を持つ走行と
   // 持たない走行で、但し書きの一覧が動かなければ嘘である。
   const untouched = renderReport([summary()], PROVENANCE);
-  const disclaimerOf = (markdown: string) =>
-    markdown.slice(markdown.indexOf("この節の件数は、この走行の実データから"));
 
   expect(disclaimerOf(untouched)).toContain("角度モード");
   expect(disclaimerOf(untouched)).toContain("表示の記法");
@@ -1211,10 +1692,26 @@ test("the hand-maintained disclaimer lists only the items that really are fixed"
   expect(disclaimerOf(touched)).not.toContain("角度モード");
   expect(disclaimerOf(touched)).not.toContain("表示の記法");
   // 外れたぶん、一覧は短くなる(数え上げも同じ述語から出ている)。
-  expect(disclaimerOf(touched)).toContain("複素数・UI・入力中の表示の 3 行");
-  expect(disclaimerOf(untouched)).toContain(
-    "複素数・角度モード・表示の記法・UI・入力中の表示の 5 行",
+  expect(disclaimerOf(touched)).toContain(
+    "エラー経路・複素数・結合方向・UI・入力中の表示の 5 行",
   );
+  expect(disclaimerOf(untouched)).toContain(
+    "エラー経路・複素数・角度モード・表示の記法・結合方向・UI・入力中の表示の 7 行",
+  );
+
+  // **エラー経路も同じ形である。** 6 つの枠のどれか 1 つでも数を出していれば、
+  // その行はデータ由来になるので一覧から外れる。以前この項目は一覧に一度も
+  // 載らず、枠すべてが空の走行で数え落としになっていた。
+  const withErrors = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 3 },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(disclaimerOf(withErrors)).not.toContain("エラー経路");
 });
 
 test("the angle-mode and notation items say what the run actually pressed", () => {
@@ -1289,4 +1786,836 @@ test("the verdict table names every area, including the untested ones", () => {
   expect(markdown).toContain("data_scale");
   expect(markdown).toContain("finance");
   expect(markdown).toContain("検証していない");
+});
+
+function recorded(
+  name: string,
+  total: number,
+  mismatches: number,
+): RecordedShard {
+  return {
+    summary: summary({
+      name,
+      total,
+      mismatches: Array.from({ length: mismatches }, (_, i) => `${name}#${i}`),
+    }),
+    runtime: { coreVersion: "0.2.1", browser: "chromium" },
+  };
+}
+
+test("the run summary carries every shard that ran, including the quiet ones", () => {
+  // **不一致 0 のシャードも載る。** ここが載らないと「0 件」と「走らなかった」が
+  // 区別できず、欠陥注入の判定が「ビルド失敗」を「検出なし」と呼ぶ。
+  const run = buildRun(
+    [
+      recorded("a-000.json (values)", 2000, 0),
+      recorded("b-000.json (values)", 2000, 7),
+    ],
+    ["a-000.json (values)", "b-000.json (values)"],
+  );
+  expect(run.ranTests).toBe(true);
+  expect(run.shards).toEqual([
+    { name: "a-000.json (values)", total: 2000, mismatches: 0 },
+    { name: "b-000.json (values)", total: 2000, mismatches: 7 },
+  ]);
+  expect(run.expected).toEqual(["a-000.json (values)", "b-000.json (values)"]);
+});
+
+test("a run where nothing was recorded says so instead of looking empty and calm", () => {
+  const run = buildRun([], ["a-000.json (values)"]);
+  expect(run.ranTests).toBe(false);
+  expect(run.shards).toEqual([]);
+  // **期待は残る。** 何が居るはずだったかを、走らなかった走行こそが持っている。
+  expect(run.expected).toEqual(["a-000.json (values)"]);
+});
+
+/**
+ * `docs/corpus-measurements.md` の「Heavy の逆算証明書」節から、実測された
+ * 数を読み出す。**報告書に手で書いた数は、一次資料に釘で留める**
+ * (`PRECEDENCE_CHANGES_MEANING` と同じ仕掛け)。
+ */
+function measurementsDoc(): string {
+  return readFileSync(
+    fileURLToPath(
+      new URL("../../../docs/corpus-measurements.md", import.meta.url),
+    ),
+    "utf-8",
+  );
+}
+
+test("the certificate figures in the report are pinned to the measurement they came from", () => {
+  const doc = measurementsDoc();
+  // 「対象件数と、実際に発行した wasm 呼び出し回数(実測)」の表の合計行。
+  const totals = /^\| 合計 \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/m.exec(doc);
+  const probes = totals?.[1];
+  if (probes === undefined) {
+    throw new Error(
+      "docs/corpus-measurements.md no longer has the certificate probe table's " +
+        "total row — the report's probe count has lost its primary source",
+    );
+  }
+  expect(Number(probes.replace(/,/g, ""))).toBe(CERTIFICATE_PROBES);
+
+  const broken = /合わせて (\d+) 個のプローブが赤くなった/.exec(doc);
+  const count = broken?.[1];
+  if (count === undefined) {
+    throw new Error(
+      "docs/corpus-measurements.md no longer records how many probes the " +
+        "`tax-combined-rate` mutation broke — the report's example has lost " +
+        "its primary source",
+    );
+  }
+  expect(Number(count)).toBe(CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION);
+});
+
+test("the detection-power table says the certificates are not in its counts", () => {
+  // **検出数を「コーパスが見つけた件数」として出す以上、そこに含まれない
+  // ものは名指しで書く。** 証明書(`certificates.ts`)は `record()` を呼ばない
+  // ので、その失敗は `mismatchesByShard` にも `detection-power.json` にも
+  // 現れない——**見逃しではなく過小計上**である。
+  const power: DetectionPower = {
+    results: [
+      {
+        id: "tax-combined-rate",
+        what: "国税・地方税を合計 20.315% の一括計算にする",
+        expect: "finance-000.json (calls)",
+        caught: { "finance-000.json (calls)": 406 },
+        total: 406,
+        ok: true,
+        why: "期待どおり",
+      },
+    ],
+  };
+  const markdown = renderDetectionPower(power).join("\n");
+  // **本数と名前はコードから出ていること。** 手で「4 本」と書いた報告書は、
+  // 5 本目を足した日に静かに古くなる。
+  expect(markdown).toContain(`逆算の境界証明書 ${CERTIFICATES.length} 本`);
+  expect(CERTIFICATES.length).toBeGreaterThan(0);
+  for (const { op } of CERTIFICATES) {
+    expect(markdown).toContain(`\`${op}\``);
+  }
+  expect(markdown).toContain(
+    `${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブ`,
+  );
+  expect(markdown).toContain(
+    `${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちている`,
+  );
+  // **「見逃し」と読ませない。**
+  expect(markdown).toContain("過小計上");
+  expect(markdown).toContain("`record()` を呼ばない");
+});
+
+test("the finance shard is broken down by op, kind and stratum, not left as one number", () => {
+  // **実物のコーパスで見る。** シャード別の表は `finance-000.json (calls)` を
+  // 「3500」の 1 行に畳むので、それだけでは 3500 回の正常な金融計算に見える。
+  const shards = loadCallShards();
+  const entries = shards.map(({ name, shard }) =>
+    summary({
+      name: summaryName(name, "calls"),
+      total: shard.cases.length,
+      values: shard.cases.length,
+      callBreakdown: summarizeCallShard(shard),
+    }),
+  );
+  const finance = entries.find((e) => e.name === "finance-000.json (calls)");
+  if (finance?.callBreakdown === undefined) {
+    throw new Error("finance-000.json is not among the call shards");
+  }
+  const { byOp, byStratum, gaveUp } = finance.callBreakdown;
+
+  // **番兵。** op が 0 個・層が 0 個なら、下の走査は 0 周で緑になる。
+  expect(Object.keys(byOp).length, "op が 1 つも無い").toBeGreaterThan(0);
+  expect(Object.keys(byStratum).length, "層が 1 つも無い").toBeGreaterThan(0);
+
+  // **実測を焼き付ける(2026-08-20)。** 3500 件の内訳が動いたら、報告書が
+  // 外の読み手にしている主張のほうを先に見直すこと。
+  const totals: Record<string, number> = {};
+  for (const counts of Object.values(byOp)) {
+    for (const [kind, n] of Object.entries(counts)) {
+      totals[kind] = (totals[kind] ?? 0) + n;
+    }
+  }
+  expect(totals).toEqual({ ok: 3139, SyntaxError: 270, Overflow: 91 });
+  expect(
+    Object.fromEntries(
+      Object.entries(byOp).map(([op, counts]) => [
+        op,
+        Object.values(counts).reduce((sum, n) => sum + n, 0),
+      ]),
+    ),
+  ).toEqual({
+    loan_forward: 599,
+    loan_bonus_forward: 456,
+    compound_grow: 439,
+    loan_principal: 433,
+    loan_term: 426,
+    compound_deposit_for: 420,
+    loan_bonus_principal: 412,
+    compound_periods_for: 315,
+  });
+  // **`rejections` はシャードが持っている。走行は読むだけである。**
+  expect(gaveUp).toEqual({
+    dup: 0,
+    reasons: {
+      compound_deposit_search_limit: 0,
+      near_yen_boundary: 7,
+      other: 0,
+    },
+  });
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **行を 1 本だけ取り出して主張する(Task 7 の実測)。** 「どこかに 270 と
+  // 書いてある」検査は、枠を畳んだ実装でも緑になる。
+  expect(onlyLine(markdown, "3500 件のうち")).toContain(
+    "3139 件が正常で、361 件",
+  );
+  expect(onlyLine(markdown, "| `loan_bonus_forward` |")).toBe(
+    "| `loan_bonus_forward` | 456 | 301 | 0 | 155 |",
+  );
+  expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
+    "| **合計** | **3500** | **3139** | **91** | **270** |",
+  );
+  expect(onlyLine(markdown, "の層から引かれている")).toContain(
+    "3500 件は 1187 の層から引かれている",
+  );
+  expect(onlyLine(markdown, "- `near_yen_boundary`:")).toBe(
+    "- `near_yen_boundary`: 7",
+  );
+  // **その 3500 が全部正常な計算だとは読ませない。**
+  expect(markdown).toContain("電卓が計算を拒むことを期待値として");
+});
+
+test("a call shard that declares no rejections is not reported as zero rejections", () => {
+  // **`null` は「宣言していない」であって「0 件捨てた」ではない。**
+  // 実物の `data-scale-000.json` が `rejections` を持たない。
+  const shard = loadCallShards().find(
+    ({ name }) => name === "data-scale-000.json",
+  );
+  if (shard === undefined) {
+    throw new Error("data-scale-000.json is not among the call shards");
+  }
+  expect(summarizeCallShard(shard.shard).gaveUp).toBeNull();
+
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(shard.name, "calls"),
+        callBreakdown: summarizeCallShard(shard.shard),
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(markdown, "棄却の数(`rejections`)")).toContain(
+    "宣言していない",
+  );
+  expect(markdown).toContain("0 件だったという意味");
+  // 層を持たないことも、0 層と書かずに名指しする。
+  expect(onlyLine(markdown, "層の宣言を持たない")).toContain(
+    "どの境界から引かれたか",
+  );
+});
+
+test("an error kind the design did not name gets a column of its own", () => {
+  // **設計書の 3 欄(`ok` / `SyntaxError` / `Overflow`)に閉じない。** 閉じると、
+  // 金融に 4 つ目の種別が入った日にその件数がどの欄にも入らず**黙って消える**。
+  const markdown = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        total: 5,
+        values: 5,
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2, DivisionByZero: 3 } },
+          byStratum: {},
+          gaveUp: null,
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(markdown, "| `loan_forward` |")).toBe(
+    "| `loan_forward` | 5 | 2 | 3 |",
+  );
+  expect(onlyLine(markdown, "| op | 総数 |")).toContain("`DivisionByZero`");
+  expect(onlyLine(markdown, "5 件のうち")).toContain("2 件が正常で、3 件");
+});
+
+test("a run with no call shard has no call breakdown section at all", () => {
+  // **空の表を出さない。** 「op が 1 つも無い」と「記録し損ねた」が同じ
+  // 見た目になる。
+  expect(renderReport([summary()], PROVENANCE)).not.toContain(
+    "## 関数呼び出しの内訳",
+  );
+  expect(renderCallBreakdowns([summary()])).toEqual([]);
+});
+
+/**
+ * 実物のコーパスから、素性(`generated_by`)を持ったままの集計を組み立てる。
+ *
+ * **素性を見本の `mpmath 1.3.0 …` で埋めない。** 検証の強さの枠を決めて
+ * いるのは素性そのものなので、埋めた瞬間に全シャードが「外部参照」に落ち、
+ * この検査は何も見なくなる。
+ */
+function realSummaries(): ShardSummary[] {
+  return [
+    ...loadShards().flatMap(({ name, shard }) => {
+      const { values, equivalences } = partitionCases(name, shard.cases);
+      return [
+        ...(values.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "values"),
+                total: shard.cases.length,
+                values: values.length,
+                equivalences: 0,
+                generatedBy: shard.generated_by,
+              }),
+            ]
+          : []),
+        ...(equivalences.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "equivalences"),
+                total: shard.cases.length,
+                values: 0,
+                equivalences: equivalences.length,
+                generatedBy: shard.generated_by,
+              }),
+            ]
+          : []),
+      ];
+    }),
+    ...loadDisplayShards().map(({ name, shard }) => {
+      const displays = shard.cases.filter((c) => c.kind === "display").length;
+      return summary({
+        name: summaryName(name, "displays"),
+        total: shard.cases.length,
+        values: displays,
+        equivalences: shard.cases.length - displays,
+        generatedBy: shard.generated_by,
+      });
+    }),
+    ...loadCallShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "calls"),
+        total: shard.cases.length,
+        values: shard.cases.length,
+        equivalences: 0,
+        generatedBy: shard.generated_by,
+      }),
+    ),
+  ];
+}
+
+test("the entry shard is counted as a spec transcription, never as an outside reference", () => {
+  // **これがこの節の主眼である(設計書 §8.3)。** `entry-000.json` の期待値は
+  // Python が独立に計算したものではなく、電卓の仕様書
+  // (`engine_table.rs` / `state.rs`)から起こした写しである。1 枠目に混ぜると
+  // 「Python の独立実装と突き合わせた件数」が 36 件ぶん水増しされ、しかも
+  // それを見ているものが何も無い——**静かに増えるだけになる。**
+  //
+  // **見本ではなく実物のコーパスの素性で見る。**
+  const entries = realSummaries();
+  expect(
+    entries.length,
+    "コーパスから 1 枚も読めなかった——この検査は何も見ていない",
+  ).toBeGreaterThan(0);
+
+  const frames = verificationFrames(entries);
+  expect(frames.map((f) => f.id)).toEqual([
+    "external",
+    "self-equivalence",
+    "spec-transcription",
+  ]);
+  const external = verificationFrameOf(frames, "external");
+  const transcription = verificationFrameOf(frames, "spec-transcription");
+
+  // **3 枠目に居るのは打鍵の途中の表示だけである。** 名前で選んでいるのでは
+  // なく素性で選んでいるので、ここが増えたら素性が増えたということ。
+  expect(transcription.shards).toEqual([summaryName(ENTRY_SHARD, "displays")]);
+  expect(transcription.cases).toBe(36);
+
+  // **1 枠目に混ざっていない。** シャードの名前としても、件数としても。
+  expect(external.shards).not.toContain(summaryName(ENTRY_SHARD, "displays"));
+  const allValues = entries.reduce((sum, e) => sum + e.values, 0);
+  expect(external.cases).toBe(allValues - transcription.cases);
+  expect(
+    external.cases,
+    "外部参照の枠が空——この検査は 1 枠目について何も見ていない",
+  ).toBeGreaterThan(0);
+
+  // **行を 1 本だけ取り出して主張する。** 「どこかに 36 と書いてある」検査は、
+  // 3 枠を 1 つに畳んだ実装でも緑になる。
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(
+    onlyLine(markdown, "- **外部参照——Python の独立実装と突き合わせたケース"),
+  ).toContain(`: ${external.cases}**`);
+  expect(
+    onlyLine(markdown, "- **仕様書からの写し——電卓の仕様書から起こした期待値"),
+  ).toContain(`: ${transcription.cases}**`);
+  // 畳んだ数字がどこにも出ていないこと。
+  expect(markdown).not.toContain(
+    `外部参照——Python の独立実装と突き合わせたケース: ${allValues}`,
+  );
+});
+
+test("no other shard claims to be a spec transcription", () => {
+  // **番兵。** 枠を決めているのは素性の中の 1 語なので、その語が別のシャードの
+  // 素性に紛れ込めば、外部参照が静かに写しの枠へ落ちる。**`errors-000.json` は
+  // 実際に危ない**——その素性は「`engine_table.rs` / `state.rs` /
+  // `expr/parse.rs` を**見ずに**数学だけから決めた」と書いており、ファイル名で
+  // 選ぶ実装ならここで写しの枠に落ちる。落ちても件数の合計は変わらないので、
+  // 表を読まない限り誰も気付かない。
+  const pedigrees = [
+    ...loadShards().map(({ name, shard }) => [name, shard.generated_by]),
+    ...loadDisplayShards().map(({ name, shard }) => [name, shard.generated_by]),
+    ...loadCallShards().map(({ name, shard }) => [name, shard.generated_by]),
+  ] as [string, string][];
+  expect(
+    pedigrees.length,
+    "コーパスから 1 枚も読めなかった——この検査は何も見ていない",
+  ).toBeGreaterThan(1);
+
+  const transcriptions = pedigrees
+    .filter(([, by]) => by.includes(SPEC_TRANSCRIPTION_MARK))
+    .map(([name]) => name);
+  expect(transcriptions).toEqual([ENTRY_SHARD]);
+
+  // `errors-000.json` は外部参照の側に居ること。**名前で選ぶ実装なら赤くなる。**
+  const errors = pedigrees.find(([name]) => name === ERRORS_SHARD);
+  expect(errors?.[1]).toContain("engine_table.rs");
+  expect(errors?.[1]).not.toContain(SPEC_TRANSCRIPTION_MARK);
+});
+
+/**
+ * `reference/tests/test_corpus_entry.py` が固定している「仕様書の写しですら
+ * ない」件数を、テストのソースそのものから読み出す。
+ */
+function pinnedWeakerEntryCases(): number {
+  const source = readFileSync(
+    fileURLToPath(
+      new URL("../../../reference/tests/test_corpus_entry.py", import.meta.url),
+    ),
+    "utf-8",
+  );
+  const match = /^\s*assert weaker == (\d+)\s*$/m.exec(source);
+  const figure = match?.[1];
+  if (figure === undefined) {
+    throw new Error(
+      "reference/tests/test_corpus_entry.py no longer contains an " +
+        "`assert weaker == <n>` line — the report's figure for how many " +
+        "entry cases are not even transcriptions is pinned to that assert, " +
+        "so either restore it or move the pin somewhere this test can read",
+    );
+  }
+  return Number(figure);
+}
+
+test("the report says which cases are not even transcriptions", () => {
+  // **3 枠目の中身は一様ではない。** 36 件のうち 10 件は仕様書に対応する規則が
+  // 無く、実装から導いて電卓を走らせた値をそのまま期待値にしている。**電卓の
+  // 欠陥はその期待値にも写るので、その 10 件は欠陥を見つけられない。**
+  // 枠の件数だけを出すと、36 件すべてが仕様書に裏打ちされているように読める。
+  //
+  // 件数は報告書が数え直しているものではなく、シャード自身の素性から読む。
+  // その素性が正しいことは Python 側の
+  // `test_the_provenance_names_the_calculator_spec_not_an_independent_reference`
+  // が実物のケース列から数えて固定している。**片方だけを直しても赤くなる。**
+  const entries = realSummaries();
+  const transcription = verificationFrameOf(
+    verificationFrames(entries),
+    "spec-transcription",
+  );
+  expect(
+    transcription.weakerUnknown,
+    "素性から内訳が読めなかった——報告書は件数を書けない",
+  ).toEqual([]);
+  expect(transcription.weaker).toBe(pinnedWeakerEntryCases());
+  expect(transcription.weaker).toBeGreaterThan(0);
+  expect(transcription.weaker).toBeLessThan(transcription.cases);
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **付録の「走行の環境」にも同じ語が出る**(シャードの素性そのものが
+  // そう書いている)。本文の項目の側の行を取る。
+  const line = onlyLine(markdown, "件は、仕様書の写しですらない。**");
+  expect(line).toContain(`${transcription.weaker} 件`);
+  expect(markdown).toContain("欠陥を見つけられない");
+});
+
+test("a run of nothing but spec transcriptions leaves the outside-reference frame empty", () => {
+  // **番兵の側も見る。** 「外の基準と突き合わせたケースが 1 件も無い走行は
+  // 報告書を書かない」という門が、値ケースの合計を数えていた時期には、
+  // `entry-000.json` だけの走行を通してしまう。通れば「不一致 0」の緑の
+  // 報告書が出る——外の基準に一度も当てていない走行について、である。
+  const entry = summary({
+    name: summaryName(ENTRY_SHARD, "displays"),
+    total: 36,
+    values: 36,
+    equivalences: 0,
+    generatedBy: `${SPEC_TRANSCRIPTION_MARK}である`,
+  });
+  const frames = verificationFrames([entry]);
+  expect(verificationFrameOf(frames, "external").cases).toBe(0);
+  expect(verificationFrameOf(frames, "spec-transcription").cases).toBe(36);
+
+  // **`writeReport()` の門はこの枠の件数を読む**ので、この走行は報告書を
+  // 書かずに落ちる。
+
+  // 枠が空であることが報告書の上でも読めること(0 件を黙って落とさない)。
+  const markdown = renderReport([entry], PROVENANCE);
+  expect(
+    onlyLine(markdown, "- **外部参照——Python の独立実装と突き合わせたケース"),
+  ).toContain(": 0**");
+  expect(markdown).toContain("**この走行には 1 件も無い。**");
+
+  // **内訳を宣言しない素性は、黙って「弱いケース 0 件」にならない。**
+  expect(
+    verificationFrameOf(frames, "spec-transcription").weakerUnknown,
+  ).toEqual([summaryName(ENTRY_SHARD, "displays")]);
+  expect(onlyLine(markdown, "の内訳は読めなかった")).toContain(
+    summaryName(ENTRY_SHARD, "displays"),
+  );
+  expect(markdown).toContain("**0 件という意味ではない。**");
+});
+
+// ---------------------------------------------------------------------------
+// **矛盾を見張る。** 報告書は状態によって文が入れ替わる。入れ替わりを
+// 見張らないと、**数を出している走行と、何も踏んでいない走行が同じ文を持つ**
+// ——固定文が腐る、というこの文書で 3 度起きた壊れ方である。
+//
+// 見張る状態は 6 つ: 指数表示・金融のエラー・**盤面を通る走行(3 状態)**・
+// core だけが通った走行・集計が揃わなかった走行・参照実装が捨てた件数。
+// ---------------------------------------------------------------------------
+
+/** 盤面を通る走行の要約の見本。**見たい欄だけ上書きする。** */
+function uiRunFixture(overrides: Partial<HeavyUiRun> = {}): HeavyUiRun {
+  return {
+    schema: 1,
+    pressedAnything: true,
+    ok: true,
+    totalPresses: 12345,
+    totalTypedCases: 1266,
+    byToken: {},
+    casesTyped: {},
+    required: [],
+    findings: [],
+    ...overrides,
+  };
+}
+
+const UI_PASSED = "盤面を通る走行——通っている";
+const UI_FAILED = "盤面を通る走行——失敗している";
+const UI_NO_PRESSES = "盤面を通る走行——キーを 1 つも押していない";
+const UI_NOT_RUN = "盤面を通る走行——記録が無い";
+const UI_STATES = [UI_PASSED, UI_FAILED, UI_NO_PRESSES, UI_NOT_RUN];
+
+/**
+ * 盤面の状態の行を 1 本だけ取り出す。**他の 3 状態が同居していないことも見る**
+ * ——「どこかに『通っている』と書いてある」検査では、4 つの状態を同じ段落に
+ * 並べた実装(つまり何も区別していない実装)でも緑になる。
+ */
+function uiLine(markdown: string, state: string): string {
+  expect(UI_STATES, "見張る状態の一覧に無い").toContain(state);
+  expect(UI_STATES.length, "状態の一覧が痩せている").toBe(4);
+  for (const other of UI_STATES) {
+    if (other === state) {
+      continue;
+    }
+    expect(markdown.includes(other), `「${other}」も同時に出ている`).toBe(
+      false,
+    );
+  }
+  return onlyLine(markdown, state);
+}
+
+test("state 1: the exponent line never holds both the count and the denial", () => {
+  // **0 と 非 0 で文が入れ替わる。** 以前この 2 つは 12 行しか離れていない
+  // 場所で同居していた(「1940 件読んだ」と「一度も出ていない」)。
+  const none = renderReport([summary({ exponentDisplayCases: 0 })], PROVENANCE);
+  expect(onlyLine(none, "指数表記の表示")).not.toContain("件が読んでいる");
+  expect(onlyLine(none, "平坦表示の帯")).toContain("一度も出ていない");
+
+  const some = renderReport(
+    [summary({ exponentDisplayCases: 1940 })],
+    PROVENANCE,
+  );
+  expect(onlyLine(some, "指数表記の表示")).toContain("1940 件が読んでいる");
+  expect(some.includes("平坦表示の帯")).toBe(false);
+});
+
+test("state 2: the finance error frames swap wording with the data, each on its own line", () => {
+  const some = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 3, Overflow: 5 },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(errorPathLine(some, "金融の `SyntaxError`")).toContain("3 件");
+  expect(errorPathLine(some, "金融の `SyntaxError`")).not.toContain(
+    "1 件も検証していない",
+  );
+  expect(errorPathLine(some, "金融の `Overflow`")).toContain("5 件");
+
+  const none = renderReport(
+    [summary({ name: "finance-000.json (calls)", errorKinds: {} })],
+    PROVENANCE,
+  );
+  for (const frame of ["金融の `SyntaxError`", "金融の `Overflow`"]) {
+    expect(errorPathLine(none, frame)).toContain("1 件も検証していない");
+  }
+});
+
+test("state 3: with no heavy-ui-run.json the report says the keypad run left no record", () => {
+  // **ここが肝である。** `pnpm heavy` と `pnpm heavy:ui` は別の走行で集計を
+  // 共有しない。読まなければ、**盤面を一度も走らせていない走行**と
+  // **盤面が落ちた走行**が同じ顔になり、報告書は「UI も通した」と読める。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+  expect(markdown).toContain("「UI も確かめた」と");
+  expect(uiHealth(null)).toEqual({ state: "not-run" });
+});
+
+test("state 3: a heavy-ui run that failed is named as failed, with its findings counted", () => {
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    uiRunFixture({
+      ok: false,
+      totalPresses: 40,
+      totalTypedCases: 3,
+      findings: [
+        { kind: "never-pressed", message: "a" },
+        { kind: "never-pressed", message: "b" },
+        { kind: "too-few-cases", message: "c" },
+      ],
+    }),
+  );
+  const line = uiLine(markdown, UI_FAILED);
+  expect(line).toContain("指摘 3 件");
+  // **種類ごとに数える。** 1 つの数字に畳むと、どの主張が崩れたのか読めない。
+  expect(markdown).toContain("`never-pressed` 2 件・`too-few-cases` 1 件");
+  expect(markdown).toContain("40 回キーを押し");
+  // **この報告書の緑がその失敗を打ち消さないと書く。**
+  expect(markdown).toContain("この報告書の緑は、その失敗を打ち消さない");
+});
+
+test("state 3: a heavy-ui run that passed is the only state that says so", () => {
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    uiRunFixture({ totalPresses: 30000, totalTypedCases: 1266 }),
+  );
+  expect(uiLine(markdown, UI_PASSED)).toContain("通っている");
+  expect(markdown).toContain("30000 回キーを押し");
+  expect(markdown).toContain("1266 件のケースを盤面から打鍵して");
+  // **同時の走行ではない**——最後に残された記録である、と断る。
+  expect(markdown).toContain("この報告書と同時の走行ではない");
+  // 通っていても、この報告書の件数は盤面を通っていない。
+  expect(markdown).toContain("この報告書の件数は、いまも盤面を通っていない");
+  expect(uiHealth(uiRunFixture())).toEqual({
+    state: "passed",
+    presses: 12345,
+    typed: 1266,
+  });
+});
+
+test("a heavy-ui run that pressed nothing is not reported as a keypad failure", () => {
+  // **設計書が想定していなかった 4 つ目の状態(2026-08-20 実測)。**
+  // ディスクに在る `heavy-ui-run.json` が `pressedAnything: false` だった
+  // ——盤面を叩く spec を含まない**部分走行**の残骸である。これを「失敗」と
+  // 同じ行に出すと、**盤面の主張が崩れた走行**と**盤面を一度も叩いていない
+  // 走行**が同じ顔になる。前者は電卓の欠陥を指しうるが、後者が指しているのは
+  // 走行の組み方だけである。
+  const residue = uiRunFixture({
+    pressedAnything: false,
+    ok: false,
+    totalPresses: 0,
+    totalTypedCases: 0,
+    findings: [
+      { kind: "no-presses", message: "a" },
+      { kind: "too-few-cases", message: "b" },
+      { kind: "planned-but-not-typed", message: "c" },
+    ],
+  });
+  expect(uiHealth(residue).state).toBe("no-presses");
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    residue,
+  );
+  expect(uiLine(markdown, UI_NO_PRESSES)).toContain(
+    "キーを 1 つも押していない",
+  );
+  expect(markdown).toContain("`planned-but-not-typed` 1 件");
+  expect(markdown).toContain("崩れる前に、");
+
+  // **`ok` を先に見ると、押していない走行が「通った」になる。** 指摘が
+  // 1 件も無い押下 0 の記録——検査そのものが外れた走行——で確かめる。
+  expect(
+    uiHealth(
+      uiRunFixture({
+        pressedAnything: false,
+        ok: true,
+        totalPresses: 0,
+        totalTypedCases: 0,
+      }),
+    ).state,
+  ).toBe("no-presses");
+});
+
+test("the shape the keypad run writes is the shape this report reads", () => {
+  // **書く側と読む側は別のモジュールである。** `presses.ts` が欄の名前を
+  // 変えた日に `readUiRunJson()` が `null` を返すようになれば、報告書は
+  // 黙って「記録が無い」と書き続ける——**盤面が緑でも、である。**
+  // 見本を手で書かず、**書く側の純関数から作る**ことでそこを繋ぐ。
+  const empty = buildUiRun(
+    { byToken: {}, casesTyped: {} },
+    {
+      cases: {},
+      inCorpus: [],
+      inSample: [],
+      totalCases: 0,
+    },
+    [{ kind: "no-presses", message: "nothing was pressed" }],
+  );
+  expect(uiHealth(empty).state).toBe("no-presses");
+
+  const green = buildUiRun(
+    {
+      byToken: {
+        ac: { case: 0, harness: 1266 },
+        dot: { case: 400, harness: 0 },
+      },
+      casesTyped: { "scientific-000.json": 1266 },
+    },
+    { cases: {}, inCorpus: [], inSample: [], totalCases: 1266 },
+    [],
+  );
+  expect(uiHealth(green)).toEqual({
+    state: "passed",
+    presses: 1666,
+    typed: 1266,
+  });
+});
+
+test("state 4: a run where only the core passed does not read as a run that also passed the keypad", () => {
+  // **core が緑で盤面が未実行**、という一番ありふれた状態。走行そのものの
+  // 失敗は 0 件と書けるが、盤面については何も書けない。**2 つを同じ緑で
+  // 並べない。**
+  const clean: HeavyRun = {
+    schema: 1,
+    ranTests: true,
+    expected: ["scientific-000.json (values)"],
+    shards: [
+      { name: "scientific-000.json (values)", total: 2000, mismatches: 0 },
+    ],
+  };
+  const markdown = renderReport([summary()], PROVENANCE, [], null, clean, null);
+  expect(errorPathLine(markdown, "走行そのものの失敗")).toContain("0 件");
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+});
+
+test("with neither summary on disk, the report calls both of them unread", () => {
+  // **2 枚とも無い走行では、両方を未実行と書く。** 片方を「異常なし」に
+  // 畳むのが、この種の報告書がいちばん静かに嘘をつく道である。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(errorPathLine(markdown, "走行そのものの失敗")).toContain(
+    "読めていない",
+  );
+  expect(errorPathLine(markdown, "走行そのものの失敗")).not.toContain("0 件");
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+});
+
+test("state 5: a report missing part of its own summaries is not a result, even with a green keypad run", () => {
+  // **盤面が通っていることは、欠けた集計の代わりにならない。**
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    ["errors-000.json (displays)"],
+    null,
+    null,
+    uiRunFixture(),
+  );
+  expect(onlyLine(markdown, "# この走行は不完全である")).toContain(
+    "結果として読まないこと",
+  );
+  expect(markdown.indexOf("この走行は不完全である")).toBeLessThan(
+    markdown.indexOf("# CalcArc 計算検証レポート"),
+  );
+  expect(onlyLine(markdown, "- `errors-000.json (displays)`")).toBe(
+    "- `errors-000.json (displays)`",
+  );
+  expect(markdown).toContain("記録が残った分だけの数字");
+  // 盤面の側は緑のまま——**その 2 つは別の主張である。**
+  expect(uiLine(markdown, UI_PASSED)).toContain("通っている");
+});
+
+test("state 6: zero rejections, some rejections and no declaration are three different sentences", () => {
+  // **「0 件捨てた」と「捨てた数を宣言していない」を混ぜない。** 実物では
+  // `finance-000.json` が理由別の数を宣言し、`data-scale-000.json` は
+  // `rejections` そのものを持たない。
+  const withReasons = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: { dup: 2, reasons: { near_yen_boundary: 7, other: 0 } },
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(withReasons, "捨てた件数")).toContain("件数: 7");
+  expect(onlyLine(withReasons, "- `near_yen_boundary`:")).toBe(
+    "- `near_yen_boundary`: 7",
+  );
+  expect(onlyLine(withReasons, "- 重複による棄却")).toContain("2");
+
+  const noneGaveUp = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: { dup: 0, reasons: { near_yen_boundary: 0, other: 0 } },
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(noneGaveUp, "捨てた件数")).toContain("件数: 0");
+  expect(noneGaveUp.includes("宣言していない")).toBe(false);
+
+  const undeclared = renderReport(
+    [
+      summary({
+        name: "data-scale-000.json (calls)",
+        callBreakdown: {
+          byOp: { to_bytes: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: null,
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(undeclared, "棄却の数(`rejections`)")).toContain(
+    "宣言していない",
+  );
+  expect(undeclared.includes("捨てた件数")).toBe(false);
 });

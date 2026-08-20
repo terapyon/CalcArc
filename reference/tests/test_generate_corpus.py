@@ -5,11 +5,14 @@ import json
 import math
 import pathlib
 import random
+import re
 import sys
 from fractions import Fraction
 
 import mpmath as mp
+import pytest
 
+from calcarc_reference import corpus_calls
 from calcarc_reference.corpus_eval import evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_KEYS,
@@ -218,7 +221,12 @@ def _needs_precedence(keys: list[str]) -> bool:
     top_level: set[int] = set()
     stack: list[set[int]] = []
     closed_groups: list[set[int]] = []
-    for key in keys:
+    # **最後の `ac` より前は読まない。** `ac` は engine を初期状態に戻す
+    # (`engine/mod.rs` の `reduce` 冒頭、`next = next.cleared()`)ので、
+    # そこより前の括弧も演算子も、この列が最後に何を計算したかとは無関係。
+    # TypeScript の双子(`needsPrecedence`)も同じ形に直してある。
+    tail = keys[len(keys) - keys[::-1].index("ac") :] if "ac" in keys else keys
+    for key in tail:
         if key == "lparen":
             stack.append(set())
         elif key == "rparen":
@@ -779,9 +787,19 @@ def test_no_case_types_more_digits_than_the_buffer_accepts() -> None:
     ここは全シャードのキー列を走査して、**連続した数字の並び**が上限を
     超えていないことを確かめる。`add` などの演算子で区切られるので、
     1 つの数に何桁打っているかはキー列から数えられる。
+
+    **`entry-000.json` は対象外。** この検査が守っているのは「参照実装が
+    打った文字列をそのまま評価する結果」と「engine が実際に持つ値」の
+    食い違いであって、`entry-000.json` の期待値は評価などしていない
+    ——実測した engine の表示そのものを写している(`corpus_entry.py`
+    `_provenance`)。`max_entry_len_cases` が 20 個の `7` を打つ 1 件を
+    **わざと**含む(engine が 12 桁で頭打ちになることを主張するケース)ので、
+    ここで一緒に検査すると自分自身が守っている不変条件に自分で違反する。
     """
     offenders: list[str] = []
     for path in sorted(_CORPUS_GENERATED.glob("*.json")):
+        if path.name == "entry-000.json":
+            continue
         shard = json.loads(path.read_text())
         for case in shard["cases"]:
             sequences = (
@@ -868,3 +886,1044 @@ def test_the_display_shard_actually_reaches_the_sexagesimal_carry() -> None:
     assert carried >= 8, (
         f"秒が繰り上がりうるケースが {carried} 件しかない。この経路の検出が乱数任せになっている"
     )
+
+
+def test_unclassified_reference_gave_up_stops_the_generator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`ReferenceGaveUp` の理由は型で分ける(設計書 §4.9)。
+
+    `loan_ref.NearYenBoundaryError` でも `compound_ref.DepositSearchLimitError`
+    でもない素の `ValueError` は、どちらの型にも当てはまらない未分類の失敗
+    である。**`other` として数だけ増やして通さない**——`_finance_entry` は
+    ここで `RuntimeError` を上げ、生成器自体を落とす。
+    """
+
+    def _boom(op: str, params: dict) -> dict:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(corpus_calls.loan_ref, "compute", _boom)
+    with pytest.raises(RuntimeError, match="unclassified"):
+        corpus_calls._finance_entry(
+            0,
+            "loan_forward",
+            {"principal": "1", "rate": "0", "n": 1, "residual": "0"},
+            "loan_forward/random",
+        )
+
+
+def test_the_current_generator_gives_up_only_for_one_classified_reason() -> None:
+    """いまの生成器では、参照実装の棄却は `near_yen_boundary` だけに収まる
+    (`other` は 0 件)。
+
+    `compound_deposit_search_limit` は Task 2(`deposit_for` の種に税を
+    織り込む改善)で 10 → 0 になった。種が税を見ずに組まれていたのが原因で、
+    実測 10 件はすべて `tax: True` の `compound_deposit_for` だった
+    （`reference/tests/test_compound_ref.py` の `TAX_SEED_MISS_CASES`）。
+
+    `near_yen_boundary` は 3 → 5 になった(Task 6)。`loan_term` /
+    `loan_principal` の乱択入力を正算の答から構成するようにしたことで、
+    `loan_forward` / `loan_bonus_forward` の乱択列(同じ `rng` を共有する)が
+    ずれ、円境界近接の棄却を引く回数がわずかに変わった——これは
+    `_guard_boundary` 自体の挙動ではなく、乱数列の並びが変わっただけである。
+
+    `near_yen_boundary` は 5 → 2 になった(Task 7)。名指し層の下限合計が
+    281 件から 1306 件に増えたので(pairwise で約 1,020 件が名指しに移った)、
+    乱択層は 1719 件から 694 件まで縮む。乱択の総試行回数が減れば、そこで
+    引く円境界棄却の実測件数も比例して減る——`_guard_boundary` の挙動でも
+    乱数列の並びでもなく、**乱択層そのものが小さくなった**ことの影響である。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    reasons = shard["rejections"]["reference_gave_up"]
+    assert reasons["near_yen_boundary"] == 2
+    assert reasons["compound_deposit_search_limit"] == 0
+    assert reasons["other"] == 0
+
+
+def test_every_finance_case_carries_a_known_stratum() -> None:
+    """設計書 §4.11 の 10。**層の一覧は `corpus_calls.FINANCE_STRATA` から読む**
+    ——テストに写しを持たない。乱択で作られたケースだけが `"{op}/random"` に
+    入ることも合わせて確かめる。
+    """
+    known_keys = {stratum.key for stratum in corpus_calls.FINANCE_STRATA}
+    random_keys = {f"{op}/random" for op in corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS}
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    strata_seen = {case["stratum"] for case in shard["cases"]}
+    assert strata_seen <= known_keys | random_keys
+    # 名指し層は全部使われている(骨格を移した Task で 1 件も落としていない)
+    named_strata_seen = strata_seen & known_keys
+    assert named_strata_seen == known_keys
+
+
+def test_every_stratum_meets_its_minimum() -> None:
+    """設計書 §4.11 の 1。**下限はこの Task ではすべて 0**(Task 3 のスコープ外の
+    値は Task 6 で入る)。
+
+    このテストが「1 つでも下限を満たさない層があれば落ちる」ことを主張できて
+    いるかは、下限 0 のままでは検証できない——**反証可能性は架空の層を
+    一時的に足して手元で確かめてあり**(実装報告に記録)、テスト本体には
+    架空の層を残さない。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        counts[case["stratum"]] = counts.get(case["stratum"], 0) + 1
+    for stratum in corpus_calls.FINANCE_STRATA:
+        assert counts.get(stratum.key, 0) >= stratum.minimum, (
+            f"{stratum.key} の下限 {stratum.minimum} を満たさない"
+            f"(実測 {counts.get(stratum.key, 0)})"
+        )
+
+
+# --- Task 4: 因子と水準・名指し異常系 -------------------------------------
+
+
+def _finance_stratum_mismatches(strata: tuple) -> list[tuple[str, str, str]]:
+    """`strata` それぞれの `build()` が作る入力を参照実装へ通し、返ってきた
+    種別が `expect` と食い違う層を集める。**「エラーになるはず」と書いた
+    入力が実は正常だった、を緑のまま許さないガード**(設計書 §4.5 の末尾・
+    Task 4 Step 4)。全 18+ 層(骨格 Task が作ったものを含む)に掛かる。
+    """
+    mismatches = []
+    for stratum in strata:
+        params = stratum.build(random.Random(0), 0)
+        compute = (
+            corpus_calls.loan_ref.compute
+            if stratum.op.startswith("loan_")
+            else corpus_calls.compound_ref.compute
+        )
+        result = compute(stratum.op, params)
+        actual = result.get("error", "ok")
+        if actual != stratum.expect:
+            mismatches.append((stratum.key, stratum.expect, actual))
+    return mismatches
+
+
+def test_every_finance_stratum_expect_matches_the_reference_output() -> None:
+    """設計書 §4.5 の末尾。全 finance 層(既存 18 + Task 4 で足した層)の
+    `expect` を、参照実装が実際に返す種別と突き合わせる。
+    """
+    mismatches = _finance_stratum_mismatches(corpus_calls.FINANCE_STRATA)
+    assert not mismatches, f"expect が実測と食い違う層: {mismatches}"
+
+
+def test_the_expect_guard_actually_catches_a_wrong_expect() -> None:
+    """反証可能性: 上のガードは、1 つの層の `expect` を意図的に間違えると
+    本当に落ちるか。**架空に壊した層を直接このテストに食わせて確かめる**
+    ——本体のガードには壊れた層を残さない。
+    """
+    real = corpus_calls.FINANCE_STRATA[0]
+    wrong_expect = "SyntaxError" if real.expect == "ok" else "ok"
+    broken = corpus_calls.Stratum(real.op, real.name, wrong_expect, real.minimum, real.build)
+    mismatches = _finance_stratum_mismatches((broken,))
+    assert mismatches == [(broken.key, wrong_expect, real.expect)]
+
+
+def test_all_seventeen_error_paths_are_named_and_appear_in_the_corpus() -> None:
+    """設計書 §4.5(2026-08-19 訂正後)・§4.11 の 4。経路は 17(16 ではない
+    ——「残価に届く前に完済」の行番号訂正で 1 行が 2 行に分かれた)。各経路が
+    `ERROR_PATH_STRATA` で層に対応づき、その層が生成されたコーパスに実際に
+    現れることを確かめる。**表に無い経路を推測で足していない**——この表は
+    Rust のガードから数え上げたもの。
+    """
+    assert len(corpus_calls.ERROR_PATHS) == 17
+    assert set(corpus_calls.ERROR_PATH_STRATA) == {
+        name for name, _source in corpus_calls.ERROR_PATHS
+    }
+    known_keys = {s.key for s in corpus_calls.FINANCE_STRATA}
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    strata_seen = {case["stratum"] for case in shard["cases"]}
+    for name, _source in corpus_calls.ERROR_PATHS:
+        stratum_keys = set(corpus_calls.ERROR_PATH_STRATA[name])
+        assert stratum_keys, f"{name} に層が割り当てられていない"
+        assert stratum_keys <= known_keys, (
+            f"{name} の層が FINANCE_STRATA に無い: {stratum_keys - known_keys}"
+        )
+        assert stratum_keys & strata_seen, f"{name} がコーパスに1件も現れない"
+
+
+def test_periods_per_year_four_never_appears_in_the_random_layer() -> None:
+    """設計書 §4.11 の 5。`4` は乱択から外し、名指しのエラー層に移した
+    (`rate.rs:32` が受け付けるのは 1・2・12 だけ)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    compound_ops = set(corpus_calls.COMPOUND_OPS)
+    for case in shard["cases"]:
+        if case["stratum"].endswith("/random") and case["op"] in compound_ops:
+            assert case["input"]["periods_per_year"] != 4
+
+
+def test_periods_per_year_1_2_12_are_roughly_balanced_in_the_random_layer() -> None:
+    """設計書 §4.11 の 5。しきい値は「最小の層が最大の層の 0.8 倍以上」。
+
+    **数えるのは正常のケースだけである。** 設計書は「**正常の** 1・2・12 が
+    ほぼ均等」と書いている。エラーまで混ぜると、測っているのは
+    「引かれた回数の均等」ではなく「引かれた回数 × その周期での失敗率」に
+    なる——`ppy=1` は同じ期数でも実時間が長く溢れやすいので(Task 6 で
+    実測した偏りと同じ原因)、エラーを含めた数え方は `1` を厚く見せる。
+
+    Task 7 でこのテストは一度 0.7 に緩められた。乱択層が 1719 件から 694 件に
+    縮んで標本のばらつきが増えた、という理由づけだった。**実測すると、緩める
+    必要は無かった。** エラーを含めた数え方では `{1: 99, 2: 80, 12: 76}` で
+    比 0.768 だが、設計書どおり正常だけで数えると
+    `{1: 85, 2: 76, 12: 76}` で **比 0.894** である。しきい値ではなく
+    数え方のほうが設計書とずれていた。
+
+    `4` が 1 件も無いこと(不均衡ではなく排除)は別テストが確かめる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    compound_ops = set(corpus_calls.COMPOUND_OPS)
+    counts: dict[int, int] = {}
+    for case in shard["cases"]:
+        if "error" in case["expect"]:
+            continue
+        if case["stratum"].endswith("/random") and case["op"] in compound_ops:
+            ppy = case["input"]["periods_per_year"]
+            counts[ppy] = counts.get(ppy, 0) + 1
+    assert set(counts) == {1, 2, 12}
+    assert min(counts.values()) >= max(counts.values()) * 0.8, counts
+
+
+def test_rate_covers_the_sub_0_1_percent_band_and_four_decimal_digits() -> None:
+    """設計書 §4.11 の 6。`0 < r < 0.1` の正常が 1 件以上、小数 4 桁が 1 件以上。"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    low_rate_ok = 0
+    four_decimal_ok = 0
+    for case in shard["cases"]:
+        if "error" in case["expect"]:
+            continue
+        rate = case["input"].get("rate")
+        if rate is None:
+            continue
+        try:
+            value = float(rate)
+        except ValueError:
+            continue
+        if 0 < value < 0.1:
+            low_rate_ok += 1
+        if len(rate.partition(".")[2]) == 4:
+            four_decimal_ok += 1
+    assert low_rate_ok >= 1
+    assert four_decimal_ok >= 1
+
+
+def test_all_sixteen_named_term_levels_appear() -> None:
+    """設計書 §4.11 の 7。名指し期間 16 種がすべて 1 件以上現れる。"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    seen_terms = {case["input"]["n"] for case in shard["cases"] if "n" in case["input"]}
+    needed = {n for n, _expect in corpus_calls.TERM_LEVELS}
+    assert needed <= seen_terms, needed - seen_terms
+
+
+def test_loan_term_1201_is_ok_but_compound_periods_1201_is_syntax_error() -> None:
+    """設計書 §4.2 の訂正の核心。loan の期間に上限のガードは無い
+    (`MAX_TERM_MONTHS` は逆算探索の打ち切りであって入力の契約ではない)ので
+    `1201` は loan では正常。複利は `compound.rs:33` が `periods > 1200` を
+    見るので `1201` は SyntaxError。**この 2 つが食い違ったら実装ではなく
+    この訂正を疑う。**
+    """
+    loan_result = corpus_calls.loan_ref.compute(
+        "loan_forward", {"principal": "1000000", "rate": "2.0", "n": 1201, "residual": "0"}
+    )
+    assert "error" not in loan_result
+
+    compound_result = corpus_calls.compound_ref.compute(
+        "compound_grow",
+        {
+            "principal": "1000000",
+            "deposit": "0",
+            "rate": "2.0",
+            "periods_per_year": 1,
+            "periods": 1201,
+            "tax": False,
+        },
+    )
+    assert compound_result == {"error": "SyntaxError"}
+
+
+# --- Task 5: 税の境界層 ---------------------------------------------------
+
+
+def _tax_boundary_stratum(name: str) -> corpus_calls.Stratum:
+    return next(
+        s for s in corpus_calls.FINANCE_STRATA if s.op == "compound_grow" and s.name == name
+    )
+
+
+def _tax_boundary_result(name: str) -> dict:
+    stratum = _tax_boundary_stratum(name)
+    params = stratum.build(random.Random(0), 0)
+    return corpus_calls.compound_ref.compute("compound_grow", params)
+
+
+def test_the_named_tax_strata_span_the_national_tax_floor_jump() -> None:
+    """設計書 §4.6。**件数ではなく跳びそのもの**を確かめる——`tax_interest_7`
+    の元本を 1 桁でも書き間違えると、利息が 7 からずれて国税が 0→1 に跳ばなく
+    なり、このテストが落ちる。「7 件入っている」だけを見るテストはこの間違いを
+    素通りさせる。
+    """
+    six = _tax_boundary_result("tax_interest_6")
+    seven = _tax_boundary_result("tax_interest_7")
+    assert six["interest"] == "6"
+    assert seven["interest"] == "7"
+    assert six["national_tax"] == "0"
+    assert seven["national_tax"] == "1"
+
+
+def test_the_named_tax_strata_span_the_local_tax_floor_jump() -> None:
+    """利息 19→20 で地方税の床が 0→1 に跳ぶ。国税と同じ理由で、跳びそのものを
+    確かめる。
+    """
+    nineteen = _tax_boundary_result("tax_interest_19")
+    twenty = _tax_boundary_result("tax_interest_20")
+    assert nineteen["interest"] == "19"
+    assert twenty["interest"] == "20"
+    assert nineteen["local_tax"] == "0"
+    assert twenty["local_tax"] == "1"
+
+
+def test_the_simultaneous_tax_jump_stratum_crosses_both_floors_at_once() -> None:
+    """`tax_simultaneous_jump` は決定的探索(乱数を使わない)で見つけた利息。
+    その利息の 1 円手前と比べて、国税と地方税が両方跳ぶことを確かめる。
+    """
+    result = _tax_boundary_result("tax_simultaneous_jump")
+    interest = int(result["interest"])
+    prev_national, prev_local = corpus_calls.compound_ref.withholding_tax(interest - 1)
+    assert int(result["national_tax"]) != prev_national
+    assert int(result["local_tax"]) != prev_local
+
+
+def test_the_tax_rounding_mismatch_stratum_differs_from_the_combined_floor() -> None:
+    """`tax_rounding_mismatch` は、国税・地方税を別々に切り捨てた合計が、
+    合計 20.315% を 1 回切り捨てた値と 1 円ずれる利息(`tax.rs` のユニット
+    テストが持つ `2,648,906` を起点に、乱数を使わず決定的に探索した)。
+    `tax.rs::the_two_taxes_are_floored_separately` と同じ数を主張する。
+    """
+    result = _tax_boundary_result("tax_rounding_mismatch")
+    interest = int(result["interest"])
+    assert interest == 2_648_906
+    separate = int(result["national_tax"]) + int(result["local_tax"])
+    combined = interest * 20315 // 100_000
+    assert result["national_tax"] == "405679"
+    assert result["local_tax"] == "132445"
+    assert separate == 538_124
+    assert combined == 538_125
+    assert separate != combined
+
+
+def test_the_tax_boundary_searches_are_deterministic_not_random() -> None:
+    """設計書 §4.6・Task 5 Step 3。「探索は生成のたびに走ってよいが、乱数を
+    使わないこと」——同じ起点からは常に同じ利息が出ることを確かめる。
+    """
+    assert corpus_calls._find_simultaneous_tax_jump(21) == corpus_calls._find_simultaneous_tax_jump(
+        21
+    )
+    assert corpus_calls._find_tax_rounding_mismatch(
+        2_648_906
+    ) == corpus_calls._find_tax_rounding_mismatch(2_648_906)
+
+
+# --- Task 6: 構成による正常生成(逆算 op と残価・ボーナス) ------------------
+
+
+def test_each_op_has_at_least_100_normal_cases() -> None:
+    """設計書 §4.11 の 2。各 op の正常が 100 件以上。
+
+    `loan_term` / `loan_principal` / `compound_deposit_for` /
+    `compound_periods_for` は、逆算の入力を正算の答から構成する(設計書
+    §4.4)ようになったことで、乱択層でもほぼ確実に正常になる——`loan_term`
+    はこの変更の前は乱択の正常率が 34% ほどで、100 件の下限を満たすのが
+    ここでは危うかった。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    ok_counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        if "error" not in case["expect"]:
+            ok_counts[case["op"]] = ok_counts.get(case["op"], 0) + 1
+    for op in corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS:
+        assert ok_counts.get(op, 0) >= 100, f"{op} の正常が100件未満(実測 {ok_counts.get(op, 0)})"
+
+
+def test_residual_zero_and_bonus_zero_are_all_normal_and_meet_their_floor() -> None:
+    """設計書 §4.11 の 2。残価 0 の正常 100 件以上、ボーナス 0 の正常 30 件以上。
+
+    `residual_zero` / `bonus_zero` は定義上すべて `expect == "ok"` の層なので
+    (金利 0% に固定し、発散や払い切りの縮退を踏まない入力だけを `i` で振って
+    いる)、単に件数を数えるだけでなく**実際に生成された各ケースが `ok` で
+    あること**まで確かめる——`build` が誤って `expect` と食い違う入力を
+    混ぜても、件数だけを見るテストでは気づけない。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    residual_zero_cases = [
+        c for c in shard["cases"] if c["stratum"] == "loan_forward/residual_zero"
+    ]
+    bonus_zero_cases = [
+        c for c in shard["cases"] if c["stratum"] == "loan_bonus_forward/bonus_zero"
+    ]
+    assert len(residual_zero_cases) >= 100
+    assert all("error" not in c["expect"] for c in residual_zero_cases)
+    assert len(bonus_zero_cases) >= 30
+    assert all("error" not in c["expect"] for c in bonus_zero_cases)
+
+
+# --- Task 7: ペアワイズ割付(IPOG) -----------------------------------------
+
+
+def _full_cross_pairs(factors: dict) -> set:
+    """`factors` の全交差から数え上げた、2 因子の水準の組の集合。
+    `pairwise()` が返す行の網羅を測るときの基準(全交差そのもの)。
+    """
+    names = list(factors)
+    pairs = set()
+    for i, factor_a in enumerate(names):
+        for factor_b in names[i + 1 :]:
+            for level_a in factors[factor_a]:
+                for level_b in factors[factor_b]:
+                    pairs.add((factor_a, level_a, factor_b, level_b))
+    return pairs
+
+
+def _covered_pairs(rows: list, names: list) -> set:
+    """`rows`(`pairwise()` の戻り値、または `name: level` の辞書の並び)が
+    実際に覆っている 2 因子の水準の組の集合。
+    """
+    pairs = set()
+    for row in rows:
+        for i, factor_a in enumerate(names):
+            for factor_b in names[i + 1 :]:
+                pairs.add((factor_a, row[factor_a], factor_b, row[factor_b]))
+    return pairs
+
+
+def test_pairwise_covers_every_pair_of_a_small_3x3x3_factor_table() -> None:
+    """Task 7 Step 2。3×3×3 の因子表で、**全交差から数え上げたペアの集合**と
+    **`pairwise()` の行が覆うペアの集合**を突き合わせる。「ペアワイズで
+    作った」という主張そのものを見張るテストの土台。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    rows = corpus_calls.pairwise(factors)
+    names = list(factors)
+    expected = _full_cross_pairs(factors)
+    actual = _covered_pairs(rows, names)
+    assert actual == expected
+    # 3 因子の全交差は 27 行。ペアワイズはそれより少ない行数で全ペアを
+    # 覆えているはず——全交差をそのまま返しているだけの実装ではないことの
+    # 検算(行を返すだけで網羅していない実装とは逆に、ここは「全交差の
+    # 手抜き」になっていないかを見る)。
+    assert len(rows) < 27
+
+
+def test_pairwise_is_deterministic_not_random() -> None:
+    """設計書 §4.3・Task 7 Step 1。「同じ因子表からは常に同じ行が同じ順で
+    出る」——2 回呼んで一致することで、乱数を使っていないことを主張する。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    assert corpus_calls.pairwise(factors) == corpus_calls.pairwise(factors)
+    assert corpus_calls.pairwise(corpus_calls.PAIRWISE_LOAN_FACTORS) == corpus_calls.pairwise(
+        corpus_calls.PAIRWISE_LOAN_FACTORS
+    )
+
+
+def test_pairwise_coverage_is_falsifiable_by_dropping_a_row() -> None:
+    """反証可能性: 行を 1 本削ると、全ペア網羅の主張が本当に崩れるか。
+    崩れなければ「ペアワイズを覆っている」と主張するテストが実は何も
+    見ていない(「テストは何も主張しないことがある」)。
+    """
+    factors = {"x": (1, 2, 3), "y": ("a", "b", "c"), "z": (True, False, None)}
+    rows = corpus_calls.pairwise(factors)
+    names = list(factors)
+    expected = _full_cross_pairs(factors)
+    reduced = rows[:-1]
+    assert _covered_pairs(reduced, names) != expected
+
+
+def _pairwise_cases(shard: dict) -> list:
+    """`shard["cases"]` のうち、pairwise 層(`"{op}/pairwise_NNNN"`)のもの。"""
+    return [c for c in shard["cases"] if c["stratum"].rsplit("/", 1)[-1].startswith("pairwise_")]
+
+
+def test_loan_ops_together_cover_every_rate_and_term_pair_in_the_corpus() -> None:
+    """§4.11 の 3(コーパス全体に対して)。loan の pairwise 因子は金利・期間の
+    2 つだけなので、`pairwise()` は全交差と一致する(2 因子なら 1 行が高々
+    1 組しか覆えないため——上の 3×3×3 のテストとは違う理屈だが、これも
+    `pairwise()` 自身の性質としてテストしている)。
+
+    ここでは**独立に計算した全交差**と、**実際にコーパスへ入った入力**
+    (`shard["cases"]`、参照実装を経て golden になったもの)を突き合わせる。
+    `n` がそのまま入力になる 4 op(forward・principal・bonus_forward・
+    bonus_principal)の合算で見る——`loan_term` は `n` が答なので合算に
+    入れない(それでも集合が揃うことがこのテストの主張であり、揃わなければ
+    `loan_term` の構成失敗がどこかの組を丸ごと消していたことになる)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    literal_n_ops = {"loan_forward", "loan_principal", "loan_bonus_forward", "loan_bonus_principal"}
+    covered = set()
+    for case in _pairwise_cases(shard):
+        if case["op"] not in literal_n_ops:
+            continue
+        covered.add((case["input"]["rate"], case["input"]["n"]))
+    expected = {
+        (rate, n)
+        for rate in corpus_calls.PAIRWISE_RATE_LEVELS
+        for n in corpus_calls.PAIRWISE_LOAN_TERM_LEVELS
+    }
+    assert covered == expected
+
+
+def test_compound_grow_pairwise_rows_cover_every_pair_of_its_four_factors() -> None:
+    """§4.11 の 3。`compound_grow` は正算そのものなので pairwise の行を
+    1 つも飛ばさない(探索が絡まないため)——**この op だけで**、金利・
+    期間・複利周期・税の 4 因子・6 通りの 2 因子ペアすべてが揃っているはず。
+    実際にコーパスへ入った入力を、独立に呼んだ `pairwise()` の出力と比べる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    rows = [case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_grow"]
+    assert len(rows) == len(corpus_calls._PAIRWISE_COMPOUND_GROW_ROWS)
+    actual = _covered_pairs(rows, names)
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    assert actual == expected
+
+
+def test_compound_periods_for_pairwise_rows_cover_every_pair_of_its_three_factors() -> None:
+    """§4.11 の 3。`compound_periods_for` は「期間」を答として持たない
+    (§4.4)ので、因子は金利・複利周期・税の 3 つ(設計書の「その op が持たない
+    因子を無理に入れない」)。この 3 因子・3 通りのペアすべてが実際のコーパス
+    に現れることを確かめる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS)
+    rows = [
+        case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_periods_for"
+    ]
+    assert len(rows) == len(corpus_calls._PAIRWISE_COMPOUND_PERIODS_FOR_ROWS)
+    actual = _covered_pairs(rows, names)
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS)
+    assert actual == expected
+
+
+def test_compound_grow_pairwise_coverage_is_falsifiable_by_dropping_a_case() -> None:
+    """反証可能性(コーパス版)。実際に生成された `compound_grow` の pairwise
+    ケースを 1 件取り除くと、上のテストが確かめている全ペア網羅は本当に
+    崩れるか。崩れなければ、そのテストは件数を見ているだけで網羅を見ていない
+    ことになる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    names = list(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    rows = [case["input"] for case in _pairwise_cases(shard) if case["op"] == "compound_grow"]
+    expected = _full_cross_pairs(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS)
+    assert _covered_pairs(rows[:-1], names) != expected
+
+
+def test_pairwise_rows_use_only_normal_levels() -> None:
+    """Task 7 Step 3。ペアワイズの水準は正常値だけで組む(設計書 §4.3)。
+    `100.0001`(金利の上限超)・期間 `0`・周期 `0`/`4`/`13` を因子の水準に
+    混ぜていないことを、実際に使われた因子表そのもので確かめる——
+    `expect` は個々の行では `ok` 以外(`SyntaxError`/`Overflow`)にもなり
+    得る(高金利 × 長期間の発散・複利の Overflow、実装報告に記録)が、それは
+    **正常値どうしの組み合わせが結果として発散・Overflow した**ためであり、
+    エラー水準そのものを混ぜたのではない、という違いをこのテストが担う。
+    """
+    assert "100.0001" not in corpus_calls.PAIRWISE_RATE_LEVELS
+    assert 0 not in corpus_calls.PAIRWISE_LOAN_TERM_LEVELS
+    assert 0 not in corpus_calls.PAIRWISE_COMPOUND_TERM_LEVELS
+    assert 1201 not in corpus_calls.PAIRWISE_COMPOUND_TERM_LEVELS
+    assert set(corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]) == {1, 2, 12}
+
+
+def test_pairwise_rows_are_allocated_to_all_eight_ops() -> None:
+    """Task 7 Step 4。8 op すべてに pairwise 層が割り付けられていること。
+    因子表は op ごとに違う(loan は金利・期間の 2 つ、`compound_grow` /
+    `compound_deposit_for` は金利・期間・周期・税の 4 つ、
+    `compound_periods_for` は期間を持たないので金利・周期・税の 3 つ)。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    ops_seen = {case["op"] for case in _pairwise_cases(shard)}
+    assert ops_seen == set(corpus_calls.LOAN_OPS + corpus_calls.COMPOUND_OPS)
+
+
+# --- Task 8: 非単調層の決定的探索 -------------------------------------------
+
+
+def _non_monotone_net_stratum() -> corpus_calls.Stratum:
+    return next(
+        s
+        for s in corpus_calls.FINANCE_STRATA
+        if s.op == "compound_periods_for" and s.name == "non_monotone_net"
+    )
+
+
+def test_the_non_monotone_net_search_is_deterministic_not_random() -> None:
+    """設計書 §5.2・Task 8 Step 1。「探索は生成のたびに走ってよいが、乱数を
+    使わないこと」——同じ入力からは常に同じ `(到達, 未達, 再到達)` の期が出る。
+    """
+    args = (
+        corpus_calls._NON_MONOTONE_NET_PRINCIPAL,
+        0,
+        corpus_calls._NON_MONOTONE_NET_NUM,
+        corpus_calls._NON_MONOTONE_NET_DEN,
+    )
+    first = corpus_calls._find_non_monotone_net_valley(*args, search_limit=200)
+    second = corpus_calls._find_non_monotone_net_valley(*args, search_limit=200)
+    assert first == second
+
+
+def test_the_non_monotone_net_stratum_exists_because_mutation_9_needs_it() -> None:
+    """設計書 §5.2・Task 8 Step 3。
+
+    **これは件数を守るテストではない。** `compound_periods_for` の必要期間は
+    期数について単調ではない——税の 2 つの床(国税 15.315%・地方税 5%)が
+    同じ期に同時に跳ぶと、その期だけ手取りが前の期より下がることがある。
+    Task 11 で入る Finance 変異 #9 は `compound_inverse.rs::periods_for` の
+    前進 1 本の全走査を期数についての二分探索に置き換えるので、この谷を
+    跨ぐ探索をすると誤った期を返す。**その谷を含むケースがコーパスに 1 件も
+    無ければ、#9 はどのケースにも当たらず、静かに検出力を失う。** つまり
+    このテストが守っているのは `non_monotone_net` 層の件数そのものではなく、
+    **変異 #9 の検出力**である——件数だけでは単調なケースが紛れ込んでも
+    緑になるので、谷の形そのものは下の
+    `test_the_non_monotone_net_stratum_is_actually_a_valley` が assert する。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=2000)
+    cases = [c for c in shard["cases"] if c["stratum"] == "compound_periods_for/non_monotone_net"]
+    assert len(cases) >= 1
+
+
+def test_the_non_monotone_net_stratum_is_actually_a_valley() -> None:
+    """設計書 §5.2・Task 8 Step 4。件数だけを見るテストは、単調なケースが
+    紛れ込んでも緑になる。**参照実装(`compound_ref.reached`)を直接呼んで**、
+    目標との比較(到達しているか)が 3 点で `True, False, True` になっている
+    ことを確かめる——これが二分探索(変異 #9)を飛び越えさせる谷そのものである。
+    """
+    stratum = _non_monotone_net_stratum()
+    params = stratum.build(random.Random(0), 0)
+    principal = int(params["principal"])
+    deposit = int(params["deposit"])
+    target = int(params["target"])
+    assert params["tax"] is True
+    num, den = corpus_calls.compound_ref.rate_fraction(params["rate"], params["periods_per_year"])
+
+    reached_period = corpus_calls._NON_MONOTONE_NET_REACHED_PERIOD
+    dip_period = corpus_calls._NON_MONOTONE_NET_DIP_PERIOD
+    recovery_period = corpus_calls._NON_MONOTONE_NET_RECOVERY_PERIOD
+    assert dip_period == reached_period + 1
+    assert recovery_period > dip_period
+
+    def _is_reached(n: int) -> bool:
+        return corpus_calls.compound_ref.reached(principal, deposit, num, den, n, True) >= target
+
+    assert _is_reached(reached_period) is True
+    assert _is_reached(dip_period) is False
+    assert _is_reached(recovery_period) is True
+
+    # `periods_for` 自身の答は「最初に到達する期」であって谷の期ではない
+    # ——参照実装の全走査(`check_periods_certificate` と同じ定義)がそれを
+    # 正しく守っていることも、ついでに確かめる。
+    n = corpus_calls.compound_ref.periods_for(principal, deposit, num, den, target, True)
+    assert n == reached_period
+
+
+def test_a_bisection_over_this_case_returns_the_wrong_period() -> None:
+    """設計書 §5.2・Task 8。上の 3 つのテストは「谷がある」ことしか言っていない
+    ——**「その谷が変異 #9 を殺す」は主張であって測定ではない。** ここで測る。
+
+    変異 #9 は `periods_for` の前進 1 本の全走査を、同じ述語
+    (`手取り >= 目標`)についての二分探索に置き換える。その二分探索をここで
+    参照実装の上に組んで走らせ、**正解と違う期を返すこと**を確かめる。
+    谷があっても二分探索がたまたま正解に着地する入力はあり得るので、
+    谷の存在だけでは #9 の検出力は保証されない。
+
+    コメントで「飛び越えるはずだ」と書くとその根拠は静かに腐るが、この
+    assert は入力が変わって谷が消えた瞬間に赤くなる。
+    """
+    stratum = _non_monotone_net_stratum()
+    params = stratum.build(random.Random(0), 0)
+    principal = int(params["principal"])
+    target = int(params["target"])
+    num, den = corpus_calls.compound_ref.rate_fraction(params["rate"], params["periods_per_year"])
+    correct = corpus_calls._NON_MONOTONE_NET_REACHED_PERIOD
+
+    def _is_reached(n: int) -> bool:
+        return corpus_calls.compound_ref.reached(principal, 0, num, den, n, True) >= target
+
+    # `MAX_PERIODS`(compound.rs)と同じ上限から下ろす、素直な下限二分探索。
+    low, high = 0, 1200
+    assert _is_reached(high)
+    while high - low > 1:
+        mid = low + (high - low) // 2
+        if _is_reached(mid):
+            high = mid
+        else:
+            low = mid
+
+    assert high != correct
+    # 実測値も焼き付ける——「違う」だけだと、谷の形が変わって別の誤り方に
+    # なったことに気づけない。
+    assert (high, correct) == (21, 19)
+
+
+def test_finance_shard_refuses_to_silently_drop_a_stratum() -> None:
+    """設計書 §4.7:「層の下限の合計が総件数を超えたら生成器がその場で落ちる
+    (黙って層を削らない)」。総件数を定数で決め打たず、`FINANCE_STRATA` から
+    実測した下限合計を 1 件だけ下回る `count` を渡して確かめる——ちょうど
+    下限合計と同じ `count` は通ることも合わせて見て、境界のどちら側で落ちる
+    かを固定する。
+    """
+    named_minimum_total = sum(max(1, stratum.minimum) for stratum in corpus_calls.FINANCE_STRATA)
+
+    with pytest.raises(RuntimeError, match="下限合計"):
+        corpus_calls.build_finance_shard(seed=1, count=named_minimum_total - 1)
+
+    # 境界ちょうどでは落ちない(下限合計そのものは満たせる件数である)。
+    shard = corpus_calls.build_finance_shard(seed=1, count=named_minimum_total)
+    assert len(shard["cases"]) == named_minimum_total
+
+
+def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """末尾の要約行の分母は、CLI 引数の `count` ではなく実際に書き出した総件数。
+
+    以前のこの行は 15 シャード合計の経過時間を `count` で割っていた。件数の
+    ほうも `count` をそのまま印字していたので、**印字された件数もケース
+    あたりの時間も嘘だった**。finance だけ `FINANCE_COUNT` を渡す変更が入った
+    時点で嘘になったが、緑のまま気づけなかった。この行は道具が印字する
+    一次資料で、他所の台帳に事実として写される。
+
+    `main` を実際に走らせて、書き出されたファイルを数え直して突き合わせる
+    ——`_summary_line` を直接呼ぶだけでは、「`main` が総件数ではなく `count`
+    を渡す」という元の壊れ方そのものを捕まえられない。
+
+    finance は下限合計まで、他の 14 枚は 5 件まで落として速く回す(分母の
+    正しさは件数の大小によらない)。
+    """
+    monkeypatch.setattr(generate_corpus, "CORPUS", tmp_path)
+    monkeypatch.setattr(
+        generate_corpus,
+        "FINANCE_COUNT",
+        sum(max(1, stratum.minimum) for stratum in corpus_calls.FINANCE_STRATA),
+    )
+    cli_count = 5
+    monkeypatch.setattr(sys, "argv", ["generate_corpus.py", str(cli_count)])
+
+    generate_corpus.main()
+
+    written = sorted(tmp_path.glob("*.json"))
+    expected_total = sum(
+        len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
+    )
+    # 18 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 数字のままなので、枚数も見る。
+    assert len(written) == 18
+    # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
+    # する取り方では、どちらか一方を分母にする退行を捕まえられない。
+    assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)
+
+    line = capsys.readouterr().out.strip().splitlines()[-1]
+    match = re.fullmatch(r"generated (\d+) cases in ([\d.]+)ms \(([\d.]+)ms each\)", line)
+    assert match is not None, line
+    printed_total, elapsed_ms, each_ms = int(match[1]), float(match[2]), float(match[3])
+
+    assert printed_total == expected_total
+    # 印字した 2 つの数の割り算が、印字した 3 つ目と合うこと。
+    #
+    # **左辺は既に量子化されている。** `_summary_line` は経過を `.2f`(ミリ秒
+    # 2 桁)で印字し、1 件あたりは**丸めていない**経過から `.4f` で出す。
+    # つまりここで割れるのは 0.005ms まで刻まれた値で、右辺は刻まれる前の
+    # 値から来ている。`round(..., 4) == each_ms` は**その差を無視して**
+    # おり、`0.005 / total` が 4 桁目(5e-5)に届く件数で確率的に赤くなった
+    # (実測 2026-08-20: 1 回赤、その後 5/5 緑。このテストは 14 枚を 5 件に
+    # 落として回すので当たる。フルコーパス 33,567 件では 1.5e-7 で当たらない)。
+    #
+    # **これは許容を緩めているのではなく、左辺の量子化という事実を右辺に
+    # 写す是正である。** 分母を取り違える退行(`count` で割る元の壊れ方)は
+    # 桁違いのずれを出すので、この許容でも捕まる。
+    quantization = 0.005 / printed_total  # 経過の `.2f` が捨てた分
+    printing = 0.5e-4  # 1 件あたりの `.4f` が捨てた分
+    assert abs(elapsed_ms / printed_total - each_ms) <= quantization + printing
+
+
+# --- corrections-000.json に足した 2 形(計画 2026-08-19-heavy-scientific-ui-report
+# Task 3、設計書 §5.2)。**この節は値を検算しない**——`ac`/`del` は値の意味を
+# 持たないキーなので、正しさの根拠は `engine_table.rs` の
+# `ac_recovers_from_an_error`(:189)・`keys_other_than_ac_are_ignored_while_in_error`
+# (:194)・`del_removes_the_last_character`(:80)であって、ここは形が
+# 壊れていないことだけを固定する。
+
+
+def test_every_correction_stratum_has_at_least_one_case() -> None:
+    # 計画 Task 3 Step 3: 新形(error-recovery・paren-edit)が 1 件以上あること
+    # を固定する。既存 2 形(typo-del・ac-rebuild)も同じ枠組みで数える
+    # (Task 3 Step 2、finance の stratum と同じ考え方)。
+    shard = generate_corpus.build_corrections_shard(seed=1, count=200)
+    counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        counts[case["stratum"]] = counts.get(case["stratum"], 0) + 1
+    assert set(counts) == set(generate_corpus.CORRECTION_STRATA)
+    for stratum in generate_corpus.CORRECTION_STRATA:
+        assert counts.get(stratum, 0) >= 1, f"{stratum} produced no cases"
+    assert shard["strata"] == counts
+    assert sum(counts.values()) == len(shard["cases"])
+
+
+def test_no_correction_stratum_collapses_to_a_handful() -> None:
+    """**「1 件以上」では、形が黙って痩せることを捕まえられない。**
+
+    生成器は 4 形を等確率で選んでいるつもりだが、選んだあとに条件を満たさな
+    かったケースを `continue` で捨てる。捨てられやすい形は結果として少なく
+    なる——**再抽選は標本を偏らせる**（B+C Task 6 で同じ形を踏んだ。均等に
+    したい因子はループの外で引くのが正しい直し方）。実測はいま
+    `paren-edit` 790 / `ac-rebuild` 420 / `error-recovery` 418 /
+    `typo-del` 372 で、等分の 500 からは離れているが、どの形も十分にある。
+
+    偏り自体は仕様として許す（設計書も計画も均等を要求していない）。
+    ここで見張るのは**崩壊**のほうである——ある形が生成しにくくなって
+    数件まで痩せても、`>= 1` のテストは緑のままだからだ。実測の最小
+    (372 = 18.6%) の半分を下限に置く。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    counts = shard["strata"]
+    total = sum(counts.values())
+    floor = total // 10
+    thin = {name: n for name, n in counts.items() if n < floor}
+    assert not thin, f"{thin} は総数 {total} の 10% ({floor} 件) に届かない"
+
+
+def test_every_correction_case_carries_a_known_stratum() -> None:
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    known = set(generate_corpus.CORRECTION_STRATA)
+    for case in shard["cases"]:
+        assert case["stratum"] in known
+
+
+def test_error_recovery_cases_actually_start_from_an_error() -> None:
+    """`right` が、実在するエラー経路(`errors-000.json` の主張)で始まり、
+    そのあとにエラー中の他のキー(`GARBAGE_KEYS`)を経て `ac` に至り、
+    それ以降が `left`(正しい列)と一致すること。
+
+    **「エラー中の他のキーが無視される」までを主張に含める**(設計書 §5.2)
+    ——`ac` の直前に `GARBAGE_KEYS` が挟まっていることまで確かめる。挟まって
+    いなければ、この形は「エラー後に ac で復帰する」しか主張しておらず、
+    計画が要求する強い主張(エラー中に押した他のキーも無視される)を
+    落としていることになる。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    error_starts = set(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES)
+    cases = [c for c in shard["cases"] if c["stratum"] == "error-recovery"]
+    assert len(cases) >= 1
+    for case in cases:
+        right = case["right"]
+        left = case["left"]
+        assert right.count("ac") == 1, f"{case['id']}: expected exactly one ac"
+        ac_index = right.index("ac")
+        # `ac` より後ろは正しい列そのもの。
+        assert right[ac_index + 1 :] == left
+        # `ac` の直前に、生成器の GARBAGE_KEYS がそのまま挟まっている
+        # (エラー中に押した他のキーが無視されることを、コーパスの規模で
+        # 踏むための挿入)。
+        garbage = list(generate_corpus.GARBAGE_KEYS)
+        assert right[ac_index - len(garbage) : ac_index] == garbage
+        # `ac` より前の残り(garbage の手前)は、実在するエラー経路の
+        # キー列そのもの。
+        error_prefix = tuple(right[: ac_index - len(garbage)])
+        assert error_prefix in error_starts
+
+
+def test_paren_edit_cases_delete_a_single_digit_inside_the_open_paren() -> None:
+    """`[a, add, lparen, b, del, c, rparen, eq]` ≡ `[a, add, lparen, c, rparen, eq]`
+    (設計書 §5.2)。`b` は必ず 1 個の数字キー——`del` が 1 回で完全に消えて
+    初めて、`del_removes_the_last_character`(`engine_table.rs:80`,
+    `main_of(&["3", "del"]) == "0"`)の主張どおりになる。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    cases = [c for c in shard["cases"] if c["stratum"] == "paren-edit"]
+    assert len(cases) >= 1
+    digits = set("0123456789")
+    for case in cases:
+        right = case["right"]
+        left = case["left"]
+        lparen_index = right.index("lparen")
+        b_index = lparen_index + 1
+        assert right[b_index] in digits, f"{case['id']}: b is not a single digit"
+        assert right[b_index + 1] == "del"
+        # `b, del` を取り除くと、正しい列そのものになる。
+        rebuilt = right[:b_index] + right[b_index + 2 :]
+        assert rebuilt == left
+
+
+def test_error_inducing_pool_is_only_genuine_errors() -> None:
+    # `errors-000.json` のアンダーフロー 2 件(`expect.error` を持たない)は
+    # 「エラーにならない」という主張なので、エラー状態を作るためのプールに
+    # 混ざっていてはいけない。
+    from calcarc_reference.corpus_errors import build_errors_shard
+
+    error_cases = build_errors_shard()["cases"]
+    non_error_keys = {tuple(c["keys"]) for c in error_cases if not c["expect"].get("error")}
+    assert len(non_error_keys) >= 1  # アンダーフロー 2 件が実在すること
+    assert not (non_error_keys & set(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES))
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) >= 1
+
+
+def test_error_inducing_pool_keeps_the_unbalanced_parenthesis_cases() -> None:
+    """**プールは 9 経路を 1 つも欠かない。**
+
+    実装中、対応の無い `rparen` を持つ経路(`unbalanced_parenthesis_cases`)を
+    プールから除けば `pnpm heavy` が緑になることが分かった——`needsPrecedence`
+    が `right` 全体を 1 本のキー列として括弧の対応を見ており、`ac` が engine を
+    初期状態に戻すことを知らなかったからである。**除いたのは入力のほうでは
+    なく、直すべきは判定のほうだった**(`ac` で組を捨てる)。除いていたら、
+    「括弧の構文エラーから `ac` で復帰する」という形がコーパスから丸ごと
+    抜けていた。
+
+    9 経路のうちアンダーフローの 2 件は `expect.error` を持たない(丸め潰れは
+    値域を外れたことにならない)ので、プールに入るのはエラーになる 28 件。
+    """
+    with_parens = [
+        keys
+        for keys in generate_corpus.ERROR_INDUCING_KEY_SEQUENCES
+        if "lparen" in keys or "rparen" in keys
+    ]
+    assert len(with_parens) == 2, with_parens
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 28
+
+
+# --- 結合方向(`associativity-000.json`、計画 Task 4、設計書 §6) -------------
+
+
+def _assoc_shard() -> dict:
+    """テスト全体で 1 枚を作り直さずに使い回す。生成は 0.2 秒未満である。"""
+    return generate_corpus.build_assoc_shard(seed=20260828, count=2000)
+
+
+_ASSOC = _assoc_shard()
+_ASSOC_KEY_OPS = {key: op for op, key in BINARY_KEYS.items()}
+
+
+def _flat_chain_of(keys: list[str]) -> tuple[list, list[str]]:
+    """平坦なキー列を項と演算子に戻す。**生成器の出力を読み直す側の実装。**
+
+    生成器が持っている `terms`/`ops` をそのまま受け取ると、テストは生成器の
+    内部状態を写すだけになる。ここはコミットされる JSON のキー列だけから
+    組み直す——`keys` が壊れていれば、ここで戻せない。
+    """
+    terms: list = []
+    ops: list[str] = []
+    digits = ""
+    for key in keys:
+        if key == "eq":
+            break
+        if key.isdigit():
+            digits += key
+            continue
+        if key not in _ASSOC_KEY_OPS:
+            raise AssertionError(f"unexpected key {key!r} in a flat associativity chain: {keys!r}")
+        terms.append(Num(int(digits)))
+        digits = ""
+        ops.append(_ASSOC_KEY_OPS[key])
+    terms.append(Num(int(digits)))
+    return terms, ops
+
+
+def test_the_associativity_shard_is_deterministic() -> None:
+    assert generate_corpus.build_assoc_shard(seed=20260828, count=200) == (
+        generate_corpus.build_assoc_shard(seed=20260828, count=200)
+    )
+
+
+def test_every_associativity_case_carries_a_known_stratum() -> None:
+    """層の名前は 5 つだけ。**知らない名前が入ると内訳が黙って崩れる。**"""
+    known = {*generate_corpus.ASSOC_CHAINS, generate_corpus.ASSOC_CONTROL_STRATUM}
+    seen = {case["stratum"] for case in _ASSOC["cases"]}
+    assert seen == known, seen
+    assert _ASSOC["strata"] == {
+        stratum: sum(1 for case in _ASSOC["cases"] if case["stratum"] == stratum)
+        for stratum in sorted(seen)
+    }
+
+
+def test_the_control_group_is_exactly_half_of_the_shard() -> None:
+    """**対照群が痩せたら、この変異は「無差別に壊していない」と言えなくなる。**
+
+    平坦なキー列 1 本につき全括弧の双子が 1 本。半分が対照群であることは、
+    `associativity-flip` が**シャードの一部だけ**を赤くするという主張の土台
+    である(設計書 §6)。
+    """
+    control = [
+        case for case in _ASSOC["cases"] if case["stratum"] == generate_corpus.ASSOC_CONTROL_STRATUM
+    ]
+    assert len(control) * 2 == len(_ASSOC["cases"])
+    assert len(_ASSOC["cases"]) == 2000
+
+
+def test_every_chain_stratum_has_cases() -> None:
+    """表に書いた形が 0 件、を許さない(`errors-000.json` と同じ規律)。"""
+    for stratum in generate_corpus.ASSOC_CHAINS:
+        assert _ASSOC["strata"].get(stratum, 0) >= 20, (stratum, _ASSOC["strata"])
+
+
+def test_the_twins_differ_only_in_their_parentheses() -> None:
+    """双子は**同じ式・同じ期待値**で、キー列だけが違う。
+
+    片方は括弧を 1 つも打たず、もう片方は全部の二項を括弧で囲む。engine が
+    同じ答えを出すべき理由が「結合方向」だけになる。
+    """
+    cases = _ASSOC["cases"]
+    for flat, control in zip(cases[0::2], cases[1::2], strict=True):
+        assert control["stratum"] == generate_corpus.ASSOC_CONTROL_STRATUM
+        assert flat["stratum"] != generate_corpus.ASSOC_CONTROL_STRATUM
+        assert flat["expr"] == control["expr"]
+        assert flat["expect"] == control["expect"]
+        assert "lparen" not in flat["keys"], flat
+        # 全括弧の側は、二項演算子と同じ数だけ組を開く(`to_keys` は根も包む)。
+        operators = sum(1 for key in flat["keys"] if key in _ASSOC_KEY_OPS)
+        assert control["keys"].count("lparen") == operators, control
+        assert control["keys"].count("rparen") == operators, control
+
+
+def test_every_flat_chain_would_change_its_answer_if_the_folding_flipped() -> None:
+    """**踏んだと言えるのは、二つの読み方が別の答えを出すときだけ。**
+
+    加算と乗算は結合的なので `9 + 4 + 3` はどちらの読み方でも 16 になる。
+    そういう列ばかりを積むと、シャードは大きいのに `associativity-flip` を
+    1 件も捕まえられない——「大量に踏んだ」が「大量に何も試していない」に
+    化ける。ここはコミットされるキー列そのものから両方の読みを組み直して、
+    差が生成側のふるいの下限以上であることを確かめる。
+    """
+    flat_cases = [
+        case for case in _ASSOC["cases"] if case["stratum"] != generate_corpus.ASSOC_CONTROL_STRATUM
+    ]
+    assert len(flat_cases) == 1000
+    for case in flat_cases:
+        terms, ops = _flat_chain_of(case["keys"])
+        documented, other = generate_corpus._assoc_trees(terms, ops)
+        value = evaluate(documented)
+        alternative = evaluate(other)
+        gap = abs(value - alternative) / max(abs(value), mp.mpf(1))
+        assert gap >= generate_corpus.ASSOC_MIN_RELATIVE_GAP, (case["id"], case["expr"], gap)
+        assert math.isclose(float(value), case["expect"]["re"], rel_tol=1e-15), case["id"]
+
+
+def test_the_power_stratum_takes_the_whole_reachable_box() -> None:
+    """`xʸ` の連鎖は数え上げられるほど狭いので、乱択せず全部使う。
+
+    **箱の中で通るものが 1 つでも漏れていたら赤くする。** 乱択に戻した
+    (あるいは箱を狭めた)ことに、件数が減るだけでは気づけない。
+    """
+    reachable = [
+        generate_corpus._flat_key_sequence(terms, ops)
+        for terms, ops in generate_corpus._power_chains()
+        if generate_corpus.assoc_value(terms, ops) is not None
+    ]
+    in_shard = [case["keys"] for case in _ASSOC["cases"] if case["stratum"] == "power"]
+    assert sorted(map(tuple, in_shard)) == sorted(map(tuple, reachable))
+    assert len(reachable) == 27
+
+
+def test_no_associativity_case_needs_precedence() -> None:
+    """**このシャードは優先順位を踏まない。** 段を混ぜていないからである。
+
+    混ざると `precedence-000.json` の担当と重なり、赤が出たときにどちらが
+    原因か分からなくなる。`web/tests/heavy/corpus.spec.ts` は値シャードごとに
+    「優先順位を踏んだ件数」を実データから数えて、`precedence-000.json` 以外は
+    0 件であることを固定している——ここが崩れると向こうが赤くなる。
+    """
+    assert not [case["id"] for case in _ASSOC["cases"] if _needs_precedence(case["keys"])]

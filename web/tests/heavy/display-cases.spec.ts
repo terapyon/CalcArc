@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import {
   assertSupportedMode,
+  countSequencesWithoutEq,
   type DisplayCase,
   type DisplayEquivalenceCase,
+  displaySequences,
   loadDisplayShards,
   summarizeShape,
 } from "./corpus";
@@ -33,6 +35,29 @@ function isDisplayCase(
   c: DisplayCase | DisplayEquivalenceCase,
 ): c is DisplayCase {
   return c.kind === "display";
+}
+
+/**
+ * 期待値として持っているエラー種別ごとの件数。**同値ケースは持たない。**
+ *
+ * 種別を落とすと、報告書のエラー経路の枠が「エラーが N 件」としか言えなく
+ * なる——`main` は全種別で同じ `"Math ERROR"` なので、そこから種別を
+ * 取り戻す方法は無い。
+ */
+function countErrorKinds(
+  cases: (DisplayCase | DisplayEquivalenceCase)[],
+): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const testCase of cases) {
+    if (!isDisplayCase(testCase)) {
+      continue;
+    }
+    const error = testCase.expect.error;
+    if (error !== undefined) {
+      kinds[error] = (kinds[error] ?? 0) + 1;
+    }
+  }
+  return kinds;
 }
 
 /**
@@ -67,14 +92,9 @@ for (const { name, shard } of loadDisplayShards()) {
     // 比べる」経路が開く。
     assertSupportedMode(name, cases);
 
-    const sequences: string[][] = [];
-    for (const testCase of cases) {
-      if (isDisplayCase(testCase)) {
-        sequences.push(testCase.keys);
-      } else {
-        sequences.push(testCase.left, testCase.right);
-      }
-    }
+    // **組み立ては `corpus.ts` の 1 か所に置く。** 報告書の「入力中の表示」を
+    // 数える側が同じ列を見るので、規則を 2 か所に書くとずれても誰も落ちない。
+    const sequences = displaySequences(cases);
 
     const results: HarnessResult[] = [];
     for (let start = 0; start < sequences.length; start += BATCH) {
@@ -94,7 +114,27 @@ for (const { name, shard } of loadDisplayShards()) {
       if (isDisplayCase(testCase)) {
         const got = at(results, cursor++);
         displayCases += 1;
-        if (got.error !== null) {
+        const expectedError = testCase.expect.error;
+        if (expectedError !== undefined) {
+          // **主張の中身は種別のほうである(設計書 §5)。** `ERROR_TEXT` は
+          // 全種別で "Math ERROR" と同じ文字列なので、種別まで見ないと
+          // 5 種類すべてが入れ替わっても `main` の比較だけでは緑になる。
+          if (got.error !== expectedError) {
+            mismatches.push(
+              `${testCase.id} (${testCase.expr}): engine reported the ` +
+                `error ${JSON.stringify(got.error)}, but the reference ` +
+                `expected ${JSON.stringify(expectedError)}`,
+            );
+          } else if (got.main !== testCase.expect.main) {
+            mismatches.push(
+              `${testCase.id} (${testCase.expr}): engine showed ` +
+                `${JSON.stringify(got.main)}, reference expected ` +
+                `${JSON.stringify(testCase.expect.main)} (error kind matched)`,
+            );
+          }
+        } else if (got.error !== null) {
+          // **省略は「エラーにならない」という主張。** アンダーフローの
+          // ようなケースが、エラーになった時点で不一致になる。
           mismatches.push(
             `${testCase.id} (${testCase.expr}): engine reported the error ` +
               `${JSON.stringify(got.error)}, but the reference produced the ` +
@@ -154,7 +194,15 @@ for (const { name, shard } of loadDisplayShards()) {
       exponentDisplayCases: cases.filter(
         (c) => isDisplayCase(c) && c.expect.main.includes("e"),
       ).length,
-      errorCases: 0,
+      // **主張したエラー種別ごとの件数。** 実際に観測した件数ではなく、
+      // このシャードが期待値として持っている件数である。**種別を落とさない**
+      // ——`main` は全種別で同じ `"Math ERROR"` なので、種別を畳んだ集計は
+      // 種別の取り違えについて何も言えない。
+      errorKinds: countErrorKinds(cases),
+      // **`=` を一度も押さないキー列の本数。** 報告書の「入力中の表示」の
+      // 項目がここから書かれる。`entry-000.json` は全件がこれに当たり、
+      // `errors-000.json` は単項関数がその場で撥ねるケースが当たる。
+      sequencesWithoutEq: countSequencesWithoutEq(sequences),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

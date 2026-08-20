@@ -30,8 +30,11 @@ from calcarc_reference.corpus_complex import (
     COMPLEX_UNARY_FNS,
     NotComplexSafe,
 )
+from calcarc_reference.corpus_entry import build_entry_shard
+from calcarc_reference.corpus_errors import build_errors_shard
 from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
+    BINARY_KEYS,
     BINARY_OPS,
     COMBINATORICS_BINS,
     COMBINATORICS_FNS,
@@ -361,6 +364,270 @@ def build_precedence_shard(seed: int, count: int) -> dict:
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "tolerance": TOLERANCE,
+        "cases": entries,
+    }
+
+
+# **結合方向のシャード(設計書 2026-08-19 §6、計画 Task 4)。**
+#
+# 左結合・右結合の規則は `docs/base-spec.md` の**公開契約**である——`xʸ` だけが
+# 右結合で(`2^3^2 = 512`)、四則と `nPr`/`nCr` は左結合。ここは
+# `BINARY_PRECEDENCE` とまったく同じ立場で、**計算ではなく記法の約束**である。
+# `engine/mod.rs` の畳み込みの実装は読んでいない——読めば移植になる。
+#
+# **既存の直列化(`to_keys` / `to_keys_minimal`)は 1 文字も触らない。**
+# `to_keys_minimal` は「同順位の入れ子の括弧は残す」で書かれており、それを
+# 変えると `precedence-000.json` の 2000 件が総入れ替えになる。このシャードは
+# **自分で平坦なキー列を組む**。
+RIGHT_ASSOCIATIVE_OPS = ("^",)
+
+#: 同順位の連鎖に使う演算子。**1 つの連鎖に混ぜてよいのは同じ優先順位の段
+#: だけ**である。混ぜると「同じ括弧の組に優先順位の異なる演算子が 2 つ」に
+#: なり、`needsPrecedence` が数える「括弧を省いた式」に化けて、優先順位の
+#: 検証(`precedence-000.json` の担当)とこのシャードの担当が混ざる。
+#: 赤が出たときにどちらが原因か分からなくなるので、意図して分けている。
+ASSOC_CHAINS: dict[str, tuple[str, ...]] = {
+    "additive": ("+", "-"),
+    "multiplicative": ("*", "/"),
+    "combinatorial": ("nPr", "nCr"),
+    "power": ("^",),
+}
+
+#: 対照群の層の名前。**同じシャードに入れる**(設計書 §6)——括弧が構造を
+#: 決めるので結合方向を反転しても答えが変わらない。変異がシャード内の
+#: **一部だけ**を赤くすることになり、無差別に壊しているのではないと言える。
+ASSOC_CONTROL_STRATUM = "parenthesized"
+
+#: 二つの読み方が「別の答え」と言えるための相対差の下限。
+#:
+#: **許容誤差ではない**(合否には一切使わない。CLAUDE.md の規約どおり、
+#: 判定に使う許容は `tolerance` が持つ)。ここは生成側のふるいで、
+#: `a + b + c` のように結合方向を変えても答えが同じになる連鎖
+#: (加算・乗算は結合的である)や、`a - b - 0` のように偶然一致する連鎖を
+#: 捨てるためにある。`tolerance.rel`(5e-10)よりはるかに粗い値を置くのは、
+#: 「二つの読み方の差」が許容誤差すれすれのケースを混ぜないためである。
+ASSOC_MIN_RELATIVE_GAP = mp.mpf("1e-3")
+
+
+def _assoc_leaves(rng: random.Random, stratum: str) -> tuple[list[Node], list[str]]:
+    """1 本の連鎖の項と演算子を引く。**層ごとに範囲が違う。**
+
+    `combinatorial` は値が爆発するので項数も桁数も小さく取る——大きく取ると
+    `_within_range` がほとんど全部を捨て、生成が止まらない。
+    """
+    ops = ASSOC_CHAINS[stratum]
+    if stratum == "additive":
+        terms = [Num(rng.randint(1, 999)) for _ in range(rng.randint(3, 5))]
+    elif stratum == "multiplicative":
+        terms = [Num(rng.randint(1, 99)) for _ in range(rng.randint(3, 4))]
+    elif stratum == "combinatorial":
+        # **内側は必ず `nPr` にする。** 組合せ `C(n, r) = P(n, r) / r!` は
+        # **割り算を通る**ので、f64 で計算した答えは整数の格子から外れることが
+        # ある——実測 `C(29, 4)` は 23751 ではなく 23751.000000000004 になる。
+        # その値をもう一度 `nPr`/`nCr` に食わせると「非負整数か」の検査に
+        # 落ちて `DomainError` になる(実測 2026-08-20、`assoc-001790` ほか
+        # 4 件。表示は 23751 と出るので、画面からは区別が付かない)。
+        # 順列 `P(n, r) = n(n−1)…` は積だけなので、2^53 未満なら厳密である。
+        #
+        # **これは結合方向とは別の主張である。** 内側に `nCr` を許すと、
+        # このシャードは「連鎖した組合せの途中値が整数の格子に載るか」まで
+        # 主張することになり、赤が出たときにどちらが原因か分からなくなる。
+        # 途中値の厳密性は別の担当である(この食い違い自体は申し送りにした)。
+        terms = [Num(rng.randint(4, 40)), Num(rng.randint(2, 5)), Num(rng.randint(2, 3))]
+        return terms, ["nPr", rng.choice(ops)]
+    else:
+        raise ValueError(f"unknown randomly sampled associativity stratum: {stratum!r}")
+    return terms, [rng.choice(ops) for _ in range(len(terms) - 1)]
+
+
+def _power_chains() -> list[tuple[list[Node], list[str]]]:
+    """`xʸ` の連鎖の候補を**全部**並べる。乱択しない。
+
+    **平坦表示の帯(`MAX_ABS` = 1e9)の中に収まる `b ^ e1 ^ e2` は、
+    数え上げられるほど少ない。** 右結合の読みは `b^(e1^e2)` なので、指数が
+    少し伸びただけで帯を突き抜ける——実測で、下の箱(底 2〜99、指数 2〜5)の
+    1568 通りのうち**残るのは 27 通り**だった。さらに `e1 = e2 = 2` は
+    `e1^e2 = e1*e2 = 4` で二つの読みが同じ値になるので、結合方向を区別できない。
+
+    狭いなら乱択する意味がない。**箱を全部見て、通ったものを全部使う**——
+    そのほうが「この形をどれだけ踏んだか」を数えたときに嘘がない。
+    """
+    return [
+        ([Num(base), Num(first), Num(second)], ["^", "^"])
+        for base in range(2, 100)
+        for first in range(2, 6)
+        for second in range(2, 6)
+    ]
+
+
+def _fold(terms: list[Node], ops: list[str], *, right: bool) -> Node:
+    """項と演算子を、左からか右から畳んで木にする。"""
+    if right:
+        node = terms[-1]
+        for op, term in zip(reversed(ops), reversed(terms[:-1]), strict=True):
+            node = Bin(op, term, node)
+        return node
+    node = terms[0]
+    for op, term in zip(ops, terms[1:], strict=True):
+        node = Bin(op, node, term)
+    return node
+
+
+def _assoc_trees(terms: list[Node], ops: list[str]) -> tuple[Node, Node]:
+    """公開契約どおりの読み方と、**その逆向きの読み方**を返す。
+
+    逆向きの木は期待値には一切使わない。生成側のふるい
+    (`ASSOC_MIN_RELATIVE_GAP`)が「このキー列は結合方向を区別できるのか」を
+    判定するためだけに組む。
+    """
+    right = ops[0] in RIGHT_ASSOCIATIVE_OPS
+    if any((op in RIGHT_ASSOCIATIVE_OPS) != right for op in ops):
+        raise ValueError(f"a chain mixes both associativities: {ops!r}")
+    return _fold(terms, ops, right=right), _fold(terms, ops, right=not right)
+
+
+def assoc_value(terms: list[Node], ops: list[str]) -> mp.mpf | None:
+    """この連鎖が使えるなら公開契約どおりの読みの値を、使えないなら `None`。
+
+    捨てるのは 3 通り。**どれも「踏んでも何も言えない列」である。**
+
+    1. 契約どおりの読みが平坦表示の帯を外れる(`_within_range`)。
+    2. どちらかの読みが数学の定義域を外れる(`5 nPr (3 nPr 2)` は r > n)。
+       engine がどのエラーを返すかはこの層の主張ではないので、素直に捨てる。
+    3. 二つの読みの差が `ASSOC_MIN_RELATIVE_GAP` に届かない。加算と乗算は
+       **結合的**なので `9 + 4 + 3` はどちらの読みでも 16 であり、
+       `(b^2)^2 = b^(2^2)` も同じ値になる。そういう列を積むと
+       「大量に踏んだ」が「大量に何も試していない」に化ける。
+    """
+    documented, other = _assoc_trees(terms, ops)
+    try:
+        if not _within_range(documented):
+            return None
+        value = evaluate(documented)
+        alternative = evaluate(other)
+    except OutOfShard:
+        return None
+    if not mp.isfinite(alternative):
+        return None
+    if abs(value - alternative) / max(abs(value), mp.mpf(1)) < ASSOC_MIN_RELATIVE_GAP:
+        return None
+    return value
+
+
+def _assoc_pair(
+    index: int, stratum: str, terms: list[Node], ops: list[str], value: mp.mpf
+) -> list[dict]:
+    """1 本の連鎖から、**平坦なキー列とその全括弧の双子**を作る。
+
+    期待値は同じ木から出るので、二つは必ず同じ値になる。違うのはキー列だけ
+    である——だから `associativity-flip` の変異は、**平坦な側だけ**を赤くする。
+    """
+    documented, _ = _assoc_trees(terms, ops)
+    expr = to_expr_text(documented)
+    expect = {"re": float(value), "im": 0.0}
+    return [
+        {
+            "kind": "value",
+            "id": f"assoc-{index:06d}",
+            "stratum": stratum,
+            "mode": "Deg",
+            "keys": _flat_key_sequence(terms, ops),
+            "expr": expr,
+            "expect": expect,
+        },
+        {
+            "kind": "value",
+            "id": f"assoc-{index + 1:06d}",
+            "stratum": ASSOC_CONTROL_STRATUM,
+            "mode": "Deg",
+            "keys": to_key_sequence(documented),
+            "expr": expr,
+            "expect": expect,
+        },
+    ]
+
+
+def _flat_key_sequence(terms: list[Node], ops: list[str]) -> list[str]:
+    """**括弧を 1 つも打たない**キー列。結合方向だけが構造を決める。
+
+    `to_keys_minimal` を使わないのは、あれが同順位の入れ子の括弧を意図して
+    残すからである(その docstring を見よ)。ここが欲しいのは、まさにその
+    残している括弧を外した形である。
+    """
+    keys = list(to_keys(terms[0]))
+    for op, term in zip(ops, terms[1:], strict=True):
+        keys.append(BINARY_KEYS[op])
+        keys.extend(to_keys(term))
+    return [*keys, "eq"]
+
+
+def build_assoc_shard(seed: int, count: int) -> dict:
+    """**結合方向**のシャード(`kind: "value"`)。
+
+    1 本の連鎖から**二件**書き出す。同じ項と同じ演算子から、
+
+    1. 括弧を 1 つも打たない平坦なキー列(`9 − 4 − 3`)。engine は結合方向
+       だけを頼りに構造を決める。
+    2. その木を全括弧で書いた対照群(`((9 − 4) − 3)`)。**括弧が構造を
+       決めるので、結合方向を反転しても答えが変わらない。**
+
+    **対照群を同じシャードに入れる**(設計書 §6)。`associativity-flip` の
+    変異はこのシャードのちょうど半分だけを赤くすることになり、変異が
+    シャード全体を無差別に壊しているのではないことが、シャードの中で言える。
+
+    層の配分は乱択しない。`power` は箱を数え上げて通ったものを全部使い
+    (`_power_chains` を見よ)、残りを乱択の 3 層に決まった割合で配る。
+    **埋まらなければ黙って縮まず `RuntimeError` で落ちる**——層が痩せた
+    シャードは、痩せたことを言わずに件数だけを名乗るからである。
+    """
+    rng = random.Random(seed)
+    pairs = count // 2
+    chains: list[tuple[str, list[Node], list[str], mp.mpf]] = []
+    remaining = pairs
+    power: list[tuple[list[Node], list[str]]] = []
+    for terms, ops in _power_chains():
+        value = assoc_value(terms, ops)
+        if value is not None and len(power) < remaining:
+            power.append((terms, ops))
+            chains.append(("power", terms, ops, value))
+    remaining -= len(power)
+    quotas = {
+        "additive": round(remaining * 0.50),
+        "multiplicative": round(remaining * 0.33),
+    }
+    quotas["combinatorial"] = remaining - sum(quotas.values())
+    for stratum, quota in quotas.items():
+        seen: set[tuple[str, ...]] = set()
+        taken = 0
+        attempts = 0
+        while taken < quota:
+            attempts += 1
+            if attempts > max(quota, 1) * 500:
+                raise RuntimeError(
+                    f"{stratum}: gave up after {attempts} attempts with {taken}/{quota} "
+                    "chains — the sampling box is too small for this count"
+                )
+            terms, ops = _assoc_leaves(rng, stratum)
+            keys = tuple(_flat_key_sequence(terms, ops))
+            if keys in seen:
+                continue
+            value = assoc_value(terms, ops)
+            if value is None:
+                continue
+            seen.add(keys)
+            chains.append((stratum, terms, ops, value))
+            taken += 1
+    entries: list[dict] = []
+    for stratum, terms, ops, value in chains:
+        entries.extend(_assoc_pair(len(entries), stratum, terms, ops, value))
+    counts: dict[str, int] = {}
+    for entry in entries:
+        counts[entry["stratum"]] = counts.get(entry["stratum"], 0) + 1
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "strata": dict(sorted(counts.items())),
         "cases": entries,
     }
 
@@ -702,7 +969,38 @@ def _inject_typo(node: Node, rng: random.Random) -> Node:
     return rebuild(node)
 
 
-CORRECTION_FORMS = 2
+def _error_inducing_key_sequences() -> tuple[tuple[str, ...], ...]:
+    """`errors-000.json` の 9 経路のうち、実際にエラーになる列だけを取り出す。
+
+    アンダーフローの 2 件(`value_range_cases` の後半)は `expect.error` を
+    持たない(丸め潰れは値域を外れたことにならない、`corpus_errors.py` の
+    モジュール docstring)ので、ここには入らない。**エラー状態を作るための
+    プールなので、実際にエラーになる列だけが要る。**
+
+    **括弧の経路(`unbalanced_parenthesis_cases`)も入れる。** 実装中、
+    この 2 件を除けば `pnpm heavy` が緑になることが分かった——`right` 全体を
+    1 本のキー列として括弧の対応を見るコード(`web/tests/heavy/corpus.ts` の
+    `needsPrecedence` と、その Python の双子)が、`ac` が engine を初期状態に
+    戻すことを知らなかったためである。**engine は `ac` で正しく復帰しており、
+    壊れていたのは判定のほうだった**ので、判定を直した(`ac` でそれまでの
+    括弧の組を捨てる)。入力を除いていたら、「括弧の構文エラーから `ac` で
+    復帰する」という形がコーパスから丸ごと抜けていた。
+    """
+    cases = build_errors_shard()["cases"]
+    return tuple(tuple(case["keys"]) for case in cases if case["expect"].get("error"))
+
+
+#: `errors-000.json` から起こした、実際にエラーになるキー列のプール
+#: (計画 Task 3、設計書 §5.2)。`build_errors_shard` は乱択を持たない固定の
+#: 列挙なので、ここも固定になる。
+ERROR_INDUCING_KEY_SEQUENCES = _error_inducing_key_sequences()
+
+#: `build_corrections_shard` が積む層(finance の `stratum` と同じ考え方、
+#: 計画 Task 3 Step 2)。`rng.randrange(len(CORRECTION_STRATA))` の添字と
+#: 対応する。
+CORRECTION_STRATA = ("typo-del", "ac-rebuild", "error-recovery", "paren-edit")
+
+CORRECTION_FORMS = len(CORRECTION_STRATA)
 
 
 def build_corrections_shard(seed: int, count: int) -> dict:
@@ -710,9 +1008,21 @@ def build_corrections_shard(seed: int, count: int) -> dict:
 
     `ac` と `del` は**打った結果を巻き戻す**キーで、値の意味を持たない。
     だから期待値を持たず、**二つのキー列が同じ表示に着くこと**だけを主張する。
+
+    4 つの層(`CORRECTION_STRATA`)を持つ:
+
+    - `typo-del`: 葉の途中で 1 桁多く打って `del` で消す。
+    - `ac-rebuild`: でたらめに打ってから `ac` で全部消して打ち直す。
+    - `error-recovery`: エラーになる列を打ち、**エラー中に他のキーを
+      押してから**(`keys_other_than_ac_are_ignored_while_in_error`、
+      `engine_table.rs:194`)`ac` で復帰し、正しい列を打つ
+      (`ac_recovers_from_an_error`、`engine_table.rs:189`)。
+    - `paren-edit`: 開いた括弧の中で 1 桁打ってから `del` で消し、
+      別の桁を打つ(計画 Task 3 Step 1)。
     """
     rng = random.Random(seed)
     entries: list[dict] = []
+    strata: list[str] = []
     seen: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
     attempts = 0
     while len(entries) < count:
@@ -721,27 +1031,65 @@ def build_corrections_shard(seed: int, count: int) -> dict:
             raise RuntimeError(
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
-        node = _typed_node(rng, MAX_DEPTH - 1)
-        if isinstance(node, Typed):
-            continue
-        try:
-            if not _within_range(node):
+        form = CORRECTION_STRATA[rng.randrange(CORRECTION_FORMS)]
+        if form in ("typo-del", "ac-rebuild", "error-recovery"):
+            node = _typed_node(rng, MAX_DEPTH - 1)
+            if isinstance(node, Typed):
                 continue
-        except OutOfShard:
-            continue
-        clean = to_key_sequence(node)
-        if rng.randrange(CORRECTION_FORMS) == 0:
-            # `del`: 葉の途中で打ち間違えて消す。
-            dirty = to_key_sequence(_inject_typo(node, rng))
+            try:
+                if not _within_range(node):
+                    continue
+            except OutOfShard:
+                continue
+            clean = to_key_sequence(node)
+            if form == "typo-del":
+                # `del`: 葉の途中で打ち間違えて消す。
+                dirty = to_key_sequence(_inject_typo(node, rng))
+            elif form == "ac-rebuild":
+                # `ac`: でたらめに打ってから全部消して打ち直す。
+                dirty = [*GARBAGE_KEYS, "ac", *clean]
+            else:
+                # `error-recovery`: エラーになる列を打ち、エラー中に別の
+                # キーをさらに押してから `ac` で復帰し、正しい列を打つ。
+                # `GARBAGE_KEYS` を「エラー中は無視される」側の主張にも
+                # そのまま使う——中身がでたらめでよいのは変わらない。
+                error_keys = ERROR_INDUCING_KEY_SEQUENCES[
+                    rng.randrange(len(ERROR_INDUCING_KEY_SEQUENCES))
+                ]
+                dirty = [*error_keys, *GARBAGE_KEYS, "ac", *clean]
+            expr = f"{to_expr_text(node)}(訂正あり)"
         else:
-            # `ac`: でたらめに打ってから全部消して打ち直す。
-            dirty = [*GARBAGE_KEYS, "ac", *clean]
+            # `paren-edit`: `a + ( c )` を、括弧の中で 1 桁打ち間違えてから
+            # 直す形で打つ。`b` は必ず 1 個の数字キーにする——1 回の `del` で
+            # 完全に消えて欲しいので、複数キーの葉(小数点や `zeros3` など)
+            # だと最後の 1 キーしか消えず別の形になってしまう。
+            a_leaf = _typed_leaf(rng)
+            c_leaf = _typed_leaf(rng)
+            try:
+                if not _within_range(Bin("+", a_leaf, c_leaf)):
+                    continue
+            except OutOfShard:
+                continue
+            b_digit = str(rng.randint(0, 9))
+            clean = [*to_keys(a_leaf), "add", "lparen", *to_keys(c_leaf), "rparen", "eq"]
+            dirty = [
+                *to_keys(a_leaf),
+                "add",
+                "lparen",
+                b_digit,
+                "del",
+                *to_keys(c_leaf),
+                "rparen",
+                "eq",
+            ]
+            expr = f"{to_expr_text(a_leaf)}+({to_expr_text(c_leaf)})(括弧内で訂正)"
         if dirty == clean:
             continue
         key = (tuple(clean), tuple(dirty))
         if key in seen:
             continue
         seen.add(key)
+        strata.append(form)
         entries.append(
             {
                 "kind": "equivalence",
@@ -749,14 +1097,17 @@ def build_corrections_shard(seed: int, count: int) -> dict:
                 "mode": "Deg",
                 "left": clean,
                 "right": dirty,
-                "expr": f"{to_expr_text(node)}(訂正あり)",
+                "expr": expr,
+                "stratum": form,
             }
         )
+    counts = {name: strata.count(name) for name in CORRECTION_STRATA}
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "tolerance": TOLERANCE,
         "cases": entries,
+        "strata": counts,
     }
 
 
@@ -1665,6 +2016,14 @@ def build_inverse_trig_shard(seed: int, count: int) -> dict:
 
 
 def write(name: str, payload: dict) -> None:
+    """1 枚を書き出す。**書き出す先を差し替えられる純粋な出口にしておく。**
+
+    `test_corpus_reproducibility.py` はこの関数を捕獲用の関数に差し替えて
+    `main()` を呼び、ディスクに触れずに「生成器が今日書くはずのもの」を
+    受け取る。だからここに件数の累計のような状態を持たせてはならない
+    ——差し替えた瞬間にその状態が更新されなくなる。総件数は `main` が
+    payload から数える。
+    """
     path = CORPUS / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # generate.py と同じ整形。差分を安定させ、nan / inf を書き出さない。
@@ -1675,48 +2034,86 @@ def write(name: str, payload: dict) -> None:
     print(f"wrote {path} ({len(payload['cases'])} cases)")
 
 
+def _summary_line(total_cases: int, elapsed: float) -> str:
+    """末尾の要約 1 行。**分母は CLI 引数の `count` ではなく、実際に書き出した総件数**。
+
+    生成時間はコーパスの上限を決める(設計書 §11)ので必ず表に出す。ただし
+    以前のこの行は 15 シャード合計の経過時間を `count`(既定 2000)で割って
+    いた。finance だけ `FINANCE_COUNT`(3,500)を渡すようになった時点で、
+    件数もケースあたりの時間も嘘になった——他の 14 枚に `count` を渡す限り
+    総件数は `14 * count + FINANCE_COUNT` であって `count` ではない。
+    実測では合計 5629.60ms のうち finance 単独が 3500 件で 1932.53ms
+    (34%)を占めており、ずれは無視できる大きさではない。
+
+    ここは道具が印字する一次資料で、他所の台帳に事実として写される。
+    合わない分母を置かない。
+
+    `%.1f` 秒だと数千件までは `0.0s` に丸まって無意味になる(レビュー修正
+    ラウンド 1)ので、ミリ秒で出す。
+    """
+    return (
+        f"generated {total_cases} cases in {elapsed * 1000:.2f}ms "
+        f"({elapsed / total_cases * 1000:.4f}ms each)"
+    )
+
+
+# finance シャードだけの目標総件数(設計書 §4.7)。他の 14 シャードは CLI 引数
+# `count`(既定 2000)を共有するが、finance は名指し層の下限合計(1,307 件)を
+# 大きく超える件数が要る。ここを `count` に連動させると、他の 14 枚を増やす
+# つもりの変更が finance の golden も一緒に動かしてしまう。
+FINANCE_COUNT = 3500
+
+
+def _shards(count: int) -> Iterator[tuple[str, dict]]:
+    """書き出す 18 枚を、名前と中身の対で 1 枚ずつ生む。
+
+    **書き出す枚数はここが唯一の一覧である。** 1 枚足せば、書き出しにも
+    末尾の要約行の分母にも自動でついてくる——`main` の側に写しの件数を
+    持たせない理由がこれで、以前は `count` という写しを分母にしていて
+    finance だけ件数が変わった時点で嘘になった。
+
+    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。18 枚
+    ぶんの payload を同時に抱えない。
+    """
+    yield "scientific-000.json", build_shard(seed=20260815, count=count)
+    yield "equivalence-000.json", build_equivalences(seed=20260816, count=count)
+    yield "precedence-000.json", build_precedence_shard(seed=20260817, count=count)
+    # 結合方向。**平坦なキー列とその全括弧の双子を対で持つ**ので、`count` を
+    # 渡すと半分が対照群になる(計画 Task 4、設計書 §6)。
+    yield "associativity-000.json", build_assoc_shard(seed=20260828, count=count)
+    yield "elementary-000.json", build_elementary_shard(seed=20260818, count=count)
+    yield "inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count)
+    yield "typed-000.json", build_typed_shard(seed=20260824, count=count)
+    yield "display-000.json", build_display_shard(seed=20260827, count=count)
+    yield "complex-000.json", build_complex_shard(seed=20260901, count=count)
+    yield "complex-display-000.json", build_complex_display_shard(seed=20260902, count=count)
+    yield "angle-mode-000.json", build_angle_mode_shard(seed=20260826, count=count)
+    yield "corrections-000.json", build_corrections_shard(seed=20260825, count=count)
+    yield "cancellation-000.json", build_cancellation_shard(seed=20260823, count=count)
+    yield "combinatorics-000.json", build_combinatorics_shard(seed=20260820, count=count)
+    # 金融とデータスケール。**科学計算とは別の領域**で、期待値は整数なので
+    # 厳密一致で比べる(設計書 2026-08-17 §3.2)。finance だけ `count` を使わず
+    # `FINANCE_COUNT`(3,500)を渡す。理由は上の定義を見よ。
+    yield "finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT)
+    yield "data-scale-000.json", build_data_scale_shard(seed=20260822, count=count)
+    # 入力途中の表示。**乱択も `count` も持たない**——engine_table.rs /
+    # state.rs から起こした固定の列挙であって、サンプリングする集合では
+    # ないので、他の 15 枚と違って seed を渡さない(設計書 §4.1)。
+    yield "entry-000.json", build_entry_shard()
+    # エラー種別。**乱択も `count` も持たない**——設計書 §5.1 の 9 経路を
+    # 数学の定義域・値域から 1 つずつ書き写した固定の列挙(計画 Task 2)。
+    yield "errors-000.json", build_errors_shard()
+
+
 def main() -> None:
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
     started = time.monotonic()
-    write("scientific-000.json", build_shard(seed=20260815, count=count))
-    write("equivalence-000.json", build_equivalences(seed=20260816, count=count))
-    write("precedence-000.json", build_precedence_shard(seed=20260817, count=count))
-    write("elementary-000.json", build_elementary_shard(seed=20260818, count=count))
-    write("inverse-trig-000.json", build_inverse_trig_shard(seed=20260819, count=count))
-    write("typed-000.json", build_typed_shard(seed=20260824, count=count))
-    write("display-000.json", build_display_shard(seed=20260827, count=count))
-    write("complex-000.json", build_complex_shard(seed=20260901, count=count))
-    write(
-        "complex-display-000.json",
-        build_complex_display_shard(seed=20260902, count=count),
-    )
-    write(
-        "angle-mode-000.json",
-        build_angle_mode_shard(seed=20260826, count=count),
-    )
-    write(
-        "corrections-000.json",
-        build_corrections_shard(seed=20260825, count=count),
-    )
-    write(
-        "cancellation-000.json",
-        build_cancellation_shard(seed=20260823, count=count),
-    )
-    write(
-        "combinatorics-000.json",
-        build_combinatorics_shard(seed=20260820, count=count),
-    )
-    # 金融とデータスケール。**科学計算とは別の領域**で、期待値は整数なので
-    # 厳密一致で比べる(設計書 2026-08-17 §3.2)。
-    write("finance-000.json", build_finance_shard(seed=20260821, count=count))
-    write("data-scale-000.json", build_data_scale_shard(seed=20260822, count=count))
+    total_cases = 0
+    for name, payload in _shards(count):
+        total_cases += len(payload["cases"])
+        write(name, payload)
     elapsed = time.monotonic() - started
-    # 生成時間はコーパスの上限を決める(設計書 §11)。必ず表に出す。
-    # %.1f 秒だと数千件までは 0.0s に丸まって無意味になる(レビュー修正ラウンド 1)。
-    # ミリ秒単位で出す。
-    print(
-        f"generated {count} cases in {elapsed * 1000:.2f}ms ({elapsed / count * 1000:.4f}ms each)"
-    )
+    print(_summary_line(total_cases, elapsed))
 
 
 if __name__ == "__main__":

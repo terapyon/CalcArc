@@ -124,3 +124,197 @@ def test_the_certificate_does_not_fall_into_the_zero_principal_hole() -> None:
     # 例外を出さずに通る。
     num, den = compound_ref.rate_fraction("3", 12)
     compound_ref.check_deposit_certificate(1, 0, num, den, 1, 1, taxed=False)
+
+
+# `build_finance_shard(seed=20260821, count=2000)` が棄却した `compound_deposit_for`
+# の実測 10 件（すべて `tax: True`）。種が税を見ずに組まれていたため `MAX_WALK`
+# を使い切って諦めていた（設計書 §4.9）。実測から来た入力なので、この経路が
+# 再発すれば必ず赤くなる。
+TAX_SEED_MISS_CASES: tuple[dict[str, object], ...] = (
+    {
+        "principal": 45274742,
+        "rate": "4.5",
+        "periods_per_year": 12,
+        "periods": 104,
+        "target": 755402859,
+    },
+    {
+        "principal": 63149292,
+        "rate": "8.1",
+        "periods_per_year": 12,
+        "periods": 80,
+        "target": 881006021,
+    },
+    {
+        "principal": 213948711,
+        "rate": "1.0",
+        "periods_per_year": 1,
+        "periods": 9,
+        "target": 437867318,
+    },
+    {
+        "principal": 298937362,
+        "rate": "5.1",
+        "periods_per_year": 12,
+        "periods": 99,
+        "target": 601241328,
+    },
+    {
+        "principal": 236741933,
+        "rate": "3.0",
+        "periods_per_year": 12,
+        "periods": 268,
+        "target": 661986954,
+    },
+    {
+        "principal": 45277543,
+        "rate": "3.2",
+        "periods_per_year": 2,
+        "periods": 163,
+        "target": 677913573,
+    },
+    {
+        "principal": 187627116,
+        "rate": "0.1",
+        "periods_per_year": 1,
+        "periods": 11,
+        "target": 969955332,
+    },
+    {
+        "principal": 224600998,
+        "rate": "5.3",
+        "periods_per_year": 12,
+        "periods": 214,
+        "target": 821133637,
+    },
+    {
+        "principal": 96899159,
+        "rate": "14.8",
+        "periods_per_year": 12,
+        "periods": 49,
+        "target": 807413223,
+    },
+    {
+        "principal": 391992896,
+        "rate": "6.4",
+        "periods_per_year": 12,
+        "periods": 72,
+        "target": 827929955,
+    },
+)
+
+
+def test_deposit_for_solves_every_tax_seed_miss_case() -> None:
+    # 赤確認: 種が税を見ずに組まれていたときは、この 10 件すべてが
+    # `MAX_WALK` を使い切って `DepositSearchLimitError` を投げていた。
+    for case in TAX_SEED_MISS_CASES:
+        num, den = compound_ref.rate_fraction(str(case["rate"]), int(case["periods_per_year"]))
+        d = compound_ref.deposit_for(
+            int(case["principal"]), num, den, int(case["periods"]), int(case["target"]), taxed=True
+        )
+        compound_ref.check_deposit_certificate(
+            d,
+            int(case["principal"]),
+            num,
+            den,
+            int(case["periods"]),
+            int(case["target"]),
+            taxed=True,
+        )
+
+
+def test_the_downward_walk_is_bounded_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `while d > 0 and ...` は元々上限を持たなかった(設計書 §4.9 Step 4)。
+    # **番人自身に判別力があること**を見てから信じる
+    # (`test_the_guard_rejects_a_loop_that_drifted_too_far` と同じ形)。種を
+    # 意図的に高く付け替え、下向きに長く歩かせる。`MAX_WALK` を 3 に絞れば、
+    # 10 歩の下向き修正が必要な入力は `DepositSearchLimitError` で止まる。
+    num, den = compound_ref.rate_fraction("3", 12)
+    real_seed = compound_ref._deposit_seed
+
+    def _seed_ten_too_high(
+        principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+    ) -> int:
+        return real_seed(principal, num, den, periods, target, taxed) + 10
+
+    monkeypatch.setattr(compound_ref, "_deposit_seed", _seed_ten_too_high)
+    monkeypatch.setattr(compound_ref, "MAX_WALK", 3)
+    with pytest.raises(compound_ref.DepositSearchLimitError, match="下向き"):
+        compound_ref.deposit_for(0, num, den, 240, 10_000_000, taxed=False)
+
+
+def test_deposit_for_reaches_every_tax_seed_miss_case_within_a_few_steps() -> None:
+    # 「解けた」だけでは、種が悪いまま `MAX_WALK` を上げても緑になる。税を
+    # 織り込んだ種からは、切り捨て 2 回ぶん(数円)しかずれないはずなので、
+    # 数歩で当たることを歩数そのものに主張させる。実測の最大歩数は 2
+    # （10 件中 8 件が 1 歩、2 件が 2 歩）。上限 4 はそこに余裕を持たせた値。
+    for case in TAX_SEED_MISS_CASES:
+        num, den = compound_ref.rate_fraction(str(case["rate"]), int(case["periods_per_year"]))
+        _d, steps = compound_ref._deposit_search(
+            int(case["principal"]), num, den, int(case["periods"]), int(case["target"]), taxed=True
+        )
+        assert steps <= 4, f"{case} が {steps} 歩かかった(上限 4、実測最大は 2)"
+
+
+def test_no_principal_and_no_periods_is_a_syntax_error_not_a_crash() -> None:
+    # **2026-08-20 の実測バグ。** `principal=0` かつ `periods=0` のときだけ、
+    # `_deposit_seed` の `growth - 1` が 0 になって `decimal.DivisionByZero` が
+    # 上がっていた。あれは `ValueError` ではないので `_finance_entry` の分類
+    # (`near_yen_boundary` / `compound_deposit_search_limit` / `other`)に
+    # 当てはまらず、**生成器ごと落ちる**。
+    #
+    # 他の期数 0 は歩きが `grow` に届いて `SyntaxError` になっていたので、
+    # **1 つの入力の組だけが別の壊れ方をしていた**——だから誰も踏まなかった。
+    #
+    # Rust も同じ入力を `SyntaxError` にする(`compound_inverse.rs:67` の
+    # `target == 0 || periods == 0 || periods > MAX_PERIODS`)。ここが
+    # 例外を投げると両実装が食い違う。
+    num, den = compound_ref.rate_fraction("2.0", 1)
+    with pytest.raises(compound_ref.CompoundError) as caught:
+        compound_ref.deposit_for(0, num, den, 0, 1_000_000, taxed=False)
+    assert caught.value.code == "SyntaxError"
+
+
+def test_a_target_of_zero_is_refused_at_the_entry_of_both_inverse_ops() -> None:
+    # 兄弟の `periods_for` は最初からこれを落としていた。`deposit_for` だけが
+    # 落としていなかった——**同じ問いの 2 つの入口で定義域の宣言が食い違って
+    # いた**のが、上のバグが隠れていた場所である。
+    num, den = compound_ref.rate_fraction("2.0", 1)
+    for call in (
+        lambda: compound_ref.deposit_for(1_000_000, num, den, 12, 0, taxed=False),
+        lambda: compound_ref.periods_for(1_000_000, 1_000, num, den, 0, taxed=False),
+    ):
+        with pytest.raises(compound_ref.CompoundError) as caught:
+            call()
+        assert caught.value.code == "SyntaxError"
+
+
+def test_the_closed_form_check_survives_its_own_rounding() -> None:
+    # **2026-08-20 の実測。** `principal=0` のとき、閉形式の
+    # `(growth - 1) / r` が桁落ちして、ずれが厳密に 0 のはずの場面で
+    # Decimal が **負側**へ丸める。向きの主張（厳密ループは閉形式以下）は
+    # 数学のものなので、有限桁の評価がそれを破ったときに検査が落ちるのは
+    # 偽の失敗である。実測は相対 4e-43 程度で、15 通りの入力で出た。
+    #
+    # 本物のずれは円の尺度で出る（各期の切り捨てが 1 円未満を落として複利で
+    # 育つ）ので、下側の余裕（相対 1e-30）が本物を隠すことはない。
+    num, den = compound_ref.rate_fraction("0.0001", 12)
+    exact = compound_ref.grow(0, 1000, num, den, 1)
+    compound_ref.check_against_closed_form(exact, 0, 1000, num, den, 1)
+
+
+def test_the_closed_form_check_still_catches_a_drift_worth_a_yen() -> None:
+    # 余裕を入れたせいで検査が何も言わなくなっていないこと。**両側**を見る。
+    #
+    # 1 期のずれは実測 0.667 円なので、答を 1 円大きくすると差は -0.333 に
+    # なり、下側の余裕（相対 1e-30）を 30 桁ぶん突き抜けて落ちる。
+    # 逆に答を 100 円小さくすると差が上界（期数×(1+r)^期数 ≈ 1.002）を超える。
+    #
+    # **期数を 1 にしているのは意図的である。** 12 期だと本物のずれが 6.97 円
+    # まで育ち、上界も 12.02 円まで伸びるので、1 円動かしても範囲に収まって
+    # しまう——このテストは最初そう書いて、実際に何も主張しなかった。
+    num, den = compound_ref.rate_fraction("2.0", 12)
+    exact = compound_ref.grow(1_000_000, 1000, num, den, 1)
+    for wrong in (exact + 1, exact - 100):
+        with pytest.raises(ValueError, match="閉形式とのずれが範囲外"):
+            compound_ref.check_against_closed_form(wrong, 1_000_000, 1000, num, den, 1)

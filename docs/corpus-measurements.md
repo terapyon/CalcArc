@@ -1028,3 +1028,861 @@ Shift 以外はすべて引ける、**Shift の裏のキーは押す前に存在
 
 赤確認済み——`判定の意味:` に `(設計書 §11 を見よ)` を足すと
 `report still says "設計書"` で落ちる。
+
+## 欠陥注入の誤成功（2026-08-19 実測、spec A Task 3）
+
+`verdictFor("nothing", {})` が `ok: true` を返すことを実測で確認した。
+`measure()` はビルド失敗・ブラウザ起動失敗・不一致 0 件のすべてで `{}` を
+返すので、**この 3 つが同じ判定に潰れている**。改善指示書 §4.2 が名指しで
+禁じている誤成功である。次の Task がこれを赤にする。
+
+## 実測から `minRate` を確定する（2026-08-19 実測、spec A Task 7）
+
+計測時の HEAD は `a5c7f84`（`crates/` は `b223bde` から 1 行も動いていない）。
+`cd web && pnpm heavy:power` を 2 回。1 回目が下の数字を出し、2 回目は緑を確かめた。
+
+| 変異 | 反応したシャード | 検出 / 件数 | 実測率 | `minRate` |
+|---|---|---:|---:|---:|
+| `display-digits` | angle-mode (values) | 1017 / 2000 | 50.85% | 0.254 |
+| | combinatorics (values) | 1187 / 2000 | 59.35% | 0.296 |
+| | complex (values) | 381 / 2000 | 19.05% | 0.095 |
+| | elementary (values) | 1210 / 2000 | 60.50% | 0.302 |
+| | inverse-trig (values) | 732 / 2000 | 36.60% | 0.183 |
+| | precedence (values) | 978 / 2000 | 48.90% | 0.244 |
+| | scientific (values) | 796 / 2000 | 39.80% | 0.199 |
+| | typed (values) | 889 / 2000 | 44.45% | 0.222 |
+| | complex-display (displays) | 334 / 2001 | 16.69% | 0.083 |
+| | display (displays) | 415 / 2000 | 20.75% | 0.103 |
+| `precedence-collapse` | precedence (values) | 1099 / 2000 | 54.95% | 0.274 |
+| `ncr-multiply-first` | combinatorics (values) | 10 / 2000 | 0.50% | 0.0025 |
+| `eng-exponent-toward-zero` | display (displays) | 96 / 2000 | 4.80% | 0.024 |
+| `sexagesimal-no-carry` | display (displays) | 10 / 2000 | 0.50% | 0.0025 |
+| `complex-multiply-sign` | complex (values) | 147 / 2000 | 7.35% | 0.036 |
+| `polar-angle-flipped` | complex-display (displays) | 661 / 2001 | 33.03% | 0.165 |
+| `associativity-flip` | （無し） | 0 | — | — |
+
+下限は実測率の半分を 3 桁で切り捨てた値である（分母は `heavy-run.json` の
+`shards[].total`）。
+
+**16 個の反応件数は 2026-08-17 の走行と 1 件も違わなかった。** つまりこの表は
+`minRate` を書き換えるための測定ではなく、**書き換える必要が無いことを確かめた
+測定**になった。コーパスも変異の効き方も、その間に動いていない。
+
+**この表は 2026-08-20 に 3 行動いた**（`associativity-flip` の「（無し）」を含む）。
+新しい行は下の「結合方向のシャードを入れたあと」にある——**上の表は 2026-08-19 の
+走行の記録**であって、いまの期待ではない。
+
+### `cancellation-000.json` だけが反応しない理由
+
+値シャードは 9 枚あり、`display-digits` に反応するのは 8 枚。残る 1 枚が
+`cancellation-000.json` である。理由は許容誤差で、しかも**余裕つきで言える**。
+
+- このシャードだけ `tolerance.rel` が 1e-6。他の 8 枚は 5e-10。
+- 値ケースの比較は相対誤差だけで行う。`abs` を見るのは期待値が厳密に 0 の
+  ときだけで、このシャードに期待値 0 のケースは 1 件も無い（0 / 2000）。
+- **このシャードの実測最大相対誤差は 7.67e-7。** 閾値 1e-6 までの余裕は 2.33e-7。
+- 有効桁を 10 から 9 に落として増える相対誤差は、9 桁丸めの半 ulp と
+  10 桁丸めの半 ulp の和が上限で、**5.5e-9 以下**。
+- 7.67e-7 + 5.5e-9 = 7.73e-7 < 1e-6。余裕は摂動の **約 42 倍**ある。
+
+だから「たまたま反応しなかった」ではなく、**この変異ではどのケースも閾値を
+跨げない**。逆に 5e-9 > 5e-10 なので、他の 8 枚は跨ぐ。
+
+この期待が変わる条件は「コーパスが増えたら」ではなく、**このシャードの `rel` が
+厳しくなるか、実測最大相対誤差が 1e-6 に近づいたら**である。
+
+`corrections-000.json` と `equivalence-000.json` が期待集合に無いのは別の理由に
+よる。全件が `kind: "equivalence"` で値ケースを持たず、`(values)` の要約が
+そもそも作られない。`data-scale-000.json` と `finance-000.json` は全件が
+`kind: "call"` である。
+
+### 結合方向のシャードを入れたあと（2026-08-20 実測、D+E Task 4）
+
+`associativity-000.json`（2000 件）を足したので、上の表の 3 行が動いた。計測時の
+HEAD は `4f680e5` + 作業ツリー（`crates/` は 1 行も動いていない）。`cd web && pnpm
+heavy:power` は **10 分 58 秒**（18 変異。コーパスが 2000 件増えたぶん、17 枚時代の
+9.2 分より伸びている）。
+
+| 変異 | 反応したシャード | 検出 / 件数 | 実測率 | `minRate` |
+|---|---|---:|---:|---:|
+| `associativity-flip` | associativity (values) | **1000 / 2000** | 50.00% | 0.25 |
+| `display-digits` | associativity (values) | 332 / 2000 | 16.60% | 0.083 |
+| `precedence-collapse` | entry (displays) | 1 / 36 | 2.78% | （置かない） |
+
+**`associativity-flip` の 1000 件は、シャードのちょうど半分である。** 1 本の連鎖
+ごとに「括弧を打たない平坦なキー列」と「同じ木を全括弧で書いた双子」を対で持たせて
+あり、**赤くなったのは平坦な側 1000 本だけ**で、対照群の 1000 本は 1 件も動かなかった。
+変異がシャードを無差別に壊しているのではない、と同じシャードの中で言える。
+
+`display-digits` にも反応するのは、新しいシャードが `tolerance.rel` 5e-10 の値
+シャードだからで、上の「`cancellation-000.json` だけが反応しない理由」がそのまま
+当てはまる（跨げないのは `rel` が 1e-6 のシャードだけである）。
+
+**`precedence-collapse` の `entry-000.json` 1 件は、Task 4 の走行で初めて見つかった。**
+Task 1 が `entry-000.json` を足した時点で「優先順位シャードだけが反応する」という
+期待は嘘になっていたが、`heavy:power` を回すまで誰も知らなかった。反応するのは
+`entry-000023`（`3 add 4 mul`、期待は `"4"`）で、括弧の話ではない——`mul` を `add` と
+同順位に落とすと `mul` を押した時点で `3 + 4` が畳まれ、**確定前の表示**が `"7"` に
+変わる。保留演算の畳み込みは打鍵の途中から見える。
+
+### 連鎖した `nCr` は engine の定義域を外れる（2026-08-20 実測）
+
+`associativity-000.json` の組合せの層を作る途中で見つかった。**`(29 nCr 4) nCr 2` は
+`Math ERROR`（`DomainError`）になる。**
+
+- `C(29, 4)` は 23751 だが、engine が f64 で「割ってから掛ける」順に計算した値は
+  **23751.000000000004** である（表示は有効数字 10 桁なので画面には `23751` と出る）。
+- `nPr` / `nCr` / `n!` の共通の入口は「非負**整数**か」を `x.fract() != 0` で見る。
+  上の値は整数の格子に載っていないので、2 つ目の組合せが定義域外として弾かれる。
+- 順列は積だけなので厳密である（`P(29, 4)` = 570024）。**内側が `nPr` なら連鎖は通る。**
+
+コーパス側は内側を `nPr` に限っている——結合方向のシャードに「連鎖した組合せの
+途中値が整数の格子に載るか」まで主張させると、赤が出たときどちらが原因か分からなく
+なるからである。**この食い違い自体は engine の側の話で、まだ誰も裁定していない。**
+
+### 2 回目の走行が測定の欠陥を 1 つ捕まえた
+
+2 回目の `pnpm heavy:power` で `associativity-flip` が
+`measurement-failed`（「テストが非ゼロで終了したが、どのシャードも反応して
+いない——走行そのものが壊れている」）になった。**変異のせいではなかった。**
+
+原因は 1 回目が書いた `web/detection-power.json` である。レポートを組み立てる
+`renderReport` が、引数ではなくディスクからこのファイルを読んでいた。変異ごとの
+`expect` がシャード名を列挙するようになっていたので、ファイルが在るだけで
+レポート本文に `precedence-000.json` という文字列が現れ、「優先順位シャードが
+走行に無いのにその名前が出ていないこと」を全文で見ている検査が落ちる。
+
+CI は `heavy:power` の直後に `heavy` を回すので、このままなら毎回落ちていた。
+測定結果は `renderReport` の引数として渡すことにして直した。
+
+**判定が「変異が検出された」でも「期待どおり」でもなく `measurement-failed` に
+なったのは、spec A が作ろうとしていた区別が働いたということである。** 以前の
+実装なら、走行が壊れたことと「どこも反応しなかった」が同じ `ok` に潰れ、
+この変異は**緑として報告されていた**（Task 3 で実測した誤成功そのものである）。
+
+## Finance を 2,000 → 3,500 に引き上げた（2026-08-20 実測、spec B+C Task 9）
+
+`finance-000.json` だけを 3,500 件に引き上げて再生成した。他の 14 シャードは
+`count`（既定 2000）のまま触っていない——`git status --short corpus/` の差分は
+`corpus/generated/finance-000.json` 1 枚だけである。
+
+`generate_corpus.py` の `main()` は 15 シャードすべてに同じ `count` を渡して
+いたが、finance の行だけ `FINANCE_COUNT = 3500` という独自の定数を渡すように
+した。他の 14 枚を 3,500 に増やすと golden が全部書き換わり、この spec（finance
+の層別化）と無関係な差分になるため。
+
+### 層の下限の合計が総件数を超えたら落ちることをテストで固定した
+
+`build_finance_shard` は Task 3 の時点で「名指し層の下限合計 > count なら
+`RuntimeError`」というガード（`corpus_calls.py:2840`）を既に持っていたが、
+それを主張するテストが無かった。`test_finance_shard_refuses_to_silently_drop_a_stratum`
+（`reference/tests/test_generate_corpus.py`）を足した。**総件数を定数で決め打たない**
+——`FINANCE_STRATA` から実測した下限合計（1,307）を使い、`count = 1306` で
+落ちる／`count = 1307` ちょうどでは通ることの両方を見て、境界のどちら側で
+落ちるかを固定した。ガードを一時的に外して赤くなることを確認済み。
+
+### 実測表（設計書 §1 と同じ形。2,000 → 3,500）
+
+| | 2,000 件 | 3,500 件 |
+|---|---:|---:|
+| 正常 | 1,789 | 3,139 |
+| SyntaxError | 164 | 270 |
+| Overflow | 47 | 91 |
+
+op 別の正常件数（`total` は全件、`normal` はエラー/Overflow を除いた件数）:
+
+| op | total (2,000) | normal (2,000) | total (3,500) | normal (3,500) |
+|---|---:|---:|---:|---:|
+| `loan_forward` | 407 | 368 | 599 | 560 |
+| `loan_principal` | 249 | 248 | 433 | 432 |
+| `loan_term` | 232 | 213 | 426 | 407 |
+| `loan_bonus_forward` | 277 | 215 | 456 | 301 |
+| `loan_bonus_principal` | 225 | 217 | 412 | 391 |
+| `compound_grow` | 250 | 195 | 439 | 340 |
+| `compound_deposit_for` | 234 | 218 | 420 | 404 |
+| `compound_periods_for` | 126 | 115 | 315 | 304 |
+
+数え方: `corpus/generated/finance-000.json` を読み、`expect` に `error` キーが
+あるかどうかで正常/異常を分け、`op` ごとに集計するワンライナーで数えた
+（コミットしていない使い捨てスクリプト、出力をそのまま貼っている）。
+
+### 層別の内訳
+
+名指し層の下限合計は 1,307 件（境界・税境界・8 op のペアワイズ・エラー経路
+17 種など）。3,500 件のうち残り 2,193 件が乱択層に入る。2,000 件のときは
+乱択層が 2,000 − 1,307 = 693 件しかなかった（下限合計が総件数の 65%を占めて
+いた）ので、3,500 件への引き上げは乱択層の広さを約 3.2 倍にした。
+
+`minimum` を持つ 2 層は 3,500 件でも下限をちょうど満たしている（`build` が
+`i` を振って複数件作る層なので、件数を増やしても増減しない）:
+
+- `loan_forward/residual_zero`: 100 件
+- `loan_bonus_forward/bonus_zero`: 30 件
+
+### `reference_gave_up` の理由別内訳——計画の見込みとは違う実測
+
+計画のこの Task の記述は「10 → 0」と書いているが、**これは Task 2（種の改善）
+が入る前、spec 起票時の見込みであり、測定ではない。** Task 2 の実装で
+`compound_deposit_search_limit` は既に 10 → 0 になっている。3,500 件への
+引き上げで実際に動いたのは `near_yen_boundary` である:
+
+| 理由 | 2,000 件 | 3,500 件 |
+|---|---:|---:|
+| `compound_deposit_search_limit` | 0 | 0 |
+| `near_yen_boundary` | 2 | 7 |
+| `other` | 0 | 0 |
+
+`near_yen_boundary` は `loan_ref._guard_boundary` の意図的な棄却で、設計書
+§4.9 は「0 件必須にしない」としている。乱択層が約 3.2 倍に広がった分だけ
+円境界近接の棄却を引く回数も増えた——`_guard_boundary` 自体の挙動でも乱数列
+の並びでもなく、乱択層の試行回数が増えたことの影響である。
+
+### 生成時間（一次資料）
+
+`cd reference && uv run python scripts/generate_corpus.py` の CLI 出力（15
+シャード全量、finance は 3,500 件・他 14 枚は 2,000 件）:
+
+```
+wrote .../corpus/generated/finance-000.json (3500 cases)
+generated 31501 cases in 5657.00ms (0.1796ms each)
+```
+
+31,501 件の内訳は 14 枚 × 2,000 件 + finance 3,500 件 + 1 件。余りの 1 件は
+`complex-display` で、`emit` が 1 ノードにつき 3 件（直交形式・極形式・
+`▸∠` 往復の同値）を足すため、`while len(entries) < count` の停止が `count` を
+最大 2 件超えることによる。
+
+**この行は 2026-08-20 まで嘘を言っていた。** 直前の実測ではこう出ていた:
+
+```
+generated 2000 cases in 5629.60ms (2.8148ms each)
+```
+
+経過時間は finance を含む 15 シャード全部の合計なのに、印字する件数と割り算の
+分母は他の 14 枚が共有する CLI 引数 `count`（2,000）のままだった。件数は実際の
+1/15.75、ケースあたりの時間は 15.7 倍に出ていたことになる。**finance だけ
+`FINANCE_COUNT`（3,500）を渡すようにした時点で嘘になったが、印字を見張る
+ものが無かったので緑のまま気づけなかった。** 分母を「実際に書き出した総件数」
+に変えて直してある——`_shards()` が書き出す 15 枚の唯一の一覧で、`main` は
+その payload から数えるので、シャードを増やしても分母がついてくる。
+5629.60ms → 5657.00ms の差は走行ごとの揺れで、この修正によるものではない。
+
+finance 単体の時間は `build_finance_shard` を `time.monotonic` で直接計測して
+別に取ってある:
+
+```
+finance alone: 3500 cases in 1932.53ms (0.5522ms each)
+```
+
+15 シャード合計 5.66 秒のうち finance が 1.93 秒（34%）を占める。残り 3.72 秒が
+他の 14 枚ぶんで、1 枚あたり約 0.27 秒。
+
+**2026-08-15 の実測（`## 生成時間`）と直接は比べられない。** あの節の
+112.73ms は `build_shard`（`scientific` 1 枚）を直接計測した値であって、
+15 枚の合計ではない——当時の CLI 出力にも `wrote` 行は 1 本しかない。
+5.66 秒との差には「1 枚が 15 枚になったこと」と「finance の総当たり探索
+（税境界の決定的探索・ペアワイズ割付）が入ったこと」の両方が乗っており、
+どちらがどれだけかはこの 2 つの数字からは分けられない。finance の 2,000 件
+時点の時間も計測していないので、Task 9 の増分だけを取り出すこともできない。
+
+### 避けて通っていた入力は、両実装が一度も突き合わせていない入力でもあった
+
+（Task 2 からの持ち越し。実例は commit `74cd4e0`。）`compound_deposit_for` に
+`principal="0"` かつ `periods=0` を渡すと、参照実装の `_deposit_seed` が
+`growth - 1 = 0` で割ることになり `decimal.DivisionByZero` で落ちる。これは
+`ValueError` ではないので `near_yen_boundary` / `compound_deposit_search_limit`
+のどちらの分類にも当てはまらず、生成器ごと落ちる。Task 4 の実装者はその組を
+避けて層を作り、コメントに記録して先へ進んでいた。**避けるのではなく参照実装の
+定義域ガードを直し**（兄弟の `periods_for` が既に持っていた
+`periods <= 0` のガードを `deposit_for` の入口にも置いた）、その入力を
+コーパスに入れた。Rust 側は `compound_inverse.rs:67` の
+`if target == 0 || periods == 0 || periods > MAX_PERIODS` が同じ入力を
+`SyntaxError` にするので、退行すれば `pnpm heavy` が両実装の食い違いとして
+落とす。
+
+### 「残価に届く前に完済」の 5 件は代替ではなく本物の到達例である
+
+（Task 4 からの持ち越し。`corpus_calls.py` の `_paid_off_before_residual_strata`
+に実装者の申告として記録されているものを、事実として確認した。）通常の元本
+（`PRINCIPAL_MIN` 以上）では annuity が残価ちょうどに届くよう払込額を較正する
+ため、定例回の途中で先に払い切ってしまうことは構造的に起きない。実装者は
+元本 1,000〜10^9・金利 0.1〜99%・n 3〜50 で 20 万回の乱択探索を行い、1 件も
+再現しなかったと申告している。極小の元本（1〜2 桁円）でだけ、円未満切り捨て
+の比率が annuity の較正を崩して再現する。実際にコーパスへ入っている 5 件
+（`loan_forward`、`paid_off_before_residual_1`〜`_5`）は総当たりで実測した
+値そのものである:
+
+| stratum | principal | rate | n | residual |
+|---|---:|---:|---:|---:|
+| `paid_off_before_residual_1` | 6 | 99.0 | 8 | 1 |
+| `paid_off_before_residual_2` | 7 | 80.0 | 9 | 1 |
+| `paid_off_before_residual_3` | 7 | 99.0 | 9 | 2 |
+| `paid_off_before_residual_4` | 8 | 80.0 | 10 | 1 |
+| `paid_off_before_residual_5` | 8 | 99.9999 | 10 | 2 |
+
+## Heavy の逆算証明書（2026-08-20 実測、spec B+C Task 10）
+
+`finance-000.json` の正常な逆算ケース（`loan_principal` / `loan_term` /
+`compound_deposit_for` / `compound_periods_for`）に対し、「その答が参照実装と
+一致する」だけでなく「その答が境界そのものである」ことを、既存の
+`loan_forward` / `compound_grow`（正算）だけを使って heavy ハーネス経由で
+確かめる証明書を `web/tests/heavy/certificates.ts` に足した
+（設計書 §4.10・計画 Task 10）。
+
+### 対象件数と、実際に発行した wasm 呼び出し回数（実測）
+
+呼び出し回数は `web/tests/heavy/calls.spec.ts` の証明書テストに
+`probes.length` を一時的に出力させて実測した（推定ではない）。
+
+| op | 正常件数 | 証明書の対象 | 呼び出し回数（実測） |
+|---|---:|---:|---:|
+| `loan_principal` | 432 | 415（縮退 17 件を除く。下記） | 830 |
+| `loan_term` | 407 | 407 | 802 |
+| `compound_deposit_for` | 404 | 404 | 808 |
+| `compound_periods_for` | 304 | 304 | 67,675 |
+| 合計 | 1,547 | 1,530 | 70,115 |
+
+`compound_periods_for` の 67,675 回は答の期数の合計と一致する（必要期間の
+証明書だけが O(n) の全走査になる設計どおり）。`loan_term` の 802 回は
+407 × 2 − 12（答が 1 期のケースは「0 期」を構成できないので下限側を測らない。
+実測 12 件）。
+
+### `loan_principal` の 17 件は `loan_forward` で証明できない（縮退）
+
+**設計書の想定（`loan_forward` を 2 回呼ぶだけ）どおりには組めなかった。**
+実装中に 2 種類の実測との食い違いが見つかった。
+
+1. **タイ。** 元利均等の月額は理論値を円未満で切り捨てるので、隣り合う元本が
+   同じ切り捨て値に落ちることがある（実測 34 件）。`monthlyPayment` の大小
+   だけで比べると、この 34 件で「答 + 1 円でも超えない」という誤った不一致に
+   なる。`loan_forward` が返す `finalPayment`（タイのときに限り
+   `schedule::clears_within` と同じ表になる）まで見る比較に直して解消した
+   （`certificates.ts` の `clearsBudget` のコメントに実例がある: `rate=12.0%
+   n=121 payment=3,360,445` で、答の元本も答 + 1 円も `monthlyPayment` は
+   同じ `3,360,445` だが、`finalPayment` は答で `3,360,445`（払い切れる）、
+   答 + 1 円で `3,360,451`（超える））。
+
+2. **縮退（432 件中 17 件）。** `loan_principal` 自身は「予算 `payment` を
+   最大 `n` 回払う」表を走らせて答を確定するが、予算に余裕がある入力では
+   その表が `n` 回を使い切る前に払い終わる（`rows_paid < n`）。
+   `loan_forward` はこれを再現できない——`loan_forward` は「`n` 期を
+   ちょうど使い切る」前提で**自分で**月額を導くので、縮退したのと同じ
+   `(元本, 金利, n)` を渡すと、その月額は理論上とても小さくなり、しばしば
+   初回利息の切り捨てと一致するか下回って `schedule::run_schedule` の
+   発散ガードに落ち、答の元本でも答 + 1 円でも `SyntaxError` が返る。
+   実例（`fin-000524`、Python 参照実装でも同一挙動を確認済み）:
+   `principal=3,599,999 rate=100% n=1,199 payment=300,000`
+   （`rows_paid=164 < n=1,199`）で、`loan_forward(3,599,999, …)` も
+   `loan_forward(3,600,000, …)` も `SyntaxError`。
+
+   `loan_forward` だけでは境界を確かめられないので、この 17 件は証明書から
+   除外した。**除外を黙って通さない**——`certificates.ts` の
+   `countDegenerateLoanPrincipalCases` で件数を読めるようにし、
+   `calls.spec.ts` に専用のテスト（正常 432 件・除外 17 件を実測値として
+   焼き付ける）を足した。「全数除外でないこと」だけでは、17 件が 400 件に
+   増えた走行が緑で通ってしまう——除外は証明書の穴なので、穴の大きさが
+   動いたら気づけなければならない。`pnpm heavy` の実行ログには毎回
+   `loan_principal: 17 of 432 normal cases are degenerate (rows_paid < n)
+   and excluded from the boundary certificate.` が出る。
+
+`loan_term` では同種の縮退は起きない（`n` は探索で決まる答であり、常に
+「ちょうど payment を使い切る」最小値になるため、`rows_paid < n` には
+ならない）。`compound_deposit_for` の下限側（答 − 1 円）が構成できない
+ケース（答が 0 円）は実測 0 件だった。
+
+### 未到達側の内訳: 計算で示せた分と、エラーで示した分（独立に検算）
+
+「答の一歩手前では届かない」側は、`compound_grow` が値を返してそれが目標を
+下回る場合と、`compound_grow` がエラーを返す場合の 2 通りで通る。後者を
+未到達として扱うのは engine 自身の流儀に合わせたもので
+（`compound_inverse.rs` の `probe` が `Err(CalcError::Overflow) => true`、
+`Err(_) => false` としている）、証明書もこれを写している
+（`certificates.ts` の `errorMeansShortOfTarget`）。**どちらでどれだけ
+通っているのかは、緑という結果からは読めない**ので数えた。
+
+数えたのは Python 参照実装（`compound_ref.compute("compound_grow", …)`）で、
+wasm とは独立の経路である。
+
+| 証明書の未到達側 | プローブ数 | 値で下回った | エラーで示した | 目標に届いてしまった |
+|---|---:|---:|---:|---:|
+| `compound_deposit_for`（答 − 1 円） | 404 | 281 | 123 | 0 |
+| `compound_periods_for`（k = 1..n−1） | 67,371 | 67,371 | 0 | 0 |
+
+- `compound_deposit_for` の 123 件は**すべて同じ形**だった: 答が 1 円で、
+  `principal = 0` かつ `deposit = 0` になる入力。engine も参照実装も
+  「入れた金がゼロ」を `SyntaxError` にする。値としては残高 0 < 目標 なので、
+  未到達として扱うのは意味の上でも正しい。
+- `compound_periods_for` は 67,371 プローブすべてが値の比較で通っており、
+  エラー経路に一度も乗っていない。必要期間の証明書は全走査そのものが
+  主張なので、ここがエラーで埋まっていないことには意味がある。
+- **「目標に届いてしまった」が両方 0** であることは、参照実装の側でも
+  境界の主張が成り立っていることを意味する（wasm 側は証明書テストが緑で
+  あることが同じことを言っている）。
+
+### `pnpm heavy` の所要時間: 証明書なし / あり
+
+いずれも `cd web && pnpm heavy`（wasm ビルド込み）の壁時計時間。
+
+| | passed | 時間 |
+|---|---:|---:|
+| 証明書なし（ベースライン、git stash で退避して計測） | 157 | 25.8 秒 |
+| 証明書あり（1 回目） | 162 | 25.9 秒 |
+| 証明書あり（2 回目） | 162 | 25.7 秒 |
+| 証明書あり（赤確認 4 件を戻した後、最終確認） | 162 | 26.4 秒 |
+
+増分は 0〜0.6 秒で、設計書 §4.10 が言う「10 秒を超えたら層の代表に絞る」の
+閾値に遠く及ばない。**層の代表には絞っていない**——67,675 回の
+`compound_grow` 呼び出しを 1 束 5,000 件（既存の `BATCH`＝500 より大きい束）
+で流したことで、往復の回数を抑えられている（`compound_periods_for` 単体は
+7.5〜7.7 秒）。絞る判断は測ってから下す指示だったので、まず測り、増分が
+無視できる大きさだったので絞らなかった。
+
+### 赤確認（4 件、すべて実施・すべて再編集で戻した）
+
+| 証明書 | 壊した内容 | 結果 |
+|---|---|---|
+| `loan_principal` | 答 + 1 円 → 答 + 0 円 | 赤。34 件が `"fin-XXXXXX: at answer + 1 yen (principal=…) expected NOT to clear within the payment budget …, but loan_forward's schedule does settle within it"` |
+| `loan_term` | 答 − 1 期 → 答（同じ期） | 赤。14 件が同型のメッセージ（`at answer - 1 period (n=…) expected NOT to clear …`） |
+| `compound_deposit_for` | 答 − 1 円 → 答 − 0 円 | 赤。14 件が `"at answer - 1 yen (deposit=…) expected NOT to reach target … yet, but compound_grow gave …"` |
+| `compound_periods_for` | ループ境界 `k < n` → `k <= n` | 赤。14 件が `"at k=… of n=… (not yet) expected NOT to reach target … yet, but compound_grow gave …"` |
+
+4 件とも、壊した箇所に対応する具体的なケース ID と数値つきのメッセージで
+落ちることを確認した。戻しはすべて再編集（`git checkout` は使っていない）。
+
+### やり残し・不安点
+
+- `loan_term` に縮退相当の問題が本当に起きないことは、`n` が探索で決まる
+  答であることからの推論であり、`loan_principal` のように総当たりで
+  確かめてはいない（実測では 407 件全部が通ったので、少なくともこの
+  コーパスでは起きていない）。
+- `loan_principal` の 17 件（縮退）は境界の証明が無いまま「参照実装と一致
+  する」ことだけが確認されている状態が残る。`loan_forward` 以外の手段
+  （`loan_term` を使う、など）を使えば証明できる可能性があるが、今回の
+  制約（`loan_forward` / `compound_grow` のみ）の外にある。
+
+## Finance 用の欠陥注入 10 種（2026-08-20 実測、spec B+C Task 11）
+
+`web/scripts/detection-power.mjs` の `MUTATIONS` に、設計書 §5 の表に沿って
+Finance 用の 10 種を足した。既存 8 種と合わせて 18 変異。**すべて
+`expectShards` は `finance-000.json (calls)` の 1 枚だけ**で、他 14 枚は
+反応しないことを実測で確かめた。
+
+### 実測表（`finance-000.json` の総件数は Task 9 で確定した 3,500）
+
+| 変異 | 検出件数 | 検出率 | `minRate`(半分・3 桁切り捨て) |
+|---|---:|---:|---:|
+| `loan-interest-round-not-floor` | 2,707 | 77.34% | 0.386 |
+| `loan-interest-as-f64` | 105 | 3.00% | 0.015 |
+| `compound-deposit-at-start` | 615 | 17.57% | 0.087 |
+| `compound-round-once-at-maturity` | 605 | 17.29% | 0.086 |
+| `rate-nominal-to-effective` | 2,272 | 64.91% | 0.324 |
+| `tax-combined-rate` | 406 | 11.60% | 0.058 |
+| `loan-final-row-no-adjustment` | 1,624 | 46.40% | 0.232 |
+| `bonus-half-year-becomes-monthly` | 368 | 10.51% | 0.052 |
+| `periods-for-binary-search` | **1**(修正後。下の節を見よ) | 0.029% | 置いていない(下限は `Math.max(1, …)` に委ねる) |
+| `compound-inverse-ignores-tax-flag` | 272 | 7.77% | 0.038 |
+
+**既存 8 変異の検出件数は Task 7 の記録から 1 件も動いていない**
+（`display-digits` の 10 シャード内訳・`precedence-collapse` 1,099・
+`ncr-multiply-first` 10・`eng-exponent-toward-zero` 96・
+`sexagesimal-no-carry` 10・`complex-multiply-sign` 147・
+`polar-angle-flipped` 661・`associativity-flip` 0、すべて完全一致)。
+Finance だけを 3,500 件に増やした Task 9 の変更が他の 14 シャードに
+漏れていないことの、変異注入による裏付けになる。
+
+### #9(必要期間の二分探索)は最初の版が間違った理由で 152 件を検出していた
+
+最初に書いた `to` は次の形だった。
+
+```rust
+let probe = |n: u32| -> CalcResult<bool> {
+    let g = grow(principal, deposit, rate, n)?;
+    Ok(reached(g.final_balance, g.interest, taxed)? >= target)
+};
+if !probe(MAX_PERIODS)? { return Err(CalcError::SyntaxError); }
+```
+
+これで 1 回目・2 回目の `pnpm heavy:power` を回すと **152 件**を検出した。
+コメントには「taxed な `compound_periods_for` の正常ケース 146 件のほぼ
+全数」が原因だと書いたが、**これは検算していない当て推量で、間違って
+いた**。発注者からの指摘で Python 参照実装の上に同じロジックを u64 の
+checked 演算まで含めて写し、304 件全部を突き合わせたところ、内訳はこうだった。
+
+| 原因 | 件数 |
+|---|---:|
+| `probe(MAX_PERIODS)` が先に u64 を溢れさせ、前進走査なら出せた小さい答の代わりに `Overflow` を返す(税なし 79 + 税あり 72) | 151 |
+| 前進走査と二分探索が別の期を返す(本物の非単調性) | 1(`fin-000265`。前進 19 / 二分 21) |
+
+**税なし 79 件が決定的だった。** 税なしの到達値は残高そのもので、期数に
+ついて厳密に単調である——税の床は原因になりようがない。実際の原因は、
+`probe(MAX_PERIODS)` を先に呼ぶ二分探索の書き方そのもので、答が小さい期
+(例: 10 期)のケースでも 1,200 期まで育てて u64 を溢れさせていた
+(`fin-001295`: 前進 10 期 / 二分 `Overflow` が実例)。
+
+**直した。** `deposit_for` の `probe` が既に持っている流儀
+(`Err(CalcError::Overflow) => true` として「届く側」に倒す。
+`crates/calcarc-core/src/finance/compound_inverse.rs:72-78`)を `periods_for`
+の `probe` にも適用し、`?` で溢れを伝播させないようにした。3 回目の
+`pnpm heavy:power` で再測定すると、**検出は 1 件になった**——設計書 §5.2
+が最初から言っていた「`non_monotone_net` 層(1 件、`fin-000265`)だけが
+検出できる」のとおりである。コーパスにはこの層が実際に 1 件だけあり
+(`stratum: compound_periods_for/non_monotone_net`)、検出件数(1)と一致する。
+
+**検出数が多いことは検出力が高いことを意味しない。** 152 件のうち 151 件
+は、#9 が確かめたいはずの「手取りの非単調性を二分探索が飛び越える」性質
+とは無関係の、変異の書き方そのものの欠陥(溢れに前のめり)が生んだ人工物
+だった。`minRate` を 152 件の実測に合わせて焼き付けていたら、
+`non_monotone_net` 層をコーパスから誰かが消しても #9 は 151 件を検出して
+緑のままになり、設計書 §5.2 がまさに防ごうとした壊れ方が開いたまま
+気づかれずに残っていた。
+
+修正後の `minRate` は率を置いていない。実測が 1 件だけなので、3,500 件
+分母の率にすると 3 桁の表現に載らず(`floor(1/3500 / 2 * 1000) = 0`)、
+`verdictFor` の `floor = Math.max(1, Math.ceil(total * rate - 1e-9))` が
+`rate` 未指定(=0)のときに 1 を保証する側に委ねている。
+
+### 証明書の失敗は検出数の集計から漏れる(実測で確認)
+
+Task 10 で `calls.spec.ts` に足した 4 つの逆算証明書
+(`loan_principal` / `loan_term` / `compound_deposit_for` /
+`compound_periods_for` の「答えが境界そのものである」テスト)は、それぞれ
+独立した `test(...)` で、**`report.ts` の `record()` を 1 度も呼ばない**。
+`heavy-run.json` の `shards[].mismatches` を書くのは
+`every call in ${name} matches the reference` という別のテスト(shard 単位
+の完全一致比較)だけである。
+
+`verdictFor` は `reacted.length === 0` のときだけ `playwrightExitCode` を
+見る。Finance 変異 10 種は全部 `finance-000.json (calls)` の完全一致比較
+自体が壊れる(`reacted` が非空)ので、**この分岐に一度も入らない**——
+証明書がどれだけ壊れていても、`verdictFor` はそれを一切見ないまま `ok` を
+返す。
+
+これを実際に 2 種で確かめた(`detection-power.mjs` の外で、変異を手で当てて
+`CI=1 pnpm exec playwright test --config playwright.heavy.config.ts` を素で
+走らせ、reporter の一覧を読んだ)。
+
+- **`compound-round-once-at-maturity`**(shard 側 605 件不一致): 4 証明書
+  すべて緑(0 件失敗)。境界の判定は「目標を超えたか」という不等式なので、
+  積立の丸め方式が変わって数値そのものが数円ずれても、golden の
+  `deposit`/`periods` がちょうど境界を跨ぐ位置にある限り証明書は崩れない
+  ——数値の完全一致より粗い性質のほうが、この種の摂動に頑健だった。
+- **`tax-combined-rate`**(shard 側 406 件不一致): `compound_deposit_for`
+  証明書が 808 件中 **57 件**、`compound_periods_for` 証明書が 67,675 件中
+  **67 件**、合わせて 124 個のプローブが赤くなった(playwright の
+  reporter は `3 failed` を返した: shard 本体 + 証明書 2 本)。にもかかわらず
+  `detection-power.json` にはこの 124 件がどこにも現れない——`reacted` が
+  既に `["finance-000.json (calls)"]` と一致していたので、`verdictFor` は
+  証明書の失敗を見ないまま `ok` を返した。
+
+**証明書の失敗は検出数の集計から漏れる。** これは `detection-power.mjs` の
+バグではない(shard 単位の完全一致という元々の契約どおりに動いている)が、
+「Finance 変異 10 種の `total` 列」を読むだけでは、証明書がどれだけ壊れて
+いるかは分からない、ということは外の読み手に対する主張として残しておく
+価値がある。**10 種のうち、残り 8 種(`compound-round-once-at-maturity` と
+`tax-combined-rate` 以外)について証明書への影響は確認していない。**
+特に `rate-nominal-to-effective`(shard 側 64.91%)と
+`loan-final-row-no-adjustment`(同 46.40%)は摂動が大きく、証明書も割れて
+いる可能性が高いが、未検証のまま報告する。
+
+### 実行時間(3 回の `pnpm heavy:power`、いずれも壁時計)
+
+| 回 | 内容 | 所要時間 |
+|---|---|---:|
+| 1 回目 | 18 変異(#9 は修正前の版)。全 18 が `ok` | 558 秒(約 9.3 分) |
+| 2 回目 | `minRate` を実測の半分で埋めた版。全 18 が `ok` | 552 秒(約 9.2 分) |
+| 3 回目 | #9 を `deposit_for` の流儀に直した版。全 18 が `ok`、#9 は 1 件 | 551 秒(約 9.2 分) |
+
+計画が見積もった「1 変異あたり約 34 秒・約 10 分」(実測前)と近い実測値。
+3 回とも 9 分台前半で揃っており、#9 の修正(数行の書き換え)は所要時間に
+目立った影響を与えていない。
+
+### 変異は残っていない
+
+3 回目の走行後、`git status --short` と `git diff --stat -- crates/` は
+どちらも空だった(`web/scripts/detection-power.mjs` の変更のみが残る)。
+`runOneMutation` の `finally` が毎回バイト単位で元に戻していることを
+実測でも確認した。
+
+### やり残し・不安点
+
+- 証明書への影響を直接確認したのは 10 種のうち 2 種
+  (`compound-round-once-at-maturity`・`tax-combined-rate`)だけである。
+  残り 8 種、特に摂動の大きい `rate-nominal-to-effective` と
+  `loan-final-row-no-adjustment` は未確認のまま。
+- #9 の最初の版(152 件)が示したこと自体は無駄ではない:
+  「二分探索が壊れる経路は非単調性だけではなく、探索の書き方(先に
+  上限を試す)そのものにもある」という事実は、`periods_for` を将来
+  書き換えるときに参照する価値がある。ただしそれは #9 が測るべき
+  対象ではないので、今回は `deposit_for` と同じ流儀に揃えて排除した。
+- `loan-interest-round-not-floor`(77.34%)と `rate-nominal-to-effective`
+  (64.91%)は検出率が非常に高い。これは金利の丸め方式・換算方式が
+  ほぼ全ケースに影響するローンの構造上自然だが、`minRate` の下限
+  (それぞれ 0.386・0.324)は他の変異(0.015〜0.232)に比べて高い水準に
+  なる。コーパスが将来偏ると最初に踏む下限になりうる。
+
+## 押下キーを数えた（2026-08-20 実測、spec D+E Task 5）
+
+`reachability.spec.ts` は「盤面から**押せる**」を見ている。ここで足したのは
+**「実際に押した」**——2 つは別の主張である。押せる場所にあっても、代表を選ぶ
+サンプリングが 1 件も選ばなければ、そのキーは走行を通じて一度も押されない。
+
+### 指示書 §8 の 9 キーは、変える前から全部押されていた
+
+記録だけを入れて `pnpm heavy:ui` を 1 回走らせた（サンプリングは従来の等間隔の
+まま）。**9 キーのうち押されていなかったものは 0 個。**
+
+| キー | トークン | ケースの押下 | harness の押下 |
+|---|---|---:|---:|
+| `.` | `dot` | 717 | 0 |
+| `EXP` | `exp` | 110 | 0 |
+| `j` | `j` | 228 | 0 |
+| `▸∠` | `polar_toggle` | 50 | 50 |
+| `Deg/Rad` | `angle_toggle` | 100 | 101 |
+| `ENG` | `eng` | 54 | 54 |
+| `°'"` | `dms` | 46 | 0 |
+| `AC` | `ac` | **0** | 1,267 |
+| `DEL` | `del` | **6** | 0 |
+
+走行全体で 19,904 回。**押されたトークンは 46 種**——盤面のボタンと同じ数で、
+どのキーも 1 回以上押されている。
+
+### 数えるときに分けたもの
+
+**押したのが誰かを分けないと、2 つの主張が混ざる。** `AC` は各ケースの頭で
+harness が必ず押す（`pressCase`）ので、区別しなければ「`AC` を押した」は
+何をしても緑になる。実際、**`ac` をキー列に持つケースはコーパスに 1 件も無い**
+——Task 3 の `corrections-000.json` は最後の `ac` 以降だけを残す形に落ち着いた
+ので、キー列に `ac` は現れない。`angle_toggle` / `eng` / `polar_toggle` も
+`resetDisplayState` が表示状態を戻すために押すので、両方に数が立つ。
+
+だから `globalTeardown` の主張は 2 段になっている。**9 キーは 1 回以上押されて
+いること**（harness の押下を数える）に加えて、**コーパスにキー列として現れる
+必須キーは、ケースが押していること**（harness の押下を数えない）。後者の期待は
+サンプリングではなく**コーパスから**導く——選び方から導くと、選ばれなくなった
+瞬間に期待も一緒に消えて差が出ない。
+
+### いちばん細い糸は `DEL` の 3 件
+
+`del` を含むケースはコーパス 33,567 件のうち **3 件**しかなく、そのすべてが
+36 件しかない `entry-000.json` に居る（`entry-000018`〜`020`、`del` を 1〜3 回）。
+36 < 100 なのでシャードごと全件が通っていた、というだけである。**等間隔の
+サンプリングが `DEL` を拾っていたのは偶然**で、`entry` シャードが 100 件を
+超えた瞬間に落ちうる。必須キー優先のサンプリング（先に必須キーを含むケースを
+各 1 件確保してから、残りを等間隔で埋める）は、この偶然を仕様に変えるために
+入れた。**いま赤いものを緑にする変更ではない。**
+
+### 実行時間（`pnpm heavy:ui`、いずれも壁時計）
+
+| 回 | 内容 | 所要時間 |
+|---|---|---:|
+| 1 回目 | 記録だけ（サンプリングは従来のまま） | **700.6 秒（11.7 分）** |
+| 2 回目 | `globalTeardown` の主張 + 必須キー優先のサンプリング | **699.8 秒（11.7 分）** |
+| 3 回目 | 赤確認（`DEL` を選ばれたケースから外した） | **700.4 秒（11.7 分）** |
+
+計画は「16 テスト 10.6 分」と書いていたが、それは段階 J（2026-08-17）の
+コーパスに対する実測である。いまは **19 テスト**（`entry` / `errors` /
+`associativity` が Task 1〜4 で増えた）で、1,266 件を打鍵する。**選び方を
+変えても所要時間は動かない**——選ぶ件数が同じだからで、差は 0.8 秒だった。
+
+選び方が実際に変わったことは押下数に出ている: `dot` 717 → 718、`eng` 54 → 55、
+`dms` 46 → 45。必須キーを先に確保したぶん、等間隔の網が 1 件ずつずれた。
+
+### 赤確認 — `DEL` を 1 つ外す
+
+`displaySelections` が選んだあとに `del` を含むケースだけを落とす変異を当てた。
+**母集団（`all`）は触らない**ので、コーパスから導く期待は残ったまま、走行だけが
+`DEL` を押さなくなる。
+
+**19 テストは全部緑のまま通った**（`entry-000.json` の件数だけが 36 → 33 に
+なった）。落ちたのは `globalTeardown` である:
+
+```
+Error: heavy-ui: 3 problem(s) with what this run actually pressed:
+  - [never-pressed] heavy-ui: DEL (del) was never pressed on the real keypad
+    during this run. It has a button — reachability.spec.ts checks that — but
+    nothing in this run actually pressed it.
+  - [never-typed-by-a-case] heavy-ui: DEL (del) appears in the corpus, but no
+    corpus case pressed it in this run. …
+  - [not-in-sample] heavy-ui: DEL (del) appears in the corpus, but the sampling
+    selected no case containing it. …
+```
+
+3 つの判定が独立に反応した。走行の終了コードは 1 で、`19 passed` と
+`1 error was not a part of any test` が同時に出る——**テストの緑は、キーを
+押したことの証拠にならない**という、この Task の主張そのものである。
+
+**`globalTeardown` の例外が終了コードを 1 にすること**も、この走行で確かめた
+（先に `reachability.spec.ts` だけを 5 秒で回して同じ形を確認してある。
+4 テスト緑・終了コード 1）。
+
+## Finance を実画面から通した（2026-08-20 実測、spec D+E Task 6）
+
+`calls.spec.ts` は `finance-000.json` の 3,500 件を全部照合しているが、
+`runCalls` を直接呼ぶので**盤面も表示も一度も通らない**。モードキー、項目キー、
+周期と税で下段が丸ごと入れ替わる面、万/億、桁区切り——利用者が触るものは
+すべてその経路の外にある。`finance-ui.spec.ts` は 8 面 × 正常 1・異常 1 の
+16 件だけを実画面から通す。
+
+### 異常系は `finance-load-error` には出ない（実測）
+
+`data-testid="finance-load-error"` は `FinancePanel.tsx` の `failed` の枝
+（wasm を読み込めなかったとき）でしか描かれず、その枝はキーパッドを描く前に
+`return` する。**計算のエラーは答の行そのものに出る**——本文が `Math ERROR`
+になり、`display-main`（`Readout` の `<output>`）が `data-error` に種別を持つ。
+種別の文字列はコーパスの `expect.error` と同じ語彙（`SyntaxError` /
+`Overflow`）である。
+
+**種別を先に見る。** 本文はどの種別でも `Math ERROR` なので、本文だけを見ると
+`SyntaxError` と `Overflow` が入れ替わっても緑になる（`errors-000.json` の
+照合が同じ理由で種別を先に見ているのと同じ話）。
+
+### 16 件はコーパスの層から引いた
+
+面ごとに「その面が打てるケース」に絞り、**真ん中**を採る。先頭は各 op の頭に
+置かれた退化の境界（n=1・年利 0・元本 1）なので、先頭を採ると 8 面すべてが
+「1 回払いで利息 0」になってしまう。真ん中は `random` の層に落ちる。
+
+| 面（コーパスの `op`） | 正常 | 異常 |
+|---|---|---|
+| `loan_forward` | fin-001424 `random` | fin-000225 `paid_off_before_residual_3`（SyntaxError） |
+| `loan_bonus_forward` | fin-002066 `random` | fin-002497 `random`（SyntaxError） |
+| `loan_principal` | fin-001741 `random` | fin-000173 `term_zero`（SyntaxError） |
+| `loan_bonus_principal` | fin-001862 `random` | fin-002555 `random`（SyntaxError） |
+| `loan_term` | fin-001912 `random` | fin-000602 `pairwise_0020`（SyntaxError） |
+| `compound_grow` | fin-001792 `random` | fin-002026 `random`（**Overflow**） |
+| `compound_deposit_for` | fin-001879 `random` | fin-000252 `deposit_overflow_ppy2`（**Overflow**） |
+| `compound_periods_for` | fin-002309 `random` | fin-000241 `target_zero_taxed`（SyntaxError） |
+
+「6 モード + ボーナス 2 面」はこの 8 つのことで、**コーパスの `op` とちょうど
+1 対 1 に対応する**。面の一覧は手で書いた表なので、`missingOps` が「コーパスに
+在って面が覆っていない op」を毎回数える——9 つ目の op が入った日にここが赤くなる。
+
+### 盤面が表現できないケースは 211 件（3,500 件中、実測）
+
+コーパスはコアの定義域を突くので、**画面からは打てない入力を持つケース**がある。
+打てないものを打とうとすれば押せないキーを待ってハングするだけで、それは
+engine の欠陥ではなく**盤面の表現力**の話である。
+
+| 件数 | 面 | 打てない理由 |
+|---:|---|---|
+| 150 | `loan_bonus_forward` | 残価つきのボーナス案件。**残価とボーナスは排他**なので同時に打てない |
+| 31 | ローン 3 面 | 期間が 1,200 か月を超える（`FinancePanel` の `MAX_PERIODS`） |
+| 15 | 5 面 | 年利が入口の文法を通らない（小数 5 桁・負・非数字・100 超） |
+| 9 | 複利 3 面 | 周期が 4 期・13 期・0 期。盤面は 年/半年/月 の 3 つしか持たない |
+| 4 | 複利 3 面 | 期間が 1,200 期を超える |
+| 2 | `compound_grow` / `compound_deposit_for` | **期数 0**。画面は計算を始めないので答もエラーも出ない（下で実測） |
+
+残る **3,289 件（94.0%）は原理的に打てる**。16 件はそこから引いている。
+
+除外の判定は理由を並べる形にしていない。**「そのケースの入力欄が、その面が打つ
+欄とちょうど一致すること」**を要求する形にした——残価つきボーナスの 150 件は
+その副作用で外れ、同時に**コーパスが入力欄を 1 つ増やした日に赤くなる**。
+打たない欄があるまま走ると、画面は別の計算をして緑になる。
+
+### 期間 1,201 か月は、コアが答えるのに画面から打てない（申し送り）
+
+`loan_forward/term_1201_ok_for_loan`（fin-000172、n=1201）は**コアが答を返す**
+（`rows_paid` 1201）。`MAX_TERM_MONTHS = 1_200` は `loan/inverse.rs` にしか
+無く、**期間を探索する `loan_term` の打ち切り**であって、正算の償還表の上限では
+ない。複利は `compound.rs` が別に 1,200 期で切っている（fin-000201 は
+SyntaxError）。
+
+`FinancePanel.tsx` の `MAX_PERIODS = 1200` のコメントは「コアの
+`MAX_TERM_MONTHS` と同じ」と書いているが、**同じなのは数字だけで、掛かる場所が
+違う**。画面は 1,201 か月のローンを打てず、コアはそれを計算できる。
+**Task 6 では直していない**（画面の定義域をどちらに寄せるかは裁定が要る）。
+
+### 画面の読み方は製品の整形関数を借りていない
+
+期待値も `grouped()` で作ると、区切りが壊れたとき両側が同じだけ壊れて緑になる。
+読み手は人が見る形を正規表現で書き下し（`^\d{1,3}(,\d{3})* 円$`）、そこから
+整数だけを取り出す。内訳も同じ読み方で数を拾うので、**区切りの位置が狂った数は
+分割されて期待値と一致しない**。
+
+### Finance は押下の台帳に載らない（載せてはいけない）
+
+Task 5 の台帳（`presses.ts`）が数えているのは科学計算の `KeyToken` で、
+Finance のキーは別の集合（`FinanceKeyToken`）である。`typingPlan()` は
+`loadShards()` と `loadDisplayShards()` から作られ、どちらも
+`CALL_SHARD_PATTERN`（finance / data-scale）を除いている。だから
+**Finance の 16 件は台帳にも計画にも現れない**——これは欠陥ではなく性質である。
+
+**載せると害がある。** `casesTyped` に 16 件が乗ると `MIN_TYPED_CASES`（1,000）
+の下限がその分だけ嵩上げされ、**打鍵の走行が痩せたことを隠す**。
+`finance-ui.spec.ts` は意図的に `recordPress` / `recordTypedCase` を呼ばない。
+
+（実測: finance のスペックだけを走らせると `globalTeardown` が
+「not a single key press was recorded」以下 33 件の findings を挙げて落ちる。
+台帳が Finance を 1 回も数えていないことの直接の証拠である。）
+
+### 期数 0 の複利は、画面に何も出さない（実測）
+
+`compound_grow/periods_zero`（fin-000200）をそのまま盤面に打ち込んだ。
+コーパスの期待は `SyntaxError` だが、**画面はエラーを出さない**:
+
+```
+main="" data-error=null  breakdown count=0
+```
+
+答の行が空のまま止まる。`FinancePanel` が `periods > 0` を確かめてから
+コアを呼ぶので、**コアが一度も呼ばれない**——エラーを返す機会が無い。
+`compound_deposit_for/periods_zero_without_principal`（fin-000205）も同じ形で、
+この 2 件だけは**画面からは確かめようがない**。
+
+### 実行時間（`pnpm heavy:ui`、壁時計）
+
+| 回 | テスト数 | 所要時間 |
+|---|---:|---:|
+| Task 5 の 3 回（`finance-ui.spec.ts` 以前） | 19 | 700.6 / 699.8 / **700.4 秒** |
+| Task 6（16 件 + 面の一覧の検査を足したあと） | **36** | **713.4 秒（11m53.4s）** |
+
+**増分は 13.1 秒**（Task 5 の 3 回の平均 700.3 秒との差）。設計書の見込みは
+「1 分未満」で、結果としては当たっている。ただし**理由づけは現物と違う**——
+設計書と計画は「Finance は打鍵ではなく欄への入力なので 1 件あたりの費用が違う」
+と書いているが、Finance にも本物の盤面がある（`FinancePanel.tsx` が `Keypad` を
+描き、`pushDigit` / `pushOperator` を呼ぶ）。`fill()` で流し込む欄は 1 つも無い。
+
+費用が科学計算と違うのは事実だが、理由は別である。実測:
+
+| | 科学計算（打鍵） | Finance |
+|---|---:|---:|
+| 1 件あたり | 0.53 秒 | **0.97 秒** |
+| 1 件あたりの押下 | 数キー | **26.1 回**（16 件で 417 回） |
+| ページの読み込み | シャードごとに 1 回 | **ケースごとに 1 回** |
+
+Finance が高いのは、**項目の値がモードをまたいで持ち回られる**ので 1 件ごとに
+ページから開き直しているのと、金額が 20 桁まで伸びるからである。`AC` は
+いま打っている項目しか消さないので、`corpus-ui.spec.ts` の
+`resetDisplayState` に当たるものが Finance には無い。
+
+**2 つの測り方が 2.4 秒ずれている。** Playwright が 17 本のテストに付けた時間の
+合計は **15.5 秒**、走行全体の壁時計の増分は **13.1 秒**である。どちらかが
+嘘というより、テストごとの時間には走行全体に按分される分が乗る一方、
+比較相手の 700.3 秒は別の日の 3 回の平均である。**走行全体の増分 13.1 秒の
+ほうを採る**——利用者が待つのはそちらである。
+
+### 赤確認（2 種、どちらも再編集で戻した）
+
+**変異 1 — `Readout.tsx` から `data-error` を落とす。** 8 つの異常系が全部落ち、
+**8 つの正常系は全部緑のまま**だった。画面には `Math ERROR` が出続けている:
+
+```
+24 × locator resolved to <output aria-live="polite" data-testid="display-main">Math ERROR</output>
+```
+
+**本文だけを見ていたら、この変異は 1 件も捕まらない。** 種別を先に見る理由が
+そのまま出ている。
+
+**変異 2 — 答の欄を 2 か所すり替える。** 複利の税ありを手取りではなく税引前に、
+月額を月々の返済額ではなく総支払額に。**その 2 面だけが落ち、残り 6 面と
+8 つの異常系は緑のまま**だった:
+
+```
+loan_forward fin-001424: the answer line reads "273,027,486 円",
+  but the reference says {"kind":"yen","value":"2173672"}
+compound_grow fin-001792: the answer line reads "17,614,448,478 円",
+  but the reference says {"kind":"yen","value":"14137325033"}
+```
+
+複利のほうは**税の 2 段の丸め**がそのまま差になっている（税引前 17,614,448,478
+に対し手取り 14,137,325,033）。画面から税の経路を通っていることの証拠でもある。

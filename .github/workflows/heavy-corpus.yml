@@ -68,14 +68,6 @@ jobs:
         env:
           CI: "1"
 
-      - name: Run the heavy corpus
-        # CI=1 で wasm を作り直し、プレビューも立て直す
-        # (前の走行のサーバを掴んだまま「緑」にしない)。
-        run: pnpm heavy
-        working-directory: web
-        env:
-          CI: "1"
-
       - name: Type a sample on the real keypad
         # **計算コアの経路とはブラウザに載るものが違う。** あちらは
         # `heavy-harness.html` だけを配信するので画面が存在せず、
@@ -84,8 +76,30 @@ jobs:
         #
         # **前の段が落ちても走らせる**——計算が合っているかと、盤面から
         # 打てるかは別の問いで、片方の赤でもう片方を隠さない。
+        #
+        # **レポートを書く段より前に置く。** 報告書は `pnpm heavy` の走行末尾で
+        # 書かれ、**その時点でディスクにある `web/heavy-ui-run.json` を読む**。
+        # まっさらな runner にはその記録が無いので、あとに置くと盤面の行が
+        # **毎回「記録が無い」になり**、`uiHealth` の 4 状態のうち 1 つしか
+        # CI に出ない。順番だけがそれを決めている。
         if: always()
         run: pnpm heavy:ui
+        working-directory: web
+        env:
+          CI: "1"
+
+      - name: Run the heavy corpus
+        # CI=1 で wasm を作り直し、プレビューも立て直す
+        # (前の走行のサーバを掴んだまま「緑」にしない)。
+        #
+        # **こちらにも `if: always()` が要る。** 上の段を前に出した以上、
+        # これが無いと `heavy:ui` の赤が `heavy` を丸ごと隠す——「片方の赤で
+        # もう片方を隠さない」を、入れ替えた向きにも掛ける。
+        # `heavy:power` が落ちて `detection-power.json` が無いときは、報告書が
+        # 「測っていない」と書く(`renderDetectionPower` の `null` の枝)ので、
+        # 測っていない走行が測った顔で出ることはない。
+        if: always()
+        run: pnpm heavy
         working-directory: web
         env:
           CI: "1"

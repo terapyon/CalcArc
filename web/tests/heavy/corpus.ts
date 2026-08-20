@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CalcErrorCode } from "../../src/calc/types";
 import { KEY_TOKENS } from "../../src/calc/types";
 import { type ComplexValue, magnitude, zeroComponentsAgree } from "./complex";
 
@@ -301,21 +302,38 @@ export function partitionCases(
 export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
 
 /**
- * 表示のトグルのシャード。**値ではなく表示文字列を比べる。**
+ * 表示文字列を比べるシャード。**値ではなく表示文字列を比べる。**
  *
  * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
- * (設計書 2026-08-17-display §3.1)。
+ * (設計書 2026-08-17-display §3.1)。`entry` は打鍵の途中の表示
+ * (設計書 2026-08-19 §4.1)——`eq` を押さないので値そのものが無く、
+ * こちらも表示文字列でしか比べられない。`errors` はエラー種別
+ * (設計書 2026-08-19 §5)——`main` は全件 `"Math ERROR"` で同じなので、
+ * こちらも表示文字列(と `expect.error`)でしか比べられない。
+ * **`entry`/`errors` をここに足し忘れると `loadShards()` が拾い、
+ * `tolerance` も `value`/`equivalence` の `kind` も持たないシャードとして
+ * 即座に落ちる**(assertShardIsSound が守る)。
  */
-export const DISPLAY_SHARD_PATTERN = /^(display|complex-display)-\d+\.json$/;
+export const DISPLAY_SHARD_PATTERN =
+  /^(display|complex-display|entry|errors)-\d+\.json$/;
 
-/** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
+/**
+ * 表示を主張するケース。`expect.main` は**表示文字列そのもの**。
+ *
+ * `expect.error` は省略可能。**省略は「エラーにならない」という主張**で
+ * あって「エラー種別を気にしない」ではない——`errors-000.json` の
+ * アンダーフローの 2 件がこの形を使う(設計書 §5.1)。持たせたときは、
+ * 表示だけでなく**エラーの種別まで**一致しないと不合格になる
+ * (`ERROR_TEXT` が全種別で `"Math ERROR"` と同じなので、種別を見なければ
+ * 全部入れ替わっても緑になる)。
+ */
 export interface DisplayCase {
   kind: "display";
   id: string;
   mode: string;
   keys: string[];
   expr: string;
-  expect: { main: string };
+  expect: { main: string; error?: CalcErrorCode };
 }
 
 /**
@@ -382,13 +400,105 @@ export interface CallCase {
   op: string;
   input: Record<string, string | number | boolean>;
   expect: Record<string, unknown>;
+  /**
+   * このケースが属する層の識別子(`"{op}/{name}"`)。乱択で作られたケースは
+   * `"{op}/random"`(設計書 §4.1・§4.8)。**finance の全ケースが持つが、
+   * `CallCase` は data-scale とも共有する型で、data-scale のケースには無い**
+   * ので `optional` にする。いま読み手はこのフィールドを使わないが、
+   * 宣言を実物に合わせておく——持たせずにおくと、`rejections` の型が実物と
+   * 食い違っていたのと同じ壊れ方になる。
+   */
+  stratum?: string;
 }
 
 export interface CallShard {
   schema: number;
   generated_by: string;
-  rejections?: Record<string, number>;
+  /**
+   * 生成器が捨てた件数。**`reference_gave_up` は理由別の内訳を持つ**——
+   * `near_yen_boundary`(意図的な棄却)・`compound_deposit_search_limit`
+   * (参照実装の探索限界)・`other`(未分類。1 件でも出たら生成器が落ちる)。
+   *
+   * `Record<string, number>` と書いてあった。内訳が入った日にこの宣言だけが
+   * 静かに嘘になる——**いま誰も読んでいなくても、宣言は実物と合っていること。**
+   */
+  rejections?: {
+    dup: number;
+    reference_gave_up: Record<string, number>;
+  };
   cases: CallCase[];
+}
+
+/**
+ * **関数呼び出しのシャードの内訳**(設計書 2026-08-19 §8.2、計画 Task 8)。
+ *
+ * これが無いと、報告書は `finance-000.json (calls)` を「3500」という 1 つの
+ * 数でしか出せない。**その 3500 件は 3500 回の正常な金融計算ではない**——
+ * 1 割強は「電卓が計算を拒むこと」を期待値として持つケースで、op も 8 つに
+ * 分かれている。1 つの数に畳んだ報告書は、読者に前者を後者として読ませる。
+ */
+export interface CallBreakdown {
+  /**
+   * op ごとの、**期待値の種別別**件数。種別は `"ok"` と、エラーコード
+   * (`"SyntaxError"` / `"Overflow"` …)。
+   *
+   * **設計書は `{ ok; SyntaxError; Overflow }` の 3 欄で書いていたが、
+   * 開いた `Record` にした。** 3 欄に閉じると、金融に 4 つ目の種別
+   * (`DivisionByZero` など)が入った日に、その件数はどの欄にも入らず
+   * **黙って消える**。`corpus.ts` の `rejections` が
+   * `Record<string, number>` と宣言されていて実物と食い違っていたのと同じ
+   * 壊れ方である。**いまの種別が 3 つであることは、`report.spec.ts` の
+   * 実コーパスの検査が固定する。**
+   */
+  byOp: Record<string, Record<string, number>>;
+  /**
+   * 層(`"{op}/{name}"`)ごとの件数。**報告書は全層を並べない**
+   * ——実測 1,187 層あり、そのうち 1,177 層は 1 件ずつである。
+   */
+  byStratum: Record<string, number>;
+  /**
+   * **シャードが宣言している棄却の数。この走行が数え直したものではない。**
+   *
+   * `null` は「このシャードは `rejections` を持たない」であって
+   * **「0 件捨てた」ではない**(`data-scale-000.json` が実際にそれ)。
+   * 理由の内訳も開いた `Record` で持つ——生成器が理由を 1 つ足した日に、
+   * 報告書がその行を落とさないため。
+   */
+  gaveUp: { dup: number; reasons: Record<string, number> } | null;
+}
+
+/**
+ * シャードから内訳を数える。**`calls.spec.ts` が記録し、報告書が出す。**
+ *
+ * **`rejections` は数え直さない。** 生成器が何件を捨てたかは生成の時点でしか
+ * 分からない(捨てられたケースはシャードに入っていない)ので、シャードが
+ * 宣言している数をそのまま運ぶ。
+ */
+export function summarizeCallShard(shard: CallShard): CallBreakdown {
+  const byOp: Record<string, Record<string, number>> = {};
+  const byStratum: Record<string, number> = {};
+  for (const testCase of shard.cases) {
+    const error = testCase.expect.error;
+    // **種別を畳まない。** 電卓の表示はどの種別でも同じ `Math ERROR` なので、
+    // ここで畳んだら二度と種別に戻せない。
+    const kind = typeof error === "string" ? error : "ok";
+    const counts = byOp[testCase.op] ?? {};
+    counts[kind] = (counts[kind] ?? 0) + 1;
+    byOp[testCase.op] = counts;
+    const stratum = testCase.stratum;
+    if (stratum !== undefined) {
+      byStratum[stratum] = (byStratum[stratum] ?? 0) + 1;
+    }
+  }
+  const rejections = shard.rejections;
+  return {
+    byOp,
+    byStratum,
+    gaveUp:
+      rejections === undefined
+        ? null
+        : { dup: rejections.dup, reasons: rejections.reference_gave_up },
+  };
 }
 
 /**
@@ -686,6 +796,45 @@ export function summarizeShape(sequences: string[][]): ShapeSummary {
 }
 
 /**
+ * **`eq` を一度も含まないキー列の本数。**
+ *
+ * `=` を押さずに読んだ表示は**確定前の表示**である——電卓の `render()` には
+ * 分岐が二つあり、入力中は打った文字がそのまま出て、確定後だけが整形を通る。
+ * どちらを踏んだかで表示についての主張の強さが変わるので、報告書はこの件数
+ * から書く(手書きの否定で書いていた時期があり、`entry-000.json` が入った日に
+ * 黙って嘘になった)。
+ *
+ * **末尾が `eq` かどうかでは数えない。** `=` のあとに `ENG` や `°'"` を押して
+ * 終わるキー列がコミット済みコーパスに数千本あり、それらが読んでいるのは
+ * **確定した値の表示**である。末尾で数えると、その全部が「確定前を踏んだ」側に
+ * 化ける。
+ */
+export function countSequencesWithoutEq(sequences: string[][]): number {
+  return sequences.filter((keys) => !keys.includes("eq")).length;
+}
+
+/**
+ * 表示のシャードが電卓に流すキー列。表示ケースは 1 本、同値ケースは左右 2 本。
+ *
+ * **組み立ての規則を 1 か所に置く。** 照合する側と数える側が同じ規則を別々に
+ * 書くと、同値ケースの右辺を片方だけが数えるようなずれが起きる——ずれても
+ * 例外にはならず、報告書の件数だけが静かに変わる。
+ */
+export function displaySequences(
+  cases: (DisplayCase | DisplayEquivalenceCase)[],
+): string[][] {
+  const sequences: string[][] = [];
+  for (const testCase of cases) {
+    if (testCase.kind === "display") {
+      sequences.push(testCase.keys);
+    } else {
+      sequences.push(testCase.left, testCase.right);
+    }
+  }
+  return sequences;
+}
+
+/**
  * **同値ケースの右辺が左辺に付け足したキー**を数える。
  *
  * 同値ケースの右辺は、左辺に `neg neg` / `sqrt sqr` / `add 0` のような
@@ -779,7 +928,19 @@ export function needsPrecedence(keys: string[]): boolean {
   const topLevel = new Set<number>();
   const stack: Set<number>[] = [];
   const closedGroups: Set<number>[] = [];
-  for (const key of keys) {
+  // **最後の `ac` より前は読まない。** `ac` は engine を初期状態に戻す
+  // (`crates/calcarc-core/src/engine/mod.rs` の `reduce` 冒頭、
+  // `next = next.cleared()`)ので、そこより前の括弧も演算子も、この列が
+  // 最後に何を計算したかとは何の関係も無い。
+  //
+  // 切らないと、`corrections-000.json` の「エラーからの復帰」形
+  // (`[エラー列, ガベージ, ac, 正しい列]`)のうち**対応の無い `rparen` で
+  // エラーを起こした列**が下の例外に落ちる。engine は `ac` で正しく復帰して
+  // いるのに、この関数がそれを知らないだけである。壊れた入力を静かに
+  // 読み違えないという下の約束は守るが、**`ac` の前に何があっても、その列は
+  // 壊れていない。**
+  const lastClear = keys.lastIndexOf("ac");
+  for (const key of lastClear === -1 ? keys : keys.slice(lastClear + 1)) {
     if (key === "lparen") {
       stack.push(new Set<number>());
       continue;

@@ -9,7 +9,10 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
+import type { HeavyUiRun } from "../heavy-ui/presses";
+import { CERTIFICATES } from "./certificates";
 import type {
+  CallBreakdown,
   Quantiles,
   ShapeSummary,
   Tolerance,
@@ -104,13 +107,45 @@ export interface ShardSummary {
    */
   exponentDisplayCases: number;
   /**
-   * **エラーになることを期待値として持つケースの件数。**
+   * **エラーになることを期待値として持つケースの、種別ごとの件数。**
    *
-   * 科学計算のシャードは 0 である——定義域外は生成の時点で捨てている。
-   * 金融とデータスケールは違う。**入力の検証が仕事の一部**なので、
-   * エラーになること自体が仕様であり、エラー名まで突き合わせる。
+   * 科学計算の**値**シャードは空である——定義域外は生成の時点で捨てている。
+   * `errors-000.json` はその例外で、定義域外・極・ゼロ除算を**わざと**
+   * 期待値として持つ(設計書 2026-08-19 §5)。金融とデータスケールも違う——
+   * **入力の検証が仕事の一部**なので、エラーになること自体が仕様であり、
+   * どちらもエラー名まで突き合わせる。
+   *
+   * **合計ではなく種別で持つ。** 電卓の表示はどの種別でも同じ `Math ERROR`
+   * なので、件数だけを持つと「ゼロ除算が 270 件」と「構文エラーが 270 件」が
+   * 区別できない——報告書はエラー経路を**経路ごとに**出すので、そこで種別が
+   * 要る。合計が要るところは `errorCaseCount()` が足す(同じ数を 2 か所に
+   * 持てば、片方だけが動く)。
    */
-  errorCases: number;
+  errorKinds: Record<string, number>;
+  /**
+   * **このシャードが流したキー列のうち、`eq` を一度も含まないものの本数。**
+   *
+   * 報告書の「入力中の表示」の項目はここから書く。**手書きの否定を置かない**
+   * ——以前ここは「全ケースが `=` で終わるので、確定した値の表示しか踏んで
+   * いない」という固定の文章で、`entry-000.json`(打鍵の途中の表示)が入った
+   * 日に**両方の半分が偽**になった。走行のたびに数えていれば、次に新しい
+   * シャードが入った日も文が自分で動く。
+   *
+   * **`=` を押さないこと**が基準である。末尾のキーではない——`=` のあとに
+   * `ENG` や `°'"` を押して終わるキー列は、確定した値の表示を読んでいる。
+   *
+   * 関数呼び出しのシャード(金融・データスケール)はキー列を持たないので 0。
+   * **0 は「キー列がすべて `=` を押した」であって「測っていない」ではない。**
+   */
+  sequencesWithoutEq: number;
+  /**
+   * **関数呼び出しのシャードだけが持つ内訳。**
+   *
+   * `undefined` は「このシャードは関数呼び出しではない」という意味である。
+   * 空のオブジェクトで埋めない——埋めると、金融のシャードが内訳を記録し
+   * 損ねた走行と、そもそも op を持たないシャードが**同じ顔**になる。
+   */
+  callBreakdown?: CallBreakdown;
   worstEffectiveRelTolerance: number;
   bands: Record<ToleranceBand, number>;
   // 設計書 §11 の「分布そのものを報告書に載せる」。
@@ -150,8 +185,204 @@ const REPORT_PATH = fileURLToPath(
   new URL("../../heavy-report.md", import.meta.url),
 );
 
+const RUN_PATH = fileURLToPath(
+  new URL("../../heavy-run.json", import.meta.url),
+);
+
+/**
+ * **盤面を通る走行が残す要約。** `pnpm heavy:ui` の `globalTeardown` が書く
+ * (`../heavy-ui/presses.ts`)。この走行が書くものではない——だからここは
+ * **読むだけ**である。
+ */
+const UI_RUN_PATH = fileURLToPath(
+  new URL("../../heavy-ui-run.json", import.meta.url),
+);
+
+/** 走行 1 回ぶんの機械可読な要約。**欠陥注入の測定はこれだけを読む。** */
+export interface HeavyRunShard {
+  name: string;
+  total: number;
+  /** 不一致の**件数**。全文は `.heavy-summaries/` にある。 */
+  mismatches: number;
+}
+
+export interface HeavyRun {
+  schema: 1;
+  /** 集計が 1 枚でも書かれたか。false は「テストが 1 本も走っていない」。 */
+  ranTests: boolean;
+  /** この走行に居るはずだったシャード(`expectedSummaryNames()`)。 */
+  expected: string[];
+  /** 実際に走ったシャード。**不一致 0 のものも載る。** */
+  shards: HeavyRunShard[];
+}
+
+/**
+ * **純関数。** ディスクを触らないので、走行の外からテストできる。
+ *
+ * `writeReport()` と違って**何があっても投げない**——投げてしまうと
+ * 「走行が失敗した」という事実そのものが残らず、測定側は理由を知る手段を失う。
+ */
+export function buildRun(
+  recorded: RecordedShard[],
+  expected: string[],
+): HeavyRun {
+  return {
+    schema: 1,
+    ranTests: recorded.length > 0,
+    expected,
+    shards: recorded.map((entry) => ({
+      name: entry.summary.name,
+      total: entry.summary.total,
+      mismatches: entry.summary.mismatches.length,
+    })),
+  };
+}
+
+export function writeRunJson(): void {
+  const run = buildRun(readRecorded(), expectedSummaryNames());
+  writeFileSync(RUN_PATH, `${JSON.stringify(run, null, 2)}\n`, "utf-8");
+}
+
+/**
+ * 走行の要約をディスクから読む。**読めなければ `null`。**
+ *
+ * 報告書の「走行そのものの失敗」の枠がこれを読む。**同じ集計から作り直さず、
+ * 書かれたファイルを読み直す**のは、この枠が答えるのが「走行が自分の結果を
+ * ディスクに残せたか」だからである——`globalTeardown` は要約を先に書いてから
+ * 報告書を書く(要約が残らない走行ほど、測定側が一番知りたい)。プロセス内の
+ * 値を写せば、その 1 本の鎖が切れていても報告書は「異常なし」と書く。
+ *
+ * **壊れたファイルは無いファイルと同じだけ何も言っていない。** 形が違えば
+ * `null` を返し、報告書は「読めていない」と書く——「失敗が無かった」ではない。
+ */
+export function readRunJson(): HeavyRun | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(RUN_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const run = parsed as Partial<HeavyRun>;
+  if (
+    run.schema !== 1 ||
+    typeof run.ranTests !== "boolean" ||
+    !Array.isArray(run.expected) ||
+    !Array.isArray(run.shards)
+  ) {
+    return null;
+  }
+  return run as HeavyRun;
+}
+
+/**
+ * **盤面を通る走行の要約(`web/heavy-ui-run.json`)を読む。読めなければ `null`。**
+ *
+ * `pnpm heavy` と `pnpm heavy:ui` は**別の走行**で、集計を共有しない。だから
+ * 盤面の結果はこの走行の `heavy-run.json` には現れない——読まなければ、
+ * **UI が落ちた走行と、UI を一度も走らせていない走行が同じ顔になる**。
+ * どちらの顔も「盤面については何も言っていない」ではなく「異常なし」に
+ * 見えてしまう。
+ *
+ * `readRunJson()` と同じ流儀にする: **ディスクを読み直し、形が違えば `null`。**
+ * `null` は「走った証拠が無い」であって「UI が通った」でも「UI が落ちた」でも
+ * ない。
+ */
+export function readUiRunJson(): HeavyUiRun | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(UI_RUN_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const run = parsed as Partial<HeavyUiRun>;
+  if (
+    run.schema !== 1 ||
+    typeof run.pressedAnything !== "boolean" ||
+    typeof run.ok !== "boolean" ||
+    typeof run.totalPresses !== "number" ||
+    typeof run.totalTypedCases !== "number" ||
+    !Array.isArray(run.findings)
+  ) {
+    return null;
+  }
+  return run as HeavyUiRun;
+}
+
+/**
+ * **盤面を通る走行の状態。畳まない。**
+ *
+ * 設計が名指ししたのは 3 つ——「無い = 走っていない」「在って失敗」
+ * 「在って成功」である。**実物には 4 つ目があった**(2026-08-20 実測):
+ * `heavy-ui-run.json` が在って `pressedAnything: false`、つまり
+ * **盤面を通る spec が 1 本も走らなかった部分走行**の残骸である
+ * (`finance-ui.spec.ts` だけを走らせるとこれが残る)。
+ *
+ * これを `failed` に混ぜると、**盤面の主張が崩れた走行**と、**盤面を一度も
+ * 叩いていない走行**が同じ行になる。前者は電卓の欠陥を指しうるが、後者が
+ * 指しているのは走行の組み方だけである。別の状態として出す。
+ */
+export type UiHealth =
+  /** 記録が無い(または読めない)。**「UI が通った」ではない。** */
+  | { state: "not-run" }
+  /** 記録は在るが、キーを 1 つも押していない。**部分走行の残骸。** */
+  | { state: "no-presses"; kinds: Record<string, number> }
+  /** 押してはいるが、主張が通っていない。 */
+  | {
+      state: "failed";
+      kinds: Record<string, number>;
+      presses: number;
+      typed: number;
+    }
+  /** 押して、主張も全部通った。 */
+  | { state: "passed"; presses: number; typed: number };
+
+/** 指摘を種類ごとに数える。**全文は並べない**(実測 33 件)。 */
+function uiFindingKinds(run: HeavyUiRun): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const finding of run.findings) {
+    const kind = typeof finding?.kind === "string" ? finding.kind : "(不明)";
+    kinds[kind] = (kinds[kind] ?? 0) + 1;
+  }
+  return kinds;
+}
+
+/**
+ * **純関数。** ディスクを触らないので、走行の外から 4 つの状態を全部作れる。
+ *
+ * **押していないことを先に見る。** `ok` を先に見ると、指摘が 1 件も無いのに
+ * 1 度も押していない記録——つまり検査そのものが外れた走行——が「通った」に
+ * なる。押下 0 は、それだけで「盤面については何も確かめていない」である。
+ */
+export function uiHealth(run: HeavyUiRun | null): UiHealth {
+  if (run === null) {
+    return { state: "not-run" };
+  }
+  if (!run.pressedAnything || run.totalPresses === 0) {
+    return { state: "no-presses", kinds: uiFindingKinds(run) };
+  }
+  if (!run.ok) {
+    return {
+      state: "failed",
+      kinds: uiFindingKinds(run),
+      presses: run.totalPresses,
+      typed: run.totalTypedCases,
+    };
+  }
+  return {
+    state: "passed",
+    presses: run.totalPresses,
+    typed: run.totalTypedCases,
+  };
+}
+
 /** ディスクに落とす 1 枚分。素性もここに入れる(これもワーカーごとの状態だった)。 */
-interface RecordedShard {
+export interface RecordedShard {
   summary: ShardSummary;
   runtime: { coreVersion: string; browser: string };
 }
@@ -207,6 +438,14 @@ export function summaryName(
 export const PRECEDENCE_SHARD = "precedence-000.json";
 
 /**
+ * 結合方向のシャード(設計書 2026-08-19 §6)。
+ *
+ * **このシャードが走行に居るかどうかで、但し書きの文が変わる。** 居ない
+ * 走行で「踏んでいる」と書けば、報告書が自分の走行について嘘をつく。
+ */
+export const ASSOCIATIVITY_SHARD = "associativity-000.json";
+
+/**
  * **`precedence-000.json` の 2000 件のうち、優先順位が無いと別の木になる件数。**
  *
  * この数は報告書が再計算しているものではない。reference の
@@ -227,6 +466,29 @@ export const PRECEDENCE_SHARD = "precedence-000.json";
 export const PRECEDENCE_CHANGES_MEANING = 1101;
 
 /**
+ * **逆算の境界証明書が発行するプローブの総数**(2026-08-20 実測)。
+ *
+ * この走行が数えている数ではない——証明書は `pnpm heavy` の別のテストが
+ * 走らせ、集計を記録しない。数の出どころは
+ * `docs/corpus-measurements.md` の「Heavy の逆算証明書」節の表で、
+ * `calls.spec.ts` に `probes.length` を一時的に出力させて測ったものである。
+ *
+ * **手書きの数を報告書に置くときは、一次資料に釘で留める。**
+ * `report.spec.ts` の "the certificate figures are pinned to the measurement
+ * they came from" がその表を実際に読み出して照合する。どちらか一方だけを
+ * 直しても赤くなる(`PRECEDENCE_CHANGES_MEANING` と同じ仕掛け)。
+ */
+export const CERTIFICATE_PROBES = 70115;
+
+/**
+ * **`tax-combined-rate` の変異で赤くなった証明書のプローブ数**(同上、実測)。
+ *
+ * この 124 は `detection-power.json` のどこにも現れない。報告書はそれを
+ * 「検出数に証明書が含まれない」ことの実例として出す。
+ */
+export const CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION = 124;
+
+/**
  * **走行の開始時に古い残骸を消す。** 前回の走行が書いた集計が混ざると、
  * 今回一件も回らなかったシャードが前回の数字で埋まる——それは緑の顔である。
  * 前回の `heavy-report.md` も消す。書き出しを拒んだときに、**古い緑の
@@ -236,6 +498,9 @@ export function resetRun(): void {
   rmSync(SUMMARY_DIR, { recursive: true, force: true });
   mkdirSync(SUMMARY_DIR, { recursive: true });
   rmSync(REPORT_PATH, { force: true });
+  // **前回の走行の要約も消す。** 残っていると、今回ビルドで落ちた走行が
+  // 前回の数字を見せる——`heavy-report.md` を消すのとまったく同じ理由である。
+  rmSync(RUN_PATH, { force: true });
 }
 
 export function record(summary: ShardSummary): void {
@@ -365,13 +630,26 @@ export const AREAS = [
 export type Area = (typeof AREAS)[number];
 
 /**
+ * 集計の名前からシャードの幹を取り出す。`"errors-000.json (displays)"` →
+ * `"errors-000"`。
+ *
+ * **規則は 1 か所に置く。** 領域の判定とエラー経路の判定が、同じ名前を
+ * それぞれの書き方で刻むと、片方だけが `(displays)` の接尾辞に躓く——
+ * 躓いた側は例外を投げるのではなく**別のシャードの数字に混ぜてしまう**ので、
+ * 検査は緑のまま報告書だけが嘘になる。
+ */
+export function shardStem(name: string): string {
+  return name.replace(/ \(.*\)$/, "").replace(/\.json$/, "");
+}
+
+/**
  * シャード名から領域を決める。
  *
  * **未知の接頭辞は黙って `scientific` に落とさない。** 落とすと、新しい領域の
  * シャードを足したときに、その結果が科学計算の判定に混ざって見えなくなる。
  */
 export function areaOfShard(shardName: string): Area {
-  const stem = shardName.replace(/\.json$/, "").replace(/ \(.*\)$/, "");
+  const stem = shardStem(shardName);
   if (/^(finance|loan|compound)-/.test(stem)) {
     return "finance";
   }
@@ -384,10 +662,21 @@ export function areaOfShard(shardName: string): Area {
     // 「複素数を検証した」件数が別の領域の数字に混ざる。
     return "complex";
   }
-  if (/^display-/.test(stem)) {
+  if (/^(display|entry|errors)-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
     // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
     // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
+    //
+    // `entry-` も同じ理由でここに入る。**さらに一段弱い**——`display-` は
+    // 一度確定した値をトグルで見せ直すだけだが、`entry-` は打鍵の途中で
+    // 値がまだ存在しない(設計書 2026-08-19 §4.1)。それでも「値ではなく
+    // 表示文字列を比べる」という一致点のほうが、6 領域しか持たない
+    // `AREAS` の粒度では効いてくる。
+    //
+    // `errors-` も同じ理由でここに入る。主張しているのは値ではなく
+    // **エラー種別**で、`main` は全種別で同じ "Math ERROR" である
+    // (設計書 §5)——値の一致件数に混ぜると、値を一度も比べていない
+    // 30 件が「値がどれだけ合っているか」の分母に紛れ込む。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {
@@ -397,7 +686,7 @@ export function areaOfShard(shardName: string): Area {
     return "cancellation";
   }
   if (
-    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics|typed|corrections|angle-mode)-/.test(
+    /^(scientific|equivalence|precedence|associativity|elementary|inverse-trig|combinatorics|typed|corrections|angle-mode)-/.test(
       stem,
     )
   ) {
@@ -537,7 +826,244 @@ export function renderDetectionPower(power: DetectionPower | null): string[] {
     "",
     "**この表があって初めて、上の「不一致 0 件」に意味がある**——",
     "「何も見つからなかった」ではなく、**「これだけの壊れ方を検出できる網で 0 件だった」**。",
+    ...renderCertificateStanding(),
   ];
+}
+
+/**
+ * **逆算の境界証明書は、この表の件数に入っていない**(B+C からの持ち越し、
+ * 設計書 §8.2)。
+ *
+ * 証明書(`web/tests/heavy/certificates.ts`)は `record()` を呼ばない。だから
+ * その失敗は `mismatchesByShard` にも `detection-power.json` にも現れず、
+ * 上の「件数」列には 1 も足さない。**表が検出数を「コーパスが見つけた件数」
+ * として出す以上、そこに含まれないものは名指しで書く**——書かなければ、
+ * 読者はこの列を「この変異で壊れた検査の全部」と読む。
+ *
+ * **見逃しではなく過小計上である。** 証明書だけが落ちる変異は、`verdictFor`
+ * の `expectShards: []` の枝で `playwrightExitCode` を見て
+ * `measurement-failed` になる(`web/scripts/detection-power.mjs`)。つまり
+ * 「緑に見えて実は赤」ではなく、「赤いのに件数が小さく出る」。
+ */
+function renderCertificateStanding(): string[] {
+  return [
+    "",
+    `**この表の件数に入っていないものが一つある——逆算の境界証明書 ${CERTIFICATES.length} 本。**`,
+    `${CERTIFICATES.map((c) => `\`${c.op}\``).join(" / ")} の答が`,
+    "**参照実装と同じ値である**ことは上の表が見ているが、**その答が境界そのもの",
+    "である**(1 円・1 期ずらすと条件が破れる)ことは、正算だけを使う別の検査が",
+    `見ている。実測 ${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブある。`,
+    "",
+    "**その検査は集計を記録しない**(`record()` を呼ばない)ので、**証明書が",
+    "何本落ちても上の「件数」列は 1 も動かない。** 実測: 税率を合算にする変異",
+    `(\`tax-combined-rate\`)では証明書が ${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちているのに、その数は`,
+    "この表のどこにも現れない。",
+    "",
+    "**見逃しではなく過小計上である。** 証明書だけが落ちる変異は、走行が非ゼロで",
+    "終わることで**測定の失敗**として報告される(`detection-power.mjs` の",
+    "`verdictFor`)。上の件数は「壊れた検査の全部」ではなく、**コーパスの照合が",
+    "数えた分**だと読むこと。",
+  ];
+}
+
+/** 乱択で引かれた層の識別子の末尾(`corpus.ts` の `CallCase.stratum` が定める)。 */
+const RANDOM_STRATUM_SUFFIX = "/random";
+
+/**
+ * **関数呼び出しのシャードの内訳**(設計書 §8.2、計画 Task 8)。
+ *
+ * ここが答えるのは「その N 件は何だったのか」である。シャード別の表は
+ * `finance-000.json (calls)` を **3500** という 1 つの数で出すが、その数は
+ * 「3500 回の正常な金融計算」ではない——1 割強は**電卓が計算を拒むこと**を
+ * 期待値として持つケースであり、残りも 8 つの op に分かれている。
+ *
+ * **内訳を持たないシャードは節ごと出さない。** 空の表を出すと「op が 1 つも
+ * 無い」と「記録し損ねた」が同じ見た目になる。
+ */
+export function renderCallBreakdowns(entries: ShardSummary[]): string[] {
+  const own = entries.filter((entry) => entry.callBreakdown !== undefined);
+  if (own.length === 0) {
+    return [];
+  }
+  const lines: string[] = ["", "## 関数呼び出しの内訳", ""];
+  lines.push(
+    "**この節は「その件数が何だったのか」を出す。** 上の表はシャードを 1 行に",
+    "畳むので、`3500` のような数が「3500 回の正常な計算」に見える。**実際には",
+    "エラーになることを期待値として持つケースが混ざっている**——入力の検証は",
+    "この領域の仕事の一部なので、それも仕様の検証である。",
+  );
+  for (const entry of own) {
+    const breakdown = entry.callBreakdown;
+    if (breakdown === undefined) {
+      continue;
+    }
+    // **種別の欄はデータから起こす。** 固定の 3 欄にすると、4 つ目の種別が
+    // 入った日にその件数がどの欄にも入らず消える。
+    const kinds = [
+      "ok",
+      ...[
+        ...new Set(
+          Object.values(breakdown.byOp).flatMap((k) => Object.keys(k)),
+        ),
+      ]
+        .filter((kind) => kind !== "ok")
+        .sort(),
+    ];
+    const totalOf = (kind: string) =>
+      Object.values(breakdown.byOp).reduce(
+        (sum, counts) => sum + (counts[kind] ?? 0),
+        0,
+      );
+    const total = kinds.reduce((sum, kind) => sum + totalOf(kind), 0);
+    const errors = total - totalOf("ok");
+    lines.push(
+      "",
+      `### ${entry.name}`,
+      "",
+      `**${total} 件のうち ${totalOf("ok")} 件が正常で、${errors} 件` +
+        `(${percentage(errors, total)})は電卓が計算を拒むことを期待値として`,
+      "持つケースである。**",
+      "",
+      `| op | 総数 | ${kinds.map((kind) => (kind === "ok" ? "正常" : `\`${kind}\``)).join(" | ")} |`,
+      `|---|---:|${kinds.map(() => "---:").join("|")}|`,
+    );
+    for (const op of Object.keys(breakdown.byOp).sort()) {
+      const counts = breakdown.byOp[op] ?? {};
+      const opTotal = Object.values(counts).reduce((sum, n) => sum + n, 0);
+      lines.push(
+        `| \`${op}\` | ${opTotal} | ` +
+          kinds.map((kind) => String(counts[kind] ?? 0)).join(" | ") +
+          " |",
+      );
+    }
+    lines.push(
+      `| **合計** | **${total}** | ` +
+        kinds.map((kind) => `**${totalOf(kind)}**`).join(" | ") +
+        " |",
+    );
+    lines.push("", ...renderStrata(breakdown), ...renderGaveUp(breakdown));
+  }
+  return lines;
+}
+
+/** 層の内訳。**全層は並べない**——実測 1,187 層で、その大半は 1 件ずつである。 */
+function renderStrata(breakdown: CallBreakdown): string[] {
+  const strata = Object.entries(breakdown.byStratum);
+  if (strata.length === 0) {
+    return [
+      "**層の宣言を持たないシャードである。** ケースがどの境界から引かれたかは、",
+      "このシャードからは読めない。",
+      "",
+    ];
+  }
+  const random = strata.filter(([name]) =>
+    name.endsWith(RANDOM_STRATUM_SUFFIX),
+  );
+  const named = strata.filter(
+    ([name]) => !name.endsWith(RANDOM_STRATUM_SUFFIX),
+  );
+  const sum = (rows: [string, number][]) =>
+    rows.reduce((into, [, n]) => into + n, 0);
+  const singletons = named.filter(([, n]) => n === 1).length;
+  return [
+    `**層。** ${sum(strata)} 件は ${strata.length} の層から引かれている` +
+      `——乱択の ${random.length} 層が ${sum(random)} 件、`,
+    `名前のついた ${named.length} 層が ${sum(named)} 件で、そのうち ` +
+      `${singletons} 層は 1 件ずつである`,
+    "(境界と組み合わせを名指しで置いた層で、**乱択では当たらない**)。",
+    "層ごとの件数は `corpus/generated/` のシャードが 1 件ずつ平文で持つ。",
+    "",
+  ];
+}
+
+/**
+ * 生成器が捨てた件数。**シャードが宣言している数で、この走行が数えたものでは
+ * ない。** 持たないシャードでは「0 件」と書かない。
+ */
+function renderGaveUp(breakdown: CallBreakdown): string[] {
+  const gaveUp = breakdown.gaveUp;
+  if (gaveUp === null) {
+    return [
+      "**このシャードは棄却の数(`rejections`)を宣言していない。**",
+      "生成器が何件を捨てたかは、ここからは読めない——**0 件だったという意味",
+      "ではない。**",
+    ];
+  }
+  const reasons = Object.entries(gaveUp.reasons).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const total = reasons.reduce((into, [, n]) => into + n, 0);
+  return [
+    `**参照実装が答を出せずに捨てた件数: ${total}。**`,
+    "**シャード自身が持っている数であり、この走行が数え直したものではない**",
+    "(`corpus/generated/*.json` の `rejections`)。",
+    "",
+    ...reasons.map(([reason, n]) => `- \`${reason}\`: ${n}`),
+    `- 重複による棄却(\`dup\`): ${gaveUp.dup}`,
+  ];
+}
+
+/**
+ * **盤面を通る走行について、この報告書が言えることを書く。**
+ *
+ * 4 つの状態は 4 つの別の文になる。**同じ文で済ませない**のが要点である
+ * ——「記録が無い」を黙って省くと、盤面を一度も走らせていない走行が、
+ * 盤面まで通った走行と同じ顔で出る。
+ *
+ * どの状態でも**この報告書の数字が盤面を通っていないことは変わらない**ので、
+ * その断りは 4 つとも持つ。
+ */
+function renderUiHealth(health: UiHealth): string[] {
+  if (health.state === "not-run") {
+    return [
+      "  **盤面を通る走行——記録が無い。**",
+      "  `web/heavy-ui-run.json` がこの報告書からは読めない。その走行が",
+      "  一度も行われていないか、要約を残す前に落ちたかのどちらかである。",
+      "  **この報告書は盤面について何も言っていない**——「UI も確かめた」と",
+      "  読まないこと。",
+    ];
+  }
+  if (health.state === "no-presses") {
+    return [
+      "  **盤面を通る走行——キーを 1 つも押していない。**",
+      "  `web/heavy-ui-run.json` は在るが、押下が 0 回である。盤面を叩く",
+      "  テストが 1 本も走らなかった走行(一部だけを走らせた場合を含む)か、",
+      "  押下の記録が外れているかで、**どちらも盤面については何も確かめて",
+      "  いない。** 指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      "  **これは盤面の主張が崩れたという意味ではない**——崩れる前に、",
+      "  叩いていない。",
+    ];
+  }
+  if (health.state === "failed") {
+    return [
+      `  **盤面を通る走行——失敗している(指摘 ${countUiFindings(health.kinds)} 件)。**`,
+      `  最後に走った \`pnpm heavy:ui\` は ${health.presses} 回キーを押し、`,
+      `  ${health.typed} 件のケースを打鍵したが、主張が通っていない。`,
+      "  指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      "  **この報告書の緑は、その失敗を打ち消さない。**",
+    ];
+  }
+  return [
+    "  **盤面を通る走行——通っている。**",
+    `  最後に走った \`pnpm heavy:ui\` は ${health.presses} 回キーを押し、`,
+    `  ${health.typed} 件のケースを盤面から打鍵して、主張が全部通っている。`,
+    "  **それはこの報告書と同時の走行ではない**(最後に残された記録である)。",
+    "  **この報告書の件数は、いまも盤面を通っていない。**",
+  ];
+}
+
+/** 指摘の種類と件数。**全文は並べない。** */
+function describeUiFindings(kinds: Record<string, number>): string {
+  const entries = Object.entries(kinds).sort(
+    ([a, x], [b, y]) => y - x || a.localeCompare(b),
+  );
+  return entries.length === 0
+    ? "種類の分かる指摘は 1 件も無い"
+    : entries.map(([kind, n]) => `\`${kind}\` ${n} 件`).join("・");
+}
+
+function countUiFindings(kinds: Record<string, number>): number {
+  return Object.values(kinds).reduce((sum, n) => sum + n, 0);
 }
 
 export function renderVerdicts(entries: ShardSummary[]): string[] {
@@ -604,6 +1130,223 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
   ];
 }
 
+/**
+ * **期待値の出どころが「電卓の仕様書」であることの目印。**
+ *
+ * シャードの素性(`generated_by`)は Python 側が書いており、
+ * `reference/src/calcarc_reference/corpus_entry.py` の `_provenance()` は
+ * この語をわざと入れている——「外部参照ではなく仕様書からの写しである」。
+ * **版数を書けるほど何かを計算していない、ということ自体が証拠である。**
+ *
+ * **`engine_table.rs` の文字で選ばない。** `errors-000.json` の素性にも
+ * その名前が出るが、そちらは「`engine_table.rs` / `state.rs` /
+ * `expr/parse.rs` を**見ずに**数学だけから決めた」という文脈で出ている。
+ * ファイル名で選ぶと、外部参照のシャードが写しの枠に落ちる。
+ */
+export const SPEC_TRANSCRIPTION_MARK = "仕様書からの写し";
+
+/**
+ * **素性が「仕様書の写しですらない」件数を宣言している形。**
+ *
+ * `entry-000.json` の素性は「36 件のうち 10 件(…)は … 実装から導いて
+ * engine を走らせて確かめた値である」と書いている。その 10 件は仕様書に
+ * 対応する規則が無く、**engine の欠陥がそのまま期待値に写る**ので、
+ * 欠陥を見つけられない。報告書はこの内訳を素性から読む——手で書き写すと、
+ * コーパスが変わった日に古い数字だけが残る。
+ */
+const WEAKER_THAN_TRANSCRIPTION = /(\d+)\s*件のうち\s*(\d+)\s*件/;
+
+/** 検証の強さの枠。**3 つを 1 つの数字に畳まない。** */
+export type VerificationFrameId =
+  | "external"
+  | "self-equivalence"
+  | "spec-transcription";
+
+export const VERIFICATION_FRAME_TITLES: Record<VerificationFrameId, string> = {
+  external: "外部参照",
+  "self-equivalence": "自己同値",
+  "spec-transcription": "仕様書からの写し",
+};
+
+/** 枠の見出しの後半。**見出しは 1 か所でしか組み立てない**(`summaryName` と同じ理由)。 */
+const VERIFICATION_FRAME_LEDES: Record<VerificationFrameId, string> = {
+  external: "Python の独立実装と突き合わせたケース",
+  "self-equivalence": "二つのキー列が同じ表示に着くことを見たケース",
+  "spec-transcription": "電卓の仕様書から起こした期待値と照合したケース",
+};
+
+export interface VerificationFrame {
+  id: VerificationFrameId;
+  title: string;
+  /** この枠が数えたケース数。**0 は「この走行では見ていない」。** */
+  cases: number;
+  /** この枠に数を出したシャードの名前。0 件の枠では空である。 */
+  shards: string[];
+  /**
+   * **この枠の中で、枠の名前より弱いケース。**
+   * いまは「仕様書からの写し」の枠だけが持つ——素性が名指しした、
+   * 仕様書に対応する規則が無く実装から導いた件数である。
+   */
+  weaker: number;
+  /**
+   * **素性が内訳を宣言していないシャード。番兵である。**
+   *
+   * 空でなければ、その枠の `weaker` は「弱いケースが無い」ではなく
+   * 「数えられなかった」を意味する。報告書はそれを黙って 0 と書かない。
+   */
+  weakerUnknown: string[];
+}
+
+/**
+ * **検証の強さを 3 つに分ける。**
+ *
+ * - **外部参照** — Python が独立に出した期待値との照合
+ * - **自己同値** — 2 つのキー列が同じ表示に着くことの確認
+ * - **仕様書からの写し** — 電卓の仕様書の規則から起こした期待値(入力途中の表示)
+ *
+ * **3 枠目を作らずに 1 枠目へ混ぜるのが、報告書が一番静かに嘘をつく道である。**
+ * 混ぜると「Python の独立実装と突き合わせた件数」が水増しされる——
+ * 打鍵の途中の表示には数学的な定義が無いので、Python は独立に計算していない。
+ * 混ぜた側の数字はどのテストも見ていないので、静かに増えるだけで誰も咎めない。
+ *
+ * **同値ケースはどのシャードのものでも 2 枠目に入る。** 期待値を持たない
+ * 検査なので、素性が誰であっても強さは変わらない。
+ */
+export function verificationFrames(
+  entries: ShardSummary[],
+): VerificationFrame[] {
+  const frames = new Map<VerificationFrameId, VerificationFrame>(
+    (Object.keys(VERIFICATION_FRAME_TITLES) as VerificationFrameId[]).map(
+      (id) => [
+        id,
+        {
+          id,
+          title: VERIFICATION_FRAME_TITLES[id],
+          cases: 0,
+          shards: [],
+          weaker: 0,
+          weakerUnknown: [],
+        },
+      ],
+    ),
+  );
+  const add = (id: VerificationFrameId, cases: number, name: string): void => {
+    if (cases === 0) {
+      return;
+    }
+    const frame = frames.get(id);
+    if (frame === undefined) {
+      // 到達しない。`frames` は `VERIFICATION_FRAME_TITLES` の全キーを持つ。
+      return;
+    }
+    frame.cases += cases;
+    if (!frame.shards.includes(name)) {
+      frame.shards.push(name);
+    }
+  };
+  for (const entry of entries) {
+    const transcription = entry.generatedBy.includes(SPEC_TRANSCRIPTION_MARK);
+    add(
+      transcription ? "spec-transcription" : "external",
+      entry.values,
+      entry.name,
+    );
+    add("self-equivalence", entry.equivalences, entry.name);
+    if (!transcription || entry.values === 0) {
+      continue;
+    }
+    const frame = frames.get("spec-transcription");
+    if (frame === undefined) {
+      continue;
+    }
+    const declared = WEAKER_THAN_TRANSCRIPTION.exec(entry.generatedBy)?.[2];
+    if (declared === undefined) {
+      // **黙って 0 にしない。** 素性が内訳を書かなくなったら、報告書は
+      // 「弱いケースは無い」ではなく「数えられなかった」と書く。
+      frame.weakerUnknown.push(entry.name);
+      continue;
+    }
+    frame.weaker += Number(declared);
+  }
+  return [...frames.values()];
+}
+
+/** 枠の見出し 1 本。**本文の箇条書きと、あとから引用する文が同じ文字列を使う。** */
+export function verificationFrameHeadline(frame: VerificationFrame): string {
+  return `${frame.title}——${VERIFICATION_FRAME_LEDES[frame.id]}: ${frame.cases}`;
+}
+
+/** 枠を 1 つ取り出す。無い枠は呼び出し側の綴り間違いなので、空の枠を返さない。 */
+export function verificationFrameOf(
+  frames: VerificationFrame[],
+  id: VerificationFrameId,
+): VerificationFrame {
+  const frame = frames.find((f) => f.id === id);
+  if (frame === undefined) {
+    throw new Error(`report: no verification frame called ${id}`);
+  }
+  return frame;
+}
+
+/** 枠ごとの、件数のあとに続く説明。 */
+const VERIFICATION_FRAME_NOTES: Record<VerificationFrameId, string[]> = {
+  external: [
+    "  Rust の計算コアと Python の独立実装が、同じ答えに別々の道で着くことを",
+    "  確かめた件数。**外の基準を持っているのはこの枠だけである。**",
+  ],
+  "self-equivalence": [
+    "  二つのキー列の表示が一致することだけを確かめた件数。期待値を持たず、",
+    "  Python は介在しない——電卓が自分自身と矛盾しないことだけを見る。",
+  ],
+  "spec-transcription": [
+    "  打鍵の途中の表示。**「3 と打った直後に何が出るか」に数学の答えは無い**",
+    "  ので、Python は独立に計算していない。期待値は電卓の仕様書",
+    "  (`crates/calcarc-core/tests/engine_table.rs`)の規則から起こした写しで、",
+    "  **仕様書と実装が食い違っていれば捕まえるが、仕様書そのものの誤りは",
+    "  捕まえない。**",
+  ],
+};
+
+/**
+ * 検証の強さの 3 枠を書く。**1 枠に畳まない。**
+ *
+ * 畳んだ数字は「Python の独立実装と突き合わせた件数」として読まれる。
+ * 3 枠目を 1 枠目に混ぜると、その読み方が静かに嘘になる。
+ */
+function renderVerificationFrames(frames: VerificationFrame[]): string[] {
+  return frames.flatMap((frame) => {
+    if (frame.cases === 0) {
+      return [
+        `- **${verificationFrameHeadline(frame)}**`,
+        "  **この走行には 1 件も無い。**",
+      ];
+    }
+    const unknown = frame.weakerUnknown.map((name) => `\`${name}\``).join("・");
+    return [
+      `- **${verificationFrameHeadline(frame)}**`,
+      ...VERIFICATION_FRAME_NOTES[frame.id],
+      // **番兵。** 素性が内訳を書かなくなったら、黙って 0 と書かずに言う。
+      ...(frame.weakerUnknown.length === 0
+        ? []
+        : [
+            `  - **${unknown} の内訳は読めなかった。**`,
+            "    このシャードの中に、仕様書に対応する規則を持たないケースが",
+            "    何件あるのかを、シャード自身の記録から数えられなかった。",
+            "    **0 件という意味ではない。**",
+          ]),
+      ...(frame.weaker === 0
+        ? []
+        : [
+            `  - **そのうち ${frame.weaker} 件は、仕様書の写しですらない。**`,
+            "    仕様書に対応する規則が無く、実装から導いて電卓を走らせ、出た",
+            "    表示をそのまま期待値にしたものである。**電卓の欠陥はその期待値",
+            `    にも写るので、この ${frame.weaker} 件は欠陥を見つけられない**`,
+            "    ——いまの挙動を留めるだけである。",
+          ]),
+    ];
+  });
+}
+
 export function renderReport(
   entries: ShardSummary[],
   provenance: Provenance,
@@ -614,6 +1357,36 @@ export function renderReport(
    * なってはならない(ワーカー再起動で集計が消えた実測に対する構造的な塞ぎ)。
    */
   missing: string[] = [],
+  /**
+   * **`pnpm heavy:power` の測定結果。呼び出し側が渡す。**
+   *
+   * 既定が `null` なのは意図である。以前はここで `readDetectionPower()` を
+   * 呼んでいたが、そうすると `renderReport` の出力が**引数に無いファイル**に
+   * 依存し、測定が済んでいる作業ツリーとそうでない作業ツリーで別の文書が
+   * 出る。実際に踏んだ: 変異ごとの `expect` がシャード名を列挙するように
+   * なった時点で、`detection-power.json` が在るだけで
+   * 「優先順位シャードが走行に無いのにその名前が出ていないこと」を見る検査が
+   * 落ちるようになった(2026-08-19、Task 7 の 2 回目の走行)。
+   * 本番の読み込みは `writeReport()` が行う。
+   */
+  power: DetectionPower | null = null,
+  /**
+   * **この走行自身の要約(`heavy-run.json`)。呼び出し側が渡す。**
+   *
+   * 既定が `null` なのは `power` と同じ理由である——ここでディスクを読むと、
+   * `renderReport` の出力が引数に無いファイルに依存し、走行のあとの作業ツリー
+   * とそうでない作業ツリーで別の文書が出る。本番の読み込みは `writeReport()`
+   * が行う。`null` は「読めていない」であって「失敗が無かった」ではない。
+   */
+  run: HeavyRun | null = null,
+  /**
+   * **盤面を通る走行の要約(`heavy-ui-run.json`)。呼び出し側が渡す。**
+   *
+   * `run` と同じ理由で既定は `null`——そしてここでは `null` そのものが
+   * 報告すべき状態である。**`pnpm heavy:ui` は別の走行で、集計を共有しない。**
+   * 読まずに黙っていると、この報告書は「UI も通した」と読める顔をする。
+   */
+  uiRun: HeavyUiRun | null = null,
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -657,15 +1430,17 @@ export function renderReport(
     (sum, entry) => sum + entry.relMeasured,
     0,
   );
-  // **経路ごとに分ける。** 合計 4000 を「二経路が同じ数に着くことを確かめた」
+  // **強さごとに分ける。** 合計 4000 を「二経路が同じ数に着くことを確かめた」
   // の直下に置くと、独立した二経路の証拠が 2 倍に見える。実際に Python が
   // 介在するのは値ケースだけで、同値ケースは電卓の自己整合しか見ていない
   // (敵対者レビュー 2026-08-15 の開示要求)。
-  const valueCases = entries.reduce((sum, entry) => sum + entry.values, 0);
-  const equivalenceCases = entries.reduce(
-    (sum, entry) => sum + entry.equivalences,
-    0,
-  );
+  //
+  // **そして「値ケース」も一枚岩ではない。** `entry-000.json`(打鍵の途中の
+  // 表示)の期待値は Python が独立に計算したものではなく、電卓の仕様書から
+  // 起こした写しである。値ケースの合計に混ぜると「Python の独立実装と
+  // 突き合わせた件数」が水増しされ、しかもそれを見ているテストが 1 つも
+  // 無い——静かに増えるだけになる。だから 3 つに分ける。
+  const frames = verificationFrames(entries);
   const lines = [
     ...(missing.length === 0
       ? []
@@ -702,14 +1477,13 @@ export function renderReport(
     "シャードごとの内訳や誤差の分布は**付録**にある。",
     "",
     ...renderVerdicts(entries),
-    ...renderDetectionPower(readDetectionPower()),
+    ...renderDetectionPower(power),
     "",
     "## 数えたもの",
     "",
-    `- **二経路で照合したケース(値): ${valueCases}** ` +
-      "— Rust の計算コアと Python の独立実装が、同じ答えに別々の道で着くことを確かめた件数",
-    `- **電卓の自己整合を見たケース(同値): ${equivalenceCases}** ` +
-      "— 二つのキー列の表示が一致することだけを確かめた件数。Python は介在しない",
+    "**確かめ方は 1 種類ではない。強さの違う 3 つを、混ぜずに数える。**",
+    "",
+    ...renderVerificationFrames(frames),
     `- 合計: **${total}**`,
     `- 不一致: **${failed}**`,
     `- 観測された最大相対誤差: **${relativeQuantity(maxRelativeError, relMeasured)}**`,
@@ -726,9 +1500,9 @@ export function renderReport(
     "",
     "## どうやって確かめているか",
     "",
-    "**独立した二つの経路が関与するのは、値ケースの側だけである。**",
+    "**独立した二つの経路が関与するのは、外部参照の枠だけである。**",
     "",
-    "- **値ケース。** 生成器は**式木**を 1 本作り、そこから二つの表現を",
+    "- **外部参照(値ケース)。** 生成器は**式木**を 1 本作り、そこから二つの表現を",
     "  描き出す。一つは**キー列**(`lparen 3 add 4 rparen eq` のような、実際に",
     "  押すボタンの列)で、これを Rust の計算コアが wasm として食べる。",
     "  もう一つが**数式テキスト**(`(3 + 4)`)である。",
@@ -745,9 +1519,16 @@ export function renderReport(
     "  取り出して手で検算するための描画であって、それを読んで値を出す経路は",
     "  どこにも無い。したがって `expr` の記法に誤りがあっても、このコーパスの",
     "  合否は変わらない。",
-    "- **同値ケース。** 期待値を持たない。数学的に等しい二つのキー列",
+    "- **自己同値(同値ケース)。** 期待値を持たない。数学的に等しい二つのキー列",
     "  (`x` と `√(x²)`、`neg(neg(x))`、`x + 0`)の表示が一致することだけを",
     "  主張する。ここでは Python は介在せず、電卓が自分自身と矛盾しないことを見る。",
+    "- **仕様書からの写し。** 打鍵の途中の表示——`=` を押す前に画面に何が",
+    "  出ているか——だけがこの枠に入る。**ここには外の基準が無い。** `3` を",
+    "  打った直後に `3` が出ることや、`+/-` を押すと `-3` になることは、",
+    "  数学が決めていることではなく、この電卓がそう決めたことである。だから",
+    "  期待値は電卓の仕様書(`crates/calcarc-core/tests/engine_table.rs`)の",
+    "  規則から書き起こしてある。**仕様書と実装の食い違いは捕まえるが、",
+    "  仕様書そのものの誤りは捕まえない。**",
     "",
     "### 同値ケースが単独では捕まえられないもの",
     "",
@@ -764,8 +1545,10 @@ export function renderReport(
     // 測定時点と当時の母数を明示して、過去の測定として書く。
     "ほぼ全件が不一致になった(実測: **当時の値ケース 2000 件中 1996 件**。",
     "一度きりの測定で、この走行で測り直した数字ではない)。",
-    "外の基準——Python が独立に出した期待値——を持っているのは値ケースだけなので、",
-    "上の件数もその 2 つを分けて出している。",
+    "外の基準——Python が独立に出した期待値——を持っているのは外部参照の枠だけで、",
+    "自己同値の枠にも仕様書からの写しの枠にもそれは無い。だから上の件数は",
+    "**3 つに分けて出している**——1 つの数字にまとめると、外の基準と",
+    "突き合わせた件数が、外の基準を持たないケースの分だけ水増しされる。",
     "",
     "**同値ケースの誤差が全件厳密に 0 なのは、選んだ変換の帰結である。**",
     "`√(x²)`・`neg(neg(x))`・`x + 0` はいずれも f64 の上で厳密に往復する",
@@ -792,7 +1575,7 @@ export function renderReport(
 
   // **結論が届かない範囲も本文に出す。** ここを読まずに判定だけを読むと、
   // 「緑だから全部確かめた」と受け取られる。
-  lines.push(...renderCaveats(entries));
+  lines.push(...renderCaveats(entries, run, uiRun));
 
   // **本文の締めは「自分で確かめるには」。** 読み終えた人が次に何をすればよいか
   // で終わる。付録はその後ろに置く。
@@ -847,6 +1630,11 @@ export function renderReport(
     "値が大きいケースほど絶対誤差も大きく出るのが正常である(相対で見る許容は、",
     "絶対値が大きいほど広い絶対誤差を許すため)。判断材料は相対誤差の側を見る。",
     "",
+    "**「値」の欄を足し上げても「外部参照」の件数にはならない。** この欄は",
+    "**期待値を持つケース**を数えており、その期待値がどこから来たのかは",
+    "区別していない。出どころで分けた件数は上の「数えたもの」にある",
+    "——シャードごとの出どころは、すぐ上の「期待値を作ったもの」に 1 行ずつ出る。",
+    "",
     "| シャード | 総数 | 値 | 同値 | 不一致 | 最大相対誤差 | 最大絶対誤差 | " +
       "上書き | 相対誤差が定義できない | 表示分解能より緩い | 最悪の実効相対許容 | 許容 |",
     "|---|---|---|---|---|---|---|---|---|---|---|---|",
@@ -862,6 +1650,10 @@ export function renderReport(
         `abs ${entry.tolerance.abs} / rel ${entry.tolerance.rel} |`,
     );
   }
+
+  // **シャードの 1 行を開く。** 直前の表は関数呼び出しのシャードを総数 1 つに
+  // 畳むので、その数が「全部が正常な計算」に見える。
+  lines.push(...renderCallBreakdowns(entries));
 
   lines.push(
     ...renderEffectiveTolerance(entries, {
@@ -1201,12 +1993,378 @@ type ParenthesisItemState =
   /** 件数に加えて、reference テストが固定した内訳(1101)が付く。 */
   | { kind: "counted-with-pinned-breakdown"; shard: ShardSummary };
 
-function renderCaveats(entries: ShardSummary[]): string[] {
+/**
+ * このシャードがエラーを期待値として持つケースの総数。
+ *
+ * **種別の合計を別の欄に持たない。** 持てば、片方だけを直したときに
+ * 「合計 361 件・内訳 270 件」という、どちらが本当か読み手に分からない
+ * 報告書が出る。
+ */
+export function errorCaseCount(entry: ShardSummary): number {
+  return Object.values(entry.errorKinds).reduce((sum, n) => sum + n, 0);
+}
+
+/** 定義域外・極・ゼロ除算を**わざと**期待値として持つシャード。 */
+export const ERRORS_SHARD = "errors-000.json";
+
+/** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
+export const ENTRY_SHARD = "entry-000.json";
+
+/**
+ * エラー経路の枠。**経路であって領域ではない。**
+ *
+ * `AREAS` の軸と一致しない——`errors-000.json` は表示文字列を比べる
+ * シャードなので `areaOfShard` 上は `display` に居る(値の一致件数に、値を
+ * 一度も比べていないケースを混ぜないため)。エラー経路の軸で見れば、それは
+ * **科学計算の定義域エラー**である。**2 つの軸は目的が違うので、片方を
+ * もう片方に合わせない**——合わせた瞬間に、どちらかの数字が読めなくなる。
+ */
+export type ErrorPathId =
+  | "scientific-domain"
+  | "finance-syntax"
+  | "finance-overflow"
+  | "data-scale-input"
+  | "entry-syntax";
+
+export const ERROR_PATH_TITLES: Record<ErrorPathId, string> = {
+  "scientific-domain": "科学計算の定義域エラー",
+  "finance-syntax": "金融の `SyntaxError`",
+  "finance-overflow": "金融の `Overflow`",
+  "data-scale-input": "データスケールの入力エラー",
+  "entry-syntax": "打鍵の途中の構文エラー",
+};
+
+export interface ErrorPathFrame {
+  id: ErrorPathId;
+  title: string;
+  /** この枠が数えたケース数。**0 は「この走行では検証していない」。** */
+  cases: number;
+  /** 種別ごとの内訳。枠が種別 1 つに閉じている場合でも同じ形で持つ。 */
+  kinds: Record<string, number>;
+  /** この枠に数を出したシャードの名前。0 件の枠では空である。 */
+  shards: string[];
+}
+
+/** どの枠にも入らなかったエラー期待値。**黙って消さないための番兵。** */
+export interface UnclassifiedError {
+  shard: string;
+  kind: string;
+  cases: number;
+}
+
+export interface ErrorPaths {
+  frames: ErrorPathFrame[];
+  unclassified: UnclassifiedError[];
+}
+
+/**
+ * (シャード, 種別) を枠に割り当てる。**割り当てられなければ `null`。**
+ *
+ * `null` は捨てるためではなく**数え上げるため**にある。既定の枠へ落とすと、
+ * 新しいエラー経路がコーパスに入った日に、その件数が既存の枠の数字に
+ * 加算されて見えなくなる。
+ */
+function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
+  const stem = shardStem(shardName);
+  if (stem === shardStem(ERRORS_SHARD)) {
+    // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
+    // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
+    return "scientific-domain";
+  }
+  if (stem === shardStem(ENTRY_SHARD)) {
+    // **ここも名前で選ぶ。** このシャードも領域は `display` で、`display-`
+    // のシャードと同じ枠に落ちる。落とすと「確定した表示のエラー」と
+    // 「確定に届かなかった打鍵」が 1 つの数字になる——後者は `=` の前に
+    // 出るエラーで、経路が違う。
+    return "entry-syntax";
+  }
+  const area = areaOfShard(shardName);
+  if (area === "finance") {
+    if (kind === "SyntaxError") {
+      return "finance-syntax";
+    }
+    if (kind === "Overflow") {
+      return "finance-overflow";
+    }
+    return null;
+  }
+  if (area === "data_scale") {
+    return "data-scale-input";
+  }
+  return null;
+}
+
+/**
+ * エラー経路を枠ごとに数える。**合計は出さない。**
+ *
+ * 1 つの数字にまとめると、270 件の構文エラーと 0 件の定義域エラーが
+ * 「エラーを 270 件照合した」という 1 行になり、**踏んでいない経路が
+ * 踏んだ経路の数字に隠れる。**
+ */
+export function errorPaths(entries: ShardSummary[]): ErrorPaths {
+  const frames = new Map<ErrorPathId, ErrorPathFrame>(
+    (Object.keys(ERROR_PATH_TITLES) as ErrorPathId[]).map((id) => [
+      id,
+      { id, title: ERROR_PATH_TITLES[id], cases: 0, kinds: {}, shards: [] },
+    ]),
+  );
+  const unclassified: UnclassifiedError[] = [];
+  for (const entry of entries) {
+    for (const [kind, count] of Object.entries(entry.errorKinds)) {
+      if (count === 0) {
+        continue;
+      }
+      const id = errorPathOf(entry.name, kind);
+      if (id === null) {
+        unclassified.push({ shard: entry.name, kind, cases: count });
+        continue;
+      }
+      const frame = frames.get(id);
+      if (frame === undefined) {
+        // 到達しない。`frames` は `ERROR_PATH_TITLES` の全キーを持つ。
+        unclassified.push({ shard: entry.name, kind, cases: count });
+        continue;
+      }
+      frame.cases += count;
+      frame.kinds[kind] = (frame.kinds[kind] ?? 0) + count;
+      if (!frame.shards.includes(entry.name)) {
+        frame.shards.push(entry.name);
+      }
+    }
+  }
+  return { frames: [...frames.values()], unclassified };
+}
+
+/**
+ * **最後の枠だけ出どころの種類が違う。**
+ *
+ * 上の 5 つは「電卓がエラーを返すべき入力を、何件突き合わせたか」である。
+ * この枠が見るのは電卓ではなく**走行そのもの**——ビルドが落ちた、ブラウザが
+ * 上がらなかった、集計がディスクに届かなかった、という失敗である。
+ * どれが起きても電卓の不一致は 0 件になるので、**不一致 0 件を「合っていた」
+ * と読ませないために要る。**
+ */
+export type RunHealth =
+  /** 走行の要約が読めない。**「失敗が無かった」ではない。** */
+  | { state: "unreadable" }
+  /** 走行は自分の失敗を 1 件も報告していない。 */
+  | { state: "clean" }
+  /** 走行が自分の失敗を報告している。 */
+  | { state: "failed"; failures: string[] };
+
+export function runHealth(run: HeavyRun | null): RunHealth {
+  if (run === null) {
+    return { state: "unreadable" };
+  }
+  const failures: string[] = [];
+  if (!run.ranTests) {
+    failures.push(
+      "集計が 1 枚も書かれていない——テストが 1 本も走らずに走行が終わった",
+    );
+  }
+  const seen = new Set(run.shards.map((shard) => shard.name));
+  for (const name of run.expected) {
+    if (!seen.has(name)) {
+      failures.push(`\`${name}\` の集計がディスクに届かなかった`);
+    }
+  }
+  return failures.length === 0
+    ? { state: "clean" }
+    : { state: "failed", failures };
+}
+
+/** 種別の内訳を `` `DomainError` 17 件・`TrigPole` 3 件 `` の形にする。 */
+function describeKinds(kinds: Record<string, number>): string {
+  return Object.entries(kinds)
+    .sort(([, a], [, b]) => b - a)
+    .map(([kind, count]) => `\`${kind}\` ${count} 件`)
+    .join("・");
+}
+
+/**
+ * **エラー経路を 6 つに分けて出す。**
+ *
+ * 以前ここは 1 行だった——「エラー経路。ゼロ除算・オーバーフロー・三角関数の
+ * 極・構文エラーは生成の時点で範囲外にしている」。走行が 394 件のエラーを
+ * 突き合わせていても、あるいは 1 件も突き合わせていなくても、読み手には
+ * どの経路のことなのか分からない。**経路ごとに出どころが違い、踏んでいる
+ * ものと踏んでいないものが同時にある**ので、1 つの数字にまとめない。
+ *
+ * **0 件の枠だけが「検証していない」と書く。** 全体を一括で否定すると、
+ * 数を出している枠と同じ行で矛盾する。
+ */
+function renderErrorPaths(paths: ErrorPaths, health: RunHealth): string[] {
+  const frame = (id: ErrorPathId): ErrorPathFrame => {
+    const found = paths.frames.find((f) => f.id === id);
+    if (found === undefined) {
+      // 到達しない。`errorPaths` は全 ID の枠を返す。
+      return {
+        id,
+        title: ERROR_PATH_TITLES[id],
+        cases: 0,
+        kinds: {},
+        shards: [],
+      };
+    }
+    return found;
+  };
+  const scientific = frame("scientific-domain");
+  const syntax = frame("finance-syntax");
+  const overflow = frame("finance-overflow");
+  const dataScale = frame("data-scale-input");
+  const entry = frame("entry-syntax");
+  const head = (f: ErrorPathFrame): string =>
+    f.cases === 0
+      ? `  - **${f.title}——この走行は 1 件も検証していない。**`
+      : `  - **${f.title}——${f.cases} 件。**`;
+  return [
+    "- **エラー経路——6 つに分けて数える。**",
+    "  エラーの出どころは 6 つあり、踏んでいる経路と踏んでいない経路が",
+    "  同時にある。1 つの数字にまとめると、**踏んでいない経路が踏んだ経路の",
+    "  数字に隠れる。**",
+    "",
+    "  **どの経路も種別まで突き合わせる。** 電卓の表示はどの種別でも同じ",
+    "  `Math ERROR` なので、表示だけを見る検査は種別の取り違えを 1 件も",
+    "  捕まえない。",
+    "",
+    head(scientific),
+    ...(scientific.cases === 0
+      ? [
+          "    ゼロ除算・定義域の外・三角関数の極を**わざと**期待値として持つ",
+          "    ケースが、この走行に無い。値のシャードはそれらを生成の時点で",
+          "    捨てているので、**エラーになる入力に電卓が何を返すかについて、",
+          "    この報告書は何も言っていない。**",
+        ]
+      : [
+          "    ゼロ除算・定義域の外・三角関数の極を**わざと**期待値として持つ",
+          `    ケースである(内訳 ${describeKinds(scientific.kinds)})。`,
+          "    **値のシャードにこの経路は無い**——そちらは定義域の外を生成の",
+          "    時点で捨てており、エラーが出たら不一致として扱う。",
+        ]),
+    head(syntax),
+    ...(syntax.cases === 0
+      ? [
+          "    返済額が利息に届かない、ボーナスが元金の半分を超える、といった",
+          "    **数としては読めるが金融の意味で成り立たない**入力が、この走行に",
+          "    無い。**入力の検証はこの電卓の仕事の一部だが、この走行はその側を",
+          "    踏んでいない。**",
+        ]
+      : [
+          "    返済額が利息に届かない、ボーナスが元金の半分を超える、残価が元金と",
+          "    同じ、といった**数としては読めるが金融の意味で成り立たない**入力",
+          "    である。**入力を撥ねること自体が仕様**なので、エラーになることを",
+          "    期待値として持ち、種別まで突き合わせる。",
+        ]),
+    head(overflow),
+    ...(overflow.cases === 0
+      ? [
+          "    元金や残高が符号なし 64 ビットの外に出る入力が、この走行に無い。",
+          "    **桁が溢れる側の振る舞いを、この報告書は言っていない。**",
+        ]
+      : [
+          "    元金や残高が符号なし 64 ビットの外に出る入力である。式としては",
+          "    成り立っているので、**上の `SyntaxError` とは別の経路**で撥ねられる",
+          "    ——2 つを 1 つの数にまとめると、片方が 0 件でも気付けない。",
+        ]),
+    head(dataScale),
+    ...(dataScale.cases === 0
+      ? [
+          "    数として読めない件数・負の件数・知らない型といった入力が、この走行に",
+          "    無い。",
+        ]
+      : [
+          "    数として読めない件数(`abc`、全角の `１０`)、負の件数、知らない型",
+          "    といった入力である。ここも撥ねること自体が仕様である。",
+        ]),
+    head(entry),
+    ...(entry.cases === 0
+      ? [
+          "    `=` を押す前に、打っている数そのものが構文として壊れる打鍵——",
+          "    小数点を 2 つ続けて打つような入力——が、この走行に無い。",
+          "    **確定より前に出るエラーについて、この報告書は何も言っていない。**",
+        ]
+      : [
+          "    `=` を押す前に、**打っている数そのものが構文として壊れる**入力",
+          `    である(小数点を 2 つ続けて打つ。内訳 ${describeKinds(entry.kinds)})。`,
+          "    上の 4 つは打ち終えた式を計算してから撥ねるが、この経路は計算に",
+          "    届かない——**エラーは確定の前に出る。** 表示は同じ `Math ERROR`",
+          "    なので、出た場所の違いは表示からは分からない。",
+        ]),
+    ...renderRunHealth(health),
+    // **番兵は 6 つの枠を切らずに、そのあとに置く。** 枠の途中に挟むと
+    // 一覧が 2 つに割れて見える。指す先は「上の 5 つ」ではなく「どの経路
+    // にも入らないもの」と書く——走行そのものの失敗の枠は、エラー期待値が
+    // 入る場所ではない。
+    //
+    // **枠が 6 つになっても番兵は消さない。** 枠の集合が完全であることは
+    // 証明できない——いまのコーパスで空だというだけである。新しい経路が
+    // 生えた日に、その件数が既存の枠に加算されるのではなく、名前ごと本文に
+    // 浮くための見張りである。
+    ...(paths.unclassified.length === 0
+      ? []
+      : [
+          "",
+          `  **エラー期待値のうち、上のどの経路にも入らないものが ${paths.unclassified.reduce((sum, u) => sum + u.cases, 0)} 件ある。**`,
+          ...paths.unclassified.map(
+            (u) => `  - \`${u.shard}\` の \`${u.kind}\` ${u.cases} 件`,
+          ),
+          "  **既定の枠へ落とさずにここへ出している**——落とせば、新しい経路の",
+          "  件数が既存の枠の数字に加算されて見えなくなる。",
+        ]),
+  ];
+}
+
+/**
+ * 6 つ目の枠。**電卓ではなく走行そのものを見る。**
+ *
+ * ビルドが落ちても、ブラウザが上がらなくても、集計がディスクに届かなくても、
+ * 電卓の不一致は 0 件になる。**この枠が無いと、その 0 件が「合っていた」と
+ * 同じ顔をする。**
+ */
+function renderRunHealth(health: RunHealth): string[] {
+  if (health.state === "unreadable") {
+    return [
+      "  - **走行そのものの失敗——読めていない。**",
+      "    走行の要約(`web/heavy-run.json`)がこの報告書からは読めない。",
+      "    **この走行が自分の失敗を報告できたかどうかを、この報告書は言えない**",
+      "    ——「失敗が無かった」ではない。",
+    ];
+  }
+  if (health.state === "clean") {
+    return [
+      "  - **走行そのものの失敗——0 件。**",
+      "    走行の要約(`web/heavy-run.json`)は、集計が 1 枚も書かれなかった",
+      "    走行でも、期待した集計がディスクに届かなかった走行でもない、と",
+      "    言っている。**失敗したときにこの報告書が何を書くかは、この走行では",
+      "    示されていない。**",
+    ];
+  }
+  return [
+    `  - **走行そのものの失敗——${health.failures.length} 件。**`,
+    "    走行の要約(`web/heavy-run.json`)が、この走行自身の失敗を報告して",
+    "    いる。**上の判定と不一致の件数は、この走行が実際に見た範囲についての",
+    "    ものでしかない。**",
+    ...health.failures.map((line) => `    - ${line}`),
+  ];
+}
+
+function renderCaveats(
+  entries: ShardSummary[],
+  run: HeavyRun | null,
+  uiRun: HeavyUiRun | null,
+): string[] {
   const unused = unusedKeyTokens(entries);
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
   // **F6b fix (fix round 4).** 「上の『4000 件通った』」は以前リテラルで、
   // 2000 件だけの走行でも 4000 と書いた。見出しと同じ集計から出す。
-  const valueCases = entries.reduce((sum, e) => sum + e.values, 0);
+  //
+  // **引くのは「外部参照」の枠の見出しである(検証の強さの 3 枠)。** ここは
+  // 「その件数は確定値の表示についての主張だ」と断る文で、断る相手は外の
+  // 基準と突き合わせた枠のほうである。打鍵の途中の表示は 3 枠目に居るので、
+  // この文が指しているものと混ざらない。
+  const externalHeadline = verificationFrameHeadline(
+    verificationFrameOf(verificationFrames(entries), "external"),
+  );
   // **N1 fix (review round 3).** The elaboration below (the pinned figure and
   // the associativity caveat) is a specific claim about how
   // `precedence-000.json` was built — it is true only when that shard is
@@ -1230,22 +2388,16 @@ function renderCaveats(entries: ShardSummary[]): string[] {
       : precedenceShard === undefined
         ? { kind: "counted" }
         : { kind: "counted-with-pinned-breakdown", shard: precedenceShard };
-  const errors = entries.reduce((sum, entry) => sum + entry.errorCases, 0);
-  const errorItem =
-    errors === 0
-      ? [
-          "- **エラー経路。** ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
-          "  生成の時点で範囲外にしている。エラーが出たケースは不一致として扱う。",
-        ]
-      : [
-          `- **エラー経路——${errors} 件は照合済み、それ以外は範囲外。**`,
-          "  金融とデータスケールは**入力の検証が仕事の一部**なので、",
-          "  エラーになること自体を期待値として持ち、**エラー名まで突き合わせる**",
-          "  (返済額が利息に届かない、桁が読めない、など)。",
-          "  一方、科学計算のシャードはゼロ除算・定義域外・三角関数の極を",
-          "  **生成の時点で捨てている**——そちらでエラーが出たら不一致として扱う。",
-          "  **つまり「エラーを検証している領域」と「していない領域」がある。**",
-        ];
+  const paths = errorPaths(entries);
+  const health = runHealth(run);
+  const errorItem = renderErrorPaths(paths, health);
+  // **エラー経路の行が「完全に固定の文章」になるのは、6 枠すべてに数える
+  // 対象が無いときだけである。** 1 枠でも数を出していれば、その行はデータ
+  // 由来になる——但し書きの一覧と項目の分岐は同じ述語から引く。
+  const errorPathsCounted =
+    paths.frames.some((frame) => frame.cases > 0) ||
+    paths.unclassified.length > 0 ||
+    health.state === "failed";
   const exponent = entries.reduce(
     (sum, entry) => sum + entry.exponentDisplayCases,
     0,
@@ -1334,15 +2486,129 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           "  整形の欠陥と計算の丸めを区別できなくなる。",
           "  計算を挟む式には「トグルを 2 回押すと元の表示に戻る」ことだけを主張させた。",
         ];
+  const associativityShard = entries.find(
+    (e) => e.name === summaryName(ASSOCIATIVITY_SHARD, "values"),
+  );
+  // **`=` を一度も押さないキー列。** 「入力中の表示」の項目と、下の一覧での
+  // その項目の扱いが、**同じ述語**から出る。
+  const withoutEq = entries.reduce((sum, e) => sum + e.sequencesWithoutEq, 0);
+  const withoutEqShards = entries
+    .filter((e) => e.sequencesWithoutEq > 0)
+    .map((e) => `\`${shardStem(e.name)}\` ${e.sequencesWithoutEq} 本`);
+  // **入力中の表示(設計書 2026-08-19 §4.1、計画 Task 1)。**
+  //
+  // 以前ここは「**全ケースが `=` で終わる**ので、**確定した値の表示しか
+  // 踏んでいない**」という固定の文章だった。`entry-000.json`(打鍵の途中の
+  // 表示)が入った時点で**両方の半分が偽**になる。
+  //
+  // **偽り方が二段になっていることに注意する。** 末尾が `eq` でないキー列は
+  // それより遥かに多い——`=` を押して値を確定させてから `ENG` や `°'"` を
+  // 押して終わる列がそれで、**そちらが読んでいるのは確定した値の表示**だから
+  // 結論には反しない。結論に反するのは `=` を**一度も**押さない列だけである。
+  // だから数えるのは末尾のキーではなく `eq` の有無。
+  //
+  // **`entry-000.json` の 36 件は「外部参照」の件数に入っていない。**
+  // 検証の強さの 3 枠(`verificationFrames`)が分けており、それらは 3 枠目
+  // 「仕様書からの写し」に入る。だから下で引く見出しは外部参照の枠のもので、
+  // この項目が数える「`=` を押さないキー列」とは別の数字である。
+  const enteringItem =
+    withoutEq === 0
+      ? [
+          "- **入力中の表示。** この走行のキー列はどれも `=` を押しているので、",
+          "  **確定した値の表示しか踏んでいない**。電卓には表示の規則が二つあり",
+          "  (`render()` の分岐)、入力中は打った文字がそのまま出て、確定後だけが",
+          "  整形を通る。`1e10` を打ち込むと平坦な `10000000000` が出るが、同じ値を",
+          "  計算で作ると `1e10` になる(2026-08-16 実測)。",
+          // **F6b fix (fix round 4).** 以前ここは「上の『4000 件通った』」という
+          // リテラルで、(a) 2000 件だけの走行でも 4000 と言い、(b) 引用元だと
+          // 称する文字列が上に literal には出てこなかった(見出しは「二経路で
+          // 照合したケース(値): 4000」)。見出しと同じ集計から、見出しと同じ
+          // 言い方で引く。
+          `  **上の「${externalHeadline}」は、確定値の表示に`,
+          "  ついてだけの主張である。**",
+        ]
+      : [
+          `- **入力中の表示——${withoutEq} 本のキー列が \`=\` を一度も押さない。**`,
+          `  内訳は ${withoutEqShards.join("・")}。`,
+          "  電卓には表示の規則が二つあり(`render()` の分岐)、入力中は打った文字が",
+          "  そのまま出て、確定後だけが整形を通る。`1e10` を打ち込むと平坦な",
+          "  `10000000000` が出るが、同じ値を計算で作ると `1e10` になる(2026-08-16 実測)。",
+          `  **この ${withoutEq} 本が読んでいるのは前者、つまり確定前の表示である**`,
+          "  ——打鍵の途中の表示と、単項関数が `=` を待たずにその場で撥ねた表示。",
+          "",
+          "  **`=` のあとに `ENG` や `°'\"` を押して終わるキー列は、ここに入らない。**",
+          "  末尾が `=` でなくても、値を確定させてから記法を切り替えているので、",
+          "  読んでいるのは**確定した値の表示**である。だから数えているのは末尾の",
+          "  キーではなく、`=` を押したかどうかである。",
+          `  **上の「${externalHeadline}」は、いまも確定値の`,
+          "  表示についてだけの主張である。**",
+          "  **打鍵の途中の表示は、その件数には入っていない。** それは",
+          "  「仕様書からの写し」の枠で別に数えている。",
+        ];
   // **但し書きが名指しする「完全に固定の文章」の一覧。**
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
   const fixedItems = [
+    // **エラー経路も固定の文章になりうる。** 以前この項目は一覧に載って
+    // いなかったので、6 枠すべてが空の走行では「数える対象が無いのは N 行
+    // だけである」が 1 行数え落としていた。
+    ...(errorPathsCounted ? [] : ["エラー経路"]),
     ...(imaginaryPresses === 0 && polarPresses === 0 ? ["複素数"] : []),
     ...(angleToggles === 0 ? ["角度モード"] : []),
     ...(notationPresses === 0 ? ["表示の記法"] : []),
-    "UI",
-    "入力中の表示",
+    // **結合方向も、シャードが走行に無いときは固定の文章である。** 項目の
+    // 分岐と同じ述語から引く——別々に書くと、片方だけが動く。
+    ...(associativityShard === undefined ? ["結合方向"] : []),
+    // **UI の行も、盤面の走行の記録が在れば件数を持つ。** 無条件に
+    // 「数える対象が無い」側へ入れておくと、押下回数と打鍵件数を書いている
+    // 走行で但し書きだけが古いことを言う——項目と一覧は同じ述語から引く。
+    ...(uiRun === null ? ["UI"] : []),
+    // **入力中の表示も、`=` を押さないキー列が 1 本も無いときだけ固定である。**
+    // `entry-000.json` が入るまでは本当に 0 本だったので、この項目は一覧に
+    // 無条件で載っていた——その日から一覧の側も嘘になっていた。
+    ...(withoutEq === 0 ? ["入力中の表示"] : []),
   ];
+  // **結合方向(設計書 2026-08-19 §6、計画 Task 4)。**
+  //
+  // 以前ここは「`pow` は押されるが右結合も優先順位 4 も踏んでいない」という
+  // **固定の文章**だった。`associativity-000.json` が入った時点でその前半は
+  // 嘘になる——だから件数を実データから出し、シャードが走行に無い走行では
+  // 元の否定をそのまま書く。**片方だけ動かすと、報告書が自分の走行について
+  // 矛盾する。**
+  //
+  // **後半(優先順位 4)は撤回しない。** 新しいシャードは 1 本の連鎖を必ず
+  // 同じ優先順位の段の中に収めており(`ASSOC_CHAINS`)、`2 ^ 3 × 4` のように
+  // 段をまたぐ列は一件も持たない。結合方向を踏んだことと、優先順位 4 を
+  // 踏んだことは別である。
+  const associativityItem =
+    associativityShard === undefined
+      ? [
+          "- **`xʸ` の右結合と優先順位 4。** `pow` は押されるが、キー列は二項を必ず",
+          "  括弧で囲むので、**右結合も優先順位 4 も踏んでいない**。これは意図した",
+          "  分離である。",
+          "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
+          "  ——結合方向を反転する変異で 1 件も赤くならない。",
+        ]
+      : [
+          `- **結合方向——${associativityShard.total} 件が踏んでいる。優先順位 4 はまだ踏んでいない。**`,
+          `  \`${ASSOCIATIVITY_SHARD}\` は同順位の演算子が括弧なしで並ぶキー列`,
+          "  (`9 − 4 − 3`、`2 ^ 3 ^ 2`)を持つ。engine は括弧ではなく**結合方向**から",
+          "  構造を復元した——`xʸ` だけが右結合で、四則と `nPr`/`nCr` は左結合である",
+          "  (`docs/base-spec.md` の公開契約)。",
+          "",
+          "  **括弧つきの対照群が同じシャードに入っている。** 平坦なキー列 1 本につき、",
+          "  同じ木を全括弧で書いた双子が 1 本ある——括弧が構造を決めるので、畳む向きを",
+          "  変えても双子の答えは変わらない。**対で作られていることを数えているのは",
+          "  この走行ではなく参照側のテストである**",
+          "  (`reference/tests/test_generate_corpus.py`)。",
+          "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
+          "  ——結合方向を反転する変異は、このシャードだけを、しかもその一部だけを",
+          "  赤くする。",
+          "",
+          "  **優先順位 4 は依然として踏んでいない。** このシャードの連鎖は 1 本が",
+          "  必ず同じ優先順位の段に収まっており、`2 ^ 3 × 4` のように段をまたぐ列を",
+          "  持たない。結合方向と優先順位を混ぜると、赤が出たときどちらが原因か",
+          "  分からなくなるので、意図して分けている。",
+        ];
   const parenthesisItem =
     parenthesis.kind === "untouched"
       ? [
@@ -1404,10 +2670,12 @@ function renderCaveats(entries: ShardSummary[]): string[] {
                 "  数え、その値を固定している",
                 "  (`reference/tests/test_generate_corpus.py`)。",
                 "",
-                "  **結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
-                "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",
-                "  省いた瞬間に生成側が結合方向を知ることになるため、意図して残している。",
-                "  結合方向は `engine_table.rs` の担当である。",
+                "  **このシャードは結合方向を踏んでいない**——同順位の入れ子は括弧を残して生成して",
+                "  いるので、`10 - 3 - 2` のような列がこのシャードには一件も無い。省けるのは",
+                "  左結合だからで、省いた瞬間に生成側が結合方向を知ることになるため、意図して",
+                "  残している。**結合方向は別の担当である**(下の「まだ踏んでいない、または",
+                "  限定的にしか踏んでいない領域」の結合方向の項目が、この走行で踏んだかどうかを",
+                "  実データから書く)。",
               ]),
         ];
   return [
@@ -1460,15 +2728,7 @@ function renderCaveats(entries: ShardSummary[]): string[] {
         ]),
     ...parenthesisItem,
     ...exponentItem,
-    // **`xʸ` は押されるが、結合方向にも優先順位 4 にも触れていない。**
-    // キー列は二項を必ず括弧で囲むためである(設計書 2026-08-16-corpus-functions
-    // §3.5)。新しい関数の検証と結合方向の検証を混ぜると、赤が出たときどちらが
-    // 原因か分からなくなるので、意図して分けている。
-    "- **`xʸ` の右結合と優先順位 4。** `pow` は押されるが、キー列は二項を必ず",
-    "  括弧で囲むので、**右結合も優先順位 4 も踏んでいない**。これは意図した",
-    "  分離である。",
-    "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
-    "  ——結合方向を反転する変異で 1 件も赤くならない。",
+    ...associativityItem,
     ...errorItem,
     ...complexItem,
     ...angleItem,
@@ -1478,31 +2738,20 @@ function renderCaveats(entries: ShardSummary[]): string[] {
     "  アプリの画面が存在しない**——`web/vite.heavy.config.ts` は React を",
     "  含まず、入口も `heavy-harness.html` の 1 つだけである。",
     "",
-    "  **ただし盤面を通る走行が別にある。** `pnpm heavy:ui` が本物のアプリを",
-    "  開き、キートークンとボタンの対応を盤面の定義から導いて実際に押す——",
-    "  同じワークフローの次の段がそれで、**その結果はこの報告書には載らない**",
-    "  (別の走行なので集計を共有しない)。**この報告書だけを見て「UI も",
-    "  確かめた」と読まないこと。** 逆に、この報告書が緑でも",
-    "  「盤面のどのボタンからその関数に届くか」——Shift 層の奥にあるキー、",
-    "  押せない位置にあるボタン、表示に配線し忘れた欄——は何も分からない。",
+    "  **盤面を通る走行は別にある。** `pnpm heavy:ui` が本物のアプリを開き、",
+    "  キートークンとボタンの対応を盤面の定義から導いて実際に押す——同じ",
+    "  ワークフローの別の段がそれである。**別の走行なので、その結果はこの",
+    "  報告書の件数・判定・不一致には一切入っていない。**",
+    "",
+    ...renderUiHealth(uiHealth(uiRun)),
+    "",
+    "  逆に、この報告書が緑でも「盤面のどのボタンからその関数に届くか」",
+    "  ——Shift 層の奥にあるキー、押せない位置にあるボタン、表示に配線し忘れた",
+    "  欄——は何も分からない。",
     "",
     "  **この層が答えるのは「計算が合っているか」だけである。**",
     "  それが一番問われるところではあるが、それだけではアプリが正しいとは言えない。",
-    "- **入力中の表示。** 全ケースが `=` で終わるので、**確定した値の表示しか",
-    "  踏んでいない**。電卓には表示の規則が二つあり(`render()` の分岐)、入力中は",
-    "  打った文字がそのまま出て、確定後だけが整形を通る。`1e10` を打ち込むと平坦な",
-    "  `10000000000` が出るが、同じ値を計算で作ると `1e10` になる(2026-08-16 実測)。",
-    // **F6b fix (fix round 4).** 以前ここは「上の『4000 件通った』」という
-    // リテラルで、(a) 2000 件だけの走行でも 4000 と言い、(b) 引用元だと
-    // 称する文字列が上に literal には出てこなかった(見出しは「二経路で
-    // 照合したケース(値): 4000」)。見出しと同じ集計から、見出しと同じ
-    // 言い方で引く。
-    `  **上の「二経路で照合したケース(値): ${valueCases}」は、確定値の表示に`,
-    "  ついてだけの主張である。**",
-    "  なお入力中の側は踏む価値も薄い——「打った文字がそのまま出る」は規則というより",
-    "  恒等写像で、破れるとしたら「打った文字が出ない」という壊れ方になる。それは",
-    "  この層の道具立て(表示を数に戻して期待値と突き合わせる)では捕まえにくく、",
-    "  画面の見た目を直接見る E2E の方が向いている。",
+    ...enteringItem,
     "",
     // **N6 fix (review round 3).** 以前ここは「括弧を省いた式」が丸ごと
     // データ由来であるかのように書いていたが、N1(review round 3)以降、
@@ -1586,7 +2835,17 @@ export function writeReport(): void {
   const seen = new Set(recorded.map((entry) => entry.summary.name));
   const missing = expected.filter((name) => !seen.has(name));
   const entries = recorded.map((entry) => entry.summary);
-  const valueCases = entries.reduce((sum, entry) => sum + entry.values, 0);
+  // **数えるのは「外部参照」の枠だけである(検証の強さの 3 枠)。**
+  // 以前ここは値ケースの合計だった。値ケースには打鍵の途中の表示
+  // (`entry-000.json`)も入っており、その期待値は Python が独立に出した
+  // ものではなく電卓の仕様書からの写しである——**そのシャードだけが記録
+  // された走行**では、外の基準と突き合わせたケースが 1 件も無いのに、
+  // この番兵は黙って通していた。すぐ下の文言が言っているのは外部参照の
+  // 枠のことなので、数える対象もそちらに合わせる。
+  const externalCases = verificationFrameOf(
+    verificationFrames(entries),
+    "external",
+  ).cases;
 
   if (entries.length === 0) {
     throw new Error(
@@ -1597,13 +2856,14 @@ export function writeReport(): void {
         "mismatches' and look like a pass.",
     );
   }
-  if (valueCases === 0) {
+  if (externalCases === 0) {
     throw new Error(
-      "report: not a single value case was recorded. The value cases are " +
-        "the only half of this layer that is checked against an outside " +
-        "reference (the expectations Python produced independently); a run " +
-        "of equivalence cases alone verifies nothing but the calculator's " +
-        "agreement with itself. Refusing to write a report for it. " +
+      "report: not a single externally-referenced case was recorded. Those " +
+        "are the only cases in this layer that are checked against an " +
+        "outside reference (the expectations Python produced " +
+        "independently); a run of equivalence cases and spec transcriptions " +
+        "alone verifies nothing but the calculator's agreement with itself " +
+        "and with its own spec. Refusing to write a report for it. " +
         `Recorded: ${[...seen].map((name) => JSON.stringify(name)).join(", ")}.`,
     );
   }
@@ -1624,6 +2884,12 @@ export function writeReport(): void {
       browser: provenanceRuntime.browser,
     },
     missing,
+    readDetectionPower(),
+    readRunJson(),
+    // **盤面を通る走行の記録は、ここで初めて読む。** `renderReport` に
+    // 読ませると、走行のあとの作業ツリーとそうでない作業ツリーで別の文書が
+    // 出る(`power` / `run` と同じ理由)。
+    readUiRunJson(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);

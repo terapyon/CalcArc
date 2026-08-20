@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { describe, differences } from "./calls";
-import { type CallCase, loadCallShards } from "./corpus";
+import {
+  CERTIFICATES,
+  countDegenerateLoanPrincipalCases,
+  runProbes,
+} from "./certificates";
+import { type CallCase, loadCallShards, summarizeCallShard } from "./corpus";
 import { openHarness } from "./harness";
 import { record, summaryName } from "./report";
 
@@ -18,7 +23,27 @@ import { record, summaryName } from "./report";
 /** 1 束あたりのケース数。往復のコストが計算のコストを覆わない大きさにする。 */
 const BATCH = 500;
 
-for (const { name, shard } of loadCallShards()) {
+/**
+ * 期待値として持っているエラー種別ごとの件数。
+ *
+ * `expect.error` を読む——**`"error" in expect` を数えるだけでは種別が消える**。
+ * 電卓の表示はどの種別でも同じ `Math ERROR` なので、種別を落とした集計からは
+ * 種別の取り違えが二度と見えない。
+ */
+function countErrorKinds(cases: CallCase[]): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const testCase of cases) {
+    const error = testCase.expect.error;
+    if (typeof error === "string") {
+      kinds[error] = (kinds[error] ?? 0) + 1;
+    }
+  }
+  return kinds;
+}
+
+const SHARDS = loadCallShards();
+
+for (const { name, shard } of SHARDS) {
   test(`every call in ${name} matches the reference`, async ({ page }) => {
     await openHarness(page);
     const cases = shard.cases;
@@ -70,9 +95,19 @@ for (const { name, shard } of loadCallShards()) {
       looserThanDisplay: 0,
       precedenceCases: 0,
       exponentDisplayCases: 0,
-      // **エラーを期待値として持つケース。** 金融とデータスケールは入力の
-      // 検証が仕事の一部なので、エラーになること自体が仕様である。
-      errorCases: cases.filter((c: CallCase) => "error" in c.expect).length,
+      // **エラーを期待値として持つケースを、種別ごとに数える。** 金融と
+      // データスケールは入力の検証が仕事の一部なので、エラーになること自体が
+      // 仕様である。**合計ではなく種別で渡す**——報告書は「金融の
+      // `SyntaxError`」と「金融の `Overflow`」を別の経路として出すので、
+      // ここで畳むと片方が 0 件でも読み手に分からない。
+      errorKinds: countErrorKinds(cases),
+      // 関数呼び出しのシャードはキー列を持たない(盤面ではなく計算コアの
+      // 関数を直接呼ぶ)。**0 は「`=` を押さない列が無い」であって
+      // 「測っていない」ではない。**
+      sequencesWithoutEq: 0,
+      // **op と層とエラー種別の内訳。** 報告書の「関数呼び出しの内訳」が
+      // ここから書かれる。
+      callBreakdown: summarizeCallShard(shard),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,
@@ -95,3 +130,73 @@ for (const { name, shard } of loadCallShards()) {
     ).toEqual([]);
   });
 }
+
+/**
+ * 逆算証明書(設計書 2026-08-19 §4.10)。
+ *
+ * 上のループは「答が参照実装と同じ値である」ことを見る。ここでは
+ * **その答が境界そのものであること**を、`loan_forward` / `compound_grow`
+ * の正算だけを使って heavy ハーネス経由で確かめる。詳しくは `certificates.ts`
+ * のコメントを見よ。
+ *
+ * 必要期間の証明書だけが n 回(答の期数ぶん)の呼び出しになる。既存の
+ * `BATCH`(500)より大きな束で流す——束の数がそのまま往復の回数になる。
+ */
+const CERT_BATCH = 5000;
+
+const FINANCE_SHARD = SHARDS.find(({ name }) => name === "finance-000.json");
+if (FINANCE_SHARD === undefined) {
+  throw new Error(
+    "calls.spec.ts: finance-000.json is not among the call shards — the " +
+      "inverse certificates have nothing to certify.",
+  );
+}
+const FINANCE_CASES = FINANCE_SHARD.shard.cases;
+
+for (const { op, build } of CERTIFICATES) {
+  test(`${op}'s answer is the boundary, not just a number`, async ({
+    page,
+  }) => {
+    await openHarness(page);
+    const probes = build(FINANCE_CASES);
+    expect(
+      probes.length,
+      `${op}: built zero boundary checks — either the corpus has no normal ` +
+        `${op} cases, or the certificate is not wired up`,
+    ).toBeGreaterThan(0);
+
+    const mismatches = await runProbes(page, probes, CERT_BATCH);
+
+    expect(
+      mismatches,
+      `${op}: ${mismatches.length} of ${probes.length} boundary checks ` +
+        "failed. Each line says which case, and which side of the boundary " +
+        "(the answer itself, or one step past it), broke.",
+    ).toEqual([]);
+  });
+}
+
+test("loan_principal's degenerate answers are counted, not silently dropped", () => {
+  // `loan_forward` は「n 期を使い切る」前提の月額しか計算できない。予算に
+  // 余裕があって n 期より早く払い終わる(縮退)答は、`loan_forward` では
+  // 再現できず、境界証明書から除かれる(`certificates.ts` の
+  // `isDegenerateLoanPrincipal` のコメントに実例がある)。**その除外を
+  // 黙って通さない。** 件数を毎回言わせ、全数除外(証明書が何も見ていない)
+  // になっていないことを確かめる。
+  const total = FINANCE_CASES.filter(
+    (c) => c.op === "loan_principal" && !("error" in c.expect),
+  ).length;
+  const excluded = countDegenerateLoanPrincipalCases(FINANCE_CASES);
+  console.log(
+    `loan_principal: ${excluded} of ${total} normal cases are degenerate ` +
+      "(rows_paid < n) and excluded from the boundary certificate.",
+  );
+  // **実測値を焼き付ける。** 「全数除外でないこと」だけを見ても、17 件が
+  // 400 件に増えた走行が緑で通り、証明書が覆う範囲が黙って縮む。除外は
+  // 証明書の穴なので、穴の大きさが動いたら気づけなければならない。
+  //
+  // ここが赤くなったときに直す先はこの数字ではなく、まず
+  // `docs/corpus-measurements.md` の「Heavy の逆算証明書」の記録である
+  // ——何件が境界の証明を持たないかは、外の読み手に対する主張の一部。
+  expect({ total, excluded }).toEqual({ total: 432, excluded: 17 });
+});
