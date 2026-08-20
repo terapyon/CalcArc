@@ -10,6 +10,7 @@
 
 use calcarc_core::AngleMode;
 use calcarc_core::Key;
+use calcarc_core::convert::{Category, Unit};
 use calcarc_core::data_scale::DataType;
 use calcarc_core::data_scale::llm::Precision;
 use calcarc_core::data_scale::transfer::{BandwidthUnit, DurationUnit};
@@ -98,6 +99,28 @@ fn duration_unit_tokens_match_between_typescript_and_rust() {
     assert_eq!(
         ts, rust,
         "web/src/datascale/types.ts の DURATION_UNIT_TOKENS と DurationUnit::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn convert_unit_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/convert/types.ts");
+    let ts = tokens_in_ts_array(src, "export const CONVERT_UNIT_TOKENS = [");
+    let rust: Vec<String> = Unit::ALL.iter().map(|u| u.token().to_owned()).collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/convert/types.ts の CONVERT_UNIT_TOKENS と Unit::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn convert_category_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/convert/types.ts");
+    let ts = tokens_in_ts_array(src, "export const CONVERT_CATEGORY_TOKENS = [");
+    let rust: Vec<String> = Category::ALL.iter().map(|c| c.token().to_owned()).collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/convert/types.ts の CONVERT_CATEGORY_TOKENS と Category::ALL の token() が食い違っている"
     );
 }
 

@@ -3,6 +3,9 @@
 //! 計算ロジックを持たない。責務は型変換と export のみ(base-spec §6.2)。
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
+// **関数名 `convert` はモジュール名 `convert` と衝突する**(境界の関数名は
+// 設計書 §5 が決めている)。別名で入れて、モジュールは `convert_core::` で呼ぶ。
+use calcarc_core::convert as convert_core;
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::llm::{self, Precision};
 use calcarc_core::data_scale::transfer::{self, BandwidthUnit, DurationUnit};
@@ -671,4 +674,71 @@ pub fn expr_integer(text: &str, maximum: &str, unit_set: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn expr_percent(text: &str) -> JsValue {
     to_expr_result(expr::evaluate_to_percent(text))
+}
+
+/// 単位換算の結果。TypeScript 側の `ConvertResult` に対応する。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ConvertResult {
+    text: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` に対応する。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ConvertUnitsResult {
+    units: Option<Vec<String>>,
+    error: Option<CalcError>,
+}
+
+/// 単位換算(U-1 設計書 §5)。**例外を投げない。**
+///
+/// 値は式でよい(§4.3)。単位もカテゴリも文字列トークンで受け、知らない綴りは
+/// 戻り値の `SyntaxError` になる——境界で黙って無視しない。
+#[wasm_bindgen]
+pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
+    let outcome: CalcResult<String> = (|| {
+        let category =
+            convert_core::Category::from_token(category).ok_or(CalcError::SyntaxError)?;
+        let from = convert_core::Unit::from_token(from).ok_or(CalcError::SyntaxError)?;
+        let to = convert_core::Unit::from_token(to).ok_or(CalcError::SyntaxError)?;
+        convert_core::format::format_rational(convert_core::convert(value, category, from, to)?)
+    })();
+    let result = match outcome {
+        Ok(text) => ConvertResult {
+            text: Some(text),
+            error: None,
+        },
+        Err(e) => ConvertResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// カテゴリの単位トークンを **`Category::units()` の並びのまま**返す。
+///
+/// **盤面はこの順に並べる**(設計書 §4.1)。並びをコアが持つのは、単位を足した
+/// ときに表と画面の 2 か所を直さずに済ませるためである。
+#[wasm_bindgen]
+pub fn convert_units(category: &str) -> JsValue {
+    let result = match convert_core::Category::from_token(category) {
+        Some(category) => ConvertUnitsResult {
+            units: Some(
+                category
+                    .units()
+                    .iter()
+                    .map(|unit| unit.token().to_owned())
+                    .collect(),
+            ),
+            error: None,
+        },
+        None => ConvertUnitsResult {
+            error: Some(CalcError::SyntaxError),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
 }
