@@ -3,6 +3,9 @@ import { expect, type Page, test } from "@playwright/test";
 const panel = (page: Page) =>
   page.getByRole("region", { name: "データ転送量計算" });
 
+/** 測れなかったことの印。相対座標は負にもなるので `-1` では代用できない。 */
+const UNMEASURED = "unmeasured";
+
 /**
  * ボタン名は `web/src/ui/Keypad/transfer.ts` の `ariaLabel` そのもの。
  * 単位キーはラベルと読み上げが同じ(`Mbps` は画面でも声でも `Mbps`)なので、
@@ -79,8 +82,17 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
   // 枠が中身の行数ぶんに伸び縮みする(DataScale で実測済みの事故、19px)。
   // キー 1 個ずつの 44px を見る上の検査は、それでも緑のまま——だから枠
   // そのものと、枠の中で位置が動いてはいけない DEL・AC を突き合わせる。
+  //
+  // **DEL と AC は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が
+  // 動かない**」であって、**盤面より上にある表示行の高さを巻き込むのは
+  // 測り間違い**である——その行高はフォント環境で変わる。枠を原点に取れば、
+  // 盤面の中で動いたかどうかだけが残る。
   await page.goto("/#scale/transfer");
   await expect(panel(page)).toBeVisible();
+  const rel = (
+    b: { x: number; y: number } | null,
+    frame: { x: number; y: number } | null,
+  ) => (b && frame ? `${b.x - frame.x},${b.y - frame.y}` : UNMEASURED);
   const seen: { face: string; box: string; del: string; ac: string }[] = [];
   for (const [field, faceName] of FACES) {
     await press(page, [field]);
@@ -96,8 +108,8 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
     seen.push({
       face: faceName,
       box: `${frame?.width ?? -1}x${frame?.height ?? -1}`,
-      del: `${del?.x ?? -1},${del?.y ?? -1}`,
-      ac: `${ac?.x ?? -1},${ac?.y ?? -1}`,
+      del: rel(del, frame),
+      ac: rel(ac, frame),
     });
   }
   expect(seen).toHaveLength(FACES.length);
@@ -113,12 +125,12 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
     new Set(seen.map((s) => s.ac)).size,
     `AC moved: ${JSON.stringify(seen)}`,
   ).toBe(1);
-  // **番兵**: 1 度も測っていなければ -1 のまま 1 通りになってしまう。
-  // **3 つとも要る**——AC を落とすと、AC が全面で測れなくなった日に
-  // `"-1,-1"` が 1 通りに揃って緑のまま通る。
+  // **番兵**: 1 度も測っていなければ枠は -1、DEL と AC は `UNMEASURED` の
+  // まま 1 通りに揃ってしまう。**3 つとも要る**——AC を落とすと、AC が全面で
+  // 測れなくなった日に 1 通りに揃って緑のまま通る。
   expect(seen[0]?.box, "the frame was never measured").not.toContain("-1");
-  expect(seen[0]?.del, "DEL was never measured").not.toContain("-1");
-  expect(seen[0]?.ac, "AC was never measured").not.toContain("-1");
+  expect(seen[0]?.del, "DEL was never measured").not.toBe(UNMEASURED);
+  expect(seen[0]?.ac, "AC was never measured").not.toBe(UNMEASURED);
 });
 
 test("the deep link lands on transfer with the category selected", async ({

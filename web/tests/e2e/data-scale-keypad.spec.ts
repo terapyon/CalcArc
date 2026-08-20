@@ -5,6 +5,9 @@ const panel = (page: Page) =>
 const echo = (page: Page) => page.getByTestId("display-entry-active");
 const result = (page: Page) => page.getByTestId("datascale-result");
 
+/** 測れなかったことの印。相対座標は負にもなるので `-1` では代用できない。 */
+const UNMEASURED = "unmeasured";
+
 async function press(page: Page, names: string[]) {
   for (const name of names) {
     await panel(page).getByRole("button", { name, exact: true }).click();
@@ -62,10 +65,20 @@ test("the field row is half height but wide enough", async ({ page }) => {
 test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   // **同じ枠に載る**(設計書 §2 の【訂正】: 5 列 × 5 行)。候補面は 15 セルで
   // 3 行しか描かれないため、枠は CSS の aspect-ratio が押さえている。
+  //
+  // **DEL は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が動かない**」
+  // であって、**盤面より上にある表示行の高さを巻き込むのは測り間違い**である
+  // ——その行高はフォント環境で変わる(**CI 実測: DEL の y だけが面によって
+  // 390 と 375.625 に割れ、枠の 366.0625 は 7 面とも不動だった**)。枠を原点に
+  // 取れば、盤面の中で動いたかどうかだけが残る。
+  const rel = (
+    b: { x: number; y: number } | null,
+    frame: { x: number; y: number } | null,
+  ) => (b && frame ? `${b.x - frame.x},${b.y - frame.y}` : UNMEASURED);
   const seen: {
     face: string;
     box: { width: number; height: number };
-    del: { x: number; y: number };
+    del: string;
   }[] = [];
   for (const [field, face] of [
     ["件数を入力", "数字と演算のキー"],
@@ -82,15 +95,23 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
       box: { width: box?.width ?? 0, height: box?.height ?? 0 },
       // **DEL の位置も控える。** 名前が「と DEL」と言っている以上、
       // 在ることではなく**動かないこと**を測る(元の検査がそうだった)。
-      del: { x: del?.x ?? -1, y: del?.y ?? -1 },
+      del: rel(del, box),
     });
   }
   expect(seen).toHaveLength(3);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
-  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  const dels = new Set(seen.map((s) => s.del));
   expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
-  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
+  // **番兵**: 測れていなければ枠は 0、DEL は `UNMEASURED` のまま 1 通りに
+  // 揃い、**上の 2 つの Set は緑になる**。
+  //
+  // **2 つで足りる理由**: U-0 は二面版で番兵を 4 つ置いていた(2 面 × 枠と DEL)。
+  // ここは 3 面をループで回すので、**1 面だけ測れなければ Set が 2 通りに割れて
+  // 赤くなる**——番兵が要るのは「**全面が同じように測れなかった**」場合だけで、
+  // それは `seen[0]` を見れば足りる。**面が増えても番兵は増えない。**
+  expect(seen[0]?.box.width, "the frame was never measured").toBeGreaterThan(0);
+  expect(seen[0]?.del, "DEL was never measured").not.toBe(UNMEASURED);
 });
 
 test("the unit keys open only when the entry can take them", async ({
