@@ -20,18 +20,30 @@ describe("ConvertPanel", () => {
       (option) => option.textContent,
     );
     // **件数を主張する。** ループだけだと、選択肢が 0 個になった日も緑になる。
-    expect(labels).toEqual(["長さ", "質量", "温度"]);
+    expect(labels).toEqual([
+      "長さ",
+      "質量",
+      "温度",
+      "面積",
+      "体積",
+      "速さ",
+      "データ量",
+    ]);
   });
 
   it("shows the panel for the category in the route", () => {
-    // **押せて何も起きない面を作らない。** 分岐が 3 つあるなら 3 つとも
-    // 描いて確かめる——面の名前は 3 カテゴリで同じ(`単位変換`)なので、
-    // 出ている単位で見分ける。
+    // **押せて何も起きない面を作らない。** 分岐が 7 つあるなら 7 つとも
+    // 描いて確かめる——面の名前は全カテゴリで同じ(`単位変換`)なので、
+    // 出ている単位で見分ける。**単位は `UnitPanel` の既定**である。
     const seen: string[] = [];
     for (const [category, from, to] of [
       ["length", "km", "mi"],
       ["mass", "kg", "lb"],
       ["temperature", "°C", "°F"],
+      ["area", "坪", "m²"],
+      ["volume", "L", "gal(US)"],
+      ["speed", "km/h", "mph"],
+      ["data-size", "GB", "GiB"],
     ] as const) {
       const { unmount } = render(<ConvertPanel category={category} />);
       expect(select()).toHaveValue(category);
@@ -41,7 +53,7 @@ describe("ConvertPanel", () => {
       seen.push(category);
       unmount();
     }
-    expect(seen).toHaveLength(3);
+    expect(seen).toHaveLength(7);
   });
 
   it("falls back to length when the category is unknown", () => {

@@ -71,6 +71,14 @@ const DEFAULT_UNITS: Record<
   length: { from: "km", to: "mi" },
   mass: { from: "kg", to: "lb" },
   temperature: { from: "degc", to: "degf" },
+  // **面積だけは向きが違う。** 日本で面積を引くのは「坪はいくつの m² か」
+  // であって、ヤード・ポンドへ出す用ではない(U-2 spec §3.3 が名指しする
+  // `坪 ≠ 2 畳` も、この向きで見える)。
+  area: { from: "tsubo", to: "m2" },
+  volume: { from: "l", to: "gal_us" },
+  speed: { from: "kmh", to: "mph" },
+  // **SI と IEC の分離が既定で見えるようにする**(設計書 §6 の例、`1 GB`)。
+  "data-size": { from: "gb", to: "gib" },
 };
 
 export function UnitPanel({ category }: { category: ConvertCategoryToken }) {

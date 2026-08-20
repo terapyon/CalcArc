@@ -10,7 +10,10 @@ import type {
   ConvertResult,
   ConvertUnitToken,
 } from "../../convert/types";
-import { CONVERT_UNIT_TOKENS } from "../../convert/types";
+import {
+  CONVERT_CATEGORY_TOKENS,
+  CONVERT_UNIT_TOKENS,
+} from "../../convert/types";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (TransferPanel.test.tsx / DataScalePanel.test.tsx と同じ流儀)。
@@ -41,8 +44,13 @@ const calls: {
  * golden の代わりではない)。換算の正しさは
  * `crates/calcarc-core/tests/convert_golden.rs` と `testdata/convert.json`
  * が持つ。
+ *
+ * **意図的に部分表である**(U-2)。63 単位ぶんの係数をここに書き写すと、web に
+ * 換算表がもう 1 つ生えて、コアとずれても誰も気づかない。**このスタブが
+ * 知らない単位で換算を呼んだら、黙って通さず落とす**(`affine()`)——
+ * 検査が知らないうちに別の値を見ていることのほうが怖い。
  */
-const FACTOR: Record<ConvertUnitToken, number> = {
+const FACTOR: Partial<Record<ConvertUnitToken, number>> = {
   nm: 1e-9,
   um: 1e-6,
   mm: 1e-3,
@@ -66,7 +74,7 @@ const FACTOR: Record<ConvertUnitToken, number> = {
   degf: 5 / 9,
 };
 
-const OFFSET: Record<ConvertUnitToken, number> = {
+const OFFSET: Partial<Record<ConvertUnitToken, number>> = {
   nm: 0,
   um: 0,
   mm: 0,
@@ -92,6 +100,16 @@ const OFFSET: Record<ConvertUnitToken, number> = {
 
 function isUnit(token: string): token is ConvertUnitToken {
   return (CONVERT_UNIT_TOKENS as readonly string[]).includes(token);
+}
+
+/** 上の部分表を引く。**持っていない単位は落とす**(黙って 0 を返さない)。 */
+function affine(unit: ConvertUnitToken): { factor: number; offset: number } {
+  const factor = FACTOR[unit];
+  const offset = OFFSET[unit];
+  if (factor === undefined || offset === undefined) {
+    throw new Error(`${unit} はこのスタブが係数を持たない単位である`);
+  }
+  return { factor, offset };
 }
 
 /**
@@ -149,8 +167,13 @@ function convertStub(
   if (!isUnit(from) || !isUnit(to)) return { text: null, error: "SyntaxError" };
   const parsed = evaluate(value);
   if (parsed === null) return { text: null, error: "SyntaxError" };
-  const base = parsed * FACTOR[from] + OFFSET[from];
-  return { text: format((base - OFFSET[to]) / FACTOR[to]), error: null };
+  const source = affine(from);
+  const target = affine(to);
+  const base = parsed * source.factor + source.offset;
+  return {
+    text: format((base - target.offset) / target.factor),
+    error: null,
+  };
 }
 
 function stubCalc(): ConvertCalc {
@@ -380,10 +403,10 @@ describe("UnitPanel（単位換算の盤面）", () => {
   });
 
   it("names every unit key of the category it is showing", async () => {
-    // **3 カテゴリ 21 単位が、押せて表示に出ること。** 件数を `toBe` で
+    // **7 カテゴリ 63 単位が、押せて表示に出ること。** 件数を `toBe` で
     // 固定する——ループだけだと、単位面が空になった日も緑になる。
     let seen = 0;
-    for (const category of ["length", "mass", "temperature"] as const) {
+    for (const category of CONVERT_CATEGORY_TOKENS) {
       const { unmount } = await renderPanel(category);
       await press([FIELD.from]);
       const units = unitsOf(category);
