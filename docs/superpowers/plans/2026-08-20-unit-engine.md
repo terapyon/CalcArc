@@ -932,9 +932,13 @@ fn the_unit_counts_match_the_spec() {
 #[test]
 fn a_ratio_too_wide_for_i128_is_an_overflow_not_a_wrap() {
     // spec §3.5: **あふれは実際に起きる。** 黙って f64 に落ちるより Overflow と言う。
+    //
+    // **向きに注意**（spec §3.5 の【訂正 2026-08-20】）。桁の大きい**整数**を
+    // `nm → mi` に通すと分子は**縮んで** i128 に収まる（1.1e34 / 1.8e11）。
+    // あふれるのは分子が 1.6e12 倍に伸びる `mi → nm` の側である。
     let huge = "99999999999999999999999999999999999";
     assert_eq!(
-        convert(huge, Category::Length, Unit::Nm, Unit::Mi),
+        convert(huge, Category::Length, Unit::Mi, Unit::Nm),
         Err(CalcError::Overflow)
     );
 }
