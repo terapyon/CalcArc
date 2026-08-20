@@ -114,8 +114,8 @@ fn convert_matches_the_reference() {
         golden.cases.len(),
         "some case was not compared"
     );
-    // **下限は Task 3 が実際に置いた件数から決める。** 2026-08-20 の実測: 成功 27 / エラー 4
+    // **下限は Task 3 が実際に置いた件数から決める。** 2026-08-20 の実測(Task 5): 成功 51 / エラー 4
     // ——「だいたい」で書くと、ケースが消えた日に緑のまま通る。
-    assert!(ok >= 27, "only {ok} successful cases compared");
+    assert!(ok >= 51, "only {ok} successful cases compared");
     assert!(errors >= 4, "only {errors} error cases compared");
 }

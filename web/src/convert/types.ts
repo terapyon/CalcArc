@@ -20,11 +20,18 @@ export const CONVERT_CATEGORY_TOKENS = [
   "length",
   "mass",
   "temperature",
+  "area",
+  "volume",
+  "speed",
+  "data-size",
 ] as const;
 
 export type ConvertCategoryToken = (typeof CONVERT_CATEGORY_TOKENS)[number];
 
-/** calcarc-core の convert::Unit に対応するトークン(長さ → 質量 → 温度の順)。 */
+/**
+ * calcarc-core の convert::Unit に対応するトークン
+ * (長さ → 質量 → 温度 → 面積 → 体積 → 速さ → データ量の順)。
+ */
 export const CONVERT_UNIT_TOKENS = [
   "nm",
   "um",
@@ -47,6 +54,48 @@ export const CONVERT_UNIT_TOKENS = [
   "k",
   "degc",
   "degf",
+  "mm2",
+  "cm2",
+  "m2",
+  "km2",
+  "ha",
+  "in2",
+  "ft2",
+  "yd2",
+  "ac",
+  "tsubo",
+  "jo",
+  "ml",
+  "cl",
+  "dl",
+  "l",
+  "m3",
+  "gal_us",
+  "gal_imp",
+  "floz_us",
+  "floz_imp",
+  "pt_us",
+  "pt_imp",
+  "qt_us",
+  "qt_imp",
+  "cup_us",
+  "cup_jp",
+  "mps",
+  "kmh",
+  "mph",
+  "kn",
+  "bit",
+  "byte",
+  "kb",
+  "mb",
+  "gb",
+  "tb",
+  "pb",
+  "kib",
+  "mib",
+  "gib",
+  "tib",
+  "pib",
 ] as const;
 
 export type ConvertUnitToken = (typeof CONVERT_UNIT_TOKENS)[number];
