@@ -222,23 +222,29 @@ impl Category {
     }
 }
 
-/// 基準単位へ上げる。
-pub fn to_base(value: Rational, unit: Unit) -> CalcResult<Rational> {
+/// 基準単位へ上げる。**モジュール外には出さない**——境界(WASM)が使うのは `convert()` だけで、
+/// `#[cfg(test)] mod tests` は `use super::*` で親のプライベート項目に届く。
+fn to_base(value: Rational, unit: Unit) -> CalcResult<Rational> {
     let (factor, offset) = unit.affine()?;
     value.checked_mul(factor)?.checked_add(offset)
 }
 
-/// 基準単位から下ろす。
-pub fn from_base(base: Rational, unit: Unit) -> CalcResult<Rational> {
+/// 基準単位から下ろす。**モジュール外には出さない**(理由は `to_base` と同じ)。
+fn from_base(base: Rational, unit: Unit) -> CalcResult<Rational> {
     let (factor, offset) = unit.affine()?;
     base.checked_sub(offset)?.checked_div(factor)
 }
 
 /// 入口。**値は式でよい**(§4.3)。
 ///
-/// **単項マイナスは構文解析器に無い**ので、ここで 1 つだけ剥がす(計画の裁定 2)。
-/// `parse.rs` は 1 行も変えない——`--40` は剥がした残りが `-40` になり、
-/// 構文解析器が `SyntaxError` を返す。
+/// **単項マイナスは構文解析器に無い**ので、ここで担う(計画の裁定 2)。
+/// `parse.rs` は 1 行も変えない。
+///
+/// **先頭が `-` なら、評価する前に `0` を前置するだけでよい**(裁定 2 の
+/// 【訂正 2026-08-20】)。左結合と優先順位が符号を正しい位置に入れる。
+/// 剥がした残り全体を評価してから符号反転すると、`-5-12` が `−(5−12)` = +7 になる
+/// (正しくは −17)。`--1` は `0--1` になり、演算子の連続として `SyntaxError` のまま拒否される
+/// ——二重負号の扱いは変わらない。
 ///
 /// **単位の接尾辞は取らない(`UnitSet::None`)。** `K` / `M` / `G` を式に持ち込むと、
 /// `km` の `k` と同じ字が 2 つの意味を持つ。
@@ -246,14 +252,14 @@ pub fn convert(value: &str, category: Category, from: Unit, to: Unit) -> CalcRes
     if from.category() != category || to.category() != category {
         return Err(CalcError::SyntaxError);
     }
-    let (text, negate) = match value.strip_prefix('-') {
-        Some(rest) => (rest, true),
-        None => (value, false),
+    let owned;
+    let text = if value.starts_with('-') {
+        owned = format!("0{value}");
+        &owned
+    } else {
+        value
     };
-    let mut parsed = evaluate_to_rational(text, UnitSet::None)?;
-    if negate {
-        parsed = Rational::from_i128(0)?.checked_sub(parsed)?;
-    }
+    let parsed = evaluate_to_rational(text, UnitSet::None)?;
     from_base(to_base(parsed, from)?, to)
 }
 
@@ -327,9 +333,25 @@ mod tests {
 
     #[test]
     fn one_leading_minus_is_allowed_and_two_are_not() {
+        // **`*` で確かめてはいけない。** `−(5×12)` も `(−5)×12` も −60 で、
+        // 2 つの解釈が一致する——判別力が無い(裁定 2 の【訂正 2026-08-20】)。
         assert_eq!(
             convert("-5*12", Category::Length, Unit::M, Unit::M),
             Ok(r(-60, 1))
+        );
+        // **これが判別する 1 件。** 剥がして全体を反転する実装だと
+        // `-5-12` は `−(5−12)` = +7 になる(正しくは −17)。
+        assert_eq!(
+            convert("-5-12", Category::Length, Unit::M, Unit::M),
+            Ok(r(-17, 1))
+        );
+        assert_eq!(
+            convert("-2-3-4", Category::Length, Unit::M, Unit::M),
+            Ok(r(-9, 1))
+        );
+        assert_eq!(
+            convert("-1+1", Category::Length, Unit::M, Unit::M),
+            Ok(r(0, 1))
         );
         assert_eq!(
             convert("--1", Category::Length, Unit::M, Unit::M),
@@ -386,9 +408,8 @@ mod tests {
     fn a_ratio_too_wide_for_i128_is_an_overflow_not_a_wrap() {
         // spec §3.5: **あふれは実際に起きる。** 黙って f64 に落ちるより Overflow と言う。
         //
-        // **あふれる向きは「大きい単位 → 小さい単位」である。** 桁の大きい入力を
-        // `nm → mi` に掛けると分子は縮み(1.1e34/1.8e11)、i128 に収まってしまう
-        // ——spec §3.5 が例に挙げた向きでは、この入力は落ちない(計画の誤り)。
+        // **向きに注意**(spec §3.5 の【訂正 2026-08-20】)。桁の大きい入力を
+        // `nm → mi` に掛けると分子は縮み(1.1e34/1.8e11)、i128 に収まってしまう。
         // 分子が 1.6e12 倍に伸びる `mi → nm` が、係数の比が効く向きである。
         let huge = "99999999999999999999999999999999999";
         assert_eq!(
