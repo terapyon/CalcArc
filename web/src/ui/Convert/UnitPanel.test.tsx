@@ -343,6 +343,16 @@ describe("UnitPanel（単位換算の盤面）", () => {
     expect(screen.queryByTestId("convert-result")).toBeNull();
   });
 
+  it("keeps `=` disabled while the expression cannot be evaluated", async () => {
+    // レビュー(round 1, Important 1)の実測: `5 ×` は畳むもの(演算子)は
+    // あるので `hasOperator` では押せてしまうが、`settled()` は式が閉じて
+    // いないので null を返す。**押せて何も起きないキーを作らない**という
+    // Task 11 の方針どおり、この状態で `=` は disabled でなければならない。
+    await renderPanel();
+    await press(["5", "掛ける"]);
+    expect(screen.getByRole("button", { name: EQ })).toBeDisabled();
+  });
+
   it("says nothing until a value is typed", async () => {
     await renderPanel();
     expect(main()).toHaveTextContent("");
@@ -356,13 +366,17 @@ describe("UnitPanel（単位換算の盤面）", () => {
 
   it("settles the expression into the value when = is pressed", async () => {
     // Finance の `=` と同じ(`FinancePanel.tsx` の `settle`)——式をその場で
-    // 評価して項目の値にする。**畳むものが無ければ押せない。**
+    // 評価して項目の値にする。**評価できなければ(`settled() === null`)押せない。**
     await renderPanel();
     await press(["5", "掛ける", "1", "2"]);
     await press([EQ]);
     expect(echo()).toHaveTextContent("値 60");
     expect(calls.at(-1)?.value).toBe("60");
-    expect(screen.getByRole("button", { name: EQ })).toBeDisabled();
+    // 畳んだあとの「60」も演算子は無いが評価はできる(同じ単位への恒等変換)
+    // ので、`settled()` は null を返さない。FinancePanel の `settle` も
+    // 演算子の有無ではなく評価できるかで判定しており、settle 後の `=` を
+    // 無効化してはいない——**もう一度押しても値は変わらないので害が無い**。
+    expect(screen.getByRole("button", { name: EQ })).not.toBeDisabled();
   });
 
   it("names every unit key of the category it is showing", async () => {

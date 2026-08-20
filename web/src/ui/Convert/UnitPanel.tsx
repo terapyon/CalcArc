@@ -13,7 +13,6 @@ import {
   EMPTY,
   type Entry,
   fromDigits,
-  hasOperator,
   isEmpty,
   type Operator,
   pushCloseParen,
@@ -139,9 +138,10 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
     switch (token) {
       case "del":
         return !valueField;
-      // 畳むものが無ければ `=` は押せない(FinancePanel の `=` と同じ)。
+      // 畳んだ結果が取れなければ `=` は押せない(FinancePanel の `settle` と
+      // 同じ述語——`hasOperator` ではなく「評価できるか」で判定する)。
       case "eq":
-        return !hasOperator(entry);
+        return settled() === null;
       case "add":
       case "sub":
       case "mul":

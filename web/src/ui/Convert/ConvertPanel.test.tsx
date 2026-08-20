@@ -51,6 +51,30 @@ describe("ConvertPanel", () => {
     expect(echo()).toHaveTextContent("変換元 km");
   });
 
+  it("rebuilds the board when the category changes, instead of carrying the old input over (key={current})", async () => {
+    // レビュー(round 1, Important 2a)の実測: `<UnitPanel key={current}>` の
+    // `key` を外すと、カテゴリを切り替えても盤面は作り直されず、前の
+    // カテゴリの entry と単位を新しいカテゴリのものとして評価してしまう
+    // ——実ブラウザでは「長さ→温度」で `Math ERROR` になる。**既存の巡回
+    // 検査は毎回 unmount()/goto するので remount 経路を通らない**。ここは
+    // 同じ `ConvertPanel` を rerender して、実際に区画を切り替える経路を
+    // 通す。
+    const { rerender } = render(<ConvertPanel category="length" />);
+    await userEvent.click(screen.getByRole("button", { name: "1" }));
+    await userEvent.click(screen.getByRole("button", { name: "0" }));
+    await userEvent.click(screen.getByRole("button", { name: "0" }));
+    expect(echo()).toHaveTextContent("値 100");
+    expect(echo()).toHaveTextContent("変換元 km");
+
+    rerender(<ConvertPanel category="temperature" />);
+
+    // 値も単位も、温度の盤面としてまっさらに作り直されていなければならない
+    // ——`key` が無ければここで「値 100」と「変換元 km」が生き残る。
+    expect(echo()).not.toHaveTextContent("100");
+    expect(echo()).not.toHaveTextContent("変換元 km");
+    expect(echo()).toHaveTextContent("変換元 °C");
+  });
+
   it("moves the hash when the select changes", async () => {
     render(<ConvertPanel category="length" />);
     await userEvent.selectOptions(select(), "temperature");

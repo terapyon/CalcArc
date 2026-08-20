@@ -20,7 +20,7 @@ const face_ = (page: Page, name: "数字と演算のキー" | "単位のキー")
 /**
  * 面ごとのキー総数。**予約スロットも disabled な `<button>` として描かれる**
  * ので、面の総数はキー配列の長さと一致する。単位面は 5 列 × (3 単位/行) で、
- * length 11 単位 → 4 行 = 20、mass 8 単位 → 3 行 = 15、temperature 3 単位 →
+ * length 11 単位 → 4 行 = 20、mass 7 単位 → 3 行 = 15、temperature 3 単位 →
  * 1 行 = 5。
  */
 const FACES = [
@@ -78,6 +78,23 @@ test("the swap key is wide enough even though the field row is half height", asy
   // **番兵**: 測れていなければ -1 になり、`< 44` を素通りしない。
   expect(swap?.height ?? -1).toBeGreaterThanOrEqual(0);
   expect(swap?.height ?? -1).toBeLessThan(44);
+});
+
+test("the panel does not shrink to its own max-content width", async ({
+  page,
+}) => {
+  // レビュー(round 1, Important 2b)の実測: `.panel { width: 100% }`
+  // (`UnitPanel.module.css`)を外すと、390px の画面で盤面は 252px・面は
+  // 252×252・キーは 44×44 ちょうどまで縮む——既存の 44px 検査
+  // (`toBeGreaterThanOrEqual(44)`)はこれを素通りする。`width: 100%` が
+  // 効いていれば ~366px になる(同じ CSS のコメントにある Transfer 360 /
+  // Finance 366 と同じ桁)ので、実測の 252px と 366px のあいだの 300px を
+  // 下限に選ぶ——max-content まで縮めば確実に赤くなり、正しい寸法では
+  // 確実に緑になる。
+  await page.goto("/#convert/length");
+  await expect(panel(page)).toBeVisible();
+  const box = await face_(page, "数字と演算のキー").boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(300);
 });
 
 test("swapping faces moves neither the frame nor DEL and AC", async ({
