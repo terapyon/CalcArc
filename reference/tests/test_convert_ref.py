@@ -138,6 +138,37 @@ def test_a_tsubo_is_not_exactly_two_tatami() -> None:
     assert convert_value(Fraction(1), "area", "tsubo", "jo") == Fraction(20000, 9801)
 
 
+def test_the_tsubo_and_the_jo_are_pinned_to_the_square_metre() -> None:
+    # **比だけでは足りない。** 上のテストは坪と畳の「比」（20000/9801）しか見ていない
+    # ので、坪と畳を**同じ倍率で**ずらしても比は変わらず、通り抜ける。
+    # Rust 側の `a_tsubo_is_not_exactly_two_tatami` はそれぞれを m² で個別に固定して
+    # いる（convert/mod.rs）。参照実装にも同じピンを打つ。
+    assert convert_value(Fraction(1), "area", "tsubo", "m2") == Fraction(400, 121)
+    assert convert_value(Fraction(1), "area", "jo", "m2") == Fraction(81, 50)
+
+
+def test_the_area_si_prefixes_are_pinned_to_the_square_metre() -> None:
+    # 同じ理由。`cm2` と `mm2` を両方 2 倍しても、あるいは `km2` と `ha` を両方
+    # 2 倍しても、この 2 つの比だけを見る検査は通り抜ける。SI 接頭辞は m² に対して
+    # 個別に固定する。
+    assert convert_value(Fraction(1), "area", "mm2", "m2") == Fraction(1, 10**6)
+    assert convert_value(Fraction(1), "area", "cm2", "m2") == Fraction(1, 10**4)
+    assert convert_value(Fraction(1), "area", "km2", "m2") == Fraction(10**6)
+    assert convert_value(Fraction(1), "area", "ha", "m2") == Fraction(10**4)
+
+
+def test_the_speed_units_are_pinned_to_their_own_definitions() -> None:
+    # 同じ理由だが、速さは基準単位 `mps` 自身も一緒にずれうる点が area と違う。
+    # `mps` を含む 4 単位を同じ倍率でずらすと、`convert_value(..., "mps")` は
+    # 分子・分母の両方にその倍率がかかって打ち消し合うので、**どの比較も動かない**
+    # ——`mps` を経由する検査では原理的に捕まえられない。だから `CATEGORIES` の
+    # 生の値を直接見て、それぞれの定義値を固定する。
+    assert CATEGORIES["speed"]["mps"] == (Fraction(1), Fraction(0))
+    assert CATEGORIES["speed"]["kmh"] == (Fraction(5, 18), Fraction(0))
+    assert CATEGORIES["speed"]["mph"] == (Fraction(1397, 3125), Fraction(0))
+    assert CATEGORIES["speed"]["kn"] == (Fraction(463, 900), Fraction(0))
+
+
 def test_the_two_gallons_are_not_the_same() -> None:
     assert convert_value(Fraction(1), "volume", "gal_us", "l") == Fraction(473176473, 125000000)
     assert convert_value(Fraction(1), "volume", "gal_imp", "l") == Fraction(454609, 100000)
