@@ -1,7 +1,9 @@
-"""単位換算の参照実装（U-1 spec §3.1〜§3.5）。
+"""単位換算の参照実装（U-1 spec §3.1〜§3.5、U-2 spec §3.1〜§3.6）。
 
 数値は `fractions.Fraction`（任意精度の厳密有理数）。**係数はすべて定義値であって
-測定値ではない**——出典は国際ヤード・ポンド協定（1959）と SI。式は spec §3.2 の表から
+測定値ではない**——出典は国際ヤード・ポンド協定（1959）と SI、そして
+面積の `畳` は不動産の表示に関する公正競争規約施行規則 第 9 条第 16 号
+（令和 4 年 9 月 1 日施行）である。式は U-1 spec §3.2 と U-2 spec §3.1〜§3.6 の表から
 書き起こしている。
 
 **Rust の実装は見ていない。**
@@ -27,6 +29,18 @@ _ONE = Fraction(1)
 # 常衡ポンド。**質量の非 SI 単位はここ 1 つだけが定義値で、残りはこれの倍数**
 # ——spec §3.2 の表が `oz` を `lb`/16、`st` を 14 × `lb` と書いている。
 _LB = Fraction(45359237, 10**8)  # ちょうど 0.45359237 kg（1959）
+
+# 面積と体積のヤード・ポンド系は、1 つの定義値の積み上げでできている。
+# **上と同じ流儀**——U-2 spec の表が導出と約分済みの値の**両方**を書いている行
+# （`in²` `ac` `gal(US)`）は約分済みのほうを採り、**導出しか書いていない行**
+# （`ft²` `yd²` `fl oz` `pt` `qt` `cup`）は導出のまま書く。
+_IN2 = Fraction(16129, 25000000)  # (127/5000)² m²。国際インチの 2 乗
+_FT2 = 144 * _IN2  # 12 in × 12 in
+_YD2 = 9 * _FT2  # 3 ft × 3 ft
+_GAL_US = Fraction(473176473, 125000000)  # 231 × in³。ちょうど 3.785411784 L
+_GAL_IMP = Fraction(454609, 100000)  # ちょうど 4.54609 L（1985）
+_FLOZ_US = _GAL_US / 128
+_FLOZ_IMP = _GAL_IMP / 160
 
 # (factor, offset)。基準単位は factor = 1、offset = 0。
 # **spec §3.2 の表をそのまま書く。** 長さの `ft` `yd` `mi` は表が
@@ -61,6 +75,65 @@ CATEGORIES: dict[str, dict[str, tuple[Fraction, Fraction]]] = {
         "k": (_ONE, _ZERO),
         "degc": (_ONE, Fraction(5463, 20)),  # 273.15
         "degf": (Fraction(5, 9), Fraction(45967, 180)),  # K = (F + 459.67) × 5/9
+    },
+    "area": {  # 基準: 平方メートル（U-2 spec §3.1）
+        "mm2": (Fraction(1, 10**6), _ZERO),
+        "cm2": (Fraction(1, 10**4), _ZERO),
+        "m2": (_ONE, _ZERO),
+        "km2": (Fraction(10**6), _ZERO),
+        "ha": (Fraction(10**4), _ZERO),  # ヘクタール
+        "in2": (_IN2, _ZERO),
+        "ft2": (_FT2, _ZERO),
+        "yd2": (_YD2, _ZERO),
+        # 4840 yd²。**ちょうど 4046.8564224 m²**（= 316160658/78125）。
+        # 導出のほうは `the_acre_is_the_yard_pound_stack` が突き合わせる。
+        "ac": (Fraction(316160658, 78125), _ZERO),
+        # 1 尺 = 10/33 m、1 坪 = 6 尺 × 6 尺 = (20/11)² m²。
+        "tsubo": (Fraction(400, 121), _ZERO),
+        # **1.62 m² ちょうど**。畳は地域で違うので、表示規約が広告に用いる下限を採る
+        # （U-2 spec §3.2。**ラベルは `畳(1.62㎡)` と基準を名前に書く**）。
+        # **慣用の「1 坪 = 2 畳」には寄せない**——20000/9801 = 2.040608101… と出る。
+        "jo": (Fraction(81, 50), _ZERO),
+    },
+    "volume": {  # 基準: リットル（U-2 spec §3.4）
+        "ml": (Fraction(1, 1000), _ZERO),
+        "cl": (Fraction(1, 100), _ZERO),
+        "dl": (Fraction(1, 10), _ZERO),
+        "l": (_ONE, _ZERO),
+        "m3": (Fraction(1000), _ZERO),
+        "gal_us": (_GAL_US, _ZERO),
+        "gal_imp": (_GAL_IMP, _ZERO),
+        # **US と Imperial は倍率が違う**（US は gal/128 の 16・32・8 倍、
+        # Imperial は gal/160 の 20・40 倍）。取り違えないよう系ごとに積む。
+        "floz_us": (_FLOZ_US, _ZERO),
+        "floz_imp": (_FLOZ_IMP, _ZERO),
+        "pt_us": (16 * _FLOZ_US, _ZERO),
+        "pt_imp": (20 * _FLOZ_IMP, _ZERO),
+        "qt_us": (32 * _FLOZ_US, _ZERO),
+        "qt_imp": (40 * _FLOZ_IMP, _ZERO),
+        "cup_us": (8 * _FLOZ_US, _ZERO),  # 米国慣用カップ。236.5882365 mL
+        "cup_jp": (Fraction(1, 5), _ZERO),  # 日本の計量カップ。ちょうど 200 mL
+    },
+    "speed": {  # 基準: メートル毎秒（U-2 spec §3.5）
+        "mps": (_ONE, _ZERO),
+        "kmh": (Fraction(5, 18), _ZERO),  # 1000/3600
+        "mph": (Fraction(1397, 3125), _ZERO),  # mi/3600。ちょうど 0.44704 m/s
+        "kn": (Fraction(463, 900), _ZERO),  # 1852/3600。海里毎時
+    },
+    "data-size": {  # 基準: バイト（U-2 spec §3.6）
+        # **SI と IEC を分離する**（設計書 §6）。`GB` と `GiB` を同じにしない。
+        "bit": (Fraction(1, 8), _ZERO),  # **1/8 である。** 有理数なので 0.125 が厳密に出る
+        "byte": (_ONE, _ZERO),
+        "kb": (Fraction(10**3), _ZERO),
+        "mb": (Fraction(10**6), _ZERO),
+        "gb": (Fraction(10**9), _ZERO),
+        "tb": (Fraction(10**12), _ZERO),
+        "pb": (Fraction(10**15), _ZERO),
+        "kib": (Fraction(2**10), _ZERO),
+        "mib": (Fraction(2**20), _ZERO),
+        "gib": (Fraction(2**30), _ZERO),
+        "tib": (Fraction(2**40), _ZERO),
+        "pib": (Fraction(2**50), _ZERO),
     },
 }
 
