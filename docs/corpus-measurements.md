@@ -2072,3 +2072,170 @@ Task 3 の `web/exact-power.json` は 6 種すべてが `caught: {}` / `total: 0
 
 走行後の `git diff -- crates/` は**足したテストの 18 行だけ**で、計算のコードは
 1 行も変わっていない。
+
+## フルスイープと 6 種の地図（2026-08-20 実測、verify-0-3-0 Task 6）
+
+この計画の締め。**走らせる一覧は `.github/workflows/ci.yml` から起こした**（計画の
+一覧を信じない）。BASE は `4145a85`（Task 5 のコミット）、前提の main は `f1fdc2e`。
+
+### フルスイープ（22 本、すべて緑。時間は壁時計）
+
+| # | コマンド | 結果 | 秒 |
+|---:|---|---|---:|
+| 1 | `cargo fmt --check` | 差分なし（出力 0 バイト） | 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | warning 0 | 0 |
+| 3 | `cargo test --workspace` | **374 passed** / 0 failed | 23 |
+| 4 | `wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm` | ok | 4 |
+| 5 | `wasm-pack test --headless --firefox crates/calcarc-wasm` | **34 passed** / 0 failed | 6 |
+| 6 | `pnpm typecheck` | ok | 2 |
+| 7 | `pnpm lint` | ok | 1 |
+| 8 | `pnpm test`（vitest） | **365 passed**（32 ファイル） | 8 |
+| 9 | `pnpm exec vite build` | ok | 2 |
+| 10 | `pnpm check:sw` | `prompt 形 / wasm precache / manifest 完備` | 1 |
+| 11 | `pnpm check:version` | `0.3.0`（`Cargo.toml` と `web/package.json` が一致） | 0 |
+| 12 | `pnpm exec playwright test`（Layer 5） | **170 passed**（12.5 秒） | 13 |
+| 13 | `uv sync --locked --no-config` | 9 パッケージ、ロック済み | 0 |
+| 14 | `uv run --no-config ruff check .` | `All checks passed!` | 0 |
+| 15 | `uv run --no-config ruff format --check .` | `42 files already formatted` | 0 |
+| 16 | `uv run --no-config pytest` | **362 passed**（23.88 秒） | 24 |
+| 17 | `uv run --no-config python scripts/generate.py` | 生成 ok | 1 |
+| 18-19 | `git add --intent-to-add testdata/` → `git diff --exit-code testdata/` | **差分なし** | 0 |
+| 20 | `pnpm heavy:power:exact` | **6 種すべて `ok`** | 139 |
+| 21 | `pnpm heavy` | **195 passed**（31.4 秒） | 36 |
+| 22 | `git diff --stat -- crates/ web/src/` | **空** | 0 |
+
+**手元は `--firefox`、CI は `--chrome`。** `wasm-pack test` のブラウザだけ CI と違う
+（手元に chromedriver が無い）。34 本の内訳は同じ。
+
+**指示された基準値との食い違いは無かった**——cargo 374 / vitest 365 / Layer 5 170（12.5 秒）
+／ pytest 362 / `pnpm heavy` 195 / `heavy:power:exact` 6 種 `ok`。時間だけ
+`heavy:power:exact` が 138 秒 → **139 秒**（壁時計の揺れ、± 1 秒）。
+
+**`pnpm heavy` は 195 のまま動かなかった。** これがこの走行の目的である——この計画は
+`crates/` の計算を 1 行も変えていないので、重量級の値も動かないはずで、**動いていたら
+この計画が壊したという意味**だった。動いていない。
+
+### 6 種の変異の最終的な地図
+
+**「捕まえた層」は、赤くなったテストがどこに住んでいるかで数える。** 単体テスト（Layer 1、
+`crates/calcarc-core/src/**` の `mod tests`）と言語間 golden（Layer 4、
+`crates/calcarc-core/tests/*_golden.rs` が `testdata/*.json` と突き合わせる）の 2 層。
+
+| # | 変異 | 変異を当てる先 | Layer 1（単体） | Layer 4（golden） | 見張る層 |
+|---:|---|---|---:|---:|---:|
+| 1 | `binary-base-is-decimal` | `data_scale/format.rs` | **1**（Task 4 で 0 → 1） | 1 | **1 → 2** |
+| 2 | `degf-offset-dropped` | `convert/mod.rs` | 2 | 1 | 2 |
+| 3 | `micrometre-off-by-thousand` | `convert/mod.rs` | **0** | 1 | **1** |
+| 4 | `half-even-becomes-half-up` | `convert/format.rs` | 1 | 1 | 2 |
+| 5 | `kv-counts-once-not-twice` | `data_scale/llm.rs` | 4 | 1 | 2 |
+| 6 | `partial-byte-truncated` | `data_scale/transfer.rs` | 1 | 1 | 2 |
+
+赤くなったテストの名前（最終走行の `web/exact-power.json` から。合計 15 本）:
+
+| # | 赤くなったテスト |
+|---:|---|
+| 1 | `data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand`（Task 4 で追加）、`data_scale_matches_the_reference` |
+| 2 | `convert::tests::minus_forty_is_the_fixed_point_of_the_two_scales`、`convert::tests::the_offsets_check_out`、`convert_matches_the_reference` |
+| 3 | `convert_matches_the_reference` |
+| 4 | `convert::format::tests::half_to_even_rounds_toward_the_even_digit`、`convert_matches_the_reference` |
+| 5 | `data_scale::llm::tests::kv_heads_is_not_the_attention_head_count`、`data_scale::llm::tests::overflow_is_an_error_not_a_wrap`、`data_scale::llm::tests::the_headline_case`、`data_scale::llm::tests::the_kv_side_never_needs_the_ceiling`、`llm_matches_the_reference` |
+| 6 | `data_scale::transfer::tests::a_partial_byte_rounds_up`、`transfer_matches_the_reference` |
+
+**6 種すべてが golden に捕まる。** 言語間 golden は 6 種の全部を見張っている——
+**Python の独立実装との突き合わせが、この 3 計算の最後の砦である**。単体テストのほうは
+偏りがあり、**変異 3 は今も単体テストが 1 本も反応しない**（下記のとおり、これは意図した
+残し方である）。
+
+### 足したもの / 足さなかったもの
+
+**足したのは単体テスト 1 件だけ。golden は 1 件も足していない**（上限 20 件に対して 0 件）。
+
+- **足した（変異 1）**: `data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand`。
+  `format_binary(1_084_479_242_240) == Some("1010.0 GiB")`。基数の取り違えは
+  **整数部が 1000 以上 1024 未満に収まる 2 進の値**でしか見えず、既存の唯一の再選択ケース
+  はその帯に入っていなかった。足したあと、この変異の赤は 1 本 → **2 本**になった。
+- **足さなかった（変異 3）**: `micrometre-off-by-thousand`。**係数表 63 行を golden が
+  63 単位すべて覆っている**（`affine()` の腕 63 = `token()` の腕 63 = `convert.json` が
+  使うトークン 63、未訪問 0）。1 行だけを単体テストで literal 固定するのは恣意的であり、
+  しかも**この spec 自身が Step 0 で「表の literal 固定は変異を下の層で止めて上まで
+  届かせない」と実証した形**である（transfer の `every_unit_has_its_factor` が 8 つの
+  係数を literal で持つ実例）。**係数表の見張りは Python の独立実装に任せる**——同じ表を
+  Rust に写しても、写し間違いは golden でしか見つからない。
+
+**「念のため足す」をしていない。** 暗い帯は 2 種見つかり、足したのは 1 種である。
+
+### 盤面経路の 6 件（盤面から打てない値は 1 つも無かった）
+
+Task 5 が `web/tests/e2e/convert.spec.ts` に足した 6 件。Convert の 6 カテゴリに
+1 件ずつで、**期待値は `testdata/convert.json` から引き写した**（各行に golden の id を
+書いてある）。押す名前は `UNIT_ARIA_LABELS`、表示は `UNIT_LABELS`。
+
+| カテゴリ | golden の id | 打つ | 表示（実測） |
+|---|---|---|---|
+| length | `convert/length/1intomm` | 1 インチ → ミリメートル | `25.4 mm` |
+| mass | `convert/mass/1lbtokg` | 1 ポンド → キログラム | `0.45359237 kg` |
+| area | `convert/area/1tsubotojo` | 1 坪 → 畳 | `2.040608101 畳(1.62m²)` |
+| volume | `convert/volume/1gal_ustol` | 1 ガロン(米) → リットル | `3.785411784 L` |
+| data-size | `convert/data-size/1gbtomib` | 1 ギガバイト → メビバイト | `953.6743164 MiB` |
+| speed | `convert/speed/1kntokmh` | 1 ノット → キロメートル毎時 | `1.852 km/h` |
+
+**打てない値は 1 つも無かった**——6 件とも、値も単位も盤面のキーだけで指定でき、
+表示に戻ってきた。U-1 の「計算はできるのに `±` が無くて不動点が打てない」型の穴は、
+Convert の 6 カテゴリには無い。
+
+温度は既存の `types the fixed point of the two temperature scales` が持っている。
+LLM・transfer も既存の `the headline case` が実画面から打っている（`llm.spec.ts` /
+`transfer.spec.ts`）ので、**新規は 6 件で spec の 9 件が揃う**（Convert 7 = 新規 6 +
+温度 1、LLM 1、transfer 1）。
+
+### 回さなかった走行と、その理由
+
+| 走行 | 所要（過去の実測） | 回さなかった理由 |
+|---|---:|---|
+| `pnpm heavy:power` | 11.2 分 | **`crates/` の計算を 1 行も変えていないので、重量級の検出力は動かない。** この走行が測るのは Finance / Scientific の 18 種の変異に対する生成コーパスの反応で、この計画はそのコーパスにも `MUTATIONS` にも `verdictFor` にも触れていない（触ったのは `runOneMutation` の判定注入口だけで、既定は `verdictFor` のまま）。 |
+| `pnpm heavy:ui` | 11.9 分 | 同上。加えて**この計画は `heavy:ui` に 1 本も足していない**（Task 5 の裁定 1: 盤面 6 件は Layer 5 に置き、11.9 分の走行を伸ばさない）。押下キーの台帳も変わらない。 |
+
+**回した重量級は `pnpm heavy`（31.4 秒）だけ**で、目的は検出力の測定ではなく
+**回帰の確認**である（195 のままかどうか)。
+
+### 重量級のコーパスは変異 1 を見ていない（シャードからの導出。注入では確かめていない）
+
+計画は「変異 1（基数）と 4（丸め）は `data_scale` の表示に触るので、**重量級のコーパスにも
+見えるはず**」と書いていた。**シャードを数えると、そうは読めない。**
+
+1. **`corpus/generated/*.json` の 18 枚に、0.3.0 の 3 計算のうち載っているのは
+   `data_scale` だけである**（`kind: "call"` の `op` を全シャードで数えた実測:
+   `data_scale` 2000 件、`convert` / `llm` / `transfer` は **0 件**）。
+   よって**変異 4 は `convert/format.rs` にあるので、重量級には構造的に見えない**
+   ——計画が「変異 4 は `data_scale` の表示に触る」と書いたのは誤りで、
+   変異 4 が触るのは **`convert` の表示**である。
+2. **`data-scale-000.json` の 2000 件のうち、`expect.binary` が非 null は 1984 件。
+   そのうち整数部が 1000 以上 1024 未満の帯に入るのは 3 件だけで、3 件とも `TiB` である**
+   （`ds-001107` `1005.3 TiB`、`ds-001261` `1015.3 TiB`、`ds-001630` `1015.2 TiB`）。
+   `scaled()` の再選択は `if whole >= base && index + 1 < units.len()` なので、
+   **最上位の `TiB` では `base` が読まれても再選択が起きない**。したがって
+   **2000 件のどれも、基数を 1000 に取り違えても表示が 1 文字も変わらない。**
+
+**これは導出であって、注入による実測ではない。** 変異 1 を当てた状態で `pnpm heavy` を
+1 度回して確かめようとしたが、その走行は実行環境に拒否された。計画の裁定 2 も測定先を
+`cargo test` に限っているので、**この節は「シャードのデータとコードから導いた見立て」
+として読むこと**。注入で確かめるなら、変異 1 を当てて wasm を作り直してから
+`pnpm heavy` を 1 度回せばよい（見積り 1 分未満、実測前）。
+
+**導出が正しければ、Task 4 で単体テストを足した判断が裏から支えられる**——
+`binary-base-is-decimal` を見張っていたのは golden 1 本だけで、**重量級 2000 件は
+1 件も見張っていなかった**ことになる。
+
+### spec §8 の完了条件（1 つずつ）
+
+| # | 完了条件 | 結果 |
+|---:|---|---|
+| 1 | 6 種の変異それぞれについて、**赤くなった検査の名前と件数**が記録されている | **達成**。上の表（合計 15 本、変異ごとの内訳つき） |
+| 2 | 赤くならなかった変異があれば、**その帯に足したケース**と、**足したあとに赤くなること**が記録されている | **達成（ただし文面どおりではない）**。暗い帯は 2 種で、**足したのは 1 種だけ**。変異 1 は足して赤 1 → 2 本を記録した。変異 3 は**足さない判断とその理由**を記録した——spec の文面は「足す」しか想定していないので、**片方は文面から外れている**。外した理由は上記のとおり（golden が 63 単位を全覆いしており、表の literal 固定は変異を下の層で止める） |
+| 3 | `testdata/*.json` が生成物と一致する | **達成**。`generate.py` のあと `git diff --exit-code testdata/` が差分なし |
+| 4 | `crates/` に**計算の変更が入っていない** | **達成**。`f1fdc2e..HEAD` の `crates/` は `data_scale/format.rs` の **+18 行のみ**で、全行が `mod tests` の中（`#[test] fn the_binary_base_is_ten_twenty_four_not_a_thousand`）。`web/src/` は **0 行**。走行後の作業ツリーも `git status` が空 |
+| 5 | 段 3 を含めた場合、**9 件が実画面から打てて表示に戻ること**が緑 | **達成**。新規 6 件（Convert の 6 カテゴリ）＋ 既存 3 件（Convert 温度・LLM・transfer の `headline case`）= 9 件。Layer 5 は 170 passed |
+| 6 | 実測値が `docs/corpus-measurements.md` に追記されている（**設計書に写さない**） | **達成**。Task 3・4・6 の 3 節。設計書と計画に数字を書き戻していない |
+
+**未達は無い。** 条件 2 だけ、spec の文面（「足したケース」）に対して**片方は足さない判断**
+であり、そのずれを上に明記した。
