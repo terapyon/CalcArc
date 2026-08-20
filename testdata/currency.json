@@ -128,6 +128,20 @@
     },
     {
       "expect": {
+        "text": "54.28"
+      },
+      "id": "currency/42.66gbptousd@0.8532-1.0855",
+      "input": {
+        "from": "gbp",
+        "from_rate": "0.8532",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "42.66"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
         "text": "-1,234.57"
       },
       "id": "currency/-1234.567usdtousd@1.0855-1.0855",
