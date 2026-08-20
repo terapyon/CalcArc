@@ -209,9 +209,19 @@ describe("Convert のキー集合", () => {
   it("names every category in English too", () => {
     // **併記のための表**(U-0 §9 の【変更 2026-08-20】)。日本語の表と鍵が
     // 揃っていないと、盤面が `undefined` を連結して出す。
-    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual([
-      ...CONVERT_CATEGORY_TOKENS,
-    ]);
+    //
+    // **鍵は `CONVERT_CATEGORY_IDS`(8)である。** ここには当初
+    // `CONVERT_CATEGORY_TOKENS`(7)と書いてあった——**併記を入れた日には
+    // 為替がまだ無く、7 と 8 の区別が付かなかった**。U-4 を積み直したときに
+    // この行が赤くなって見つかった。
+    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual([...CONVERT_CATEGORY_IDS]);
+    // **2 つの表の鍵が同じであること自体を主張する。** 上の 2 行は
+    // どちらも「この表は 8 つの id を持つ」と言っているだけで、
+    // **両者が同じ鍵であることは言っていない**——`ConvertPanel` が
+    // 同じ id で 2 つの表を同時に引く以上、こちらが本体の不変条件である。
+    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual(
+      Object.keys(CATEGORY_LABELS),
+    );
     expect(CATEGORY_LABELS_EN.length).toBe("Length");
     expect(CATEGORY_LABELS_EN.mass).toBe("Mass");
     expect(CATEGORY_LABELS_EN.temperature).toBe("Temperature");
@@ -221,6 +231,7 @@ describe("Convert のキー集合", () => {
     // **Scale の `data-scale` は `Data Scale`** である。日本語はどちらも
     // `データ量` で、**英語だけが 2 つの系統を分けている**(U-2 §2)。
     expect(CATEGORY_LABELS_EN["data-size"]).toBe("Data Size");
+    expect(CATEGORY_LABELS_EN.currency).toBe("Currency");
   });
 
   it("writes the basis into the name where the unit has more than one", () => {
