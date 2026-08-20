@@ -1656,6 +1656,16 @@ git commit   # 例: "Send a conversion across the boundary without throwing"
 - Modify: `web/src/route.test.ts`
 - Modify: `web/src/ui/Nav/Nav.tsx`（`#convert` → `#convert/length`）
 - Modify: `web/src/App.tsx`（`<ConvertPanel category={route.category} />`）
+- Modify: `web/src/ui/Convert/ConvertPanel.tsx`（**prop を受けるだけ**の最小変更。中身は Task 11）
+
+**【追加 2026-08-20】この変更で壊れる検査が 3 つある**（実測。**当初の一覧に入っていなかった**）:
+- `web/src/ui/Nav/Nav.test.tsx` の `links to every module by hash`（`#convert` を**直書き**している）
+- `web/src/ui/Convert/ConvertPanel.test.tsx`（`render(<ConvertPanel />)` が prop を渡していない）
+- `web/tests/e2e/convert-placeholder.spec.ts` の `toHaveURL(/#convert$/)`
+  ——**E2E は Task 12 まで誰も走らせないので、気づかないまま赤で残る。**
+
+**削除する既存テストが 1 件**: `web/src/route.test.ts` の `reads convert, which has no category yet`
+（`#convert` → `category: null` を固定している）。新しいテストと矛盾するので置き換える。
 
 **Interfaces:**
 - Consumes: Task 8 の `convert` / `convert_units`、Task 8 の `web/src/convert/types.ts`
@@ -1702,11 +1712,10 @@ cd web && pnpm test route
 
 - [ ] **Step 3: 実装する**
 
-`route.ts`:
-```ts
-export const CONVERT_CATEGORIES = ["length", "mass", "temperature"] as const;
-export type ConvertCategory = (typeof CONVERT_CATEGORIES)[number];
-```
+`route.ts`——**綴りを直書きしないこと**。同じ 3 語は既に `web/src/convert/types.ts` の
+`CONVERT_CATEGORY_TOKENS` にあり、**そちらは `token_parity.rs` が Rust の `Category::ALL` と機械で
+突き合わせている**。直書きすると**誰も検査しない 3 つ目の写し**ができる（[[plan-inventories-need-grep]]）。
+`convert/types.ts` から import して別名で export すること（循環参照は無い）。
 `CATEGORIES.convert` を `CONVERT_CATEGORIES` に、`DEFAULT_CATEGORY.convert` を `"length"` に。
 
 `Nav.tsx` の `href="#convert"` を `href="#convert/length"` に。**round-trip テストが守っている**
