@@ -350,8 +350,18 @@ cd /home/terapyon/dev/CalcArc-e2e/web && pnpm test exact-power && pnpm lint
 
 - [ ] **Step 5: 赤確認（実出力を報告に貼る）**
 
-`parseFailedTests` の正規表現から `$` を落とす（`\.\.\. FAILED` を部分一致にする）。
-→ **`does not mistake the summary line for a test` が赤くなること**を確かめる。戻しは再編集。
+**【訂正 2026-08-20、Task 2 の実測】この計画が最初に指定した変異（`$` を落とす）は空振りだった。**
+実測: 要約行 `test result: FAILED. 0 passed; 1 failed` には **` ... ` が無い**ので、
+`$` の有無にかかわらず `\.\.\. FAILED` に当たらない。**`$` はそのテストを守っていない。**
+
+**守っているのは ` ... ` の区切りのほうである。** 赤確認はそれを外す変異で行う——
+素朴な実装に相当する `/^test (\S+) .*FAILED/` に差し替えると、要約行から `result:` を
+拾って **2 本**が赤くなる（`does not mistake the summary line for a test` と
+`takes the failing test names, not the passing ones`）。
+
+**教訓**: **赤くならない赤確認は、何も測っていない。** 変異を選ぶときは
+「その検査が実際に守っているもの」を先に見極める（この計画は `$` が守っていると
+思い込んで書いた）。戻しは再編集（`git checkout` を使わない）。
 
 - [ ] **Step 6: コミット**
 
