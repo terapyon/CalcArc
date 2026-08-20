@@ -43,8 +43,17 @@ E はコーパスの実物が無いと「0 件のときの見た目」しか書�
 
 打鍵中の表示に数学的な定義は無い。規則を持っているのは `engine_table.rs` だけ
 （CLAUDE.md が「電卓の挙動の仕様書」と定めている）。**推測で書かない。**
-先頭 `0`・`00`・`0.`、小数点の 2 つ目（`:69`）、`MAX_ENTRY_LEN`（`state.rs:17`）、
+先頭 `0`・`00`・`0.`、小数点の 2 つ目、`MAX_ENTRY_LEN`（`state.rs:17`）、
 `EXP` の書式、演算子直後、括弧を開いた直後、`+/-` の途中適用。
+
+**裁定（実装中に判明、2026-08-20）: 小数点の 2 つ目はこの Task では積まない。**
+あれは打鍵の途中で `SyntaxError` になる形で、`display-cases.spec.ts` は現状
+`DisplayCase.expect` に `error` を持たず、ハーネスが `error !== null` を返した
+ケースを無条件に不一致とする。**その改修は Task 2 の Step 2 そのもの**なので、
+ケースは `corpus_entry.py` の `second_decimal_point_cases()` に
+`engine_table.rs` から起こして置くだけにし、**シャードに積むのは Task 2**。
+`test_the_shard_carries_exactly_the_built_shapes` が「積まれていないこと」を
+固定しているので、Task 2 が積むときに必ずこのテストが赤くなって気づく。
 
 - [ ] **Step 2: 生成器を書く。`kind: "display"`、キー列は `eq` で終わらない**
 
@@ -82,7 +91,15 @@ E はコーパスの実物が無いと「0 件のときの見た目」しか書�
 
 - [ ] **Step 4: 種別ごとに 1 件以上あることをテストで固定する**
 
-- [ ] **Step 5: 再生成・`pnpm heavy`**
+- [ ] **Step 5: `entry-000.json` に小数点の 2 つ目を積む（Task 1 からの持ち越し）**
+
+`corpus_entry.py` の `second_decimal_point_cases()` は Task 1 が
+`engine_table.rs`（`a_second_decimal_point_is_a_syntax_error`、assert は :70）
+から起こして置いてある。Step 2 で `expect.error` を持てるようになった時点で
+`build_entry_shard()` に積む。`test_the_shard_carries_exactly_the_built_shapes`
+が赤くなるので、更新を忘れられない。
+
+- [ ] **Step 6: 再生成・`pnpm heavy`**
 
 ---
 

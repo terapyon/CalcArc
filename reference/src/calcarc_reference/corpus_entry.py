@@ -11,10 +11,17 @@
 `engine_table.rs` のテスト名や行番号、あるいは `state.rs` のどの規則から
 導いたかを残す。
 
-`state.rs` に直接テストが無い組み合わせ（例: 括弧を開いた直後の表示、
+`engine_table.rs` に直接テストが無い組み合わせ（例: 括弧を開いた直後の表示、
 `+/-` の直後に新しい桁を打った場合の表示）は、`crates/calcarc-core` を
 `path` 依存にした使い捨ての Rust バイナリで `reduce`/`render` を直に呼んで
 実測した（`crates/` はコミット対象からは触っていない）。推測はしていない。
+
+**その 10 件は、他の 25 件より弱い。** 仕様書（`engine_table.rs`）は人が
+「こうあるべき」と書いたものだが、実装から導いて engine で確かめた値は
+engine が「いまこう振る舞う」と言っただけのものである。**engine の欠陥は
+そこに写るので、その 10 件は欠陥を見つけられない——退行を留めるだけである。**
+内訳は `max_entry_len` の 3 件目、`paren_open` の 4 件、`sign_toggle` の
+5 件で、`_provenance()` にも書いてある（レポートが読む先はそちら）。
 """
 
 from __future__ import annotations
@@ -36,6 +43,11 @@ def _provenance() -> str:
         "（打鍵中の表示の規則はそこにしか無い）。"
         "SymPy/mpmath は使っていない。Python が独立に計算した値ではない"
         "——外部参照ではなく仕様書からの写しである（設計書 §4.1）。"
+        " なお 35 件のうち 10 件（max_entry_len の 3 件目、paren_open の 4 件、"
+        "sign_toggle の 5 件）は engine_table.rs に対応するテストが無く、"
+        "実装（state.rs）から導いて engine を走らせて確かめた値である。"
+        "仕様書の写しですらないので、engine の欠陥は見つけられない"
+        "——いまの挙動を留めるだけである。"
     )
 
 

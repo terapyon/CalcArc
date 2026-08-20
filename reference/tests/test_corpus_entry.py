@@ -88,6 +88,18 @@ def test_the_provenance_names_the_calculator_spec_not_an_independent_reference()
     assert "dps)" not in generated_by
     # 「独立に計算した値ではない」ことを文中で明言している。
     assert "独立" in generated_by
+    # **仕様書の写しですらない 10 件を、素性が名指ししている。**
+    # `max_entry_len` の 3 件目・`paren_open` の 4 件・`sign_toggle` の
+    # 5 件は `engine_table.rs` に対応するテストが無く、実装(`state.rs`)から
+    # 導いて engine を走らせて確かめた値である——engine の欠陥はその値に
+    # そのまま写るので、この 10 件は欠陥を見つけられない(退行を留めるだけ)。
+    # レポートが `generated_by` だけを読んで「仕様書からの写し 35 件」と
+    # 書くと、その 10 件について実際より強い主張になる。
+    assert "10 件" in generated_by
+    assert "engine の欠陥は見つけられない" in generated_by
+    # 名指しした 10 件が実際にその数であること。素性の文と実物がずれたら赤。
+    weaker = len(max_entry_len_cases()[2:]) + len(paren_open_cases()) + len(sign_toggle_cases())
+    assert weaker == 10
 
 
 def test_the_shard_has_the_schema_and_no_tolerance() -> None:
