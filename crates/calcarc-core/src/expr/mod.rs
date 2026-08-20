@@ -70,6 +70,15 @@ pub fn unit_set_from_str(text: &str) -> CalcResult<UnitSet> {
     }
 }
 
+/// 式を評価して**有理数のまま**返す。
+///
+/// `evaluate_to_integer` は床関数で u128 に落とし、`evaluate_to_percent` は
+/// 4 桁の文字列に落とす。**単位換算はどちらの着地もできない**——落とした時点で
+/// 換算の意味が消える(U-1 spec §1-1)。**ここは着地しないための出口である。**
+pub fn evaluate_to_rational(text: &str, units: UnitSet) -> CalcResult<Rational> {
+    parse::evaluate(text, units)
+}
+
 /// 式を評価して整数へ着地させる。`maximum` は項目の上限。
 pub fn evaluate_to_integer(text: &str, maximum: u128, units: UnitSet) -> CalcResult<u128> {
     let landed = parse::evaluate(text, units)?.floor_to_u128()?;
@@ -181,6 +190,45 @@ mod tests {
         assert_eq!(
             evaluate_to_integer("100*12+1", 1200, UnitSet::Months),
             Err(CalcError::Overflow)
+        );
+    }
+
+    #[test]
+    fn a_rational_lands_without_being_floored() {
+        // **`evaluate_to_integer` は床関数で落とす。** 換算は落としてはいけない。
+        let value = evaluate_to_rational("25.4", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (127, 5));
+    }
+
+    #[test]
+    fn an_expression_lands_as_a_rational() {
+        let value = evaluate_to_rational("5*12", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (60, 1));
+    }
+
+    #[test]
+    fn a_third_stays_a_third() {
+        // **f64 を経由しない**ことがここで見える。1/3 は 10 進で終わらない。
+        let value = evaluate_to_rational("1/3", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (1, 3));
+    }
+
+    #[test]
+    fn the_empty_text_is_a_syntax_error() {
+        assert_eq!(
+            evaluate_to_rational("", UnitSet::None),
+            Err(CalcError::SyntaxError)
+        );
+    }
+
+    #[test]
+    fn a_leading_minus_is_still_not_the_parsers_job() {
+        // **単項マイナスは構文解析器に無い**(parse.rs:119-131)。この事実を固定する
+        // ——`convert` の入口が符号を担う理由がここにある(計画の裁定 2)。
+        // この検査が赤くなったら、parse.rs が変わったということである。
+        assert_eq!(
+            evaluate_to_rational("-40", UnitSet::None),
+            Err(CalcError::SyntaxError)
         );
     }
 }
