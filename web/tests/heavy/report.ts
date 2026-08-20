@@ -953,6 +953,223 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
   ];
 }
 
+/**
+ * **期待値の出どころが「電卓の仕様書」であることの目印。**
+ *
+ * シャードの素性(`generated_by`)は Python 側が書いており、
+ * `reference/src/calcarc_reference/corpus_entry.py` の `_provenance()` は
+ * この語をわざと入れている——「外部参照ではなく仕様書からの写しである」。
+ * **版数を書けるほど何かを計算していない、ということ自体が証拠である。**
+ *
+ * **`engine_table.rs` の文字で選ばない。** `errors-000.json` の素性にも
+ * その名前が出るが、そちらは「`engine_table.rs` / `state.rs` /
+ * `expr/parse.rs` を**見ずに**数学だけから決めた」という文脈で出ている。
+ * ファイル名で選ぶと、外部参照のシャードが写しの枠に落ちる。
+ */
+export const SPEC_TRANSCRIPTION_MARK = "仕様書からの写し";
+
+/**
+ * **素性が「仕様書の写しですらない」件数を宣言している形。**
+ *
+ * `entry-000.json` の素性は「36 件のうち 10 件(…)は … 実装から導いて
+ * engine を走らせて確かめた値である」と書いている。その 10 件は仕様書に
+ * 対応する規則が無く、**engine の欠陥がそのまま期待値に写る**ので、
+ * 欠陥を見つけられない。報告書はこの内訳を素性から読む——手で書き写すと、
+ * コーパスが変わった日に古い数字だけが残る。
+ */
+const WEAKER_THAN_TRANSCRIPTION = /(\d+)\s*件のうち\s*(\d+)\s*件/;
+
+/** 検証の強さの枠。**3 つを 1 つの数字に畳まない。** */
+export type VerificationFrameId =
+  | "external"
+  | "self-equivalence"
+  | "spec-transcription";
+
+export const VERIFICATION_FRAME_TITLES: Record<VerificationFrameId, string> = {
+  external: "外部参照",
+  "self-equivalence": "自己同値",
+  "spec-transcription": "仕様書からの写し",
+};
+
+/** 枠の見出しの後半。**見出しは 1 か所でしか組み立てない**(`summaryName` と同じ理由)。 */
+const VERIFICATION_FRAME_LEDES: Record<VerificationFrameId, string> = {
+  external: "Python の独立実装と突き合わせたケース",
+  "self-equivalence": "二つのキー列が同じ表示に着くことを見たケース",
+  "spec-transcription": "電卓の仕様書から起こした期待値と照合したケース",
+};
+
+export interface VerificationFrame {
+  id: VerificationFrameId;
+  title: string;
+  /** この枠が数えたケース数。**0 は「この走行では見ていない」。** */
+  cases: number;
+  /** この枠に数を出したシャードの名前。0 件の枠では空である。 */
+  shards: string[];
+  /**
+   * **この枠の中で、枠の名前より弱いケース。**
+   * いまは「仕様書からの写し」の枠だけが持つ——素性が名指しした、
+   * 仕様書に対応する規則が無く実装から導いた件数である。
+   */
+  weaker: number;
+  /**
+   * **素性が内訳を宣言していないシャード。番兵である。**
+   *
+   * 空でなければ、その枠の `weaker` は「弱いケースが無い」ではなく
+   * 「数えられなかった」を意味する。報告書はそれを黙って 0 と書かない。
+   */
+  weakerUnknown: string[];
+}
+
+/**
+ * **検証の強さを 3 つに分ける。**
+ *
+ * - **外部参照** — Python が独立に出した期待値との照合
+ * - **自己同値** — 2 つのキー列が同じ表示に着くことの確認
+ * - **仕様書からの写し** — 電卓の仕様書の規則から起こした期待値(入力途中の表示)
+ *
+ * **3 枠目を作らずに 1 枠目へ混ぜるのが、報告書が一番静かに嘘をつく道である。**
+ * 混ぜると「Python の独立実装と突き合わせた件数」が水増しされる——
+ * 打鍵の途中の表示には数学的な定義が無いので、Python は独立に計算していない。
+ * 混ぜた側の数字はどのテストも見ていないので、静かに増えるだけで誰も咎めない。
+ *
+ * **同値ケースはどのシャードのものでも 2 枠目に入る。** 期待値を持たない
+ * 検査なので、素性が誰であっても強さは変わらない。
+ */
+export function verificationFrames(
+  entries: ShardSummary[],
+): VerificationFrame[] {
+  const frames = new Map<VerificationFrameId, VerificationFrame>(
+    (Object.keys(VERIFICATION_FRAME_TITLES) as VerificationFrameId[]).map(
+      (id) => [
+        id,
+        {
+          id,
+          title: VERIFICATION_FRAME_TITLES[id],
+          cases: 0,
+          shards: [],
+          weaker: 0,
+          weakerUnknown: [],
+        },
+      ],
+    ),
+  );
+  const add = (id: VerificationFrameId, cases: number, name: string): void => {
+    if (cases === 0) {
+      return;
+    }
+    const frame = frames.get(id);
+    if (frame === undefined) {
+      // 到達しない。`frames` は `VERIFICATION_FRAME_TITLES` の全キーを持つ。
+      return;
+    }
+    frame.cases += cases;
+    if (!frame.shards.includes(name)) {
+      frame.shards.push(name);
+    }
+  };
+  for (const entry of entries) {
+    const transcription = entry.generatedBy.includes(SPEC_TRANSCRIPTION_MARK);
+    add(
+      transcription ? "spec-transcription" : "external",
+      entry.values,
+      entry.name,
+    );
+    add("self-equivalence", entry.equivalences, entry.name);
+    if (!transcription || entry.values === 0) {
+      continue;
+    }
+    const frame = frames.get("spec-transcription");
+    if (frame === undefined) {
+      continue;
+    }
+    const declared = WEAKER_THAN_TRANSCRIPTION.exec(entry.generatedBy)?.[2];
+    if (declared === undefined) {
+      // **黙って 0 にしない。** 素性が内訳を書かなくなったら、報告書は
+      // 「弱いケースは無い」ではなく「数えられなかった」と書く。
+      frame.weakerUnknown.push(entry.name);
+      continue;
+    }
+    frame.weaker += Number(declared);
+  }
+  return [...frames.values()];
+}
+
+/** 枠の見出し 1 本。**本文の箇条書きと、あとから引用する文が同じ文字列を使う。** */
+export function verificationFrameHeadline(frame: VerificationFrame): string {
+  return `${frame.title}——${VERIFICATION_FRAME_LEDES[frame.id]}: ${frame.cases}`;
+}
+
+/** 枠を 1 つ取り出す。無い枠は呼び出し側の綴り間違いなので、空の枠を返さない。 */
+export function verificationFrameOf(
+  frames: VerificationFrame[],
+  id: VerificationFrameId,
+): VerificationFrame {
+  const frame = frames.find((f) => f.id === id);
+  if (frame === undefined) {
+    throw new Error(`report: no verification frame called ${id}`);
+  }
+  return frame;
+}
+
+/** 枠ごとの、件数のあとに続く説明。 */
+const VERIFICATION_FRAME_NOTES: Record<VerificationFrameId, string[]> = {
+  external: [
+    "  Rust の計算コアと Python の独立実装が、同じ答えに別々の道で着くことを",
+    "  確かめた件数。**外の基準を持っているのはこの枠だけである。**",
+  ],
+  "self-equivalence": [
+    "  二つのキー列の表示が一致することだけを確かめた件数。期待値を持たず、",
+    "  Python は介在しない——電卓が自分自身と矛盾しないことだけを見る。",
+  ],
+  "spec-transcription": [
+    "  打鍵の途中の表示。**「3 と打った直後に何が出るか」に数学の答えは無い**",
+    "  ので、Python は独立に計算していない。期待値は電卓の仕様書",
+    "  (`crates/calcarc-core/tests/engine_table.rs`)の規則から起こした写しで、",
+    "  **仕様書と実装が食い違っていれば捕まえるが、仕様書そのものの誤りは",
+    "  捕まえない。**",
+  ],
+};
+
+/**
+ * 検証の強さの 3 枠を書く。**1 枠に畳まない。**
+ *
+ * 畳んだ数字は「Python の独立実装と突き合わせた件数」として読まれる。
+ * 3 枠目を 1 枠目に混ぜると、その読み方が静かに嘘になる。
+ */
+function renderVerificationFrames(frames: VerificationFrame[]): string[] {
+  return frames.flatMap((frame) => {
+    if (frame.cases === 0) {
+      return [
+        `- **${verificationFrameHeadline(frame)}**`,
+        "  **この走行には 1 件も無い。**",
+      ];
+    }
+    const unknown = frame.weakerUnknown.map((name) => `\`${name}\``).join("・");
+    return [
+      `- **${verificationFrameHeadline(frame)}**`,
+      ...VERIFICATION_FRAME_NOTES[frame.id],
+      // **番兵。** 素性が内訳を書かなくなったら、黙って 0 と書かずに言う。
+      ...(frame.weakerUnknown.length === 0
+        ? []
+        : [
+            `  - **${unknown} の内訳は読めなかった。**`,
+            "    このシャードの中に、仕様書に対応する規則を持たないケースが",
+            "    何件あるのかを、シャード自身の記録から数えられなかった。",
+            "    **0 件という意味ではない。**",
+          ]),
+      ...(frame.weaker === 0
+        ? []
+        : [
+            `  - **そのうち ${frame.weaker} 件は、仕様書の写しですらない。**`,
+            "    仕様書に対応する規則が無く、実装から導いて電卓を走らせ、出た",
+            "    表示をそのまま期待値にしたものである。**電卓の欠陥はその期待値",
+            `    にも写るので、この ${frame.weaker} 件は欠陥を見つけられない**`,
+            "    ——いまの挙動を留めるだけである。",
+          ]),
+    ];
+  });
+}
+
 export function renderReport(
   entries: ShardSummary[],
   provenance: Provenance,
@@ -1028,15 +1245,17 @@ export function renderReport(
     (sum, entry) => sum + entry.relMeasured,
     0,
   );
-  // **経路ごとに分ける。** 合計 4000 を「二経路が同じ数に着くことを確かめた」
+  // **強さごとに分ける。** 合計 4000 を「二経路が同じ数に着くことを確かめた」
   // の直下に置くと、独立した二経路の証拠が 2 倍に見える。実際に Python が
   // 介在するのは値ケースだけで、同値ケースは電卓の自己整合しか見ていない
   // (敵対者レビュー 2026-08-15 の開示要求)。
-  const valueCases = entries.reduce((sum, entry) => sum + entry.values, 0);
-  const equivalenceCases = entries.reduce(
-    (sum, entry) => sum + entry.equivalences,
-    0,
-  );
+  //
+  // **そして「値ケース」も一枚岩ではない。** `entry-000.json`(打鍵の途中の
+  // 表示)の期待値は Python が独立に計算したものではなく、電卓の仕様書から
+  // 起こした写しである。値ケースの合計に混ぜると「Python の独立実装と
+  // 突き合わせた件数」が水増しされ、しかもそれを見ているテストが 1 つも
+  // 無い——静かに増えるだけになる。だから 3 つに分ける。
+  const frames = verificationFrames(entries);
   const lines = [
     ...(missing.length === 0
       ? []
@@ -1077,10 +1296,9 @@ export function renderReport(
     "",
     "## 数えたもの",
     "",
-    `- **二経路で照合したケース(値): ${valueCases}** ` +
-      "— Rust の計算コアと Python の独立実装が、同じ答えに別々の道で着くことを確かめた件数",
-    `- **電卓の自己整合を見たケース(同値): ${equivalenceCases}** ` +
-      "— 二つのキー列の表示が一致することだけを確かめた件数。Python は介在しない",
+    "**確かめ方は 1 種類ではない。強さの違う 3 つを、混ぜずに数える。**",
+    "",
+    ...renderVerificationFrames(frames),
     `- 合計: **${total}**`,
     `- 不一致: **${failed}**`,
     `- 観測された最大相対誤差: **${relativeQuantity(maxRelativeError, relMeasured)}**`,
@@ -1097,9 +1315,9 @@ export function renderReport(
     "",
     "## どうやって確かめているか",
     "",
-    "**独立した二つの経路が関与するのは、値ケースの側だけである。**",
+    "**独立した二つの経路が関与するのは、外部参照の枠だけである。**",
     "",
-    "- **値ケース。** 生成器は**式木**を 1 本作り、そこから二つの表現を",
+    "- **外部参照(値ケース)。** 生成器は**式木**を 1 本作り、そこから二つの表現を",
     "  描き出す。一つは**キー列**(`lparen 3 add 4 rparen eq` のような、実際に",
     "  押すボタンの列)で、これを Rust の計算コアが wasm として食べる。",
     "  もう一つが**数式テキスト**(`(3 + 4)`)である。",
@@ -1116,9 +1334,16 @@ export function renderReport(
     "  取り出して手で検算するための描画であって、それを読んで値を出す経路は",
     "  どこにも無い。したがって `expr` の記法に誤りがあっても、このコーパスの",
     "  合否は変わらない。",
-    "- **同値ケース。** 期待値を持たない。数学的に等しい二つのキー列",
+    "- **自己同値(同値ケース)。** 期待値を持たない。数学的に等しい二つのキー列",
     "  (`x` と `√(x²)`、`neg(neg(x))`、`x + 0`)の表示が一致することだけを",
     "  主張する。ここでは Python は介在せず、電卓が自分自身と矛盾しないことを見る。",
+    "- **仕様書からの写し。** 打鍵の途中の表示——`=` を押す前に画面に何が",
+    "  出ているか——だけがこの枠に入る。**ここには外の基準が無い。** `3` を",
+    "  打った直後に `3` が出ることや、`+/-` を押すと `-3` になることは、",
+    "  数学が決めていることではなく、この電卓がそう決めたことである。だから",
+    "  期待値は電卓の仕様書(`crates/calcarc-core/tests/engine_table.rs`)の",
+    "  規則から書き起こしてある。**仕様書と実装の食い違いは捕まえるが、",
+    "  仕様書そのものの誤りは捕まえない。**",
     "",
     "### 同値ケースが単独では捕まえられないもの",
     "",
@@ -1135,8 +1360,10 @@ export function renderReport(
     // 測定時点と当時の母数を明示して、過去の測定として書く。
     "ほぼ全件が不一致になった(実測: **当時の値ケース 2000 件中 1996 件**。",
     "一度きりの測定で、この走行で測り直した数字ではない)。",
-    "外の基準——Python が独立に出した期待値——を持っているのは値ケースだけなので、",
-    "上の件数もその 2 つを分けて出している。",
+    "外の基準——Python が独立に出した期待値——を持っているのは外部参照の枠だけで、",
+    "自己同値の枠にも仕様書からの写しの枠にもそれは無い。だから上の件数は",
+    "**3 つに分けて出している**——1 つの数字にまとめると、外の基準と",
+    "突き合わせた件数が、外の基準を持たないケースの分だけ水増しされる。",
     "",
     "**同値ケースの誤差が全件厳密に 0 なのは、選んだ変換の帰結である。**",
     "`√(x²)`・`neg(neg(x))`・`x + 0` はいずれも f64 の上で厳密に往復する",
@@ -1217,6 +1444,11 @@ export function renderReport(
     "",
     "値が大きいケースほど絶対誤差も大きく出るのが正常である(相対で見る許容は、",
     "絶対値が大きいほど広い絶対誤差を許すため)。判断材料は相対誤差の側を見る。",
+    "",
+    "**「値」の欄を足し上げても「外部参照」の件数にはならない。** この欄は",
+    "**期待値を持つケース**を数えており、その期待値がどこから来たのかは",
+    "区別していない。出どころで分けた件数は上の「数えたもの」にある",
+    "——シャードごとの出どころは、すぐ上の「期待値を作ったもの」に 1 行ずつ出る。",
     "",
     "| シャード | 総数 | 値 | 同値 | 不一致 | 最大相対誤差 | 最大絶対誤差 | " +
       "上書き | 相対誤差が定義できない | 表示分解能より緩い | 最悪の実効相対許容 | 許容 |",
@@ -1939,7 +2171,14 @@ function renderCaveats(
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
   // **F6b fix (fix round 4).** 「上の『4000 件通った』」は以前リテラルで、
   // 2000 件だけの走行でも 4000 と書いた。見出しと同じ集計から出す。
-  const valueCases = entries.reduce((sum, e) => sum + e.values, 0);
+  //
+  // **引くのは「外部参照」の枠の見出しである(検証の強さの 3 枠)。** ここは
+  // 「その件数は確定値の表示についての主張だ」と断る文で、断る相手は外の
+  // 基準と突き合わせた枠のほうである。打鍵の途中の表示は 3 枠目に居るので、
+  // この文が指しているものと混ざらない。
+  const externalHeadline = verificationFrameHeadline(
+    verificationFrameOf(verificationFrames(entries), "external"),
+  );
   // **N1 fix (review round 3).** The elaboration below (the pinned figure and
   // the associativity caveat) is a specific claim about how
   // `precedence-000.json` was built — it is true only when that shard is
@@ -2082,9 +2321,10 @@ function renderCaveats(
   // 結論には反しない。結論に反するのは `=` を**一度も**押さない列だけである。
   // だから数えるのは末尾のキーではなく `eq` の有無。
   //
-  // **検証の強さを 3 つに分ける話(設計書 §8.3)はここではやらない。**
-  // `entry-000.json` が「外部参照でも自己同値でもない第 3 の枠」であることは
-  // Task 9 の担当で、ここで直すのはいま偽になっている文だけである。
+  // **`entry-000.json` の 36 件は「外部参照」の件数に入っていない。**
+  // 検証の強さの 3 枠(`verificationFrames`)が分けており、それらは 3 枠目
+  // 「仕様書からの写し」に入る。だから下で引く見出しは外部参照の枠のもので、
+  // この項目が数える「`=` を押さないキー列」とは別の数字である。
   const enteringItem =
     withoutEq === 0
       ? [
@@ -2098,7 +2338,7 @@ function renderCaveats(
           // 称する文字列が上に literal には出てこなかった(見出しは「二経路で
           // 照合したケース(値): 4000」)。見出しと同じ集計から、見出しと同じ
           // 言い方で引く。
-          `  **上の「二経路で照合したケース(値): ${valueCases}」は、確定値の表示に`,
+          `  **上の「${externalHeadline}」は、確定値の表示に`,
           "  ついてだけの主張である。**",
         ]
       : [
@@ -2114,8 +2354,10 @@ function renderCaveats(
           "  末尾が `=` でなくても、値を確定させてから記法を切り替えているので、",
           "  読んでいるのは**確定した値の表示**である。だから数えているのは末尾の",
           "  キーではなく、`=` を押したかどうかである。",
-          `  **上の「二経路で照合したケース(値): ${valueCases}」は、いまも確定値の`,
+          `  **上の「${externalHeadline}」は、いまも確定値の`,
           "  表示についてだけの主張である。**",
+          "  **打鍵の途中の表示は、その件数には入っていない。** それは",
+          "  「仕様書からの写し」の枠で別に数えている。",
         ];
   // **但し書きが名指しする「完全に固定の文章」の一覧。**
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
@@ -2401,7 +2643,17 @@ export function writeReport(): void {
   const seen = new Set(recorded.map((entry) => entry.summary.name));
   const missing = expected.filter((name) => !seen.has(name));
   const entries = recorded.map((entry) => entry.summary);
-  const valueCases = entries.reduce((sum, entry) => sum + entry.values, 0);
+  // **数えるのは「外部参照」の枠だけである(検証の強さの 3 枠)。**
+  // 以前ここは値ケースの合計だった。値ケースには打鍵の途中の表示
+  // (`entry-000.json`)も入っており、その期待値は Python が独立に出した
+  // ものではなく電卓の仕様書からの写しである——**そのシャードだけが記録
+  // された走行**では、外の基準と突き合わせたケースが 1 件も無いのに、
+  // この番兵は黙って通していた。すぐ下の文言が言っているのは外部参照の
+  // 枠のことなので、数える対象もそちらに合わせる。
+  const externalCases = verificationFrameOf(
+    verificationFrames(entries),
+    "external",
+  ).cases;
 
   if (entries.length === 0) {
     throw new Error(
@@ -2412,13 +2664,14 @@ export function writeReport(): void {
         "mismatches' and look like a pass.",
     );
   }
-  if (valueCases === 0) {
+  if (externalCases === 0) {
     throw new Error(
-      "report: not a single value case was recorded. The value cases are " +
-        "the only half of this layer that is checked against an outside " +
-        "reference (the expectations Python produced independently); a run " +
-        "of equivalence cases alone verifies nothing but the calculator's " +
-        "agreement with itself. Refusing to write a report for it. " +
+      "report: not a single externally-referenced case was recorded. Those " +
+        "are the only cases in this layer that are checked against an " +
+        "outside reference (the expectations Python produced " +
+        "independently); a run of equivalence cases and spec transcriptions " +
+        "alone verifies nothing but the calculator's agreement with itself " +
+        "and with its own spec. Refusing to write a report for it. " +
         `Recorded: ${[...seen].map((name) => JSON.stringify(name)).join(", ")}.`,
     );
   }

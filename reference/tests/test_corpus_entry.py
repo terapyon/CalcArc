@@ -94,6 +94,12 @@ def test_the_provenance_names_the_calculator_spec_not_an_independent_reference()
     assert "dps)" not in generated_by
     # 「独立に計算した値ではない」ことを文中で明言している。
     assert "独立" in generated_by
+    # **レポートが第 3 枠を選ぶ目印そのもの**(`web/tests/heavy/report.ts` の
+    # `SPEC_TRANSCRIPTION_MARK`)。ファイル名では選べない——`errors-000.json`
+    # の素性にも `engine_table.rs` の名前が出るが、そちらは「それを**見ずに**
+    # 数学だけから決めた」という文脈である。この語が消えると、このシャードは
+    # 静かに「外部参照」の件数に混ざる。
+    assert "仕様書からの写し" in generated_by
     # **仕様書の写しですらない 10 件を、素性が名指ししている。**
     # `max_entry_len` の 3 件目・`paren_open` の 4 件・`sign_toggle` の
     # 5 件は `engine_table.rs` に対応するテストが無く、実装(`state.rs`)から

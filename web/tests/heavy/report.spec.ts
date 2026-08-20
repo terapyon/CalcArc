@@ -41,8 +41,11 @@ import {
   renderReport,
   runHealth,
   type ShardSummary,
+  SPEC_TRANSCRIPTION_MARK,
   summaryName,
   verdictOf,
+  verificationFrameOf,
+  verificationFrames,
 } from "./report";
 
 const TOLERANCE = { abs: 1e-9, rel: 1e-9 };
@@ -381,9 +384,13 @@ test("headline numbers aggregate correctly across multiple shards", () => {
     PROVENANCE,
   );
 
-  // 合計は 2 シャードの合算(2000 + 2000)だが、**経路ごとに分けて**出る。
-  expect(markdown).toContain("二経路で照合したケース(値): 2000**");
-  expect(markdown).toContain("電卓の自己整合を見たケース(同値): 2000**");
+  // 合計は 2 シャードの合算(2000 + 2000)だが、**検証の強さごとに分けて**出る。
+  expect(markdown).toContain(
+    "外部参照——Python の独立実装と突き合わせたケース: 2000**",
+  );
+  expect(markdown).toContain(
+    "自己同値——二つのキー列が同じ表示に着くことを見たケース: 2000**",
+  );
   expect(markdown).toContain("合計: **4000**");
   // 最大相対誤差・最大絶対誤差は 2 シャードのうち大きい方(シャード 1)を拾う。
   expect(markdown).toContain("観測された最大相対誤差: **1.34e-9**");
@@ -1154,7 +1161,8 @@ test("the adversarial-fake measurement says when it was taken and over what", ()
 test("the input-display caveat quotes the headline's own number", () => {
   // **F6b (fix round 4).** 「上の「4000 件通った」」 was a literal — it said
   // 4000 for a 2000-case run, and the phrase it claimed to quote never
-  // appeared above (the headline reads 「二経路で照合したケース(値): 4000」).
+  // appeared above (the headline now reads
+  // 「外部参照——Python の独立実装と突き合わせたケース: 4000」).
   const markdown = renderReport(
     [
       summary({
@@ -1166,8 +1174,9 @@ test("the input-display caveat quotes the headline's own number", () => {
     ],
     PROVENANCE,
   );
-  expect(markdown).toContain("**二経路で照合したケース(値): 1234**");
-  expect(markdown).toContain("上の「二経路で照合したケース(値): 1234」");
+  const headline = "外部参照——Python の独立実装と突き合わせたケース: 1234";
+  expect(markdown).toContain(`**${headline}**`);
+  expect(markdown).toContain(`上の「${headline}」`);
   expect(markdown).not.toContain("4000 件通った");
 });
 
@@ -2035,4 +2044,233 @@ test("a run with no call shard has no call breakdown section at all", () => {
     "## 関数呼び出しの内訳",
   );
   expect(renderCallBreakdowns([summary()])).toEqual([]);
+});
+
+/**
+ * 実物のコーパスから、素性(`generated_by`)を持ったままの集計を組み立てる。
+ *
+ * **素性を見本の `mpmath 1.3.0 …` で埋めない。** 検証の強さの枠を決めて
+ * いるのは素性そのものなので、埋めた瞬間に全シャードが「外部参照」に落ち、
+ * この検査は何も見なくなる。
+ */
+function realSummaries(): ShardSummary[] {
+  return [
+    ...loadShards().flatMap(({ name, shard }) => {
+      const { values, equivalences } = partitionCases(name, shard.cases);
+      return [
+        ...(values.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "values"),
+                total: shard.cases.length,
+                values: values.length,
+                equivalences: 0,
+                generatedBy: shard.generated_by,
+              }),
+            ]
+          : []),
+        ...(equivalences.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "equivalences"),
+                total: shard.cases.length,
+                values: 0,
+                equivalences: equivalences.length,
+                generatedBy: shard.generated_by,
+              }),
+            ]
+          : []),
+      ];
+    }),
+    ...loadDisplayShards().map(({ name, shard }) => {
+      const displays = shard.cases.filter((c) => c.kind === "display").length;
+      return summary({
+        name: summaryName(name, "displays"),
+        total: shard.cases.length,
+        values: displays,
+        equivalences: shard.cases.length - displays,
+        generatedBy: shard.generated_by,
+      });
+    }),
+    ...loadCallShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "calls"),
+        total: shard.cases.length,
+        values: shard.cases.length,
+        equivalences: 0,
+        generatedBy: shard.generated_by,
+      }),
+    ),
+  ];
+}
+
+test("the entry shard is counted as a spec transcription, never as an outside reference", () => {
+  // **これがこの節の主眼である(設計書 §8.3)。** `entry-000.json` の期待値は
+  // Python が独立に計算したものではなく、電卓の仕様書
+  // (`engine_table.rs` / `state.rs`)から起こした写しである。1 枠目に混ぜると
+  // 「Python の独立実装と突き合わせた件数」が 36 件ぶん水増しされ、しかも
+  // それを見ているものが何も無い——**静かに増えるだけになる。**
+  //
+  // **見本ではなく実物のコーパスの素性で見る。**
+  const entries = realSummaries();
+  expect(
+    entries.length,
+    "コーパスから 1 枚も読めなかった——この検査は何も見ていない",
+  ).toBeGreaterThan(0);
+
+  const frames = verificationFrames(entries);
+  expect(frames.map((f) => f.id)).toEqual([
+    "external",
+    "self-equivalence",
+    "spec-transcription",
+  ]);
+  const external = verificationFrameOf(frames, "external");
+  const transcription = verificationFrameOf(frames, "spec-transcription");
+
+  // **3 枠目に居るのは打鍵の途中の表示だけである。** 名前で選んでいるのでは
+  // なく素性で選んでいるので、ここが増えたら素性が増えたということ。
+  expect(transcription.shards).toEqual([summaryName(ENTRY_SHARD, "displays")]);
+  expect(transcription.cases).toBe(36);
+
+  // **1 枠目に混ざっていない。** シャードの名前としても、件数としても。
+  expect(external.shards).not.toContain(summaryName(ENTRY_SHARD, "displays"));
+  const allValues = entries.reduce((sum, e) => sum + e.values, 0);
+  expect(external.cases).toBe(allValues - transcription.cases);
+  expect(
+    external.cases,
+    "外部参照の枠が空——この検査は 1 枠目について何も見ていない",
+  ).toBeGreaterThan(0);
+
+  // **行を 1 本だけ取り出して主張する。** 「どこかに 36 と書いてある」検査は、
+  // 3 枠を 1 つに畳んだ実装でも緑になる。
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(
+    onlyLine(markdown, "- **外部参照——Python の独立実装と突き合わせたケース"),
+  ).toContain(`: ${external.cases}**`);
+  expect(
+    onlyLine(markdown, "- **仕様書からの写し——電卓の仕様書から起こした期待値"),
+  ).toContain(`: ${transcription.cases}**`);
+  // 畳んだ数字がどこにも出ていないこと。
+  expect(markdown).not.toContain(
+    `外部参照——Python の独立実装と突き合わせたケース: ${allValues}`,
+  );
+});
+
+test("no other shard claims to be a spec transcription", () => {
+  // **番兵。** 枠を決めているのは素性の中の 1 語なので、その語が別のシャードの
+  // 素性に紛れ込めば、外部参照が静かに写しの枠へ落ちる。**`errors-000.json` は
+  // 実際に危ない**——その素性は「`engine_table.rs` / `state.rs` /
+  // `expr/parse.rs` を**見ずに**数学だけから決めた」と書いており、ファイル名で
+  // 選ぶ実装ならここで写しの枠に落ちる。落ちても件数の合計は変わらないので、
+  // 表を読まない限り誰も気付かない。
+  const pedigrees = [
+    ...loadShards().map(({ name, shard }) => [name, shard.generated_by]),
+    ...loadDisplayShards().map(({ name, shard }) => [name, shard.generated_by]),
+    ...loadCallShards().map(({ name, shard }) => [name, shard.generated_by]),
+  ] as [string, string][];
+  expect(
+    pedigrees.length,
+    "コーパスから 1 枚も読めなかった——この検査は何も見ていない",
+  ).toBeGreaterThan(1);
+
+  const transcriptions = pedigrees
+    .filter(([, by]) => by.includes(SPEC_TRANSCRIPTION_MARK))
+    .map(([name]) => name);
+  expect(transcriptions).toEqual([ENTRY_SHARD]);
+
+  // `errors-000.json` は外部参照の側に居ること。**名前で選ぶ実装なら赤くなる。**
+  const errors = pedigrees.find(([name]) => name === ERRORS_SHARD);
+  expect(errors?.[1]).toContain("engine_table.rs");
+  expect(errors?.[1]).not.toContain(SPEC_TRANSCRIPTION_MARK);
+});
+
+/**
+ * `reference/tests/test_corpus_entry.py` が固定している「仕様書の写しですら
+ * ない」件数を、テストのソースそのものから読み出す。
+ */
+function pinnedWeakerEntryCases(): number {
+  const source = readFileSync(
+    fileURLToPath(
+      new URL("../../../reference/tests/test_corpus_entry.py", import.meta.url),
+    ),
+    "utf-8",
+  );
+  const match = /^\s*assert weaker == (\d+)\s*$/m.exec(source);
+  const figure = match?.[1];
+  if (figure === undefined) {
+    throw new Error(
+      "reference/tests/test_corpus_entry.py no longer contains an " +
+        "`assert weaker == <n>` line — the report's figure for how many " +
+        "entry cases are not even transcriptions is pinned to that assert, " +
+        "so either restore it or move the pin somewhere this test can read",
+    );
+  }
+  return Number(figure);
+}
+
+test("the report says which cases are not even transcriptions", () => {
+  // **3 枠目の中身は一様ではない。** 36 件のうち 10 件は仕様書に対応する規則が
+  // 無く、実装から導いて電卓を走らせた値をそのまま期待値にしている。**電卓の
+  // 欠陥はその期待値にも写るので、その 10 件は欠陥を見つけられない。**
+  // 枠の件数だけを出すと、36 件すべてが仕様書に裏打ちされているように読める。
+  //
+  // 件数は報告書が数え直しているものではなく、シャード自身の素性から読む。
+  // その素性が正しいことは Python 側の
+  // `test_the_provenance_names_the_calculator_spec_not_an_independent_reference`
+  // が実物のケース列から数えて固定している。**片方だけを直しても赤くなる。**
+  const entries = realSummaries();
+  const transcription = verificationFrameOf(
+    verificationFrames(entries),
+    "spec-transcription",
+  );
+  expect(
+    transcription.weakerUnknown,
+    "素性から内訳が読めなかった——報告書は件数を書けない",
+  ).toEqual([]);
+  expect(transcription.weaker).toBe(pinnedWeakerEntryCases());
+  expect(transcription.weaker).toBeGreaterThan(0);
+  expect(transcription.weaker).toBeLessThan(transcription.cases);
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **付録の「走行の環境」にも同じ語が出る**(シャードの素性そのものが
+  // そう書いている)。本文の項目の側の行を取る。
+  const line = onlyLine(markdown, "件は、仕様書の写しですらない。**");
+  expect(line).toContain(`${transcription.weaker} 件`);
+  expect(markdown).toContain("欠陥を見つけられない");
+});
+
+test("a run of nothing but spec transcriptions leaves the outside-reference frame empty", () => {
+  // **番兵の側も見る。** 「外の基準と突き合わせたケースが 1 件も無い走行は
+  // 報告書を書かない」という門が、値ケースの合計を数えていた時期には、
+  // `entry-000.json` だけの走行を通してしまう。通れば「不一致 0」の緑の
+  // 報告書が出る——外の基準に一度も当てていない走行について、である。
+  const entry = summary({
+    name: summaryName(ENTRY_SHARD, "displays"),
+    total: 36,
+    values: 36,
+    equivalences: 0,
+    generatedBy: `${SPEC_TRANSCRIPTION_MARK}である`,
+  });
+  const frames = verificationFrames([entry]);
+  expect(verificationFrameOf(frames, "external").cases).toBe(0);
+  expect(verificationFrameOf(frames, "spec-transcription").cases).toBe(36);
+
+  // **`writeReport()` の門はこの枠の件数を読む**ので、この走行は報告書を
+  // 書かずに落ちる。
+
+  // 枠が空であることが報告書の上でも読めること(0 件を黙って落とさない)。
+  const markdown = renderReport([entry], PROVENANCE);
+  expect(
+    onlyLine(markdown, "- **外部参照——Python の独立実装と突き合わせたケース"),
+  ).toContain(": 0**");
+  expect(markdown).toContain("**この走行には 1 件も無い。**");
+
+  // **内訳を宣言しない素性は、黙って「弱いケース 0 件」にならない。**
+  expect(
+    verificationFrameOf(frames, "spec-transcription").weakerUnknown,
+  ).toEqual([summaryName(ENTRY_SHARD, "displays")]);
+  expect(onlyLine(markdown, "の内訳は読めなかった")).toContain(
+    summaryName(ENTRY_SHARD, "displays"),
+  );
+  expect(markdown).toContain("**0 件という意味ではない。**");
 });
