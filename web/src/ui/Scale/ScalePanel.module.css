@@ -1,12 +1,16 @@
+/* 器は縦を 1 行しか使わない(S-0 §4.1)。**幅は器が決める**——`<main>` は
+   ブロックなので、指定が無いと器は viewport 幅まで伸び、中のカテゴリ
+   `<select>` が PC で 1280px の帯になる(実測 2026-08-20)。盤面と同じ
+   `--shell-max-width` で頭打ちにして中央へ寄せる。
+
+   **`.panel` 側の `width: 100%` と対である**——ここが flex の器である以上、
+   子の `margin: 0 auto` は交差軸の stretch を止める(DataScalePanel と
+   TransferPanel がそれで痩せていた。ConvertPanel と同じ壊れ方)。 */
 .scale {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.category {
-  min-height: var(--touch-target-min);
-  font-size: var(--key-font-size-function);
-  background: var(--display-bg);
-  color: var(--display-fg);
+  width: 100%;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
 }

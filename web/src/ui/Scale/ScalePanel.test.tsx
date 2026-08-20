@@ -18,7 +18,13 @@ describe("ScalePanel", () => {
       (o) => o.textContent,
     );
     // **件数を主張する。** ループだけだと、選択肢が 0 個になった日も緑になる。
-    expect(labels).toEqual(["データ量", "LLM のメモリ", "データ転送"]);
+    // **日英を併記する**(U-0 §9 の【変更 2026-08-20】)。日本語だけに戻すと
+    // Convert の `データ量`(単位換算)と見分けが付かなくなる。
+    expect(labels).toEqual([
+      "データ量 Data Scale",
+      "LLM のメモリ LLM Memory",
+      "データ転送 Data Transfer",
+    ]);
   });
 
   it("moves the hash when the category changes", async () => {

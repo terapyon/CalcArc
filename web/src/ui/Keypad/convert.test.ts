@@ -5,6 +5,7 @@ import {
 } from "../../convert/types";
 import {
   CATEGORY_LABELS,
+  CATEGORY_LABELS_EN,
   CONVERT_SECTIONS,
   UNIT_LABELS,
   unitSections,
@@ -190,6 +191,23 @@ describe("Convert のキー集合", () => {
     expect(CATEGORY_LABELS.volume).toBe("体積");
     expect(CATEGORY_LABELS.speed).toBe("速さ");
     expect(CATEGORY_LABELS["data-size"]).toBe("データ量");
+  });
+
+  it("names every category in English too", () => {
+    // **併記のための表**(U-0 §9 の【変更 2026-08-20】)。日本語の表と鍵が
+    // 揃っていないと、盤面が `undefined` を連結して出す。
+    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual([
+      ...CONVERT_CATEGORY_TOKENS,
+    ]);
+    expect(CATEGORY_LABELS_EN.length).toBe("Length");
+    expect(CATEGORY_LABELS_EN.mass).toBe("Mass");
+    expect(CATEGORY_LABELS_EN.temperature).toBe("Temperature");
+    expect(CATEGORY_LABELS_EN.area).toBe("Area");
+    expect(CATEGORY_LABELS_EN.volume).toBe("Volume");
+    expect(CATEGORY_LABELS_EN.speed).toBe("Speed");
+    // **Scale の `data-scale` は `Data Scale`** である。日本語はどちらも
+    // `データ量` で、**英語だけが 2 つの系統を分けている**(U-2 §2)。
+    expect(CATEGORY_LABELS_EN["data-size"]).toBe("Data Size");
   });
 
   it("writes the basis into the name where the unit has more than one", () => {
