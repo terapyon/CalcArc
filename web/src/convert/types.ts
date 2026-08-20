@@ -54,8 +54,10 @@ export type ConvertUnitToken = (typeof CONVERT_UNIT_TOKENS)[number];
 /**
  * calcarc-wasm の `convert()` に対応。
  *
- * narrowing の根拠は、この経路が通る 3 つのファイルが上の 3 つしか作らない
- * こと(`expr/parse.rs`・`expr/rational.rs`・`convert/format.rs`)。
+ * narrowing の根拠は、この経路で `CalcError` を作る 4 か所が上の 3 種しか作らないこと
+ * ——`expr/parse.rs`・`expr/rational.rs`・`convert/format.rs` と、**`convert/mod.rs` 自身**
+ * (カテゴリ不一致の入口検査が `SyntaxError` を作る)。`TrigPole` と `DomainError` は
+ * リポジトリ全体で `error.rs` の enum 定義以外に一度も構築されていない。
  */
 export interface ConvertResult {
   text: string | null;
