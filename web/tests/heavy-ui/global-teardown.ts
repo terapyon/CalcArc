@@ -17,7 +17,15 @@ export default function globalTeardown(): void {
   // **要約を先に書く。** 投げてから書くと、**失敗した走行ほど何も残らない**
   // ——測定側が一番知りたい場合に、一番分からなくなる。
   writeRunJson(buildRun(ledger, plan, findings));
-  for (const finding of findings) {
-    console.error(`heavy-ui: ${finding.kind}: ${finding.message}`);
+  if (findings.length > 0) {
+    throw new Error(
+      [
+        `heavy-ui: ${findings.length} problem(s) with what this run actually ` +
+          "pressed:",
+        ...findings.map(
+          (finding) => `  - [${finding.kind}] ${finding.message}`,
+        ),
+      ].join("\n"),
+    );
   }
 }

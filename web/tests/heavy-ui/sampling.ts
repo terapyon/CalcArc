@@ -8,6 +8,7 @@ import {
 } from "../heavy/corpus";
 import { BUTTON_FOR } from "./keys";
 import { REQUIRED_KEYS, type TypingPlan } from "./presses";
+import { selectSample } from "./select";
 
 /**
  * **どのケースを盤面から打つか。**
@@ -42,23 +43,6 @@ export interface Selection<T> {
 /** 盤面から打てるキー列か。ボタンの無いトークンが 1 つでもあれば打てない。 */
 export const typeable = (keys: string[]): boolean =>
   keys.every((key) => BUTTON_FOR.has(key as KeyToken));
-
-/** 等間隔に選ぶ。先頭だけ通すと、生成の後半の形をまったく踏まない。 */
-function spread(count: number, length: number): number[] {
-  const step = length / count;
-  return Array.from({ length: count }, (_, i) => Math.floor(i * step));
-}
-
-/** 代表を選ぶ。 */
-export function selectSample<T extends { keys: string[] }>(
-  items: T[],
-  count: number,
-): T[] {
-  if (items.length <= count) {
-    return items;
-  }
-  return spread(count, items.length).map((index) => items[index] as T);
-}
 
 export type ValueSelection = Selection<ValueCase> & {
   tolerance: ReturnType<typeof loadShards>[number]["shard"]["tolerance"];
