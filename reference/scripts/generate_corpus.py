@@ -704,7 +704,50 @@ def _inject_typo(node: Node, rng: random.Random) -> Node:
     return rebuild(node)
 
 
-CORRECTION_FORMS = 2
+def _error_inducing_key_sequences() -> tuple[tuple[str, ...], ...]:
+    """`errors-000.json` の 9 経路のうち、実際にエラーになる列だけを取り出す。
+
+    アンダーフローの 2 件(`value_range_cases` の後半)は `expect.error` を
+    持たない(丸め潰れは値域を外れたことにならない、`corpus_errors.py` の
+    モジュール docstring)ので、ここには入らない。**エラー状態を作るための
+    プールなので、実際にエラーになる列だけが要る。**
+
+    **`lparen`/`rparen` を持つ列(`unbalanced_parenthesis_cases`)も除く。**
+    実装時の赤確認で判明した制約: `corrections-000.json` の `right` は
+    「エラー列 + ガベージ + `ac` + 正しい列」を 1 本のキー列として持つので、
+    `right` 全体をそのキー列だけ見て解釈するコード(`web/tests/heavy/corpus.ts`
+    の `needsPrecedence`、報告専用の優先順位検出)は `ac` が構文の巻き戻しに
+    なることを知らない。`unbalanced_parenthesis_cases` はわざと対応しない
+    `rparen` を含む列(`["rparen"]` や `["3","add","4","rparen"]`)で、これを
+    エラー源に選ぶと `right` が「対応の無い `rparen` を持つキー列」になり、
+    `needsPrecedence` が(壊れた入力を黙って読み違えない設計により)例外を
+    投げて `pnpm heavy` が落ちる——engine 自体は `ac` で正しく復帰しており、
+    壊れているのは engine ではなく報告専用ヒューリスティックの前提である。
+    **他の 7 経路(0 除算・対数/平方根/逆三角の定義域・tan の極・階乗・
+    組合せ・値域)は 1 個も括弧を使わないので、この 2 件だけを除いても
+    プールの多様性はほぼ保たれる。**
+    """
+    cases = build_errors_shard()["cases"]
+    return tuple(
+        tuple(case["keys"])
+        for case in cases
+        if case["expect"].get("error")
+        and "lparen" not in case["keys"]
+        and "rparen" not in case["keys"]
+    )
+
+
+#: `errors-000.json` から起こした、実際にエラーになるキー列のプール
+#: (計画 Task 3、設計書 §5.2)。`build_errors_shard` は乱択を持たない固定の
+#: 列挙なので、ここも固定になる。
+ERROR_INDUCING_KEY_SEQUENCES = _error_inducing_key_sequences()
+
+#: `build_corrections_shard` が積む層(finance の `stratum` と同じ考え方、
+#: 計画 Task 3 Step 2)。`rng.randrange(len(CORRECTION_STRATA))` の添字と
+#: 対応する。
+CORRECTION_STRATA = ("typo-del", "ac-rebuild", "error-recovery", "paren-edit")
+
+CORRECTION_FORMS = len(CORRECTION_STRATA)
 
 
 def build_corrections_shard(seed: int, count: int) -> dict:
@@ -712,9 +755,21 @@ def build_corrections_shard(seed: int, count: int) -> dict:
 
     `ac` と `del` は**打った結果を巻き戻す**キーで、値の意味を持たない。
     だから期待値を持たず、**二つのキー列が同じ表示に着くこと**だけを主張する。
+
+    4 つの層(`CORRECTION_STRATA`)を持つ:
+
+    - `typo-del`: 葉の途中で 1 桁多く打って `del` で消す。
+    - `ac-rebuild`: でたらめに打ってから `ac` で全部消して打ち直す。
+    - `error-recovery`: エラーになる列を打ち、**エラー中に他のキーを
+      押してから**(`keys_other_than_ac_are_ignored_while_in_error`、
+      `engine_table.rs:194`)`ac` で復帰し、正しい列を打つ
+      (`ac_recovers_from_an_error`、`engine_table.rs:189`)。
+    - `paren-edit`: 開いた括弧の中で 1 桁打ってから `del` で消し、
+      別の桁を打つ(計画 Task 3 Step 1)。
     """
     rng = random.Random(seed)
     entries: list[dict] = []
+    strata: list[str] = []
     seen: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
     attempts = 0
     while len(entries) < count:
@@ -723,27 +778,65 @@ def build_corrections_shard(seed: int, count: int) -> dict:
             raise RuntimeError(
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
-        node = _typed_node(rng, MAX_DEPTH - 1)
-        if isinstance(node, Typed):
-            continue
-        try:
-            if not _within_range(node):
+        form = CORRECTION_STRATA[rng.randrange(CORRECTION_FORMS)]
+        if form in ("typo-del", "ac-rebuild", "error-recovery"):
+            node = _typed_node(rng, MAX_DEPTH - 1)
+            if isinstance(node, Typed):
                 continue
-        except OutOfShard:
-            continue
-        clean = to_key_sequence(node)
-        if rng.randrange(CORRECTION_FORMS) == 0:
-            # `del`: 葉の途中で打ち間違えて消す。
-            dirty = to_key_sequence(_inject_typo(node, rng))
+            try:
+                if not _within_range(node):
+                    continue
+            except OutOfShard:
+                continue
+            clean = to_key_sequence(node)
+            if form == "typo-del":
+                # `del`: 葉の途中で打ち間違えて消す。
+                dirty = to_key_sequence(_inject_typo(node, rng))
+            elif form == "ac-rebuild":
+                # `ac`: でたらめに打ってから全部消して打ち直す。
+                dirty = [*GARBAGE_KEYS, "ac", *clean]
+            else:
+                # `error-recovery`: エラーになる列を打ち、エラー中に別の
+                # キーをさらに押してから `ac` で復帰し、正しい列を打つ。
+                # `GARBAGE_KEYS` を「エラー中は無視される」側の主張にも
+                # そのまま使う——中身がでたらめでよいのは変わらない。
+                error_keys = ERROR_INDUCING_KEY_SEQUENCES[
+                    rng.randrange(len(ERROR_INDUCING_KEY_SEQUENCES))
+                ]
+                dirty = [*error_keys, *GARBAGE_KEYS, "ac", *clean]
+            expr = f"{to_expr_text(node)}(訂正あり)"
         else:
-            # `ac`: でたらめに打ってから全部消して打ち直す。
-            dirty = [*GARBAGE_KEYS, "ac", *clean]
+            # `paren-edit`: `a + ( c )` を、括弧の中で 1 桁打ち間違えてから
+            # 直す形で打つ。`b` は必ず 1 個の数字キーにする——1 回の `del` で
+            # 完全に消えて欲しいので、複数キーの葉(小数点や `zeros3` など)
+            # だと最後の 1 キーしか消えず別の形になってしまう。
+            a_leaf = _typed_leaf(rng)
+            c_leaf = _typed_leaf(rng)
+            try:
+                if not _within_range(Bin("+", a_leaf, c_leaf)):
+                    continue
+            except OutOfShard:
+                continue
+            b_digit = str(rng.randint(0, 9))
+            clean = [*to_keys(a_leaf), "add", "lparen", *to_keys(c_leaf), "rparen", "eq"]
+            dirty = [
+                *to_keys(a_leaf),
+                "add",
+                "lparen",
+                b_digit,
+                "del",
+                *to_keys(c_leaf),
+                "rparen",
+                "eq",
+            ]
+            expr = f"{to_expr_text(a_leaf)}+({to_expr_text(c_leaf)})(括弧内で訂正)"
         if dirty == clean:
             continue
         key = (tuple(clean), tuple(dirty))
         if key in seen:
             continue
         seen.add(key)
+        strata.append(form)
         entries.append(
             {
                 "kind": "equivalence",
@@ -751,14 +844,17 @@ def build_corrections_shard(seed: int, count: int) -> dict:
                 "mode": "Deg",
                 "left": clean,
                 "right": dirty,
-                "expr": f"{to_expr_text(node)}(訂正あり)",
+                "expr": expr,
+                "stratum": form,
             }
         )
+    counts = {name: strata.count(name) for name in CORRECTION_STRATA}
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "tolerance": TOLERANCE,
         "cases": entries,
+        "strata": counts,
     }
 
 

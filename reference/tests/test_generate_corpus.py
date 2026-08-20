@@ -1622,3 +1622,116 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     # 印字した 2 つの数の割り算が、印字した 3 つ目と合うこと。表示桁は
     # 4 桁なので、そこに丸めてから比べる。
     assert round(elapsed_ms / printed_total, 4) == each_ms
+
+
+# --- corrections-000.json に足した 2 形(計画 2026-08-19-heavy-scientific-ui-report
+# Task 3、設計書 §5.2)。**この節は値を検算しない**——`ac`/`del` は値の意味を
+# 持たないキーなので、正しさの根拠は `engine_table.rs` の
+# `ac_recovers_from_an_error`(:189)・`keys_other_than_ac_are_ignored_while_in_error`
+# (:194)・`del_removes_the_last_character`(:80)であって、ここは形が
+# 壊れていないことだけを固定する。
+
+
+def test_every_correction_stratum_has_at_least_one_case() -> None:
+    # 計画 Task 3 Step 3: 新形(error-recovery・paren-edit)が 1 件以上あること
+    # を固定する。既存 2 形(typo-del・ac-rebuild)も同じ枠組みで数える
+    # (Task 3 Step 2、finance の stratum と同じ考え方)。
+    shard = generate_corpus.build_corrections_shard(seed=1, count=200)
+    counts: dict[str, int] = {}
+    for case in shard["cases"]:
+        counts[case["stratum"]] = counts.get(case["stratum"], 0) + 1
+    assert set(counts) == set(generate_corpus.CORRECTION_STRATA)
+    for stratum in generate_corpus.CORRECTION_STRATA:
+        assert counts.get(stratum, 0) >= 1, f"{stratum} produced no cases"
+    assert shard["strata"] == counts
+    assert sum(counts.values()) == len(shard["cases"])
+
+
+def test_every_correction_case_carries_a_known_stratum() -> None:
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    known = set(generate_corpus.CORRECTION_STRATA)
+    for case in shard["cases"]:
+        assert case["stratum"] in known
+
+
+def test_error_recovery_cases_actually_start_from_an_error() -> None:
+    """`right` が、実在するエラー経路(`errors-000.json` の主張)で始まり、
+    そのあとにエラー中の他のキー(`GARBAGE_KEYS`)を経て `ac` に至り、
+    それ以降が `left`(正しい列)と一致すること。
+
+    **「エラー中の他のキーが無視される」までを主張に含める**(設計書 §5.2)
+    ——`ac` の直前に `GARBAGE_KEYS` が挟まっていることまで確かめる。挟まって
+    いなければ、この形は「エラー後に ac で復帰する」しか主張しておらず、
+    計画が要求する強い主張(エラー中に押した他のキーも無視される)を
+    落としていることになる。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    error_starts = set(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES)
+    cases = [c for c in shard["cases"] if c["stratum"] == "error-recovery"]
+    assert len(cases) >= 1
+    for case in cases:
+        right = case["right"]
+        left = case["left"]
+        assert right.count("ac") == 1, f"{case['id']}: expected exactly one ac"
+        ac_index = right.index("ac")
+        # `ac` より後ろは正しい列そのもの。
+        assert right[ac_index + 1 :] == left
+        # `ac` の直前に、生成器の GARBAGE_KEYS がそのまま挟まっている
+        # (エラー中に押した他のキーが無視されることを、コーパスの規模で
+        # 踏むための挿入)。
+        garbage = list(generate_corpus.GARBAGE_KEYS)
+        assert right[ac_index - len(garbage) : ac_index] == garbage
+        # `ac` より前の残り(garbage の手前)は、実在するエラー経路の
+        # キー列そのもの。
+        error_prefix = tuple(right[: ac_index - len(garbage)])
+        assert error_prefix in error_starts
+
+
+def test_paren_edit_cases_delete_a_single_digit_inside_the_open_paren() -> None:
+    """`[a, add, lparen, b, del, c, rparen, eq]` ≡ `[a, add, lparen, c, rparen, eq]`
+    (設計書 §5.2)。`b` は必ず 1 個の数字キー——`del` が 1 回で完全に消えて
+    初めて、`del_removes_the_last_character`(`engine_table.rs:80`,
+    `main_of(&["3", "del"]) == "0"`)の主張どおりになる。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    cases = [c for c in shard["cases"] if c["stratum"] == "paren-edit"]
+    assert len(cases) >= 1
+    digits = set("0123456789")
+    for case in cases:
+        right = case["right"]
+        left = case["left"]
+        lparen_index = right.index("lparen")
+        b_index = lparen_index + 1
+        assert right[b_index] in digits, f"{case['id']}: b is not a single digit"
+        assert right[b_index + 1] == "del"
+        # `b, del` を取り除くと、正しい列そのものになる。
+        rebuilt = right[:b_index] + right[b_index + 2 :]
+        assert rebuilt == left
+
+
+def test_error_inducing_pool_is_only_genuine_errors() -> None:
+    # `errors-000.json` のアンダーフロー 2 件(`expect.error` を持たない)は
+    # 「エラーにならない」という主張なので、エラー状態を作るためのプールに
+    # 混ざっていてはいけない。
+    from calcarc_reference.corpus_errors import build_errors_shard
+
+    error_cases = build_errors_shard()["cases"]
+    non_error_keys = {tuple(c["keys"]) for c in error_cases if not c["expect"].get("error")}
+    assert len(non_error_keys) >= 1  # アンダーフロー 2 件が実在すること
+    assert not (non_error_keys & set(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES))
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) >= 1
+
+
+def test_error_inducing_pool_excludes_unbalanced_parenthesis_cases() -> None:
+    """赤確認で判明した制約(`_error_inducing_key_sequences` の docstring):
+    `web/tests/heavy/corpus.ts` の `needsPrecedence` は `right` 全体を 1 本の
+    キー列として括弧の対応を見るので、対応の無い `rparen` を持つエラー経路
+    (`unbalanced_parenthesis_cases`)をプールに混ぜると `pnpm heavy` が
+    落ちる。**プールは括弧を 1 個も持たない。**
+    """
+    for keys in generate_corpus.ERROR_INDUCING_KEY_SEQUENCES:
+        assert "lparen" not in keys
+        assert "rparen" not in keys
+    # 除いたのは 2 件だけ(`["rparen"]` と `["3","add","4","rparen"]`)で、
+    # 残り 7 経路は 1 件も欠けていないこと。
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 26
