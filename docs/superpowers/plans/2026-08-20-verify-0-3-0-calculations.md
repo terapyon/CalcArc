@@ -12,6 +12,22 @@
 
 ## Global Constraints
 
+**【基準値の訂正 2026-08-20】この計画の初稿の件数は、0.2.1 ベースの旧ブランチで数えた値だった。**
+Task 1 の実装者が実測で見つけた（vitest は 263 ではなく **354**）。**新しい BASE `f1fdc2e` /
+`7bfe62e` で数え直した基準値は次のとおり**——各タスクの「期待」はこちらを使うこと。
+
+| 検査 | この BASE での実測 | 初稿に書いていた誤り |
+|---|---:|---:|
+| `pnpm test`（vitest） | **355**（Task 1 の +1 を含む） | 263 |
+| `cargo test --workspace` | **373** | 304 |
+| `pnpm exec playwright test`（Layer 5） | **164**（12.9 秒） | 132 |
+| `uv run --no-config pytest` | **362** | 311 |
+| `pnpm heavy` | **195**（31.8 秒） | 195（偶然一致） |
+
+**なぜ間違えたか**: 0.3.0 のアプリ（Convert・Scale の UI と計算）が main に入ったぶん、
+検査そのものが増えている。**旧ブランチで数えた数字を新しい BASE の計画に持ち込んだ**のが誤りで、
+[[plan-inventories-need-grep]] の「行番号は書いた日の座標」と同じ型である——**件数も測った日の座標**。
+
 - **前提の main は `f1fdc2e`。** この計画の実測値はすべてそこで数えた。
 - **`git push` と PR 作成は行わない**（ユーザー専権）。コミット末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`、**件名の 1 行目のあとに空行**。
 - **`crates/` に計算の変更を入れない。** 変異は測定中に一時的に当てるだけで、走行後に `git diff -- crates/` が空であること。
@@ -84,7 +100,9 @@ it("lets the caller decide the verdict, without touching the shard rules", () =>
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm test detection-power
 ```
-期待: `verdict` が無視されて既定の `verdictFor` が走り、`record.why` が「注入された判定」にならずに落ちる。
+期待: 赤くなること。**落ち方は予想と違ってよい**——実測（Task 1）では `record.why` の比較まで
+到達せず、`resultRecord` が `measurement.mismatchesByShard` を読んで `TypeError` で落ちた。
+**落ち方が違ったらそのまま報告する。**
 
 - [ ] **Step 3: 実装する**
 
@@ -112,7 +130,8 @@ export function runOneMutation(
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm test
 ```
-期待: 既存 263 + 新規 1 = **264 passed**。既存の `detection-power.test.ts` が 1 本も赤くならないこと（既定の判定が変わっていない証拠）。
+期待: 既存 **355** + 新規 1（Task 1 で計上済み）——**この計画の初稿は 263 と書いていたが、
+それは 0.2.1 ベースの旧ブランチで数えた値だった**（下の【基準値の訂正】を読むこと）。既存の `detection-power.test.ts` が 1 本も赤くならないこと（既定の判定が変わっていない証拠）。
 
 - [ ] **Step 5: コミット**
 
@@ -580,7 +599,7 @@ transfer 1 = 9 件」と書き、置き場所を `heavy:ui` の文脈で語っ�
 **したがって新規は 6 件**（Convert の残り 6 カテゴリ: length・mass・area・volume・data-size・speed）
 **であり、置き場所は Layer 5 の `convert.spec.ts`** とする。理由: ①同じ主張の既存 4 件がそこに在り、
 **二重に作らない** ②Layer 5 は毎 push で走る（`heavy:ui` は手動・タグ・週 1）——「打てるか」は
-**壊れたその日に知りたい** ③実測で Layer 5 は 132 本 11.8 秒、6 件足しても秒の単位。
+**壊れたその日に知りたい** ③実測で Layer 5 は **164 本 12.9 秒**、6 件足しても秒の単位。
 **`heavy:ui` は 1 本も足さない**（11.9 分の走行を伸ばさない）。
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -633,7 +652,7 @@ cd /home/terapyon/dev/CalcArc-e2e/web && pnpm exec playwright test convert.spec.
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm exec playwright test
 ```
-期待: 既存 132 + 新規 6 = **138 passed**。
+期待: 既存 **164** + 新規 6 = **170 passed**。
 
 - [ ] **Step 5: 赤確認**
 
