@@ -15,17 +15,14 @@ const TABS = [
  * パネルが描かれるのを待つ。
  *
  * **フッタは WASM と無関係に即描画される**ので、これが無いと Scientific は
- * `Loading…` のままの空のページを測って緑になる。**Convert には表示器が
- * 無い**ので、そのパネル自身の出現を待つ。
+ * `Loading…` のままの空のページを測って緑になる。
+ *
+ * **U-1 で Convert の分岐が消えた。** 準備中の面には表示器が無かったので、
+ * そのパネル自身の出現を待っていた——盤面が入って `display-main` を持つ
+ * ようになったので、4 タブとも同じ待ち方でよい。
  */
-async function waitForPanel(page: Page, hash: string) {
-  if (hash === "#convert") {
-    await expect(
-      page.getByRole("region", { name: "単位変換（準備中）" }),
-    ).toBeVisible();
-  } else {
-    await expect(page.getByTestId("display-main")).toBeVisible();
-  }
+async function waitForPanel(page: Page) {
+  await expect(page.getByTestId("display-main")).toBeVisible();
 }
 
 for (const [hash, name] of TABS) {
@@ -33,7 +30,7 @@ for (const [hash, name] of TABS) {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await waitForPanel(page, hash);
+    await waitForPanel(page);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
 
     const overflow = await page.evaluate(
@@ -53,7 +50,7 @@ test("the footer sits at the same place on every tab", async ({ page }) => {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await waitForPanel(page, hash);
+    await waitForPanel(page);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
     const box = await page.getByTestId("footer-disclaimer").boundingBox();
     seen.push({ name, y: box?.y ?? -1 });
@@ -111,8 +108,8 @@ for (const [hash, name] of TABS) {
     await page.setViewportSize(NARROW);
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** これが無いと `Loading…` の空のページを
-    // 測って緑になる。**Convert には表示器が無い**ので waitForPanel に任せる。
-    await waitForPanel(page, hash);
+    // 測って緑になる。
+    await waitForPanel(page);
 
     const spill = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,

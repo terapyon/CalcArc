@@ -50,3 +50,17 @@ test("the category select is large enough to touch", async ({ page }) => {
   const box = await select(page).boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 });
+
+test("the old #data-scale link lands on Scientific", async ({ page }) => {
+  // **互換は作らない**(設計書 §1-4、クローズドβ)。知らないハッシュとして
+  // 既定に倒れる——これは仕様であって、壊れているのではない。
+  //
+  // **U-1 で `convert-placeholder.spec.ts` から移してきた。** あちらは
+  // 「準備中」の面を見る 2 本と一緒に消えたが、この 1 本は Convert と
+  // 無関係——旧 `#data-scale` の行き先を見ている。
+  await page.goto("/#data-scale");
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await expect(
+    page.getByRole("link", { name: "Scientific", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+});
