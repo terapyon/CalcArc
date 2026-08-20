@@ -1624,9 +1624,22 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     printed_total, elapsed_ms, each_ms = int(match[1]), float(match[2]), float(match[3])
 
     assert printed_total == expected_total
-    # 印字した 2 つの数の割り算が、印字した 3 つ目と合うこと。表示桁は
-    # 4 桁なので、そこに丸めてから比べる。
-    assert round(elapsed_ms / printed_total, 4) == each_ms
+    # 印字した 2 つの数の割り算が、印字した 3 つ目と合うこと。
+    #
+    # **左辺は既に量子化されている。** `_summary_line` は経過を `.2f`(ミリ秒
+    # 2 桁)で印字し、1 件あたりは**丸めていない**経過から `.4f` で出す。
+    # つまりここで割れるのは 0.005ms まで刻まれた値で、右辺は刻まれる前の
+    # 値から来ている。`round(..., 4) == each_ms` は**その差を無視して**
+    # おり、`0.005 / total` が 4 桁目(5e-5)に届く件数で確率的に赤くなった
+    # (実測 2026-08-20: 1 回赤、その後 5/5 緑。このテストは 14 枚を 5 件に
+    # 落として回すので当たる。フルコーパス 33,567 件では 1.5e-7 で当たらない)。
+    #
+    # **これは許容を緩めているのではなく、左辺の量子化という事実を右辺に
+    # 写す是正である。** 分母を取り違える退行(`count` で割る元の壊れ方)は
+    # 桁違いのずれを出すので、この許容でも捕まる。
+    quantization = 0.005 / printed_total  # 経過の `.2f` が捨てた分
+    printing = 0.5e-4  # 1 件あたりの `.4f` が捨てた分
+    assert abs(elapsed_ms / printed_total - each_ms) <= quantization + printing
 
 
 # --- corrections-000.json に足した 2 形(計画 2026-08-19-heavy-scientific-ui-report
