@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  EXACT_MUTATIONS,
   parseFailedTests,
+  ROOT,
   readCargoMeasurement,
   verdictForTests,
 } from "../../scripts/exact-power.mjs";
@@ -93,5 +97,31 @@ describe("the verdict names both sides", () => {
     expect(v.why).toContain(
       "data_scale::transfer::tests::a_partial_byte_rounds_up",
     );
+  });
+});
+
+describe("the six defects", () => {
+  it("declares a from-string that still exists in the file it names", () => {
+    // **黙って当たらない変異を許さない。** `runOneMutation` は
+    // `mutation-site-missing` を返すが、それは `cargo test` を 6 回
+    // 回して初めて分かる。engine が動いたらここで気づく。
+    expect(EXACT_MUTATIONS.length).toBeGreaterThan(0);
+    for (const mutation of EXACT_MUTATIONS) {
+      const source = readFileSync(join(ROOT, mutation.file), "utf-8");
+      expect(source, `${mutation.id} の from`).toContain(mutation.from);
+      expect(mutation.from, `${mutation.id}: from と to が同じ`).not.toBe(
+        mutation.to,
+      );
+    }
+  });
+
+  it("expects at least one test per mutation", () => {
+    // **期待が空の変異は、何を測っているのか誰にも分からない。**
+    // `verdictForTests` は `expectTests` が空だと「1 本も赤くならなかった
+    // 走行」を `ok` と判定する——空の期待は空の集合と一致するからである。
+    // 表を空のままコミットしないことは、判定ではなくここで縛る。
+    for (const mutation of EXACT_MUTATIONS) {
+      expect(mutation.expectTests.length, mutation.id).toBeGreaterThan(0);
+    }
   });
 });

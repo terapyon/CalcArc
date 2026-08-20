@@ -1886,3 +1886,87 @@ compound_grow fin-001792: the answer line reads "17,614,448,478 円",
 
 複利のほうは**税の 2 段の丸め**がそのまま差になっている（税引前 17,614,448,478
 に対し手取り 14,137,325,033）。画面から税の経路を通っていることの証拠でもある。
+
+---
+
+## 0.3.0 の 3 計算に欠陥を 6 種入れた（2026-08-20 実測、verify-0-3-0 Task 3）
+
+単位換算・LLM メモリ・データ転送量には**生成コーパスが無い**ので、
+`web/scripts/detection-power.mjs` の枠組みのうち**測り先だけを差し替えた**
+——`cargo test --workspace --no-fail-fast` を走らせ、**赤くなったテストの
+名前の集合**を期待と突き合わせる（`web/scripts/exact-power.mjs`、
+`pnpm heavy:power:exact`）。変異を当てて戻す手続きは写していない
+（`runOneMutation` に判定を注入している）。
+
+判定は**両側を主張する**。期待したテストが赤いこと**と**、期待していない
+テストが緑のままであること。
+
+### 実測表（6 種すべて、`cargo test` が 373 本の走行）
+
+| 変異 | 判定 | 赤くなったテスト（実測） |
+|---|---|---|
+| `binary-base-is-decimal` | ok | `data_scale_matches_the_reference` |
+| `degf-offset-dropped` | ok | `convert::tests::minus_forty_is_the_fixed_point_of_the_two_scales`、`convert::tests::the_offsets_check_out`、`convert_matches_the_reference` |
+| `micrometre-off-by-thousand` | ok | `convert_matches_the_reference` |
+| `half-even-becomes-half-up` | ok | `convert::format::tests::half_to_even_rounds_toward_the_even_digit`、`convert_matches_the_reference` |
+| `kv-counts-once-not-twice` | ok | `data_scale::llm::tests::overflow_is_an_error_not_a_wrap`、`data_scale::llm::tests::kv_heads_is_not_the_attention_head_count`、`data_scale::llm::tests::the_headline_case`、`data_scale::llm::tests::the_kv_side_never_needs_the_ceiling`、`llm_matches_the_reference` |
+| `partial-byte-truncated` | ok | `data_scale::transfer::tests::a_partial_byte_rounds_up`、`transfer_matches_the_reference` |
+
+**`expectTests` は実測から起こした。** 空で 1 度走らせ（6 種すべてが
+`unexpected-red`、すなわち「期待は空なのに赤が出た」）、**実際に赤くなった
+名前をそのまま書き入れて**から 2 度目を走らせた。2 度目は 6 種すべて `ok`
+で、赤の集合は 1 本も動かなかった。**先に期待を書いて実測を合わせると、
+「期待どおり」が「自分の推測どおり」になる**ので、順序を逆にしていない。
+
+### 暗い帯: 単体テストが 1 本も反応しない欠陥が 2 種ある
+
+**`binary-base-is-decimal` と `micrometre-off-by-thousand` を捕まえたのは
+golden 1 本だけ**で、`crates/calcarc-core/src/` の中の単体テストは 1 本も
+赤くならなかった。**この 2 つは Python の独立実装との突き合わせだけが
+見張っている。**
+
+- `micrometre-off-by-thousand`: `convert/mod.rs` の `mod tests` に
+  `Unit::Um` は 1 度も出てこない（Step 0 の実測。下記）。係数表 27 行の
+  うち、単体テストが literal で押さえているのは in/lb/°F/°C/K など
+  ごく一部で、**um は表に載っているだけ**である。
+- `binary-base-is-decimal`: 2 進の基数は `units[0].1` から導いていて、
+  製品コードに `1024` の literal が無い。`base` が効くのは
+  **「丸めた後の整数部が基数に達したら 1 つ上の単位で丸め直す」1 か所だけ**
+  なので、基数を 1000 にしても差が出るのは**整数部が 1000 以上 1024 未満に
+  収まる 2 進の値**に限られる。`format.rs` の 8 本の単体テストのうち 2 進の
+  再選択を通るのは `a_carry_that_crosses_the_unit_boundary_reselects_the_unit`
+  の `format_binary(1_099_460_000_000)` だけで、これは整数部が 1023.95 →
+  丸めて 1024.0 になるため**基数が 1000 でも 1024 でも同じく再選択する**
+  ——だから緑のままだった。**例えば 1010 GiB 相当の値（`1.0 TiB` に化ける）
+  を 1 件足せば、この帯に単体テストの光が入る。**
+
+残る 4 種は単体テストと golden の両方が反応した（`kv-counts-once-not-twice`
+は 5 本、うち 4 本が単体テスト）。
+
+### Step 0: 変異 3 は単体テストで止まらなかった（差し替え不要）
+
+係数表を壊す変異は、**同じファイルの単体テストが literal で固定していれば
+そこで止まり、上の層まで届いたかを測れない**（transfer の
+`every_unit_has_its_factor` が 8 つの係数を literal で持つのが実例）。
+`convert/mod.rs` で確かめたところ、`Unit::Um` が出るのは `:42`（列挙）・
+`:137`（`ALL`）・`:207`（トークン）・`:283`（カテゴリ）・`:348`（係数表）
+の 5 か所だけで、**`mod tests`（`:535` 以降）には 1 度も出てこない**。
+止まらないので、計画どおりの係数変異のまま測った——**そして実際に、
+係数表の 1 行を壊すと golden だけが赤くなった。**
+
+### 実行時間（`pnpm heavy:power:exact`、壁時計）
+
+| 走行 | 時間 |
+|---|---:|
+| 1 度目（`expectTests` 空、6 種すべて `unexpected-red`） | 139 秒 |
+| 2 度目（`expectTests` 実測入り、6 種すべて `ok`） | 139 秒 |
+
+変異ごとに `cargo` が再ビルドするので、1 変異あたり約 23 秒。**計画の
+見積り「約 1 分」は実測 139 秒だった**（[[estimates-are-held-not-prosecuted]]
+のとおり、見積りは追及せず実測で差し替える）。
+
+### 変異は残っていない
+
+両方の走行のあとで `git diff -- crates/` が空であることを確かめた
+（`runOneMutation` が戻したうえでバイト比較している）。走行後の
+`cargo test --workspace` も 373 本すべて緑。
