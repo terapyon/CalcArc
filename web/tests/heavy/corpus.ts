@@ -724,6 +724,45 @@ export function summarizeShape(sequences: string[][]): ShapeSummary {
 }
 
 /**
+ * **`eq` を一度も含まないキー列の本数。**
+ *
+ * `=` を押さずに読んだ表示は**確定前の表示**である——電卓の `render()` には
+ * 分岐が二つあり、入力中は打った文字がそのまま出て、確定後だけが整形を通る。
+ * どちらを踏んだかで表示についての主張の強さが変わるので、報告書はこの件数
+ * から書く(手書きの否定で書いていた時期があり、`entry-000.json` が入った日に
+ * 黙って嘘になった)。
+ *
+ * **末尾が `eq` かどうかでは数えない。** `=` のあとに `ENG` や `°'"` を押して
+ * 終わるキー列がコミット済みコーパスに数千本あり、それらが読んでいるのは
+ * **確定した値の表示**である。末尾で数えると、その全部が「確定前を踏んだ」側に
+ * 化ける。
+ */
+export function countSequencesWithoutEq(sequences: string[][]): number {
+  return sequences.filter((keys) => !keys.includes("eq")).length;
+}
+
+/**
+ * 表示のシャードが電卓に流すキー列。表示ケースは 1 本、同値ケースは左右 2 本。
+ *
+ * **組み立ての規則を 1 か所に置く。** 照合する側と数える側が同じ規則を別々に
+ * 書くと、同値ケースの右辺を片方だけが数えるようなずれが起きる——ずれても
+ * 例外にはならず、報告書の件数だけが静かに変わる。
+ */
+export function displaySequences(
+  cases: (DisplayCase | DisplayEquivalenceCase)[],
+): string[][] {
+  const sequences: string[][] = [];
+  for (const testCase of cases) {
+    if (testCase.kind === "display") {
+      sequences.push(testCase.keys);
+    } else {
+      sequences.push(testCase.left, testCase.right);
+    }
+  }
+  return sequences;
+}
+
+/**
  * **同値ケースの右辺が左辺に付け足したキー**を数える。
  *
  * 同値ケースの右辺は、左辺に `neg neg` / `sqrt sqr` / `add 0` のような

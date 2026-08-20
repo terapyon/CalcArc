@@ -105,6 +105,10 @@ for (const { name, shard } of SHARDS) {
       // `SyntaxError`」と「金融の `Overflow`」を別の経路として出すので、
       // ここで畳むと片方が 0 件でも読み手に分からない。
       errorKinds: countErrorKinds(cases),
+      // 関数呼び出しのシャードはキー列を持たない(盤面ではなく計算コアの
+      // 関数を直接呼ぶ)。**0 は「`=` を押さない列が無い」であって
+      // 「測っていない」ではない。**
+      sequencesWithoutEq: 0,
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

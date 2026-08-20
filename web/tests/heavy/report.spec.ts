@@ -8,6 +8,8 @@ import type {
   ToleranceBand,
 } from "./corpus";
 import {
+  countSequencesWithoutEq,
+  displaySequences,
   loadCallShards,
   loadDisplayShards,
   loadShards,
@@ -65,13 +67,24 @@ function bands(counts: Partial<Record<ToleranceBand, number>>) {
  * 6 枠を 1 つに畳んだ実装——どこかに 270 と書いてあるだけの実装——でも緑に
  * なる。枠の名前の付いた行に、その枠の数が乗っていることを見る。
  */
-function errorPathLine(markdown: string, title: string): string {
-  const lines = markdown.split("\n").filter((line) => line.includes(title));
+function onlyLine(markdown: string, needle: string): string {
+  const lines = markdown.split("\n").filter((line) => line.includes(needle));
   expect(
     lines.length,
-    `エラー経路「${title}」の行が 1 本ではない(${lines.length} 本)`,
+    `「${needle}」を含む行が 1 本ではない(${lines.length} 本)`,
   ).toBe(1);
   return lines[0] ?? "";
+}
+
+function errorPathLine(markdown: string, title: string): string {
+  return onlyLine(markdown, title);
+}
+
+/** 但し書き(「この節の件数は…」以降)だけを切り出す。 */
+function disclaimerOf(markdown: string): string {
+  return markdown.slice(
+    markdown.indexOf("この節の件数は、この走行の実データから"),
+  );
 }
 
 /** 期待値として持っているエラー種別ごとの件数(実コーパスから数えるとき用)。 */
@@ -107,6 +120,8 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     precedenceCases: 0,
     exponentDisplayCases: 0,
     errorKinds: {},
+    // 見本のシャードは `tokens.eq: 2000`——2000 本すべてが `=` を押している。
+    sequencesWithoutEq: 0,
     worstEffectiveRelTolerance: 1e-9,
     bands: bands({ display: 2000 }),
     shape: {
@@ -1535,6 +1550,101 @@ test("every error expectation in the committed corpus lands in one of the six fr
   expect(markdown).not.toContain("上のどの経路にも入らないものが");
 });
 
+test("the in-progress display item is counted from the corpus, not written by hand", () => {
+  // **この項目は手書きの否定だった。** 「全ケースが `=` で終わるので、確定した
+  // 値の表示しか踏んでいない」——`entry-000.json`(打鍵の途中の表示)が入った
+  // 日に**両方の半分**が偽になり、走行のたびに嘘を印字していた。いまは走行が
+  // 数える。**見本ではなく実物のコーパスで見る。**
+  //
+  // 数える基準は**末尾のキーではなく `=` の有無**である。`=` を押して値を
+  // 確定させてから `ENG`/`°'\"` を押して終わるキー列がコーパスに 3 千本余り
+  // あり、そちらが読んでいるのは確定した値の表示だから結論には反しない。
+  // 末尾で数える実装に変えると、下の内訳がその 3 千本を拾って赤くなる。
+  const entries = [
+    ...loadShards().flatMap(({ name, shard }) => {
+      const { values, equivalences } = partitionCases(name, shard.cases);
+      return [
+        ...(values.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "values"),
+                sequencesWithoutEq: countSequencesWithoutEq(
+                  values.map((c) => c.keys),
+                ),
+              }),
+            ]
+          : []),
+        ...(equivalences.length > 0
+          ? [
+              summary({
+                name: summaryName(name, "equivalences"),
+                sequencesWithoutEq: countSequencesWithoutEq(
+                  equivalences.map((c) => c.left),
+                ),
+              }),
+            ]
+          : []),
+      ];
+    }),
+    ...loadDisplayShards().map(({ name, shard }) =>
+      summary({
+        name: summaryName(name, "displays"),
+        sequencesWithoutEq: countSequencesWithoutEq(
+          displaySequences(shard.cases),
+        ),
+      }),
+    ),
+    ...loadCallShards().map(({ name }) =>
+      summary({ name: summaryName(name, "calls"), sequencesWithoutEq: 0 }),
+    ),
+  ];
+
+  const withoutEq = entries.reduce((sum, e) => sum + e.sequencesWithoutEq, 0);
+  // **番兵。** 1 本も無ければ項目は「踏んでいない」側の固定文になり、この
+  // テストは何も見ていない。
+  expect(
+    withoutEq,
+    "コーパスに `=` を押さないキー列が 1 本も無い——この検査は何も見ていない",
+  ).toBeGreaterThan(0);
+
+  // **実測を焼き付ける。** ここが動いたら、まず直すのはこの数字ではなく
+  // 報告書が外の読み手に対してしている主張のほうである。
+  const byShard = Object.fromEntries(
+    entries
+      .filter((e) => e.sequencesWithoutEq > 0)
+      .map((e) => [e.name, e.sequencesWithoutEq]),
+  );
+  expect(byShard).toEqual({
+    // 打鍵の途中の表示。全 36 件が `=` に届かない。
+    "entry-000.json (displays)": 36,
+    // 単項関数が `=` を待たずにその場で撥ねるケース(`0 recip` / `0 ln` など)。
+    "errors-000.json (displays)": 19,
+  });
+
+  const markdown = renderReport(entries, PROVENANCE);
+  // **行を 1 本だけ取り出して主張する。** 「どこかに数字が書いてある」検査は、
+  // 項目を畳んだ実装でも緑になる。
+  const line = onlyLine(markdown, "入力中の表示");
+  expect(line).toContain(`${withoutEq} 本のキー列が`);
+  expect(line).not.toContain("全ケースが");
+  expect(line).not.toContain("踏んでいない");
+  expect(markdown).toContain("`entry-000` 36 本・`errors-000` 19 本");
+  // **数がある項目は但し書きの一覧から外れる**——項目と一覧は同じ述語から出る。
+  expect(disclaimerOf(markdown)).not.toContain("入力中の表示");
+
+  // **逆向きも見る。** `=` を押さない列が 1 本も無い走行では、項目は否定に
+  // 戻り、一覧にも載る。入力を変えて出力が変わらないなら、この項目は
+  // データ由来ではない。
+  const allConfirmed = renderReport([summary()], PROVENANCE);
+  expect(onlyLine(allConfirmed, "- **入力中の表示。**")).toContain(
+    "どれも `=` を押しているので",
+  );
+  expect(onlyLine(allConfirmed, "確定した値の表示しか")).toContain(
+    "踏んでいない",
+  );
+  expect(disclaimerOf(allConfirmed)).toContain("入力中の表示");
+});
+
 test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
   // 但し書き自身が腐っていた——「エラー経路・指数表記…は完全に固定の文章」と
   // 書いてあったが、その 2 つはデータ由来になっていた。
@@ -1550,8 +1660,6 @@ test("the hand-maintained disclaimer lists only the items that really are fixed"
   // いまは**入力を変えて、出力が変わることを見る**。押した集計を持つ走行と
   // 持たない走行で、但し書きの一覧が動かなければ嘘である。
   const untouched = renderReport([summary()], PROVENANCE);
-  const disclaimerOf = (markdown: string) =>
-    markdown.slice(markdown.indexOf("この節の件数は、この走行の実データから"));
 
   expect(disclaimerOf(untouched)).toContain("角度モード");
   expect(disclaimerOf(untouched)).toContain("表示の記法");

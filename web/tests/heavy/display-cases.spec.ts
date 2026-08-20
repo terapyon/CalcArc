@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import {
   assertSupportedMode,
+  countSequencesWithoutEq,
   type DisplayCase,
   type DisplayEquivalenceCase,
+  displaySequences,
   loadDisplayShards,
   summarizeShape,
 } from "./corpus";
@@ -90,14 +92,9 @@ for (const { name, shard } of loadDisplayShards()) {
     // 比べる」経路が開く。
     assertSupportedMode(name, cases);
 
-    const sequences: string[][] = [];
-    for (const testCase of cases) {
-      if (isDisplayCase(testCase)) {
-        sequences.push(testCase.keys);
-      } else {
-        sequences.push(testCase.left, testCase.right);
-      }
-    }
+    // **組み立ては `corpus.ts` の 1 か所に置く。** 報告書の「入力中の表示」を
+    // 数える側が同じ列を見るので、規則を 2 か所に書くとずれても誰も落ちない。
+    const sequences = displaySequences(cases);
 
     const results: HarnessResult[] = [];
     for (let start = 0; start < sequences.length; start += BATCH) {
@@ -202,6 +199,10 @@ for (const { name, shard } of loadDisplayShards()) {
       // ——`main` は全種別で同じ `"Math ERROR"` なので、種別を畳んだ集計は
       // 種別の取り違えについて何も言えない。
       errorKinds: countErrorKinds(cases),
+      // **`=` を一度も押さないキー列の本数。** 報告書の「入力中の表示」の
+      // 項目がここから書かれる。`entry-000.json` は全件がこれに当たり、
+      // `errors-000.json` は単項関数がその場で撥ねるケースが当たる。
+      sequencesWithoutEq: countSequencesWithoutEq(sequences),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

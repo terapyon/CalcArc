@@ -9,6 +9,7 @@ import {
   classify,
   classifyComplex,
   countInjectedTokens,
+  countSequencesWithoutEq,
   type EquivalenceCase,
   equivalenceNeedsPrecedence,
   loadShards,
@@ -654,6 +655,11 @@ for (const { name, shard, values } of partitions) {
       exponentDisplayCases,
       // 定義域外は生成の時点で捨てているので、期待値がエラーのケースは無い。
       errorKinds: {},
+      // **`=` を一度も押さないキー列の本数。** 報告書の「入力中の表示」が
+      // ここから書かれる。値のシャードは必ず `=` で確定させるので実測は 0 だが、
+      // **数えずに 0 を書かない**——手書きの 0 は、そういうケースが入った日に
+      // 黙って嘘になる(まさにそれが起きた項目である)。
+      sequencesWithoutEq: countSequencesWithoutEq(values.map((c) => c.keys)),
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       shape: summarizeShape(values.map((c) => c.keys)),
@@ -842,6 +848,11 @@ for (const { name, shard, equivalences } of partitions) {
       // 同値ケースは期待値を持たないので、指数表記かどうかを言えない。
       exponentDisplayCases: 0,
       errorKinds: {},
+      // **左辺だけを数える**——`shape` と同じ規則(下のコメントを見よ)。
+      // 右辺は左辺に恒等変換を被せたもので、`=` の有無は左辺が決めている。
+      sequencesWithoutEq: countSequencesWithoutEq(
+        equivalences.map((c) => c.left),
+      ),
       worstEffectiveRelTolerance: into.worstEffectiveRelTolerance,
       bands: into.bands,
       // **左辺だけを数える。** 右辺は左辺に恒等変換を被せて作られているので、
