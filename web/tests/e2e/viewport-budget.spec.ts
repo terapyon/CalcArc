@@ -22,8 +22,10 @@ import { expect, type Page, test } from "@playwright/test";
 // - **Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で
 //   溢れることが分かっている(ユーザー裁定で許容)。足すと赤になる——
 //   「承知のうえで許容した」溢れである。
-// - **Convert の 4 つ**は溢れていない(360×640 でも 0。手で実測済み)。
-//   足せば緑になるが、足していない。U-2 spec §5 が `pnpm e2e` に足す
+// - **Convert の 4 つ**は、**この巡回が測る 390×844 では 0**(手で実測済み)。
+//   360×640 では 66 だが、**それは既存の 3 route と同値の既知債務**で、
+//   U-2 が増やしたものではない(`docs/definition-of-done.md` の表)。
+//   **この巡回は 390×844 しか測らない**ので、足せば緑になる。足していない。U-2 spec §5 が `pnpm e2e` に足す
 //   検査を「面が枠に収まっているか」を見る 1 本
 //   (`convert.spec.ts` の "swapping faces moves neither the frame nor
 //   DEL and AC")に限っており、この巡回に route を足す判断ではなかった。
