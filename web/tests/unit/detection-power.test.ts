@@ -169,8 +169,8 @@ const ALL = ["a (values)", "b (values)"];
 /**
  * **判定に「居るべきシャード」を注入して呼ぶ。**
  *
- * 既定は実物の 17 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
- * テストは全部「16 枚足りない」で赤くなる。検査が引数に無いものに依存しない
+ * 既定は実物の 18 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
+ * テストは全部「17 枚足りない」で赤くなる。検査が引数に無いものに依存しない
  * ようにした結果で、ここで偽の 2 枚を渡すのが正しい使い方である。
  */
 const verdict = (
@@ -278,11 +278,33 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names seventeen shards, and names them once", () => {
+  it("names eighteen shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
-    expect(ALL_SHARDS).toHaveLength(17);
-    expect(new Set(ALL_SHARDS).size).toBe(17);
+    expect(ALL_SHARDS).toHaveLength(18);
+    expect(new Set(ALL_SHARDS).size).toBe(18);
+  });
+
+  it("expects only shards that this run is supposed to load", () => {
+    // **これが無いと、赤確認が静かに緑になりうる。** `verdictFor` の健全性の
+    // 判定 4 が見るのは「読み込まれたシャードの集合 = `ALL_SHARDS`」だけで、
+    // **`expectShards` が `ALL_SHARDS` に無い名前を挙げていても何も言わない**
+    // ——挙げたシャードが走行に居ないのだから 1 件も反応しようがなく、判定は
+    // `caught-nothing`(「コーパスが捕まえられなかった」)になる。それは
+    // 測定の失敗であって検出力の欠如ではない。実測: 計画 Task 4 Step 1 で、
+    // `associativity-000.json` をまだ置かずに期待だけを反転したときの判定が
+    // まさにこれだった。名前の綴り違いも同じ形で紛れ込むので、静的に縛る。
+    for (const mutation of MUTATIONS) {
+      for (const name of mutation.expectShards) {
+        expect(ALL_SHARDS, `${mutation.id} が挙げた ${name}`).toContain(name);
+      }
+      for (const name of Object.keys(mutation.minRate ?? {})) {
+        expect(
+          mutation.expectShards,
+          `${mutation.id} の minRate にある ${name}`,
+        ).toContain(name);
+      }
+    }
   });
 
   it("accepts a healthy run where nothing reacted", () => {

@@ -34,11 +34,12 @@ const RUN_JSON = join(WEB, "heavy-run.json");
  * 枚数だけを assert しても足りない。1 枚消えて 1 枚増えた走行が緑で通り、
  * 壊れたときに何が消えたのかを言えない。**名前で持つ。**
  *
- * 正当に 18 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
+ * 正当に 19 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
  * この定数の狙いである。
  */
 export const ALL_SHARDS = [
   "angle-mode-000.json (values)",
+  "associativity-000.json (values)",
   "cancellation-000.json (values)",
   "combinatorics-000.json (values)",
   "complex-000.json (values)",
@@ -95,6 +96,11 @@ export const MUTATIONS = [
     // `docs/corpus-measurements.md`。
     expectShards: [
       "angle-mode-000.json (values)",
+      // **結合方向のシャードもここに入る(2026-08-20 実測、計画 Task 4)。**
+      // 値シャードとして `tolerance.rel` が 5e-10 なので、有効桁を 1 桁
+      // 落とせば他の 8 枚と同じ理由で跨ぐ。反応しないのは相変わらず
+      // `cancellation-000.json` だけである。
+      "associativity-000.json (values)",
       "combinatorics-000.json (values)",
       "complex-000.json (values)",
       "elementary-000.json (values)",
@@ -107,6 +113,7 @@ export const MUTATIONS = [
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
+      "associativity-000.json (values)": 0.083,
       "combinatorics-000.json (values)": 0.296,
       "complex-000.json (values)": 0.095,
       "elementary-000.json (values)": 0.302,
@@ -126,7 +133,21 @@ export const MUTATIONS = [
     to: "BinOp::Mul | BinOp::Div => 1,",
     // **括弧を省いたシャードだけが反応するはず。** 全括弧のシャードは
     // 括弧が構造を決めるので、優先順位が変わっても答えが変わらない。
-    expectShards: ["precedence-000.json (values)"],
+    //
+    // **`entry-000.json` も 1 件だけ反応する(2026-08-20 実測、計画 Task 4 で
+    // 判明)。** 括弧の話ではない——`entry-000023`(`3 add 4 mul`、期待は
+    // `"4"`)は**打鍵の途中の表示**を主張しており、`mul` を `add` と同順位に
+    // 落とすと `mul` を押した時点で `3 + 4` が畳まれて `"7"` が出る。
+    // 保留演算の畳み込みは確定前の表示から見える、ということである。
+    // Task 1 が `entry-000.json` を足した時点でこの期待は嘘になっていたが、
+    // `heavy:power` を回すまで誰も知らなかった。**1 件しかないので `minRate`
+    // は置かない**——3500 件中 1 件が率の 3 桁に載らないのと同じ理由で
+    // (`periods-for-binary-search` を見よ)、`verdictFor` の
+    // `Math.max(1, ...)` が下限 1 を保証する。
+    expectShards: [
+      "precedence-000.json (values)",
+      "entry-000.json (displays)",
+    ],
     minRate: { "precedence-000.json (values)": 0.274 },
   },
   {
@@ -135,10 +156,28 @@ export const MUTATIONS = [
     file: "crates/calcarc-core/src/engine/mod.rs",
     from: "|| (top.precedence() == op.precedence() && !op.is_right_associative())",
     to: "|| (top.precedence() == op.precedence() && op.is_right_associative())",
-    // **どこも赤くならないはず。** レポートが「結合方向は踏んでいない」と
-    // 書いており、これはその主張そのものである。赤くなったらレポートが嘘。
-    expectShards: [],
-    minRate: {},
+    // **`associativity-000.json` だけが反応するはず。** 他の 17 枚は二項を
+    // 必ず括弧で囲むので、括弧が構造を決めており、畳む向きを変えても
+    // 答えが変わらない。
+    //
+    // **そのシャードの中でも反応するのは半分だけである。** 1 本の連鎖ごとに
+    // 「括弧を打たない平坦なキー列」と「同じ木を全括弧で書いた双子」を対で
+    // 持たせてあり(設計書 §6 の対照群)、赤くなるのは平坦な側だけ——
+    // **変異がシャードを無差別に壊しているのではない**ことが、シャードの
+    // 中で言える。
+    //
+    // 期待を `[]` から実体へ変えたのは A の導入以降でこれが初めてなので、
+    // **シャードを入れる前に期待だけを反転して先に赤を見た**(計画 Task 4
+    // Step 1)。そのときの判定は `caught-nothing`(「1 件も捕まえられ
+    // なかった」)である——`ALL_SHARDS` にまだ名前が無く、健全性の判定 4 は
+    // 「読み込まれたシャードの集合 = `ALL_SHARDS`」しか見ないので、
+    // `measurement-failed` にはならない。
+    //
+    // **実測 2026-08-20: 2000 件中ちょうど 1000 件**——平坦なキー列が 1000 本、
+    // 全括弧の双子が 1000 本で、**赤くなったのは平坦な側だけ**である。
+    // 対照群は 1 件も動いていない。下限は実測率(50.00%)の半分。
+    expectShards: ["associativity-000.json (values)"],
+    minRate: { "associativity-000.json (values)": 0.25 },
   },
   {
     id: "ncr-multiply-first",

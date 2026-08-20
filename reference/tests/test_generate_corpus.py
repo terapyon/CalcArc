@@ -1611,9 +1611,9 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     expected_total = sum(
         len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
     )
-    # 17 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 18 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
     # 数字のままなので、枚数も見る。
-    assert len(written) == 17
+    assert len(written) == 18
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)
@@ -1771,3 +1771,146 @@ def test_error_inducing_pool_keeps_the_unbalanced_parenthesis_cases() -> None:
     ]
     assert len(with_parens) == 2, with_parens
     assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 28
+
+
+# --- 結合方向(`associativity-000.json`、計画 Task 4、設計書 §6) -------------
+
+
+def _assoc_shard() -> dict:
+    """テスト全体で 1 枚を作り直さずに使い回す。生成は 0.2 秒未満である。"""
+    return generate_corpus.build_assoc_shard(seed=20260828, count=2000)
+
+
+_ASSOC = _assoc_shard()
+_ASSOC_KEY_OPS = {key: op for op, key in BINARY_KEYS.items()}
+
+
+def _flat_chain_of(keys: list[str]) -> tuple[list, list[str]]:
+    """平坦なキー列を項と演算子に戻す。**生成器の出力を読み直す側の実装。**
+
+    生成器が持っている `terms`/`ops` をそのまま受け取ると、テストは生成器の
+    内部状態を写すだけになる。ここはコミットされる JSON のキー列だけから
+    組み直す——`keys` が壊れていれば、ここで戻せない。
+    """
+    terms: list = []
+    ops: list[str] = []
+    digits = ""
+    for key in keys:
+        if key == "eq":
+            break
+        if key.isdigit():
+            digits += key
+            continue
+        if key not in _ASSOC_KEY_OPS:
+            raise AssertionError(f"unexpected key {key!r} in a flat associativity chain: {keys!r}")
+        terms.append(Num(int(digits)))
+        digits = ""
+        ops.append(_ASSOC_KEY_OPS[key])
+    terms.append(Num(int(digits)))
+    return terms, ops
+
+
+def test_the_associativity_shard_is_deterministic() -> None:
+    assert generate_corpus.build_assoc_shard(seed=20260828, count=200) == (
+        generate_corpus.build_assoc_shard(seed=20260828, count=200)
+    )
+
+
+def test_every_associativity_case_carries_a_known_stratum() -> None:
+    """層の名前は 5 つだけ。**知らない名前が入ると内訳が黙って崩れる。**"""
+    known = {*generate_corpus.ASSOC_CHAINS, generate_corpus.ASSOC_CONTROL_STRATUM}
+    seen = {case["stratum"] for case in _ASSOC["cases"]}
+    assert seen == known, seen
+    assert _ASSOC["strata"] == {
+        stratum: sum(1 for case in _ASSOC["cases"] if case["stratum"] == stratum)
+        for stratum in sorted(seen)
+    }
+
+
+def test_the_control_group_is_exactly_half_of_the_shard() -> None:
+    """**対照群が痩せたら、この変異は「無差別に壊していない」と言えなくなる。**
+
+    平坦なキー列 1 本につき全括弧の双子が 1 本。半分が対照群であることは、
+    `associativity-flip` が**シャードの一部だけ**を赤くするという主張の土台
+    である(設計書 §6)。
+    """
+    control = [
+        case for case in _ASSOC["cases"] if case["stratum"] == generate_corpus.ASSOC_CONTROL_STRATUM
+    ]
+    assert len(control) * 2 == len(_ASSOC["cases"])
+    assert len(_ASSOC["cases"]) == 2000
+
+
+def test_every_chain_stratum_has_cases() -> None:
+    """表に書いた形が 0 件、を許さない(`errors-000.json` と同じ規律)。"""
+    for stratum in generate_corpus.ASSOC_CHAINS:
+        assert _ASSOC["strata"].get(stratum, 0) >= 20, (stratum, _ASSOC["strata"])
+
+
+def test_the_twins_differ_only_in_their_parentheses() -> None:
+    """双子は**同じ式・同じ期待値**で、キー列だけが違う。
+
+    片方は括弧を 1 つも打たず、もう片方は全部の二項を括弧で囲む。engine が
+    同じ答えを出すべき理由が「結合方向」だけになる。
+    """
+    cases = _ASSOC["cases"]
+    for flat, control in zip(cases[0::2], cases[1::2], strict=True):
+        assert control["stratum"] == generate_corpus.ASSOC_CONTROL_STRATUM
+        assert flat["stratum"] != generate_corpus.ASSOC_CONTROL_STRATUM
+        assert flat["expr"] == control["expr"]
+        assert flat["expect"] == control["expect"]
+        assert "lparen" not in flat["keys"], flat
+        # 全括弧の側は、二項演算子と同じ数だけ組を開く(`to_keys` は根も包む)。
+        operators = sum(1 for key in flat["keys"] if key in _ASSOC_KEY_OPS)
+        assert control["keys"].count("lparen") == operators, control
+        assert control["keys"].count("rparen") == operators, control
+
+
+def test_every_flat_chain_would_change_its_answer_if_the_folding_flipped() -> None:
+    """**踏んだと言えるのは、二つの読み方が別の答えを出すときだけ。**
+
+    加算と乗算は結合的なので `9 + 4 + 3` はどちらの読み方でも 16 になる。
+    そういう列ばかりを積むと、シャードは大きいのに `associativity-flip` を
+    1 件も捕まえられない——「大量に踏んだ」が「大量に何も試していない」に
+    化ける。ここはコミットされるキー列そのものから両方の読みを組み直して、
+    差が生成側のふるいの下限以上であることを確かめる。
+    """
+    flat_cases = [
+        case for case in _ASSOC["cases"] if case["stratum"] != generate_corpus.ASSOC_CONTROL_STRATUM
+    ]
+    assert len(flat_cases) == 1000
+    for case in flat_cases:
+        terms, ops = _flat_chain_of(case["keys"])
+        documented, other = generate_corpus._assoc_trees(terms, ops)
+        value = evaluate(documented)
+        alternative = evaluate(other)
+        gap = abs(value - alternative) / max(abs(value), mp.mpf(1))
+        assert gap >= generate_corpus.ASSOC_MIN_RELATIVE_GAP, (case["id"], case["expr"], gap)
+        assert math.isclose(float(value), case["expect"]["re"], rel_tol=1e-15), case["id"]
+
+
+def test_the_power_stratum_takes_the_whole_reachable_box() -> None:
+    """`xʸ` の連鎖は数え上げられるほど狭いので、乱択せず全部使う。
+
+    **箱の中で通るものが 1 つでも漏れていたら赤くする。** 乱択に戻した
+    (あるいは箱を狭めた)ことに、件数が減るだけでは気づけない。
+    """
+    reachable = [
+        generate_corpus._flat_key_sequence(terms, ops)
+        for terms, ops in generate_corpus._power_chains()
+        if generate_corpus.assoc_value(terms, ops) is not None
+    ]
+    in_shard = [case["keys"] for case in _ASSOC["cases"] if case["stratum"] == "power"]
+    assert sorted(map(tuple, in_shard)) == sorted(map(tuple, reachable))
+    assert len(reachable) == 27
+
+
+def test_no_associativity_case_needs_precedence() -> None:
+    """**このシャードは優先順位を踏まない。** 段を混ぜていないからである。
+
+    混ざると `precedence-000.json` の担当と重なり、赤が出たときにどちらが
+    原因か分からなくなる。`web/tests/heavy/corpus.spec.ts` は値シャードごとに
+    「優先順位を踏んだ件数」を実データから数えて、`precedence-000.json` 以外は
+    0 件であることを固定している——ここが崩れると向こうが赤くなる。
+    """
+    assert not [case["id"] for case in _ASSOC["cases"] if _needs_precedence(case["keys"])]

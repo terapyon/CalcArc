@@ -9,6 +9,7 @@ import {
   partitionCases,
 } from "./corpus";
 import {
+  ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
   expectedSummaryNames,
@@ -1027,11 +1028,35 @@ test("the exponent-notation count is reported, and says zero means never left th
   expect(some).not.toContain("平坦表示の帯を一度も出ていない");
 });
 
-test("the report keeps saying the power operator's associativity is untested", () => {
-  // `xʸ` はこのプロジェクト唯一の右結合だが、キー列は二項を必ず括弧で囲むので
-  // 踏んでいない。**踏んでいないと言い続ける**(設計書 2026-08-16-corpus-functions §3.5)。
+test("the report says the associativity shard is exercised, and by how many cases", () => {
+  // **踏んだと言い続ける。** 以前ここは「踏んでいないと言い続ける」だった
+  // (`xʸ` はこのプロジェクト唯一の右結合だが、キー列が二項を必ず括弧で囲む
+  // ので踏めなかった)。`associativity-000.json`(設計書 2026-08-19 §6)が
+  // その否定を撤回させる——**シャードと期待とレポートの 3 つは同時に動く。**
+  const markdown = renderReport(
+    [
+      summary({
+        name: summaryName(ASSOCIATIVITY_SHARD, "values"),
+        total: 2000,
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(markdown).toContain("結合方向——2000 件が踏んでいる");
+  expect(markdown).not.toContain("右結合も優先順位 4 も踏んでいない");
+  // **優先順位 4 は撤回しない。** 連鎖は 1 本が同じ段に収まっているので、
+  // `2 ^ 3 × 4` のように段をまたぐ列はこのシャードにも無い。
+  expect(markdown).toContain("優先順位 4 はまだ踏んでいない");
+});
+
+test("the report keeps saying so when the associativity shard is not in the run", () => {
+  // **走行に無いものを踏んだと書かない。** 件数だけを実データから出して
+  // 文章を固定にすると、シャードを持たない走行(部分走行・将来の分割)で
+  // 報告書が自分の走行について嘘をつく。
   const markdown = renderReport([summary()], PROVENANCE);
   expect(markdown).toContain("`xʸ` の右結合と優先順位 4");
+  expect(markdown).toContain("結合方向を反転する変異で 1 件も赤くならない");
+  expect(markdown).not.toContain("件が踏んでいる。優先順位 4 はまだ");
 });
 
 test("a disclosure of two cases in six thousand is not rounded away to 0.0%", () => {
@@ -1241,9 +1266,11 @@ test("the hand-maintained disclaimer lists only the items that really are fixed"
   expect(disclaimerOf(touched)).not.toContain("角度モード");
   expect(disclaimerOf(touched)).not.toContain("表示の記法");
   // 外れたぶん、一覧は短くなる(数え上げも同じ述語から出ている)。
-  expect(disclaimerOf(touched)).toContain("複素数・UI・入力中の表示の 3 行");
+  expect(disclaimerOf(touched)).toContain(
+    "複素数・結合方向・UI・入力中の表示の 4 行",
+  );
   expect(disclaimerOf(untouched)).toContain(
-    "複素数・角度モード・表示の記法・UI・入力中の表示の 5 行",
+    "複素数・角度モード・表示の記法・結合方向・UI・入力中の表示の 6 行",
   );
 });
 

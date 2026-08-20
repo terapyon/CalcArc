@@ -258,6 +258,14 @@ export function summaryName(
 export const PRECEDENCE_SHARD = "precedence-000.json";
 
 /**
+ * 結合方向のシャード(設計書 2026-08-19 §6)。
+ *
+ * **このシャードが走行に居るかどうかで、但し書きの文が変わる。** 居ない
+ * 走行で「踏んでいる」と書けば、報告書が自分の走行について嘘をつく。
+ */
+export const ASSOCIATIVITY_SHARD = "associativity-000.json";
+
+/**
  * **`precedence-000.json` の 2000 件のうち、優先順位が無いと別の木になる件数。**
  *
  * この数は報告書が再計算しているものではない。reference の
@@ -462,7 +470,7 @@ export function areaOfShard(shardName: string): Area {
     return "cancellation";
   }
   if (
-    /^(scientific|equivalence|precedence|elementary|inverse-trig|combinatorics|typed|corrections|angle-mode)-/.test(
+    /^(scientific|equivalence|precedence|associativity|elementary|inverse-trig|combinatorics|typed|corrections|angle-mode)-/.test(
       stem,
     )
   ) {
@@ -1414,15 +1422,63 @@ function renderCaveats(entries: ShardSummary[]): string[] {
           "  整形の欠陥と計算の丸めを区別できなくなる。",
           "  計算を挟む式には「トグルを 2 回押すと元の表示に戻る」ことだけを主張させた。",
         ];
+  const associativityShard = entries.find(
+    (e) => e.name === summaryName(ASSOCIATIVITY_SHARD, "values"),
+  );
   // **但し書きが名指しする「完全に固定の文章」の一覧。**
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
   const fixedItems = [
     ...(imaginaryPresses === 0 && polarPresses === 0 ? ["複素数"] : []),
     ...(angleToggles === 0 ? ["角度モード"] : []),
     ...(notationPresses === 0 ? ["表示の記法"] : []),
+    // **結合方向も、シャードが走行に無いときは固定の文章である。** 項目の
+    // 分岐と同じ述語から引く——別々に書くと、片方だけが動く。
+    ...(associativityShard === undefined ? ["結合方向"] : []),
     "UI",
     "入力中の表示",
   ];
+  // **結合方向(設計書 2026-08-19 §6、計画 Task 4)。**
+  //
+  // 以前ここは「`pow` は押されるが右結合も優先順位 4 も踏んでいない」という
+  // **固定の文章**だった。`associativity-000.json` が入った時点でその前半は
+  // 嘘になる——だから件数を実データから出し、シャードが走行に無い走行では
+  // 元の否定をそのまま書く。**片方だけ動かすと、報告書が自分の走行について
+  // 矛盾する。**
+  //
+  // **後半(優先順位 4)は撤回しない。** 新しいシャードは 1 本の連鎖を必ず
+  // 同じ優先順位の段の中に収めており(`ASSOC_CHAINS`)、`2 ^ 3 × 4` のように
+  // 段をまたぐ列は一件も持たない。結合方向を踏んだことと、優先順位 4 を
+  // 踏んだことは別である。
+  const associativityItem =
+    associativityShard === undefined
+      ? [
+          "- **`xʸ` の右結合と優先順位 4。** `pow` は押されるが、キー列は二項を必ず",
+          "  括弧で囲むので、**右結合も優先順位 4 も踏んでいない**。これは意図した",
+          "  分離である。",
+          "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
+          "  ——結合方向を反転する変異で 1 件も赤くならない。",
+        ]
+      : [
+          `- **結合方向——${associativityShard.total} 件が踏んでいる。優先順位 4 はまだ踏んでいない。**`,
+          `  \`${ASSOCIATIVITY_SHARD}\` は同順位の演算子が括弧なしで並ぶキー列`,
+          "  (`9 − 4 − 3`、`2 ^ 3 ^ 2`)を持つ。engine は括弧ではなく**結合方向**から",
+          "  構造を復元した——`xʸ` だけが右結合で、四則と `nPr`/`nCr` は左結合である",
+          "  (`docs/base-spec.md` の公開契約)。",
+          "",
+          "  **括弧つきの対照群が同じシャードに入っている。** 平坦なキー列 1 本につき、",
+          "  同じ木を全括弧で書いた双子が 1 本ある——括弧が構造を決めるので、畳む向きを",
+          "  変えても双子の答えは変わらない。**対で作られていることを数えているのは",
+          "  この走行ではなく参照側のテストである**",
+          "  (`reference/tests/test_generate_corpus.py`)。",
+          "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
+          "  ——結合方向を反転する変異は、このシャードだけを、しかもその一部だけを",
+          "  赤くする。",
+          "",
+          "  **優先順位 4 は依然として踏んでいない。** このシャードの連鎖は 1 本が",
+          "  必ず同じ優先順位の段に収まっており、`2 ^ 3 × 4` のように段をまたぐ列を",
+          "  持たない。結合方向と優先順位を混ぜると、赤が出たときどちらが原因か",
+          "  分からなくなるので、意図して分けている。",
+        ];
   const parenthesisItem =
     parenthesis.kind === "untouched"
       ? [
@@ -1484,10 +1540,12 @@ function renderCaveats(entries: ShardSummary[]): string[] {
                 "  数え、その値を固定している",
                 "  (`reference/tests/test_generate_corpus.py`)。",
                 "",
-                "  **結合方向は踏んでいない**——同順位の入れ子は括弧を残して生成して",
-                "  いるので、`10 - 3 - 2` のような列が一件も無い。省けるのは左結合だからで、",
-                "  省いた瞬間に生成側が結合方向を知ることになるため、意図して残している。",
-                "  結合方向は `engine_table.rs` の担当である。",
+                "  **このシャードは結合方向を踏んでいない**——同順位の入れ子は括弧を残して生成して",
+                "  いるので、`10 - 3 - 2` のような列がこのシャードには一件も無い。省けるのは",
+                "  左結合だからで、省いた瞬間に生成側が結合方向を知ることになるため、意図して",
+                "  残している。**結合方向は別の担当である**(下の「まだ踏んでいない、または",
+                "  限定的にしか踏んでいない領域」の結合方向の項目が、この走行で踏んだかどうかを",
+                "  実データから書く)。",
               ]),
         ];
   return [
@@ -1540,15 +1598,7 @@ function renderCaveats(entries: ShardSummary[]): string[] {
         ]),
     ...parenthesisItem,
     ...exponentItem,
-    // **`xʸ` は押されるが、結合方向にも優先順位 4 にも触れていない。**
-    // キー列は二項を必ず括弧で囲むためである(設計書 2026-08-16-corpus-functions
-    // §3.5)。新しい関数の検証と結合方向の検証を混ぜると、赤が出たときどちらが
-    // 原因か分からなくなるので、意図して分けている。
-    "- **`xʸ` の右結合と優先順位 4。** `pow` は押されるが、キー列は二項を必ず",
-    "  括弧で囲むので、**右結合も優先順位 4 も踏んでいない**。これは意図した",
-    "  分離である。",
-    "  **上の「この検査は壊れたものを見つけられるのか」の表がその裏付けである**",
-    "  ——結合方向を反転する変異で 1 件も赤くならない。",
+    ...associativityItem,
     ...errorItem,
     ...complexItem,
     ...angleItem,
