@@ -86,6 +86,14 @@ jobs:
           name: wasm-pkg
           path: web/src/wasm/
       - run: pnpm exec playwright install --with-deps chromium
+      # **日本語のフォントを入れる。** runner には CJK が無く、入れないと盤面の文字が
+      # フォールバックで描かれ、字幅と行高が実機と変わる。**この画面は誰も見ない**
+      # ——にもかかわらず 360px の横溢れ検査（nav.spec.ts / viewport-budget.spec.ts）と
+      # 面の寸法検査（llm.spec.ts）はその画面を測って落ちる。
+      # 実測: CJK を落とした fontconfig で手元を CI 相当に絞ると、同じ 3 本が赤くなる。
+      # **検査は 1px も緩めない。測る環境のほうを実機に揃える。**
+      - name: Install Japanese fonts (the layout checks measure real glyphs)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       # Layer 5
       - run: pnpm exec playwright test
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
