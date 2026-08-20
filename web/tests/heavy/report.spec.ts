@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import type { HeavyUiRun } from "../heavy-ui/presses";
+import { buildRun as buildUiRun } from "../heavy-ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallCase,
@@ -43,6 +45,7 @@ import {
   type ShardSummary,
   SPEC_TRANSCRIPTION_MARK,
   summaryName,
+  uiHealth,
   verdictOf,
   verificationFrameOf,
   verificationFrames,
@@ -2273,4 +2276,346 @@ test("a run of nothing but spec transcriptions leaves the outside-reference fram
     summaryName(ENTRY_SHARD, "displays"),
   );
   expect(markdown).toContain("**0 件という意味ではない。**");
+});
+
+// ---------------------------------------------------------------------------
+// **矛盾を見張る。** 報告書は状態によって文が入れ替わる。入れ替わりを
+// 見張らないと、**数を出している走行と、何も踏んでいない走行が同じ文を持つ**
+// ——固定文が腐る、というこの文書で 3 度起きた壊れ方である。
+//
+// 見張る状態は 6 つ: 指数表示・金融のエラー・**盤面を通る走行(3 状態)**・
+// core だけが通った走行・集計が揃わなかった走行・参照実装が捨てた件数。
+// ---------------------------------------------------------------------------
+
+/** 盤面を通る走行の要約の見本。**見たい欄だけ上書きする。** */
+function uiRunFixture(overrides: Partial<HeavyUiRun> = {}): HeavyUiRun {
+  return {
+    schema: 1,
+    pressedAnything: true,
+    ok: true,
+    totalPresses: 12345,
+    totalTypedCases: 1266,
+    byToken: {},
+    casesTyped: {},
+    required: [],
+    findings: [],
+    ...overrides,
+  };
+}
+
+const UI_PASSED = "盤面を通る走行——通っている";
+const UI_FAILED = "盤面を通る走行——失敗している";
+const UI_NO_PRESSES = "盤面を通る走行——キーを 1 つも押していない";
+const UI_NOT_RUN = "盤面を通る走行——記録が無い";
+const UI_STATES = [UI_PASSED, UI_FAILED, UI_NO_PRESSES, UI_NOT_RUN];
+
+/**
+ * 盤面の状態の行を 1 本だけ取り出す。**他の 3 状態が同居していないことも見る**
+ * ——「どこかに『通っている』と書いてある」検査では、4 つの状態を同じ段落に
+ * 並べた実装(つまり何も区別していない実装)でも緑になる。
+ */
+function uiLine(markdown: string, state: string): string {
+  expect(UI_STATES, "見張る状態の一覧に無い").toContain(state);
+  expect(UI_STATES.length, "状態の一覧が痩せている").toBe(4);
+  for (const other of UI_STATES) {
+    if (other === state) {
+      continue;
+    }
+    expect(markdown.includes(other), `「${other}」も同時に出ている`).toBe(
+      false,
+    );
+  }
+  return onlyLine(markdown, state);
+}
+
+test("state 1: the exponent line never holds both the count and the denial", () => {
+  // **0 と 非 0 で文が入れ替わる。** 以前この 2 つは 12 行しか離れていない
+  // 場所で同居していた(「1940 件読んだ」と「一度も出ていない」)。
+  const none = renderReport([summary({ exponentDisplayCases: 0 })], PROVENANCE);
+  expect(onlyLine(none, "指数表記の表示")).not.toContain("件が読んでいる");
+  expect(onlyLine(none, "平坦表示の帯")).toContain("一度も出ていない");
+
+  const some = renderReport(
+    [summary({ exponentDisplayCases: 1940 })],
+    PROVENANCE,
+  );
+  expect(onlyLine(some, "指数表記の表示")).toContain("1940 件が読んでいる");
+  expect(some.includes("平坦表示の帯")).toBe(false);
+});
+
+test("state 2: the finance error frames swap wording with the data, each on its own line", () => {
+  const some = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        errorKinds: { SyntaxError: 3, Overflow: 5 },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(errorPathLine(some, "金融の `SyntaxError`")).toContain("3 件");
+  expect(errorPathLine(some, "金融の `SyntaxError`")).not.toContain(
+    "1 件も検証していない",
+  );
+  expect(errorPathLine(some, "金融の `Overflow`")).toContain("5 件");
+
+  const none = renderReport(
+    [summary({ name: "finance-000.json (calls)", errorKinds: {} })],
+    PROVENANCE,
+  );
+  for (const frame of ["金融の `SyntaxError`", "金融の `Overflow`"]) {
+    expect(errorPathLine(none, frame)).toContain("1 件も検証していない");
+  }
+});
+
+test("state 3: with no heavy-ui-run.json the report says the keypad run left no record", () => {
+  // **ここが肝である。** `pnpm heavy` と `pnpm heavy:ui` は別の走行で集計を
+  // 共有しない。読まなければ、**盤面を一度も走らせていない走行**と
+  // **盤面が落ちた走行**が同じ顔になり、報告書は「UI も通した」と読める。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+  expect(markdown).toContain("「UI も確かめた」と");
+  expect(uiHealth(null)).toEqual({ state: "not-run" });
+});
+
+test("state 3: a heavy-ui run that failed is named as failed, with its findings counted", () => {
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    uiRunFixture({
+      ok: false,
+      totalPresses: 40,
+      totalTypedCases: 3,
+      findings: [
+        { kind: "never-pressed", message: "a" },
+        { kind: "never-pressed", message: "b" },
+        { kind: "too-few-cases", message: "c" },
+      ],
+    }),
+  );
+  const line = uiLine(markdown, UI_FAILED);
+  expect(line).toContain("指摘 3 件");
+  // **種類ごとに数える。** 1 つの数字に畳むと、どの主張が崩れたのか読めない。
+  expect(markdown).toContain("`never-pressed` 2 件・`too-few-cases` 1 件");
+  expect(markdown).toContain("40 回キーを押し");
+  // **この報告書の緑がその失敗を打ち消さないと書く。**
+  expect(markdown).toContain("この報告書の緑は、その失敗を打ち消さない");
+});
+
+test("state 3: a heavy-ui run that passed is the only state that says so", () => {
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    uiRunFixture({ totalPresses: 30000, totalTypedCases: 1266 }),
+  );
+  expect(uiLine(markdown, UI_PASSED)).toContain("通っている");
+  expect(markdown).toContain("30000 回キーを押し");
+  expect(markdown).toContain("1266 件のケースを盤面から打鍵して");
+  // **同時の走行ではない**——最後に残された記録である、と断る。
+  expect(markdown).toContain("この報告書と同時の走行ではない");
+  // 通っていても、この報告書の件数は盤面を通っていない。
+  expect(markdown).toContain("この報告書の件数は、いまも盤面を通っていない");
+  expect(uiHealth(uiRunFixture())).toEqual({
+    state: "passed",
+    presses: 12345,
+    typed: 1266,
+  });
+});
+
+test("a heavy-ui run that pressed nothing is not reported as a keypad failure", () => {
+  // **設計書が想定していなかった 4 つ目の状態(2026-08-20 実測)。**
+  // ディスクに在る `heavy-ui-run.json` が `pressedAnything: false` だった
+  // ——盤面を叩く spec を含まない**部分走行**の残骸である。これを「失敗」と
+  // 同じ行に出すと、**盤面の主張が崩れた走行**と**盤面を一度も叩いていない
+  // 走行**が同じ顔になる。前者は電卓の欠陥を指しうるが、後者が指しているのは
+  // 走行の組み方だけである。
+  const residue = uiRunFixture({
+    pressedAnything: false,
+    ok: false,
+    totalPresses: 0,
+    totalTypedCases: 0,
+    findings: [
+      { kind: "no-presses", message: "a" },
+      { kind: "too-few-cases", message: "b" },
+      { kind: "planned-but-not-typed", message: "c" },
+    ],
+  });
+  expect(uiHealth(residue).state).toBe("no-presses");
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    residue,
+  );
+  expect(uiLine(markdown, UI_NO_PRESSES)).toContain(
+    "キーを 1 つも押していない",
+  );
+  expect(markdown).toContain("`planned-but-not-typed` 1 件");
+  expect(markdown).toContain("崩れる前に、");
+
+  // **`ok` を先に見ると、押していない走行が「通った」になる。** 指摘が
+  // 1 件も無い押下 0 の記録——検査そのものが外れた走行——で確かめる。
+  expect(
+    uiHealth(
+      uiRunFixture({
+        pressedAnything: false,
+        ok: true,
+        totalPresses: 0,
+        totalTypedCases: 0,
+      }),
+    ).state,
+  ).toBe("no-presses");
+});
+
+test("the shape the keypad run writes is the shape this report reads", () => {
+  // **書く側と読む側は別のモジュールである。** `presses.ts` が欄の名前を
+  // 変えた日に `readUiRunJson()` が `null` を返すようになれば、報告書は
+  // 黙って「記録が無い」と書き続ける——**盤面が緑でも、である。**
+  // 見本を手で書かず、**書く側の純関数から作る**ことでそこを繋ぐ。
+  const empty = buildUiRun(
+    { byToken: {}, casesTyped: {} },
+    {
+      cases: {},
+      inCorpus: [],
+      inSample: [],
+      totalCases: 0,
+    },
+    [{ kind: "no-presses", message: "nothing was pressed" }],
+  );
+  expect(uiHealth(empty).state).toBe("no-presses");
+
+  const green = buildUiRun(
+    {
+      byToken: {
+        ac: { case: 0, harness: 1266 },
+        dot: { case: 400, harness: 0 },
+      },
+      casesTyped: { "scientific-000.json": 1266 },
+    },
+    { cases: {}, inCorpus: [], inSample: [], totalCases: 1266 },
+    [],
+  );
+  expect(uiHealth(green)).toEqual({
+    state: "passed",
+    presses: 1666,
+    typed: 1266,
+  });
+});
+
+test("state 4: a run where only the core passed does not read as a run that also passed the keypad", () => {
+  // **core が緑で盤面が未実行**、という一番ありふれた状態。走行そのものの
+  // 失敗は 0 件と書けるが、盤面については何も書けない。**2 つを同じ緑で
+  // 並べない。**
+  const clean: HeavyRun = {
+    schema: 1,
+    ranTests: true,
+    expected: ["scientific-000.json (values)"],
+    shards: [
+      { name: "scientific-000.json (values)", total: 2000, mismatches: 0 },
+    ],
+  };
+  const markdown = renderReport([summary()], PROVENANCE, [], null, clean, null);
+  expect(errorPathLine(markdown, "走行そのものの失敗")).toContain("0 件");
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+});
+
+test("with neither summary on disk, the report calls both of them unread", () => {
+  // **2 枚とも無い走行では、両方を未実行と書く。** 片方を「異常なし」に
+  // 畳むのが、この種の報告書がいちばん静かに嘘をつく道である。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(errorPathLine(markdown, "走行そのものの失敗")).toContain(
+    "読めていない",
+  );
+  expect(errorPathLine(markdown, "走行そのものの失敗")).not.toContain("0 件");
+  expect(uiLine(markdown, UI_NOT_RUN)).toContain("記録が無い");
+});
+
+test("state 5: a report missing part of its own summaries is not a result, even with a green keypad run", () => {
+  // **盤面が通っていることは、欠けた集計の代わりにならない。**
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    ["errors-000.json (displays)"],
+    null,
+    null,
+    uiRunFixture(),
+  );
+  expect(onlyLine(markdown, "# この走行は不完全である")).toContain(
+    "結果として読まないこと",
+  );
+  expect(markdown.indexOf("この走行は不完全である")).toBeLessThan(
+    markdown.indexOf("# CalcArc 計算検証レポート"),
+  );
+  expect(onlyLine(markdown, "- `errors-000.json (displays)`")).toBe(
+    "- `errors-000.json (displays)`",
+  );
+  expect(markdown).toContain("記録が残った分だけの数字");
+  // 盤面の側は緑のまま——**その 2 つは別の主張である。**
+  expect(uiLine(markdown, UI_PASSED)).toContain("通っている");
+});
+
+test("state 6: zero rejections, some rejections and no declaration are three different sentences", () => {
+  // **「0 件捨てた」と「捨てた数を宣言していない」を混ぜない。** 実物では
+  // `finance-000.json` が理由別の数を宣言し、`data-scale-000.json` は
+  // `rejections` そのものを持たない。
+  const withReasons = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: { dup: 2, reasons: { near_yen_boundary: 7, other: 0 } },
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(withReasons, "捨てた件数")).toContain("件数: 7");
+  expect(onlyLine(withReasons, "- `near_yen_boundary`:")).toBe(
+    "- `near_yen_boundary`: 7",
+  );
+  expect(onlyLine(withReasons, "- 重複による棄却")).toContain("2");
+
+  const noneGaveUp = renderReport(
+    [
+      summary({
+        name: "finance-000.json (calls)",
+        callBreakdown: {
+          byOp: { loan_forward: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: { dup: 0, reasons: { near_yen_boundary: 0, other: 0 } },
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(noneGaveUp, "捨てた件数")).toContain("件数: 0");
+  expect(noneGaveUp.includes("宣言していない")).toBe(false);
+
+  const undeclared = renderReport(
+    [
+      summary({
+        name: "data-scale-000.json (calls)",
+        callBreakdown: {
+          byOp: { to_bytes: { ok: 2000 } },
+          byStratum: {},
+          gaveUp: null,
+        },
+      }),
+    ],
+    PROVENANCE,
+  );
+  expect(onlyLine(undeclared, "棄却の数(`rejections`)")).toContain(
+    "宣言していない",
+  );
+  expect(undeclared.includes("捨てた件数")).toBe(false);
 });

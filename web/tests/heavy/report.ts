@@ -9,6 +9,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KEY_TOKENS } from "../../src/calc/types";
+import type { HeavyUiRun } from "../heavy-ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallBreakdown,
@@ -188,6 +189,15 @@ const RUN_PATH = fileURLToPath(
   new URL("../../heavy-run.json", import.meta.url),
 );
 
+/**
+ * **盤面を通る走行が残す要約。** `pnpm heavy:ui` の `globalTeardown` が書く
+ * (`../heavy-ui/presses.ts`)。この走行が書くものではない——だからここは
+ * **読むだけ**である。
+ */
+const UI_RUN_PATH = fileURLToPath(
+  new URL("../../heavy-ui-run.json", import.meta.url),
+);
+
 /** 走行 1 回ぶんの機械可読な要約。**欠陥注入の測定はこれだけを読む。** */
 export interface HeavyRunShard {
   name: string;
@@ -265,6 +275,110 @@ export function readRunJson(): HeavyRun | null {
     return null;
   }
   return run as HeavyRun;
+}
+
+/**
+ * **盤面を通る走行の要約(`web/heavy-ui-run.json`)を読む。読めなければ `null`。**
+ *
+ * `pnpm heavy` と `pnpm heavy:ui` は**別の走行**で、集計を共有しない。だから
+ * 盤面の結果はこの走行の `heavy-run.json` には現れない——読まなければ、
+ * **UI が落ちた走行と、UI を一度も走らせていない走行が同じ顔になる**。
+ * どちらの顔も「盤面については何も言っていない」ではなく「異常なし」に
+ * 見えてしまう。
+ *
+ * `readRunJson()` と同じ流儀にする: **ディスクを読み直し、形が違えば `null`。**
+ * `null` は「走った証拠が無い」であって「UI が通った」でも「UI が落ちた」でも
+ * ない。
+ */
+export function readUiRunJson(): HeavyUiRun | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(UI_RUN_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const run = parsed as Partial<HeavyUiRun>;
+  if (
+    run.schema !== 1 ||
+    typeof run.pressedAnything !== "boolean" ||
+    typeof run.ok !== "boolean" ||
+    typeof run.totalPresses !== "number" ||
+    typeof run.totalTypedCases !== "number" ||
+    !Array.isArray(run.findings)
+  ) {
+    return null;
+  }
+  return run as HeavyUiRun;
+}
+
+/**
+ * **盤面を通る走行の状態。畳まない。**
+ *
+ * 設計が名指ししたのは 3 つ——「無い = 走っていない」「在って失敗」
+ * 「在って成功」である。**実物には 4 つ目があった**(2026-08-20 実測):
+ * `heavy-ui-run.json` が在って `pressedAnything: false`、つまり
+ * **盤面を通る spec が 1 本も走らなかった部分走行**の残骸である
+ * (`finance-ui.spec.ts` だけを走らせるとこれが残る)。
+ *
+ * これを `failed` に混ぜると、**盤面の主張が崩れた走行**と、**盤面を一度も
+ * 叩いていない走行**が同じ行になる。前者は電卓の欠陥を指しうるが、後者が
+ * 指しているのは走行の組み方だけである。別の状態として出す。
+ */
+export type UiHealth =
+  /** 記録が無い(または読めない)。**「UI が通った」ではない。** */
+  | { state: "not-run" }
+  /** 記録は在るが、キーを 1 つも押していない。**部分走行の残骸。** */
+  | { state: "no-presses"; kinds: Record<string, number> }
+  /** 押してはいるが、主張が通っていない。 */
+  | {
+      state: "failed";
+      kinds: Record<string, number>;
+      presses: number;
+      typed: number;
+    }
+  /** 押して、主張も全部通った。 */
+  | { state: "passed"; presses: number; typed: number };
+
+/** 指摘を種類ごとに数える。**全文は並べない**(実測 33 件)。 */
+function uiFindingKinds(run: HeavyUiRun): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const finding of run.findings) {
+    const kind = typeof finding?.kind === "string" ? finding.kind : "(不明)";
+    kinds[kind] = (kinds[kind] ?? 0) + 1;
+  }
+  return kinds;
+}
+
+/**
+ * **純関数。** ディスクを触らないので、走行の外から 4 つの状態を全部作れる。
+ *
+ * **押していないことを先に見る。** `ok` を先に見ると、指摘が 1 件も無いのに
+ * 1 度も押していない記録——つまり検査そのものが外れた走行——が「通った」に
+ * なる。押下 0 は、それだけで「盤面については何も確かめていない」である。
+ */
+export function uiHealth(run: HeavyUiRun | null): UiHealth {
+  if (run === null) {
+    return { state: "not-run" };
+  }
+  if (!run.pressedAnything || run.totalPresses === 0) {
+    return { state: "no-presses", kinds: uiFindingKinds(run) };
+  }
+  if (!run.ok) {
+    return {
+      state: "failed",
+      kinds: uiFindingKinds(run),
+      presses: run.totalPresses,
+      typed: run.totalTypedCases,
+    };
+  }
+  return {
+    state: "passed",
+    presses: run.totalPresses,
+    typed: run.totalTypedCases,
+  };
 }
 
 /** ディスクに落とす 1 枚分。素性もここに入れる(これもワーカーごとの状態だった)。 */
@@ -889,6 +1003,69 @@ function renderGaveUp(breakdown: CallBreakdown): string[] {
   ];
 }
 
+/**
+ * **盤面を通る走行について、この報告書が言えることを書く。**
+ *
+ * 4 つの状態は 4 つの別の文になる。**同じ文で済ませない**のが要点である
+ * ——「記録が無い」を黙って省くと、盤面を一度も走らせていない走行が、
+ * 盤面まで通った走行と同じ顔で出る。
+ *
+ * どの状態でも**この報告書の数字が盤面を通っていないことは変わらない**ので、
+ * その断りは 4 つとも持つ。
+ */
+function renderUiHealth(health: UiHealth): string[] {
+  if (health.state === "not-run") {
+    return [
+      "  **盤面を通る走行——記録が無い。**",
+      "  `web/heavy-ui-run.json` がこの報告書からは読めない。その走行が",
+      "  一度も行われていないか、要約を残す前に落ちたかのどちらかである。",
+      "  **この報告書は盤面について何も言っていない**——「UI も確かめた」と",
+      "  読まないこと。",
+    ];
+  }
+  if (health.state === "no-presses") {
+    return [
+      "  **盤面を通る走行——キーを 1 つも押していない。**",
+      "  `web/heavy-ui-run.json` は在るが、押下が 0 回である。盤面を叩く",
+      "  テストが 1 本も走らなかった走行(一部だけを走らせた場合を含む)か、",
+      "  押下の記録が外れているかで、**どちらも盤面については何も確かめて",
+      "  いない。** 指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      "  **これは盤面の主張が崩れたという意味ではない**——崩れる前に、",
+      "  叩いていない。",
+    ];
+  }
+  if (health.state === "failed") {
+    return [
+      `  **盤面を通る走行——失敗している(指摘 ${countUiFindings(health.kinds)} 件)。**`,
+      `  最後に走った \`pnpm heavy:ui\` は ${health.presses} 回キーを押し、`,
+      `  ${health.typed} 件のケースを打鍵したが、主張が通っていない。`,
+      "  指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      "  **この報告書の緑は、その失敗を打ち消さない。**",
+    ];
+  }
+  return [
+    "  **盤面を通る走行——通っている。**",
+    `  最後に走った \`pnpm heavy:ui\` は ${health.presses} 回キーを押し、`,
+    `  ${health.typed} 件のケースを盤面から打鍵して、主張が全部通っている。`,
+    "  **それはこの報告書と同時の走行ではない**(最後に残された記録である)。",
+    "  **この報告書の件数は、いまも盤面を通っていない。**",
+  ];
+}
+
+/** 指摘の種類と件数。**全文は並べない。** */
+function describeUiFindings(kinds: Record<string, number>): string {
+  const entries = Object.entries(kinds).sort(
+    ([a, x], [b, y]) => y - x || a.localeCompare(b),
+  );
+  return entries.length === 0
+    ? "種類の分かる指摘は 1 件も無い"
+    : entries.map(([kind, n]) => `\`${kind}\` ${n} 件`).join("・");
+}
+
+function countUiFindings(kinds: Record<string, number>): number {
+  return Object.values(kinds).reduce((sum, n) => sum + n, 0);
+}
+
 export function renderVerdicts(entries: ShardSummary[]): string[] {
   const rows = AREAS.map((area) => {
     const own = entries.filter((entry) => areaOfShard(entry.name) === area);
@@ -1202,6 +1379,14 @@ export function renderReport(
    * が行う。`null` は「読めていない」であって「失敗が無かった」ではない。
    */
   run: HeavyRun | null = null,
+  /**
+   * **盤面を通る走行の要約(`heavy-ui-run.json`)。呼び出し側が渡す。**
+   *
+   * `run` と同じ理由で既定は `null`——そしてここでは `null` そのものが
+   * 報告すべき状態である。**`pnpm heavy:ui` は別の走行で、集計を共有しない。**
+   * 読まずに黙っていると、この報告書は「UI も通した」と読める顔をする。
+   */
+  uiRun: HeavyUiRun | null = null,
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -1390,7 +1575,7 @@ export function renderReport(
 
   // **結論が届かない範囲も本文に出す。** ここを読まずに判定だけを読むと、
   // 「緑だから全部確かめた」と受け取られる。
-  lines.push(...renderCaveats(entries, run));
+  lines.push(...renderCaveats(entries, run, uiRun));
 
   // **本文の締めは「自分で確かめるには」。** 読み終えた人が次に何をすればよいか
   // で終わる。付録はその後ろに置く。
@@ -2166,6 +2351,7 @@ function renderRunHealth(health: RunHealth): string[] {
 function renderCaveats(
   entries: ShardSummary[],
   run: HeavyRun | null,
+  uiRun: HeavyUiRun | null,
 ): string[] {
   const unused = unusedKeyTokens(entries);
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
@@ -2372,7 +2558,10 @@ function renderCaveats(
     // **結合方向も、シャードが走行に無いときは固定の文章である。** 項目の
     // 分岐と同じ述語から引く——別々に書くと、片方だけが動く。
     ...(associativityShard === undefined ? ["結合方向"] : []),
-    "UI",
+    // **UI の行も、盤面の走行の記録が在れば件数を持つ。** 無条件に
+    // 「数える対象が無い」側へ入れておくと、押下回数と打鍵件数を書いている
+    // 走行で但し書きだけが古いことを言う——項目と一覧は同じ述語から引く。
+    ...(uiRun === null ? ["UI"] : []),
     // **入力中の表示も、`=` を押さないキー列が 1 本も無いときだけ固定である。**
     // `entry-000.json` が入るまでは本当に 0 本だったので、この項目は一覧に
     // 無条件で載っていた——その日から一覧の側も嘘になっていた。
@@ -2549,13 +2738,16 @@ function renderCaveats(
     "  アプリの画面が存在しない**——`web/vite.heavy.config.ts` は React を",
     "  含まず、入口も `heavy-harness.html` の 1 つだけである。",
     "",
-    "  **ただし盤面を通る走行が別にある。** `pnpm heavy:ui` が本物のアプリを",
-    "  開き、キートークンとボタンの対応を盤面の定義から導いて実際に押す——",
-    "  同じワークフローの次の段がそれで、**その結果はこの報告書には載らない**",
-    "  (別の走行なので集計を共有しない)。**この報告書だけを見て「UI も",
-    "  確かめた」と読まないこと。** 逆に、この報告書が緑でも",
-    "  「盤面のどのボタンからその関数に届くか」——Shift 層の奥にあるキー、",
-    "  押せない位置にあるボタン、表示に配線し忘れた欄——は何も分からない。",
+    "  **盤面を通る走行は別にある。** `pnpm heavy:ui` が本物のアプリを開き、",
+    "  キートークンとボタンの対応を盤面の定義から導いて実際に押す——同じ",
+    "  ワークフローの次の段がそれである。**別の走行なので、その結果はこの",
+    "  報告書の件数・判定・不一致には一切入っていない。**",
+    "",
+    ...renderUiHealth(uiHealth(uiRun)),
+    "",
+    "  逆に、この報告書が緑でも「盤面のどのボタンからその関数に届くか」",
+    "  ——Shift 層の奥にあるキー、押せない位置にあるボタン、表示に配線し忘れた",
+    "  欄——は何も分からない。",
     "",
     "  **この層が答えるのは「計算が合っているか」だけである。**",
     "  それが一番問われるところではあるが、それだけではアプリが正しいとは言えない。",
@@ -2694,6 +2886,10 @@ export function writeReport(): void {
     missing,
     readDetectionPower(),
     readRunJson(),
+    // **盤面を通る走行の記録は、ここで初めて読む。** `renderReport` に
+    // 読ませると、走行のあとの作業ツリーとそうでない作業ツリーで別の文書が
+    // 出る(`power` / `run` と同じ理由)。
+    readUiRunJson(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);
