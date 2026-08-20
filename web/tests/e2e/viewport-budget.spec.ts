@@ -4,9 +4,22 @@ import { expect, type Page, test } from "@playwright/test";
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
 // ページ全体の高さもフッタの位置もタブで変わる。
 
+// **Convert は 3 カテゴリとも巡回する**(U-1)。S-0 で記録した穴——
+// **巡回に入っていない route は、緑を「収まっている」と読ませる**——を、
+// 少なくとも Convert では作らない。`#convert`(素のハッシュ)は
+// `#convert/length` へ倒れる同じ画面なので、タブの href と同じ
+// `#convert/length` のほうを巡回する(同じ画面に URL を 2 つ作らない)。
+//
+// **Scale は依然として `#scale/data-scale` の 1 件だけ**である。
+// `#scale/llm` と `#scale/transfer` は 390×844 で溢れることが分かっており
+// (docs/definition-of-done.md、ユーザー裁定で許容)、ここに足すと赤になる。
+// **その 2 route がこの巡回に居ないことは、docs/definition-of-done.md に
+// 書いてある既知の穴である。**
 const TABS = [
   ["#scientific", "Scientific"],
-  ["#convert", "Convert"],
+  ["#convert/length", "Convert 長さ"],
+  ["#convert/mass", "Convert 質量"],
+  ["#convert/temperature", "Convert 温度"],
   ["#scale/data-scale", "Data Scale"],
   ["#finance", "Finance"],
 ] as const;
