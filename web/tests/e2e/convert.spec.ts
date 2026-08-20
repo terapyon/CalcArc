@@ -4,6 +4,9 @@ const panel = (page: Page) => page.getByRole("region", { name: "単位変換" })
 const echo = (page: Page) => page.getByTestId("display-entry-active");
 const main = (page: Page) => page.getByTestId("display-main");
 
+/** 測れなかったことの印。相対座標は負にもなるので `-1` では代用できない。 */
+const UNMEASURED = "unmeasured";
+
 async function press(page: Page, names: string[]) {
   for (const name of names) {
     await panel(page).getByRole("button", { name, exact: true }).click();
@@ -109,11 +112,20 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
   //
   // 温度は単位面が 1 行(3 単位)しか無く、**枠が中身の行数で決まっていたら
   // いちばん派手に潰れる面**なので、3 カテゴリぶん回る。
+  //
+  // **DEL と AC は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が
+  // 動かない**」であって、**盤面より上にある表示行の高さを巻き込むのは
+  // 測り間違い**である——その行高はフォント環境で変わる。枠を原点に取れば、
+  // 盤面の中で動いたかどうかだけが残る。
+  const rel = (
+    b: { x: number; y: number } | null,
+    frame: { x: number; y: number } | null,
+  ) => (b && frame ? `${b.x - frame.x},${b.y - frame.y}` : UNMEASURED);
   const seen: {
     where: string;
     box: { width: number; height: number };
-    del: { x: number; y: number };
-    ac: { x: number; y: number };
+    del: string;
+    ac: string;
   }[] = [];
   for (const category of ["length", "mass", "temperature"] as const) {
     await page.goto(`/#convert/${category}`);
@@ -135,24 +147,24 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
         box: { width: box?.width ?? 0, height: box?.height ?? 0 },
         // **DEL と AC の位置も控える。** 在ることではなく**動かないこと**
         // を測る。
-        del: { x: del?.x ?? -1, y: del?.y ?? -1 },
-        ac: { x: ac?.x ?? -1, y: ac?.y ?? -1 },
+        del: rel(del, box),
+        ac: rel(ac, box),
       });
     }
   }
   expect(seen).toHaveLength(6);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
-  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  const dels = new Set(seen.map((s) => s.del));
   expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
-  const acs = new Set(seen.map((s) => `${s.ac.x},${s.ac.y}`));
+  const acs = new Set(seen.map((s) => s.ac));
   expect(acs.size, `AC moved: ${JSON.stringify(seen)}`).toBe(1);
-  // **番兵は 3 つとも置く**——計測できなかったときの `-1` は 1 通りに
-  // 揃うので、**上の 3 つの `Set` は測れていなくても緑になる**。
+  // **番兵は 3 つとも置く**——計測できなかったときの `0` / `UNMEASURED` は
+  // 1 通りに揃うので、**上の 3 つの `Set` は測れていなくても緑になる**。
   // S-0 では `ac` の 1 行が落ちていた。
   expect(seen[0]?.box.width, "the frame was never measured").toBeGreaterThan(0);
-  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
-  expect(seen[0]?.ac.x, "AC was never measured").toBeGreaterThanOrEqual(0);
+  expect(seen[0]?.del, "DEL was never measured").not.toBe(UNMEASURED);
+  expect(seen[0]?.ac, "AC was never measured").not.toBe(UNMEASURED);
 });
 
 test("every category has a deep link that lands on it", async ({ page }) => {
