@@ -27,6 +27,24 @@ import { record, summaryName } from "./report";
 /** 1 束あたりのケース数。往復のコストが計算のコストを覆わない大きさにする。 */
 const BATCH = 500;
 
+/**
+ * 期待値として持っているエラー種別ごとの件数。
+ *
+ * `expect.error` を読む——**`"error" in expect` を数えるだけでは種別が消える**。
+ * 電卓の表示はどの種別でも同じ `Math ERROR` なので、種別を落とした集計からは
+ * 種別の取り違えが二度と見えない。
+ */
+function countErrorKinds(cases: CallCase[]): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const testCase of cases) {
+    const error = testCase.expect.error;
+    if (typeof error === "string") {
+      kinds[error] = (kinds[error] ?? 0) + 1;
+    }
+  }
+  return kinds;
+}
+
 const SHARDS = loadCallShards();
 
 for (const { name, shard } of SHARDS) {
@@ -81,9 +99,12 @@ for (const { name, shard } of SHARDS) {
       looserThanDisplay: 0,
       precedenceCases: 0,
       exponentDisplayCases: 0,
-      // **エラーを期待値として持つケース。** 金融とデータスケールは入力の
-      // 検証が仕事の一部なので、エラーになること自体が仕様である。
-      errorCases: cases.filter((c: CallCase) => "error" in c.expect).length,
+      // **エラーを期待値として持つケースを、種別ごとに数える。** 金融と
+      // データスケールは入力の検証が仕事の一部なので、エラーになること自体が
+      // 仕様である。**合計ではなく種別で渡す**——報告書は「金融の
+      // `SyntaxError`」と「金融の `Overflow`」を別の経路として出すので、
+      // ここで畳むと片方が 0 件でも読み手に分からない。
+      errorKinds: countErrorKinds(cases),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

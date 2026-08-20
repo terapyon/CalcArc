@@ -36,6 +36,29 @@ function isDisplayCase(
 }
 
 /**
+ * 期待値として持っているエラー種別ごとの件数。**同値ケースは持たない。**
+ *
+ * 種別を落とすと、報告書のエラー経路の枠が「エラーが N 件」としか言えなく
+ * なる——`main` は全種別で同じ `"Math ERROR"` なので、そこから種別を
+ * 取り戻す方法は無い。
+ */
+function countErrorKinds(
+  cases: (DisplayCase | DisplayEquivalenceCase)[],
+): Record<string, number> {
+  const kinds: Record<string, number> = {};
+  for (const testCase of cases) {
+    if (!isDisplayCase(testCase)) {
+      continue;
+    }
+    const error = testCase.expect.error;
+    if (error !== undefined) {
+      kinds[error] = (kinds[error] ?? 0) + 1;
+    }
+  }
+  return kinds;
+}
+
+/**
  * 結果を 1 件取り出す。**添字が範囲外なら落とす。**
  *
  * `results[cursor++]` をそのまま読むと、束の組み立てと読み戻しがずれたとき
@@ -174,12 +197,11 @@ for (const { name, shard } of loadDisplayShards()) {
       exponentDisplayCases: cases.filter(
         (c) => isDisplayCase(c) && c.expect.main.includes("e"),
       ).length,
-      // **主張したエラー種別の件数。** `"error" in expect` を数える
-      // (`calls.spec.ts` と同じ形)——実際に観測した件数ではなく、
-      // このシャードが期待値として持っている件数である。
-      errorCases: cases.filter(
-        (c) => isDisplayCase(c) && c.expect.error !== undefined,
-      ).length,
+      // **主張したエラー種別ごとの件数。** 実際に観測した件数ではなく、
+      // このシャードが期待値として持っている件数である。**種別を落とさない**
+      // ——`main` は全種別で同じ `"Math ERROR"` なので、種別を畳んだ集計は
+      // 種別の取り違えについて何も言えない。
+      errorKinds: countErrorKinds(cases),
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

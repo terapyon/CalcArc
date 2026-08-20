@@ -104,15 +104,21 @@ export interface ShardSummary {
    */
   exponentDisplayCases: number;
   /**
-   * **エラーになることを期待値として持つケースの件数。**
+   * **エラーになることを期待値として持つケースの、種別ごとの件数。**
    *
-   * 科学計算の**値**シャードは 0 である——定義域外は生成の時点で捨てている。
+   * 科学計算の**値**シャードは空である——定義域外は生成の時点で捨てている。
    * `errors-000.json` はその例外で、定義域外・極・ゼロ除算を**わざと**
    * 期待値として持つ(設計書 2026-08-19 §5)。金融とデータスケールも違う——
    * **入力の検証が仕事の一部**なので、エラーになること自体が仕様であり、
    * どちらもエラー名まで突き合わせる。
+   *
+   * **合計ではなく種別で持つ。** 電卓の表示はどの種別でも同じ `Math ERROR`
+   * なので、件数だけを持つと「ゼロ除算が 270 件」と「構文エラーが 270 件」が
+   * 区別できない——報告書はエラー経路を**経路ごとに**出すので、そこで種別が
+   * 要る。合計が要るところは `errorCaseCount()` が足す(同じ数を 2 か所に
+   * 持てば、片方だけが動く)。
    */
-  errorCases: number;
+  errorKinds: Record<string, number>;
   worstEffectiveRelTolerance: number;
   bands: Record<ToleranceBand, number>;
   // 設計書 §11 の「分布そのものを報告書に載せる」。
@@ -199,6 +205,40 @@ export function buildRun(
 export function writeRunJson(): void {
   const run = buildRun(readRecorded(), expectedSummaryNames());
   writeFileSync(RUN_PATH, `${JSON.stringify(run, null, 2)}\n`, "utf-8");
+}
+
+/**
+ * 走行の要約をディスクから読む。**読めなければ `null`。**
+ *
+ * 報告書の「走行そのものの失敗」の枠がこれを読む。**同じ集計から作り直さず、
+ * 書かれたファイルを読み直す**のは、この枠が答えるのが「走行が自分の結果を
+ * ディスクに残せたか」だからである——`globalTeardown` は要約を先に書いてから
+ * 報告書を書く(要約が残らない走行ほど、測定側が一番知りたい)。プロセス内の
+ * 値を写せば、その 1 本の鎖が切れていても報告書は「異常なし」と書く。
+ *
+ * **壊れたファイルは無いファイルと同じだけ何も言っていない。** 形が違えば
+ * `null` を返し、報告書は「読めていない」と書く——「失敗が無かった」ではない。
+ */
+export function readRunJson(): HeavyRun | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(RUN_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const run = parsed as Partial<HeavyRun>;
+  if (
+    run.schema !== 1 ||
+    typeof run.ranTests !== "boolean" ||
+    !Array.isArray(run.expected) ||
+    !Array.isArray(run.shards)
+  ) {
+    return null;
+  }
+  return run as HeavyRun;
 }
 
 /** ディスクに落とす 1 枚分。素性もここに入れる(これもワーカーごとの状態だった)。 */
@@ -427,13 +467,26 @@ export const AREAS = [
 export type Area = (typeof AREAS)[number];
 
 /**
+ * 集計の名前からシャードの幹を取り出す。`"errors-000.json (displays)"` →
+ * `"errors-000"`。
+ *
+ * **規則は 1 か所に置く。** 領域の判定とエラー経路の判定が、同じ名前を
+ * それぞれの書き方で刻むと、片方だけが `(displays)` の接尾辞に躓く——
+ * 躓いた側は例外を投げるのではなく**別のシャードの数字に混ぜてしまう**ので、
+ * 検査は緑のまま報告書だけが嘘になる。
+ */
+export function shardStem(name: string): string {
+  return name.replace(/ \(.*\)$/, "").replace(/\.json$/, "");
+}
+
+/**
  * シャード名から領域を決める。
  *
  * **未知の接頭辞は黙って `scientific` に落とさない。** 落とすと、新しい領域の
  * シャードを足したときに、その結果が科学計算の判定に混ざって見えなくなる。
  */
 export function areaOfShard(shardName: string): Area {
-  const stem = shardName.replace(/\.json$/, "").replace(/ \(.*\)$/, "");
+  const stem = shardStem(shardName);
   if (/^(finance|loan|compound)-/.test(stem)) {
     return "finance";
   }
@@ -700,6 +753,15 @@ export function renderReport(
    * 本番の読み込みは `writeReport()` が行う。
    */
   power: DetectionPower | null = null,
+  /**
+   * **この走行自身の要約(`heavy-run.json`)。呼び出し側が渡す。**
+   *
+   * 既定が `null` なのは `power` と同じ理由である——ここでディスクを読むと、
+   * `renderReport` の出力が引数に無いファイルに依存し、走行のあとの作業ツリー
+   * とそうでない作業ツリーで別の文書が出る。本番の読み込みは `writeReport()`
+   * が行う。`null` は「読めていない」であって「失敗が無かった」ではない。
+   */
+  run: HeavyRun | null = null,
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -878,7 +940,7 @@ export function renderReport(
 
   // **結論が届かない範囲も本文に出す。** ここを読まずに判定だけを読むと、
   // 「緑だから全部確かめた」と受け取られる。
-  lines.push(...renderCaveats(entries));
+  lines.push(...renderCaveats(entries, run));
 
   // **本文の締めは「自分で確かめるには」。** 読み終えた人が次に何をすればよいか
   // で終わる。付録はその後ろに置く。
@@ -1287,7 +1349,333 @@ type ParenthesisItemState =
   /** 件数に加えて、reference テストが固定した内訳(1101)が付く。 */
   | { kind: "counted-with-pinned-breakdown"; shard: ShardSummary };
 
-function renderCaveats(entries: ShardSummary[]): string[] {
+/**
+ * このシャードがエラーを期待値として持つケースの総数。
+ *
+ * **種別の合計を別の欄に持たない。** 持てば、片方だけを直したときに
+ * 「合計 361 件・内訳 270 件」という、どちらが本当か読み手に分からない
+ * 報告書が出る。
+ */
+export function errorCaseCount(entry: ShardSummary): number {
+  return Object.values(entry.errorKinds).reduce((sum, n) => sum + n, 0);
+}
+
+/** 定義域外・極・ゼロ除算を**わざと**期待値として持つシャード。 */
+export const ERRORS_SHARD = "errors-000.json";
+
+/**
+ * エラー経路の枠。**経路であって領域ではない。**
+ *
+ * `AREAS` の軸と一致しない——`errors-000.json` は表示文字列を比べる
+ * シャードなので `areaOfShard` 上は `display` に居る(値の一致件数に、値を
+ * 一度も比べていないケースを混ぜないため)。エラー経路の軸で見れば、それは
+ * **科学計算の定義域エラー**である。**2 つの軸は目的が違うので、片方を
+ * もう片方に合わせない**——合わせた瞬間に、どちらかの数字が読めなくなる。
+ */
+export type ErrorPathId =
+  | "scientific-domain"
+  | "finance-syntax"
+  | "finance-overflow"
+  | "data-scale-input";
+
+export const ERROR_PATH_TITLES: Record<ErrorPathId, string> = {
+  "scientific-domain": "科学計算の定義域エラー",
+  "finance-syntax": "金融の `SyntaxError`",
+  "finance-overflow": "金融の `Overflow`",
+  "data-scale-input": "データスケールの入力エラー",
+};
+
+export interface ErrorPathFrame {
+  id: ErrorPathId;
+  title: string;
+  /** この枠が数えたケース数。**0 は「この走行では検証していない」。** */
+  cases: number;
+  /** 種別ごとの内訳。枠が種別 1 つに閉じている場合でも同じ形で持つ。 */
+  kinds: Record<string, number>;
+  /** この枠に数を出したシャードの名前。0 件の枠では空である。 */
+  shards: string[];
+}
+
+/** どの枠にも入らなかったエラー期待値。**黙って消さないための番兵。** */
+export interface UnclassifiedError {
+  shard: string;
+  kind: string;
+  cases: number;
+}
+
+export interface ErrorPaths {
+  frames: ErrorPathFrame[];
+  unclassified: UnclassifiedError[];
+}
+
+/**
+ * (シャード, 種別) を枠に割り当てる。**割り当てられなければ `null`。**
+ *
+ * `null` は捨てるためではなく**数え上げるため**にある。既定の枠へ落とすと、
+ * 新しいエラー経路がコーパスに入った日に、その件数が既存の枠の数字に
+ * 加算されて見えなくなる。
+ */
+function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
+  const stem = shardStem(shardName);
+  if (stem === shardStem(ERRORS_SHARD)) {
+    // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
+    // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
+    return "scientific-domain";
+  }
+  const area = areaOfShard(shardName);
+  if (area === "finance") {
+    if (kind === "SyntaxError") {
+      return "finance-syntax";
+    }
+    if (kind === "Overflow") {
+      return "finance-overflow";
+    }
+    return null;
+  }
+  if (area === "data_scale") {
+    return "data-scale-input";
+  }
+  return null;
+}
+
+/**
+ * エラー経路を枠ごとに数える。**合計は出さない。**
+ *
+ * 1 つの数字にまとめると、270 件の構文エラーと 0 件の定義域エラーが
+ * 「エラーを 270 件照合した」という 1 行になり、**踏んでいない経路が
+ * 踏んだ経路の数字に隠れる。**
+ */
+export function errorPaths(entries: ShardSummary[]): ErrorPaths {
+  const frames = new Map<ErrorPathId, ErrorPathFrame>(
+    (Object.keys(ERROR_PATH_TITLES) as ErrorPathId[]).map((id) => [
+      id,
+      { id, title: ERROR_PATH_TITLES[id], cases: 0, kinds: {}, shards: [] },
+    ]),
+  );
+  const unclassified: UnclassifiedError[] = [];
+  for (const entry of entries) {
+    for (const [kind, count] of Object.entries(entry.errorKinds)) {
+      if (count === 0) {
+        continue;
+      }
+      const id = errorPathOf(entry.name, kind);
+      if (id === null) {
+        unclassified.push({ shard: entry.name, kind, cases: count });
+        continue;
+      }
+      const frame = frames.get(id);
+      if (frame === undefined) {
+        // 到達しない。`frames` は `ERROR_PATH_TITLES` の全キーを持つ。
+        unclassified.push({ shard: entry.name, kind, cases: count });
+        continue;
+      }
+      frame.cases += count;
+      frame.kinds[kind] = (frame.kinds[kind] ?? 0) + count;
+      if (!frame.shards.includes(entry.name)) {
+        frame.shards.push(entry.name);
+      }
+    }
+  }
+  return { frames: [...frames.values()], unclassified };
+}
+
+/**
+ * **5 つ目の枠だけ出どころの種類が違う。**
+ *
+ * 上の 4 つは「電卓がエラーを返すべき入力を、何件突き合わせたか」である。
+ * この枠が見るのは電卓ではなく**走行そのもの**——ビルドが落ちた、ブラウザが
+ * 上がらなかった、集計がディスクに届かなかった、という失敗である。
+ * どれが起きても電卓の不一致は 0 件になるので、**不一致 0 件を「合っていた」
+ * と読ませないために要る。**
+ */
+export type RunHealth =
+  /** 走行の要約が読めない。**「失敗が無かった」ではない。** */
+  | { state: "unreadable" }
+  /** 走行は自分の失敗を 1 件も報告していない。 */
+  | { state: "clean" }
+  /** 走行が自分の失敗を報告している。 */
+  | { state: "failed"; failures: string[] };
+
+export function runHealth(run: HeavyRun | null): RunHealth {
+  if (run === null) {
+    return { state: "unreadable" };
+  }
+  const failures: string[] = [];
+  if (!run.ranTests) {
+    failures.push(
+      "集計が 1 枚も書かれていない——テストが 1 本も走らずに走行が終わった",
+    );
+  }
+  const seen = new Set(run.shards.map((shard) => shard.name));
+  for (const name of run.expected) {
+    if (!seen.has(name)) {
+      failures.push(`\`${name}\` の集計がディスクに届かなかった`);
+    }
+  }
+  return failures.length === 0
+    ? { state: "clean" }
+    : { state: "failed", failures };
+}
+
+/** 種別の内訳を `` `DomainError` 17 件・`TrigPole` 3 件 `` の形にする。 */
+function describeKinds(kinds: Record<string, number>): string {
+  return Object.entries(kinds)
+    .sort(([, a], [, b]) => b - a)
+    .map(([kind, count]) => `\`${kind}\` ${count} 件`)
+    .join("・");
+}
+
+/**
+ * **エラー経路を 5 つに分けて出す。**
+ *
+ * 以前ここは 1 行だった——「エラー経路。ゼロ除算・オーバーフロー・三角関数の
+ * 極・構文エラーは生成の時点で範囲外にしている」。走行が 394 件のエラーを
+ * 突き合わせていても、あるいは 1 件も突き合わせていなくても、読み手には
+ * どの経路のことなのか分からない。**経路ごとに出どころが違い、踏んでいる
+ * ものと踏んでいないものが同時にある**ので、1 つの数字にまとめない。
+ *
+ * **0 件の枠だけが「検証していない」と書く。** 全体を一括で否定すると、
+ * 数を出している枠と同じ行で矛盾する。
+ */
+function renderErrorPaths(paths: ErrorPaths, health: RunHealth): string[] {
+  const frame = (id: ErrorPathId): ErrorPathFrame => {
+    const found = paths.frames.find((f) => f.id === id);
+    if (found === undefined) {
+      // 到達しない。`errorPaths` は全 ID の枠を返す。
+      return {
+        id,
+        title: ERROR_PATH_TITLES[id],
+        cases: 0,
+        kinds: {},
+        shards: [],
+      };
+    }
+    return found;
+  };
+  const scientific = frame("scientific-domain");
+  const syntax = frame("finance-syntax");
+  const overflow = frame("finance-overflow");
+  const dataScale = frame("data-scale-input");
+  const head = (f: ErrorPathFrame): string =>
+    f.cases === 0
+      ? `  - **${f.title}——この走行は 1 件も検証していない。**`
+      : `  - **${f.title}——${f.cases} 件。**`;
+  return [
+    "- **エラー経路——5 つに分けて数える。**",
+    "  エラーの出どころは 5 つあり、踏んでいる経路と踏んでいない経路が",
+    "  同時にある。1 つの数字にまとめると、**踏んでいない経路が踏んだ経路の",
+    "  数字に隠れる。**",
+    "",
+    "  **どの経路も種別まで突き合わせる。** 電卓の表示はどの種別でも同じ",
+    "  `Math ERROR` なので、表示だけを見る検査は種別の取り違えを 1 件も",
+    "  捕まえない。",
+    "",
+    head(scientific),
+    ...(scientific.cases === 0
+      ? [
+          "    ゼロ除算・定義域の外・三角関数の極を**わざと**期待値として持つ",
+          "    ケースが、この走行に無い。値のシャードはそれらを生成の時点で",
+          "    捨てているので、**エラーになる入力に電卓が何を返すかについて、",
+          "    この報告書は何も言っていない。**",
+        ]
+      : [
+          "    ゼロ除算・定義域の外・三角関数の極を**わざと**期待値として持つ",
+          `    ケースである(内訳 ${describeKinds(scientific.kinds)})。`,
+          "    **値のシャードにこの経路は無い**——そちらは定義域の外を生成の",
+          "    時点で捨てており、エラーが出たら不一致として扱う。",
+        ]),
+    head(syntax),
+    ...(syntax.cases === 0
+      ? [
+          "    返済額が利息に届かない、ボーナスが元金の半分を超える、といった",
+          "    **数としては読めるが金融の意味で成り立たない**入力が、この走行に",
+          "    無い。**入力の検証はこの電卓の仕事の一部だが、この走行はその側を",
+          "    踏んでいない。**",
+        ]
+      : [
+          "    返済額が利息に届かない、ボーナスが元金の半分を超える、残価が元金と",
+          "    同じ、といった**数としては読めるが金融の意味で成り立たない**入力",
+          "    である。**入力を撥ねること自体が仕様**なので、エラーになることを",
+          "    期待値として持ち、種別まで突き合わせる。",
+        ]),
+    head(overflow),
+    ...(overflow.cases === 0
+      ? [
+          "    元金や残高が符号なし 64 ビットの外に出る入力が、この走行に無い。",
+          "    **桁が溢れる側の振る舞いを、この報告書は言っていない。**",
+        ]
+      : [
+          "    元金や残高が符号なし 64 ビットの外に出る入力である。式としては",
+          "    成り立っているので、**上の `SyntaxError` とは別の経路**で撥ねられる",
+          "    ——2 つを 1 つの数にまとめると、片方が 0 件でも気付けない。",
+        ]),
+    head(dataScale),
+    ...(dataScale.cases === 0
+      ? [
+          "    数として読めない件数・負の件数・知らない型といった入力が、この走行に",
+          "    無い。",
+        ]
+      : [
+          "    数として読めない件数(`abc`、全角の `１０`)、負の件数、知らない型",
+          "    といった入力である。ここも撥ねること自体が仕様である。",
+        ]),
+    ...renderRunHealth(health),
+    // **番兵は 5 つの枠を切らずに、そのあとに置く。** 枠の途中に挟むと
+    // 一覧が 2 つに割れて見える。指す先は「上の 4 つ」ではなく「どの経路
+    // にも入らないもの」と書く——走行そのものの失敗の枠は、エラー期待値が
+    // 入る場所ではない。
+    ...(paths.unclassified.length === 0
+      ? []
+      : [
+          "",
+          `  **エラー期待値のうち、上のどの経路にも入らないものが ${paths.unclassified.reduce((sum, u) => sum + u.cases, 0)} 件ある。**`,
+          ...paths.unclassified.map(
+            (u) => `  - \`${u.shard}\` の \`${u.kind}\` ${u.cases} 件`,
+          ),
+          "  **既定の枠へ落とさずにここへ出している**——落とせば、新しい経路の",
+          "  件数が既存の枠の数字に加算されて見えなくなる。",
+        ]),
+  ];
+}
+
+/**
+ * 5 つ目の枠。**電卓ではなく走行そのものを見る。**
+ *
+ * ビルドが落ちても、ブラウザが上がらなくても、集計がディスクに届かなくても、
+ * 電卓の不一致は 0 件になる。**この枠が無いと、その 0 件が「合っていた」と
+ * 同じ顔をする。**
+ */
+function renderRunHealth(health: RunHealth): string[] {
+  if (health.state === "unreadable") {
+    return [
+      "  - **走行そのものの失敗——読めていない。**",
+      "    走行の要約(`web/heavy-run.json`)がこの報告書からは読めない。",
+      "    **この走行が自分の失敗を報告できたかどうかを、この報告書は言えない**",
+      "    ——「失敗が無かった」ではない。",
+    ];
+  }
+  if (health.state === "clean") {
+    return [
+      "  - **走行そのものの失敗——0 件。**",
+      "    走行の要約(`web/heavy-run.json`)は、集計が 1 枚も書かれなかった",
+      "    走行でも、期待した集計がディスクに届かなかった走行でもない、と",
+      "    言っている。**失敗したときにこの報告書が何を書くかは、この走行では",
+      "    示されていない。**",
+    ];
+  }
+  return [
+    `  - **走行そのものの失敗——${health.failures.length} 件。**`,
+    "    走行の要約(`web/heavy-run.json`)が、この走行自身の失敗を報告して",
+    "    いる。**上の判定と不一致の件数は、この走行が実際に見た範囲についての",
+    "    ものでしかない。**",
+    ...health.failures.map((line) => `    - ${line}`),
+  ];
+}
+
+function renderCaveats(
+  entries: ShardSummary[],
+  run: HeavyRun | null,
+): string[] {
   const unused = unusedKeyTokens(entries);
   const precedence = entries.reduce((sum, e) => sum + e.precedenceCases, 0);
   // **F6b fix (fix round 4).** 「上の『4000 件通った』」は以前リテラルで、
@@ -1316,24 +1704,16 @@ function renderCaveats(entries: ShardSummary[]): string[] {
       : precedenceShard === undefined
         ? { kind: "counted" }
         : { kind: "counted-with-pinned-breakdown", shard: precedenceShard };
-  const errors = entries.reduce((sum, entry) => sum + entry.errorCases, 0);
-  const errorItem =
-    errors === 0
-      ? [
-          "- **エラー経路。** ゼロ除算・オーバーフロー・三角関数の極・構文エラーは",
-          "  生成の時点で範囲外にしている。エラーが出たケースは不一致として扱う。",
-        ]
-      : [
-          `- **エラー経路——${errors} 件は照合済み、それ以外は範囲外。**`,
-          "  金融とデータスケールは**入力の検証が仕事の一部**なので、",
-          "  エラーになること自体を期待値として持ち、**エラー名まで突き合わせる**",
-          "  (返済額が利息に届かない、桁が読めない、など)。",
-          "  科学計算では、**値**のシャードがゼロ除算・定義域外・三角関数の極を",
-          "  **生成の時点で捨てている**——そちらでエラーが出たら不一致として扱う。",
-          "  ただし `errors-000.json` はそれらを**わざと期待値として持つ**",
-          "  シャードで、エラー名まで突き合わせる。",
-          "  **つまり「エラーを検証している領域」と「していない領域」がある。**",
-        ];
+  const paths = errorPaths(entries);
+  const health = runHealth(run);
+  const errorItem = renderErrorPaths(paths, health);
+  // **エラー経路の行が「完全に固定の文章」になるのは、5 枠すべてに数える
+  // 対象が無いときだけである。** 1 枠でも数を出していれば、その行はデータ
+  // 由来になる——但し書きの一覧と項目の分岐は同じ述語から引く。
+  const errorPathsCounted =
+    paths.frames.some((frame) => frame.cases > 0) ||
+    paths.unclassified.length > 0 ||
+    health.state === "failed";
   const exponent = entries.reduce(
     (sum, entry) => sum + entry.exponentDisplayCases,
     0,
@@ -1428,6 +1808,10 @@ function renderCaveats(entries: ShardSummary[]): string[] {
   // **但し書きが名指しする「完全に固定の文章」の一覧。**
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
   const fixedItems = [
+    // **エラー経路も固定の文章になりうる。** 以前この項目は一覧に載って
+    // いなかったので、5 枠すべてが空の走行では「数える対象が無いのは N 行
+    // だけである」が 1 行数え落としていた。
+    ...(errorPathsCounted ? [] : ["エラー経路"]),
     ...(imaginaryPresses === 0 && polarPresses === 0 ? ["複素数"] : []),
     ...(angleToggles === 0 ? ["角度モード"] : []),
     ...(notationPresses === 0 ? ["表示の記法"] : []),
@@ -1755,6 +2139,7 @@ export function writeReport(): void {
     },
     missing,
     readDetectionPower(),
+    readRunJson(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);
