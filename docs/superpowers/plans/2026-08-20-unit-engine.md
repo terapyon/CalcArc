@@ -113,13 +113,28 @@ spec §3.2 の表は単位を `µm` `°C` `°F` と書いているが、**トー
 
 ```text
 convert の入口:
-  1. 先頭の `-` を **1 つだけ** 剥がす（`--40` は SyntaxError）
-  2. 残りを evaluate_to_rational に渡す（式でよい。`-5*12` は −60）
-  3. 剥がしていたら符号を反転する
+  先頭が `-` なら、評価する前に **`0` を前置する**（`-40` → `0-40`）。
+  素の評価器に渡すだけでよい——**左結合と優先順位が、符号を正しい位置に入れてくれる。**
+  `--1` は `0--1` になり、演算子の連続として SyntaxError のまま拒否される。
 ```
 
-**なぜ**: spec §0.0 の「触らない」約束は構文解析器に掛かっており、`convert` は新設のモジュールである。
-入口 1 か所で済むうえ、`-5*12` の優先順位（`-(5*12)`）も自然に出る。
+**【訂正 2026-08-20】当初この裁定は「先頭の `-` を剥がし、残り全体を評価してから符号を反転する」と
+書いていた。これは誤りである。** 剥がして全体を反転すると `-5-12` が `−(5−12)` = **+7** になる
+（正しくは −17）。実測:
+
+```
+剥がして反転:  -5-12 → 7     -2-3-4 → 5     -1+1 → -2     -5*12 → -60
+0 を前置:      -5-12 → -17   -2-3-4 → -9    -1+1 → 0      -5*12 → -60
+```
+
+**誤った理由がこの訂正の要点である。** 当初の裁定は例に `-5*12` を挙げて「−60 になる」と検証していた。
+**乗算は 2 つの解釈が一致する唯一の演算子である**——`−(5×12)` も `(−5)×12` も −60 になる。
+**判別力のない例で裁定を検証していた。** 検証には `+` か `-` が要る。
+
+**盤面から到達可能な誤りだった**（裁定 3 は打鍵テキスト全体の前に `-` を付ける）。
+`5 - 1 2` と打って `±` を押すと、画面には `-5-12` と出て **+7 が返る**——黙って間違った数を出す。
+
+**なぜ入口で担うか**: spec §0.0 の「触らない」約束は構文解析器に掛かっており、`convert` は新設のモジュールである。
 **間違えたときの代償**: ここを飛ばすと、温度の**不動点 `−40` が 1 件も打てない**——
 spec が「factor と offset の両方が同時に効く唯一の点」と呼んだケースが、盤面から到達不能になる。
 
@@ -881,7 +896,13 @@ fn an_expression_is_a_valid_value() {
 
 #[test]
 fn one_leading_minus_is_allowed_and_two_are_not() {
+    // **`*` で確かめてはいけない。** `−(5×12)` も `(−5)×12` も −60 で、
+    // 2 つの解釈が一致する——判別力が無い(裁定 2 の【訂正 2026-08-20】)。
     assert_eq!(convert("-5*12", Category::Length, Unit::M, Unit::M), Ok(r(-60, 1)));
+    // **これが判別する 1 件。** 剥がして全体を反転する実装だと +7 になる。
+    assert_eq!(convert("-5-12", Category::Length, Unit::M, Unit::M), Ok(r(-17, 1)));
+    assert_eq!(convert("-2-3-4", Category::Length, Unit::M, Unit::M), Ok(r(-9, 1)));
+    assert_eq!(convert("-1+1", Category::Length, Unit::M, Unit::M), Ok(r(0, 1)));
     assert_eq!(
         convert("--1", Category::Length, Unit::M, Unit::M),
         Err(CalcError::SyntaxError)
@@ -1070,14 +1091,17 @@ pub fn convert(value: &str, category: Category, from: Unit, to: Unit) -> CalcRes
     if from.category() != category || to.category() != category {
         return Err(CalcError::SyntaxError);
     }
-    let (text, negate) = match value.strip_prefix('-') {
-        Some(rest) => (rest, true),
-        None => (value, false),
+    // **`0` を前置するだけでよい**(裁定 2 の【訂正 2026-08-20】)。左結合と
+    // 優先順位が符号を正しい位置に入れる。剥がして全体を反転すると
+    // `-5-12` が `−(5−12)` = +7 になる。
+    let owned;
+    let text = if value.starts_with('-') {
+        owned = format!("0{value}");
+        &owned
+    } else {
+        value
     };
-    let mut parsed = evaluate_to_rational(text, UnitSet::None)?;
-    if negate {
-        parsed = Rational::from_i128(0)?.checked_sub(parsed)?;
-    }
+    let parsed = evaluate_to_rational(text, UnitSet::None)?;
     from_base(to_base(parsed, from)?, to)
 }
 ```
