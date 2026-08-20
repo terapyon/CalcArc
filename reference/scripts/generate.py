@@ -18,6 +18,7 @@ from calcarc_reference import (
     complex_ref,
     compound_ref,
     convert_ref,
+    currency_ref,
     data_scale_ref,
     expr_ref,
     llm_ref,
@@ -256,6 +257,44 @@ def build_convert() -> dict:
     }
 
 
+def build_currency() -> dict:
+    """為替換算の golden（U-4 spec §8）。
+
+    **レートは入力である。** プロバイダを叩かない——`"155.23"` のような 10 進文字列を
+    与えて、**換算と丸めが仕様どおりかだけ**を見る。だから生成し直しても値が動かない。
+
+    **`tolerance` を持たない**(spec §8)。有理数の厳密計算を通貨ごとの固定桁の文字列に
+    するので、誤差の概念が無い——`convert` / `data_scale` / `finance` と同じ強さになる。
+    """
+    entries = []
+    for value, src, dst, from_rate, to_rate in cases.CURRENCY_INPUTS:
+        result = currency_ref.compute(value, src, dst, from_rate, to_rate)
+        entries.append(
+            {
+                # **レートまで id に入れる。** 同じ値・同じ通貨対でレートだけが違う
+                # ケース（0 レートのエラーなど）があるので、入れないと衝突する。
+                "id": f"currency/{value}{src}to{dst}@{from_rate}-{to_rate}",
+                "op": "currency",
+                "input": {
+                    "value": value,
+                    "from": src,
+                    "to": dst,
+                    "from_rate": from_rate,
+                    "to_rate": to_rate,
+                },
+                "expect": result,
+            }
+        )
+    ids = [entry["id"] for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise ValueError("currency の id が重複している")
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _resolve_placeholders(params: dict) -> dict:
     """期間逆算の境界に使う元本を、参照実装に解かせて埋める。
 
@@ -356,6 +395,7 @@ def main() -> None:
     write("llm.json", build_llm())
     write("transfer.json", build_transfer())
     write("convert.json", build_convert())
+    write("currency.json", build_currency())
     write("finance.json", build_finance())
 
 
