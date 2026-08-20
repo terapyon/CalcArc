@@ -1714,3 +1714,175 @@ Error: heavy-ui: 3 problem(s) with what this run actually pressed:
 **`globalTeardown` の例外が終了コードを 1 にすること**も、この走行で確かめた
 （先に `reachability.spec.ts` だけを 5 秒で回して同じ形を確認してある。
 4 テスト緑・終了コード 1）。
+
+## Finance を実画面から通した（2026-08-20 実測、spec D+E Task 6）
+
+`calls.spec.ts` は `finance-000.json` の 3,500 件を全部照合しているが、
+`runCalls` を直接呼ぶので**盤面も表示も一度も通らない**。モードキー、項目キー、
+周期と税で下段が丸ごと入れ替わる面、万/億、桁区切り——利用者が触るものは
+すべてその経路の外にある。`finance-ui.spec.ts` は 8 面 × 正常 1・異常 1 の
+16 件だけを実画面から通す。
+
+### 異常系は `finance-load-error` には出ない（実測）
+
+`data-testid="finance-load-error"` は `FinancePanel.tsx` の `failed` の枝
+（wasm を読み込めなかったとき）でしか描かれず、その枝はキーパッドを描く前に
+`return` する。**計算のエラーは答の行そのものに出る**——本文が `Math ERROR`
+になり、`display-main`（`Readout` の `<output>`）が `data-error` に種別を持つ。
+種別の文字列はコーパスの `expect.error` と同じ語彙（`SyntaxError` /
+`Overflow`）である。
+
+**種別を先に見る。** 本文はどの種別でも `Math ERROR` なので、本文だけを見ると
+`SyntaxError` と `Overflow` が入れ替わっても緑になる（`errors-000.json` の
+照合が同じ理由で種別を先に見ているのと同じ話）。
+
+### 16 件はコーパスの層から引いた
+
+面ごとに「その面が打てるケース」に絞り、**真ん中**を採る。先頭は各 op の頭に
+置かれた退化の境界（n=1・年利 0・元本 1）なので、先頭を採ると 8 面すべてが
+「1 回払いで利息 0」になってしまう。真ん中は `random` の層に落ちる。
+
+| 面（コーパスの `op`） | 正常 | 異常 |
+|---|---|---|
+| `loan_forward` | fin-001424 `random` | fin-000225 `paid_off_before_residual_3`（SyntaxError） |
+| `loan_bonus_forward` | fin-002066 `random` | fin-002497 `random`（SyntaxError） |
+| `loan_principal` | fin-001741 `random` | fin-000173 `term_zero`（SyntaxError） |
+| `loan_bonus_principal` | fin-001862 `random` | fin-002555 `random`（SyntaxError） |
+| `loan_term` | fin-001912 `random` | fin-000602 `pairwise_0020`（SyntaxError） |
+| `compound_grow` | fin-001792 `random` | fin-002026 `random`（**Overflow**） |
+| `compound_deposit_for` | fin-001879 `random` | fin-000252 `deposit_overflow_ppy2`（**Overflow**） |
+| `compound_periods_for` | fin-002309 `random` | fin-000241 `target_zero_taxed`（SyntaxError） |
+
+「6 モード + ボーナス 2 面」はこの 8 つのことで、**コーパスの `op` とちょうど
+1 対 1 に対応する**。面の一覧は手で書いた表なので、`missingOps` が「コーパスに
+在って面が覆っていない op」を毎回数える——9 つ目の op が入った日にここが赤くなる。
+
+### 盤面が表現できないケースは 211 件（3,500 件中、実測）
+
+コーパスはコアの定義域を突くので、**画面からは打てない入力を持つケース**がある。
+打てないものを打とうとすれば押せないキーを待ってハングするだけで、それは
+engine の欠陥ではなく**盤面の表現力**の話である。
+
+| 件数 | 面 | 打てない理由 |
+|---:|---|---|
+| 150 | `loan_bonus_forward` | 残価つきのボーナス案件。**残価とボーナスは排他**なので同時に打てない |
+| 31 | ローン 3 面 | 期間が 1,200 か月を超える（`FinancePanel` の `MAX_PERIODS`） |
+| 15 | 5 面 | 年利が入口の文法を通らない（小数 5 桁・負・非数字・100 超） |
+| 9 | 複利 3 面 | 周期が 4 期・13 期・0 期。盤面は 年/半年/月 の 3 つしか持たない |
+| 4 | 複利 3 面 | 期間が 1,200 期を超える |
+| 2 | `compound_grow` / `compound_deposit_for` | **期数 0**。画面は計算を始めないので答もエラーも出ない（下で実測） |
+
+残る **3,289 件（94.0%）は原理的に打てる**。16 件はそこから引いている。
+
+除外の判定は理由を並べる形にしていない。**「そのケースの入力欄が、その面が打つ
+欄とちょうど一致すること」**を要求する形にした——残価つきボーナスの 150 件は
+その副作用で外れ、同時に**コーパスが入力欄を 1 つ増やした日に赤くなる**。
+打たない欄があるまま走ると、画面は別の計算をして緑になる。
+
+### 期間 1,201 か月は、コアが答えるのに画面から打てない（申し送り）
+
+`loan_forward/term_1201_ok_for_loan`（fin-000172、n=1201）は**コアが答を返す**
+（`rows_paid` 1201）。`MAX_TERM_MONTHS = 1_200` は `loan/inverse.rs` にしか
+無く、**期間を探索する `loan_term` の打ち切り**であって、正算の償還表の上限では
+ない。複利は `compound.rs` が別に 1,200 期で切っている（fin-000201 は
+SyntaxError）。
+
+`FinancePanel.tsx` の `MAX_PERIODS = 1200` のコメントは「コアの
+`MAX_TERM_MONTHS` と同じ」と書いているが、**同じなのは数字だけで、掛かる場所が
+違う**。画面は 1,201 か月のローンを打てず、コアはそれを計算できる。
+**Task 6 では直していない**（画面の定義域をどちらに寄せるかは裁定が要る）。
+
+### 画面の読み方は製品の整形関数を借りていない
+
+期待値も `grouped()` で作ると、区切りが壊れたとき両側が同じだけ壊れて緑になる。
+読み手は人が見る形を正規表現で書き下し（`^\d{1,3}(,\d{3})* 円$`）、そこから
+整数だけを取り出す。内訳も同じ読み方で数を拾うので、**区切りの位置が狂った数は
+分割されて期待値と一致しない**。
+
+### Finance は押下の台帳に載らない（載せてはいけない）
+
+Task 5 の台帳（`presses.ts`）が数えているのは科学計算の `KeyToken` で、
+Finance のキーは別の集合（`FinanceKeyToken`）である。`typingPlan()` は
+`loadShards()` と `loadDisplayShards()` から作られ、どちらも
+`CALL_SHARD_PATTERN`（finance / data-scale）を除いている。だから
+**Finance の 16 件は台帳にも計画にも現れない**——これは欠陥ではなく性質である。
+
+**載せると害がある。** `casesTyped` に 16 件が乗ると `MIN_TYPED_CASES`（1,000）
+の下限がその分だけ嵩上げされ、**打鍵の走行が痩せたことを隠す**。
+`finance-ui.spec.ts` は意図的に `recordPress` / `recordTypedCase` を呼ばない。
+
+（実測: finance のスペックだけを走らせると `globalTeardown` が
+「not a single key press was recorded」以下 33 件の findings を挙げて落ちる。
+台帳が Finance を 1 回も数えていないことの直接の証拠である。）
+
+### 期数 0 の複利は、画面に何も出さない（実測）
+
+`compound_grow/periods_zero`（fin-000200）をそのまま盤面に打ち込んだ。
+コーパスの期待は `SyntaxError` だが、**画面はエラーを出さない**:
+
+```
+main="" data-error=null  breakdown count=0
+```
+
+答の行が空のまま止まる。`FinancePanel` が `periods > 0` を確かめてから
+コアを呼ぶので、**コアが一度も呼ばれない**——エラーを返す機会が無い。
+`compound_deposit_for/periods_zero_without_principal`（fin-000205）も同じ形で、
+この 2 件だけは**画面からは確かめようがない**。
+
+### 実行時間（`pnpm heavy:ui`、壁時計）
+
+| 回 | テスト数 | 所要時間 |
+|---|---:|---:|
+| Task 5 の 3 回（`finance-ui.spec.ts` 以前） | 19 | 700.6 / 699.8 / **700.4 秒** |
+| Task 6（16 件 + 面の一覧の検査を足したあと） | **36** | **713.4 秒（11m53.4s）** |
+
+**増分は 13.1 秒**（Task 5 の 3 回の平均 700.3 秒との差）。設計書の見込みは
+「1 分未満」で、結果としては当たっている。ただし**理由づけは現物と違う**——
+設計書と計画は「Finance は打鍵ではなく欄への入力なので 1 件あたりの費用が違う」
+と書いているが、Finance にも本物の盤面がある（`FinancePanel.tsx` が `Keypad` を
+描き、`pushDigit` / `pushOperator` を呼ぶ）。`fill()` で流し込む欄は 1 つも無い。
+
+費用が科学計算と違うのは事実だが、理由は別である。実測:
+
+| | 科学計算（打鍵） | Finance |
+|---|---:|---:|
+| 1 件あたり | 0.53 秒 | **0.97 秒** |
+| 1 件あたりの押下 | 数キー | **26.1 回**（16 件で 417 回） |
+| ページの読み込み | シャードごとに 1 回 | **ケースごとに 1 回** |
+
+Finance が高いのは、**項目の値がモードをまたいで持ち回られる**ので 1 件ごとに
+ページから開き直しているのと、金額が 20 桁まで伸びるからである。`AC` は
+いま打っている項目しか消さないので、`corpus-ui.spec.ts` の
+`resetDisplayState` に当たるものが Finance には無い。
+
+**2 つの測り方が 2.4 秒ずれている。** Playwright が 17 本のテストに付けた時間の
+合計は **15.5 秒**、走行全体の壁時計の増分は **13.1 秒**である。どちらかが
+嘘というより、テストごとの時間には走行全体に按分される分が乗る一方、
+比較相手の 700.3 秒は別の日の 3 回の平均である。**走行全体の増分 13.1 秒の
+ほうを採る**——利用者が待つのはそちらである。
+
+### 赤確認（2 種、どちらも再編集で戻した）
+
+**変異 1 — `Readout.tsx` から `data-error` を落とす。** 8 つの異常系が全部落ち、
+**8 つの正常系は全部緑のまま**だった。画面には `Math ERROR` が出続けている:
+
+```
+24 × locator resolved to <output aria-live="polite" data-testid="display-main">Math ERROR</output>
+```
+
+**本文だけを見ていたら、この変異は 1 件も捕まらない。** 種別を先に見る理由が
+そのまま出ている。
+
+**変異 2 — 答の欄を 2 か所すり替える。** 複利の税ありを手取りではなく税引前に、
+月額を月々の返済額ではなく総支払額に。**その 2 面だけが落ち、残り 6 面と
+8 つの異常系は緑のまま**だった:
+
+```
+loan_forward fin-001424: the answer line reads "273,027,486 円",
+  but the reference says {"kind":"yen","value":"2173672"}
+compound_grow fin-001792: the answer line reads "17,614,448,478 円",
+  but the reference says {"kind":"yen","value":"14137325033"}
+```
+
+複利のほうは**税の 2 段の丸め**がそのまま差になっている（税引前 17,614,448,478
+に対し手取り 14,137,325,033）。画面から税の経路を通っていることの証拠でもある。

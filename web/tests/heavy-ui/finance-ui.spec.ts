@@ -91,6 +91,10 @@ for (const { face, normal, error } of picks) {
   }) => {
     await typeCase(page, face, normal);
 
+    // **答が出るまで待ってから読む。** `innerText()` は待たないので、最後の
+    // 打鍵の再描画が入る前に読むと、空の行を「食い違い」として報告しうる。
+    // 待つのは「何か出ること」だけで、**何が出たかはこの下で比べる**。
+    await expect(main(page)).not.toHaveText("");
     const shown = (await main(page).innerText()).trim();
     let got: Answer;
     try {
