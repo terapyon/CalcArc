@@ -6,6 +6,7 @@
 // **関数名 `convert` はモジュール名 `convert` と衝突する**(境界の関数名は
 // 設計書 §5 が決めている)。別名で入れて、モジュールは `convert_core::` で呼ぶ。
 use calcarc_core::convert as convert_core;
+use calcarc_core::convert::currency;
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
 use calcarc_core::data_scale::llm::{self, Precision};
 use calcarc_core::data_scale::transfer::{self, BandwidthUnit, DurationUnit};
@@ -741,4 +742,73 @@ pub fn convert_units(category: &str) -> JsValue {
         },
     };
     to_js_value(&result)
+}
+
+// ---- Currency(U-4 設計書 §3) -------------------------------------------
+//
+// 通貨も「factor が動的な単位」で、`convert` と同じ ConvertResult の形で
+// 返す(U-4 計画 Task 4)。ここが `convert` と違うのは、`calcarc-core` の
+// `convert_currency` が `from` の通貨を引数に取らないこと——換算に効くのは
+// `from_rate` のほうで、桁を決めるのは着地する `to` だけだからである
+// (`currency.rs` のコメント参照)。
+//
+// **だから WASM 側が `from` トークンも `Currency::from_token` で復元し、
+// 知らないトークンなら `SyntaxError` を返す。** これを怠ると、`from` に
+// 何を渡しても素通りしてしまう(golden の `100 usd → xyz` 型のケースは
+// `to` 側でしか検査されていないので、`from` 側の検査はここで初めて効く)。
+
+/// 為替換算(U-4 設計書 §3)。**例外を投げない。**
+///
+/// 値もレートも 10 進の文字列で受ける(`f64` を経由しない)。`from` は
+/// 換算の算術には使わない(桁を決めるのも基準通貨を経由する式に効くのも
+/// `to` と `from_rate` だけ)が、**知らない通貨トークンを黙って通さないために
+/// ここで復元する**。
+#[wasm_bindgen]
+pub fn convert_currency(
+    value: &str,
+    from: &str,
+    to: &str,
+    from_rate: &str,
+    to_rate: &str,
+) -> JsValue {
+    let outcome: CalcResult<String> = (|| {
+        // **結果を捨てても、この行自体が検査である。** `from` が知らない
+        // トークンなら、ここで SyntaxError になって関数を抜ける
+        // (`_` に束ねて握り潰すと、`from` は何を渡しても通ってしまう)。
+        let _from = currency::Currency::from_token(from).ok_or(CalcError::SyntaxError)?;
+        let to = currency::Currency::from_token(to).ok_or(CalcError::SyntaxError)?;
+        currency::convert_currency(value, to, from_rate, to_rate)
+    })();
+    let result = match outcome {
+        Ok(text) => ConvertResult {
+            text: Some(text),
+            error: None,
+        },
+        Err(e) => ConvertResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 通貨トークンの一覧。TypeScript 側の `CurrencyUnitsResult` に対応する。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CurrencyUnitsResult {
+    units: Vec<String>,
+}
+
+/// 固定 16 通貨のトークンを **`Currency::ALL` の並びのまま**返す。
+///
+/// **盤面はこの順に並べる**(`web/src/currency/types.ts` の `CURRENCY_TOKENS` と
+/// `token_parity.rs` が順序込みで一致を見る)。エラーを返す枝が無いのは、
+/// この関数が引数を取らず、16 通貨の並びが常に定義済みだからである。
+#[wasm_bindgen]
+pub fn currency_units() -> JsValue {
+    let units = currency::Currency::ALL
+        .iter()
+        .map(|c| c.token().to_owned())
+        .collect();
+    to_js_value(&CurrencyUnitsResult { units })
 }

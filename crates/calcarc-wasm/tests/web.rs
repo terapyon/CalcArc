@@ -506,3 +506,62 @@ fn the_unit_list_comes_back_in_the_order_the_panel_shows() {
     );
     assert!(get(&unknown, "units").is_null());
 }
+
+#[wasm_bindgen_test]
+fn a_currency_conversion_crosses_the_boundary_as_text() {
+    // 100 USD → JPY(golden `currency/100usdtojpy@1.0855-168.5` と同一)。
+    let value = calcarc_wasm::convert_currency("100", "usd", "jpy", "1.0855", "168.5");
+    assert_eq!(get(&value, "text").as_string().as_deref(), Some("15,523"));
+    assert!(
+        get(&value, "error").is_null(),
+        "success carries null, not undefined"
+    );
+}
+
+#[wasm_bindgen_test]
+fn an_unknown_from_currency_is_a_syntax_error_not_a_pass_through() {
+    // **申し送りの核心**: core の `convert_currency` は `from` を取らないので、
+    // WASM 境界がここで `Currency::from_token` を通さないと、`from` に何を
+    // 渡しても素通りしてしまう(`to` と `from_rate` だけで答が出るため)。
+    let value = calcarc_wasm::convert_currency("100", "xyz", "jpy", "1.0855", "168.5");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("SyntaxError"),
+        "an unknown `from` token must not be allowed through"
+    );
+    assert!(
+        get(&value, "text").is_null(),
+        "error carries null, not undefined"
+    );
+}
+
+#[wasm_bindgen_test]
+fn an_unknown_to_currency_is_also_a_syntax_error() {
+    let value = calcarc_wasm::convert_currency("100", "usd", "xyz", "1.0855", "168.5");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&value, "text").is_null());
+}
+
+#[wasm_bindgen_test]
+fn a_zero_from_rate_is_a_division_by_zero_not_an_exception() {
+    let value = calcarc_wasm::convert_currency("100", "usd", "jpy", "0", "168.5");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("DivisionByZero")
+    );
+    assert!(get(&value, "text").is_null());
+}
+
+#[wasm_bindgen_test]
+fn the_currency_list_comes_back_in_currency_all_order() {
+    let value = calcarc_wasm::currency_units();
+    let units = js_sys::Array::from(&get(&value, "units"));
+    assert_eq!(units.length(), 16);
+    assert_eq!(units.get(0).as_string().as_deref(), Some("jpy"));
+    assert_eq!(units.get(1).as_string().as_deref(), Some("krw"));
+    assert_eq!(units.get(2).as_string().as_deref(), Some("vnd"));
+    assert_eq!(units.get(15).as_string().as_deref(), Some("brl"));
+}
