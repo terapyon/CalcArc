@@ -1,16 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { KeyToken } from "../../src/calc";
 import { type ComplexValue, parseComplexDisplay } from "../heavy/complex";
-import {
-  classifyComplex,
-  type DisplayCase,
-  loadDisplayShards,
-  loadShards,
-  partitionCases,
-  type ValueCase,
-} from "../heavy/corpus";
+import { classifyComplex } from "../heavy/corpus";
 import { parseDisplay } from "../heavy/display";
 import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
+import { type PressOrigin, recordPress, recordTypedCase } from "./presses";
+import { displaySelections, valueSelections } from "./sampling";
 
 /**
  * **コーパスの代表を、本物のボタンで押す。**
@@ -24,16 +19,12 @@ import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
  */
 
 /**
- * シャードあたり何件通すか。
+ * **どのケースを打つかは `sampling.ts` が決める。**
  *
- * **実測 1 件あたり 0.53 秒**(50 件を 26.6 秒、2026-08-17)。クリックが
- * 1 件ごとに要るので、コアの経路(1 万件を 5 秒)とは 3 桁違う。
- * 100 件 × 5 シャードで約 4.4 分——GitHub Actions に収まる。
- *
- * **網羅はコアの経路が担う。** ここが確かめるのは「盤面から打てるか」と
- * 「打った結果が画面に正しく出るか」であって、計算の網羅ではない。
+ * 選び方をここに書かないのは、`globalTeardown` が「何を打つつもりだったか」を
+ * 同じ関数から読むためである。網羅はコアの経路が担う——ここが確かめるのは
+ * 「盤面から打てるか」と「打った結果が画面に正しく出るか」である。
  */
-const SAMPLE = Number(process.env.HEAVY_UI_SAMPLE ?? "100");
 
 /** ボタンは page から直接引く(既存の科学計算 E2E と同じ作法)。 */
 const panel = (page: Page) => page;
@@ -51,10 +42,13 @@ async function pressCase(page: Page, keys: string[]): Promise<void> {
   // **クリアのボタンも対応表から引く。** ここだけ名前を手書きしていて、
   // 実在しない「オールクリア」を押しに行き、存在しないボタンを待ち続けた
   // ——実際の名前は「全消去」だった。**手書きは 1 箇所でも腐る。**
-  await pressToken(page, "ac");
+  //
+  // **この `ac` は harness の後始末であって、ケースが踏んだキーではない。**
+  // 区別せずに数えると、`AC` を押したという主張は何をしても緑になる。
+  await pressToken(page, "ac", "harness");
   await resetDisplayState(page);
   for (const key of keys) {
-    await pressToken(page, key);
+    await pressToken(page, key, "case");
   }
 }
 
@@ -76,17 +70,17 @@ async function pressCase(page: Page, keys: string[]): Promise<void> {
  */
 async function resetDisplayState(page: Page): Promise<void> {
   if ((await page.getByTestId("display-angle").innerText()).trim() !== "DEG") {
-    await pressToken(page, "angle_toggle");
+    await pressToken(page, "angle_toggle", "harness");
   }
   if ((await page.getByTestId("display-notation").innerText()).trim() !== "") {
-    await pressToken(page, "eng");
+    await pressToken(page, "eng", "harness");
   }
   // **表示形式も残る。** 段階 J で `▸∠` を押すようになって同じことが起きた
   // ——直交形式を期待するケースが `511,105 ∠ 0` を見せ、極形式を期待する
   // ケースが `j410,758` を見せた。前のケースが極形式のまま終わっていたのが
   // 原因で、engine の欠陥ではない(モードが残るのは電卓として正しい)。
   if ((await page.getByTestId("display-form").innerText()).trim() !== "") {
-    await pressToken(page, "polar_toggle");
+    await pressToken(page, "polar_toggle", "harness");
   }
   // **戻ったことを確かめる。** 戻らないまま進むと、以後の全ケースが
   // 静かに別のモードで評価される。
@@ -95,8 +89,18 @@ async function resetDisplayState(page: Page): Promise<void> {
   await expect(page.getByTestId("display-form")).toHaveText("");
 }
 
-/** キートークンを 1 つ押す。**名前は必ず対応表から引く。** */
-async function pressToken(page: Page, key: string): Promise<void> {
+/**
+ * キートークンを 1 つ押す。**名前は必ず対応表から引く。**
+ *
+ * 押した事実をディスクへ記録する(`presses.ts`)。**押せることと押したことは
+ * 別の主張である**——`reachability.spec.ts` は前者を、`globalTeardown` は
+ * 後者を見る。
+ */
+async function pressToken(
+  page: Page,
+  key: string,
+  origin: PressOrigin,
+): Promise<void> {
   const button = BUTTON_FOR.get(key as KeyToken);
   if (button === undefined) {
     throw new Error(
@@ -112,30 +116,11 @@ async function pressToken(page: Page, key: string): Promise<void> {
   await panel(page)
     .getByRole("button", { name: button.ariaLabel, exact: true })
     .click();
+  // **押してから記録する。** 先に記録すると、押せなかったキーが台帳に載る。
+  recordPress(key, origin);
 }
 
-/** 等間隔に選ぶ。先頭だけ通すと、生成の後半の形をまったく踏まない。 */
-function spread<T>(items: T[], count: number): T[] {
-  if (items.length <= count) {
-    return items;
-  }
-  const step = items.length / count;
-  return Array.from(
-    { length: count },
-    (_, i) => items[Math.floor(i * step)] as T,
-  );
-}
-
-const typeable = (testCase: ValueCase) =>
-  testCase.keys.every((key) => BUTTON_FOR.has(key as KeyToken));
-
-for (const { name, shard } of loadShards()) {
-  const { values } = partitionCases(name, shard.cases);
-  const sample = spread(values.filter(typeable), SAMPLE);
-  if (sample.length === 0) {
-    continue;
-  }
-
+for (const { name, sample, tolerance } of valueSelections()) {
   test(`${name}: ${sample.length} cases typed on the real keypad`, async ({
     page,
   }) => {
@@ -145,6 +130,7 @@ for (const { name, shard } of loadShards()) {
     const mismatches: string[] = [];
     for (const testCase of sample) {
       await pressCase(page, testCase.keys);
+      recordTypedCase(name);
       const shown = await main(page).innerText();
       // **読み手は期待値が選ぶ。コアの経路とまったく同じ規則である**
       // (`corpus.spec.ts` の同じ箇所を見よ)。`parseDisplay` は実数の書式
@@ -162,7 +148,7 @@ for (const { name, shard } of loadShards()) {
         );
         continue;
       }
-      const verdict = classifyComplex(actual, testCase.expect, shard.tolerance);
+      const verdict = classifyComplex(actual, testCase.expect, tolerance);
       if (!verdict.passed) {
         mismatches.push(
           `${testCase.id} (${testCase.expr}): typed on the keypad it shows ` +
@@ -200,10 +186,10 @@ test("AC clears the value but not the angle mode — which is why each case rese
   await page.goto("/");
   await expect(page.getByTestId("display-angle")).toHaveText("DEG");
 
-  await pressToken(page, "angle_toggle");
+  await pressToken(page, "angle_toggle", "harness");
   await expect(page.getByTestId("display-angle")).toHaveText("RAD");
 
-  await pressToken(page, "ac");
+  await pressToken(page, "ac", "harness");
   await expect(main(page)).toHaveText("0");
   // **値は消えたが、モードは残っている。**
   await expect(page.getByTestId("display-angle")).toHaveText("RAD");
@@ -213,17 +199,7 @@ test("AC clears the value but not the angle mode — which is why each case rese
   await expect(page.getByTestId("display-angle")).toHaveText("DEG");
 });
 
-for (const { name, shard } of loadDisplayShards()) {
-  const shown = shard.cases.filter(
-    (c): c is DisplayCase =>
-      c.kind === "display" &&
-      c.keys.every((k) => BUTTON_FOR.has(k as KeyToken)),
-  );
-  const sample = spread(shown, SAMPLE);
-  if (sample.length === 0) {
-    continue;
-  }
-
+for (const { name, sample } of displaySelections()) {
   test(`${name}: ${sample.length} displays typed on the real keypad`, async ({
     page,
   }) => {
@@ -239,6 +215,7 @@ for (const { name, shard } of loadDisplayShards()) {
     const mismatches: string[] = [];
     for (const testCase of sample) {
       await pressCase(page, testCase.keys);
+      recordTypedCase(name);
       const got = (await main(page).innerText()).trim();
       if (got !== testCase.expect.main) {
         mismatches.push(

@@ -19,6 +19,18 @@ export default defineConfig({
   // 最初にこれを 600 秒にしたせいで、ハングが 10 分待たないと見えなかった。
   timeout: 120_000,
   expect: { timeout: 10_000 },
+  // **押したキーの集計はワーカーの外に置く。**
+  // `tests/heavy-ui/presses.ts` の `recordPress()` が、ワーカー 1 つにつき
+  // 1 ファイルを `web/.heavy-ui-presses/` に書く。`globalSetup` が走行の頭で
+  // そのディレクトリと前回の `heavy-ui-run.json` を消し、`globalTeardown` が
+  // 全部を読んで**指示書 §8 の 9 キーが実際に押されたか**を主張する。
+  //
+  // **主張をテストファイルに置かない。** ファイルの実行順に依存すると、
+  // 記録より先に検査が走って空の台帳を見る。`globalTeardown` は走行そのものに
+  // 紐づいていて、テストが落ちても必ず 1 度だけ走る(`playwright.heavy.config.ts`
+  // の `writeReport` がそこに居るのと同じ理由である)。
+  globalSetup: "./tests/heavy-ui/global-setup.ts",
+  globalTeardown: "./tests/heavy-ui/global-teardown.ts",
   fullyParallel: false,
   workers: 1,
   reporter: [["list"]],
