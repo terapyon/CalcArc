@@ -68,8 +68,9 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   //
   // **DEL は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が動かない**」
   // であって、**盤面より上にある表示行の高さを巻き込むのは測り間違い**である
-  // ——その行高はフォント環境で変わる。枠を原点に取れば、盤面の中で動いたか
-  // どうかだけが残る。
+  // ——その行高はフォント環境で変わる(**CI 実測: DEL の y だけが面によって
+  // 390 と 375.625 に割れ、枠の 366.0625 は 7 面とも不動だった**)。枠を原点に
+  // 取れば、盤面の中で動いたかどうかだけが残る。
   const rel = (
     b: { x: number; y: number } | null,
     frame: { x: number; y: number } | null,
@@ -104,6 +105,11 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
   // **番兵**: 測れていなければ枠は 0、DEL は `UNMEASURED` のまま 1 通りに
   // 揃い、**上の 2 つの Set は緑になる**。
+  //
+  // **2 つで足りる理由**: U-0 は二面版で番兵を 4 つ置いていた(2 面 × 枠と DEL)。
+  // ここは 3 面をループで回すので、**1 面だけ測れなければ Set が 2 通りに割れて
+  // 赤くなる**——番兵が要るのは「**全面が同じように測れなかった**」場合だけで、
+  // それは `seen[0]` を見れば足りる。**面が増えても番兵は増えない。**
   expect(seen[0]?.box.width, "the frame was never measured").toBeGreaterThan(0);
   expect(seen[0]?.del, "DEL was never measured").not.toBe(UNMEASURED);
 });
