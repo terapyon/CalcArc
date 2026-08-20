@@ -37,9 +37,18 @@ describe("parseLatestRates", () => {
 
     // **型で見る。** `toEqual` は "158.548543" と 158.548543 を区別するが、
     // ここは「文字列で保つ」(spec §2.1)そのものの主張なので明示的に見る。
+    //
+    // **件数を先に固定する。** ループだけだと、抽出が `{}` を返すようになった
+    // 日にこの検査は **1 度も比較せずに緑**になる(レビューで実測——変異を
+    // 当てるとこの 1 本だけが単独で緑のまま残った)。同ファイルの他の 3 本が
+    // 捕まえるのでスイートに穴は空かないが、**この 1 本が何も主張しない**。
+    expect(Object.keys(set.rates)).toHaveLength(1);
+    let checked = 0;
     for (const rate of Object.values(set.rates)) {
       expect(typeof rate).toBe("string");
+      checked += 1;
     }
+    expect(checked).toBe(1);
   });
 
   /**

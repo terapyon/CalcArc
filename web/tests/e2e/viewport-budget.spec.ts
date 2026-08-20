@@ -4,20 +4,24 @@ import { expect, type Page, test } from "@playwright/test";
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
 // ページ全体の高さもフッタの位置もタブで変わる。
 
-// **全 route は 12(scientific 1 + convert 7 + scale 3 + finance 1)、
+// **全 route は 13(scientific 1 + convert 8 + scale 3 + finance 1)、
 // この巡回が持つのは 6 だけである。** 巡回しているのは
 // `#scientific` `#convert/length` `#convert/mass` `#convert/temperature`
-// `#scale/data-scale` `#finance` の 6 つ。**外にいる 6 つ**は
+// `#scale/data-scale` `#finance` の 6 つ。**外にいる 7 つ**は
 // `#convert/area` `#convert/volume` `#convert/speed` `#convert/data-size`
-// (U-2 で増えた 4 カテゴリ)と `#scale/llm` `#scale/transfer`。
+// (U-2 で増えた 4 カテゴリ)、`#convert/currency`(U-4)、
+// `#scale/llm` `#scale/transfer`。
+// **カテゴリを足すたびにこの数は動く。** 在庫は 3 か所にある——この注記と、
+// `docs/definition-of-done.md` の表と、同ファイルの訂正印。U-2 のときに
+// 表だけ直して 2 か所を腐らせた。次に足す人は 3 か所を grep で起こすこと。
 // `#convert`(素のハッシュ)は `#convert/length` へ倒れる同じ画面なので、
 // タブの href と同じ `#convert/length` のほうを巡回する
 // (同じ画面に URL を 2 つ作らない)。
 //
 // **巡回に入っていない route は、緑を「収まっている」と読ませる**——
-// S-0 で記録したこの穴は、いまも 6 route ぶん残っている
+// S-0 で記録したこの穴は、いまも 7 route ぶん残っている
 // (docs/definition-of-done.md【訂正 2026-08-20】)。**足さなかった理由は
-// 2 種類あり、性質が違う。**
+// 3 種類あり、性質が違う。**
 //
 // - **Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で
 //   溢れることが分かっている(ユーザー裁定で許容)。足すと赤になる——
@@ -31,6 +35,13 @@ import { expect, type Page, test } from "@playwright/test";
 //   DEL and AC")に限っており、この巡回に route を足す判断ではなかった。
 //   **「収まっているのを機械が確認していない」穴であって、「溢れているのを
 //   許容した」穴ではない。**
+// - **通貨 `#convert/currency` は、上のどちらでもない。** レートが届いていれば
+//   390×844 で 0 だが、**キャッシュ無しの案内が出ている状態では 10px 溢れる**
+//   (360×640 では 181)。そして**足せない理由が寸法ではない**——
+//   **この巡回はネットワークを塞いでいない**(`page.route` を持つのは
+//   `convert.spec.ts` だけである)。ここに足すと**本物の `open.er-api.com` を
+//   叩き**、取得が成功すれば 0、失敗すれば 10 になる。**測る値が回線で変わる
+//   検査を、寸法の予算表に混ぜない。** 塞ぎを先に用意すれば足せる。
 const TABS = [
   ["#scientific", "Scientific"],
   ["#convert/length", "Convert 長さ"],
