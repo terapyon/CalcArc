@@ -712,29 +712,17 @@ def _error_inducing_key_sequences() -> tuple[tuple[str, ...], ...]:
     モジュール docstring)ので、ここには入らない。**エラー状態を作るための
     プールなので、実際にエラーになる列だけが要る。**
 
-    **`lparen`/`rparen` を持つ列(`unbalanced_parenthesis_cases`)も除く。**
-    実装時の赤確認で判明した制約: `corrections-000.json` の `right` は
-    「エラー列 + ガベージ + `ac` + 正しい列」を 1 本のキー列として持つので、
-    `right` 全体をそのキー列だけ見て解釈するコード(`web/tests/heavy/corpus.ts`
-    の `needsPrecedence`、報告専用の優先順位検出)は `ac` が構文の巻き戻しに
-    なることを知らない。`unbalanced_parenthesis_cases` はわざと対応しない
-    `rparen` を含む列(`["rparen"]` や `["3","add","4","rparen"]`)で、これを
-    エラー源に選ぶと `right` が「対応の無い `rparen` を持つキー列」になり、
-    `needsPrecedence` が(壊れた入力を黙って読み違えない設計により)例外を
-    投げて `pnpm heavy` が落ちる——engine 自体は `ac` で正しく復帰しており、
-    壊れているのは engine ではなく報告専用ヒューリスティックの前提である。
-    **他の 7 経路(0 除算・対数/平方根/逆三角の定義域・tan の極・階乗・
-    組合せ・値域)は 1 個も括弧を使わないので、この 2 件だけを除いても
-    プールの多様性はほぼ保たれる。**
+    **括弧の経路(`unbalanced_parenthesis_cases`)も入れる。** 実装中、
+    この 2 件を除けば `pnpm heavy` が緑になることが分かった——`right` 全体を
+    1 本のキー列として括弧の対応を見るコード(`web/tests/heavy/corpus.ts` の
+    `needsPrecedence` と、その Python の双子)が、`ac` が engine を初期状態に
+    戻すことを知らなかったためである。**engine は `ac` で正しく復帰しており、
+    壊れていたのは判定のほうだった**ので、判定を直した(`ac` でそれまでの
+    括弧の組を捨てる)。入力を除いていたら、「括弧の構文エラーから `ac` で
+    復帰する」という形がコーパスから丸ごと抜けていた。
     """
     cases = build_errors_shard()["cases"]
-    return tuple(
-        tuple(case["keys"])
-        for case in cases
-        if case["expect"].get("error")
-        and "lparen" not in case["keys"]
-        and "rparen" not in case["keys"]
-    )
+    return tuple(tuple(case["keys"]) for case in cases if case["expect"].get("error"))
 
 
 #: `errors-000.json` から起こした、実際にエラーになるキー列のプール

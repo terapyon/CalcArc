@@ -221,7 +221,12 @@ def _needs_precedence(keys: list[str]) -> bool:
     top_level: set[int] = set()
     stack: list[set[int]] = []
     closed_groups: list[set[int]] = []
-    for key in keys:
+    # **最後の `ac` より前は読まない。** `ac` は engine を初期状態に戻す
+    # (`engine/mod.rs` の `reduce` 冒頭、`next = next.cleared()`)ので、
+    # そこより前の括弧も演算子も、この列が最後に何を計算したかとは無関係。
+    # TypeScript の双子(`needsPrecedence`)も同じ形に直してある。
+    tail = keys[len(keys) - keys[::-1].index("ac") :] if "ac" in keys else keys
+    for key in tail:
         if key == "lparen":
             stack.append(set())
         elif key == "rparen":
@@ -1647,6 +1652,29 @@ def test_every_correction_stratum_has_at_least_one_case() -> None:
     assert sum(counts.values()) == len(shard["cases"])
 
 
+def test_no_correction_stratum_collapses_to_a_handful() -> None:
+    """**「1 件以上」では、形が黙って痩せることを捕まえられない。**
+
+    生成器は 4 形を等確率で選んでいるつもりだが、選んだあとに条件を満たさな
+    かったケースを `continue` で捨てる。捨てられやすい形は結果として少なく
+    なる——**再抽選は標本を偏らせる**（B+C Task 6 で同じ形を踏んだ。均等に
+    したい因子はループの外で引くのが正しい直し方）。実測はいま
+    `paren-edit` 790 / `ac-rebuild` 420 / `error-recovery` 418 /
+    `typo-del` 372 で、等分の 500 からは離れているが、どの形も十分にある。
+
+    偏り自体は仕様として許す（設計書も計画も均等を要求していない）。
+    ここで見張るのは**崩壊**のほうである——ある形が生成しにくくなって
+    数件まで痩せても、`>= 1` のテストは緑のままだからだ。実測の最小
+    (372 = 18.6%) の半分を下限に置く。
+    """
+    shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
+    counts = shard["strata"]
+    total = sum(counts.values())
+    floor = total // 10
+    thin = {name: n for name, n in counts.items() if n < floor}
+    assert not thin, f"{thin} は総数 {total} の 10% ({floor} 件) に届かない"
+
+
 def test_every_correction_case_carries_a_known_stratum() -> None:
     shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
     known = set(generate_corpus.CORRECTION_STRATA)
@@ -1722,16 +1750,24 @@ def test_error_inducing_pool_is_only_genuine_errors() -> None:
     assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) >= 1
 
 
-def test_error_inducing_pool_excludes_unbalanced_parenthesis_cases() -> None:
-    """赤確認で判明した制約(`_error_inducing_key_sequences` の docstring):
-    `web/tests/heavy/corpus.ts` の `needsPrecedence` は `right` 全体を 1 本の
-    キー列として括弧の対応を見るので、対応の無い `rparen` を持つエラー経路
-    (`unbalanced_parenthesis_cases`)をプールに混ぜると `pnpm heavy` が
-    落ちる。**プールは括弧を 1 個も持たない。**
+def test_error_inducing_pool_keeps_the_unbalanced_parenthesis_cases() -> None:
+    """**プールは 9 経路を 1 つも欠かない。**
+
+    実装中、対応の無い `rparen` を持つ経路(`unbalanced_parenthesis_cases`)を
+    プールから除けば `pnpm heavy` が緑になることが分かった——`needsPrecedence`
+    が `right` 全体を 1 本のキー列として括弧の対応を見ており、`ac` が engine を
+    初期状態に戻すことを知らなかったからである。**除いたのは入力のほうでは
+    なく、直すべきは判定のほうだった**(`ac` で組を捨てる)。除いていたら、
+    「括弧の構文エラーから `ac` で復帰する」という形がコーパスから丸ごと
+    抜けていた。
+
+    9 経路のうちアンダーフローの 2 件は `expect.error` を持たない(丸め潰れは
+    値域を外れたことにならない)ので、プールに入るのはエラーになる 28 件。
     """
-    for keys in generate_corpus.ERROR_INDUCING_KEY_SEQUENCES:
-        assert "lparen" not in keys
-        assert "rparen" not in keys
-    # 除いたのは 2 件だけ(`["rparen"]` と `["3","add","4","rparen"]`)で、
-    # 残り 7 経路は 1 件も欠けていないこと。
-    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 26
+    with_parens = [
+        keys
+        for keys in generate_corpus.ERROR_INDUCING_KEY_SEQUENCES
+        if "lparen" in keys or "rparen" in keys
+    ]
+    assert len(with_parens) == 2, with_parens
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 28

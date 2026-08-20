@@ -817,7 +817,19 @@ export function needsPrecedence(keys: string[]): boolean {
   const topLevel = new Set<number>();
   const stack: Set<number>[] = [];
   const closedGroups: Set<number>[] = [];
-  for (const key of keys) {
+  // **最後の `ac` より前は読まない。** `ac` は engine を初期状態に戻す
+  // (`crates/calcarc-core/src/engine/mod.rs` の `reduce` 冒頭、
+  // `next = next.cleared()`)ので、そこより前の括弧も演算子も、この列が
+  // 最後に何を計算したかとは何の関係も無い。
+  //
+  // 切らないと、`corrections-000.json` の「エラーからの復帰」形
+  // (`[エラー列, ガベージ, ac, 正しい列]`)のうち**対応の無い `rparen` で
+  // エラーを起こした列**が下の例外に落ちる。engine は `ac` で正しく復帰して
+  // いるのに、この関数がそれを知らないだけである。壊れた入力を静かに
+  // 読み違えないという下の約束は守るが、**`ac` の前に何があっても、その列は
+  // 壊れていない。**
+  const lastClear = keys.lastIndexOf("ac");
+  for (const key of lastClear === -1 ? keys : keys.slice(lastClear + 1)) {
     if (key === "lparen") {
       stack.push(new Set<number>());
       continue;
