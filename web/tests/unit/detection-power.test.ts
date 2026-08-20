@@ -506,6 +506,20 @@ describe("resultRecord builds the JSON that report.ts reads", () => {
     expect(r.total).toBe(8);
   });
 
+  it("names the red tests in caught when the measurement counts tests, not shards", () => {
+    // **`caught: {}` / `total: 0` は「1 本も捕まえなかった」に読める。**
+    // `exact-power.mjs` の測定はシャードを数えず、赤くなったテストの名前を
+    // 持つ――実際にこの欄が空のまま記録され、「赤 0 本」と誤読された
+    // (2026-08-20)。赤の内訳が `why` の文にしか無い形に戻さない。
+    const r = resultRecord(
+      { id: "m", expectTests: ["alpha", "beta"] },
+      { buildOk: true, exitCode: 101, failed: ["alpha", "beta"] },
+      ok,
+    );
+    expect(r.caught).toEqual({ alpha: 1, beta: 1 });
+    expect(r.total).toBe(2);
+  });
+
   it('writes expect as the string "nothing" when expectShards is empty', () => {
     const r = resultRecord(nothingExpected, measurement(), ok);
     expect(r.expect).toBe("nothing");

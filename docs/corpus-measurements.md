@@ -1926,9 +1926,11 @@ golden 1 本だけ**で、`crates/calcarc-core/src/` の中の単体テストは
 見張っている。**
 
 - `micrometre-off-by-thousand`: `convert/mod.rs` の `mod tests` に
-  `Unit::Um` は 1 度も出てこない（Step 0 の実測。下記）。係数表 27 行の
-  うち、単体テストが literal で押さえているのは in/lb/°F/°C/K など
+  `Unit::Um` は 1 度も出てこない（Step 0 の実測。下記）。係数表のうち、
+  単体テストが literal で押さえているのは in/lb/°F/°C/K など
   ごく一部で、**um は表に載っているだけ**である。
+  （**訂正 2026-08-20、Task 4**: ここに「係数表 27 行」と書いたのは誤り。
+  `affine()` の腕を数えると **63 行**で、`Unit::ALL` の 63 と一致する。）
 - `binary-base-is-decimal`: 2 進の基数は `units[0].1` から導いていて、
   製品コードに `1024` の literal が無い。`base` が効くのは
   **「丸めた後の整数部が基数に達したら 1 つ上の単位で丸め直す」1 か所だけ**
@@ -1970,3 +1972,103 @@ golden 1 本だけ**で、`crates/calcarc-core/src/` の中の単体テストは
 両方の走行のあとで `git diff -- crates/` が空であることを確かめた
 （`runOneMutation` が戻したうえでバイト比較している）。走行後の
 `cargo test --workspace` も 373 本すべて緑。
+
+## 暗い帯に単体テストを 1 件だけ足した（2026-08-20 実測、verify-0-3-0 Task 4）
+
+Task 3 が見つけた暗い帯は 2 種（`binary-base-is-decimal` と
+`micrometre-off-by-thousand`。どちらも golden 1 本だけが見張っていた）。
+**足したのはそのうち 1 種、1 件だけである。**
+
+### 足した 1 件: `binary-base-is-decimal`
+
+`crates/calcarc-core/src/data_scale/format.rs` の `mod tests` に
+`the_binary_base_is_ten_twenty_four_not_a_thousand` を足した。
+主張は `format_binary(1_084_479_242_240) == Some("1010.0 GiB")`
+——**ちょうど 1010 GiB**（1010 × 1024³）。
+
+**なぜこの値なのか。** `base` が効くのは「丸めた後の整数部が基数に達したら
+1 つ上の単位で丸め直す」1 か所だけなので、**整数部が 1000 以上 1024 未満に
+収まる 2 進の値でしか、基数の取り違えは見えない**。既存の唯一の再選択ケース
+`format_binary(1_099_460_000_000)` は整数部 1023.95 → 丸めて 1024 なので、
+基数が 1000 でも 1024 でも同じく再選択する——だから Task 3 で緑のままだった。
+
+| | 表示（実測） |
+|---|---|
+| `let base = units[0].1;`（製品） | `1010.0 GiB` |
+| `let base = 1000;`（変異） | `1.0 TiB` |
+
+**期待値は実行して確かめた。** 手計算では `0.9 TiB` に化けると読んでいたが、
+実測は `1.0 TiB` だった——TiB で丸め直すと 0.98632… の小数第 1 位が
+9 に丸まったあと `round_tenth` の繰り上がりを通り、`whole` が 1 に上がる。
+**変異後の値のほうが `round_tenth` の繰り上がりを通る**（1010 GiB ちょうどは
+剰余 0 で、製品側は繰り上がりを通らない）。テストのコメントに書いた化け方は
+この実測に合わせてある。
+
+**赤確認**（変異を当て、戻しは再編集）:
+
+```
+test data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand ... FAILED
+  left: Some("1.0 TiB")
+ right: Some("1010.0 GiB")
+test result: FAILED. 8 passed; 1 failed
+```
+
+戻したあと 9 本すべて緑。`pnpm heavy:power:exact` の
+`expectTests` にこのテスト名を足し、判定は `ok` のまま（赤は 1 本 → **2 本**）。
+**足し忘れれば `unexpected-red` になる**——両側主張の効き目である。
+
+### 足さなかった 1 件: `micrometre-off-by-thousand`
+
+**係数表 63 行を golden が 1 度以上すべて覆っている。** 起票時の実測を
+今日引き直した——`affine()` の腕は 63、`token()` の腕も 63、
+`testdata/convert.json` の 55 件が `input.from` / `input.to` に使う
+文字列は 64 通りで、そこから未知トークンの異常系 `furlong` を除いた
+**63 通りが 63 のトークンと完全に一致する**（覆われていない単位は 0）。
+1 行だけを単体テストで literal 固定するのは恣意的で、**golden の仕事を下手に
+写すことになる**。しかも「表を literal で固定した単体テスト」は、まさに
+この spec が Step 0 で「変異が下の層で止まって上まで届かない」と実証した形
+である（transfer の `every_unit_has_its_factor` が 8 つの係数を literal で
+持つ実例）。**係数表の見張りは Python の独立実装に任せる**——同じ表を Rust の
+テストに写しても、写し間違いは golden でしか見つからない。
+
+### 記録の欄を直した（`caught` / `total`）
+
+Task 3 の `web/exact-power.json` は 6 種すべてが `caught: {}` / `total: 0`
+だった。この 2 欄は `resultRecord` が `measurement.mismatchesByShard` から
+組み立てるもので、**シャードを数えない測定（`exact-power.mjs`）では埋まらない**。
+発注元はこれを見て「赤 0 本」と誤読した——赤の内訳は `why` の文にしか
+無かった。
+
+**欄を埋めるほうを選んだ**（「欄の意味が違う」と書き添えるほうではなく）。
+理由は 2 つある。① `web/exact-power.json` は `.gitignore` に載っていて
+**コミットされない**（`.gitignore:20`）ので、JSON の中に注意書きを置いても
+次に読む人の手元では生成し直されて消える。注意書きの置き場所は結局
+生成側のコードになる。② `caught` は「捕まえたものの内訳」、`total` は
+「その合計」であり、シャードを数えるかテストを数えるかで**意味は変わらない**
+——鍵がシャード名かテスト名か、値がミスマッチ件数か常に 1 か、の違いだけ。
+欄の意味を測定ごとに読み替えさせるより、**同じ意味で埋める**ほうが誤読の芽を
+残さない。
+
+`resultRecord` は `mismatchesByShard` を持つ測定では 1 件も値が変わらない
+（既存 18 種の記録は不変）。持たない測定では `failed` から
+`{テスト名: 1}` を組み立て、`total` は赤の本数になる。今回の走行の実測:
+
+| 変異 | `total`（赤の本数） |
+|---|---:|
+| `binary-base-is-decimal` | 2 |
+| `degf-offset-dropped` | 3 |
+| `micrometre-off-by-thousand` | 1 |
+| `half-even-becomes-half-up` | 2 |
+| `kv-counts-once-not-twice` | 5 |
+| `partial-byte-truncated` | 2 |
+
+### 実行時間・件数（壁時計）
+
+| 検査 | 結果 |
+|---|---|
+| `cargo test --workspace` | **374**（Task 3 時点 373 + 新規 1） |
+| `pnpm test`（vitest） | **365**（364 + `caught` の欄を主張する 1 本） |
+| `pnpm heavy:power:exact` | 6 種すべて `ok`、**138 秒** |
+
+走行後の `git diff -- crates/` は**足したテストの 18 行だけ**で、計算のコードは
+1 行も変わっていない。

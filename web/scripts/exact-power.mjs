@@ -170,6 +170,10 @@ export const EXACT_MUTATIONS = [
     from: "let base = units[0].1;",
     to: "let base = 1000;",
     expectTests: [
+      // **Task 4 で足した単体テスト。** 基数の取り違えが見えるのは
+      // 整数部が 1000 以上 1024 未満に収まる 2 進の値だけで、それまで
+      // `format.rs` の 8 本はどれもその帯を通っていなかった。
+      "data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand",
       "data_scale_matches_the_reference",
     ],
   },

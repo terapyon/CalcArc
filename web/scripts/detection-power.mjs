@@ -770,13 +770,24 @@ function describeExpect(mutation) {
  * `mismatchesByShard` のうち非ゼロのシャードだけ(レポートの「赤くなった
  * シャード」欄が表示するのはこれ)、`total` はその合計。`kind` は契約に
  * 無い追加項目――D+E がレポートで 5 種の失敗を区別するために使う。
+ *
+ * **シャードを数えない測定では、`caught` の鍵は赤くなったテストの名前、値は
+ * 常に 1、`total` は赤の本数になる。** どちらの測定でも「捕まえたものの
+ * 内訳」と「その合計」であることは変わらない。
  */
 export function resultRecord(mutation, measurement, verdict) {
-  const caught = Object.fromEntries(
-    // **シャードを数えない測定もここを通る。** `??` は既存の測定を 1 件も
-    // 変えない――`measure()` は常に `mismatchesByShard` を持つ。
-    Object.entries(measurement.mismatchesByShard ?? {}).filter(([, count]) => count > 0),
-  );
+  const caught = measurement.mismatchesByShard
+    ? Object.fromEntries(
+        Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
+      )
+    : // **シャードを数えない測定もここを通る。** `exact-power.mjs` は赤く
+      // なった**テストの名前**で測る。ここを空のままにすると、記録には
+      // `caught: {}` / `total: 0` が並び、**1 本も捕まえなかった走行と
+      // 見分けがつかない**――実際に「赤 0 本」と誤読された(2026-08-20)。
+      // 赤の内訳は `why` の文にしか無かった。テスト 1 本を 1 と数えて埋める。
+      // `measure()` は常に `mismatchesByShard` を持つので、既存の 18 種の
+      // 記録は 1 件も変わらない。
+      Object.fromEntries((measurement.failed ?? []).map((name) => [name, 1]));
   const total = Object.values(caught).reduce((a, b) => a + b, 0);
   return {
     id: mutation.id,
