@@ -2024,6 +2024,11 @@ git commit   # 例: "A hundred kilometres is 62.13711922 miles"
 - Modify: `docs/definition-of-done.md`（縦の表に Convert の行）
 - Modify: `docs/superpowers/specs/2026-08-19-unit-engine-design.md`（§6 に【実測】を追記）
 
+**【追加 2026-08-20】`web/tests/e2e/viewport-budget.spec.ts` は Task 11 で既に直してある**
+（`waitForPanel` が `region "単位変換（準備中）"` を待っていた）。Task 12 では **`TABS` に
+`#convert/length` 等を足すかどうか**を判断すること——S-0 で「**巡回に入っていない route は
+緑を『収まっている』と読ませる**」を記録したばかりである。
+
 - [ ] **Step 1: E2E を書く**
 
 **`web/tests/e2e/data-scale-keypad.spec.ts:25-51` と `:62-94` の 2 本を移植する**
@@ -2041,7 +2046,22 @@ git commit   # 例: "A hundred kilometres is 62.13711922 miles"
 `°C` → `°F` で **`-40`** が出ること。**vitest はモックの算数を通るだけ**なので、
 「符号が実際に境界を越えて core に届く」ことはここでしか見えない（計画の裁定 3）。
 
-さらに 1 本: **単位面の 44px**（spec §6 の「撮る」が名指ししている。⇅ も 44px あること）。
+さらに 1 本: **単位面の 44px**。
+
+**【訂正 2026-08-20】⇅ は「高さ 44px」を要求しないこと。** 項目行は Task 10 が `height: "half"` にしており、
+実測 **86 × 34**。`data-scale-keypad.spec.ts:53-62` は項目行について「**幅 ≥ 44、高さ < 44**」を
+**明示的に主張している**——高さ 44px を要求すると、項目行の縦の予算を変える話になり、既存の規律と衝突する。
+**⇅ は幅を測ること。**
+
+**【追加 2026-08-20】`convert-placeholder.spec.ts` の削除で被覆が 1 つ消える。**
+「**Convert タブを押すと `#convert/length` へ行く**」を見ていたのはあのファイルだけで、
+`nav.spec.ts` はタブの行き先を見ていない（実測）。**`convert.spec.ts` に 1 本入れること。**
+
+**【追加 2026-08-20】枠の不変条件は E2E でしか捕まらない。** 実測（Task 11 の赤確認）:
+CSS の面名を 1 文字変えると **vitest は 21/21 緑のまま**（jsdom は CSS Modules も レイアウトも見ない）。
+実ブラウザ（390px）では数字面が `366x366` のままで、単位面が length `366x291` / mass `366x216` /
+**temperature `366x67`** に潰れ、面を入れ替えるたびに縦が最大 **299px** 動く。
+**「枠が動かない」E2E がこの壊れ方を機械で見張る唯一の検査である。**
 
 - [ ] **Step 2: 走らせる**
 
