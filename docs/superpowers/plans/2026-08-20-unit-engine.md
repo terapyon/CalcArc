@@ -661,10 +661,10 @@ for c in d['cases']: print(' ', c['id'], '->', c['expect'])
 "
 ```
 **目で確かめること**（機械が代わりにやってくれない）:
-- `1inTomm` が `25.4`、`1lbTokg` が `0.45359237`
-- `-40degcTodegf` が `-40`
-- `1nmTokm` が `1e-12`、`10000kmTomm` が `1e10`（**指数表記の両側**）
-- `1234.5678kmTokm` が `1,234.5678`（**カンマは整数部だけ**）
+- `1intomm` が `25.4`、`1lbtokg` が `0.45359237`（**`id` は小文字の `to`**。`build_convert` のコードが正）
+- `-40degctodegf` が `-40`
+- `1nmtokm` が `1e-12`、`10000kmtomm` が `1e10`（**指数表記の両側**）
+- カンマの 2 件（`1,234,567` と `1,234.5678`。**整数部だけに入る**）
 - **tie の 2 件が `1.23456789` と `1.234567892`**（偶数は据え置き、奇数は切り上げ）。
   **どちらかが違ったら、その値は tie ではない**——11 桁目が 5 で、その後ろに何も無いことを手で確かめ直すこと
 - エラーが 3 件（`{"error": "SyntaxError"}`）
@@ -1405,8 +1405,9 @@ fn convert_matches_the_reference() {
     assert_eq!(ok + errors, golden.cases.len(), "some case was not compared");
     // **下限は Task 3 が実際に置いた件数から決める。** 数え直して書くこと
     // ——「だいたい」で書くと、ケースが消えた日に緑のまま通る。
-    assert!(ok >= 18, "only {ok} successful cases compared");
-    assert!(errors >= 3, "only {errors} error cases compared");
+    // **Task 3 の実測は 成功 27 / エラー 4**（`testdata/convert.json` を数え直すこと）。
+    assert!(ok >= 27, "only {ok} successful cases compared");
+    assert!(errors >= 4, "only {errors} error cases compared");
 }
 ```
 
@@ -2073,7 +2074,7 @@ git commit   # 例: "Measure what the converter costs, and write it down"
 | §4.2 カテゴリ 3 つ | Task 9（route）、Task 11（器） |
 | §4.3 値は式で打てる | Task 4、Task 10 の `lets the value be an expression`、Task 11 |
 | §5 WASM 境界・トークンの一致検査 | Task 8 |
-| §6 golden の名指しケース | Task 3（**表を 1 行ずつ写した**） |
+| §6 golden の名指しケース | Task 3（**表を 1 行ずつ写した**）。ただし**往復とあふれの 2 行は golden では表現できない**（spec §6 の【訂正 2026-08-20】）——往復は表示の丸めを通ると戻らず、あふれは `Fraction` が無限精度。**在る場所は単体テスト**（Task 1・5） |
 | §6 U-0 から持ち越した検査 | Task 9 の Step 5（**赤確認つき**） |
 | §6 赤確認 1〜5 | Task 5（1〜3）、Task 6（4）、Task 7（通しで 5 件） |
 | §6 段付け・撮る | Task 12 |
