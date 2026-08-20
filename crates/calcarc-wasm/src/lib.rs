@@ -773,8 +773,13 @@ pub fn convert_currency(
 ) -> JsValue {
     let outcome: CalcResult<String> = (|| {
         // **結果を捨てても、この行自体が検査である。** `from` が知らない
-        // トークンなら、ここで SyntaxError になって関数を抜ける
-        // (`_` に束ねて握り潰すと、`from` は何を渡しても通ってしまう)。
+        // トークンなら、ここで SyntaxError になって関数を抜ける。
+        //
+        // **検査になっているのは `?` であって束縛名ではない。** ここには
+        // 「`_` に束ねて握り潰すと `from` は何を渡しても通ってしまう」と
+        // 書いてあったが、**誤りだった**——`let _ = ...?;` と書いても `?` が
+        // 先に効いて早期 return する。`_from` と `_` の差は drop の時期だけで、
+        // 検査力は同じである。**この行から `?` を落としたときだけ素通りする。**
         let _from = currency::Currency::from_token(from).ok_or(CalcError::SyntaxError)?;
         let to = currency::Currency::from_token(to).ok_or(CalcError::SyntaxError)?;
         currency::convert_currency(value, to, from_rate, to_rate)
