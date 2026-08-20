@@ -4,17 +4,31 @@ import { expect, type Page, test } from "@playwright/test";
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
 // ページ全体の高さもフッタの位置もタブで変わる。
 
-// **Convert は 3 カテゴリとも巡回する**(U-1)。S-0 で記録した穴——
-// **巡回に入っていない route は、緑を「収まっている」と読ませる**——を、
-// 少なくとも Convert では作らない。`#convert`(素のハッシュ)は
-// `#convert/length` へ倒れる同じ画面なので、タブの href と同じ
-// `#convert/length` のほうを巡回する(同じ画面に URL を 2 つ作らない)。
+// **全 route は 12(scientific 1 + convert 7 + scale 3 + finance 1)、
+// この巡回が持つのは 6 だけである。** 巡回しているのは
+// `#scientific` `#convert/length` `#convert/mass` `#convert/temperature`
+// `#scale/data-scale` `#finance` の 6 つ。**外にいる 6 つ**は
+// `#convert/area` `#convert/volume` `#convert/speed` `#convert/data-size`
+// (U-2 で増えた 4 カテゴリ)と `#scale/llm` `#scale/transfer`。
+// `#convert`(素のハッシュ)は `#convert/length` へ倒れる同じ画面なので、
+// タブの href と同じ `#convert/length` のほうを巡回する
+// (同じ画面に URL を 2 つ作らない)。
 //
-// **Scale は依然として `#scale/data-scale` の 1 件だけ**である。
-// `#scale/llm` と `#scale/transfer` は 390×844 で溢れることが分かっており
-// (docs/definition-of-done.md、ユーザー裁定で許容)、ここに足すと赤になる。
-// **その 2 route がこの巡回に居ないことは、docs/definition-of-done.md に
-// 書いてある既知の穴である。**
+// **巡回に入っていない route は、緑を「収まっている」と読ませる**——
+// S-0 で記録したこの穴は、いまも 6 route ぶん残っている
+// (docs/definition-of-done.md【訂正 2026-08-20】)。**足さなかった理由は
+// 2 種類あり、性質が違う。**
+//
+// - **Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で
+//   溢れることが分かっている(ユーザー裁定で許容)。足すと赤になる——
+//   「承知のうえで許容した」溢れである。
+// - **Convert の 4 つ**は溢れていない(360×640 でも 0。手で実測済み)。
+//   足せば緑になるが、足していない。U-2 spec §5 が `pnpm e2e` に足す
+//   検査を「面が枠に収まっているか」を見る 1 本
+//   (`convert.spec.ts` の "swapping faces moves neither the frame nor
+//   DEL and AC")に限っており、この巡回に route を足す判断ではなかった。
+//   **「収まっているのを機械が確認していない」穴であって、「溢れているのを
+//   許容した」穴ではない。**
 const TABS = [
   ["#scientific", "Scientific"],
   ["#convert/length", "Convert 長さ"],

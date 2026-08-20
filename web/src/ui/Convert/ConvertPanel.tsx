@@ -9,7 +9,7 @@ function isCategory(text: string | null): text is ConvertCategory {
 
 /**
  * 単位換算の器(ScalePanel と同じ形)。**カテゴリを選ぶだけで、計算も入力も
- * 持たない**——盤面は `UnitPanel` 1 つを 3 カテゴリで共有する。
+ * 持たない**——盤面は `UnitPanel` 1 つを 7 カテゴリで共有する。
  */
 export function ConvertPanel({ category }: { category: string | null }) {
   // route が既定へ倒しているので null は来ないが、型の上では来る。

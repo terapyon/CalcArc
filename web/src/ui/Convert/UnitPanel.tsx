@@ -61,8 +61,11 @@ const OPERATORS: Record<"add" | "sub" | "mul" | "div", Operator> = {
 };
 
 /**
- * 既定の単位。**どれも「日本の単位からヤード・ポンドへ」**で、換算器を開く
+ * 既定の単位。**多くは「日本の単位からヤード・ポンドへ」**——換算器を開く
  * 動機のいちばん多い向きである(spec は既定を決めていない。Task 11 の裁定)。
+ * **例外が 2 つある**: area は 坪→m²(ヤード・ポンドへ行かない。下の注記)、
+ * data-size は GB→GiB(どちらの向きでもない。SI/IEC の分離を見せるためで、
+ * 「日本の単位から」でも「ヤード・ポンドへ」でもない)。
  */
 const DEFAULT_UNITS: Record<
   ConvertCategoryToken,

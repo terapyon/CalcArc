@@ -222,9 +222,21 @@ describe("Convert のキー集合", () => {
   it("fits every category inside the frame", () => {
     // **単位に使えるのは左 3 列 × 5 行 = 15 スロット**(spec §0.0-4 の【訂正 2026-08-20】)。
     // **Volume はちょうど 15 で、容量いっぱいである。**
+    //
+    // **`unitsOf().length` から行数を計算しない。** それは `unitFace()` の
+    // 詰め方(1 行 3 個)をここに書き写しただけのモデルで、`unitFace` の
+    // 詰め方が変わっても緑のままになる。**実物を測る**——"puts DEL and AC
+    // in the same place on every face" と同じ流儀で、`unitSections()` が
+    // 実際に返すキー数を見る。枠は 5 行 × 5 列 = 25 セルが上限。
+    let checked = 0;
     for (const category of CONVERT_CATEGORY_TOKENS) {
-      const rows = Math.ceil(unitsOf(category).length / 3);
-      expect(rows, `${category} が 5 行に収まらない`).toBeLessThanOrEqual(5);
+      const keys = face(unitSections(category)).keys;
+      expect(
+        keys.length,
+        `${category} が 5 行(25 セル)に収まらない`,
+      ).toBeLessThanOrEqual(25);
+      checked += 1;
     }
+    expect(checked).toBe(7);
   });
 });
