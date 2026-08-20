@@ -12,7 +12,11 @@
  * **React を import しない。** `web/src/calc/` と同じ境界に置く。
  */
 
-import { CURRENCY_TOKENS, type CurrencyRateSet } from "./types";
+import {
+  CURRENCY_TOKENS,
+  type CurrencyRateSet,
+  type CurrencyToken,
+} from "./types";
 
 /**
  * これを過ぎたら背後で取りに行く(spec §4.2 の「24 時間」)。
@@ -34,6 +38,19 @@ export const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000;
 export const ALLOWED_CURRENCY_CODES: readonly string[] = CURRENCY_TOKENS.map(
   (token) => token.toUpperCase(),
 );
+
+/**
+ * 盤面のトークン(小文字) → `rates` の鍵(大文字 ISO)。
+ *
+ * **綴りの変換をここ以外に書かない。** `rates` の鍵は大文字 ISO、盤面の
+ * トークンは小文字で、`validate` は**厳密一致**で見る——盤面側で
+ * `.toUpperCase()` を書き直すと、同じ対応表が 2 つになる。
+ * **上の `ALLOWED_CURRENCY_CODES` から位置で起こす**ので、表そのものは
+ * 1 つのままである。
+ */
+export const CURRENCY_CODE: Record<CurrencyToken, string> = Object.fromEntries(
+  CURRENCY_TOKENS.map((token, index) => [token, ALLOWED_CURRENCY_CODES[index]]),
+) as Record<CurrencyToken, string>;
 
 /**
  * **`use` なら描いてよい。`refresh` が立っていても描くのを待たない**(§4.2)。

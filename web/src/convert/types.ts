@@ -29,6 +29,35 @@ export const CONVERT_CATEGORY_TOKENS = [
 export type ConvertCategoryToken = (typeof CONVERT_CATEGORY_TOKENS)[number];
 
 /**
+ * 画面に出る Convert のカテゴリ。**境界の 7 つ + 為替の 1 つ**(U-4 spec §7)。
+ *
+ * **`CONVERT_CATEGORY_TOKENS` に `currency` を足さない。** あちらは
+ * `calcarc-core` の `Category::ALL` と 1 対 1 で、`token_parity.rs` が
+ * 順序込みで突き合わせている表である——**core に `Category::Currency` は
+ * 無い**(通貨の換算は `convert_currency` が別に受け、レートを引数で取る。
+ * U-4 計画の裁定 1「通貨の表は core に置かない」)。足した瞬間に
+ * `convert_category_tokens_match_between_typescript_and_rust` が赤くなる。
+ *
+ * **したがってカテゴリの綴りは 2 つの層に分かれる**——`ConvertCategoryToken`
+ * は `calc.convert()` に渡せる 7 つ、`ConvertCategoryId` は URL と `<select>` と
+ * 盤面が知っている 8 つである。**`currency` を `calc.convert()` に渡す道は
+ * 型で塞がっている。**
+ */
+export const CONVERT_CATEGORY_IDS = [
+  ...CONVERT_CATEGORY_TOKENS,
+  "currency",
+] as const;
+
+export type ConvertCategoryId = (typeof CONVERT_CATEGORY_IDS)[number];
+
+/** 為替のカテゴリか。**綴りをあちこちに書かない**ための述語である。 */
+export function isCurrencyCategory(
+  category: ConvertCategoryId,
+): category is "currency" {
+  return category === "currency";
+}
+
+/**
  * calcarc-core の convert::Unit に対応するトークン
  * (長さ → 質量 → 温度 → 面積 → 体積 → 速さ → データ量の順)。
  */

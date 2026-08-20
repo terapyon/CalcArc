@@ -9,10 +9,7 @@
  * **U-1 で実際にそうなった**——増えたのは表の 2 行だけである。
  */
 
-import {
-  CONVERT_CATEGORY_TOKENS,
-  type ConvertCategoryToken,
-} from "./convert/types";
+import { CONVERT_CATEGORY_IDS, type ConvertCategoryId } from "./convert/types";
 
 export type ModuleId = "scientific" | "convert" | "scale" | "finance";
 
@@ -34,10 +31,14 @@ export type ScaleCategory = (typeof SCALE_CATEGORIES)[number];
 /** Convert 系統のカテゴリ。**配列そのものは `convert/types.ts` が持つ**
  * ——あちらは Rust の `Category::ALL` と `token_parity.rs` が突き合わせる表で、
  * ここで綴りを写すと機械の検査が届かない 3 つ目の写しができる。ここは
- * SCALE_CATEGORIES と同じ名前で盤面へ渡すだけの別名である。 */
-export const CONVERT_CATEGORIES = CONVERT_CATEGORY_TOKENS;
+ * SCALE_CATEGORIES と同じ名前で盤面へ渡すだけの別名である。
+ *
+ * **U-4 で 8 つになった。** 参照するのは `CONVERT_CATEGORY_IDS`(7 + 為替)で
+ * あって `CONVERT_CATEGORY_TOKENS`(境界の 7)ではない——**`#convert/currency`
+ * を既知のカテゴリにするのはここである**。 */
+export const CONVERT_CATEGORIES = CONVERT_CATEGORY_IDS;
 
-export type ConvertCategory = ConvertCategoryToken;
+export type ConvertCategory = ConvertCategoryId;
 
 /** 系統ごとに存在するカテゴリ。**U-1 で convert が 2 つ目の中身を持つ。** */
 const CATEGORIES: Record<ModuleId, readonly string[]> = {

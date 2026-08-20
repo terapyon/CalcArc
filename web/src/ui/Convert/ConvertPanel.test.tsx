@@ -31,11 +31,13 @@ describe("ConvertPanel", () => {
       "体積 Volume",
       "速さ Speed",
       "データ量 Data Size",
+      // **U-4 の 8 つ目。** `route.ts` の `CONVERT_CATEGORIES` から起こる。
+      "為替 Currency",
     ]);
   });
 
   it("shows the panel for the category in the route", () => {
-    // **押せて何も起きない面を作らない。** 分岐が 7 つあるなら 7 つとも
+    // **押せて何も起きない面を作らない。** 分岐が 8 つあるなら 8 つとも
     // 描いて確かめる——面の名前は全カテゴリで同じ(`単位変換`)なので、
     // 出ている単位で見分ける。**単位は `UnitPanel` の既定**である。
     const seen: string[] = [];
@@ -47,6 +49,9 @@ describe("ConvertPanel", () => {
       ["volume", "L", "gal(US)"],
       ["speed", "km/h", "mph"],
       ["data-size", "GB", "GiB"],
+      // **為替はレートが無くても既定の通貨を出す**(spec §0.0-4)。
+      // レートが無いのは「換算できない」ことであって、面が消えることではない。
+      ["currency", "USD", "JPY"],
     ] as const) {
       const { unmount } = render(<ConvertPanel category={category} />);
       expect(select()).toHaveValue(category);
@@ -56,7 +61,7 @@ describe("ConvertPanel", () => {
       seen.push(category);
       unmount();
     }
-    expect(seen).toHaveLength(7);
+    expect(seen).toHaveLength(8);
   });
 
   it("falls back to length when the category is unknown", () => {
