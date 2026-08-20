@@ -7,6 +7,22 @@ const main = (page: Page) => page.getByTestId("display-main");
 /** 測れなかったことの印。相対座標は負にもなるので `-1` では代用できない。 */
 const UNMEASURED = "unmeasured";
 
+/**
+ * Convert の全カテゴリ。**U-1 の 3 つ + U-2 の 4 つ**(spec §2)。
+ * `web/src/convert/types.ts` の `CONVERT_CATEGORY_TOKENS` と同じ並びだが、
+ * **E2E は境界の定数を import しない**——実ブラウザに出ている面を、
+ * 外から名前で数えるのがこのファイルの仕事である。
+ */
+const CATEGORIES = [
+  "length",
+  "mass",
+  "temperature",
+  "area",
+  "volume",
+  "speed",
+  "data-size",
+] as const;
+
 async function press(page: Page, names: string[]) {
   for (const name of names) {
     await panel(page).getByRole("button", { name, exact: true }).click();
@@ -23,16 +39,37 @@ const face_ = (page: Page, name: "数字と演算のキー" | "単位のキー")
 /**
  * 面ごとのキー総数。**予約スロットも disabled な `<button>` として描かれる**
  * ので、面の総数はキー配列の長さと一致する。単位面は 5 列 × (3 単位/行) で、
- * length 11 単位 → 4 行 = 20、mass 7 単位 → 3 行 = 15、temperature 3 単位 →
- * 1 行 = 5。
+ * 行数は `ceil(単位数 / 3)`、総数は 行数 × 5:
+ *
+ * | カテゴリ | 単位数 | 行 | キー総数 |
+ * |---|---|---|---|
+ * | length | 11 | 4 | 20 |
+ * | mass | 7 | 3 | 15 |
+ * | temperature | 3 | 1 | 5 |
+ * | area | 11 | 4 | 20 |
+ * | volume | **15** | **5** | **25** |
+ * | speed | 4 | 2 | 10 |
+ * | data-size | 12 | 4 | 20 |
+ *
+ * **Volume の 5 行が枠の容量そのものである**(U-2 spec §0.0-4 の【訂正
+ * 2026-08-20】)。16 個目を足すと 6 行になり、`swapping faces moves neither
+ * the frame nor DEL and AC` が赤くなる。
+ *
+ * **件数のハードコードはここと `every category has a deep link` の 2 箇所に
+ * ある。** 片方だけ直すともう片方が緑のまま古い件数を主張し続ける。
  */
 const FACES = [
   ["length", "数字と演算のキー", "値を入力", 25],
   ["length", "単位のキー", "変換元の単位を選ぶ", 20],
+  ["mass", "単位のキー", "変換元の単位を選ぶ", 15],
   ["temperature", "単位のキー", "変換元の単位を選ぶ", 5],
+  ["area", "単位のキー", "変換元の単位を選ぶ", 20],
+  ["volume", "単位のキー", "変換元の単位を選ぶ", 25],
+  ["speed", "単位のキー", "変換元の単位を選ぶ", 10],
+  ["data-size", "単位のキー", "変換元の単位を選ぶ", 20],
 ] as const;
 
-test("all three faces keep 44px touch targets", async ({ page }) => {
+test("every face keeps 44px touch targets", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。**単位の押し間違いは答えを
   // 壊す**ので、メインの枠に載る面はどれも守る(項目行だけは押し直せば
   // 戻るので縦を詰める——下の別の検査が幅だけを見る)。
@@ -111,7 +148,17 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
   // この検査だけである。**
   //
   // 温度は単位面が 1 行(3 単位)しか無く、**枠が中身の行数で決まっていたら
-  // いちばん派手に潰れる面**なので、3 カテゴリぶん回る。
+  // いちばん派手に潰れる面**である。逆に **volume は 15 単位 5 行で枠の容量
+  // ちょうど**——**枠のあふれを見張っているのはこの検査 1 本だけ**なので
+  // (U-2 spec §0.0-4 の【訂正 2026-08-20】)、**7 カテゴリぶん回る**。
+  // 単位面の名前はカテゴリで変わらないため、新しい 4 つも同じ区画名で拾える。
+  //
+  // **volume だけを回しても潰れは見えない**(実測 2026-08-20、CSS の区画名を
+  // 1 文字ずらして計測)。5 行ちょうどの volume は `grid-template-rows` を
+  // 失っても 366x366.0625 のままで、**数字面と区別がつかない**——潰れを
+  // 見せたのは temperature 366x66.8125 / speed 366x141.625 /
+  // area・data-size 366x291.25 のほうである。**容量いっぱいの面は、
+  // あふれの番人にはなれても潰れの番人にはならない。**
   //
   // **DEL と AC は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が
   // 動かない**」であって、**盤面より上にある表示行の高さを巻き込むのは
@@ -127,7 +174,7 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
     del: string;
     ac: string;
   }[] = [];
-  for (const category of ["length", "mass", "temperature"] as const) {
+  for (const category of CATEGORIES) {
     await page.goto(`/#convert/${category}`);
     await expect(panel(page)).toBeVisible();
     for (const [field, faceName] of [
@@ -152,7 +199,7 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
       });
     }
   }
-  expect(seen).toHaveLength(6);
+  expect(seen).toHaveLength(CATEGORIES.length * 2);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
   const dels = new Set(seen.map((s) => s.del));
@@ -170,7 +217,7 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
 test("every category has a deep link that lands on it", async ({ page }) => {
   const select = page.getByRole("combobox", { name: "計算の種類" });
   const seen: string[] = [];
-  for (const category of ["length", "mass", "temperature"] as const) {
+  for (const category of CATEGORIES) {
     await page.goto(`/#convert/${category}`);
     await expect(select).toHaveValue(category);
     // **select の値だけでなく、そのカテゴリでしか出ない面まで見る。**
@@ -179,13 +226,24 @@ test("every category has a deep link that lands on it", async ({ page }) => {
     await expect(panel(page)).toBeVisible();
     await press(page, ["変換元の単位を選ぶ"]);
     const units = await face_(page, "単位のキー").getByRole("button").all();
+    // **件数のハードコードの 2 箇所目。** 上の `FACES` と同じ表を持って
+    // いるので、**カテゴリを足したら両方直す**——片方だけだと、直さなかった
+    // ほうが古い件数のまま緑を返し続ける。
     expect(units, `${category} should render its own unit face`).toHaveLength(
-      { length: 20, mass: 15, temperature: 5 }[category],
+      {
+        length: 20,
+        mass: 15,
+        temperature: 5,
+        area: 20,
+        volume: 25,
+        speed: 10,
+        "data-size": 20,
+      }[category],
     );
     seen.push(category);
   }
   // **件数を主張する。** ループが 0 周でも緑になる書き方をしない。
-  expect(seen).toHaveLength(3);
+  expect(seen).toHaveLength(CATEGORIES.length);
 });
 
 test("the Convert tab lands on #convert/length", async ({ page }) => {
