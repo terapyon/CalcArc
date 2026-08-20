@@ -70,5 +70,11 @@ test("the nav does not push the page sideways at 360px", async ({ page }) => {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
-  expect(overflow, `the page overflows sideways by ${overflow}px`).toBe(0);
+  // **ユーザー裁定 2026-08-20: 8px まで許容する。** フォント環境差を吸収するため。
+  // 実測: CI で 3px、手元で CJK を落とすと 6px。どちらも字幅が変わっただけで、
+  // 盤面は崩れていない。**本物の崩れは 2 桁 px で出るので、この幅でも捕まる。**
+  expect(
+    overflow,
+    `the page overflows sideways by ${overflow}px`,
+  ).toBeLessThanOrEqual(8);
 });

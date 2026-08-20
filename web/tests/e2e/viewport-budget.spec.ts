@@ -143,10 +143,14 @@ for (const [hash, name] of TABS) {
     const spill = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
+    // **ユーザー裁定 2026-08-20: 8px まで許容する。** フォント環境差を吸収する
+    // ため。実測: CI で 3px、手元で CJK を落とすと 6px。どちらも字幅が変わった
+    // だけで、盤面は崩れていない。**本物の崩れは 2 桁 px で出るので、この幅でも
+    // 捕まる。**
     expect(
       spill,
       `${name} spills ${spill}px sideways at 360px`,
-    ).toBeLessThanOrEqual(0);
+    ).toBeLessThanOrEqual(8);
   });
 }
 
