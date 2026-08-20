@@ -34,7 +34,7 @@ const RUN_JSON = join(WEB, "heavy-run.json");
  * 枚数だけを assert しても足りない。1 枚消えて 1 枚増えた走行が緑で通り、
  * 壊れたときに何が消えたのかを言えない。**名前で持つ。**
  *
- * 正当に 16 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
+ * 正当に 18 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
  * この定数の狙いである。
  */
 export const ALL_SHARDS = [
@@ -54,6 +54,7 @@ export const ALL_SHARDS = [
   "complex-display-000.json (displays)",
   "display-000.json (displays)",
   "entry-000.json (displays)",
+  "errors-000.json (displays)",
 ];
 
 /**

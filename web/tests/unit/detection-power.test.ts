@@ -169,8 +169,8 @@ const ALL = ["a (values)", "b (values)"];
 /**
  * **判定に「居るべきシャード」を注入して呼ぶ。**
  *
- * 既定は実物の 15 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
- * テストは全部「14 枚足りない」で赤くなる。検査が引数に無いものに依存しない
+ * 既定は実物の 17 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
+ * テストは全部「16 枚足りない」で赤くなる。検査が引数に無いものに依存しない
  * ようにした結果で、ここで偽の 2 枚を渡すのが正しい使い方である。
  */
 const verdict = (
@@ -278,11 +278,11 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names fifteen shards, and names them once", () => {
+  it("names seventeen shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
-    expect(ALL_SHARDS).toHaveLength(15);
-    expect(new Set(ALL_SHARDS).size).toBe(15);
+    expect(ALL_SHARDS).toHaveLength(17);
+    expect(new Set(ALL_SHARDS).size).toBe(17);
   });
 
   it("accepts a healthy run where nothing reacted", () => {

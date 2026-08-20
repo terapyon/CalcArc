@@ -94,7 +94,27 @@ for (const { name, shard } of loadDisplayShards()) {
       if (isDisplayCase(testCase)) {
         const got = at(results, cursor++);
         displayCases += 1;
-        if (got.error !== null) {
+        const expectedError = testCase.expect.error;
+        if (expectedError !== undefined) {
+          // **主張の中身は種別のほうである(設計書 §5)。** `ERROR_TEXT` は
+          // 全種別で "Math ERROR" と同じ文字列なので、種別まで見ないと
+          // 5 種類すべてが入れ替わっても `main` の比較だけでは緑になる。
+          if (got.error !== expectedError) {
+            mismatches.push(
+              `${testCase.id} (${testCase.expr}): engine reported the ` +
+                `error ${JSON.stringify(got.error)}, but the reference ` +
+                `expected ${JSON.stringify(expectedError)}`,
+            );
+          } else if (got.main !== testCase.expect.main) {
+            mismatches.push(
+              `${testCase.id} (${testCase.expr}): engine showed ` +
+                `${JSON.stringify(got.main)}, reference expected ` +
+                `${JSON.stringify(testCase.expect.main)} (error kind matched)`,
+            );
+          }
+        } else if (got.error !== null) {
+          // **省略は「エラーにならない」という主張。** アンダーフローの
+          // ようなケースが、エラーになった時点で不一致になる。
           mismatches.push(
             `${testCase.id} (${testCase.expr}): engine reported the error ` +
               `${JSON.stringify(got.error)}, but the reference produced the ` +
@@ -154,7 +174,12 @@ for (const { name, shard } of loadDisplayShards()) {
       exponentDisplayCases: cases.filter(
         (c) => isDisplayCase(c) && c.expect.main.includes("e"),
       ).length,
-      errorCases: 0,
+      // **主張したエラー種別の件数。** `"error" in expect` を数える
+      // (`calls.spec.ts` と同じ形)——実際に観測した件数ではなく、
+      // このシャードが期待値として持っている件数である。
+      errorCases: cases.filter(
+        (c) => isDisplayCase(c) && c.expect.error !== undefined,
+      ).length,
       worstEffectiveRelTolerance: 0,
       bands: {
         display: cases.length,

@@ -43,7 +43,7 @@ def _provenance() -> str:
         "（打鍵中の表示の規則はそこにしか無い）。"
         "SymPy/mpmath は使っていない。Python が独立に計算した値ではない"
         "——外部参照ではなく仕様書からの写しである（設計書 §4.1）。"
-        " なお 35 件のうち 10 件（max_entry_len の 3 件目、paren_open の 4 件、"
+        " なお 36 件のうち 10 件（max_entry_len の 3 件目、paren_open の 4 件、"
         "sign_toggle の 5 件）は engine_table.rs に対応するテストが無く、"
         "実装（state.rs）から導いて engine を走らせて確かめた値である。"
         "仕様書の写しですらないので、engine の欠陥は見つけられない"
@@ -51,14 +51,21 @@ def _provenance() -> str:
     )
 
 
-def _case(keys: list[str], main: str, expr: str) -> dict:
-    """`id` を持たない 1 件。`id` は `build_entry_shard` が連番で振る。"""
+def _case(keys: list[str], main: str, expr: str, error: str | None = None) -> dict:
+    """`id` を持たない 1 件。`id` は `build_entry_shard` が連番で振る。
+
+    `error` は Task 2(`display-cases.spec.ts` が `expect.error` を照合できる
+    ようになった時点)から使える。`second_decimal_point_cases` だけが渡す。
+    """
+    expect: dict = {"main": main}
+    if error is not None:
+        expect["error"] = error
     return {
         "kind": "display",
         "mode": "Deg",
         "keys": keys,
         "expr": expr,
-        "expect": {"main": main},
+        "expect": expect,
     }
 
 
@@ -87,21 +94,23 @@ def second_decimal_point_cases() -> list[dict]:
     `push_dot` は `digits` が既に `.` を含んでいれば `Err(SyntaxError)` を
     即座に返す——`eq` を待たずにその場でエラー表示になる。
 
-    **`build_entry_shard` には積まない。** `web/tests/heavy/display-cases.spec.ts`
-    は現状(このシャードが作られた時点)で `DisplayCase.expect` に `error` を
-    持たず、ハーネスが `error !== null` を返したケースを無条件に不一致として
-    扱う——`expect.main` が `"Math ERROR"` と一致していても落ちる。エラー種別
-    まで期待値に持たせる変更(`error` フィールドの追加)は計画の Task 2
-    (`errors-000.json`)の担当であり、この Task では `web/tests/heavy/
-    display-cases.spec.ts` を変更しない。ここではケースの中身だけを
-    `engine_table.rs:70` から正しく起こして残し、Task 2 が拾えるようにする
-    (計画と実物の食い違い。実装報告に書く)。
+    **Task 1 時点では `build_entry_shard` に積んでいなかった。**
+    `web/tests/heavy/display-cases.spec.ts` がその時点で `DisplayCase.expect`
+    に `error` を持たず、ハーネスが `error !== null` を返したケースを無条件に
+    不一致として扱っていたため——`expect.main` が `"Math ERROR"` と一致して
+    いても落ちた。エラー種別まで期待値に持たせる変更(`error` フィールドの
+    追加)は計画 Task 2(`errors-000.json`)が行った。**いまは積む**
+    (計画 Task 2 Step 5)。`error` はこのシャードの他のケースと同じ理由
+    ——`engine_table.rs` のテスト名自身が「構文エラーである」と書いている
+    ——で `engine_table.rs` から起こす(このシャードは仕様書の写しであって、
+    `errors-000.json` のように数学の定義域だけから独立に決める場所ではない)。
     """
     return [
         _case(
             ["3", "dot", "dot"],
             "Math ERROR",
             "小数点を 2 つ打つと、確定させる前から構文エラーになる",
+            error="SyntaxError",
         ),
     ]
 
@@ -285,9 +294,13 @@ def build_entry_shard() -> dict:
     仕様書の規則を 1 つずつ書き写した固定の列挙である。並び順を変えると
     既存の `id` が変わってしまうので、形の並びはこの関数の中で固定する。
 
-    **`second_decimal_point_cases` はここに積まない。** その関数のコメントに
-    書いたとおり、`web/tests/heavy/display-cases.spec.ts` が `error` を
-    まだ照合できない(Task 2 の担当)ので、いま積むと `pnpm heavy` が赤くなる。
+    **`second_decimal_point_cases` は末尾に積む(計画 Task 2 Step 5)。**
+    Task 1 時点では `web/tests/heavy/display-cases.spec.ts` が `error` を
+    照合できず積むと `pnpm heavy` が赤くなったので外してあったが、
+    Task 2 が `DisplayCase.expect.error` の照合を足したので積める。
+    既存の 35 件の `id`(entry-000000〜entry-000034)を変えないよう、
+    形の並びの**末尾**に置く——途中に挟むと、それより後ろの全件の `id` が
+    ずれて `entry-000.json` の差分が「1 件増える」では済まなくなる。
     """
     shapes: list[list[dict]] = [
         leading_zero_cases(),
@@ -296,6 +309,7 @@ def build_entry_shard() -> dict:
         operator_pending_cases(),
         paren_open_cases(),
         sign_toggle_cases(),
+        second_decimal_point_cases(),
     ]
     cases: list[dict] = []
     for shape in shapes:

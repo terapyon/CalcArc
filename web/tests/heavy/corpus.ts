@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CalcErrorCode } from "../../src/calc/types";
 import { KEY_TOKENS } from "../../src/calc/types";
 import { type ComplexValue, magnitude, zeroComponentsAgree } from "./complex";
 
@@ -306,21 +307,33 @@ export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
  * `eng` と `dms` は値を変えないので、既存の「値を比べる」仕組みが使えない
  * (設計書 2026-08-17-display §3.1)。`entry` は打鍵の途中の表示
  * (設計書 2026-08-19 §4.1)——`eq` を押さないので値そのものが無く、
- * こちらも表示文字列でしか比べられない。**`entry` をここに足し忘れると
- * `loadShards()` が拾い、`tolerance` も `value`/`equivalence` の `kind` も
- * 持たないシャードとして即座に落ちる**(assertShardIsSound が守る)。
+ * こちらも表示文字列でしか比べられない。`errors` はエラー種別
+ * (設計書 2026-08-19 §5)——`main` は全件 `"Math ERROR"` で同じなので、
+ * こちらも表示文字列(と `expect.error`)でしか比べられない。
+ * **`entry`/`errors` をここに足し忘れると `loadShards()` が拾い、
+ * `tolerance` も `value`/`equivalence` の `kind` も持たないシャードとして
+ * 即座に落ちる**(assertShardIsSound が守る)。
  */
 export const DISPLAY_SHARD_PATTERN =
-  /^(display|complex-display|entry)-\d+\.json$/;
+  /^(display|complex-display|entry|errors)-\d+\.json$/;
 
-/** 表示を主張するケース。`expect.main` は**表示文字列そのもの**。 */
+/**
+ * 表示を主張するケース。`expect.main` は**表示文字列そのもの**。
+ *
+ * `expect.error` は省略可能。**省略は「エラーにならない」という主張**で
+ * あって「エラー種別を気にしない」ではない——`errors-000.json` の
+ * アンダーフローの 2 件がこの形を使う(設計書 §5.1)。持たせたときは、
+ * 表示だけでなく**エラーの種別まで**一致しないと不合格になる
+ * (`ERROR_TEXT` が全種別で `"Math ERROR"` と同じなので、種別を見なければ
+ * 全部入れ替わっても緑になる)。
+ */
 export interface DisplayCase {
   kind: "display";
   id: string;
   mode: string;
   keys: string[];
   expr: string;
-  expect: { main: string };
+  expect: { main: string; error?: CalcErrorCode };
 }
 
 /**

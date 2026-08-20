@@ -1606,9 +1606,9 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     expected_total = sum(
         len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
     )
-    # 16 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 17 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
     # 数字のままなので、枚数も見る。
-    assert len(written) == 16
+    assert len(written) == 17
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)

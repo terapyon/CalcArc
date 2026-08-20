@@ -436,7 +436,7 @@ export function areaOfShard(shardName: string): Area {
     // 「複素数を検証した」件数が別の領域の数字に混ざる。
     return "complex";
   }
-  if (/^(display|entry)-/.test(stem)) {
+  if (/^(display|entry|errors)-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
     // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
     // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
@@ -446,6 +446,11 @@ export function areaOfShard(shardName: string): Area {
     // 値がまだ存在しない(設計書 2026-08-19 §4.1)。それでも「値ではなく
     // 表示文字列を比べる」という一致点のほうが、6 領域しか持たない
     // `AREAS` の粒度では効いてくる。
+    //
+    // `errors-` も同じ理由でここに入る。主張しているのは値ではなく
+    // **エラー種別**で、`main` は全種別で同じ "Math ERROR" である
+    // (設計書 §5)——値の一致件数に混ぜると、値を一度も比べていない
+    // 30 件が「値がどれだけ合っているか」の分母に紛れ込む。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {

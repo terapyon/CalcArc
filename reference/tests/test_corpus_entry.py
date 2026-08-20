@@ -31,10 +31,12 @@ SHAPES = (
     sign_toggle_cases,
 )
 
-# `build_entry_shard` が実際に積む形。`second_decimal_point_cases` を欠く
-# ——理由は `corpus_entry.py` の同関数の docstring と `build_entry_shard` の
-# docstring を見よ(display-cases.spec.ts がまだ error を照合できない)。
-BUILT_SHAPES = tuple(shape for shape in SHAPES if shape is not second_decimal_point_cases)
+# `build_entry_shard` が実際に積む形。**計画 Task 2 Step 5 で全 7 形になった。**
+# Task 1 時点は `second_decimal_point_cases` を欠いていた——
+# `display-cases.spec.ts` がまだ `error` を照合できなかったため。Task 2 が
+# `DisplayCase.expect.error` の照合を足したので、いまは積める
+# (`corpus_entry.py` の `build_entry_shard` の docstring を見よ)。
+BUILT_SHAPES = SHAPES
 
 
 def test_every_shape_has_at_least_one_case() -> None:
@@ -44,14 +46,18 @@ def test_every_shape_has_at_least_one_case() -> None:
 
 
 def test_the_shard_carries_exactly_the_built_shapes() -> None:
-    # **`second_decimal_point_cases` が静かに紛れ込んでいないこと。** 紛れ込む
-    # と `pnpm heavy` が `display-cases.spec.ts` で赤くなる(実測済み)。
+    # **総件数が形の合計と一致すること。** 形が 1 つでも黙って落ちる/紛れ込む
+    # と、この assert がまず気づく。
     shard = build_entry_shard()
     expected_total = sum(len(shape()) for shape in BUILT_SHAPES)
     assert len(shard["cases"]) == expected_total
+    # **`second_decimal_point_cases` が静かに紛れ込んでいない**のではなく、
+    # いまは**積まれていること**を固定する(Task 1 とは逆向きの主張。
+    # 計画 Task 2 Step 5 が「積まれていないことを固定していたテストを、
+    # 積まれていることに変える」と予告したのがここ)。
     built_keys = {tuple(c["keys"]) for c in shard["cases"]}
     for case in second_decimal_point_cases():
-        assert tuple(case["keys"]) not in built_keys
+        assert tuple(case["keys"]) in built_keys
 
 
 def test_every_case_is_display_kind_and_does_not_end_with_eq() -> None:
@@ -93,7 +99,7 @@ def test_the_provenance_names_the_calculator_spec_not_an_independent_reference()
     # 5 件は `engine_table.rs` に対応するテストが無く、実装(`state.rs`)から
     # 導いて engine を走らせて確かめた値である——engine の欠陥はその値に
     # そのまま写るので、この 10 件は欠陥を見つけられない(退行を留めるだけ)。
-    # レポートが `generated_by` だけを読んで「仕様書からの写し 35 件」と
+    # レポートが `generated_by` だけを読んで「仕様書からの写し 36 件」と
     # 書くと、その 10 件について実際より強い主張になる。
     assert "10 件" in generated_by
     assert "engine の欠陥は見つけられない" in generated_by
@@ -119,6 +125,7 @@ def test_leading_zero_covers_00_and_the_bare_dot() -> None:
 def test_second_decimal_point_is_an_error_before_eq() -> None:
     (case,) = second_decimal_point_cases()
     assert case["expect"]["main"] == "Math ERROR"
+    assert case["expect"]["error"] == "SyntaxError"
     assert "eq" not in case["keys"]
 
 
