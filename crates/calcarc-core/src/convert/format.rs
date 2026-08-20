@@ -16,7 +16,18 @@
 use crate::expr::rational::Rational;
 use crate::{CalcError, CalcResult};
 
-const DIGITS: usize = 10;
+/// 表示する有効数字の桁数(numerical-policy「表示は有効数字 10 桁」)。
+/// **指数表記の境とは別の定数である。** 桁数だけを変えるつもりで指数の境まで
+/// 動かさないよう、`EXP_HIGH_EXPONENT` / `EXP_LOW_EXPONENT` に分けてある
+/// (先例: `numeric::format::DISPLAY_DIGITS` と `EXP_HIGH_EXPONENT` /
+/// `EXP_LOW_EXPONENT` の分離。U-1 spec §3.3 が「S-0 で直した『同じ字が 2 つの
+/// 意味を持つ』と同じ型の罠」と名指ししている)。
+const DISPLAY_DIGITS: usize = 10;
+
+/// この 10 の冪以上で指数表記にする(numerical-policy「`|x| >= 1e10`」)。
+const EXP_HIGH_EXPONENT: i32 = 10;
+/// この 10 の冪未満で指数表記にする(numerical-policy「`|x| < 1e-9`」)。
+const EXP_LOW_EXPONENT: i32 = -9;
 
 pub fn format_rational(value: Rational) -> CalcResult<String> {
     let (num, den) = value.parts();
@@ -40,22 +51,41 @@ pub fn format_rational(value: Rational) -> CalcResult<String> {
         exponent += 1;
     }
     // こちらは**あふれたら Overflow**。p を 10 倍する側で、値を失う。
-    // 到達するのは分母が u128::MAX/10 を超える場合で、この spec の係数表からは
-    // 作れない(分母は 10^9・16·10^8・5000・125・180・9 の積までしか育たない)が、
-    // **証明をコメントに置いて検査は残す**——証明が崩れた日に黙って折り返さない。
+    // **分母は係数表からは来ない。** `convert()` の第 1 引数は式であり、
+    // 利用者が打った値が分母を決める——係数表の分母がどこまでしか育たないかは
+    // ここでは関係ない(前段のコメントに以前あった「係数表からは作れない」は
+    // 事実誤認だったので削った)。
+    // **実測でここに到達する**: `1 / 170141183460469231731687303715884105727`
+    // (= `1 / i128::MAX`) は `convert()` は `Ok`、ここで `Err(Overflow)` になる。
+    // p=1, q=i128::MAX(≈1.7014e38) から始まり、p を q に届かせようと 10 倍を
+    // 重ねると `10^38 < q` でまだ足りず、次の `10^39` が `u128::MAX`(≈3.4028e38)
+    // を超える。
+    // **黙って丸めるより Overflow と言うほうがよい**
+    // (numerical-policy「表示できない値を黙って丸めない」、design §3.5 の
+    // 「黙って f64 に落ちるより `Overflow` と言うほうがよい」と同じ方針)。
     while p < q {
         p = p.checked_mul(10).ok_or(CalcError::Overflow)?;
         exponent -= 1;
     }
 
     // 10 桁を 1 桁ずつ取り出す。
-    let mut digits = Vec::with_capacity(DIGITS);
+    let mut digits = Vec::with_capacity(DISPLAY_DIGITS);
     let mut rest = p;
-    for i in 0..DIGITS {
+    for i in 0..DISPLAY_DIGITS {
         let d = rest / q;
         digits.push(d as u8);
         rest -= d * q;
-        if i + 1 < DIGITS {
+        if i + 1 < DISPLAY_DIGITS {
+            // こちらも**あふれたら Overflow**。**値が大きい側は、上の
+            // `p.checked_mul(10)` より先にこちらが発火する。**
+            // 実測: `150000000000000000000000000000000000000` (= 1.5e38) は
+            // `convert()` は `Ok`、ここで `Err(Overflow)` になる。正規化後
+            // p=1.5e38, q=1e38 で 1 桁目の余り `rest = 0.5e38` を 10 倍すると
+            // `5e38 > u128::MAX`(≈3.4028e38)。
+            // 一方 `100000000000000000000000000000000000000` (= 1e38) は
+            // p と q が一致して割り切れ、`rest` は以後ずっと 0 のまま
+            // 9 回の `*10` を安全に通り抜けるので `Ok("1e38")` になる——
+            // **同じ桁数でも割り切れるかどうかでこの境をまたぐ**。
             rest = rest.checked_mul(10).ok_or(CalcError::Overflow)?;
         }
     }
@@ -95,11 +125,25 @@ fn carry(digits: &mut [u8]) -> i32 {
 fn render(negative: bool, digits: &[u8], exponent: i32) -> String {
     let sign = if negative { "-" } else { "" };
     // `d0 d1 d2 …` を `"d0d1d2…"` にしておく。値は 0.d0d1… × 10^(exponent+1)。
+    // **`(b'0' + d) as char` が安全である根拠**: `d` は上の抽出ループで
+    // `rest / q`(0 ≤ rest < q だった直後の商)であり、`checked_mul(10)` が
+    // あふれて break したのでなければ 0 ≤ d ≤ 9 に収まる。あふれた場合は
+    // `?` で早期リターンしているのでここには来ない——
+    // あふれて break したとき `10q > u128::MAX ≥ p` なので `p/q ≤ 9` になる、
+    // というのが keep する不変条件である。
     let text: String = digits.iter().map(|d| (b'0' + d) as char).collect();
 
     // **指数表記の境**(numerical-policy「`|x| >= 1e10` または `0 < |x| < 1e-9`」)。
-    if exponent >= DIGITS as i32 || exponent <= -(DIGITS as i32) {
-        let (lead, tail) = text.split_at(1);
+    // `DISPLAY_DIGITS` ではなく `EXP_HIGH_EXPONENT` / `EXP_LOW_EXPONENT` を見る
+    // ——桁数を変えても指数の境は動かない(上の定数のコメント参照)。
+    if !(EXP_LOW_EXPONENT..EXP_HIGH_EXPONENT).contains(&exponent) {
+        // `text` は digits(常に `DISPLAY_DIGITS` 桁、空にはならない)から
+        // 作っているので長さ 1 以上は自明であり、無検査の `split_at(1)` でも
+        // panic しない。**それでも下の固定小数点の枝(`split_at_checked`)と
+        // 作法を揃える**——「ここは自明だから検査を省く」を枝ごとに判断させると、
+        // 判断が古びたときに気づく場所がなくなる。core は panic しない
+        // (CLAUDE.md)ので、検査のコストより揃っていることの価値を取る。
+        let (lead, tail) = text.split_at_checked(1).unwrap_or((&text, ""));
         let tail = tail.trim_end_matches('0');
         let mantissa = if tail.is_empty() {
             lead.to_string()
@@ -136,6 +180,12 @@ fn render(negative: bool, digits: &[u8], exponent: i32) -> String {
 }
 
 /// **整数部だけ**に 3 桁ごとのカンマを入れる。負号はこの外側にある。
+///
+/// `numeric::format::group_integer_part` と `data_scale::format::group_digits`
+/// に続く 3 つ目の同型実装。**同じ判断で共通化しない**——f64 版の理由をここでも
+/// 踏襲する: 入力の型(ここは `&str`、他は `f64` の文字列化 / `u128`)も定義域も
+/// 用途も違い、5 行前後の処理を 1 つにまとめる価値より、まとめて生まれる
+/// 結合(片方の都合がもう片方に効く)の害のほうが大きい。
 fn group(integer: &str) -> String {
     let mut out = String::with_capacity(integer.len() + integer.len() / 3);
     for (i, c) in integer.chars().enumerate() {
@@ -221,5 +271,71 @@ mod tests {
     fn a_carry_moves_the_exponent() {
         // 9.9999999995 は 10 桁に丸めると 10 になる。桁が 1 つ増える。
         assert_eq!(f(99_999_999_995, 10_000_000_000), "10");
+    }
+
+    #[test]
+    fn a_rational_the_conversion_layer_accepts_can_still_overflow_here() {
+        // **換算層(convert())は成功するのに表示層が拒む帯が実在する。**
+        // どちらも `p`/`rest` を 10 倍する側の `checked_mul` があふれる
+        // ——`wrapping_mul` に変異させると 2 つとも黙って(間違った)数を
+        // 返すようになり、このテストが赤くなる。
+        //
+        // `1 / i128::MAX`。convert() の分母は係数表ではなく利用者の入力が
+        // 決める(この分数はどの係数表からも作れない)。p=1, q=i128::MAX から
+        // p を q に届かせる正規化ループの `p.checked_mul(10)` で
+        // `10^39 > u128::MAX` に当たる。
+        assert_eq!(
+            format_rational(Rational::from_ratio(1, i128::MAX).unwrap()),
+            Err(CalcError::Overflow)
+        );
+
+        // 1.5e38(39 桁の整数、i128 には収まる)。正規化後 p=1.5e38, q=1e38 で、
+        // 1 桁目の余り 0.5e38 を、桁抽出ループの `rest.checked_mul(10)` が
+        // `5e38 > u128::MAX` にする。こちらは正規化ループの
+        // `p.checked_mul(10)` よりコメントの付いていなかった側で、
+        // 大きい値ではこちらが先に発火する。
+        assert_eq!(
+            format_rational(
+                Rational::from_i128(150_000_000_000_000_000_000_000_000_000_000_000_000).unwrap()
+            ),
+            Err(CalcError::Overflow)
+        );
+
+        // 1e38(39 桁の整数)は境の内側。p=q=1e38 に割り切れるので rest は
+        // ずっと 0 のまま残り 9 桁を安全に通り抜ける。
+        // **なぜこの挙動でよいか**: 表示できない値は黙って丸めず Overflow と
+        // 言う(numerical-policy「表示できない値を黙って丸めない」、
+        // design §3.5「黙って f64 に落ちるより `Overflow` と言うほうがよい」)
+        // ——間違った数を出すよりエラーと言うほうがよい、という方針の帯である。
+        assert_eq!(
+            f(100_000_000_000_000_000_000_000_000_000_000_000_000, 1),
+            "1e38"
+        );
+    }
+
+    #[test]
+    fn the_p_normalization_overflow_is_not_masked_by_the_rest_overflow() {
+        // **`1 / i128::MAX` だけでは `p.checked_mul(10)` の行を単独では赤くしない。**
+        // `wrapping_mul` に変異させて実測したところ、あの入力は正規化後の `p` が
+        // 破損した値になっても、桁抽出の `rest.checked_mul(10)`(こちらは無変異)が
+        // 別の理由でたまたま `Overflow` を返し、最終結果は偶然にも同じ `Err(Overflow)`
+        // になった——**壊れた計算過程の上に、たまたま正しい結論が乗っていた**。
+        // この入力は `p.checked_mul(10)` の検査を単独では検査していない。
+        //
+        // これは、`p` の正規化があふれ、かつ破損した `p` が桁抽出ループを
+        // あふれずに(誤った)`Ok` まで通り抜ける組(探索で見つけた実例)。
+        // `p.checked_mul(10)` だけを `wrapping_mul(10)` に変異させると、
+        // 実測でここが `Err(Overflow)` から `Ok("1.001552626e-30")` に変わる
+        // ——**このテストだけがその変異を検出する**。
+        assert_eq!(
+            format_rational(
+                Rational::from_ratio(
+                    387_699_925,
+                    47_344_050_470_018_749_799_790_552_491_131_718_782
+                )
+                .unwrap()
+            ),
+            Err(CalcError::Overflow)
+        );
     }
 }

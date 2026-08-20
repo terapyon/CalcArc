@@ -89,6 +89,13 @@ fn convert_matches_the_reference() {
                 ok += 1;
             }
             (Err(e), Some(expected)) => {
+                // **`Overflow` の枝は構造上ずっと 0 件になる。** 参照実装の
+                // `Fraction` は無限精度であふれないので、golden にはこの枝を
+                // 埋めるケースを置けない(spec §6 の【訂正 2026-08-20】)。
+                // あふれを見張っているのは golden ではなく `convert/mod.rs` と
+                // `convert/format.rs` の単体テスト(`a_ratio_too_wide_for_i128…`
+                // など)。`transfer_golden.rs` からの写しとして残しているだけで、
+                // 「golden が Overflow を見張っている」わけではない。
                 let code = match e {
                     CalcError::Overflow => "Overflow",
                     CalcError::SyntaxError => "SyntaxError",
