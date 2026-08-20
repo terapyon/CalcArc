@@ -1677,6 +1677,7 @@ harness が必ず押す（`pressCase`）ので、区別しなければ「`AC` �
 |---|---|---:|
 | 1 回目 | 記録だけ（サンプリングは従来のまま） | **700.6 秒（11.7 分）** |
 | 2 回目 | `globalTeardown` の主張 + 必須キー優先のサンプリング | **699.8 秒（11.7 分）** |
+| 3 回目 | 赤確認（`DEL` を選ばれたケースから外した） | **700.4 秒（11.7 分）** |
 
 計画は「16 テスト 10.6 分」と書いていたが、それは段階 J（2026-08-17）の
 コーパスに対する実測である。いまは **19 テスト**（`entry` / `errors` /
@@ -1685,3 +1686,31 @@ harness が必ず押す（`pressCase`）ので、区別しなければ「`AC` �
 
 選び方が実際に変わったことは押下数に出ている: `dot` 717 → 718、`eng` 54 → 55、
 `dms` 46 → 45。必須キーを先に確保したぶん、等間隔の網が 1 件ずつずれた。
+
+### 赤確認 — `DEL` を 1 つ外す
+
+`displaySelections` が選んだあとに `del` を含むケースだけを落とす変異を当てた。
+**母集団（`all`）は触らない**ので、コーパスから導く期待は残ったまま、走行だけが
+`DEL` を押さなくなる。
+
+**19 テストは全部緑のまま通った**（`entry-000.json` の件数だけが 36 → 33 に
+なった）。落ちたのは `globalTeardown` である:
+
+```
+Error: heavy-ui: 3 problem(s) with what this run actually pressed:
+  - [never-pressed] heavy-ui: DEL (del) was never pressed on the real keypad
+    during this run. It has a button — reachability.spec.ts checks that — but
+    nothing in this run actually pressed it.
+  - [never-typed-by-a-case] heavy-ui: DEL (del) appears in the corpus, but no
+    corpus case pressed it in this run. …
+  - [not-in-sample] heavy-ui: DEL (del) appears in the corpus, but the sampling
+    selected no case containing it. …
+```
+
+3 つの判定が独立に反応した。走行の終了コードは 1 で、`19 passed` と
+`1 error was not a part of any test` が同時に出る——**テストの緑は、キーを
+押したことの証拠にならない**という、この Task の主張そのものである。
+
+**`globalTeardown` の例外が終了コードを 1 にすること**も、この走行で確かめた
+（先に `reachability.spec.ts` だけを 5 秒で回して同じ形を確認してある。
+4 テスト緑・終了コード 1）。
