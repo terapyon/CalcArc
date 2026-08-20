@@ -3,6 +3,9 @@ import { expect, type Page, test } from "@playwright/test";
 const panel = (page: Page) =>
   page.getByRole("region", { name: "LLM のメモリ計算" });
 
+/** 測れなかったことの印。相対座標は負にもなるので `-1` では代用できない。 */
+const UNMEASURED = "unmeasured";
+
 /**
  * **ボタン名は実物の aria-label(Task 8 の `llm.ts`)に合わせてある。**
  * plan の brief に書かれていた文字列("パラメータ数を選ぶ"、候補キーの
@@ -111,12 +114,23 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
   // まま——その面だけ中身の行数ぶんに枠が伸び縮みする(DataScale で実測
   // 済みの事故、19px)。だから枠そのものと、枠の中で位置が動いてはいけない
   // DEL・AC を、7 面ぶん突き合わせる。
+  // **DEL と AC は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が
+  // 動かない**」であって、**盤面より上にある表示行の高さを巻き込むのは
+  // 測り間違い**である——その行高はフォント環境で変わる(CI 実測: 数字面
+  // だけ y=390、他 6 面は y=375.625。枠の 366.0625 は 7 面とも不動だった)。
+  // 枠を原点に取れば、盤面の中で動いたかどうかだけが残る。
   const seen: {
     face: string;
     box: { width: number; height: number };
-    del: { x: number; y: number };
-    ac: { x: number; y: number };
+    // 測れなかったときは `UNMEASURED`。相対座標は負にもなりうるので、
+    // `-1` を番兵に使うことはできない。
+    del: string;
+    ac: string;
   }[] = [];
+  const rel = (
+    b: { x: number; y: number } | null,
+    frame: { x: number; y: number } | null,
+  ) => (b && frame ? `${b.x - frame.x},${b.y - frame.y}` : UNMEASURED);
   for (const [field, face] of FACES) {
     await press(page, [field]);
     const box = await panel(page)
@@ -133,24 +147,25 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
       box: { width: box?.width ?? -1, height: box?.height ?? -1 },
       // **在ることではなく動かないことを測る**(data-scale-keypad.spec.ts
       // の同名の検査と同じ形)。
-      del: { x: del?.x ?? -1, y: del?.y ?? -1 },
-      ac: { x: ac?.x ?? -1, y: ac?.y ?? -1 },
+      del: rel(del, box),
+      ac: rel(ac, box),
     });
   }
   expect(seen).toHaveLength(FACES.length);
   const sizes = new Set(seen.map((s) => `${s.box.width}x${s.box.height}`));
   expect(sizes.size, `the frame moved: ${JSON.stringify(seen)}`).toBe(1);
-  const dels = new Set(seen.map((s) => `${s.del.x},${s.del.y}`));
+  const dels = new Set(seen.map((s) => s.del));
   expect(dels.size, `DEL moved: ${JSON.stringify(seen)}`).toBe(1);
-  const acs = new Set(seen.map((s) => `${s.ac.x},${s.ac.y}`));
+  const acs = new Set(seen.map((s) => s.ac));
   expect(acs.size, `AC moved: ${JSON.stringify(seen)}`).toBe(1);
-  // **番兵**: 1 度も測っていなければ -1 のまま 1 通りになってしまう。
+  // **番兵は 3 つとも要る**: 1 度も測っていなければ枠は -1、DEL と AC は
+  // `UNMEASURED` のまま 1 通りに揃い、**上の 3 つの Set は緑になる**。
   expect(
     seen[0]?.box.width,
     "the frame was never measured",
   ).toBeGreaterThanOrEqual(0);
-  expect(seen[0]?.del.x, "DEL was never measured").toBeGreaterThanOrEqual(0);
-  expect(seen[0]?.ac.x, "AC was never measured").toBeGreaterThanOrEqual(0);
+  expect(seen[0]?.del, "DEL was never measured").not.toBe(UNMEASURED);
+  expect(seen[0]?.ac, "AC was never measured").not.toBe(UNMEASURED);
 });
 
 test("a candidate key says its number out loud", async ({ page }) => {
