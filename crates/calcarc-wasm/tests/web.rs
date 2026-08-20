@@ -128,6 +128,29 @@ fn data_scale_sub_unit_success_carries_null_lines() {
 }
 
 #[wasm_bindgen_test]
+fn the_llm_headline_crosses_the_boundary() {
+    let value = calcarc_wasm::llm_memory("27000000000", "int4", "62", "16", "128", "8192", "fp16");
+    let total = get(&value, "total");
+    assert_eq!(
+        get(&total, "bytesGrouped").as_string().as_deref(),
+        Some("17,660,749,568")
+    );
+    assert_eq!(
+        get(&total, "decimal").as_string().as_deref(),
+        Some("17.7 GB")
+    );
+}
+
+#[wasm_bindgen_test]
+fn a_transfer_error_is_a_value_not_an_exception() {
+    let value = calcarc_wasm::data_transfer("1", "tbps", "1", "second");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
+
+#[wasm_bindgen_test]
 fn loan_forward_crosses_the_boundary() {
     // 住宅基準例。golden(finance.json)と同じ値が境界を越えて出る。
     let result = calcarc_wasm::loan_forward("30000000", "1.5", 420, "0");
@@ -419,4 +442,67 @@ fn the_percent_landing_crosses_the_boundary() {
         get(&refused, "error").as_string().as_deref(),
         Some("SyntaxError")
     );
+}
+
+#[wasm_bindgen_test]
+fn a_conversion_crosses_the_boundary_as_text() {
+    // 100 km = 100000 / 1609.344 mi。有理数のまま計算し、表示で 10 桁に丸める。
+    let value = calcarc_wasm::convert("100", "length", "km", "mi");
+    assert_eq!(
+        get(&value, "text").as_string().as_deref(),
+        Some("62.13711922")
+    );
+    assert!(
+        get(&value, "error").is_null(),
+        "success carries null, not undefined"
+    );
+}
+
+#[wasm_bindgen_test]
+fn the_temperature_fixed_point_crosses_the_boundary() {
+    // −40 は factor と offset の両方が同時に効く唯一の点(設計書 §6)。
+    // 単項マイナスは構文解析器に無く、convert の入口が担う。
+    let value = calcarc_wasm::convert("-40", "temperature", "degc", "degf");
+    assert_eq!(get(&value, "text").as_string().as_deref(), Some("-40"));
+}
+
+#[wasm_bindgen_test]
+fn an_unknown_unit_is_an_error_in_the_return_value_not_an_exception() {
+    let value = calcarc_wasm::convert("1", "length", "km", "furlong");
+    assert_eq!(
+        get(&value, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(
+        get(&value, "text").is_null(),
+        "error carries null, not undefined"
+    );
+    // カテゴリをまたぐ組み合わせも同じ扱い(例外ではなく戻り値)。
+    let crossed = calcarc_wasm::convert("1", "length", "km", "kg");
+    assert_eq!(
+        get(&crossed, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+}
+
+#[wasm_bindgen_test]
+fn the_unit_list_comes_back_in_the_order_the_panel_shows() {
+    let value = calcarc_wasm::convert_units("length");
+    let units = js_sys::Array::from(&get(&value, "units"));
+    assert_eq!(units.length(), 11);
+    assert_eq!(units.get(0).as_string().as_deref(), Some("nm"));
+    assert_eq!(units.get(10).as_string().as_deref(), Some("nmi"));
+    assert!(get(&value, "error").is_null());
+    // 温度は 3 件。カテゴリごとに切り出されている。
+    let temperature =
+        js_sys::Array::from(&get(&calcarc_wasm::convert_units("temperature"), "units"));
+    assert_eq!(temperature.length(), 3);
+    assert_eq!(temperature.get(0).as_string().as_deref(), Some("k"));
+    // 知らないカテゴリは例外ではなく戻り値のエラー。
+    let unknown = calcarc_wasm::convert_units("furlongs");
+    assert_eq!(
+        get(&unknown, "error").as_string().as_deref(),
+        Some("SyntaxError")
+    );
+    assert!(get(&unknown, "units").is_null());
 }

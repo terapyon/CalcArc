@@ -29,6 +29,9 @@ pub enum UnitSet {
     Months,
     /// 複利の期間。**年 = 1 年あたりの期数**、期 = 1。どの周期でも割り切れる。
     Periods(u32),
+    /// LLM のパラメータ数。**B = 10^9、M = 10^6**。`Count` と係数は同じだが、
+    /// モデルカードの慣習では `G` ではなく `B` と呼ぶ(spec §4.3)。
+    Params,
     /// 単位を取らない(年利)。
     None,
 }
@@ -42,6 +45,7 @@ impl UnitSet {
             UnitSet::Months => vec![('年', 12), ('月', 1)],
             UnitSet::Periods(1) => vec![('年', 1)],
             UnitSet::Periods(per_year) => vec![('年', *per_year as u128), ('期', 1)],
+            UnitSet::Params => vec![('B', 1_000_000_000), ('M', 1_000_000)],
             UnitSet::None => Vec::new(),
         }
     }
@@ -60,9 +64,19 @@ pub fn unit_set_from_str(text: &str) -> CalcResult<UnitSet> {
         "yen" => Ok(UnitSet::Yen),
         "count" => Ok(UnitSet::Count),
         "months" => Ok(UnitSet::Months),
+        "params" => Ok(UnitSet::Params),
         "none" => Ok(UnitSet::None),
         _ => Err(CalcError::SyntaxError),
     }
+}
+
+/// 式を評価して**有理数のまま**返す。
+///
+/// `evaluate_to_integer` は床関数で u128 に落とし、`evaluate_to_percent` は
+/// 4 桁の文字列に落とす。**単位換算はどちらの着地もできない**——落とした時点で
+/// 換算の意味が消える(U-1 spec §1-1)。**ここは着地しないための出口である。**
+pub fn evaluate_to_rational(text: &str, units: UnitSet) -> CalcResult<Rational> {
+    parse::evaluate(text, units)
 }
 
 /// 式を評価して整数へ着地させる。`maximum` は項目の上限。
@@ -117,12 +131,28 @@ mod tests {
             UnitSet::Count,
             UnitSet::Months,
             UnitSet::Periods(12),
+            UnitSet::Params,
         ] {
             let units = set.units();
             for pair in units.windows(2) {
                 assert!(pair[0].1 > pair[1].1, "{set:?} が降順でない");
             }
         }
+    }
+
+    #[test]
+    fn parameters_count_in_billions() {
+        // **`B` は既存の `G` と係数が同じで、ラベルだけが違う**(spec §4.3)
+        // ——Data Scale の件数は `G`、LLM のパラメータ数は `B` と呼ぶ慣習である。
+        assert_eq!(
+            UnitSet::Params.units(),
+            vec![('B', 1_000_000_000), ('M', 1_000_000)]
+        );
+        assert_eq!(unit_set_from_str("params").unwrap(), UnitSet::Params);
+        assert_eq!(
+            evaluate_to_integer("27B", u128::MAX, UnitSet::Params).unwrap(),
+            27_000_000_000
+        );
     }
 
     #[test]
@@ -160,6 +190,45 @@ mod tests {
         assert_eq!(
             evaluate_to_integer("100*12+1", 1200, UnitSet::Months),
             Err(CalcError::Overflow)
+        );
+    }
+
+    #[test]
+    fn a_rational_lands_without_being_floored() {
+        // **`evaluate_to_integer` は床関数で落とす。** 換算は落としてはいけない。
+        let value = evaluate_to_rational("25.4", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (127, 5));
+    }
+
+    #[test]
+    fn an_expression_lands_as_a_rational() {
+        let value = evaluate_to_rational("5*12", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (60, 1));
+    }
+
+    #[test]
+    fn a_third_stays_a_third() {
+        // **f64 を経由しない**ことがここで見える。1/3 は 10 進で終わらない。
+        let value = evaluate_to_rational("1/3", UnitSet::None).unwrap();
+        assert_eq!(value.parts(), (1, 3));
+    }
+
+    #[test]
+    fn the_empty_text_is_a_syntax_error() {
+        assert_eq!(
+            evaluate_to_rational("", UnitSet::None),
+            Err(CalcError::SyntaxError)
+        );
+    }
+
+    #[test]
+    fn a_leading_minus_is_still_not_the_parsers_job() {
+        // **単項マイナスは構文解析器に無い**(parse.rs:119-131)。この事実を固定する
+        // ——`convert` の入口が符号を担う理由がここにある(計画の裁定 2)。
+        // この検査が赤くなったら、parse.rs が変わったということである。
+        assert_eq!(
+            evaluate_to_rational("-40", UnitSet::None),
+            Err(CalcError::SyntaxError)
         );
     }
 }

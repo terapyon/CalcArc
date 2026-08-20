@@ -17,6 +17,9 @@ export type UnitSetName =
   | "count"
   | "months"
   | "none"
+  // `B` = 10⁹ / `M` = 10⁶(LLM のパラメータ数、コアの UnitSet::Params。
+  // コア・WASM は Task 5 で足したが、TS の型はここが初めての消費者)。
+  | "params"
   | `periods:${1 | 2 | 12}`;
 
 /** 式の評価結果。値は文字列 —— 円も件数も JS の number を超えうる。 */

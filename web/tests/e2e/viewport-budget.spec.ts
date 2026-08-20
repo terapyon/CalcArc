@@ -1,21 +1,65 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // **0.2.0 で縦に足したものが 1 画面に収まり、かつタブで揺れないこと。**
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
 // ページ全体の高さもフッタの位置もタブで変わる。
 
+// **全 route は 12(scientific 1 + convert 7 + scale 3 + finance 1)、
+// この巡回が持つのは 6 だけである。** 巡回しているのは
+// `#scientific` `#convert/length` `#convert/mass` `#convert/temperature`
+// `#scale/data-scale` `#finance` の 6 つ。**外にいる 6 つ**は
+// `#convert/area` `#convert/volume` `#convert/speed` `#convert/data-size`
+// (U-2 で増えた 4 カテゴリ)と `#scale/llm` `#scale/transfer`。
+// `#convert`(素のハッシュ)は `#convert/length` へ倒れる同じ画面なので、
+// タブの href と同じ `#convert/length` のほうを巡回する
+// (同じ画面に URL を 2 つ作らない)。
+//
+// **巡回に入っていない route は、緑を「収まっている」と読ませる**——
+// S-0 で記録したこの穴は、いまも 6 route ぶん残っている
+// (docs/definition-of-done.md【訂正 2026-08-20】)。**足さなかった理由は
+// 2 種類あり、性質が違う。**
+//
+// - **Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で
+//   溢れることが分かっている(ユーザー裁定で許容)。足すと赤になる——
+//   「承知のうえで許容した」溢れである。
+// - **Convert の 4 つ**は、**この巡回が測る 390×844 では 0**(手で実測済み)。
+//   360×640 では 66 だが、**それは既存の 3 route と同値の既知債務**で、
+//   U-2 が増やしたものではない(`docs/definition-of-done.md` の表)。
+//   **この巡回は 390×844 しか測らない**ので、足せば緑になる。足していない。U-2 spec §5 が `pnpm e2e` に足す
+//   検査を「面が枠に収まっているか」を見る 1 本
+//   (`convert.spec.ts` の "swapping faces moves neither the frame nor
+//   DEL and AC")に限っており、この巡回に route を足す判断ではなかった。
+//   **「収まっているのを機械が確認していない」穴であって、「溢れているのを
+//   許容した」穴ではない。**
 const TABS = [
   ["#scientific", "Scientific"],
-  ["#data-scale", "Data Scale"],
+  ["#convert/length", "Convert 長さ"],
+  ["#convert/mass", "Convert 質量"],
+  ["#convert/temperature", "Convert 温度"],
+  ["#scale/data-scale", "Data Scale"],
   ["#finance", "Finance"],
 ] as const;
+
+/**
+ * パネルが描かれるのを待つ。
+ *
+ * **フッタは WASM と無関係に即描画される**ので、これが無いと Scientific は
+ * `Loading…` のままの空のページを測って緑になる。
+ *
+ * **U-1 で Convert の分岐が消えた。** 準備中の面には表示器が無かったので、
+ * そのパネル自身の出現を待っていた——盤面が入って `display-main` を持つ
+ * ようになったので、4 タブとも同じ待ち方でよい。
+ */
+async function waitForPanel(page: Page) {
+  await expect(page.getByTestId("display-main")).toBeVisible();
+}
 
 for (const [hash, name] of TABS) {
   test(`${name} fits in one screen at 390x844`, async ({ page }) => {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    await waitForPanel(page);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
 
     const overflow = await page.evaluate(
@@ -35,7 +79,7 @@ test("the footer sits at the same place on every tab", async ({ page }) => {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    await waitForPanel(page);
     await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
     const box = await page.getByTestId("footer-disclaimer").boundingBox();
     seen.push({ name, y: box?.y ?? -1 });
@@ -94,15 +138,19 @@ for (const [hash, name] of TABS) {
     await page.goto(`/${hash}`);
     // **パネルが出てから測る。** これが無いと `Loading…` の空のページを
     // 測って緑になる。
-    await expect(page.getByTestId("display-main")).toBeVisible();
+    await waitForPanel(page);
 
     const spill = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
+    // **ユーザー裁定 2026-08-20: 8px まで許容する。** フォント環境差を吸収する
+    // ため。実測: CI で 3px、手元で CJK を落とすと 6px。どちらも字幅が変わった
+    // だけで、盤面は崩れていない。**本物の崩れは 2 桁 px で出るので、この幅でも
+    // 捕まる。**
     expect(
       spill,
       `${name} spills ${spill}px sideways at 360px`,
-    ).toBeLessThanOrEqual(0);
+    ).toBeLessThanOrEqual(8);
   });
 }
 

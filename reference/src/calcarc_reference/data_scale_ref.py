@@ -26,7 +26,13 @@ DECIMAL_UNITS = [("KB", 10**3), ("MB", 10**6), ("GB", 10**9), ("TB", 10**12)]
 BINARY_UNITS = [("KiB", 2**10), ("MiB", 2**20), ("GiB", 2**30), ("TiB", 2**40)]
 
 
-def _parse(text: str) -> int | None:
+def parse_u128(text: str) -> int | None:
+    """10 進数字列を u128 の範囲で読む。範囲外・空・数字以外は None。
+
+    **u128 の上限は公開契約である**（spec §3.6）。参照実装が 3 つに
+    増えても、この関数は 1 つである——写すと、上限が動いた日に
+    片方だけ直る。
+    """
     if not text or not text.isascii() or not text.isdigit():
         return None
     value = int(text)
@@ -63,18 +69,28 @@ def _scaled(size: int, units: list[tuple[str, int]]) -> str | None:
         return f"{whole}.{tenth} {unit}"
 
 
-def compute(count: str, dimensions: str, dtype: str) -> dict:
-    c = _parse(count)
-    d = _parse(dimensions)
-    per = BYTES_PER_ELEMENT.get(dtype)
-    if c is None or d is None or per is None:
-        return {"error": "SyntaxError"}
-    size = c * d * per
-    if size > U128_MAX:
-        return {"error": "Overflow"}
+def lines(size: int) -> dict:
+    """バイト数を画面の 1 組(bytes / 3 桁区切り / 10 進 / 2 進)にする。
+
+    **表示器は 1 つである**(spec §2)。LLM も Transfer もここを通る——
+    Rust 側で format.rs を共有しているのと同じ形にしておかないと、
+    「Python では揃っているのに Rust ではずれている」を検出できない。
+    """
     return {
         "bytes": str(size),
         "bytes_grouped": f"{size:,}",
         "decimal": _scaled(size, DECIMAL_UNITS),
         "binary": _scaled(size, BINARY_UNITS),
     }
+
+
+def compute(count: str, dimensions: str, dtype: str) -> dict:
+    c = parse_u128(count)
+    d = parse_u128(dimensions)
+    per = BYTES_PER_ELEMENT.get(dtype)
+    if c is None or d is None or per is None:
+        return {"error": "SyntaxError"}
+    size = c * d * per
+    if size > U128_MAX:
+        return {"error": "Overflow"}
+    return lines(size)

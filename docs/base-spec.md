@@ -242,7 +242,9 @@ UI Frameworkは実装開始時に選択する。
 Calculator Platform
 
 ├── Scientific / Engineering
-├── Data Scale
+├── Convert
+├── Scale
+│   └── Data Scale
 ├── Loan / Finance
 └── Future Modules
 ```
@@ -251,6 +253,12 @@ Calculator Platform
 （[F0 設計](superpowers/specs/2026-08-14-finance-rename-design.md)）。
 ローンは Finance の中の 1 機能であり、§20〜§22 の仕様は変わらない。
 旧 `#loan` の互換は作っていない。
+
+**【訂正 2026-08-19】** タブに `Convert` と `Scale` を足した。ハッシュは
+`#<系統>[/<カテゴリ>]` の 2 段になり、Data Scale は `Scale` の下の
+カテゴリとして `#scale/data-scale` に移った。旧 `#data-scale` の互換は
+作っていない。開くと Scientific が出る。クローズドβで飛び先を失う人が
+ごく少ないことを理由に、`#loan` のときと同じ判断をした。
 
 共通UI、履歴、数値表示、設定などはPlatform側で提供する。
 

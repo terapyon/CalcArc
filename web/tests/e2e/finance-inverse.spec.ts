@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const nav = (page: Page, label: "Scientific" | "Data Scale" | "Finance") =>
+const nav = (page: Page, label: "Scientific" | "Finance") =>
   page.getByRole("link", { name: label, exact: true });
 
 // **region 起点で引く**——「入力する項目」という区画名は Data Scale にも

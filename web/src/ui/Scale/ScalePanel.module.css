@@ -1,0 +1,12 @@
+.scale {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category {
+  min-height: var(--touch-target-min);
+  font-size: var(--key-font-size-function);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}

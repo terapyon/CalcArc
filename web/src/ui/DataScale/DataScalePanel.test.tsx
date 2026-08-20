@@ -49,6 +49,7 @@ vi.mock("../../expr", () => ({
 }));
 
 import { initDataScale } from "../../datascale";
+import { DATA_SCALE_SECTIONS } from "../Keypad/dataScale";
 import { DataScalePanel } from "./DataScalePanel";
 
 function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
@@ -63,7 +64,17 @@ function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
 }
 
 function stubCalc(compute?: DataScaleCalc["compute"]): DataScaleCalc {
-  return { compute: compute ?? vi.fn().mockReturnValue(result()) };
+  // llm / transfer はこのパネルではまだ使わない(別タスクで配線される)。
+  // 型を満たすためだけのスタブで、呼ばれたら失敗させて検知する。
+  return {
+    compute: compute ?? vi.fn().mockReturnValue(result()),
+    llm: vi.fn(() => {
+      throw new Error("stubCalc.llm is not wired in this test");
+    }),
+    transfer: vi.fn(() => {
+      throw new Error("stubCalc.transfer is not wired in this test");
+    }),
+  };
 }
 
 async function renderPanel(calc: DataScaleCalc = stubCalc()) {
@@ -84,17 +95,7 @@ const main = () => screen.getByTestId("display-main");
 
 /** 基準例: 100M × 768 × float32 = 307.2 GB。 */
 async function fillHeadline() {
-  await press([
-    "件数を入力",
-    "1",
-    "0",
-    "0",
-    "百万",
-    "次元数を入力",
-    "7",
-    "6",
-    "8",
-  ]);
+  await press(["件数を入力", "1", "0", "0", "百万", "次元数を入力", "768"]);
 }
 
 // **データ型・主表示は保存される(このファイルの「設定の永続化」参照)。**
@@ -192,6 +193,72 @@ describe("DataScalePanel（電卓）", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("opens the dimension candidates by default, not the digits", async () => {
+    await renderPanel();
+    await press(["次元数を入力"]);
+    expect(
+      screen.getByRole("group", { name: "次元数の候補キー" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "数字と演算のキー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("a candidate lands in the same entry as typed digits", async () => {
+    await renderPanel();
+    await press(["件数を入力", "1", "次元数を入力", "768"]);
+    expect(echo()).toHaveTextContent("次元数 768");
+  });
+
+  it("goes to the digits and back", async () => {
+    await renderPanel();
+    await press(["次元数を入力", "手入力"]);
+    expect(
+      screen.getByRole("group", { name: "数字と演算のキー" }),
+    ).toBeInTheDocument();
+    await press(["7", "6", "8"]);
+    expect(echo()).toHaveTextContent("次元数 768");
+    await press(["候補から選ぶ"]);
+    expect(
+      screen.getByRole("group", { name: "次元数の候補キー" }),
+    ).toBeInTheDocument();
+    // **打った値は面を戻しても消えない**——面は入口が 2 つあるだけである。
+    expect(echo()).toHaveTextContent("次元数 768");
+  });
+
+  it("keeps the candidate face out of the other fields", async () => {
+    await renderPanel();
+    await press(["件数を入力"]);
+    expect(
+      screen.getByRole("group", { name: "数字と演算のキー" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "候補から選ぶ" })).toBeNull();
+  });
+
+  it("has nothing for DEL to delete on the candidate face", async () => {
+    await renderPanel();
+    await press(["次元数を入力"]);
+    expect(screen.getByRole("button", { name: "1文字消去" })).toBeDisabled();
+  });
+
+  it("AC clears the dimensions without leaving the candidate face", async () => {
+    await renderPanel();
+    await press(["次元数を入力", "768"]);
+    expect(echo()).toHaveTextContent("次元数 768");
+    await press(["この項目を消去"]);
+    // 面は変えない——次元数だけが空に戻る(型の AC とは違う挙動)。
+    expect(echo()).not.toHaveTextContent("768");
+    expect(
+      screen.getByRole("group", { name: "次元数の候補キー" }),
+    ).toBeInTheDocument();
+  });
+
+  it("replaces a reserved slot, not a live key", () => {
+    // 「選択」キーは数字面の**予約スロット**に入る(5 行 3 列目)。
+    // 生きているキーを潰していないことを、位置ではなく事実で押さえる。
+    expect(DATA_SCALE_SECTIONS[1]?.keys[22]?.token).toBeNull();
   });
 
   it("closes the unit keys until a digit is there, and after a smaller unit", async () => {

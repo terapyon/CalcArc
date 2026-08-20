@@ -1,0 +1,56 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+  /* **下端はフッタが持つ**(Footer.module.css)。DataScalePanel.module.css と
+     同じ理由——ここで env(safe-area-inset-bottom) を吸うと二重になる。 */
+  padding-bottom: 12px;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  font-family: var(--display-font);
+  text-align: right;
+}
+
+.result p {
+  margin: 0;
+}
+
+/* 数字面と 2 つの単位面は同じ枠に載る(Global Constraints)。**3 つの面すべて
+   をここに並べる**——単位面はキーが 10 個で 2 行しか描かれないため、行数を
+   指定しないと面を入れ替えるたびに画面が伸び縮みする(DataScale で実測済みの
+   事故、19px)。**綴りが 1 文字でも違うと、その面だけ枠が崩れる**ので、
+   aria-label は `web/src/ui/Keypad/transfer.ts` の実物と突き合わせること。 */
+.panel :global(fieldset[aria-label="数字と演算のキー"]),
+.panel :global(fieldset[aria-label="帯域幅の単位のキー"]),
+.panel :global(fieldset[aria-label="時間の単位のキー"]) {
+  grid-template-rows: repeat(5, 1fr);
+  aspect-ratio: 1 / 1;
+}
+
+/* 帯域幅の単位は 4 文字まで(`kbps`・`Mbps`)。数字面と時間の単位面は 1〜3
+   文字なので縮めない(LlmPanel.module.css の候補面と同じ判断)。 */
+.panel :global(fieldset[aria-label="帯域幅の単位のキー"]) button {
+  font-size: 0.75rem;
+}
+
+/* 主は大きく、副は小さく併記する。両方出す(base-spec §17)ことは
+   変えず、どちらを強調するかだけが設定で決まる(設計書 §6)。 */
+.primary {
+  font-size: var(--key-font-size);
+}
+
+.secondary {
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}

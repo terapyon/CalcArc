@@ -3,7 +3,12 @@ import { expect, test } from "@playwright/test";
 test("the footer shows on every tab, once", async ({ page }) => {
   // **全タブに出す**のが要件である(0.2.0 設計書 §5)。以前は Scientific
   // だけに calcarc-core の版数が出ていた。
-  for (const hash of ["#scientific", "#data-scale", "#finance"]) {
+  for (const hash of [
+    "#scientific",
+    "#convert",
+    "#scale/data-scale",
+    "#finance",
+  ]) {
     await page.goto(`/${hash}`);
     const link = page.getByRole("link", { name: /^CalcArc .+ @terapyon$/ });
     await expect(link).toHaveCount(1);

@@ -17,11 +17,14 @@ from calcarc_reference import (
     cases,
     complex_ref,
     compound_ref,
+    convert_ref,
     data_scale_ref,
     expr_ref,
+    llm_ref,
     loan_ref,
     scientific_ref,
     sexagesimal_ref,
+    transfer_ref,
 )
 
 SCHEMA = 1
@@ -168,6 +171,91 @@ def build_data_scale() -> dict:
     }
 
 
+def build_llm() -> dict:
+    entries = []
+    for case in cases.LLM_INPUTS:
+        params, weight, layers, kv_heads, head_dim, context, kv = case
+        result = llm_ref.compute(params, weight, layers, kv_heads, head_dim, context, kv)
+        entries.append(
+            {
+                "id": f"llm/{params}x{weight}/{layers}x{kv_heads}x{head_dim}x{context}x{kv}",
+                "op": "llm",
+                "input": {
+                    "parameters": params,
+                    "weight_precision": weight,
+                    "layers": layers,
+                    "kv_heads": kv_heads,
+                    "head_dim": head_dim,
+                    "context_length": context,
+                    "kv_precision": kv,
+                },
+                "expect": result,
+            }
+        )
+    # 整数の完全一致なので tolerance を持たない(data_scale と同じ)。
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
+def build_transfer() -> dict:
+    entries = []
+    for bandwidth, bandwidth_unit, duration, duration_unit in cases.TRANSFER_INPUTS:
+        result = transfer_ref.compute(bandwidth, bandwidth_unit, duration, duration_unit)
+        entries.append(
+            {
+                "id": f"transfer/{bandwidth}{bandwidth_unit}x{duration}{duration_unit}",
+                "op": "transfer",
+                "input": {
+                    "bandwidth": bandwidth,
+                    "bandwidth_unit": bandwidth_unit,
+                    "duration": duration,
+                    "duration_unit": duration_unit,
+                },
+                "expect": result,
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
+def build_convert() -> dict:
+    """単位換算の golden。
+
+    **`tolerance` を持たない**(spec §6)。有理数の厳密計算を 10 桁の文字列にするので、
+    誤差の概念が無い——`data_scale` / `finance` と同じ強さになる。
+    """
+    entries = []
+    for value, category, src, dst in cases.CONVERT_INPUTS:
+        result = convert_ref.compute(value, category, src, dst)
+        entries.append(
+            {
+                "id": f"convert/{category}/{value}{src}to{dst}",
+                "op": "convert",
+                "input": {
+                    "value": value,
+                    "category": category,
+                    "from": src,
+                    "to": dst,
+                },
+                "expect": result,
+            }
+        )
+    ids = [entry["id"] for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise ValueError("convert の id が重複している")
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": entries,
+    }
+
+
 def _resolve_placeholders(params: dict) -> dict:
     """期間逆算の境界に使う元本を、参照実装に解かせて埋める。
 
@@ -265,6 +353,9 @@ def main() -> None:
     write("complex.json", build_complex())
     write("scientific.json", build_scientific())
     write("data_scale.json", build_data_scale())
+    write("llm.json", build_llm())
+    write("transfer.json", build_transfer())
+    write("convert.json", build_convert())
     write("finance.json", build_finance())
 
 

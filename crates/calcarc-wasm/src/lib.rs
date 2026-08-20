@@ -3,7 +3,12 @@
 //! 計算ロジックを持たない。責務は型変換と export のみ(base-spec §6.2)。
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
+// **関数名 `convert` はモジュール名 `convert` と衝突する**(境界の関数名は
+// 設計書 §5 が決めている)。別名で入れて、モジュールは `convert_core::` で呼ぶ。
+use calcarc_core::convert as convert_core;
 use calcarc_core::data_scale::format::{format_binary, format_decimal, group_digits};
+use calcarc_core::data_scale::llm::{self, Precision};
+use calcarc_core::data_scale::transfer::{self, BandwidthUnit, DurationUnit};
 use calcarc_core::data_scale::{self, DataType};
 use calcarc_core::expr;
 use calcarc_core::finance::loan::rate::Rate;
@@ -109,6 +114,122 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
             data_scale::size_in_bytes(c, d, t)
         });
+    let result = match outcome {
+        Ok(bytes) => DataScaleResult {
+            bytes: Some(bytes.to_string()),
+            bytes_grouped: Some(group_digits(bytes)),
+            decimal: format_decimal(bytes),
+            binary: format_binary(bytes),
+            error: None,
+        },
+        Err(e) => DataScaleResult {
+            bytes: None,
+            bytes_grouped: None,
+            decimal: None,
+            binary: None,
+            error: Some(e),
+        },
+    };
+    to_js_value(&result)
+}
+
+/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、DataScaleResult を
+/// そのまま 3 つ並べるのではなく、組を型にした(spec §6)。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ByteLines {
+    bytes: String,
+    bytes_grouped: String,
+    decimal: Option<String>,
+    binary: Option<String>,
+}
+
+impl ByteLines {
+    fn of(bytes: u128) -> ByteLines {
+        ByteLines {
+            bytes: bytes.to_string(),
+            bytes_grouped: group_digits(bytes),
+            decimal: format_decimal(bytes),
+            binary: format_binary(bytes),
+        }
+    }
+}
+
+/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` に対応する。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LlmResult {
+    weight: Option<ByteLines>,
+    kv: Option<ByteLines>,
+    total: Option<ByteLines>,
+    error: Option<calcarc_core::CalcError>,
+}
+
+/// 重み ＋ KV cache を見積もる。純関数で、状態を持たない。
+///
+/// 入出力が文字列なのは data_scale と同じ理由(JS の number は 2^53 を超えると
+/// u128 の定義域を境界で殺す)。**例外は投げない。**
+#[wasm_bindgen]
+pub fn llm_memory(
+    parameters: &str,
+    weight_precision: &str,
+    layers: &str,
+    kv_heads: &str,
+    head_dim: &str,
+    context_length: &str,
+    kv_precision: &str,
+) -> JsValue {
+    let outcome = (|| {
+        let parameters = data_scale::parse_count(parameters)?;
+        let layers = data_scale::parse_count(layers)?;
+        let kv_heads = data_scale::parse_count(kv_heads)?;
+        let head_dim = data_scale::parse_count(head_dim)?;
+        let context_length = data_scale::parse_count(context_length)?;
+        let weight = Precision::from_token(weight_precision).ok_or(CalcError::SyntaxError)?;
+        let kv = Precision::from_token(kv_precision).ok_or(CalcError::SyntaxError)?;
+        llm::memory(
+            parameters,
+            weight,
+            layers,
+            kv_heads,
+            head_dim,
+            context_length,
+            kv,
+        )
+    })();
+    let result = match outcome {
+        Ok(m) => LlmResult {
+            weight: Some(ByteLines::of(m.weight_bytes)),
+            kv: Some(ByteLines::of(m.kv_bytes)),
+            total: Some(ByteLines::of(m.total_bytes)),
+            error: None,
+        },
+        Err(e) => LlmResult {
+            weight: None,
+            kv: None,
+            total: None,
+            error: Some(e),
+        },
+    };
+    to_js_value(&result)
+}
+
+/// 帯域幅 × 時間 → バイト数。**戻り値の形は data_scale と同じ**(spec §6)
+/// ——同じ 4 点なので、TypeScript 側も同じ型で受ける。
+#[wasm_bindgen]
+pub fn data_transfer(
+    bandwidth: &str,
+    bandwidth_unit: &str,
+    duration: &str,
+    duration_unit: &str,
+) -> JsValue {
+    let outcome = (|| {
+        let bandwidth_value = data_scale::parse_count(bandwidth)?;
+        let duration_value = data_scale::parse_count(duration)?;
+        let unit = BandwidthUnit::from_token(bandwidth_unit).ok_or(CalcError::SyntaxError)?;
+        let per = DurationUnit::from_token(duration_unit).ok_or(CalcError::SyntaxError)?;
+        transfer::transferred_bytes(bandwidth_value, unit, duration_value, per)
+    })();
     let result = match outcome {
         Ok(bytes) => DataScaleResult {
             bytes: Some(bytes.to_string()),
@@ -553,4 +674,71 @@ pub fn expr_integer(text: &str, maximum: &str, unit_set: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn expr_percent(text: &str) -> JsValue {
     to_expr_result(expr::evaluate_to_percent(text))
+}
+
+/// 単位換算の結果。TypeScript 側の `ConvertResult` に対応する。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ConvertResult {
+    text: Option<String>,
+    error: Option<CalcError>,
+}
+
+/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` に対応する。
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ConvertUnitsResult {
+    units: Option<Vec<String>>,
+    error: Option<CalcError>,
+}
+
+/// 単位換算(U-1 設計書 §5)。**例外を投げない。**
+///
+/// 値は式でよい(§4.3)。単位もカテゴリも文字列トークンで受け、知らない綴りは
+/// 戻り値の `SyntaxError` になる——境界で黙って無視しない。
+#[wasm_bindgen]
+pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
+    let outcome: CalcResult<String> = (|| {
+        let category =
+            convert_core::Category::from_token(category).ok_or(CalcError::SyntaxError)?;
+        let from = convert_core::Unit::from_token(from).ok_or(CalcError::SyntaxError)?;
+        let to = convert_core::Unit::from_token(to).ok_or(CalcError::SyntaxError)?;
+        convert_core::format::format_rational(convert_core::convert(value, category, from, to)?)
+    })();
+    let result = match outcome {
+        Ok(text) => ConvertResult {
+            text: Some(text),
+            error: None,
+        },
+        Err(e) => ConvertResult {
+            error: Some(e),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
+}
+
+/// カテゴリの単位トークンを **`Category::units()` の並びのまま**返す。
+///
+/// **盤面はこの順に並べる**(設計書 §4.1)。並びをコアが持つのは、単位を足した
+/// ときに表と画面の 2 か所を直さずに済ませるためである。
+#[wasm_bindgen]
+pub fn convert_units(category: &str) -> JsValue {
+    let result = match convert_core::Category::from_token(category) {
+        Some(category) => ConvertUnitsResult {
+            units: Some(
+                category
+                    .units()
+                    .iter()
+                    .map(|unit| unit.token().to_owned())
+                    .collect(),
+            ),
+            error: None,
+        },
+        None => ConvertUnitsResult {
+            error: Some(CalcError::SyntaxError),
+            ..Default::default()
+        },
+    };
+    to_js_value(&result)
 }

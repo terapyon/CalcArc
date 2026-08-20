@@ -1,0 +1,14 @@
+/* 器は縦を 1 行しか使わない(設計書 §4.1)。**ScalePanel.module.css と同じ形**
+   ——カテゴリの選択は系統ごとに 1 つずつあり、見た目は揃っている必要がある。 */
+.convert {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category {
+  min-height: var(--touch-target-min);
+  font-size: var(--key-font-size-function);
+  background: var(--display-bg);
+  color: var(--display-fg);
+}

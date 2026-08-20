@@ -65,7 +65,7 @@
   margin: 0;
 }
 
-/* 数字面と型面は同じ枠に載る(設計書 §2)。型面は 15 キーで 3 行しか描かれ
+/* 数字面・型面・次元数の候補面は同じ枠に載る(設計書 §2)。型面は 15 キーで 3 行しか描かれ
    ないので、行数を指定しても**中身のある行だけが高さを持ち**、面を入れ替える
    たびに画面が伸び縮みする(実測 19px)。
 
@@ -73,14 +73,17 @@
    同じで、キーが正方で、間隔が一様だからである。だから縦横比で押さえる。
    中身の行数に依存しないので、型面のキーが増えても減っても枠は動かない。 */
 .panel :global(fieldset[aria-label="数字と演算のキー"]),
-.panel :global(fieldset[aria-label="データ型のキー"]) {
+.panel :global(fieldset[aria-label="データ型のキー"]),
+.panel :global(fieldset[aria-label="次元数の候補キー"]) {
   grid-template-rows: repeat(5, 1fr);
   aspect-ratio: 1 / 1;
 }
 
-/* 型名は文字数が多い(bfloat16)。この面だけ小さくする——数字面や
-   Scientific の関数列に波及させないよう、区画名で狙い撃つ。 */
-.panel :global(fieldset[aria-label="データ型のキー"]) button {
+/* 型名・次元数の候補は文字数が多い(bfloat16、4 桁の次元数)。この 2 面だけ
+   小さくする——数字面や Scientific の関数列に波及させないよう、区画名で
+   狙い撃つ。 */
+.panel :global(fieldset[aria-label="データ型のキー"]) button,
+.panel :global(fieldset[aria-label="次元数の候補キー"]) button {
   font-size: 0.75rem;
 }
 
