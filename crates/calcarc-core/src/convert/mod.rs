@@ -16,6 +16,8 @@
 //!
 //! **温度は「点」である**(§3.4)。温度差の換算はしない。
 
+pub mod format;
+
 use crate::expr::rational::Rational;
 use crate::expr::{UnitSet, evaluate_to_rational};
 use crate::{CalcError, CalcResult};
