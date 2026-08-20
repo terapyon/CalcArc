@@ -55,6 +55,12 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
   // **同じ枠に載る**(設計書 §2)。型面は 11 キーで 3 行しか描かれないため、
   // 行数を CSS で押さえていないとここで枠が 1 行ぶん縮み、DEL の位置が
   // 上にずれる。jsdom では寸法が出ないので、この検査は実ブラウザにしかない。
+  //
+  // **DEL は枠からの相対座標で測る。** 主張は「**盤面の中で DEL が動かない**」
+  // であって、**盤面より上にある表示行の高さを巻き込むのは測り間違い**である
+  // ——その行高はフォント環境で変わる(CI 実測: DEL の y だけが面によって
+  // 390 と 375.625 に割れ、枠の 366.0625 は不動だった)。枠を原点に取れば、
+  // 盤面の中で動いたかどうかだけが残る。
   const numberBox = await face(page, "数字と演算のキー").boundingBox();
   const delBefore = await panel(page)
     .getByRole("button", { name: "1文字消去", exact: true })
@@ -67,11 +73,26 @@ test("swapping faces moves neither the frame nor DEL", async ({ page }) => {
     .getByRole("button", { name: "1文字消去", exact: true })
     .boundingBox();
 
+  // **番兵**: 測れていなければ `?? 0` が両辺を 0 に揃え、下の 3 つの差は
+  // すべて 0 になって**緑のまま通る**。枠と DEL の両方に置く。
+  expect(numberBox, "the number face was never measured").not.toBeNull();
+  expect(typeBox, "the type face was never measured").not.toBeNull();
+  expect(delBefore, "DEL was never measured on the number face").not.toBeNull();
+  expect(delAfter, "DEL was never measured on the type face").not.toBeNull();
+
   expect(
     Math.abs((typeBox?.height ?? 0) - (numberBox?.height ?? 0)),
   ).toBeLessThan(1);
-  expect(Math.abs((delAfter?.x ?? 0) - (delBefore?.x ?? 0))).toBeLessThan(1);
-  expect(Math.abs((delAfter?.y ?? 0) - (delBefore?.y ?? 0))).toBeLessThan(1);
+  const before = {
+    x: (delBefore?.x ?? 0) - (numberBox?.x ?? 0),
+    y: (delBefore?.y ?? 0) - (numberBox?.y ?? 0),
+  };
+  const after = {
+    x: (delAfter?.x ?? 0) - (typeBox?.x ?? 0),
+    y: (delAfter?.y ?? 0) - (typeBox?.y ?? 0),
+  };
+  expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(1);
 });
 
 test("the unit keys open only when the entry can take them", async ({
