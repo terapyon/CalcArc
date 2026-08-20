@@ -1363,6 +1363,9 @@ export function errorCaseCount(entry: ShardSummary): number {
 /** 定義域外・極・ゼロ除算を**わざと**期待値として持つシャード。 */
 export const ERRORS_SHARD = "errors-000.json";
 
+/** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
+export const ENTRY_SHARD = "entry-000.json";
+
 /**
  * エラー経路の枠。**経路であって領域ではない。**
  *
@@ -1376,13 +1379,15 @@ export type ErrorPathId =
   | "scientific-domain"
   | "finance-syntax"
   | "finance-overflow"
-  | "data-scale-input";
+  | "data-scale-input"
+  | "entry-syntax";
 
 export const ERROR_PATH_TITLES: Record<ErrorPathId, string> = {
   "scientific-domain": "科学計算の定義域エラー",
   "finance-syntax": "金融の `SyntaxError`",
   "finance-overflow": "金融の `Overflow`",
   "data-scale-input": "データスケールの入力エラー",
+  "entry-syntax": "打鍵の途中の構文エラー",
 };
 
 export interface ErrorPathFrame {
@@ -1421,6 +1426,13 @@ function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
     return "scientific-domain";
+  }
+  if (stem === shardStem(ENTRY_SHARD)) {
+    // **ここも名前で選ぶ。** このシャードも領域は `display` で、`display-`
+    // のシャードと同じ枠に落ちる。落とすと「確定した表示のエラー」と
+    // 「確定に届かなかった打鍵」が 1 つの数字になる——後者は `=` の前に
+    // 出るエラーで、経路が違う。
+    return "entry-syntax";
   }
   const area = areaOfShard(shardName);
   if (area === "finance") {
@@ -1480,9 +1492,9 @@ export function errorPaths(entries: ShardSummary[]): ErrorPaths {
 }
 
 /**
- * **5 つ目の枠だけ出どころの種類が違う。**
+ * **最後の枠だけ出どころの種類が違う。**
  *
- * 上の 4 つは「電卓がエラーを返すべき入力を、何件突き合わせたか」である。
+ * 上の 5 つは「電卓がエラーを返すべき入力を、何件突き合わせたか」である。
  * この枠が見るのは電卓ではなく**走行そのもの**——ビルドが落ちた、ブラウザが
  * 上がらなかった、集計がディスクに届かなかった、という失敗である。
  * どれが起きても電卓の不一致は 0 件になるので、**不一致 0 件を「合っていた」
@@ -1526,7 +1538,7 @@ function describeKinds(kinds: Record<string, number>): string {
 }
 
 /**
- * **エラー経路を 5 つに分けて出す。**
+ * **エラー経路を 6 つに分けて出す。**
  *
  * 以前ここは 1 行だった——「エラー経路。ゼロ除算・オーバーフロー・三角関数の
  * 極・構文エラーは生成の時点で範囲外にしている」。走行が 394 件のエラーを
@@ -1556,13 +1568,14 @@ function renderErrorPaths(paths: ErrorPaths, health: RunHealth): string[] {
   const syntax = frame("finance-syntax");
   const overflow = frame("finance-overflow");
   const dataScale = frame("data-scale-input");
+  const entry = frame("entry-syntax");
   const head = (f: ErrorPathFrame): string =>
     f.cases === 0
       ? `  - **${f.title}——この走行は 1 件も検証していない。**`
       : `  - **${f.title}——${f.cases} 件。**`;
   return [
-    "- **エラー経路——5 つに分けて数える。**",
-    "  エラーの出どころは 5 つあり、踏んでいる経路と踏んでいない経路が",
+    "- **エラー経路——6 つに分けて数える。**",
+    "  エラーの出どころは 6 つあり、踏んでいる経路と踏んでいない経路が",
     "  同時にある。1 つの数字にまとめると、**踏んでいない経路が踏んだ経路の",
     "  数字に隠れる。**",
     "",
@@ -1619,11 +1632,30 @@ function renderErrorPaths(paths: ErrorPaths, health: RunHealth): string[] {
           "    数として読めない件数(`abc`、全角の `１０`)、負の件数、知らない型",
           "    といった入力である。ここも撥ねること自体が仕様である。",
         ]),
+    head(entry),
+    ...(entry.cases === 0
+      ? [
+          "    `=` を押す前に、打っている数そのものが構文として壊れる打鍵——",
+          "    小数点を 2 つ続けて打つような入力——が、この走行に無い。",
+          "    **確定より前に出るエラーについて、この報告書は何も言っていない。**",
+        ]
+      : [
+          "    `=` を押す前に、**打っている数そのものが構文として壊れる**入力",
+          `    である(小数点を 2 つ続けて打つ。内訳 ${describeKinds(entry.kinds)})。`,
+          "    上の 4 つは打ち終えた式を計算してから撥ねるが、この経路は計算に",
+          "    届かない——**エラーは確定の前に出る。** 表示は同じ `Math ERROR`",
+          "    なので、出た場所の違いは表示からは分からない。",
+        ]),
     ...renderRunHealth(health),
-    // **番兵は 5 つの枠を切らずに、そのあとに置く。** 枠の途中に挟むと
-    // 一覧が 2 つに割れて見える。指す先は「上の 4 つ」ではなく「どの経路
+    // **番兵は 6 つの枠を切らずに、そのあとに置く。** 枠の途中に挟むと
+    // 一覧が 2 つに割れて見える。指す先は「上の 5 つ」ではなく「どの経路
     // にも入らないもの」と書く——走行そのものの失敗の枠は、エラー期待値が
     // 入る場所ではない。
+    //
+    // **枠が 6 つになっても番兵は消さない。** 枠の集合が完全であることは
+    // 証明できない——いまのコーパスで空だというだけである。新しい経路が
+    // 生えた日に、その件数が既存の枠に加算されるのではなく、名前ごと本文に
+    // 浮くための見張りである。
     ...(paths.unclassified.length === 0
       ? []
       : [
@@ -1639,7 +1671,7 @@ function renderErrorPaths(paths: ErrorPaths, health: RunHealth): string[] {
 }
 
 /**
- * 5 つ目の枠。**電卓ではなく走行そのものを見る。**
+ * 6 つ目の枠。**電卓ではなく走行そのものを見る。**
  *
  * ビルドが落ちても、ブラウザが上がらなくても、集計がディスクに届かなくても、
  * 電卓の不一致は 0 件になる。**この枠が無いと、その 0 件が「合っていた」と
@@ -1707,7 +1739,7 @@ function renderCaveats(
   const paths = errorPaths(entries);
   const health = runHealth(run);
   const errorItem = renderErrorPaths(paths, health);
-  // **エラー経路の行が「完全に固定の文章」になるのは、5 枠すべてに数える
+  // **エラー経路の行が「完全に固定の文章」になるのは、6 枠すべてに数える
   // 対象が無いときだけである。** 1 枠でも数を出していれば、その行はデータ
   // 由来になる——但し書きの一覧と項目の分岐は同じ述語から引く。
   const errorPathsCounted =
@@ -1809,7 +1841,7 @@ function renderCaveats(
   // 項目そのものと同じ述語から組み立てる——別々に書くと、片方だけが動く。
   const fixedItems = [
     // **エラー経路も固定の文章になりうる。** 以前この項目は一覧に載って
-    // いなかったので、5 枠すべてが空の走行では「数える対象が無いのは N 行
+    // いなかったので、6 枠すべてが空の走行では「数える対象が無いのは N 行
     // だけである」が 1 行数え落としていた。
     ...(errorPathsCounted ? [] : ["エラー経路"]),
     ...(imaginaryPresses === 0 && polarPresses === 0 ? ["複素数"] : []),

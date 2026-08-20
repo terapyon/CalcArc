@@ -18,6 +18,7 @@ import {
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
+  ENTRY_SHARD,
   ERRORS_SHARD,
   type ErrorPathId,
   errorCaseCount,
@@ -61,7 +62,7 @@ function bands(counts: Partial<Record<ToleranceBand, number>>) {
  * エラー経路の枠の見出し行を 1 本だけ取り出す。
  *
  * **見出しごと取り出すのが肝である。** `toContain("270 件")` で済ませると、
- * 5 枠を 1 つに畳んだ実装——どこかに 270 と書いてあるだけの実装——でも緑に
+ * 6 枠を 1 つに畳んだ実装——どこかに 270 と書いてあるだけの実装——でも緑に
  * なる。枠の名前の付いた行に、その枠の数が乗っていることを見る。
  */
 function errorPathLine(markdown: string, title: string): string {
@@ -1281,6 +1282,9 @@ test("with nothing counted, the untouched wording comes back", () => {
     "金融の `SyntaxError`",
     "金融の `Overflow`",
     "データスケールの入力エラー",
+    // **枠が 6 つ目になったので、ここも 1 行増える。** 0 件の枠が
+    // 「検証していない」と書くことは、どの枠でも同じ規則である。
+    "打鍵の途中の構文エラー",
   ]) {
     expect(errorPathLine(markdown, title)).toContain("1 件も検証していない");
   }
@@ -1288,7 +1292,7 @@ test("with nothing counted, the untouched wording comes back", () => {
 
 test("a run that counts one error path and not another says both, each on its own line", () => {
   // **枠を分けた意味は、全部 0 でも全部非 0 でも検査されない。** 0 件の枠と
-  // 非 0 の枠が同時に出る走行でだけ、5 つを 1 つの数字に畳んだ実装と区別が
+  // 非 0 の枠が同時に出る走行でだけ、6 つを 1 つの数字に畳んだ実装と区別が
   // 付く——畳んだ実装は「エラー経路——7 件は照合済み」と書き、どの経路を
   // 踏んでいないのかを 1 行も持たない。
   const markdown = renderReport(
@@ -1306,6 +1310,7 @@ test("a run that counts one error path and not another says both, each on its ow
     "科学計算の定義域エラー",
     "金融の `Overflow`",
     "データスケールの入力エラー",
+    "打鍵の途中の構文エラー",
   ]) {
     expect(errorPathLine(markdown, untouched)).toContain(
       "1 件も検証していない",
@@ -1338,25 +1343,64 @@ test("the SyntaxError frame and the Overflow frame are not interchangeable", () 
   expect(overflow).not.toContain("11");
 });
 
-test("an error expectation that fits none of the four paths is named, not folded into one", () => {
+test("an error expectation that fits none of the six frames is named, not folded into one", () => {
   // **既定の枠へ落とすと、新しい経路の件数が既存の枠に加算されて見えなく
   // なる。** 落とさずに数え上げ、名前と件数を本文に出す。
+  //
+  // **見本は `display-000.json` に変えた。** 以前ここは `entry-000.json`
+  // だったが、そのシャードは「打鍵の途中の構文エラー」の枠を持つように
+  // なったので、番兵の見本にならない。`display-` は確定した値をトグルで
+  // 見せ直すシャードで、エラー期待値を持てばどの枠にも入らない——番兵が
+  // 見張るのは**まさにこれから生えてくる経路**である。
   const entries = [
     summary({
-      name: "entry-000.json (displays)",
+      name: "display-000.json (displays)",
       errorKinds: { SyntaxError: 1 },
     }),
   ];
   const paths = errorPaths(entries);
   expect(paths.frames.every((frame) => frame.cases === 0)).toBe(true);
   expect(paths.unclassified).toEqual([
-    { shard: "entry-000.json (displays)", kind: "SyntaxError", cases: 1 },
+    { shard: "display-000.json (displays)", kind: "SyntaxError", cases: 1 },
   ]);
   const markdown = renderReport(entries, PROVENANCE);
   expect(markdown).toContain("上のどの経路にも入らないものが 1 件ある");
   expect(markdown).toContain(
-    "`entry-000.json (displays)` の `SyntaxError` 1 件",
+    "`display-000.json (displays)` の `SyntaxError` 1 件",
   );
+});
+
+test("the entry shard has a frame of its own, and it is not the display frame", () => {
+  // **打鍵の途中で構文が壊れる経路は、名前のある枠である。** 件数 1 でも、
+  // 名前のある 1 は番兵の中の 1 より読者に多くを語る——番兵は「どこにも
+  // 入らなかった」としか言えず、何が起きた入力なのかを言えない。
+  //
+  // **枠はシャード名で選ぶ。** `entry-000.json` の領域は `display` なので、
+  // 領域で選ぶと `display-000.json` と同じ枠に落ちる。落ちれば「確定した
+  // 表示のエラー」と「確定に届かなかった打鍵」が 1 つの数字になる。
+  expect(areaOfShard(ENTRY_SHARD)).toBe("display");
+  const entries = [
+    summary({
+      name: summaryName(ENTRY_SHARD, "displays"),
+      errorKinds: { SyntaxError: 1 },
+    }),
+    summary({
+      name: "display-000.json (displays)",
+      errorKinds: { SyntaxError: 4 },
+    }),
+  ];
+  const paths = errorPaths(entries);
+  expect(paths.frames.find((frame) => frame.id === "entry-syntax")?.cases).toBe(
+    1,
+  );
+  // **`display-000.json` の 4 件が枠へ混ざっていないこと。** 混ざれば枠は
+  // 5 件になり、番兵は空になる。
+  expect(paths.unclassified).toEqual([
+    { shard: "display-000.json (displays)", kind: "SyntaxError", cases: 4 },
+  ]);
+  const markdown = renderReport(entries, PROVENANCE);
+  expect(errorPathLine(markdown, "打鍵の途中の構文エラー")).toContain("1 件");
+  expect(markdown).toContain("エラーは確定の前に出る");
 });
 
 test("the scientific domain frame is fed by the errors shard, whose area is not scientific", () => {
@@ -1381,8 +1425,8 @@ test("the scientific domain frame is fed by the errors shard, whose area is not 
   expect(markdown).toContain("`DomainError` 17 件");
 });
 
-test("the fifth frame watches the run itself, and an unreadable summary is not a clean one", () => {
-  // **5 つ目の枠だけ出どころの種類が違う。** シャードの集計ではなく、走行
+test("the sixth frame watches the run itself, and an unreadable summary is not a clean one", () => {
+  // **最後の枠だけ出どころの種類が違う。** シャードの集計ではなく、走行
   // そのものの要約(`heavy-run.json`)を読む。ビルドが落ちても、集計が
   // ディスクに届かなくても、電卓の不一致は 0 件になる。
   const clean: HeavyRun = {
@@ -1415,9 +1459,13 @@ test("the fifth frame watches the run itself, and an unreadable summary is not a
   expect(errorPathLine(unknown, "走行そのものの失敗")).not.toContain("0 件");
 });
 
-test("every error expectation in the committed corpus lands in a frame or is named", () => {
-  // **番兵。** 枠に入らなかったエラー期待値が黙って消えないことを、見本では
-  // なく実物で見る。
+test("every error expectation in the committed corpus lands in one of the six frames", () => {
+  // **枠 6 つ + 番兵 = 総数、そして番兵は 0。** 実物のコーパスが持つエラー
+  // 期待値は、名前のある 6 つの枠のどれかに入る。見本ではなく実物で見る。
+  //
+  // **番兵が 0 でも消さない。** 枠の集合が完全であることは証明できない
+  // ——いまのコーパスで空だというだけである。0 を固定するのは、新しい経路が
+  // 生えた日にここが赤くなるためである。
   const entries = [
     ...loadCallShards().map(({ name, shard }) =>
       summary({
@@ -1445,11 +1493,22 @@ test("every error expectation in the committed corpus lands in a frame or is nam
     total,
   );
 
+  // **番兵は 0 である。** どこにも入らないエラー期待値がコーパスに在れば、
+  // ここが名前ごと印字して落ちる。**0 を主張する検査は、何も見ていなくても
+  // 緑になる常連である**——だから下の 2 つと組にする。上の等式が総数を
+  // 覆っていること、下の走査が 6 つの枠すべてに実物が流れていることが、
+  // この 0 が「枠が実物と繋がった結果の 0」であることを支えている。
+  expect(
+    paths.unclassified,
+    "どの枠にも入らないエラー期待値が在る——枠を足すか、番兵の理由を書く",
+  ).toEqual([]);
+
   for (const id of [
     "scientific-domain",
     "finance-syntax",
     "finance-overflow",
     "data-scale-input",
+    "entry-syntax",
   ] as ErrorPathId[]) {
     expect(
       paths.frames.find((frame) => frame.id === id)?.cases ?? 0,
@@ -1457,13 +1516,23 @@ test("every error expectation in the committed corpus lands in a frame or is nam
     ).toBeGreaterThan(0);
   }
 
-  // **実物には 4 つの枠のどれにも入らないものが在る。** 打鍵の途中で構文
-  // エラーになるケース(`entry-000.json`)がそれで、定義域のエラーでも金融
-  // でもデータスケールでもない。**在ることを固定する**——黙ってどれかの枠へ
-  // 混ぜた実装はここで赤くなる。
-  expect(paths.unclassified.map((one) => one.shard)).toEqual([
-    "entry-000.json (displays)",
-  ]);
+  // **枠は 6 つ、番兵は本文に出ていない。** エラー期待値の枠 5 つに、
+  // 走行そのものの失敗を見る枠を足して 6 つ。数だけでなく本文に 6 本の
+  // 見出しが立っていることを見る——枠を足して描き忘れた実装は、上の
+  // 算術だけなら緑で通る。
+  const markdown = renderReport(entries, PROVENANCE);
+  for (const title of [
+    "科学計算の定義域エラー",
+    "金融の `SyntaxError`",
+    "金融の `Overflow`",
+    "データスケールの入力エラー",
+    "打鍵の途中の構文エラー",
+    "走行そのものの失敗",
+  ]) {
+    expect(errorPathLine(markdown, title)).toContain("——");
+  }
+  expect(markdown).toContain("エラー経路——6 つに分けて数える");
+  expect(markdown).not.toContain("上のどの経路にも入らないものが");
 });
 
 test("the hand-maintained disclaimer lists only the items that really are fixed", () => {
@@ -1504,9 +1573,9 @@ test("the hand-maintained disclaimer lists only the items that really are fixed"
     "エラー経路・複素数・角度モード・表示の記法・結合方向・UI・入力中の表示の 7 行",
   );
 
-  // **エラー経路も同じ形である。** 5 つの枠のどれか 1 つでも数を出していれば、
+  // **エラー経路も同じ形である。** 6 つの枠のどれか 1 つでも数を出していれば、
   // その行はデータ由来になるので一覧から外れる。以前この項目は一覧に一度も
-  // 載らず、5 枠すべてが空の走行で数え落としになっていた。
+  // 載らず、枠すべてが空の走行で数え落としになっていた。
   const withErrors = renderReport(
     [
       summary({
