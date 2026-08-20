@@ -402,6 +402,318 @@
         "value": "\uff11\uff12\uff13"
       },
       "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "2.040608101"
+      },
+      "id": "convert/area/1tsubotojo",
+      "input": {
+        "category": "area",
+        "from": "tsubo",
+        "to": "jo",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "3.785411784"
+      },
+      "id": "convert/volume/1gal_ustol",
+      "input": {
+        "category": "volume",
+        "from": "gal_us",
+        "to": "l",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "4.54609"
+      },
+      "id": "convert/volume/1gal_imptol",
+      "input": {
+        "category": "volume",
+        "from": "gal_imp",
+        "to": "l",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "236.5882365"
+      },
+      "id": "convert/volume/1cup_ustoml",
+      "input": {
+        "category": "volume",
+        "from": "cup_us",
+        "to": "ml",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "200"
+      },
+      "id": "convert/volume/1cup_jptoml",
+      "input": {
+        "category": "volume",
+        "from": "cup_jp",
+        "to": "ml",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "953.6743164"
+      },
+      "id": "convert/data-size/1gbtomib",
+      "input": {
+        "category": "data-size",
+        "from": "gb",
+        "to": "mib",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "0.125"
+      },
+      "id": "convert/data-size/1bittobyte",
+      "input": {
+        "category": "data-size",
+        "from": "bit",
+        "to": "byte",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "4,046.856422"
+      },
+      "id": "convert/area/1actom2",
+      "input": {
+        "category": "area",
+        "from": "ac",
+        "to": "m2",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1.852"
+      },
+      "id": "convert/speed/1kntokmh",
+      "input": {
+        "category": "speed",
+        "from": "kn",
+        "to": "kmh",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "100"
+      },
+      "id": "convert/area/1cm2tomm2",
+      "input": {
+        "category": "area",
+        "from": "cm2",
+        "to": "mm2",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "100"
+      },
+      "id": "convert/area/1km2toha",
+      "input": {
+        "category": "area",
+        "from": "km2",
+        "to": "ha",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "144"
+      },
+      "id": "convert/area/1ft2toin2",
+      "input": {
+        "category": "area",
+        "from": "ft2",
+        "to": "in2",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "9"
+      },
+      "id": "convert/area/1yd2toft2",
+      "input": {
+        "category": "area",
+        "from": "yd2",
+        "to": "ft2",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "10"
+      },
+      "id": "convert/volume/1dltocl",
+      "input": {
+        "category": "volume",
+        "from": "dl",
+        "to": "cl",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1,000"
+      },
+      "id": "convert/volume/1m3tol",
+      "input": {
+        "category": "volume",
+        "from": "m3",
+        "to": "l",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "2"
+      },
+      "id": "convert/volume/1qt_ustopt_us",
+      "input": {
+        "category": "volume",
+        "from": "qt_us",
+        "to": "pt_us",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "2"
+      },
+      "id": "convert/volume/1qt_imptopt_imp",
+      "input": {
+        "category": "volume",
+        "from": "qt_imp",
+        "to": "pt_imp",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "16"
+      },
+      "id": "convert/volume/1pt_ustofloz_us",
+      "input": {
+        "category": "volume",
+        "from": "pt_us",
+        "to": "floz_us",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "20"
+      },
+      "id": "convert/volume/1pt_imptofloz_imp",
+      "input": {
+        "category": "volume",
+        "from": "pt_imp",
+        "to": "floz_imp",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "0.44704"
+      },
+      "id": "convert/speed/1mphtomps",
+      "input": {
+        "category": "speed",
+        "from": "mph",
+        "to": "mps",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1,000"
+      },
+      "id": "convert/data-size/1pbtotb",
+      "input": {
+        "category": "data-size",
+        "from": "pb",
+        "to": "tb",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1,000"
+      },
+      "id": "convert/data-size/1mbtokb",
+      "input": {
+        "category": "data-size",
+        "from": "mb",
+        "to": "kb",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1,024"
+      },
+      "id": "convert/data-size/1pibtotib",
+      "input": {
+        "category": "data-size",
+        "from": "pib",
+        "to": "tib",
+        "value": "1"
+      },
+      "op": "convert"
+    },
+    {
+      "expect": {
+        "text": "1,048,576"
+      },
+      "id": "convert/data-size/1gibtokib",
+      "input": {
+        "category": "data-size",
+        "from": "gib",
+        "to": "kib",
+        "value": "1"
+      },
+      "op": "convert"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",

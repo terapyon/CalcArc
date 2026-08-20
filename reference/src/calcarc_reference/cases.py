@@ -949,4 +949,51 @@ CONVERT_INPUTS: list[tuple[str, str, str, str]] = [
     # 全角は **Rust の字句解析器も `is_ascii_digit` で弾く**ので、両実装で SyntaxError。
     # Python の `\d` は既定で Unicode を含むため、ここを golden に置いて食い違いを見張る。
     ("１２３", "length", "m", "m"),
+    # ここから U-2（面積・体積・速さ・データ量）。**U-1 の上の 31 件は 1 件も変えない**
+    # ——spec §5 が禁じている。**U-2 spec §5 の「名指しで置くケース」を 1 行ずつ写す**
+    # （U-1 の Task 3 と同じ流儀。なぜ置くかをコメントに残す）。
+    #
+    # 坪は尺から、畳は不動産の表示規約から来ていて出自が違う（spec §3.3）。
+    # 慣用の「1 坪 = 2 畳」に丸めず、正直な非整数を出す。
+    ("1", "area", "tsubo", "jo"),  # 2.040608101…（= 20000/9801）
+    # US と Imperial のガロンは別物。取り違えていないことを固定する（spec §3.4）。
+    ("1", "volume", "gal_us", "l"),  # 3.785411784
+    ("1", "volume", "gal_imp", "l"),  # 4.54609
+    # 米国慣用の cup と日本の計量カップは別物（spec §3.4）。
+    ("1", "volume", "cup_us", "ml"),  # 236.5882365
+    ("1", "volume", "cup_jp", "ml"),  # 200
+    # SI と IEC を曖昧にしない（設計書 §6 の例、spec §3.6）。
+    ("1", "data-size", "gb", "mib"),  # 953.6743164（= 10^9 / 2^20）
+    # bit は byte の 1/8。有理数なので 0.125 が厳密に出る（spec §3.6）。
+    ("1", "data-size", "bit", "byte"),  # 0.125
+    # エーカーはヤード・ポンド系の積み上げ（spec §3.1）。
+    ("1", "area", "ac", "m2"),  # 4046.8564224
+    # ノットは海里毎時。海里の定義が生きていることを固定する（spec §3.5）。
+    ("1", "speed", "kn", "kmh"),  # 1.852
+    #
+    # 上の名指しケースだけでは 42 単位のうち一部しか現れない
+    # （tsubo/jo/gal_us/gal_imp/l/cup_us/cup_jp/ml/gb/mib/bit/byte/ac/m2/kn/kmh の
+    # 16 個どまり）。**現れない単位の係数は言語間で一度も突き合わされない**
+    # （U-1 の Task 3 で mg・g・t が漏れていた実例がある）。残り 26 単位を、
+    # U-1 の「残りの単位」節と同じ流儀（隣接単位どうしの倍率）で埋める。
+    #
+    # 面積の残り: mm2・cm2・km2・ha・in2・ft2・yd2 の 7 個。
+    ("1", "area", "cm2", "mm2"),  # 100
+    ("1", "area", "km2", "ha"),  # 100
+    ("1", "area", "ft2", "in2"),  # 144
+    ("1", "area", "yd2", "ft2"),  # 9
+    # 体積の残り: cl・dl・m3・floz_us・floz_imp・pt_us・pt_imp・qt_us・qt_imp の 9 個。
+    ("1", "volume", "dl", "cl"),  # 10
+    ("1", "volume", "m3", "l"),  # 1,000
+    ("1", "volume", "qt_us", "pt_us"),  # 2
+    ("1", "volume", "qt_imp", "pt_imp"),  # 2
+    ("1", "volume", "pt_us", "floz_us"),  # 16
+    ("1", "volume", "pt_imp", "floz_imp"),  # 20
+    # 速さの残り: mps・mph の 2 個。
+    ("1", "speed", "mph", "mps"),  # 0.44704
+    # データ量の残り: kb・mb・tb・pb・kib・gib・tib・pib の 8 個。
+    ("1", "data-size", "pb", "tb"),  # 1,000
+    ("1", "data-size", "mb", "kb"),  # 1,000
+    ("1", "data-size", "pib", "tib"),  # 1,024
+    ("1", "data-size", "gib", "kib"),  # 1,048,576
 ]
