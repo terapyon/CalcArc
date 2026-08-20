@@ -20,14 +20,17 @@ describe("ConvertPanel", () => {
       (option) => option.textContent,
     );
     // **件数を主張する。** ループだけだと、選択肢が 0 個になった日も緑になる。
+    // **日英を併記する**(U-0 §9 の【変更 2026-08-20】)。末尾の
+    // `データ量 Data Size` は、Scale の `データ量 Data Scale` と**日本語が
+    // 同じ**である——英語が無いと 2 つの系統で同じ名前になる(U-2 §2)。
     expect(labels).toEqual([
-      "長さ",
-      "質量",
-      "温度",
-      "面積",
-      "体積",
-      "速さ",
-      "データ量",
+      "長さ Length",
+      "質量 Mass",
+      "温度 Temperature",
+      "面積 Area",
+      "体積 Volume",
+      "速さ Speed",
+      "データ量 Data Size",
     ]);
   });
 

@@ -2,6 +2,14 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* **幅を明示する。** `margin: 0 auto` は flex の交差軸で stretch を止める
+     ので、指定が無いと器(`.scale`)の中で**中身の max-content まで縮む**
+     (UnitPanel.module.css と同じ壊れ方)。**この面は 2026-08-20 の時点では
+     縮んでいなかった**——項目行のラベルが長く(`パラメータ数`)、max-content が
+     390px を超えていたからで、寸法を守っていたわけではない。同じ器に載る
+     Data Scale(292/52)とデータ転送(360/66)は実際に痩せていた。
+     **ラベルが短くなった日に静かに縮む**ので、寸法のほうを固定する。 */
+  width: 100%;
   max-width: var(--shell-max-width);
   margin: 0 auto;
   padding: 12px;

@@ -1,7 +1,19 @@
 import { CONVERT_CATEGORIES, type ConvertCategory } from "../../route";
-import { CATEGORY_LABELS } from "../Keypad/convert";
+import {
+  type CategoryOption,
+  CategorySelect,
+} from "../Category/CategorySelect";
+import { CATEGORY_LABELS, CATEGORY_LABELS_EN } from "../Keypad/convert";
 import styles from "./ConvertPanel.module.css";
 import { UnitPanel } from "./UnitPanel";
+
+/** カテゴリの選択肢。**日英を併記する**(U-0 §9 の【変更 2026-08-20】)。
+ * 綴りの表は `Keypad/convert.ts` が持つ——ここで写すと 3 つ目の写しになる。 */
+const OPTIONS: readonly CategoryOption[] = CONVERT_CATEGORIES.map((id) => ({
+  value: id,
+  ja: CATEGORY_LABELS[id],
+  en: CATEGORY_LABELS_EN[id],
+}));
 
 function isCategory(text: string | null): text is ConvertCategory {
   return (CONVERT_CATEGORIES as readonly string[]).includes(text ?? "");
@@ -17,23 +29,13 @@ export function ConvertPanel({ category }: { category: string | null }) {
 
   return (
     <div className={styles.convert}>
-      {/* **リンクではなく select である**(設計書 §4.1)——縦を 1 行しか
-          使わないため。hash を書き換えるだけで、画面はハッシュの購読が
-          差し替える(U-0 §3)。 */}
-      <select
-        className={styles.category}
-        aria-label="計算の種類"
+      <CategorySelect
+        options={OPTIONS}
         value={current}
-        onChange={(e) => {
-          window.location.hash = `#convert/${e.target.value}`;
+        onChange={(value) => {
+          window.location.hash = `#convert/${value}`;
         }}
-      >
-        {CONVERT_CATEGORIES.map((id) => (
-          <option key={id} value={id}>
-            {CATEGORY_LABELS[id]}
-          </option>
-        ))}
-      </select>
+      />
       {/* **カテゴリが変わったら盤面は作り直す。** 同じ部品を使い回すので、
           key を与えないと単位も打ちかけの値も前のカテゴリのまま残る
           ——長さの `km` を選んだまま温度の面に入る、という壊れ方をする。 */}

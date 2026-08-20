@@ -1,0 +1,63 @@
+/* カテゴリの器。**Nav のタブと同じ配色トークンで、盤面と同じ幅に置く**
+   ——素の `<select>` は器（`.scale` / `.convert`）の幅いっぱいに伸びるので、
+   PC・タブレットでは画面の端から端まで 1280px の帯になっていた（実測、
+   2026-08-20）。**幅は器のほうが `--shell-max-width` で決め**、ここは
+   左右 12px の差し込みだけを持つ——盤面の `padding: 12px` と同じ量なので、
+   select の左右端がキーの格子の左右端に揃う（390px で 366px、実測）。 */
+.field {
+  position: relative;
+  display: flex;
+  margin: 0 12px;
+}
+
+/* 矢印。**`appearance: none` で素の三角が消えるので描き直す。**
+   `currentColor` にするのは、配色が明・暗・高コントラストの 3 通りある
+   ためである（data URI の SVG では色を固定してしまう）。 */
+.field::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  width: 8px;
+  height: 8px;
+  margin-top: -6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-radius: 1px;
+  color: var(--key-function-fg);
+  transform: rotate(45deg);
+  /* 矢印の上を押しても select が開く。 */
+  pointer-events: none;
+}
+
+.select {
+  /* **器の幅いっぱいに伸ばす。** `flex: 1` と `min-width: 0` の対で、
+     長いラベル（`LLM のメモリ LLM Memory`）でも器を押し広げない。 */
+  flex: 1;
+  min-width: 0;
+  /* 44px を守る（base-spec §43）。カテゴリの選び間違いは、別の計算機を
+     見ているのに気付かない、という壊れ方をする。 */
+  min-height: var(--touch-target-min);
+  /* 右は矢印の場所を空ける。 */
+  padding: 8px 40px 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  /* **Nav のタブと同じ配色。** 系統を選ぶ器の下に、カテゴリを選ぶ器が
+     同じ見た目で並ぶ。 */
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+  font-family: inherit;
+  font-size: var(--nav-font-size);
+  /* 入らないときは切る。折り返して 2 行になると 44px の行が伸びる。 */
+  text-overflow: ellipsis;
+  /* 素の見た目をやめる（矢印は上の `::after` が描く）。iOS Safari の
+     古い版のために接頭辞つきも並べる（`Nav.module.css` の user-select と
+     同じ流儀）。 */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

@@ -64,6 +64,22 @@ export const CATEGORY_LABELS: Record<ConvertCategoryToken, string> = {
   "data-size": "データ量",
 };
 
+/** カテゴリの英語名。**日本語と併記する**(U-0 §9 の【変更 2026-08-20】)。
+ * 綴りは U-1 §4.2 と U-2 §2 の表そのままで、ここで訳し直さない。
+ *
+ * **`データ量` の衝突をほどくのはこの表である**——Convert の `data-size` は
+ * 単位どうしの換算(`1 GB = 953.674 MiB`)、Scale の `data-scale` は規模の
+ * 計算で、**日本語のラベルは両方とも `データ量`** である(U-2 §2)。 */
+export const CATEGORY_LABELS_EN: Record<ConvertCategoryToken, string> = {
+  length: "Length",
+  mass: "Mass",
+  temperature: "Temperature",
+  area: "Area",
+  volume: "Volume",
+  speed: "Speed",
+  "data-size": "Data Size",
+};
+
 /**
  * 単位の画面ラベル。**記号を持つのはここだけである**(計画の裁定 1)。
  * トークンは ASCII の小文字と数字と `_`(`um` `degc` `mm2` `gal_us`)——`µ` は

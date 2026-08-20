@@ -210,6 +210,19 @@ Scientific と同じで、**1 箇所だけ違う 3 つ目の規則**になると
 U-1 は **3 つ**（`#convert/length` `#convert/mass` `#convert/temperature`）。
 残りは U-2（設計書 §37 の初期リリース範囲: Area / Volume / Speed / Data Size）。
 
+**【変更 2026-08-20】カテゴリ名は画面でも日英を併記する**（裁定と理由は U-0 §9 の
+【変更 2026-08-20】）。**英語名はこの節の呼び名をそのまま使い、訳し直さない**:
+
+| token | 画面に出る文字 |
+|---|---|
+| `length` | `長さ Length` |
+| `mass` | `質量 Mass` |
+| `temperature` | `温度 Temperature` |
+
+表は `web/src/ui/Keypad/convert.ts` の `CATEGORY_LABELS`（日本語）と
+`CATEGORY_LABELS_EN`（英語）の 2 つで、**鍵が揃っていることを
+`convert.test.ts` が検査する**——片方に穴があると盤面が `undefined` を連結する。
+
 ### 4.3 値は式で打てる
 
 `5*12` と打って `inch` を選べば `60 inch` である。**既存の式評価器を再利用する**
