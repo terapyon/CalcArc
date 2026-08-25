@@ -75,6 +75,15 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: heavy
 
+      # **型検査より先に wasm を作る。** `heavy/` の型検査は `web/src/calc` を
+      # 通って `web/src/wasm/` の型宣言に届く。**新しいクローンにはそれが
+      # 無い**ので、ここを飛ばすと `TS2307` で落ちる——手元のワークツリーには
+      # 既にあるため、手元では緑のまま気づけない(v0.4.1 の走行で実際に踏んだ。
+      # CLAUDE.md の「新しいクローンでは先に `pnpm wasm`」と同じ罠である)。
+      - name: Build the wasm the type checker needs
+        run: pnpm --dir ../web wasm
+        working-directory: heavy
+
       # **11 分の変異を回す前に、数十秒で落ちるものを先に落とす。**
       # 重量級のユニット 6 本は「測る道具そのもの」を見張っており、
       # 普段の CI では走らない(2026-08-25 のユーザ裁定)。ここが唯一の場所である。
@@ -82,7 +91,13 @@ jobs:
         run: pnpm typecheck && pnpm lint && pnpm test
         working-directory: heavy
 
+      # **`if: always()` が要る。** 下の走行 3 本が `always()` を持つ以上、
+      # ブラウザの導入だけが飛ばされると、道具の不調が
+      # 「`browserType.launch: Executable doesn't exist`」に化けて 36 本が
+      # 全滅する——v0.4.1 の走行で実際にそうなり、本当の原因(型検査の赤)が
+      # 埋もれた。段ごとの失敗を独立させる。
       - name: Install Playwright's browser
+        if: always()
         run: pnpm exec playwright install --with-deps chromium
         working-directory: heavy
 
