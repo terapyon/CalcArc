@@ -5,7 +5,7 @@ import { resetPresses } from "./presses";
  *
  * 押したキーは `web/.heavy-ui-presses/` にワーカー 1 つ = 1 ファイルで落ちる
  * (`presses.ts` の `recordPress()`)。消さずに走ると、今回 1 度も押していない
- * キーが**前回の走行の数字で緑になる**——`../heavy/global-setup.ts` が
+ * キーが**前回の走行の数字で緑になる**——`../corpus/global-setup.ts` が
  * `.heavy-summaries/` を消すのとまったく同じ理由である。前回の
  * `web/heavy-ui-run.json` も一緒に消す。
  *

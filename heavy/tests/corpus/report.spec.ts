@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import type { HeavyUiRun } from "../heavy-ui/presses";
-import { buildRun as buildUiRun } from "../heavy-ui/presses";
+import type { HeavyUiRun } from "../ui/presses";
+import { buildRun as buildUiRun } from "../ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallCase,

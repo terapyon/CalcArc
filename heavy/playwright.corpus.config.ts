@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
  * ./tests/e2e なので、こちらの spec は構造的に拾われない(設計書 §6.2)。
  */
 export default defineConfig({
-  testDir: "./tests/heavy",
+  testDir: "./tests/corpus",
   // 1 シャードで数千件を回す。既定の 30 秒では足りない。
   timeout: 300_000,
   // **集計はワーカーの外に置く。**
@@ -22,8 +22,8 @@ export default defineConfig({
   // 緑の顔をした報告書**が残った(`wrote …heavy-report.md` がログに 2 回出る)。
   // `fullyParallel: true` は同じ壊れ方を**落ちなくても**引き起こすが、
   // 原因はそこではなく、集計をワーカーのメモリに置いていたことだった。
-  globalSetup: "./tests/heavy/global-setup.ts",
-  globalTeardown: "./tests/heavy/global-teardown.ts",
+  globalSetup: "./tests/corpus/global-setup.ts",
+  globalTeardown: "./tests/corpus/global-teardown.ts",
   // **1 ファイル内の test を並列に走らせない。** fullyParallel が制御するのは
   // 並列度だけで、失敗時に打ち切るかどうか(bail / maxFailures)とは無関係
   // である(レビュー修正ラウンド 2 でコメントの誤りを訂正)。ここで直列に
@@ -38,8 +38,8 @@ export default defineConfig({
     // 衝突させない。--strictPort は「取れなければ黙って別ポートに逃げる」を
     // 禁じる——2026-08-15 に他プロジェクトの preview を掴む事故が実在した。
     command:
-      "pnpm exec vite build --config vite.heavy.config.ts && pnpm exec vite preview --config vite.heavy.config.ts --port 4180 --strictPort",
-    url: "http://localhost:4180/heavy-harness.html",
+      "pnpm exec vite build --config vite.harness.config.ts && pnpm exec vite preview --config vite.harness.config.ts --port 4180 --strictPort",
+    url: "http://localhost:4180/harness/heavy-harness.html",
     // **手元では 4180 に既に居るものを掴む。** CI では毎回立て直すが、
     // ローカルでは起動が遅いので使い回す。その代償として、**4180 に別物が
     // 居ればそれを掴む**。2026-08-15 の敵対者レビューはこれを使い、

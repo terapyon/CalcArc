@@ -1,4 +1,4 @@
-import type { CallCase } from "../heavy/corpus";
+import type { CallCase } from "../corpus/corpus";
 
 /**
  * **Finance を実画面から通すための、盤面に依らない部分**(設計書 §7.2)。

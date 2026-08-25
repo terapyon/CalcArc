@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CalcErrorCode } from "../../src/calc/types";
-import { KEY_TOKENS } from "../../src/calc/types";
+import type { CalcErrorCode } from "../../../web/src/calc/types";
+import { KEY_TOKENS } from "../../../web/src/calc/types";
 import { type ComplexValue, magnitude, zeroComponentsAgree } from "./complex";
 
 /** 許容誤差。**値はコーパスの JSON が持つ**(CLAUDE.md の規約)。 */

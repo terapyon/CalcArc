@@ -1,5 +1,5 @@
-import type { KeyToken } from "../../src/calc";
-import { SCIENTIFIC_SECTIONS } from "../../src/ui/Keypad/scientific";
+import type { KeyToken } from "../../../web/src/calc";
+import { SCIENTIFIC_SECTIONS } from "../../../web/src/ui/Keypad/scientific";
 
 /**
  * キートークン → 盤面のボタン。

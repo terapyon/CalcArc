@@ -26,7 +26,7 @@ interface HarnessWindow {
  * ページの開き直しは高価なので、以後は同じページで回す。
  */
 export async function openHarness(page: Page): Promise<void> {
-  await page.goto("/heavy-harness.html");
+  await page.goto("/harness/heavy-harness.html");
   await page.waitForFunction(() => "__calcarc" in window);
   await page.evaluate(async () => {
     await (window as unknown as HarnessWindow).__calcarc.ready;

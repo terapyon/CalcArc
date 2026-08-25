@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { type CallCase, loadCallShards } from "../heavy/corpus";
+import { type CallCase, loadCallShards } from "../corpus/corpus";
 import {
   type Answer,
   expectedAnswer,

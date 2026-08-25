@@ -1,11 +1,11 @@
-import type { KeyToken } from "../../src/calc";
+import type { KeyToken } from "../../../web/src/calc";
 import {
   type DisplayCase,
   loadDisplayShards,
   loadShards,
   partitionCases,
   type ValueCase,
-} from "../heavy/corpus";
+} from "../corpus/corpus";
 import { BUTTON_FOR } from "./keys";
 import { REQUIRED_KEYS, type TypingPlan } from "./presses";
 import { selectSample } from "./select";

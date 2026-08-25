@@ -7,7 +7,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { KeyToken } from "../../src/calc";
+import type { KeyToken } from "../../../web/src/calc";
 
 /**
  * **押したキーを数える。**
@@ -17,7 +17,7 @@ import type { KeyToken } from "../../src/calc";
  * コーパスの代表を選ぶサンプリングが 1 件も選ばなければ、そのキーは走行を
  * 通じて一度も押されない。緑のまま、何も確かめていない。
  *
- * **集計はディスクに置く。プロセス内の配列に頼らない**(`../heavy/report.ts`
+ * **集計はディスクに置く。プロセス内の配列に頼らない**(`../corpus/report.ts`
  * の `record()` と同じ流儀)。Playwright はテストが 1 本落ちるとワーカーを
  * 再起動するので、モジュールスコープに溜めた数字は**そこで消える**。
  * ここはワーカーごとに 1 ファイルを持ち、押すたびに書き直す。ワーカーが
@@ -95,7 +95,7 @@ function flush(): void {
  * **走行の頭で前回の台帳を消す。**
  *
  * 消さずに走ると、今回 1 件も押していないキーが前回の数字で埋まる——
- * `../heavy/report.ts` の `resetRun()` とまったく同じ理由である。
+ * `../corpus/report.ts` の `resetRun()` とまったく同じ理由である。
  * 前回の `heavy-ui-run.json` も消す。走行が落ちたときに古い緑の要約が
  * 残るのでは、書き出しを拒む意味がない。
  */

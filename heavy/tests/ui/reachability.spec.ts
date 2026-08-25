@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { KEY_TOKENS } from "../../src/calc";
+import { KEY_TOKENS } from "../../../web/src/calc";
 import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
 
 /**

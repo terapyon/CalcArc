@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { KeyToken } from "../../src/calc";
-import { type ComplexValue, parseComplexDisplay } from "../heavy/complex";
-import { classifyComplex } from "../heavy/corpus";
-import { parseDisplay } from "../heavy/display";
+import type { KeyToken } from "../../../web/src/calc";
+import { type ComplexValue, parseComplexDisplay } from "../corpus/complex";
+import { classifyComplex } from "../corpus/corpus";
+import { parseDisplay } from "../corpus/display";
 import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
 import { type PressOrigin, recordPress, recordTypedCase } from "./presses";
 import { displaySelections, valueSelections } from "./sampling";

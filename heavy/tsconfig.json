@@ -4,6 +4,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // `tests/ui/keys.ts` が `web/src/ui/Keypad/scientific` 経由で
+    // `web/src/ui/Key/Key.tsx`(型だけ)に触れる。heavy に react は無いが、
+    // これは型検査だけの依存で、react-jsx はそれを読めるようにするだけである。
+    "jsx": "react-jsx",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,

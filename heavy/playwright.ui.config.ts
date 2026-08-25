@@ -13,7 +13,7 @@ import { defineConfig, devices } from "@playwright/test";
  * 網羅は計算コアの経路が担う。
  */
 export default defineConfig({
-  testDir: "./tests/heavy-ui",
+  testDir: "./tests/ui",
   // 実クリックは 1 件あたり数十 ms かかるので既定(30 秒)では足りないが、
   // **長すぎる timeout は「壊れている」と「遅い」を区別できなくする**——
   // 最初にこれを 600 秒にしたせいで、ハングが 10 分待たないと見えなかった。
@@ -29,8 +29,8 @@ export default defineConfig({
   // 記録より先に検査が走って空の台帳を見る。`globalTeardown` は走行そのものに
   // 紐づいていて、テストが落ちても必ず 1 度だけ走る(`playwright.heavy.config.ts`
   // の `writeReport` がそこに居るのと同じ理由である)。
-  globalSetup: "./tests/heavy-ui/global-setup.ts",
-  globalTeardown: "./tests/heavy-ui/global-teardown.ts",
+  globalSetup: "./tests/ui/global-setup.ts",
+  globalTeardown: "./tests/ui/global-teardown.ts",
   fullyParallel: false,
   workers: 1,
   reporter: [["list"]],
@@ -42,6 +42,9 @@ export default defineConfig({
     // **ポートは 4181。** 既存 E2E が 4179、ハーネスが 4180、Vite 既定が 4173。
     // どれとも衝突させない。`--strictPort` は「取れなければ黙って別ポートに
     // 逃げる」を禁じる——他プロジェクトの preview を掴む事故が実在した。
+    // アプリのビルドは web の仕事。heavy はアプリのビルド設定を持たないので、
+    // ここで web に cd してから vite を呼ぶ。
+    cwd: "../web",
     command:
       "pnpm exec vite build && pnpm exec vite preview --port 4181 --strictPort",
     url: "http://localhost:4181",

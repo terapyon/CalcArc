@@ -7,7 +7,7 @@ import { SAMPLE_RATIO, typingPlan } from "./sampling";
  * これを別のテストファイルに置くと、ファイルの実行順に依存する——記録より
  * 先に検査が走れば、検査は空の台帳を見て「1 つも押されていない」と言うか、
  * あるいは何も言わずに緑になる。`globalTeardown` はワーカーではなく走行に
- * 紐づいていて、**テストが落ちても必ず 1 度だけ走る**(`../heavy/report.ts` の
+ * 紐づいていて、**テストが落ちても必ず 1 度だけ走る**(`../corpus/report.ts` の
  * `writeReport` が同じ理由でそこに居る)。
  */
 export default function globalTeardown(): void {

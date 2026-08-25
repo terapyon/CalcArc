@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KEY_TOKENS } from "../../src/calc/types";
-import type { HeavyUiRun } from "../heavy-ui/presses";
+import { KEY_TOKENS } from "../../../web/src/calc/types";
+import type { HeavyUiRun } from "../ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallBreakdown,
@@ -191,7 +191,7 @@ const RUN_PATH = fileURLToPath(
 
 /**
  * **盤面を通る走行が残す要約。** `pnpm heavy:ui` の `globalTeardown` が書く
- * (`../heavy-ui/presses.ts`)。この走行が書くものではない——だからここは
+ * (`../ui/presses.ts`)。この走行が書くものではない——だからここは
  * **読むだけ**である。
  */
 const UI_RUN_PATH = fileURLToPath(
