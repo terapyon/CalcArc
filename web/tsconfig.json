@@ -26,10 +26,7 @@
     "src",
     "tests",
     "vite.config.ts",
-    "vite.heavy.config.ts",
-    "playwright.config.ts",
-    "playwright.heavy.config.ts",
-    "playwright.heavy-ui.config.ts"
+    "playwright.config.ts"
   ],
   "exclude": ["src/wasm"]
 }
