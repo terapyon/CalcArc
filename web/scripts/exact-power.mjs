@@ -239,6 +239,94 @@ export const EXACT_MUTATIONS = [
       "transfer_matches_the_reference",
     ],
   },
+  // ---- 0.3.1 の通貨換算に効く欠陥を 4 種(2026-08-25 に追加) ----
+  //
+  // **`currency.rs` の `mod tests` は密である。** 意味論の大半を同じ
+  // ファイルの 14 本が literal で固定しているので、**minor unit の表を
+  // 壊す変異は使わない**——`the_minor_units_match_the_spec` が表そのものを
+  // literal で持っており、測れるのはその 1 本だけになる。**壊すのは合成の
+  // ほう**である(換算の向き・判定の順序・丸めの tie・符号)。
+  {
+    id: "cross-rate-inverted",
+    what: "クロスレートの向きを取り違える(to と from を入れ替える)",
+    file: "crates/calcarc-core/src/convert/currency.rs",
+    // 基準通貨を経由する合成そのもの。係数表には 1 文字も触らない。
+    from: "value.checked_mul(to_rate)?.checked_div(from_rate)",
+    to: "value.checked_mul(from_rate)?.checked_div(to_rate)",
+    // **実測 2026-08-25。先に書いて実測を合わせたのではない**——空の
+    // `expectTests` で 1 度走らせ、赤くなった名前をそのまま写した。
+    // **2 層が見張っている**: 同居する単体テスト 4 本と golden 1 本。
+    expectTests: [
+      "convert::currency::tests::a_rate_of_zero_is_an_error_not_a_division",
+      "convert::currency::tests::the_conversion_goes_through_the_base_currency",
+      "convert::currency::tests::the_entry_point_takes_strings_and_never_sees_an_f64",
+      "convert::currency::tests::the_tie_that_tells_f64_from_an_exact_rational",
+      "currency_matches_the_reference",
+    ],
+  },
+  {
+    id: "zero-check-after-multiply",
+    what: "ゼロ判定を掛け算の後ろへ動かす(Overflow が DivisionByZero を隠す)",
+    file: "crates/calcarc-core/src/convert/currency.rs",
+    // **`exchange` の doc コメントが理由を宣言している変異である。**
+    // 「0 の判定を掛け算より先に置くのは、`value × to_rate` があふれる組で
+    // `Overflow` が `DivisionByZero` を隠さないようにするためである」——
+    // **その理由が検査されているかどうかを、この変異が測る。**
+    from: [
+      "    if from_rate.is_zero() {",
+      "        return Err(CalcError::DivisionByZero);",
+      "    }",
+      "    value.checked_mul(to_rate)?.checked_div(from_rate)",
+    ].join("\n"),
+    to: [
+      "    let scaled = value.checked_mul(to_rate)?;",
+      "    if from_rate.is_zero() {",
+      "        return Err(CalcError::DivisionByZero);",
+      "    }",
+      "    scaled.checked_div(from_rate)",
+    ].join("\n"),
+    // **1 度目の実測(2026-08-25)は赤 0 本だった。** 宣言された理由を誰も
+    // 検査していなかった——`value × to_rate` があふれる組で `from_rate` が 0、
+    // という組が既存 390 本のどこにも無い(rationales-rot-silently)。
+    //
+    // **この暗い帯にだけ 2 本足した**(`convert/currency.rs` の `mod tests`)。
+    // **golden では言えない**——参照実装の `Fraction` は多倍長で `Overflow` を
+    // 持たないので、`testdata/currency.json` に Overflow のケースは 1 件も無い。
+    // だから 2 層にはならず、**core の単体テスト 1 層だけ**である。
+    expectTests: [
+      "convert::currency::tests::a_zero_rate_is_named_even_when_the_product_overflows",
+      "convert::currency::tests::the_entry_point_names_the_zero_rate_before_it_multiplies",
+    ],
+  },
+  {
+    id: "currency-half-even-becomes-half-up",
+    what: "金額の丸めを half-even から half-up に変える",
+    file: "crates/calcarc-core/src/convert/currency.rs",
+    // `convert/format.rs` の同型の変異(`half-even-becomes-half-up`)とは
+    // **別の実装**である——裁定 2 が共有すると言っているのは規則であって
+    // コードではないので、丸めの tie は 2 か所に別々に書かれている。
+    from: "core::cmp::Ordering::Equal => !units.is_multiple_of(2),",
+    to: "core::cmp::Ordering::Equal => true,",
+    // **実測 2026-08-25。** `convert/format.rs` 側の同型の変異と同じく 2 層。
+    expectTests: [
+      "convert::currency::tests::rounding_is_half_to_even",
+      "currency_matches_the_reference",
+    ],
+  },
+  {
+    id: "rounded-zero-keeps-its-sign",
+    what: "丸めて 0 になった額に負号を残す(`-0.00` を出す)",
+    file: "crates/calcarc-core/src/convert/currency.rs",
+    // 値は 1 ビットも変わらない。表示の符号だけが変わる。
+    from: 'let sign = if negative && units != 0 { "-" } else { "" };',
+    to: 'let sign = if negative { "-" } else { "" };',
+    // **実測 2026-08-25。** golden にも 1 件(`currency/-0.001usdtousd@…`)
+    // 置いてあるので 2 層で見張られている。
+    expectTests: [
+      "convert::currency::tests::a_rounded_zero_has_no_sign",
+      "currency_matches_the_reference",
+    ],
+  },
 ];
 
 /**

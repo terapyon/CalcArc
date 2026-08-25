@@ -100,11 +100,14 @@ describe("the verdict names both sides", () => {
   });
 });
 
-describe("the six defects", () => {
+describe("the defects in the table", () => {
   it("declares a from-string that still exists in the file it names", () => {
     // **黙って当たらない変異を許さない。** `runOneMutation` は
-    // `mutation-site-missing` を返すが、それは `cargo test` を 6 回
-    // 回して初めて分かる。engine が動いたらここで気づく。
+    // `mutation-site-missing` を返すが、それは表の全件について
+    // `cargo test` を回して初めて分かる。engine が動いたらここで気づく。
+    //
+    // **見出しに件数を書かない。** 表は増える(6 種 → 10 種、2026-08-25 に
+    // currency の 4 種を足した)ので、数を書くと緑のまま嘘になる。
     expect(EXACT_MUTATIONS.length).toBeGreaterThan(0);
     for (const mutation of EXACT_MUTATIONS) {
       const source = readFileSync(join(ROOT, mutation.file), "utf-8");
