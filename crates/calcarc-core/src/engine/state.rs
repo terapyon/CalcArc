@@ -152,7 +152,7 @@ impl Buffer {
         }
     }
 
-    /// 確定値。`j` だけで数字がなければ j1 と解釈する（設計書 §4.3）。
+    /// 確定値。`j` だけで数字がなければ 1j と解釈する（設計書 §4.3）。
     /// `Exp` だけの場合も仮数 1 とする(実機と同じ)。
     ///
     /// 指数を付けた結果が f64 の範囲を超えたら Overflow(設計書 §2)。
@@ -211,7 +211,7 @@ impl Buffer {
         // 60 進は `°` で繋いで打った通りに見せる(S-4)。**十進でも 60 進の
         // 完成形でもない、打鍵の途中の姿**である。
         if !self.sexagesimal.is_empty() {
-            let head = if self.imaginary { "j" } else { "" };
+            let tail = if self.imaginary { "j" } else { "" };
             let body = self
                 .sexagesimal
                 .iter()
@@ -219,7 +219,7 @@ impl Buffer {
                 .chain(std::iter::once(self.digits.as_str()))
                 .collect::<Vec<_>>()
                 .join("°");
-            return format!("{head}{body}");
+            return format!("{body}{tail}");
         }
         let mantissa = if !self.digits.is_empty() {
             self.digits.clone()
@@ -235,8 +235,8 @@ impl Buffer {
             Some(e) => format!("e{}{}", if e.negative { "-" } else { "" }, e.digits),
             None => String::new(),
         };
-        let head = if self.imaginary { "j" } else { "" };
-        format!("{head}{mantissa}{exponent}")
+        let tail = if self.imaginary { "j" } else { "" };
+        format!("{mantissa}{exponent}{tail}")
     }
 
     /// 打鍵された数字があるか。j の切り替え条件(設計書 §1)。
@@ -345,7 +345,7 @@ impl Buffer {
     /// 末尾 1 文字を削る。
     ///
     /// 虚数入力では数字が尽きても j マーカーを残す。ここで一緒に捨てると
-    /// `3 + j4 DEL 5 =` が 3+j5 ではなく 3+5 になり、何を計算しているかが
+    /// `3 + 4j DEL 5 =` が 3+5j ではなく 3+5 になり、何を計算しているかが
     /// 黙って変わる。j を消すにはもう一度 DEL を押す。
     pub fn backspace(&mut self) -> Backspace {
         // 段は 指数の桁 → e マーカー → 仮数の文字 → j マーカー の順

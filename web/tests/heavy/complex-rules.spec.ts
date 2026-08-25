@@ -19,24 +19,24 @@ const TOLERANCE = { abs: 5e-10, rel: 5e-10 };
 
 test("the rectangular forms the calculator actually displays are read back", () => {
   // どれも実測（2026-08-17、heavy-harness 経由）で観測した表示である。
-  expect(parseComplexDisplay("j2")).toEqual({ re: 0, im: 2 });
-  expect(parseComplexDisplay("-j2")).toEqual({ re: 0, im: -2 });
-  expect(parseComplexDisplay("3+j4")).toEqual({ re: 3, im: 4 });
-  expect(parseComplexDisplay("3-j4")).toEqual({ re: 3, im: -4 });
-  expect(parseComplexDisplay("2.2-j0.4")).toEqual({ re: 2.2, im: -0.4 });
-  expect(parseComplexDisplay("-892.636+j575.81")).toEqual({
+  expect(parseComplexDisplay("2j")).toEqual({ re: 0, im: 2 });
+  expect(parseComplexDisplay("-2j")).toEqual({ re: 0, im: -2 });
+  expect(parseComplexDisplay("3+4j")).toEqual({ re: 3, im: 4 });
+  expect(parseComplexDisplay("3-4j")).toEqual({ re: 3, im: -4 });
+  expect(parseComplexDisplay("2.2-0.4j")).toEqual({ re: 2.2, im: -0.4 });
+  expect(parseComplexDisplay("-892.636+575.81j")).toEqual({
     re: -892.636,
     im: 575.81,
   });
-  // 虚部が 0 なら実数として出る（`j0` とは出ない）。
+  // 虚部が 0 なら実数として出る（`0j` とは出ない）。
   expect(parseComplexDisplay("-4")).toEqual({ re: -4, im: 0 });
   // 3 桁区切りも指数表記も、実部と虚部のどちらにも来る。
-  expect(parseComplexDisplay("j1,363,193")).toEqual({ re: 0, im: 1363193 });
-  expect(parseComplexDisplay("76,164,165.42-j508,221,023.6")).toEqual({
+  expect(parseComplexDisplay("1,363,193j")).toEqual({ re: 0, im: 1363193 });
+  expect(parseComplexDisplay("76,164,165.42-508,221,023.6j")).toEqual({
     re: 76164165.42,
     im: -508221023.6,
   });
-  expect(parseComplexDisplay("3+j4e3")).toEqual({ re: 3, im: 4000 });
+  expect(parseComplexDisplay("3+4e3j")).toEqual({ re: 3, im: 4000 });
 });
 
 test("the polar display is not read as a rectangular one", () => {
@@ -50,7 +50,7 @@ test("the polar display is not read as a rectangular one", () => {
   expect(parsePolarDisplay("1 ∠ 180")).toEqual({ r: 1, theta: 180 });
   expect(parsePolarDisplay("2 ∠ -90")).toEqual({ r: 2, theta: -90 });
   // 逆向きも塞ぐ。直交形式を極形式として読ませない。
-  expect(() => parsePolarDisplay("3+j4")).toThrow(/polar/);
+  expect(() => parsePolarDisplay("3+4j")).toThrow(/polar/);
 });
 
 test("things that are not displays of this calculator are refused", () => {
@@ -60,10 +60,10 @@ test("things that are not displays of this calculator are refused", () => {
     "",
     " ",
     "j",
-    "+j4",
+    "+4j",
     "3+j",
     "j-2",
-    "3 + j4",
+    "3 + 4j",
     "NaN",
     "j∞",
   ]) {

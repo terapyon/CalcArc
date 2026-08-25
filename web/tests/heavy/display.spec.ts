@@ -26,14 +26,14 @@ test("a display that is not a number is refused loudly", () => {
   // 「誤差の範囲外」ではなく「常に不一致」に化けて原因が見えなくなる。
   //
   // "Math ERROR" は負数の平方根(4 ± √)の探りで観測した表示。
-  // **2026-08-16 の main 取り込みで "j2" から変わった**(engine が
+  // **2026-08-16 の main 取り込みで "2j" から変わった**(engine が
   // DomainError を返すようになった)。エラー表示のほうが、この層が
   // 拒むべきものの代表として射程が広い。
   expect(() => parseDisplay("Math ERROR")).toThrow();
-  // "j2" は `j` `2` と打つと出る CalcArc 独自の複素数表記。**この表示自体は
+  // "2j" は `j` `2` と打つと出る CalcArc 独自の複素数表記。**この表示自体は
   // 今も観測される**——変わったのは「負数の平方根の答えとして出るか」だけで、
   // 実数の書式でないことは変わらない。
-  expect(() => parseDisplay("j2")).toThrow();
+  expect(() => parseDisplay("2j")).toThrow();
 });
 
 test("thousands separators are read, in the places the engine puts them", () => {

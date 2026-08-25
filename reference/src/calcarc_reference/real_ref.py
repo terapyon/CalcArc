@@ -93,19 +93,23 @@ def format_real(x: float) -> str:
 
 
 def format_rect(re: float, im: float) -> str:
-    """直交形式。**`j` は数の前に置く**（`3+j4` / `j2` / `-j2`）。
+    """直交形式。**`j` は数の後ろに置く**（`3+4j` / `2j` / `-2j`）。
+
+    **【変更 2026-08-25】0.3.x までは前に置いていた**（`3+j4`）。ユーザー指示で
+    後置に変えた。参照実装は Rust の移植ではないので、**この規則を spec から
+    独立に書いている**——揃っていることは engine_table と各言語のテストが見る。
 
     虚部が 0 のときは実数として表示する——engine の `is_real()` と同じ線引きで、
-    `j0` とは出さない（実測 2026-08-17: `j` `0` `=` は `0` を表示する）。
+    `0j` とは出さない（実測 2026-08-17: `j` `0` `=` は `0` を表示する）。
     """
     if im == 0.0:
         return format_real(re)
     body = format_real(abs(im))
     if re == 0.0:
         sign = "-" if im < 0 else ""
-        return f"{sign}j{body}"
+        return f"{sign}{body}j"
     sign = "-" if im < 0 else "+"
-    return f"{format_real(re)}{sign}j{body}"
+    return f"{format_real(re)}{sign}{body}j"
 
 
 def format_polar(r: float, theta_deg: float) -> str:

@@ -36,7 +36,7 @@ def test_the_imaginary_leaf_is_on_the_imaginary_axis() -> None:
 def test_the_four_operations_stay_complex() -> None:
     assert evaluate(Bin("+", typed("3"), imag("4"))) == (3.0, 4.0)
     assert evaluate(Bin("-", typed("3"), imag("4"))) == (3.0, -4.0)
-    # (3+j4) / (1+j2) = 2.2 - j0.4。教科書の値である。
+    # (3+4j) / (1+2j) = 2.2 - 0.4j。教科書の値である。
     quotient = Bin(
         "/",
         Bin("+", typed("3"), imag("4")),
@@ -48,7 +48,7 @@ def test_the_four_operations_stay_complex() -> None:
 
 
 def test_squaring_the_imaginary_unit_gives_minus_one() -> None:
-    """`j2` の 2 乗は `-4`。**虚部は厳密に 0 になる。**"""
+    """`2j` の 2 乗は `-4`。**虚部は厳密に 0 になる。**"""
     assert evaluate(Un("sqr", imag("2"))) == (-4.0, 0.0)
     assert evaluate(Bin("*", imag("2"), imag("2"))) == (-4.0, 0.0)
 

@@ -2,7 +2,7 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 実数の平方根。**負の実数と複素数は定義域の外**である（S-1 設計書 §1 の裁定 1）。
 ///
-/// 以前は負の実数を虚軸に載せて `sqrt(-4) = j2` を返していた。関数を実数に
+/// 以前は負の実数を虚軸に載せて `sqrt(-4) = 2j` を返していた。関数を実数に
 /// 閉じる裁定でそれを落とした。**複素数は入力と四則と表示の機能であって、
 /// 関数の値域ではない。** `sqr` と `neg` は複素数のままである——2 乗は乗算、
 /// 符号反転は減算であり、どちらも四則の側にある。
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn squares_a_complex_number() {
-        // (3+j4)^2 = -7+j24
+        // (3+4j)^2 = -7+24j
         assert_eq!(sqr(Value::new(3.0, 4.0)).unwrap(), Value::new(-7.0, 24.0));
     }
 
@@ -485,7 +485,7 @@ mod tests {
     fn reciprocal_inverts() {
         close(recip(Value::real(4.0)).unwrap().re, 0.25);
         close(recip(Value::real(-8.0)).unwrap().re, -0.125);
-        // 複素数は DomainError。1 ÷ (3+j4) と四則で書けるので機能は失われない。
+        // 複素数は DomainError。1 ÷ (3+4j) と四則で書けるので機能は失われない。
         assert_eq!(recip(Value::new(3.0, 4.0)), Err(CalcError::DomainError));
     }
 

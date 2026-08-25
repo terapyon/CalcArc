@@ -2,7 +2,7 @@
  * 複素数の表示を読み、複素数として比べる（段階 J）。
  *
  * **`parseDisplay` を広げない。** あれは実数の書式だけを受け付ける関数で、
- * 狭いことに価値がある——実数しか出ないはずのシャードで電卓が `j2` を
+ * 狭いことに価値がある——実数しか出ないはずのシャードで電卓が `2j` を
  * 表示するようになったら、あそこで落ちてほしい。広げるとその番人が消える。
  *
  * だから読み手を 2 つ持ち、**期待値が複素数のときだけ**こちらを使う。
@@ -21,10 +21,12 @@ const REAL_BODY = String.raw`-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?(?:e[+-]?\d+)
 const MAGNITUDE = String.raw`(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?(?:e[+-]?\d+)?`;
 
 const PURE_REAL = new RegExp(`^(${REAL_BODY})$`);
-/** `j2` / `-j2`。実部を表示しない形。 */
-const PURE_IMAGINARY = new RegExp(`^(-?)j(${MAGNITUDE})$`);
-/** `3+j4` / `2.2-j0.4`。**`j` は数の前**に置かれる。 */
-const RECTANGULAR = new RegExp(`^(${REAL_BODY})([+-])j(${MAGNITUDE})$`);
+/** `2j` / `-2j`。実部を表示しない形。 */
+const PURE_IMAGINARY = new RegExp(`^(-?)(${MAGNITUDE})j$`);
+/** `3+4j` / `2.2-0.4j`。**`j` は数の後ろ**に置かれる
+ * (【変更 2026-08-25】0.3.x までは前だった。**捕獲群の番号は変えていない**
+ * ——符号が 1、大きさが 2 のまま)。 */
+const RECTANGULAR = new RegExp(`^(${REAL_BODY})([+-])(${MAGNITUDE})j$`);
 /** `5 ∠ 53.13010235`。**半径と角度の間は空白付きの `∠`**（実測 2026-08-17）。 */
 const POLAR = new RegExp(`^(${REAL_BODY}) ∠ (${REAL_BODY})$`);
 
@@ -69,8 +71,8 @@ export function parseComplexDisplay(main: string): ComplexValue {
   }
   throw new Error(
     `complex: ${JSON.stringify(main)} is not a rectangular complex number in ` +
-      "the format this calculator displays (a real, 'j<magnitude>' with an " +
-      "optional leading '-', or '<real><+|->j<magnitude>')",
+      "the format this calculator displays (a real, '<magnitude>j' with an " +
+      "optional leading '-', or '<real><+|-><magnitude>j')",
   );
 }
 

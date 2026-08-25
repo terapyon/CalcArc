@@ -14,9 +14,9 @@ test.beforeEach(async ({ page }) => {
   await expect(main(page)).toHaveText("0");
 });
 
-test("the headline case: 3 + j4 becomes 5 ∠ 53.13010235", async ({ page }) => {
+test("the headline case: 3 + 4j becomes 5 ∠ 53.13010235", async ({ page }) => {
   await press(page, ["3", "足す", "虚数単位", "4", "計算する"]);
-  await expect(main(page)).toHaveText("3+j4");
+  await expect(main(page)).toHaveText("3+4j");
 
   await press(page, ["極形式と直交形式を切り替え"]);
   await expect(main(page)).toHaveText("5 ∠ 53.13010235");
@@ -24,9 +24,9 @@ test("the headline case: 3 + j4 becomes 5 ∠ 53.13010235", async ({ page }) => 
 
 test("the same calculation from the physical keyboard", async ({ page }) => {
   // デスクトップで使えること(base-spec §50)。
-  await page.keyboard.type("3+j4");
+  await page.keyboard.type("3+4j");
   await page.keyboard.press("Enter");
-  await expect(main(page)).toHaveText("3+j4");
+  await expect(main(page)).toHaveText("3+4j");
 
   await press(page, ["極形式と直交形式を切り替え"]);
   await expect(main(page)).toHaveText("5 ∠ 53.13010235");
@@ -39,7 +39,7 @@ test("the polar toggle is a display change, not a calculation", async ({
   await press(page, ["極形式と直交形式を切り替え"]);
   await expect(main(page)).toHaveText("5 ∠ 53.13010235");
 
-  // 表示は 8 桁に丸められているが、保持している値は 3+j4 のまま。
+  // 表示は 8 桁に丸められているが、保持している値は 3+4j のまま。
   await press(page, [
     "掛ける",
     "開き括弧",
@@ -51,7 +51,7 @@ test("the polar toggle is a display change, not a calculation", async ({
     "計算する",
   ]);
   await press(page, ["極形式と直交形式を切り替え"]);
-  await expect(main(page)).toHaveText("-5+j10");
+  await expect(main(page)).toHaveText("-5+10j");
 });
 
 test("operator precedence follows the algebraic convention", async ({
@@ -69,7 +69,7 @@ test("functions apply to the displayed value immediately", async ({ page }) => {
 test("the square root of a negative number is a domain error", async ({
   page,
 }) => {
-  // **かつては j2 だった。** 関数を実数に閉じる裁定で落とした
+  // **かつては 2j だった。** 関数を実数に閉じる裁定で落とした
   // (S-1 設計書 §1 の裁定 1)。複素数は入力と四則と表示の機能であって、
   // 関数の値域ではない——下の複素数の行はそのまま生きている。
   await press(page, ["4", "符号を反転", "平方根"]);

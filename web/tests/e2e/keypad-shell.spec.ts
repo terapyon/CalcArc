@@ -93,7 +93,7 @@ test("the board still computes after the rearrangement", async ({ page }) => {
   for (const name of ["3", "足す", "虚数単位", "4", "計算する"]) {
     await page.getByRole("button", { name, exact: true }).click();
   }
-  await expect(page.getByTestId("display-main")).toHaveText("3+j4");
+  await expect(page.getByTestId("display-main")).toHaveText("3+4j");
 });
 
 test("DRG still switches the angle unit from the function row", async ({

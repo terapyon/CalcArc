@@ -165,7 +165,8 @@ pub fn format_sexagesimal(x: f64) -> Option<String> {
     ))
 }
 
-/// 直交形式で表示する。`3+j4` のように j を数の前に置く。
+/// 直交形式で表示する。**`3+4j` のように j を数の後ろに置く**
+/// (【変更 2026-08-25】0.3.x までは `3+j4` と前に置いていた。ユーザー指示)。
 pub fn format_rect(v: Value) -> String {
     if v.is_real() {
         return format_real(v.re);
@@ -173,10 +174,10 @@ pub fn format_rect(v: Value) -> String {
     let im = format_real(v.im.abs());
     if v.re == 0.0 {
         let sign = if v.im < 0.0 { "-" } else { "" };
-        return format!("{sign}j{im}");
+        return format!("{sign}{im}j");
     }
     let sign = if v.im < 0.0 { "-" } else { "+" };
-    format!("{}{sign}j{im}", format_real(v.re))
+    format!("{}{sign}{im}j", format_real(v.re))
 }
 
 /// 極形式で表示する。角度は与えられたモードの単位で描画する。
@@ -313,12 +314,12 @@ mod tests {
 
     #[test]
     fn formats_rectangular_form() {
-        assert_eq!(format_rect(Value::new(3.0, 4.0)), "3+j4");
-        assert_eq!(format_rect(Value::new(3.0, -4.0)), "3-j4");
-        assert_eq!(format_rect(Value::new(-5.0, 10.0)), "-5+j10");
+        assert_eq!(format_rect(Value::new(3.0, 4.0)), "3+4j");
+        assert_eq!(format_rect(Value::new(3.0, -4.0)), "3-4j");
+        assert_eq!(format_rect(Value::new(-5.0, 10.0)), "-5+10j");
         assert_eq!(format_rect(Value::real(5.0)), "5");
-        assert_eq!(format_rect(Value::imag(2.0)), "j2");
-        assert_eq!(format_rect(Value::imag(-2.0)), "-j2");
+        assert_eq!(format_rect(Value::imag(2.0)), "2j");
+        assert_eq!(format_rect(Value::imag(-2.0)), "-2j");
     }
 
     #[test]

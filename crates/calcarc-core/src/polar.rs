@@ -36,7 +36,7 @@ mod tests {
 
     #[test]
     fn converts_the_headline_case() {
-        // 3 + j4 -> 5 ∠ 53.13010235...°
+        // 3 + 4j -> 5 ∠ 53.13010235...°
         let p = Value::new(3.0, 4.0).to_polar();
         close(p.r, 5.0);
         close(p.theta_rad.to_degrees(), 53.13010235415598);

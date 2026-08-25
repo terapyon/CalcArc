@@ -30,7 +30,7 @@ fn the_echo_shows_the_pending_expression() {
     assert_eq!(echo_of(&["3", "add"]), "3 +");
     assert_eq!(echo_of(&["3", "add", "4", "mul"]), "3 + 4 ×");
     assert_eq!(echo_of(&["3", "add", "lparen", "4"]), "3 + ( 4");
-    assert_eq!(echo_of(&["j", "4", "mul"]), "j4 ×");
+    assert_eq!(echo_of(&["j", "4", "mul"]), "4j ×");
     // = で確定するとスタックが空になり、echo も空になる。
     assert_eq!(echo_of(&["3", "add", "4", "eq"]), "");
     // 保留式が無いあいだは空(main が値を見せている)。
@@ -72,7 +72,7 @@ fn a_second_decimal_point_is_a_syntax_error() {
 
 #[test]
 fn j_starts_an_imaginary_entry() {
-    assert_eq!(main_of(&["j", "4"]), "j4");
+    assert_eq!(main_of(&["j", "4"]), "4j");
     assert_eq!(main_of(&["j"]), "j");
 }
 
@@ -85,18 +85,18 @@ fn del_removes_the_last_character() {
 #[test]
 fn j_after_digits_turns_the_entry_imaginary() {
     // 設計書 §1: 数字があれば j は実部と虚部を切り替える。
-    assert_eq!(main_of(&["3", "j"]), "j3");
+    assert_eq!(main_of(&["3", "j"]), "3j");
     assert_eq!(main_of(&["3", "j", "j"]), "3");
-    assert_eq!(main_of(&["3", "j", "4"]), "j34");
-    assert_eq!(main_of(&["3", "dot", "5", "j"]), "j3.5");
+    assert_eq!(main_of(&["3", "j", "4"]), "34j");
+    assert_eq!(main_of(&["3", "dot", "5", "j"]), "3.5j");
     // 数字が無い j は従来どおり新しい虚部入力を開始する。
-    assert_eq!(main_of(&["j", "j", "4"]), "j4");
+    assert_eq!(main_of(&["j", "j", "4"]), "4j");
     // DEL の段構成は変わらない(数字だけ消え、j マーカーが残る)。
     assert_eq!(main_of(&["3", "j", "del"]), "j");
     assert_eq!(main_of(&["3", "j", "del", "del"]), "0");
     // 式の中でも同じ。
-    assert_eq!(main_of(&["3", "add", "4", "j", "eq"]), "3+j4");
-    assert_eq!(main_of(&["3", "j", "add", "2", "j", "eq"]), "j5");
+    assert_eq!(main_of(&["3", "add", "4", "j", "eq"]), "3+4j");
+    assert_eq!(main_of(&["3", "j", "add", "2", "j", "eq"]), "5j");
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn exp_enters_an_exponent() {
     // 先頭ゼロは仮数と同じ規則。
     assert_eq!(main_of(&["1", "dot", "5", "exp", "0", "0", "3"]), "1.5e3");
     // 指数入力中でも後置 j は効く(設計書 §1 の表の最後の行)。
-    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "j"]), "j1.5e3");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "3", "j"]), "1.5e3j");
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn del_on_an_imaginary_entry_keeps_the_j() {
     // 数字だけ消える。j まで消えると、続きを打った人は自分が虚部を
     // 入力しているつもりのまま実部を入力してしまう。
     assert_eq!(main_of(&["3", "add", "j", "4", "del"]), "j");
-    assert_eq!(main_of(&["3", "add", "j", "4", "del", "5", "eq"]), "3+j5");
+    assert_eq!(main_of(&["3", "add", "j", "4", "del", "5", "eq"]), "3+5j");
     // もう一度押すと j も消える。
     assert_eq!(main_of(&["3", "add", "j", "4", "del", "del"]), "3");
 }
@@ -494,37 +494,37 @@ fn subtracts_and_divides() {
 #[test]
 fn builds_a_complex_number() {
     // 本スライスの目標入力。
-    assert_eq!(main_of(&["3", "add", "j", "4", "eq"]), "3+j4");
+    assert_eq!(main_of(&["3", "add", "j", "4", "eq"]), "3+4j");
 }
 
 #[test]
 fn multiplies_a_complex_number_by_a_real() {
-    // = で 3+j4 が確定したあと、その値がそのまま次の演算に入る。
+    // = で 3+4j が確定したあと、その値がそのまま次の演算に入る。
     assert_eq!(
         main_of(&["3", "add", "j", "4", "eq", "mul", "2", "eq"]),
-        "6+j8"
+        "6+8j"
     );
 }
 
 #[test]
 fn an_operator_folds_the_pending_product_before_the_next_term_is_typed() {
-    // 3+j4 = × 1 + j2 = は (3+j4)×(1+j2) にならない。
-    // + を押した時点で優先順位の高い × が畳まれ、(3+j4)×1 が確定してから
-    // j2 が足されるので 3+j6 になる。CASIO の代数方式として正しい挙動で、
+    // 3+4j = × 1 + 2j = は (3+4j)×(1+2j) にならない。
+    // + を押した時点で優先順位の高い × が畳まれ、(3+4j)×1 が確定してから
+    // 2j が足されるので 3+6j になる。CASIO の代数方式として正しい挙動で、
     // 2 つの複素数の積を書くには括弧が要る（Task 8 で扱う）。
     assert_eq!(
         main_of(&[
             "3", "add", "j", "4", "eq", "mul", "1", "add", "j", "2", "eq"
         ]),
-        "3+j6"
+        "3+6j"
     );
 }
 
 #[test]
 fn j_alone_means_one_times_j() {
-    // j の直後に数字がなければ j1 と解釈する。format_rect は虚部の
-    // 絶対値をそのまま整形するので "3+j1" になる（"3+j" ではない）。
-    assert_eq!(main_of(&["3", "add", "j", "eq"]), "3+j1");
+    // j の直後に数字がなければ 1j と解釈する。format_rect は虚部の
+    // 絶対値をそのまま整形するので "3+1j" になる（"3+j" ではない）。
+    assert_eq!(main_of(&["3", "add", "j", "eq"]), "3+1j");
 }
 
 #[test]
@@ -604,7 +604,7 @@ fn parentheses_carry_complex_values() {
             "lparen", "3", "add", "j", "4", "rparen", "mul", "lparen", "1", "add", "j", "2",
             "rparen", "eq"
         ]),
-        "-5+j10"
+        "-5+10j"
     );
 }
 
@@ -674,14 +674,14 @@ fn the_polar_toggle_is_idempotent_in_pairs() {
     // 2 回押すと元の表示に戻る。表示の切替であって計算ではないため。
     assert_eq!(
         main_of(&["3", "add", "j", "4", "eq", "polar_toggle", "polar_toggle"]),
-        "3+j4"
+        "3+4j"
     );
 }
 
 #[test]
 fn the_polar_toggle_does_not_feed_rounded_values_forward() {
     // 極形式で表示すると角度は 53.13010235 に丸められるが、保持している
-    // 値は 3+j4 のままなので、続く乗算は丸めの影響を受けない
+    // 値は 3+4j のままなので、続く乗算は丸めの影響を受けない
     // （base-spec §26、設計書 D5）。
     assert_eq!(
         main_of(&[
@@ -701,7 +701,7 @@ fn the_polar_toggle_does_not_feed_rounded_values_forward() {
             "eq",
             "polar_toggle"
         ]),
-        "-5+j10"
+        "-5+10j"
     );
 }
 

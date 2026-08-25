@@ -72,5 +72,5 @@ test("the square root of a negative number is now an error", async ({
   await expect(page.getByTestId("display-main")).toHaveText("Math ERROR");
   // 四則の複素数は今までどおり動く——落としたのは関数だけである。
   await press(page, ["全消去", "3", "足す", "虚数単位", "4", "計算する"]);
-  await expect(page.getByTestId("display-main")).toHaveText("3+j4");
+  await expect(page.getByTestId("display-main")).toHaveText("3+4j");
 });
