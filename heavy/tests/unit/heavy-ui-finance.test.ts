@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CallCase } from "../heavy/corpus";
+import type { CallCase } from "../corpus/corpus";
 import {
   digitKeys,
   expectedAnswer,
@@ -11,7 +11,7 @@ import {
   pickCases,
   readAnswer,
   readNumbers,
-} from "../heavy-ui/finance-cases";
+} from "../ui/finance-cases";
 
 /**
  * **この検査は本当に何かを比べているか。**

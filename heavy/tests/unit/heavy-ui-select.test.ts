@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { REQUIRED_KEYS } from "../heavy-ui/presses";
-import { selectSample } from "../heavy-ui/select";
+import { REQUIRED_KEYS } from "../ui/presses";
+import { selectSample } from "../ui/select";
 
 /**
  * **必須キーを含むケースが 1 件も選ばれないことがありうる。**

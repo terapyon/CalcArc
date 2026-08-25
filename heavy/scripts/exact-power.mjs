@@ -17,14 +17,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { exitCodeFrom, runOneMutation } from "./detection-power.mjs";
 
-const WEB = dirname(dirname(fileURLToPath(import.meta.url)));
+const HEAVY = dirname(dirname(fileURLToPath(import.meta.url)));
 /**
  * リポジトリの根。**変異表のテストが `from` の実在を確かめるのに要る**
  * ので export している——テスト側で根を組み立て直すと、`vitest` の
  * `import.meta.url` が file URL でないために解けない(実測)。
  */
-export const ROOT = dirname(WEB);
-const OUT = join(WEB, "exact-power.json");
+export const ROOT = dirname(HEAVY);
+const OUT = join(HEAVY, "exact-power.json");
 
 /**
  * 1 件の変異。`detection-power.mjs` の `MUTATIONS` と同じ 5 項目に、

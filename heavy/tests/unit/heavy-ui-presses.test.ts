@@ -5,7 +5,7 @@ import {
   type PressLedger,
   REQUIRED_KEYS,
   type TypingPlan,
-} from "../heavy-ui/presses";
+} from "../ui/presses";
 
 /**
  * **この検査は本当に何かを比べているか。**

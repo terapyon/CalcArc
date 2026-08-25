@@ -17,10 +17,10 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const WEB = dirname(dirname(fileURLToPath(import.meta.url)));
-const ROOT = dirname(WEB);
-const OUT = join(WEB, "detection-power.json");
-const RUN_JSON = join(WEB, "heavy-run.json");
+const HEAVY = dirname(dirname(fileURLToPath(import.meta.url)));
+const ROOT = dirname(HEAVY);
+const OUT = join(HEAVY, "detection-power.json");
+const RUN_JSON = join(HEAVY, "heavy-run.json");
 
 /**
  * **この走行に居るべきシャードの集計名。定数で持つ。**
@@ -489,7 +489,7 @@ export const MUTATIONS = [
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
-    cwd: WEB,
+    cwd: HEAVY,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, CI: "1" },
