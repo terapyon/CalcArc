@@ -33,7 +33,7 @@ test("the triple zero key is live now", async ({ page }) => {
 
 test("j after digits turns the entry imaginary", async ({ page }) => {
   await press(page, ["3", "虚数単位"]);
-  await expect(page.getByTestId("display-main")).toHaveText("j3");
+  await expect(page.getByTestId("display-main")).toHaveText("3j");
   await press(page, ["虚数単位"]);
   await expect(page.getByTestId("display-main")).toHaveText("3");
 });

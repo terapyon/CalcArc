@@ -79,17 +79,21 @@ def test_the_value_comes_from_the_bits_not_from_repr() -> None:
     assert format_real(2.0**-30) == "9.313225746e-10"
 
 
-def test_the_rectangular_form_puts_j_before_the_magnitude() -> None:
-    """`j` は数の**前**に置く。実測 `3+j4` / `j2` / `-j2`（2026-08-17）。"""
-    assert format_rect(3.0, 4.0) == "3+j4"
-    assert format_rect(3.0, -4.0) == "3-j4"
-    assert format_rect(0.0, 2.0) == "j2"
-    assert format_rect(0.0, -2.0) == "-j2"
-    assert format_rect(2.2, -0.4) == "2.2-j0.4"
+def test_the_rectangular_form_puts_j_after_the_magnitude() -> None:
+    """`j` は数の**後ろ**に置く（`3+4j` / `2j` / `-2j`）。
+
+    **【変更 2026-08-25】0.3.x までは前に置いていた**（`3+j4`）。ユーザー指示。
+    **符号は j 側ではなく数の前に残る**——`-2j` であって `2-j` ではない。
+    """
+    assert format_rect(3.0, 4.0) == "3+4j"
+    assert format_rect(3.0, -4.0) == "3-4j"
+    assert format_rect(0.0, 2.0) == "2j"
+    assert format_rect(0.0, -2.0) == "-2j"
+    assert format_rect(2.2, -0.4) == "2.2-0.4j"
 
 
 def test_a_zero_imaginary_part_is_shown_as_a_real() -> None:
-    """虚部が 0 なら実数として出る。**`j0` とは出ない**（実測）。"""
+    """虚部が 0 なら実数として出る。**`0j` とは出ない**（実測）。"""
     assert format_rect(5.0, 0.0) == "5"
     assert format_rect(0.0, 0.0) == "0"
     assert format_rect(-4.0, 0.0) == "-4"

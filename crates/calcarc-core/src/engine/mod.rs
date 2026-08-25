@@ -8,7 +8,7 @@ pub use state::EngineState;
 
 use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
-use state::{Backspace, BinOp, Buffer, OpToken};
+use state::{Backspace, BinOp, Buffer, Notation, OpToken};
 
 /// 電卓の唯一の遷移関数。
 ///
@@ -97,6 +97,15 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     // 安い。** 利用者から見ると「`°'"` は覗くためのキー」になる。
     if key != Key::Dms {
         next.sexagesimal_view = false;
+    }
+
+    // **ENG も同じ規律である**(【変更 2026-08-25、0.4.0】ユーザー指示)。
+    // 以前は `notation` がモードで、一度押すと以後の答も ENG で出た。
+    // **いまは覗くためのキー**で、**ENG 以外のどのキーでも通常表記に戻る**。
+    // 上の 60 進と同じく**例外を作らない**——AC も、角度も、`▸∠` も戻す。
+    // 「1 打鍵で戻る」と言い切れるほうが、利用者にも実装にも検査にも安い。
+    if key != Key::EngToggle {
+        next.notation = Notation::Normal;
     }
 
     let shown = display::render(&next);

@@ -39,7 +39,7 @@ test("record how the display formats numbers (observation only, no pass/fail on 
  *
  * 散文は腐る。しかもこの層は緑のまま腐る——表示書式が変わっても、コーパスの
  * ケースがたまたま影響を受けなければ誰も気づかない。実際、同文書の
- * 「`sqrt(-4)` の表示は `j2`」は、関数を実数に閉じる変更が入れば事実でなくなる。
+ * 「`sqrt(-4)` の表示は `2j`」は、関数を実数に閉じる変更が入れば事実でなくなる。
  *
  * そこで**再観測できる根拠だけを**ここに移す。表示書式が動いた瞬間にこの test が
  * 赤くなり、「実測し直して `tolerance` を導出し直せ」と言う。相手に何も要求しない
@@ -138,7 +138,7 @@ test("the display format the tolerance was derived from has not moved", async ({
  * 生成器は負数の平方根を `OutOfShard` で範囲外にしている。**範囲外である
  * ことは一度も変わっていないが、その理由は 2026-08-16 に変わった。**
  *
- * かつての理由: 表示が `j2`(複素表記)で、`parseDisplay` が読まないから。
+ * かつての理由: 表示が `2j`(複素表記)で、`parseDisplay` が読まないから。
  * いまの理由: engine が `DomainError` を返すエラー経路だから。
  *
  * **この test は予告どおり赤くなり、記録を更新させた。** 仕掛けとして機能した

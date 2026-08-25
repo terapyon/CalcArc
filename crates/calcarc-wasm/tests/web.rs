@@ -245,10 +245,10 @@ fn the_new_entry_keys_cross_the_boundary() {
     assert_eq!(main_text(&step), "1000");
     // 後置 j とエコー行も境界を越える。
     let step = press(calcarc_wasm::initial_state(), &["3", "j", "add"]);
-    assert_eq!(main_text(&step), "j3");
+    assert_eq!(main_text(&step), "3j");
     assert_eq!(
         get(&get(&step, "display"), "echo").as_string().as_deref(),
-        Some("j3 +")
+        Some("3j +")
     );
 }
 

@@ -257,7 +257,7 @@ def to_expr_text(node: Node) -> str:
     if isinstance(node, Typed):
         return node.text
     if isinstance(node, Imag):
-        # 表示と同じ書き方にする(`j2`)。読み手が engine の画面と見比べられる。
+        # 表示と同じ書き方にする(`2j`)。読み手が engine の画面と見比べられる。
         return f"j{node.text}"
     if isinstance(node, Un):
         inner = to_expr_text(node.arg)

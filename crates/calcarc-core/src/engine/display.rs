@@ -129,10 +129,10 @@ fn format_rect_notated(v: Value, notation: Notation) -> String {
     let im = real_notated(v.im.abs(), notation);
     if v.re == 0.0 {
         let sign = if v.im < 0.0 { "-" } else { "" };
-        return format!("{sign}j{im}");
+        return format!("{sign}{im}j");
     }
     let sign = if v.im < 0.0 { "-" } else { "+" };
-    format!("{}{sign}j{im}", real_notated(v.re, notation))
+    format!("{}{sign}{im}j", real_notated(v.re, notation))
 }
 
 /// 極形式で表示する。半径が有限でなければ None を返す。

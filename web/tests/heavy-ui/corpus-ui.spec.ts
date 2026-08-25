@@ -77,7 +77,7 @@ async function resetDisplayState(page: Page): Promise<void> {
   }
   // **表示形式も残る。** 段階 J で `▸∠` を押すようになって同じことが起きた
   // ——直交形式を期待するケースが `511,105 ∠ 0` を見せ、極形式を期待する
-  // ケースが `j410,758` を見せた。前のケースが極形式のまま終わっていたのが
+  // ケースが `410,758j` を見せた。前のケースが極形式のまま終わっていたのが
   // 原因で、engine の欠陥ではない(モードが残るのは電卓として正しい)。
   if ((await page.getByTestId("display-form").innerText()).trim() !== "") {
     await pressToken(page, "polar_toggle", "harness");

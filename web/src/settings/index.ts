@@ -76,11 +76,6 @@ function parse(raw: string): Settings {
     scientific: {
       angle: pick(ALLOWED.angle, sci.angle, fallback.scientific.angle),
       form: pick(ALLOWED.form, sci.form, fallback.scientific.form),
-      notation: pick(
-        ALLOWED.notation,
-        sci.notation,
-        fallback.scientific.notation,
-      ),
     },
     dataScale: {
       dtype: pick(ALLOWED.dtype, ds.dtype, fallback.dataScale.dtype),

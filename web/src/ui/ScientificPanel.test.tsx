@@ -133,10 +133,15 @@ describe("設定の永続化", () => {
   });
 
   it("restores every scientific setting at once", async () => {
-    // **3 つ同時に復元する。** 復元はトグルを 1 つずつ送り、その結果の
+    // **2 つ同時に復元する。** 復元はトグルを 1 つずつ送り、その結果の
     // state を次へ渡す replay である(P-1 設計書 §4)。1 つだけ復元する
-    // テストでは、3 つとも `initial().state` に対して送る実装
+    // テストでは、どちらも `initial().state` に対して送る実装
     // ——最後の 1 つしか残らない——も緑のままになる。
+    //
+    // **【変更 2026-08-25、0.4.0】記法は 3 つ目ではなくなった。** 保存にも
+    // 復元にも入らない——ENG はモードではなく覗くためのキーになった。
+    // **保存に古い `notation` が残っていても無視されること**も、ここで
+    // 一緒に見る(下の `display-notation` が空であることの主張)。
     window.localStorage.setItem(
       "calcarc.settings",
       JSON.stringify({
@@ -147,7 +152,7 @@ describe("設定の永続化", () => {
     render(<ScientificPanel />);
     expect(await screen.findByText("RAD")).toBeInTheDocument();
     expect(screen.getByTestId("display-form")).toHaveTextContent("∠");
-    expect(screen.getByTestId("display-notation")).toHaveTextContent("ENG");
+    expect(screen.getByTestId("display-notation")).not.toHaveTextContent("ENG");
   });
 
   it("does not store anything the user typed", async () => {

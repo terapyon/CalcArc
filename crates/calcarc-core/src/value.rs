@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn multiplies_complex_numbers() {
-        // (3+j4)(1+j2) = 3 + j6 + j4 + j^2*8 = -5 + j10
+        // (3+4j)(1+2j) = 3 + 6j + 4j + j^2*8 = -5 + 10j
         let r = Value::new(3.0, 4.0)
             .checked_mul(Value::new(1.0, 2.0))
             .unwrap();
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn divides_complex_numbers() {
-        // (-5+j10) / (1+j2) = 3+j4
+        // (-5+10j) / (1+2j) = 3+4j
         let r = Value::new(-5.0, 10.0)
             .checked_div(Value::new(1.0, 2.0))
             .unwrap();
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn a_tiny_but_nonzero_divisor_is_not_treated_as_zero() {
         // b.re^2 は f64 の最小非正規数を下回って 0 に潰れるが、b はゼロではない。
-        // 1e-200 / (1e-200 + j1e-200) = 1/(1+j) = 0.5 - j0.5
+        // 1e-200 / (1e-200 + 1je-200) = 1/(1+j) = 0.5 - 0.5j
         let r = Value::real(1e-200)
             .checked_div(Value::new(1e-200, 1e-200))
             .unwrap();

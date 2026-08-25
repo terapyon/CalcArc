@@ -25,10 +25,14 @@ export function ScientificPanel() {
         if (cancelled) return;
         calcRef.current = loaded;
         setCalc(loaded);
-        // **設定を復元する。** EngineState には触らない——角度・極形式・
-        // 記法はどれも自分の欄だけを入れ替えるトグルなので、初期状態に
+        // **設定を復元する。** EngineState には触らない——角度と極形式は
+        // どちらも自分の欄だけを入れ替えるトグルなので、初期状態に
         // キーを送れば届く(P-1 設計書 §4)。復元後の状態は定義上
         // 「利用者が押して到達できる状態」になる。
+        //
+        // **記法(ENG)はここに無い**(【変更 2026-08-25、0.4.0】)。
+        // ENG はモードではなくなり、**ENG 以外のどのキーでも通常表記に
+        // 戻る**——`eng` を送って復元しても、利用者の次の 1 打鍵で消える。
         const wanted = loadSettings().scientific;
         let restored = loaded.initial();
         if (restored.display.angle !== wanted.angle) {
@@ -36,9 +40,6 @@ export function ScientificPanel() {
         }
         if (restored.display.form !== wanted.form) {
           restored = loaded.dispatch(restored.state, "polar_toggle");
-        }
-        if (restored.display.notation !== wanted.notation) {
-          restored = loaded.dispatch(restored.state, "eng");
         }
         setStep(restored);
       },
