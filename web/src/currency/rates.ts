@@ -87,13 +87,36 @@ export function decide(
 }
 
 /**
+ * 時間帯の指定を必ず持つ ISO 8601 の綴り(`...Z` か `...+09:00`)。
+ *
+ * **`Date.parse` に素で渡してよい綴りだけを通す門である。** ECMAScript は
+ * 「日付と時刻を書いてあるが時間帯が無い」綴り(`2026-08-19 23:30`)を
+ * **端末のローカル時刻**として読む——同じキャッシュが、端末の時間帯によって
+ * 違う瞬間を指すことになる。**`provider.ts` の `utcDate` が `Date.parse` を
+ * 使わずに正規表現で読んでいるのと同じ理由**である(あちらの理由 1)。
+ *
+ * **2026-08-25 に CI が教えてくれた。** `fetchedAt` を `2026-08-19 23:30` に
+ * した検査が、**JST の手元では緑・UTC の CI では赤**になった——JST なら
+ * 経過 32.98 時間で「取りに行く」、UTC なら 23.98 時間で「行かない」。
+ * 判定が端末の時間帯で割れていた。
+ */
+const ISO_WITH_ZONE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
  * 取りに行くべきか。**`fetchedAt` からの経過で切る。**
  *
  * `fetchedAt` が読めないときと、**`now` より未来のとき**は取りに行く
  * ——どちらも「いつ取ったか」を知らない状態であり、放っておくと
  * 二度と更新されない(未来の時刻は経過が負のまま動かない)。
+ *
+ * **「読めない」には「時間帯が書いていない」を含める**(`ISO_WITH_ZONE`)。
+ * 自分で書くのは常に `toISOString()`(`...Z`)なので、**実データはこの門を
+ * 素通りする**——効くのは壊れたキャッシュのときだけで、そのとき
+ * **端末ごとに違う答を出すより、取りに行くほうを選ぶ**。
  */
 function isStale(cached: CurrencyRateSet, now: Date): boolean {
+  if (!ISO_WITH_ZONE.test(cached.fetchedAt)) return true;
   const fetchedAt = Date.parse(cached.fetchedAt);
   if (!Number.isFinite(fetchedAt)) return true;
   const age = now.getTime() - fetchedAt;

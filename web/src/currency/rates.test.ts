@@ -113,12 +113,47 @@ describe("decide", () => {
   });
 
   it("fetchedAt が読めなければ取りに行く。それでも use のままである", () => {
-    for (const fetchedAt of ["", "きのう", "2026-08-19 23:30"]) {
+    let checked = 0;
+    for (const fetchedAt of ["", "きのう", "2026-08-19", "23:30"]) {
       expect(decide(set({ fetchedAt }), NOW_23_59)).toMatchObject({
         kind: "use",
         refresh: true,
       });
+      checked += 1;
     }
+    expect(checked).toBe(4);
+  });
+
+  it("時間帯の無い綴りは、端末の時間帯によらず読めない扱いである", () => {
+    // **ここには当初 `2026-08-19 23:30` が「読めない綴り」として並んでいた。
+    // 読める綴りだった。** ECMAScript は日付と時刻があって時間帯が無い綴りを
+    // **端末のローカル時刻**として読む——`Date.parse` の戻り値が端末で変わる。
+    //
+    // **2026-08-25 に CI が教えてくれた。** JST の手元では
+    // `2026-08-19T14:30Z` と読まれて経過 32.98 時間 → 取りに行く（緑）。
+    // UTC の CI では `2026-08-19T23:30Z` と読まれて経過 23.98 時間 →
+    // 行かない（赤）。**同じ検査が、時間帯で反対の答を出していた。**
+    //
+    // いま `isStale` は時間帯の指定が無い綴りを読めない扱いにするので、
+    // **どちらの端末でも `refresh: true`** である。この検査は
+    // **`ISO_WITH_ZONE` の門を外すと、UTC でだけ赤くなる**
+    // ——だから下で「素の `Date.parse` なら端末で割れる」ことも固定する。
+    const localLooking = "2026-08-19 23:30";
+    expect(decide(set({ fetchedAt: localLooking }), NOW_23_59)).toMatchObject({
+      kind: "use",
+      refresh: true,
+    });
+
+    // **判別力の担保。** この綴りが「そもそも誰にも読めない」なら、上の主張は
+    // 門があっても無くても緑で、何も見張っていない。**素の `Date.parse` では
+    // 読めてしまう**ことをここで固定する——読めるからこそ門が要る。
+    expect(Number.isFinite(Date.parse(localLooking))).toBe(true);
+
+    // **時間帯の指定があれば、綴りが同じ瞬間を指す。** `Z` と `+09:00` は
+    // 9 時間ずれた別の瞬間で、どちらも端末に依存しない。
+    expect(Date.parse("2026-08-19T23:30:00Z")).toBe(
+      Date.parse("2026-08-20T08:30:00+09:00"),
+    );
   });
 
   it("fetchedAt が未来なら取りに行く(経過が負のまま固まらない)", () => {
