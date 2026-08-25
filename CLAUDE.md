@@ -19,6 +19,7 @@
 | `web/src/ui` | React。CSS Modules とデザイントークン |
 | `reference` | Python の独立実装。`testdata/*.json` を生成する |
 | `testdata` | 生成された期待値。コミットされている |
+| `heavy` | 重量級の検証。独立した pnpm パッケージで、`web` はこれを知らない |
 
 ## コマンド
 
@@ -32,6 +33,10 @@ cd web && pnpm e2e         # Playwright（内部で wasm をビルドする）
 
 cd reference && uv run pytest
 cd reference && uv run python scripts/generate.py   # golden の再生成
+
+cd heavy && pnpm heavy         # 生成コーパスと参照の照合（32 秒）
+cd heavy && pnpm heavy:ui      # 本物の盤面を叩く（12 分）
+cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ```
 
 `web` の型検査・lint・build は `web/src/wasm/` を必要とする。新しいクローンでは先に
@@ -49,11 +54,26 @@ cd reference && uv run python scripts/generate.py   # golden の再生成
   入って検証の意味がなくなる。
 - **電卓の挙動は `crates/calcarc-core/tests/engine_table.rs` が仕様書。** キー列と表示の
   対応を先に変えてから実装を直す。
-- **版数を上げるときは 4 箇所を揃える。** `Cargo.toml`（workspace）、
+- **版数を上げるときは 5 箇所を揃える。** `Cargo.toml`（workspace）、
   `web/package.json`、`README.md` の「現在の版」、`README.en.md` の
-  「Current version」。`pnpm check:version` が検査するのは `Cargo.toml` と
-  `web/package.json` の不一致だけで、**どちらの README も見ない**。
-  画面に出る版数は `web/package.json` からビルド時に埋まる。
+  「Current version」、`CHANGELOG.md` の見出し。**`pnpm check:version` が
+  5 箇所すべてを見る**（毎回の CI が回している）。
+  **タグを打つときは 1 段厳しくなる**——`node scripts/check-version.mjs --tag v0.5.0`
+  は、4 つの版数がタグ名と一致し、CHANGELOG の見出しに**日付が入っている
+  （「未リリース」でない）**ことまで見る。これは Release のワークフローが
+  タグから走ったときに最初のジョブとして自動で回すので、**リリース前に手で
+  打つ必要はない**。画面に出る版数は `web/package.json` からビルド時に埋まる。
+- **本番へ出る扉は `v*` タグだけである。** main への push はどこにも配らない。
+  タグを打つと `release.yml` が
+  **版数ゲート → CI 全部 → 重量級コーパス → 本番展開 → 証拠と GitHub Release**
+  の順に回す（実測で 40 分強）。1 つでも落ちれば本番へは出ない。
+  Release にはその走行が作った証拠が 3 つ添付される——各ジョブの結論
+  （`gh api` が走行から読む）、重量級の報告書、**実際に配った `dist`**。
+  戻すときは revert を main に積んで**パッチ版のタグを打つ**。緊急時だけ
+  `Deploy` を古いタグの ref で手動起動できるが、**それは検査を迂回する経路**で、
+  使ったら Release に書き足す（[docs/deploy.md](docs/deploy.md)）。
+- **重量級のテストを `web/` に置かない。** `heavy/` が持つ。`web` から
+  重量級への参照は 0 件であり、この向きを保つ。
 
 ## 踏んだ罠
 

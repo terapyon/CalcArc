@@ -5,9 +5,16 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # リリース(release.yml)から呼ばれる。**ジョブの中身は 1 行も変えない**
+  # ——「リリース前に通した検査」と「毎回の CI」が別物にならないよう、
+  # 定義はこの 1 ファイルだけに置き、呼ぶ側は呼ぶだけにする(設計書 §3)。
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # **接頭辞 `ci-` を外さない。** 呼ばれた側の `github.workflow` には
+  # **呼び出し元の名前**が入るので、接頭辞が無いと群が呼び出し元と重なり、
+  # `cancel-in-progress: true` が**呼び出し元の走行を打ち切る**(設計書 §3.2)。
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

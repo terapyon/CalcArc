@@ -13,7 +13,7 @@
 
 ## 現在の版
 
-**0.4.0（ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
+**0.4.1（ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
 リリースごとの記録は [Releases](https://github.com/terapyon/CalcArc/releases) にある。
 
 **ベータである。** まだ広くは告知しておらず、使っている人はごく少ない。
@@ -122,10 +122,11 @@ cd reference && uv run python scripts/generate.py
 `crates/calcarc-core` の数値を変更したときは期待値の再生成が必要になる。
 **再生成せずに `testdata/` を手で書き換えないこと。**
 
-版数を上げるときは **4 箇所**を同じ値にする。`Cargo.toml`、`web/package.json`、
-`README.md` の「現在の版」、`README.en.md` の「Current version」。
-`pnpm check:version` が検査するのは `Cargo.toml` と `web/package.json` の
-不一致だけで、**どちらの README も見ない**。
+版数を上げるときは **5 箇所**を同じ値にする。`Cargo.toml`、`web/package.json`、
+`README.md` の「現在の版」、`README.en.md` の「Current version」、
+`CHANGELOG.md` の見出し。`pnpm check:version` が 5 箇所すべてを検査する。
+**タグを打つときはさらに、4 つの版数がタグ名と一致し、CHANGELOG の見出しに
+日付が入っていることを CI が確かめる。**
 
 詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) と
 [docs/base-spec.md](docs/base-spec.md)（全体仕様）を参照。

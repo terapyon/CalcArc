@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from . import compound_ref, data_scale_ref, loan_ref
+from . import corpus_coverage as coverage
 
 # 現実的な入力の帯。**f64 が壊れるところに寄せない**(設計書 §3.5)。
 # 金融の入力には人が実際に入れる範囲がある。
@@ -2729,6 +2730,81 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
     + _pairwise_compound_deposit_for_strata()
     + _pairwise_compound_periods_for_strata()
 )
+
+
+# ---------------------------------------------------------------------------
+# テスト空間モデル `finance-v1`(設計書 §7)
+#
+# **ここに水準を書き写さない。** 上の因子表(`PAIRWISE_*_FACTORS`)が一次資料で、
+# モデルはそこから組み立てる——写しを持つと、因子表を直した日に片方だけが
+# 古くなる(設計書 §7.1)。
+# ---------------------------------------------------------------------------
+
+FINANCE_MODEL = "finance-v1"
+
+#: scope → 因子名 → 水準列。**`loan_term` だけ第 2 因子の名前が違う**
+#: ——期間が入力ではなく答だからで、`n` のまま通すと被覆の集計が
+#: 「入力に在った値」と「答として出た値」を混ぜる(設計書 §8.2)。
+COVERAGE_FACTORS: dict[str, dict[str, tuple]] = {
+    "loan_forward": PAIRWISE_LOAN_FACTORS,
+    "loan_principal": PAIRWISE_LOAN_FACTORS,
+    "loan_bonus_forward": PAIRWISE_LOAN_FACTORS,
+    "loan_bonus_principal": PAIRWISE_LOAN_FACTORS,
+    "loan_term": {
+        "rate": PAIRWISE_LOAN_FACTORS["rate"],
+        "target_n": PAIRWISE_LOAN_FACTORS["n"],
+    },
+    "compound_grow": PAIRWISE_COMPOUND_GROW_FACTORS,
+    # `compound_deposit_for` は `compound_grow` と同じ 4 因子だが、**被覆は
+    # op 単体で数える**(設計書 §7.2 の但し書き)。同じ因子表を指していても、
+    # 要求セルの scope が違うので混ざらない。
+    "compound_deposit_for": PAIRWISE_COMPOUND_GROW_FACTORS,
+    "compound_periods_for": PAIRWISE_COMPOUND_PERIODS_FOR_FACTORS,
+}
+
+#: 被覆規則(設計書 §7.2)。loan 系 5 op は金利 × 期間の**全組合せ**、
+#: 複利 3 op は**2 因子間ペアワイズ**。
+#:
+#: ペアワイズの数は**行数ではなくセル数**である(設計書 §12.4)——
+#: `compound_grow` は 140 行で 266 セルを踏む。除外した行数をそのまま
+#: 除外セル数として出せないのは、この単位の違いによる。
+FINANCE_REQUIREMENTS: tuple[coverage.Requirement, ...] = (
+    *(
+        coverage.Requirement(
+            f"{op}/rate-n/all",
+            op,
+            "all",
+            coverage.all_combination_cells(op, COVERAGE_FACTORS[op]),
+        )
+        for op in ("loan_forward", "loan_principal", "loan_bonus_forward", "loan_bonus_principal")
+    ),
+    coverage.Requirement(
+        "loan_term/rate-target_n/all",
+        "loan_term",
+        "all",
+        coverage.all_combination_cells("loan_term", COVERAGE_FACTORS["loan_term"]),
+    ),
+    coverage.Requirement(
+        "compound_grow/rate-periods-ppy-tax/pairwise",
+        "compound_grow",
+        "pairwise",
+        coverage.pairwise_cells("compound_grow", COVERAGE_FACTORS["compound_grow"]),
+    ),
+    coverage.Requirement(
+        "compound_deposit_for/rate-periods-ppy-tax/pairwise",
+        "compound_deposit_for",
+        "pairwise",
+        coverage.pairwise_cells("compound_deposit_for", COVERAGE_FACTORS["compound_deposit_for"]),
+    ),
+    coverage.Requirement(
+        "compound_periods_for/rate-ppy-tax/pairwise",
+        "compound_periods_for",
+        "pairwise",
+        coverage.pairwise_cells("compound_periods_for", COVERAGE_FACTORS["compound_periods_for"]),
+    ),
+)
+
+_REQUIREMENT_OF: dict[str, coverage.Requirement] = {r.scope: r for r in FINANCE_REQUIREMENTS}
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
     ("0", "1", "int8"),

@@ -1,5 +1,8 @@
 # コーパスの実測値
 
+> **2026-08-25 に重量級は `heavy/` へ移った。** 以下に出てくる `web/tests/heavy/`
+> などのパスは、**測定した当時のもの**である。当時の事実として残してある。
+
 設計書 `2026-08-15-heavy-corpus-e2e-design.md` §6.3 / §11 の未知を実測した記録。
 
 ## 括弧を省いたシャードが実際に掛かった費用（2026-08-16 実測、段階 3c Task 4）
@@ -2388,3 +2391,219 @@ LLM・transfer も既存の `the headline case` が実画面から打ってい�
 3 度の走行のあとで `git diff -- crates/ web/src/` を確かめた。残っているのは
 `convert/currency.rs` の `mod tests` に足した **+43 行**だけで、
 **製品コードは 0 行、`web/src/` も 0 行**である。
+
+## `heavy/` への移動を通しで確かめた（2026-08-25 実測、heavy-package-split Task 8）
+
+計測環境: worktree `/home/terapyon/dev/CalcArc-e2e`、ブランチ `feature/heavy-tests-split`、
+HEAD `61a5f26`（Task 7 のコミット）。この計画は重量級検証一式（`web/tests/heavy/` ほか）を
+独立パッケージ `heavy/` へ丸ごと移すもので、**計算ロジックは 1 行も変えていない**。
+このタスクの目的は「移動が何も変えていないこと」の証拠を残すことで、4 本の重量級コマンドを
+移動前の基準値と突き合わせた。
+
+### 4 本の突き合わせ（移動前の基準は 2026-08-25 に別セッションが同じ手元で測定）
+
+| コマンド | 移動前（基準） | 移動後（今回の実測） | 判定 |
+|---|---|---|---|
+| `CI=1 pnpm heavy` | 195 passed / 33,567 件 / 不一致 0 | **195 passed（31.1 秒）/ 33,567 件 / 不一致 0** | 一致 |
+| `CI=1 pnpm heavy:power:exact` | 10/10 ok、赤の本数 2,3,1,2,5,2,5,2,2,2 | **10/10 ok、赤の本数 2,3,1,2,5,2,5,2,2,2** | 一致 |
+| `CI=1 pnpm heavy:ui` | 36 passed / 指摘 0 / 46 トークン全押下 / 1,266 件 | **36 passed / 指摘 0 / 46 トークン全押下 / 1,266 件** | 一致 |
+| `CI=1 pnpm heavy:power` | 18/18 ok、各変異の実測率が下限のちょうど 2.00 倍 | **測定不能。0/18 が `measurement-failed`（下記）** | **不一致** |
+
+`pnpm heavy` と `pnpm heavy:power:exact` は数字がバイト単位で同じだった。`pnpm heavy:ui` は
+押下総数だけが 19,904 → **19,849** に動いたが、これは指示書どおり**サンプリングが毎回別の
+集合を引くための揺れ**であり、主張している 3 つ（46 トークン全押下・指摘 0・1,266 件）は
+どれも動いていない——回帰ではない。
+
+### `pnpm heavy:power` は移動が壊した——検出力ではなく測定そのものが死んでいる
+
+18 変異すべてが `measurement-failed`（`wasm のビルドが失敗した——検出の有無は測れていない`）
+で終わり、最後の後始末（`原文の wasm を作り直しています`）で未捕捉の例外が飛んで
+`heavy/detection-power.json` は 1 度も書かれなかった。**「検出率が変わった」ではなく、
+「測れなかった」。**
+
+実際に印字されたエラー（`pnpm heavy:power` の生の stderr）:
+
+```
+Error: Command failed: pnpm wasm
+    at run (file:///home/terapyon/dev/CalcArc-e2e/heavy/scripts/detection-power.mjs:491:10)
+    at main (file:///home/terapyon/dev/CalcArc-e2e/heavy/scripts/detection-power.mjs:896:5)
+  status: 254,
+  output: [ null, 'undefined\n ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "wasm" not found\n', '' ],
+```
+
+**原因は `heavy/scripts/detection-power.mjs` が Task 5（コミット `60e36f0`）で移されたときに
+直し忘れた 2 箇所。** 移動前（`web/scripts/detection-power.mjs`、`60e36f0^`）は
+
+```js
+const WEB = dirname(dirname(fileURLToPath(import.meta.url)));
+const ROOT = dirname(WEB);
+```
+
+で `run()` の既定 `cwd` が `web/` を指していたので、`run("pnpm", ["wasm"])`（605 行目・
+896 行目）は `web/package.json` の `"wasm"` スクリプトに届いていた。移動後は
+
+```js
+const HEAVY = dirname(dirname(fileURLToPath(import.meta.url)));
+const ROOT = dirname(HEAVY);
+```
+
+に変わり、`run()` の既定 `cwd` も `HEAVY`（`heavy/`）になった。ところが `heavy/package.json` に
+`"wasm"` スクリプトは無い——`heavy/package.json` の `heavy` / `heavy:ui` は
+`"pnpm --dir ../web wasm && playwright test ..."` と**書き分けて**いるのに、
+`detection-power.mjs` の 2 箇所は裸の `run("pnpm", ["wasm"])` のまま取り残された
+（`exact-power.mjs` は逆に `cwd: ROOT` を明示していて、こちらは正しく直っている——
+`progress.md` の Task 5 の裁定はこの `exact-power.mjs` 側だけを見て「直っている」と
+書いており、`detection-power.mjs` の 2 箇所は見落とされていた）。
+
+**もう 1 箇所、独立した壊れ方が重ねて残っている。** 612 行目は
+
+```js
+run("pnpm", ["exec", "playwright", "test", "--config", "playwright.heavy.config.ts"]);
+```
+
+を呼ぶが、`playwright.heavy.config.ts` という名前のファイルは `heavy/` に無い
+（`ls heavy/*.config.ts` → `playwright.corpus.config.ts` / `playwright.ui.config.ts` の 2 つだけ）。
+Task 2/3+4 でこのファイルは `playwright.corpus.config.ts` に改名されており、
+`heavy/package.json` の `heavy` スクリプトはその新しい名前を指している。
+`detection-power.mjs` の 612 行目だけが旧名を引きずっている。**wasm ビルドの失敗が先に
+起きるので今回はここまで到達していないが、(1) を直しただけでは (2) でまた落ちる。**
+
+この 2 か所は `docs/` にも `CLAUDE.md` にも「触っていい」と書かれていない範囲であり、
+このタスクは「測定して記録する」ことが仕事で「直す」ことではないので、**製品コードにも
+`heavy/scripts/*.mjs` にも手を入れていない。** 直すかどうかは計画側の判断に委ねる。
+
+### `crates/` は原状回復できている（測定不能でも壊れていない）
+
+```
+$ git status --short crates/
+（空）
+```
+
+18 変異すべてが `measurement-failed` で終わった後も `crates/` は空で確認できた
+（実行の前後で 2 回）。ソースへの変異当て・戻しは `pnpm wasm` を呼ぶより前の段で
+独立して行われているので、wasm ビルドが失敗しても変異は毎回きちんと戻っている。
+`web/src/wasm/` も、失敗した 18 回の `pnpm wasm` はどれも `wasm-pack` 自体を一度も
+起動できていない（`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` はスクリプト解決の時点で落ちる）
+ので、直前の `pnpm heavy:ui` が作った正しいビルドのまま触られていない。
+
+### web 側
+
+| コマンド | 結果 |
+|---|---|
+| `pnpm typecheck` | 緑（出力 0 バイト） |
+| `pnpm lint` | `Checked 131 files in 31ms. No fixes applied.` |
+| `pnpm test`（vitest） | **364 passed（30 files）** — Task 6 で確認済みの、このブランチの基準どおり |
+| `pnpm e2e` | **測定できなかった（下記、インフラの障害）** |
+
+**`pnpm e2e` は 2 度とも環境側の要因で完走しなかった。** 1 度目は 181 件中 **179 件が
+正常に緑で通った**あとブラウザ（`chrome-headless`）がクラッシュし、親を失った 1 プロセスが
+`PPid=1` に付け替わって `[chrome-headless]` として CPU を食い続ける状態になった
+（`/proc/<pid>/exe` が読めず、`kill -9` を 3 回送っても `kill` 自体は成功（終了コード 0）
+するのにプロセスは消えなかった）。2 度目はブラウザ起動の段階で `playwright test` の
+親プロセスが `D`（uninterruptible I/O wait）のまま 5 分以上進まず、これも `kill -9` が
+効かなかった。同じホスト上に他セッションの `claude --resume` プロセスが走っており
+（`uptime` の load average が作業中に 1 台前後から 27〜29 台まで上がった一方、`vmstat` の
+CPU idle は 95〜99% だった——CPU 逼迫ではなく、I/O 待ちのプロセスが load average を
+押し上げている）、**この 2 回の停止はホストの共有リソース競合であり、`heavy-tests-split`
+の変更やテスト内容の欠陥ではない。** 1 度目の 179/181 はどれも赤くなっていない
+（失敗ではなくクラッシュで打ち切られた)ので、少なくともここまでは web 側の回帰も無い。
+
+### Rust 側
+
+```
+$ cargo test --workspace
+...
+test result: ok. 264 passed; 0 failed; ...   (unittests calcarc_core)
+test result: ok. 1 passed; 0 failed; ...     (convert_golden)
+test result: ok. 1 passed; 0 failed; ...     (currency_golden)
+test result: ok. 1 passed; 0 failed; ...     (data_scale_golden)
+test result: ok. 7 passed; 0 failed; ...     (engine_robustness)
+test result: ok. 100 passed; 0 failed; ...   (engine_table)
+test result: ok. 2+2+1+2+1 passed; 0 failed; ... (残りの golden 各種)
+test result: ok. 11 passed; 0 failed; ...    (token 突き合わせ)
+```
+
+全ビルド合計 **393 passed、0 failed**。`heavy-tests-split` は `crates/` を 1 行も
+変えていないので、ここが赤くなる理由は無く、実際に赤くならなかった。
+
+### まとめ
+
+**4 本のうち 3 本（`heavy` / `heavy:power:exact` / `heavy:ui`）は移動前とバイト単位で
+一致し、検出力・件数・押下トークン数のどれも動いていない。** 残る 1 本
+（`heavy:power`）は検出力が変わったのではなく、**Task 5 の移動が
+`heavy/scripts/detection-power.mjs` の `pnpm wasm` 呼び出しと
+`playwright.heavy.config.ts` という古い名前の 2 か所を直し忘れたために、測定そのものが
+動かなくなっている。** `crates/` は原状回復できており、web の typecheck・lint・vitest・
+`cargo test --workspace`（393 passed）はすべて緑。`pnpm e2e` は共有ホストの
+プロセス障害で 2 度とも完走せず、1 度目の 179/181 passed が得られた実測の全てである。
+
+## `heavy:power` の 3 か所を直して測り直した（2026-08-25 実測、heavy-package-split Task 8 の続き）
+
+前節が「測定そのものが動かなかった」と記録した `pnpm heavy:power` を、原因の
+3 か所を直してから測り直した。**移動の検証で唯一残っていた 1 本である。**
+
+### 直したのは 3 行、どれも呼び出し先の名前
+
+`heavy/scripts/detection-power.mjs`。計算にも判定にも触っていない。
+
+| 場所 | 前 | 後 |
+|---|---|---|
+| `measure()` の wasm ビルド | `pnpm wasm` | `pnpm --dir ../web wasm` |
+| `measure()` の Playwright | `--config playwright.heavy.config.ts` | `--config playwright.corpus.config.ts` |
+| `main()` の後始末（原文の wasm を作り直す） | `pnpm wasm` | `pnpm --dir ../web wasm` |
+
+`heavy/` は `web/` と別パッケージになったので、`pnpm wasm` は `heavy` から見て
+解決できない（`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL`）。設定ファイル名は Task 5 の
+移動で `playwright.heavy.config.ts` → `playwright.corpus.config.ts` に変わっていた。
+
+### 実測（18/18 ok、移動前と 1 件も動いていない）
+
+```
+$ cd heavy && pnpm heavy:power
+[display-digits] ... ok — 期待したシャードだけが反応した(11 枚)
+... （18 行すべて ok）
+原文の wasm を作り直しています ... done
+detection-power: wrote /home/terapyon/dev/CalcArc-e2e/heavy/detection-power.json
+```
+
+**18 種すべて `ok`。検出件数は 18 種の総数も `display-digits` の 11 枚の内訳も、
+移動前の実測（`docs/heavy-corpus-implementation-report.md` §5 の表）と完全に一致した**
+——`detection-power.json` と表を機械で突き合わせて食い違い 0 件。検出率は件数と
+シャードの件数だけで決まるので、`minRate` に対する比も移動前と同じである。
+
+所要 **652 秒（10.9 分）**（ログの作成 19:26:48 から最終書き込み 19:37:40 まで）。
+移動前の 669 秒と同じ水準。
+
+### 走行後の状態
+
+```
+$ git status --short
+ M heavy/scripts/detection-power.mjs
+```
+
+`crates/` は空——18 回の変異当てはすべて戻っている。`heavy` パッケージ自身の
+検査も緑: `pnpm test` **86 passed（6 files）**、`pnpm typecheck` 出力 0 バイト、
+`pnpm lint` `Checked 43 files in 39ms.`（info 3 件はいずれも
+`tests/corpus/report.ts` の既存のもので、この変更とは無関係）。
+
+### まとめ
+
+**移動の検証は 4 本とも揃った。** `heavy` / `heavy:power:exact` / `heavy:ui` は
+前節でバイト単位の一致を確認済み、`heavy:power` はこの節で 18/18 ok・件数完全一致。
+**`heavy/` への移動は検出力を 1 件も動かしていない。**
+
+### `pnpm e2e` も静かな機械で完走した（2 度落ちたのは機械のせいだった）
+
+前節が「共有ホストのプロセス障害で 2 度とも完走しなかった」と記録した 1 本。
+機械の再起動後（`uptime` 45 分、load average 1.2〜1.7）に回し直した。
+
+```
+$ cd web && pnpm e2e
+Running 181 tests using 16 workers
+...
+  181 passed (14.9s)
+```
+
+**181 passed、0 failed、リトライも flaky も 0 件**（ログに `retry` / `flaky` /
+`✘` は 1 行も無い）。前節が推定した「1 度目の 179/181 は失敗ではなくクラッシュで
+打ち切られたもので、コードの回帰ではない」は、**静かな機械での 181/181 で裏が取れた。**

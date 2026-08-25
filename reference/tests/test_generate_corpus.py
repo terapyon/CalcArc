@@ -1927,3 +1927,77 @@ def test_no_associativity_case_needs_precedence() -> None:
     0 件であることを固定している——ここが崩れると向こうが赤くなる。
     """
     assert not [case["id"] for case in _ASSOC["cases"] if _needs_precedence(case["keys"])]
+
+
+def test_the_model_enumerates_every_required_cell_exactly_once() -> None:
+    """設計書 §7.2・§15.1 の 1。**要求セルは一意に列挙される。**
+
+    実測(2026-08-25、コミット済みコーパス): loan 系 4 op と `loan_term` が各 150
+    (金利 10 水準 × 期間 15 水準の全組合せ)、`compound_grow` と
+    `compound_deposit_for` が各 266、`compound_periods_for` が 56
+    (**行数ではなく 2 因子セルの数**)。
+    """
+    requirements = corpus_calls.FINANCE_REQUIREMENTS
+    assert [r.scope for r in requirements] == [
+        "loan_forward",
+        "loan_principal",
+        "loan_bonus_forward",
+        "loan_bonus_principal",
+        "loan_term",
+        "compound_grow",
+        "compound_deposit_for",
+        "compound_periods_for",
+    ]
+    assert {r.scope: len(r.cells) for r in requirements} == {
+        "loan_forward": 150,
+        "loan_principal": 150,
+        "loan_bonus_forward": 150,
+        "loan_bonus_principal": 150,
+        "loan_term": 150,
+        "compound_grow": 266,
+        "compound_deposit_for": 266,
+        "compound_periods_for": 56,
+    }
+    for requirement in requirements:
+        ids = [cell.id for cell in requirement.cells]
+        assert len(ids) == len(set(ids)), f"{requirement.id} にセルの重複がある"
+
+
+def test_the_model_reads_the_levels_from_the_factor_tables() -> None:
+    """設計書 §7.1「既存水準をモデルの一次資料とする。写しを作ってはならない」。
+
+    **因子表を直せば要求セルも動く**ことを確かめる。ここで水準を書き写して
+    しまうと、因子表を直した日に片方だけが古くなる。
+    """
+    loan = next(r for r in corpus_calls.FINANCE_REQUIREMENTS if r.scope == "loan_forward")
+    assert {dict(cell.axes)["rate"] for cell in loan.cells} == set(
+        corpus_calls.PAIRWISE_RATE_LEVELS
+    )
+    assert {dict(cell.axes)["n"] for cell in loan.cells} == {
+        str(n) for n in corpus_calls.PAIRWISE_LOAN_TERM_LEVELS
+    }
+    grow = next(r for r in corpus_calls.FINANCE_REQUIREMENTS if r.scope == "compound_grow")
+    assert {dict(cell.axes).get("periods") for cell in grow.cells} >= {
+        str(n) for n in corpus_calls.PAIRWISE_COMPOUND_TERM_LEVELS
+    }
+
+
+def test_loan_term_calls_its_second_factor_the_target() -> None:
+    """設計書 §8.2。**`loan_term` の期間は入力ではなく答**なので、因子の名前を
+    `n` と分ける。同じ `n` で通すと、被覆の集計が「入力に在った値」と
+    「答として出た値」を混ぜてしまう。
+    """
+    term = next(r for r in corpus_calls.FINANCE_REQUIREMENTS if r.scope == "loan_term")
+    assert {name for cell in term.cells for name, _ in cell.axes} == {"rate", "target_n"}
+    assert term.cells[0].id.startswith("loan_term/rate=")
+    assert "target_n=" in term.cells[0].id
+
+
+def test_the_model_counts_pairs_not_rows() -> None:
+    """設計書 §12.4。**構成行と要求セルは同じ単位ではない。**
+    `compound_grow` は 140 行で 266 セルを踏む。
+    """
+    grow = next(r for r in corpus_calls.FINANCE_REQUIREMENTS if r.scope == "compound_grow")
+    assert len(corpus_calls._PAIRWISE_COMPOUND_GROW_ROWS) == 140
+    assert len(grow.cells) == 266
+    assert all(len(cell.axes) == 2 for cell in grow.cells)

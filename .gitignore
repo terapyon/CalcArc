@@ -1,10 +1,10 @@
 /target
 node_modules/
 web/dist/
-web/dist-heavy/
-web/heavy-report.md
+heavy/dist-harness/
+heavy/heavy-report.md
 # pnpm heavy がシャードごとの集計を落とす場所。globalSetup が毎回消す。
-web/.heavy-summaries/
+heavy/.heavy-summaries/
 web/src/wasm/
 .venv/
 __pycache__/
@@ -15,12 +15,12 @@ playwright-report/
 .superpowers/
 
 # 検出力の測定結果。pnpm heavy:power が毎回書き直す。
-web/detection-power.json
+heavy/detection-power.json
 # 0.3.0 の 3 計算の検出力。pnpm heavy:power:exact が毎回書き直す。
-web/exact-power.json
+heavy/exact-power.json
 # 走行の要約。pnpm heavy のたびに globalTeardown が上書きする。
-web/heavy-run.json
+heavy/heavy-run.json
 # pnpm heavy:ui が押したキーを数える場所。globalSetup が毎回消す。
-web/.heavy-ui-presses/
+heavy/.heavy-ui-presses/
 # 盤面を通る走行の要約。pnpm heavy:ui のたびに globalTeardown が上書きする。
-web/heavy-ui-run.json
+heavy/heavy-ui-run.json

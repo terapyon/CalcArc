@@ -6,24 +6,58 @@ name: Heavy corpus
 #
 # 走らせるのは:
 #  - 手動(workflow_dispatch)——確かめたくなったとき
-#  - タグを打ったとき——リリースの記録として残す
-#  - 週 1 回——放っておいても記録が積み上がるように
+#  - リリース(release.yml)から呼ばれたとき——**本番へ出す条件**である
+#
+# **週 1 の cron は外した**(ユーザ裁定 2026-08-25)。
+# **`push: tags` も外した**(ユーザ裁定 2026-08-25)——タグからは `release.yml` が
+# 呼ぶので、両方を残すと同じタグで重量級が 2 回走る(設計書 §3.1)。
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
-  schedule:
-    # 毎週月曜 03:00 UTC(日本時間 12:00)。
-    - cron: "0 3 * * 1"
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # 接頭辞 `heavy-` を外さない(理由は ci.yml と同じ。設計書 §3.2)。
+  group: heavy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  # **45 分を使う前に、1 分で分かることを先に見る。** 版数がタグと食い違って
+  # いるなら、そのリリースはもう間違っているので、計算を測る意味がない。
+  version:
+    name: Version numbers agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # node の版はこの複合アクションが一本で持っている。**写しで持つと
+      # 片方だけ更新される**ので、依存を入れる分だけ遅くてもこちらに乗せる。
+      - uses: ./.github/actions/setup-web
+
+      - name: The five places must agree, and match the tag
+        # **タグから走ったときだけタグと照合する。** workflow_dispatch は
+        # ブランチから走るので `github.ref_name` がタグ名ではない——渡すと
+        # 「ブランチ名と版数が違う」という無意味な赤になる。
+        #
+        # `pnpm` 越しではなく node を直に呼ぶのは、引数の受け渡しを
+        # pnpm の版の挙動に預けないためである。
+        working-directory: web
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$IS_TAG" = "true" ]; then
+            node scripts/check-version.mjs --tag "$REF_NAME"
+          else
+            node scripts/check-version.mjs
+          fi
+
   corpus:
     name: Corpus vs reference
     runs-on: ubuntu-latest
+    # **版数が食い違っていたら走らせない。** 手で回したいときに版数が
+    # 揃っていないなら、まず揃える——毎回の CI が同じ検査を回しているので、
+    # ここで止まるのは「main に入っていない何かを手で回した」ときだけである。
+    needs: version
     # 生成コーパスは 1 万件超あり、既定の 6 分では足りない。
     timeout-minutes: 45
     steps:
@@ -35,9 +69,22 @@ jobs:
       # 自ら書いている。`pnpm heavy` が中で wasm を作り直すので、これが要る。
       - uses: ./.github/actions/setup-wasm-pack
 
+      # **heavy は自分のパッケージなので、自分で依存を入れる。** pnpm と node は
+      # 上の setup-web が用意済みで、版の固定はあちらに一本化されている。
+      - name: Install the heavy package
+        run: pnpm install --frozen-lockfile
+        working-directory: heavy
+
+      # **11 分の変異を回す前に、数十秒で落ちるものを先に落とす。**
+      # 重量級のユニット 6 本は「測る道具そのもの」を見張っており、
+      # 普段の CI では走らない(2026-08-25 のユーザ裁定)。ここが唯一の場所である。
+      - name: The measuring instrument must be sound
+        run: pnpm typecheck && pnpm lint && pnpm test
+        working-directory: heavy
+
       - name: Install Playwright's browser
         run: pnpm exec playwright install --with-deps chromium
-        working-directory: web
+        working-directory: heavy
 
       - name: Set up Python for the reference implementation
         # ci.yml と同じ版に揃える。
@@ -64,7 +111,7 @@ jobs:
         # 変異はコミットされない(測ったあと原文に戻し、バイト一致を確かめる)。
         # この段の結果が次の段のレポートに載る。
         run: pnpm heavy:power
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -84,7 +131,7 @@ jobs:
         # CI に出ない。順番だけがそれを決めている。
         if: always()
         run: pnpm heavy:ui
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -100,7 +147,7 @@ jobs:
         # 測っていない走行が測った顔で出ることはない。
         if: always()
         run: pnpm heavy
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -109,8 +156,8 @@ jobs:
         # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。
         if: always()
         run: |
-          if [ -f web/heavy-report.md ]; then
-            cat web/heavy-report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f heavy/heavy-report.md ]; then
+            cat heavy/heavy-report.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## 報告書が書かれなかった" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -122,6 +169,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: heavy-report
-          path: web/heavy-report.md
+          path: heavy/heavy-report.md
           if-no-files-found: warn
           retention-days: 90

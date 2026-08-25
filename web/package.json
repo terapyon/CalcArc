@@ -1,7 +1,7 @@
 {
   "name": "calcarc-web",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
@@ -14,10 +14,6 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
-    "heavy": "pnpm wasm && playwright test --config playwright.heavy.config.ts",
-    "heavy:ui": "pnpm wasm && playwright test --config playwright.heavy-ui.config.ts",
-    "heavy:power": "node scripts/detection-power.mjs",
-    "heavy:power:exact": "node scripts/exact-power.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
