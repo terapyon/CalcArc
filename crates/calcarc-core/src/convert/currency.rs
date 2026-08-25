@@ -349,6 +349,49 @@ mod tests {
     }
 
     #[test]
+    fn a_zero_rate_is_named_even_when_the_product_overflows() {
+        // **`exchange` の doc コメントが宣言している理由を、ここで初めて検査する。**
+        // 「0 の判定を掛け算より先に置くのは、`value × to_rate` があふれる組で
+        // `Overflow` が `DivisionByZero` を隠さないようにするためである」——
+        // **その組を誰も踏んでいなかった。** 判定を掛け算の後ろへ動かす変異を当てても
+        // ワークスペースの 390 本は 1 本も赤くならない(2026-08-25 の実測。
+        // `docs/corpus-measurements.md` の `zero-check-after-multiply`)。
+        //
+        // 10^30 × 10^30 = 10^60 は i128(上限およそ 1.7 × 10^38)に収まらない。
+        // **`checked_mul` は先に約分する**ので、約分の効かない組を選んである
+        // (分母はどちらも 1)。
+        let huge = r(1_000_000_000_000_000_000_000_000_000_000, 1);
+        assert_eq!(
+            exchange(huge, r(0, 1), huge),
+            Err(CalcError::DivisionByZero)
+        );
+        // **主張しているのは順序だけである。** 同じ積を、レートが 0 でないときに
+        // 置くと `Overflow` になる——この 1 行が無いと、何が来ても
+        // `DivisionByZero` を返す実装で上の 1 行が通ってしまう。
+        assert_eq!(exchange(huge, huge, huge), Err(CalcError::Overflow));
+    }
+
+    #[test]
+    fn the_entry_point_names_the_zero_rate_before_it_multiplies() {
+        // 同じ順序を**文字列の入口から**踏む。`exchange` を直接呼ぶ 1 本だけだと、
+        // `convert_currency` が先に別の判断をしていても気づけない
+        // (end-to-end-cases-need-the-whole-path)。
+        //
+        // **この組は golden では言えない。** 参照実装の `Fraction` は多倍長で、
+        // `Overflow` という結果を持たない——だから `testdata/currency.json` に
+        // Overflow のケースは 1 件も無い。言語間で突き合わせられない主張である。
+        let huge = "1000000000000000000000000000000";
+        assert_eq!(
+            convert_currency(huge, Currency::Usd, "0", huge),
+            Err(CalcError::DivisionByZero)
+        );
+        assert_eq!(
+            convert_currency(huge, Currency::Usd, huge, huge),
+            Err(CalcError::Overflow)
+        );
+    }
+
+    #[test]
     fn the_conversion_goes_through_the_base_currency() {
         // 100 USD → JPY。100 × 168.5 ÷ 1.0855 = 33_700_000/2171。
         assert_eq!(
