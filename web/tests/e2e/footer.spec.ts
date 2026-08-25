@@ -17,7 +17,7 @@ test("the footer shows on every tab, once", async ({ page }) => {
       "https://github.com/terapyon/CalcArc",
     );
     await expect(page.getByTestId("footer-disclaimer")).toHaveText(
-      "計算結果は無保証です。重要な判断の根拠にしないでください。",
+      "無保証。重要な判断に使わないでください。",
     );
   }
 });
@@ -31,7 +31,9 @@ test("the old core version line is gone", async ({ page }) => {
 test("the footer stays on one line and never overflows sideways", async ({
   page,
 }) => {
-  // **文言を縮めずフォントを落として 1 行に収めている**(ユーザー裁定)。
+  // **文言を縮めて字を大きくし、1 行に収めている**(【変更 2026-08-25】。
+  // 0.2.1 は逆に「文言を縮めずフォントを落とす」を採っていたが、8px は
+  // 実機で読めなかった)。
   // nowrap なので、入らなくなったら折り返さずに横へはみ出す——縦の予算も
   // 横のスクロールも同時に壊れる。両方をここで止める。
   //
@@ -58,8 +60,9 @@ test("the footer stays on one line and never overflows sideways", async ({
 });
 
 test("the footer survives a narrower phone", async ({ page }) => {
-  // **8px は 390px に載る最大**として決めた値である。360px(多くの Android)や
-  // 320px でも、折り返さず・横にも溢れないこと。
+  // **11px は 390px に載る最大**である(実測 11.45px。【変更 2026-08-25】。
+  // 0.2.1 では文言が長く、同じ「載る最大」が 8px だった)。360px(多くの
+  // Android)や 320px でも、折り返さず・横にも溢れないこと。
   //
   // **`getByRole("contentinfo")` ではなく `footer-disclaimer` を測る**——上の
   // 「stays on one line」と同じ理由。<footer> はリンクと区切りと免責の複数
@@ -95,8 +98,10 @@ test("the footer survives a narrower phone", async ({ page }) => {
     // なので、それがビューポート幅を超えていれば、フッタの中身がその
     // ビューポートに収まりきらないと直接言える。祖先の広がり(Keypad の
     // 既存バグ)にも、中央寄せの副作用にも左右されない。
-    // vw の頭打ちを外して赤確認済み(320px で +33px、360px は収まる幅
-    // だったため赤くならない——閾値の狙いどおり)。
+    // vw の頭打ちを外して赤確認済み。**2026-08-25 に測り直した**——字を
+    // 11px に上げたので、いまは **360px でも +19px** 溢れて赤くなる
+    // (0.2.1 の 8px では 360px は収まる幅で、赤くなるのは 320px だけだった)。
+    // **この 1 行は前より効いている。**
     const spill = await page.getByRole("contentinfo").evaluate((el) => {
       return el.scrollWidth - window.innerWidth;
     });

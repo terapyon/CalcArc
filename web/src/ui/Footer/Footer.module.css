@@ -11,10 +11,14 @@
   /* iOS のホームインジケータを避ける(パネルの .shell と同形)。 */
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   color: var(--display-status-fg);
-  /* **狭い画面では更に縮む。** 8px は 390px に 1 行で載る最大として決めた値で、
+  /* **狭い画面では更に縮む。** 11px は 390px に 1 行で載る最大(実測 11.45px)で、
      360px や 320px ではそのままだと nowrap のまま横へ溢れる(横スクロールが
-     出る)。vw で頭打ちにして、折り返さず・溢れずに縮ませる。 */
-  font-size: min(var(--footer-font-size), 2.05vw);
+     出る)。vw で頭打ちにして、折り返さず・溢れずに縮ませる。
+     **2.85vw の出どころ**(2026-08-25 実測、縮めたあとの文言で):
+     1 行に載る上限は 360px で 2.925vw / 375px で 2.931vw / 390px で 2.936vw
+     ——**いちばん狭い 360px が効く**ので、そこを下回る値を採った。
+     390px 以上では `--footer-font-size` のほうが先に頭打ちになる。 */
+  font-size: min(var(--footer-font-size), 2.85vw);
   text-align: center;
   /* **折り返させない。** 折り返ったら 2 行に戻り、縦の予算が破れる。 */
   white-space: nowrap;
