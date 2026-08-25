@@ -49,10 +49,14 @@ cd reference && uv run python scripts/generate.py   # golden の再生成
   入って検証の意味がなくなる。
 - **電卓の挙動は `crates/calcarc-core/tests/engine_table.rs` が仕様書。** キー列と表示の
   対応を先に変えてから実装を直す。
-- **版数を上げるときは 4 箇所を揃える。** `Cargo.toml`（workspace）、
+- **版数を上げるときは 5 箇所を揃える。** `Cargo.toml`（workspace）、
   `web/package.json`、`README.md` の「現在の版」、`README.en.md` の
-  「Current version」。`pnpm check:version` が検査するのは `Cargo.toml` と
-  `web/package.json` の不一致だけで、**どちらの README も見ない**。
+  「Current version」、`CHANGELOG.md` の見出し。**`pnpm check:version` が
+  5 箇所すべてを見る**（毎回の CI が回している）。
+  **タグを打つときは 1 段厳しくなる**——`node scripts/check-version.mjs --tag v0.5.0`
+  は、4 つの版数がタグ名と一致し、CHANGELOG の見出しに**日付が入っている
+  （「未リリース」でない）**ことまで見る。これは Heavy corpus のワークフローが
+  タグから走ったときに自動で回すので、**リリース前に手で打つ必要はない**。
   画面に出る版数は `web/package.json` からビルド時に埋まる。
 
 ## 踏んだ罠

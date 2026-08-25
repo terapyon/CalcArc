@@ -7,23 +7,56 @@ name: Heavy corpus
 # 走らせるのは:
 #  - 手動(workflow_dispatch)——確かめたくなったとき
 #  - タグを打ったとき——リリースの記録として残す
-#  - 週 1 回——放っておいても記録が積み上がるように
+#
+# **週 1 の cron は外した**(ユーザ裁定 2026-08-25)。自動で走るのはタグを
+# 打ったときだけで、それ以外は手で回す。
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
-  schedule:
-    # 毎週月曜 03:00 UTC(日本時間 12:00)。
-    - cron: "0 3 * * 1"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  # **45 分を使う前に、1 分で分かることを先に見る。** 版数がタグと食い違って
+  # いるなら、そのリリースはもう間違っているので、計算を測る意味がない。
+  version:
+    name: Version numbers agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # node の版はこの複合アクションが一本で持っている。**写しで持つと
+      # 片方だけ更新される**ので、依存を入れる分だけ遅くてもこちらに乗せる。
+      - uses: ./.github/actions/setup-web
+
+      - name: The five places must agree, and match the tag
+        # **タグから走ったときだけタグと照合する。** workflow_dispatch は
+        # ブランチから走るので `github.ref_name` がタグ名ではない——渡すと
+        # 「ブランチ名と版数が違う」という無意味な赤になる。
+        #
+        # `pnpm` 越しではなく node を直に呼ぶのは、引数の受け渡しを
+        # pnpm の版の挙動に預けないためである。
+        working-directory: web
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$IS_TAG" = "true" ]; then
+            node scripts/check-version.mjs --tag "$REF_NAME"
+          else
+            node scripts/check-version.mjs
+          fi
+
   corpus:
     name: Corpus vs reference
     runs-on: ubuntu-latest
+    # **版数が食い違っていたら走らせない。** 手で回したいときに版数が
+    # 揃っていないなら、まず揃える——毎回の CI が同じ検査を回しているので、
+    # ここで止まるのは「main に入っていない何かを手で回した」ときだけである。
+    needs: version
     # 生成コーパスは 1 万件超あり、既定の 6 分では足りない。
     timeout-minutes: 45
     steps:

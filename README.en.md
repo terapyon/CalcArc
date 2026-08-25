@@ -143,10 +143,12 @@ cd reference && uv run python scripts/generate.py
 When you change a number in `crates/calcarc-core`, the expected values need to be
 regenerated. **Do not hand-edit `testdata/` instead of regenerating it.**
 
-When bumping the version number, set the same value in **four places** —
-`Cargo.toml`, `web/package.json`, "Current version" in `README.md`, and "Current
-version" in this file. `pnpm check:version` only checks that `Cargo.toml` and
-`web/package.json` match — **it does not look at either README**.
+When bumping the version number, set the same value in **five places** —
+`Cargo.toml`, `web/package.json`, "Current version" in `README.md`, "Current
+version" in this file, and the heading in `CHANGELOG.md`. `pnpm check:version`
+checks all five. **When a tag is pushed, CI additionally requires the four
+version numbers to match the tag name, and the CHANGELOG heading to carry a
+date rather than "未リリース" (unreleased).**
 
 For more detail, see [CONTRIBUTING.md](CONTRIBUTING.md) and
 [docs/base-spec.md](docs/base-spec.md) (the overall specification).
