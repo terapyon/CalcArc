@@ -2239,3 +2239,152 @@ LLM・transfer も既存の `the headline case` が実画面から打ってい�
 
 **未達は無い。** 条件 2 だけ、spec の文面（「足したケース」）に対して**片方は足さない判断**
 であり、そのずれを上に明記した。
+
+## 0.3.1 の通貨換算に欠陥を 4 種入れた（2026-08-25 実測、verify-0-3-1-currency）
+
+0.3.0 で作った `pnpm heavy:power:exact`（`web/scripts/exact-power.mjs`）の
+`EXACT_MUTATIONS` は 6 種あったが、**currency を 1 つも触っていなかった**
+（grep で 0 件）。**通貨の欠陥を、いま在る検査が捕まえるか**を測った。
+足したのは変異 4 種で、件数を増やすのが目的ではない。
+
+### 基準値（この BASE で自分で測った 4 つ）
+
+| 走行 | 件数 |
+|---|---:|
+| `cargo test --workspace` | **390 passed**、0 failed |
+| `cd web && pnpm test`（vitest） | **437 passed**（35 ファイル） |
+| `cd web && pnpm exec playwright test` | **180 passed** |
+| `cd reference && uv run --no-config pytest` | **379 passed** |
+
+0.3.0 の記録（`cargo test` が 373 本）を写していない——currency の分だけ
+検査が増えている。
+
+**踏んだ罠 1 件**: このワークツリーの `node_modules` が古く、
+`src/currency/cache.test.ts` が `fake-indexeddb` を解決できずに
+**Test Files 1 failed**（Tests 自体は 422 passed）で終わった。
+`pnpm install --frozen-lockfile` で `fake-indexeddb 6.2.5` が入り、
+35 ファイル 437 本すべて緑になる。**`web/src/wasm/` も古く**、
+`convert_currency` を 1 つも持っていなかった（`pnpm wasm` で作り直した）。
+どちらもこのブランチのコードの問題ではない。
+
+### 変異の選び方: 表を壊さず、合成を壊す
+
+`crates/calcarc-core/src/convert/currency.rs` の `mod tests` は**密**で、
+意味論の大半を同じファイルの 14 本が固定している
+（`every_currency_token_round_trips` / `the_minor_units_match_the_spec` /
+`the_order_is_the_contract` / `a_rate_of_zero_is_an_error_not_a_division` /
+`the_conversion_goes_through_the_base_currency` / `rounding_is_half_to_even`
+ほか）。**minor unit の表を壊す変異は使っていない**——
+`the_minor_units_match_the_spec` が表を literal で持っているので、
+0.3.0 で 2 度実証した型（表を壊す変異は同じファイルの literal テストで
+止まる）どおり、測れるのはその 1 本だけになる。**壊したのは合成のほう**で、
+換算の向き・判定の順序・丸めの tie・符号の 4 つである。
+
+### 実測表（4 種、`cargo test --workspace --no-fail-fast` が 390 本の走行）
+
+| 変異 | 判定（1 度目） | 赤くなったテスト（実測、1 度目） | 層 |
+|---|---|---|---:|
+| `cross-rate-inverted` | 赤 5 本 | `convert::currency::tests::a_rate_of_zero_is_an_error_not_a_division`、`convert::currency::tests::the_conversion_goes_through_the_base_currency`、`convert::currency::tests::the_entry_point_takes_strings_and_never_sees_an_f64`、`convert::currency::tests::the_tie_that_tells_f64_from_an_exact_rational`、`currency_matches_the_reference` | 2 |
+| `zero-check-after-multiply` | **赤 0 本** | （無し） | **0** |
+| `currency-half-even-becomes-half-up` | 赤 2 本 | `convert::currency::tests::rounding_is_half_to_even`、`currency_matches_the_reference` | 2 |
+| `rounded-zero-keeps-its-sign` | 赤 2 本 | `convert::currency::tests::a_rounded_zero_has_no_sign`、`currency_matches_the_reference` | 2 |
+
+「層」は core の単体テストと golden（Python の独立実装との突き合わせ）の
+どちらが反応したかの数である。
+
+**`expectTests` は実測から起こした。** 4 種とも空で 1 度走らせている
+（1 度目の判定は 3 種が `unexpected-red`、`zero-check-after-multiply` だけが
+`ok — 期待どおり 0 本が赤くなった`。空の期待は空の集合と一致するので、
+**赤 0 本の走行は `ok` に見える**——これが `web/tests/unit/exact-power.test.ts` の
+「expects at least one test per mutation」が縛っている形そのものである）。
+そのうえで**実際に赤くなった名前をそのまま書き入れて**から 2 度目を走らせた。
+
+**既存 6 種は 1 度目・2 度目とも `ok` のまま**で、赤の集合は 1 本も動かなかった。
+
+### 暗い帯: 宣言された理由を、誰も検査していなかった
+
+`exchange` の doc コメントは**理由を宣言している**:
+
+> **0 の判定を掛け算より先に置く**のは、`value × to_rate` があふれる組で
+> `Overflow` が `DivisionByZero` を隠さないようにするためである。
+
+**その理由は検査されていなかった。** 判定を掛け算の後ろへ動かす変異
+（`zero-check-after-multiply`）を当てても、ワークスペースの 390 本は
+**1 本も赤くならない**。`a_rate_of_zero_is_an_error_not_a_division` は
+0 のレートを 3 通り踏んでいるが、**どれも積があふれない**ので、判定が
+掛け算の前にあるか後ろにあるかを区別できない。golden の
+`currency/100usdtojpy@0-168.5` も同じである。
+
+[[rationales-rot-silently]] の型だが、**腐ったのではなく最初から
+検査されていなかった**——理由は正しいままで、それを支える走行が
+1 本も無かった。
+
+### 足したもの: 2 件（上限 5 件のうち）
+
+`crates/calcarc-core/src/convert/currency.rs` の `mod tests` に 2 本足した。
+**製品コードは 1 行も変えていない。**
+
+| 足したテスト | 何を言うか |
+|---|---|
+| `a_zero_rate_is_named_even_when_the_product_overflows` | `exchange(10^30, 0, 10^30)` は `DivisionByZero`。**同じ積をレートが 0 でないときに置くと `Overflow`** であることも同じ本で言う（これが無いと、何が来ても `DivisionByZero` を返す実装で 1 行目が通る） |
+| `the_entry_point_names_the_zero_rate_before_it_multiplies` | 同じ順序を**文字列の入口 `convert_currency` から**踏む（[[end-to-end-cases-need-the-whole-path]]） |
+
+10^30 × 10^30 = 10^60 は i128（上限およそ 1.7 × 10^38）に収まらない。
+`Rational::checked_mul` は**先に約分する**ので、約分の効かない組
+（分母がどちらも 1）を選んである。
+
+足したあと**同じ変異でもう一度赤を見た**: `zero-check-after-multiply` は
+**この 2 本だけを赤にする**（他の 388 本は緑）。2 本とも他の 3 種の変異では
+緑のままなので、**主張しているのが順序だけである**ことが測定から言える。
+
+### 足せなかった層: golden では言えない
+
+この帯は**2 層にならない。core の単体テスト 1 層だけである。**
+参照実装（`reference/src/calcarc_reference/currency_ref.py`）の
+`fractions.Fraction` は**多倍長で `Overflow` という結果を持たない**ので、
+`testdata/currency.json` の 33 件に **Overflow のケースは 1 件も無い**
+（エラー 5 件の内訳は `DivisionByZero` 1・`SyntaxError` 4）。
+`crates/calcarc-core/tests/currency_golden.rs` は `CalcError::Overflow` を
+`"Overflow"` に写す腕を持っているが、**その腕は一度も通っていない。**
+
+**参照実装に i128 の上限を持ち込むと「Rust の移植」になる**（CLAUDE.md が
+名指しで禁じている）ので、足していない。**言語間で突き合わせられない主張
+である**ことを、ここに残す。
+
+### 足さなかったもの
+
+残る 3 種（`cross-rate-inverted`・`currency-half-even-becomes-half-up`・
+`rounded-zero-keeps-its-sign`）は**どれも 2 層が見張っていた**ので、
+1 件も足していない。**測る前に足さない。**
+
+### 実行時間（`pnpm heavy:power:exact`、壁時計）
+
+| 走行 | 種類数 | 時間 |
+|---|---:|---:|
+| 1 度目（currency 4 種の `expectTests` 空） | 10 | 未計測 |
+| 2 度目（`expectTests` 実測入り、10 種すべて `ok`） | 10 | 未計測 |
+| 3 度目（検証スイープ、10 種すべて `ok`） | 10 | **236 秒** |
+
+1 変異あたり約 24 秒で、0.3.0 の 6 種 139 秒（約 23 秒／変異）と揃っている。
+**1 度目・2 度目は時計を回し忘れた**——見積り（約 4 分）は 3 度目の実測
+236 秒で置き換えた（[[estimates-are-held-not-prosecuted]]）。
+
+### 検証スイープ（すべて緑）
+
+| 走行 | 結果 |
+|---|---|
+| `cargo test --workspace` | **392 passed**（基準値 390 + 足した 2 本） |
+| `cargo fmt --check` / `cargo clippy --workspace --all-targets -- -D warnings` | 緑 |
+| `pnpm test` / `pnpm typecheck` / `pnpm lint` | **437 passed**（35 ファイル）／緑／緑（infos 2 件、終了コード 0） |
+| `pnpm exec playwright test` | **180 passed** |
+| `uv run --no-config pytest` | **379 passed** |
+| `pnpm heavy:power:exact` | **10 種すべて `ok`** |
+
+**`pnpm heavy` / `heavy:power` / `heavy:ui` は回していない。** currency は
+生成コーパスに 1 件も無いので、重量級の検出力は動かない。
+
+### 変異は残っていない
+
+3 度の走行のあとで `git diff -- crates/ web/src/` を確かめた。残っているのは
+`convert/currency.rs` の `mod tests` に足した **+43 行**だけで、
+**製品コードは 0 行、`web/src/` も 0 行**である。
