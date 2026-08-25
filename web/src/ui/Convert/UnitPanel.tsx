@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  type ConvertCalc,
-  type ConvertCategoryToken,
-  type ConvertUnitToken,
-  initConvert,
-} from "../../convert";
+import { type ConvertCalc, initConvert } from "../../convert";
 import {
   backspace,
   canPushCloseParen,
@@ -22,16 +17,30 @@ import {
   pushOperator,
   text,
 } from "../../convert/entry";
+// **カテゴリの綴りと述語は `types.ts` から取る。** ラッパー本体
+// (`../../convert`)はテストがまるごと差し替えるので、そちらから取ると
+// **モックに無い関数が `undefined` になって落ちる**(`UnitPanel.test.tsx` が
+// トークンの一覧を `types.ts` から取っているのと同じ理由)。
+import type {
+  ConvertCategoryId,
+  ConvertCategoryToken,
+} from "../../convert/types";
+import { isCurrencyCategory } from "../../convert/types";
+import { PROVIDER_ATTRIBUTION } from "../../currency/provider";
+import { CURRENCY_CODE } from "../../currency/rates";
+import type { CurrencyToken } from "../../currency/types";
 import {
   CONVERT_SECTIONS,
+  type ConvertFaceUnit,
   type ConvertField,
   type ConvertKeyToken,
-  UNIT_LABELS,
+  FACE_LABELS,
   unitSections,
 } from "../Keypad/convert";
 import { Keypad } from "../Keypad/Keypad";
 import { Readout } from "../Readout/Readout";
 import styles from "./UnitPanel.module.css";
+import { useCurrencyRates } from "./useCurrencyRates";
 
 /**
  * 単位換算の盤面。**3 つのカテゴリで 1 つを共有する**——長さ・質量・温度で
@@ -68,8 +77,8 @@ const OPERATORS: Record<"add" | "sub" | "mul" | "div", Operator> = {
  * 「日本の単位から」でも「ヤード・ポンドへ」でもない)。
  */
 const DEFAULT_UNITS: Record<
-  ConvertCategoryToken,
-  { from: ConvertUnitToken; to: ConvertUnitToken }
+  ConvertCategoryId,
+  { from: ConvertFaceUnit; to: ConvertFaceUnit }
 > = {
   length: { from: "km", to: "mi" },
   mass: { from: "kg", to: "lb" },
@@ -82,18 +91,46 @@ const DEFAULT_UNITS: Record<
   speed: { from: "kmh", to: "mph" },
   // **SI と IEC の分離が既定で見えるようにする**(設計書 §6 の例、`1 GB`)。
   "data-size": { from: "gb", to: "gib" },
+  // **為替は「外貨から円へ」。** 日本で為替を引く動機のいちばん多い向きで、
+  // area が 坪→m² を既定にしたのと同じ判断である。**レートの中身では
+  // 決めない**(spec §7)——表に無ければキーが押せなくなるだけで、
+  // 既定の位置は動かさない。
+  currency: { from: "usd", to: "jpy" },
 };
 
-export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
+/**
+ * レート日付が無いとき(キャッシュ無し)に出す字。
+ *
+ * **行ごと消さない**(spec §5・§0.0-3)——**古いときだけ日付を出すと、
+ * 出ていないことが「新しい」の意味になり**、読み手がそれを学習しなければ
+ * ならなくなる。**同じ場所に同じ形で、いつも出す。**
+ */
+const NO_DATE = "—";
+
+/**
+ * `=` が式を畳むときに通す恒等換算。**カテゴリに依らない**——`1 m → 1 m` は
+ * どんな式に対しても「有理数のまま評価して 10 進に落とす」だけである。
+ *
+ * **為替でここを `convertCurrency` にしない。** あちらは着地通貨の桁で
+ * 丸めるので、`=` が打った値を書き換えてしまう(`settled()` の注記)。
+ */
+const FOLD_CATEGORY: ConvertCategoryToken = "length";
+const FOLD_UNIT = "m";
+
+export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   const defaults = DEFAULT_UNITS[category];
+  const currency = isCurrencyCategory(category);
   const [calc, setCalc] = useState<ConvertCalc | null>(null);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState<ConvertField>("value");
   const [entry, setEntry] = useState<Entry>(EMPTY);
   // **符号は値の一部だが、Entry には入らない**(計画の裁定 3)。
   const [negative, setNegative] = useState(false);
-  const [from, setFrom] = useState<ConvertUnitToken>(defaults.from);
-  const [to, setTo] = useState<ConvertUnitToken>(defaults.to);
+  const [from, setFrom] = useState<ConvertFaceUnit>(defaults.from);
+  const [to, setTo] = useState<ConvertFaceUnit>(defaults.to);
+  // **為替のときだけレートを読む**(spec §0.0-2)。他の 7 カテゴリを見て
+  // いるあいだは、`fetch` も IndexedDB も触らない。
+  const rates = useCurrencyRates(currency);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +160,19 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
   const valueField = active === "value";
 
   /**
+   * その通貨のレート。**`validate` が通した `rates` の鍵からだけ起こす**
+   * (Task 6 の申し送り)——`CURRENCY_TOKENS` から起こすと、**検証で落ちた
+   * はずの通貨が押せてしまう。**
+   *
+   * 綴りの変換は `CURRENCY_CODE`(`currency/rates.ts`)が持つ。**盤面で
+   * `.toUpperCase()` を書き直さない**——同じ対応表が 2 つになる。
+   */
+  function rateOf(unit: ConvertFaceUnit): string | null {
+    if (!currency || rates.set === null) return null;
+    return rates.set.rates[CURRENCY_CODE[unit as CurrencyToken]] ?? null;
+  }
+
+  /**
    * コアへ渡す式。**符号はここで先頭に付く**(計画の裁定 3)。空の入力には
    * 付けない——`-` だけを渡すと、何も打っていない画面に SyntaxError が出る。
    */
@@ -138,7 +188,13 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
    */
   function settled(): string | null {
     if (calc === null || typed === "") return null;
-    const folded = calc.convert(typed, category, from, from);
+    // **為替でも畳むのは単位の恒等換算である。** `convertCurrency` は
+    // **着地通貨の桁で丸める**(spec §3.1)ので、JPY を選んで `12.5` と
+    // 打つと `13` に化ける——**打った値が `=` で書き換わってはならない。**
+    // 畳むのは「式を数にする」ことだけで、丸めは表示側の仕事である。
+    const folded = currency
+      ? calc.convert(typed, FOLD_CATEGORY, FOLD_UNIT, FOLD_UNIT)
+      : calc.convert(typed, category as ConvertCategoryToken, from, from);
     if (folded.text === null) return null;
     const plain = folded.text.replace(/,/g, "");
     return /^-?\d+(\.\d+)?$/.test(plain) ? plain : null;
@@ -146,6 +202,12 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
 
   /** いま押せないキー。**DEL はどの面にも居る**ので、単位面では消すものが無い。 */
   function keyDisabled(token: ConvertKeyToken): boolean {
+    // **レート表に無い通貨は押せない**(spec §7)。`Key` が `:disabled` で
+    // 薄くするので、**押せないキーは押せないように見える**——0.2.0 の
+    // 予約スロットの穴(有効なキーと同じ見た目で無反応)を繰り返さない。
+    if (currency && token.startsWith("unit:")) {
+      return rateOf(token.slice("unit:".length) as ConvertFaceUnit) === null;
+    }
     switch (token) {
       case "del":
         return !valueField;
@@ -184,7 +246,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
       return;
     }
     if (token.startsWith("unit:")) {
-      const unit = token.slice("unit:".length) as ConvertUnitToken;
+      const unit = token.slice("unit:".length) as ConvertFaceUnit;
       if (active === "from") setFrom(unit);
       else if (active === "to") setTo(unit);
       return;
@@ -258,23 +320,32 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
 
   // 結果は保持しない。**打った通りの文字列をコアに評価させる**(spec §4.3)
   // ——式も単位も解釈するのはコアで、ここは境界を渡すだけである。
+  const fromRate = rateOf(from);
+  const toRate = rateOf(to);
+  // 結果は保持しない。**打った通りの文字列をコアに評価させる**(spec §4.3)。
+  // **為替はレートを引数で渡す**(spec §3)——レートが 1 つでも欠けていれば
+  // 換算しない(そのキーは押せないので、既定が欠けているときだけ起きる)。
   const shown =
-    calc !== null && typed !== ""
-      ? calc.convert(typed, category, from, to)
-      : null;
+    calc === null || typed === ""
+      ? null
+      : currency
+        ? fromRate === null || toRate === null
+          ? null
+          : calc.convertCurrency(typed, from, to, fromRate, toRate)
+        : calc.convert(typed, category as ConvertCategoryToken, from, to);
   const answer =
     shown === null
       ? ""
       : shown.text === null
         ? "Math ERROR"
-        : `${shown.text} ${UNIT_LABELS[to]}`;
+        : `${shown.text} ${FACE_LABELS[to]}`;
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**(設計書 §2)。
   // 単位は常に値を持つので、消えるのは未入力の値だけである。
   const entries = FIELD_ORDER.map((field) => ({
     label: FIELD_LABELS[field],
     value:
-      field === "value" ? typed : UNIT_LABELS[field === "from" ? from : to],
+      field === "value" ? typed : FACE_LABELS[field === "from" ? from : to],
     active: field === active,
   })).filter((item) => item.active || item.value !== "");
 
@@ -292,6 +363,38 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
           },
         ]}
       />
+      {/* **レート日付は常にここに出る**(spec §5・§0.0-3)。キャッシュが
+          新しくても古くても、オフラインでも取得に失敗していても、**同じ
+          場所に同じ形で**——古いときだけ出すと、出ていないことが「新しい」
+          の意味になる。**帰属表示はその隣**(spec §2.1 実装時義務 3・§7)
+          ——出さない選択肢は無い。 */}
+      {currency && (
+        <p className={styles.rate} data-testid="currency-rate">
+          <span data-testid="currency-rate-date">{`Rate: ${
+            rates.set?.date ?? NO_DATE
+          }`}</span>
+          {/* オフラインは**状態であってエラーではない**(spec §5)。
+              キャッシュがあればそのまま換算が続く。 */}
+          {rates.offline && <span data-testid="currency-offline">Offline</span>}
+          <a
+            className={styles.attribution}
+            href={PROVIDER_ATTRIBUTION.href}
+            target="_blank"
+            rel="noreferrer"
+            data-testid="currency-attribution"
+          >
+            {PROVIDER_ATTRIBUTION.text}
+          </a>
+        </p>
+      )}
+      {/* **キャッシュ無しはエラーではなく案内である**(spec §5)。読み込み中は
+          出さない——開いた直後の一瞬だけ「ありません」と出て消えるのは嘘で
+          ある。**このとき換算結果の欄は出ない**(`shown` が null になる)。 */}
+      {currency && !rates.loading && rates.set === null && (
+        <p className={styles.notice} role="note" data-testid="currency-none">
+          為替レートがありません。インターネットに接続して取得してください。
+        </p>
+      )}
       <Keypad
         sections={valueField ? CONVERT_SECTIONS : unitSections(category)}
         onPress={press}
@@ -300,7 +403,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryToken }) {
       />
       {shown !== null && shown.text !== null && (
         <p className={styles.result} data-testid="convert-result">
-          {`${typed} ${UNIT_LABELS[from]} = ${shown.text} ${UNIT_LABELS[to]}`}
+          {`${typed} ${FACE_LABELS[from]} = ${shown.text} ${FACE_LABELS[to]}`}
         </p>
       )}
     </section>

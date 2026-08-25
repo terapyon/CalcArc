@@ -16,7 +16,7 @@ U-1 が決めている。
 1. **金額を外へ送らない。** 落とすのはレート表で、換算はこの端末で行う
 2. **起動時に通信しない。** ネットワークは Currency を開いたあとの話である
 3. **古いレートを隠さない。** いつのレートかを必ず画面に出す
-4. **レートが無くても、他の 6 カテゴリは 1 つも壊れない**
+4. **レートが無くても、他の 7 カテゴリは 1 つも壊れない**（**【訂正 2026-08-20】U-2 で Convert は 7 カテゴリになった。当初は 6 と書いていた**）
 5. **換算の算術は `calcarc-core`。** web が持つのは取得と保存だけである
 6. **API キーを持たない。** クライアントに秘密は置けない
 
@@ -81,6 +81,112 @@ interface CurrencyRateSet {
 
 **「金額を送って換算結果を受け取る」形の API は、この段階で落とす**（§0.0-1）。
 
+**【プロバイダの確認 2026-08-20】ExchangeRate-API の Open Access エンドポイントを選ぶ。
+4 点とも一次情報で確認できた。**
+
+- **サービス名**: ExchangeRate-API（Open Access / 無キー版）。運営は AYR Tech (Pty) Ltd
+- **エンドポイントの形**: `https://open.er-api.com/v6/latest/{BASE}`
+  （例: `.../v6/latest/USD`）。**キーもトークンも URL に無い。**
+  **金額はどこにも乗らない**——落とすのはレート表だけで、換算はこの端末で行う（§0.0-1）
+- **一次情報**:
+  - ドキュメント <https://www.exchangerate-api.com/docs/free>
+  - 利用規約 <https://www.exchangerate-api.com/terms>
+  - **どちらもレスポンス自身が `documentation` / `terms_of_use` フィールドで指している**
+    （出どころの裏取りが応答の中で完結する）
+- **取得日**: 2026-08-20（実測。応答の `time_last_update_utc` は
+  `Thu, 20 Aug 2026 00:02:31 +0000`、`time_next_update_utc` は
+  `Fri, 21 Aug 2026 00:11:41 +0000`、`time_eol_unix` は `0`＝廃止予定なし）
+
+**4 点それぞれの根拠（原文）:**
+
+1. **API キーが不要**（§0.0-6）——ドキュメントの見出しが
+   *「Open Access, No Key Required」*、比較表が *「Open API / **No API Key** /
+   Attribution Required / Updates Once Per Day / Rate Limited」*。
+
+   > If you want a free exchange rates API with no API key requirement for a small
+   > project then this is what you're looking for!
+
+2. **この使い方（PWA からの取得・端末へのキャッシュ）を許す**——
+
+   > You're welcome to cache the data we respond with and to use it for either personal
+   > or commercial currency conversion purposes. You are, however, not allowed to
+   > re-distribute it.
+
+   規約の Data Caching Policy も同じことを言う。
+
+   > Users are given permission to store & re-use any data retrieved from our API.
+   > Users are, however, strongly reminded of the terms in the LICENSE section above
+   > specifying that data gathered from our API cannot be re-distributed - caching is
+   > for customer end-use only.
+
+   **CalcArc の使い方はこの「end-use」側である。** IndexedDB に置くのは**この端末の
+   換算のためだけ**で、他へ配らない。規約が禁じているのは再配布と、
+   *「any product or service that offers programmatic or automatic access to exchange
+   rate data」*——**レートを API として他へ出す形**であり、CalcArc はそれをしない
+   （§9 が複数プロバイダも履歴レートも外している）。
+3. **商用・非商用の別と帰属表示**——**商用・非商用のどちらでもよい。帰属表示は要る。**
+
+   > This license does not restrict Free Plan accounts differently to paid accounts, so
+   > both Free Plan and paid ExchangeRate-API accounts are suitable for either commercial
+   > or personal use.
+
+   > This open access API is subject to our Terms and requires attribution.
+
+   **出す文言はドキュメントが指定している**（これをそのまま置く）:
+
+   ```html
+   <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a>
+   ```
+
+   > We require attribution on the pages you're using these rates with the link below
+
+   > You're also welcome to make the attribution link discreet and in keeping with how the
+   > rest of your application looks - we leave this up to you.
+
+   **したがって §7 が予約した置き場を使う**——レート日付の行の隣に、この文言とリンクを出す。
+   見た目は他に合わせてよいが、**出さない選択肢は無い。**
+4. **レート制限**——**1 日 1 回の更新には十分**（§4.2 の 24 時間の境とちょうど噛み合う）。
+
+   > • If you only request once every 24 hours you won't need to read any more of this
+   > section. Easy!
+   > • If you can't keep a cached response for that long, you could still request once
+   > every hour and never get rate limited.
+
+   > Rate limited IP's will receive HTTP code 429 responses. After 20 minutes the rate
+   > limit will finish and new requests will be allowed through.
+
+   **429 は §5 の「失敗」として扱えばよい**——古いキャッシュで換算が続く（§0.0-3 で
+   日付は出したまま）。
+
+**「金額を送って換算結果を受け取る」形ではない**（§0.0-1）。GET するのはレート表 1 枚で、
+**リクエストに金額を入れる場所が無い。**
+
+**実測（2026-08-20、`curl` に `Origin:` を付けて確認）:**
+
+- `access-control-allow-origin: *`——**ブラウザから直接引ける**（プロキシを立てなくてよい）
+- `cache-control: public, max-age=3600`
+- **§3.1 の 16 通貨がすべて `rates` に載っていた**（応答は 166 通貨）。
+  **`TWD` と `VND` が要るので ECB 由来のプロバイダは採れない**——ECB の参照レートは
+  この 2 つを公表しておらず、実測でも Frankfurter（ECB 由来）の応答 29 通貨に
+  `TWD` `VND` が無かった。**16 面のうち 2 つが常に押せないのは §7 の意図ではない。**
+
+**`CurrencyRateSet`（§2.1）への対応づけ:**
+
+| §2.1 | 応答の何から作るか |
+|---|---|
+| `baseCurrency` | `base_code`（要求した通貨。例 `"USD"`） |
+| `date` | **そのままは無い。** `time_last_update_utc`（RFC 1123。例 `"Thu, 20 Aug 2026 00:02:31 +0000"`）から `YYYY-MM-DD` を作る |
+| `fetchedAt` | こちらで打つ（応答には無い） |
+| `rates` | `rates`（**下記の注意**） |
+| `provider` | `provider`（`"https://www.exchangerate-api.com"`）を識別子にできる |
+
+**【Task 5 への申し送り】`rates` の値は JSON の数値である**（`"JPY": 158.548543` のように
+引用符が無い）。**spec は「文字列で保つ」と決めている**（§2.1）ので、
+**`JSON.parse` の戻り値から取ると、そこで `f64` を一度通ってしまう。**
+**受け取った生のテキストから、その通貨の数値リテラルの綴りを取り出す工夫が要る。**
+**「`parseFloat` して文字列に戻す」は駄目である**——それは `f64` を通したのと同じで、
+§3 が禁じていることそのものになる。
+
 ## §3 換算は U-1 のエンジンに乗る
 
 **通貨は「factor が動的な単位」である。**
@@ -134,6 +240,61 @@ U-1 の表示規則（有効数字 10 桁）をそのまま使うと、`100 USD`
 **【実装時の義務】この 16 行を ISO 4217 の一次情報で確認してから landing する。**
 私は記憶で書いている。**畳の出典（U-2 §3.2）と同じ扱いである。**
 
+**【ISO 4217 の確認 2026-08-20】16 行すべて確認できた。落とした通貨は無い。**
+
+- **テーブル**: ISO 4217 **「List One: Current Currency & Funds Codes」**（`list-one.xml`）
+- **版**: XML のルート要素が `<ISO_4217 Pblshd="2026-01-01">`。
+  発効中の最新改訂は **Amendment 180（2026 年 1 月 1 日発効**、ブルガリアのユーロ導入
+  = `BGN` を List Three へ、`EUR` を List One のブルガリア行へ）。**この 16 通貨に
+  Amendment 180 が触れた行は `EUR` だけで、minor unit は 2 のまま**（改訂文自身が
+  `Bulgaria / Euro / EUR / 978 / 2` と書いている）
+- **維持機関**（同ページの原文）:
+
+  > SIX is the official Maintenance Agency of these currency codes under ISO 4217 and as
+  > such the only recognized, authoritative source on currency code designations.
+
+- **出典**: SIX Group「Data Standards」ページと、そこから直リンクされる XML
+  - <https://www.six-group.com/en/products-services/financial-information/data-standards.html>
+  - <https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml>
+  - Amendment 180: <https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/dl-currency-iso-amendment-180.pdf>
+  - （`iso-currrency` の `r` が 3 つなのは**先方の URL がそうなっている**。誤記ではない）
+- **確認のしかた**: XML を取得し、`<CcyNtry>` を全 280 件走査して `<Ccy>` ごとの
+  `<CcyMnrUnts>` を**集合**にした。**同じ通貨コードが複数国に現れても値が割れないこと**を
+  同時に見ている（`USD` は 19 か国、`EUR` は 37 か国、`GBP` は 4 か国に現れるが、
+  minor unit はいずれも 1 通り）。
+
+| 通貨 | 数字コード | `CcyMnrUnts` | spec の表 | |
+|---|---|---|---|---|
+| `JPY` | 392 | **0** | 0 | 一致 |
+| `KRW` | 410 | **0** | 0 | 一致 |
+| `VND` | 704 | **0** | 0 | 一致 |
+| `USD` | 840 | 2 | 2 | 一致 |
+| `EUR` | 978 | 2 | 2 | 一致 |
+| `GBP` | 826 | 2 | 2 | 一致 |
+| `CHF` | 756 | 2 | 2 | 一致 |
+| `CNY` | 156 | 2 | 2 | 一致 |
+| `THB` | 764 | 2 | 2 | 一致 |
+| `SGD` | 702 | 2 | 2 | 一致 |
+| `HKD` | 344 | 2 | 2 | 一致 |
+| `TWD` | 901 | 2 | 2 | 一致 |
+| `AUD` | 036 | 2 | 2 | 一致 |
+| `CAD` | 124 | 2 | 2 | 一致 |
+| `INR` | 356 | 2 | 2 | 一致 |
+| `BRL` | 986 | 2 | 2 | 一致 |
+
+**16 行とも一致したので、§3.1 の表・§7 の「固定 16 通貨」・§8 の golden ケースは
+書き換えない。**
+
+**ついでに確認した**（同じ XML）: §3.1 が「入れない」と名指しした `KWD` `BHD` `JOD`
+`OMR` は**いずれも 3**。**`TND` も 3、`CLF` と `UYW` は 4** で、**「0 か 2 のどちらか」が
+崩れるという §3.1 の判断は正しい。** 貴金属（`XAU` など）の minor unit は `N.A.` である。
+
+**版で動く。引くときは版を添えること**（U-2 §3.2 の教訓）。**`list-one.xml` は同じ URL の
+まま中身が差し替わる**——**版は URL ではなく `Pblshd` 属性と Amendment 番号が持つ。**
+**「定義値だから陳腐化しない」は「変わらない」の意味ではなく、「変わるときは改訂番号が
+付く」の意味である**（Amendment 180 が現に List One を書き換えている）。**引き直すときは
+`Pblshd` を見て、この記録の `2026-01-01` と比べること。**
+
 **整数部のカンマは U-1 と同じ**（`numerical-policy.md` の表示節）。
 **丸めは round-half-to-even**——プロジェクトの中で丸め方向を 2 つ持たない。
 
@@ -178,6 +339,13 @@ U-1 の表示規則（有効数字 10 桁）をそのまま使うと、`100 USD`
 - **`baseCurrency` か `date` が読めない** → **セット全体を捨てる**。
   基準通貨が無ければ、どのレートも意味を持たない
 - **知らない通貨が入っている** → 捨てる（面に無いものは使わない）
+- **【追加 2026-08-20】読めるレートが 1 件も残らない** → **セット全体を捨てる**。
+  上の 3 つを適用した結果ここに落ちることがある。**捨てないと、日付だけが出て全キーが押せない画面**になる
+  ——**§5 の案内のほうが読める**。**§4.3 が当初名指しした「丸ごと捨てる」条件（`baseCurrency` と `date`）に
+  1 つ足している**ので、ここに明記する。
+- **【追加 2026-08-20】`fetchedAt` と `provider` が読めないのは致命的ではない。**
+  `fetchedAt` は空にして「取りに行く」側へ倒す（§4.2 の 24 時間判定が経過を測れないだけで、
+  **レートそのものは使える**）。**丸ごと捨てるのは `baseCurrency` と `date` と、上の「1 件も残らない」だけである。**
 
 ### 4.4 キャッシュの版（設計書 §10）
 
@@ -198,7 +366,7 @@ U-1 の表示規則（有効数字 10 桁）をそのまま使うと、`100 USD`
   日付を出す（設計書 §35）
 - **キャッシュが無い**: 換算できない。**エラーではなく案内**を出す——
   「為替レートがありません。インターネットに接続して取得してください。」
-  **このとき Convert の他の 6 カテゴリは 1 つも壊れない**（§0.0-4）
+  **このとき Convert の他の 7 カテゴリは 1 つも壊れない**（§0.0-4。**U-2 で 7 になった**）
 
 ## §6 プライバシーと接続先
 
@@ -233,6 +401,69 @@ Convert の 8 番目のカテゴリ（`#convert/currency`）。**項目行・単
 
 **押せないキーは押せないように見せる**——0.2.0 の予約スロットの穴（有効なキーと
 同じ見た目で無反応）を繰り返さない。**computed style を読む E2E で固定する。**
+
+**【実測 2026-08-20】16 通貨は枠に収まる。落とした通貨は無い。**
+
+**推論では決めていない**——Playwright（mobile 390 × 844）で 8 カテゴリ 16 面を測った。
+
+```text
+通貨 16 個・左 3 列 → 6 行 30 キー。単位面 440.875 x 440.875
+                      DEL の枠からの相対位置も 224.4375,0 → 269.3125,0 へ動く
+通貨 16 個・5 列    → 4 行 20 キー。単位面 366.0625 x 366.0625
+                      DEL 224.4375,0 / AC 299.25,0（数字面と一致）
+キー 1 つ           → 66.8125 x 66.8125（44px の下限を割らない）
+```
+
+**採った置き方**: **2 行目以降の 4・5 列目にも通貨を置く**（1 行目は 3 個 + DEL + AC、
+以降 5 個ずつ = 3 + 5 + 5 + 3）。
+
+**共有の面パターンは破っていない**——枠は 5 列 × 5 行のまま、**DEL と AC は 1 行目の
+4・5 列目のまま**である（8 カテゴリ 16 面すべてで枠の寸法も DEL・AC の相対位置も同値）。
+**単位 63 個の面は 1 キーも動いていない**（左 3 列のまま）。動かしたのは、
+他のカテゴリでは恒久の空きだった 2 行目以降の 4・5 列目だけである
+（U-2 spec §0.0-4 にこの追記を入れた）。
+
+**通貨を 1 つ落とす案は採らなかった**——どれを落としても誰かの通貨が消える。
+**枠の中に 16 個が収まる置き方が実在した**以上、落とす基準を書く必要が無い。
+したがって §3.1 の表と、この節の「固定 16 通貨」はそのままである。
+
+**【実測 2026-08-20・Task 8】レート日付の行の高さと、縦の予算。**
+
+盤面に増えたのは**この 1 行だけ**である（Playwright、`pnpm build` の実機
+ビルドを preview で配信、パネルが出てから測った）。
+
+```text
+レート日付の行         19px（font-size 13px の 1 行。日付・Offline・帰属表示が同じ行）
+盤面の gap             12px（UnitPanel.module.css の .panel）
+盤面の高さ 390×844     長さ 643.6875 → 通貨 674.6875（+31 = 19 + 12）
+```
+
+> **【訂正 2026-08-20・レビュー指摘】絶対値は、測った要素と盤面の状態を
+> 書いていないと再導出できない。** レビュアーが `section[単位変換]` を測ると
+> **587.6875 → 618.6875**（何も打っていない状態）、**647.6875 → 678.6875**
+> （`1` を打った状態）で、上の 643.6875 とはどれも一致しなかった。
+> **差の +31 は 3 通りとも完全に一致する**ので結論は正しい。
+> **この節が主張しているのは差であって、絶対値ではない。**
+> 絶対値を残すなら「どの要素を・どの状態で」を併記すること。
+
+**縦の予算**（`scrollHeight − innerHeight`。0 なら 1 画面に収まっている）:
+
+| 状態 | 390×844 | 360×640 |
+|---|---|---|
+| レートがある（通常） | **0** | 97 |
+| **キャッシュ無しの案内が出ている** | **10** | 181 |
+
+- **通常の状態は 390×844 で収まる。** 他の 7 カテゴリと同じ 0 である
+  （360×640 の 97 は、他カテゴリの 66 にこの行の 31 が乗った値。
+  **この列は 0.2.1 の時点で全タブが溢れている既知債務**である）。
+- **案内が出ている状態だけ 390×844 で 10px 溢れる。** 案内の箱が 72px
+  （2 行 + 上下 12px の余白）あり、レート日付の行と合わせて 1 画面を
+  10px 超える。**レートが届けば案内は消える**ので、これは
+  **キャッシュを持たない端末が初回にオフラインだったときの一時的な状態**
+  である。**直していない**——文言は §5 が決めており（縮めると案内の意味が
+  変わる）、`viewport-budget.spec.ts` の巡回にも `#convert/currency` は
+  入っていないので**緑と両立する**。`docs/definition-of-done.md` に実測値
+  つきで記録した。
 
 ## §8 検証
 

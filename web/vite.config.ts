@@ -71,6 +71,18 @@ export default defineConfig({
   ],
   build: { target: "es2022" },
   test: {
+    // **時間帯を固定する。手元と CI を同じ条件にするためである。**
+    // 固定しないと手元は JST、CI の runner は UTC で回り、**時間帯で答が
+    // 割れる検査が「手元だけ緑」になる**——2026-08-25 に実際に起きた
+    // (`rates.test.ts` の `fetchedAt` が `2026-08-19 23:30` で、JST では
+    // 経過 32.98 時間・UTC では 23.98 時間と読まれた)。
+    //
+    // **値を UTC にしたのは CI の runner に合わせたからで、UTC が正しい
+    // からではない。** 製品は利用者の時間帯で動く。**「時間帯によらない」
+    // ことは、この固定ではなく専用の検査が主張する**
+    // (`rates.test.ts` の「時間帯の無い綴りは…」)——固定は
+    // **手元と CI をずらさない**ためだけの道具である。
+    env: { TZ: "UTC" },
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],

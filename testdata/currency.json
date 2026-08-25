@@ -1,0 +1,468 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "text": "15,523"
+      },
+      "id": "currency/100usdtojpy@1.0855-168.5",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "0"
+      },
+      "id": "currency/0eurtojpy@1-168.5",
+      "input": {
+        "from": "eur",
+        "from_rate": "1",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "0"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "12.50"
+      },
+      "id": "currency/12.5usdtousd@1.0855-1.0855",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "12.5"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "1.09"
+      },
+      "id": "currency/1eurtousd@1-1.0855",
+      "input": {
+        "from": "eur",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "1"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "10,855.00"
+      },
+      "id": "currency/10000eurtousd@1-1.0855",
+      "input": {
+        "from": "eur",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "10000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "12.34"
+      },
+      "id": "currency/12.345usdtousd@1-1",
+      "input": {
+        "from": "usd",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "1",
+        "value": "12.345"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "12.36"
+      },
+      "id": "currency/12.355usdtousd@1-1",
+      "input": {
+        "from": "usd",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "1",
+        "value": "12.355"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "168"
+      },
+      "id": "currency/168.5jpytojpy@1-1",
+      "input": {
+        "from": "jpy",
+        "from_rate": "1",
+        "to": "jpy",
+        "to_rate": "1",
+        "value": "168.5"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "170"
+      },
+      "id": "currency/169.5jpytojpy@1-1",
+      "input": {
+        "from": "jpy",
+        "from_rate": "1",
+        "to": "jpy",
+        "to_rate": "1",
+        "value": "169.5"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "54.28"
+      },
+      "id": "currency/42.66gbptousd@0.8532-1.0855",
+      "input": {
+        "from": "gbp",
+        "from_rate": "0.8532",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "42.66"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "-1,234.57"
+      },
+      "id": "currency/-1234.567usdtousd@1.0855-1.0855",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "-1234.567"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "0.00"
+      },
+      "id": "currency/-0.001usdtousd@1.0855-1.0855",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "-0.001"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "86,795"
+      },
+      "id": "currency/10000jpytokrw@168.5-1462.5",
+      "input": {
+        "from": "jpy",
+        "from_rate": "168.5",
+        "to": "krw",
+        "to_rate": "1462.5",
+        "value": "10000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "18,905,983"
+      },
+      "id": "currency/1000000krwtovnd@1462.5-27650",
+      "input": {
+        "from": "krw",
+        "from_rate": "1462.5",
+        "to": "vnd",
+        "to_rate": "27650",
+        "value": "1000000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "39.26"
+      },
+      "id": "currency/1000000vndtousd@27650-1.0855",
+      "input": {
+        "from": "vnd",
+        "from_rate": "27650",
+        "to": "usd",
+        "to_rate": "1.0855",
+        "value": "1000000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "92.12"
+      },
+      "id": "currency/100usdtoeur@1.0855-1",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "eur",
+        "to_rate": "1",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "85.32"
+      },
+      "id": "currency/100eurtogbp@1-0.8532",
+      "input": {
+        "from": "eur",
+        "from_rate": "1",
+        "to": "gbp",
+        "to_rate": "0.8532",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "110.42"
+      },
+      "id": "currency/100gbptochf@0.8532-0.9421",
+      "input": {
+        "from": "gbp",
+        "from_rate": "0.8532",
+        "to": "chf",
+        "to_rate": "0.9421",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "824.58"
+      },
+      "id": "currency/100chftocny@0.9421-7.7684",
+      "input": {
+        "from": "chf",
+        "from_rate": "0.9421",
+        "to": "cny",
+        "to_rate": "7.7684",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "491.03"
+      },
+      "id": "currency/100cnytothb@7.7684-38.145",
+      "input": {
+        "from": "cny",
+        "from_rate": "7.7684",
+        "to": "thb",
+        "to_rate": "38.145",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "38.34"
+      },
+      "id": "currency/1000thbtosgd@38.145-1.4623",
+      "input": {
+        "from": "thb",
+        "from_rate": "38.145",
+        "to": "sgd",
+        "to_rate": "1.4623",
+        "value": "1000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "580.71"
+      },
+      "id": "currency/100sgdtohkd@1.4623-8.4917",
+      "input": {
+        "from": "sgd",
+        "from_rate": "1.4623",
+        "to": "hkd",
+        "to_rate": "8.4917",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "410.66"
+      },
+      "id": "currency/100hkdtotwd@8.4917-34.872",
+      "input": {
+        "from": "hkd",
+        "from_rate": "8.4917",
+        "to": "twd",
+        "to_rate": "34.872",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "47.13"
+      },
+      "id": "currency/1000twdtoaud@34.872-1.6435",
+      "input": {
+        "from": "twd",
+        "from_rate": "34.872",
+        "to": "aud",
+        "to_rate": "1.6435",
+        "value": "1000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "89.98"
+      },
+      "id": "currency/100audtocad@1.6435-1.4788",
+      "input": {
+        "from": "aud",
+        "from_rate": "1.6435",
+        "to": "cad",
+        "to_rate": "1.4788",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "6,127.60"
+      },
+      "id": "currency/100cadtoinr@1.4788-90.615",
+      "input": {
+        "from": "cad",
+        "from_rate": "1.4788",
+        "to": "inr",
+        "to_rate": "90.615",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "643.84"
+      },
+      "id": "currency/10000inrtobrl@90.615-5.8342",
+      "input": {
+        "from": "inr",
+        "from_rate": "90.615",
+        "to": "brl",
+        "to_rate": "5.8342",
+        "value": "10000"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "text": "2,888"
+      },
+      "id": "currency/100brltojpy@5.8342-168.5",
+      "input": {
+        "from": "brl",
+        "from_rate": "5.8342",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "DivisionByZero"
+      },
+      "id": "currency/100usdtojpy@0-168.5",
+      "input": {
+        "from": "usd",
+        "from_rate": "0",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "currency/100usdtoxyz@1.0855-168.5",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "xyz",
+        "to_rate": "168.5",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "currency/1e3usdtojpy@1.0855-168.5",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "1e3"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "currency/100usdtojpy@1.0855-abc",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "jpy",
+        "to_rate": "abc",
+        "value": "100"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "currency/\uff11\uff12\uff13usdtojpy@1.0855-168.5",
+      "input": {
+        "from": "usd",
+        "from_rate": "1.0855",
+        "to": "jpy",
+        "to_rate": "168.5",
+        "value": "\uff11\uff12\uff13"
+      },
+      "op": "currency"
+    }
+  ],
+  "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
+  "schema": 1
+}

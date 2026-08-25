@@ -10,6 +10,7 @@
 
 use calcarc_core::AngleMode;
 use calcarc_core::Key;
+use calcarc_core::convert::currency::Currency;
 use calcarc_core::convert::{Category, Unit};
 use calcarc_core::data_scale::DataType;
 use calcarc_core::data_scale::llm::Precision;
@@ -121,6 +122,17 @@ fn convert_category_tokens_match_between_typescript_and_rust() {
     assert_eq!(
         ts, rust,
         "web/src/convert/types.ts の CONVERT_CATEGORY_TOKENS と Category::ALL の token() が食い違っている"
+    );
+}
+
+#[test]
+fn currency_tokens_match_between_typescript_and_rust() {
+    let src = include_str!("../../../web/src/currency/types.ts");
+    let ts = tokens_in_ts_array(src, "export const CURRENCY_TOKENS = [");
+    let rust: Vec<String> = Currency::ALL.iter().map(|c| c.token().to_owned()).collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/currency/types.ts の CURRENCY_TOKENS と Currency::ALL の token() が食い違っている"
     );
 }
 

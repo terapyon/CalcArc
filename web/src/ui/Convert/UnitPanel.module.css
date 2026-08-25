@@ -49,3 +49,39 @@
   grid-template-rows: repeat(5, 1fr);
   aspect-ratio: 1 / 1;
 }
+
+/* **レート日付の行**(U-4 spec §5・§7)。**増える縦はこの 1 行だけ**で、
+   項目行・単位面・Swap・数字面は U-1 のままである。
+
+   日付と帰属表示を**同じ行**に置く——spec §7 が予約したのは「レート日付の
+   行の隣」で、帰属表示のためにもう 1 行使う話ではない。**折り返しは許す**
+   (`flex-wrap`)——狭い画面で帰属表示がはみ出して切れると、**出す義務を
+   果たしていないのと同じ**になる。 */
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--display-status-fg);
+}
+
+/* 帰属表示のリンク。**見た目は他に合わせてよい**とプロバイダの
+   ドキュメントが明示している(spec §2.1 実装時義務 3)が、**出さない選択肢は
+   無い**ので、色だけ落として下線は残す。 */
+.attribution {
+  margin-left: auto;
+  color: inherit;
+}
+
+/* **キャッシュ無しの案内**(spec §5)。**エラーではない**ので、
+   `--error-fg` は使わない——`Readout` の Math ERROR と同じ色にすると、
+   利用者の入力が悪かったように読める。 */
+.notice {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+}

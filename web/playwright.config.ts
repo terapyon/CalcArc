@@ -2,7 +2,9 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  use: { baseURL: "http://localhost:4179" },
+  // **ブラウザの時間帯も固定する**(vite.config.ts の `test.env.TZ` と同じ理由)。
+  // Playwright はブラウザに時間帯を渡すので、`TZ` 環境変数では効かない。
+  use: { baseURL: "http://localhost:4179", timezoneId: "UTC" },
   webServer: {
     // **ポートは 4179（Vite 既定の 4173 ではない）。** 既定のままだと、同じ
     // マシンで動いている別プロジェクトの preview を `reuseExistingServer` が

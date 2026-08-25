@@ -1,8 +1,11 @@
 import type {
+  ConvertCategoryId,
   ConvertCategoryToken,
   ConvertUnitToken,
 } from "../../convert/types";
 import { CONVERT_UNIT_TOKENS } from "../../convert/types";
+import type { CurrencyToken } from "../../currency/types";
+import { CURRENCY_TOKENS } from "../../currency/types";
 import type { KeyDef, KeypadSection } from "./types";
 
 /**
@@ -51,10 +54,21 @@ export type ConvertKeyToken =
   | "eq"
   | "swap"
   | `field:${ConvertField}`
-  | `unit:${ConvertUnitToken}`;
+  | `unit:${ConvertFaceUnit}`;
+
+/**
+ * 面に載る「単位」。**通貨も単位である**——U-4 spec §3 が
+ * 「通貨は factor が動的な単位である」と書いており、offset を持たないので
+ * U-1 のアフィン機構に 1 行も足さずに乗る。
+ *
+ * **接頭辞は `unit:` のまま 1 つにする。** 通貨だけ `currency:` にすると、
+ * 盤面の押下・トグル・読み上げの経路が全部 2 本になる。綴りは重ならない
+ * (単位 63 個と通貨 16 個に同じトークンは無い)。
+ */
+export type ConvertFaceUnit = ConvertUnitToken | CurrencyToken;
 
 /** カテゴリの表示名(計画の裁定 1 の表)。 */
-export const CATEGORY_LABELS: Record<ConvertCategoryToken, string> = {
+export const CATEGORY_LABELS: Record<ConvertCategoryId, string> = {
   length: "長さ",
   mass: "質量",
   temperature: "温度",
@@ -62,6 +76,8 @@ export const CATEGORY_LABELS: Record<ConvertCategoryToken, string> = {
   volume: "体積",
   speed: "速さ",
   "data-size": "データ量",
+  // **U-4 の 8 つ目。** ここだけがネットワーク由来のレートで動く。
+  currency: "為替",
 };
 
 /** カテゴリの英語名。**日本語と併記する**(U-0 §9 の【変更 2026-08-20】)。
@@ -70,7 +86,7 @@ export const CATEGORY_LABELS: Record<ConvertCategoryToken, string> = {
  * **`データ量` の衝突をほどくのはこの表である**——Convert の `data-size` は
  * 単位どうしの換算(`1 GB = 953.674 MiB`)、Scale の `data-scale` は規模の
  * 計算で、**日本語のラベルは両方とも `データ量`** である(U-2 §2)。 */
-export const CATEGORY_LABELS_EN: Record<ConvertCategoryToken, string> = {
+export const CATEGORY_LABELS_EN: Record<ConvertCategoryId, string> = {
   length: "Length",
   mass: "Mass",
   temperature: "Temperature",
@@ -78,6 +94,10 @@ export const CATEGORY_LABELS_EN: Record<ConvertCategoryToken, string> = {
   volume: "Volume",
   speed: "Speed",
   "data-size": "Data Size",
+  // **U-4 の 8 つ目。** 鍵は `ConvertCategoryToken`(7)ではなく
+  // `ConvertCategoryId`(8)である——**`CATEGORY_LABELS` と同じ鍵でなければ
+  // ならない**。この 2 つの表は `ConvertPanel` が同じ id で同時に引く。
+  currency: "Currency",
 };
 
 /**
@@ -326,6 +346,86 @@ export function unitsOf(
   return CONVERT_UNIT_TOKENS.filter((unit) => UNIT_CATEGORY[unit] === category);
 }
 
+/**
+ * 通貨の画面ラベル。**大文字の ISO 4217 コードである**(`JPY` `USD`)。
+ *
+ * トークン(`jpy`)と綴りが違うのは単位と同じ流儀で、**盤面のトークンは
+ * 小文字**(`currency/types.ts`。Rust の `Currency::ALL` と `token_parity.rs`
+ * が突き合わせる)。**記号(`¥` `$`)は使わない**——`$` は米ドル・豪ドル・
+ * カナダドル・香港ドル・シンガポールドル・台湾ドルで重なり、`¥` は日本円と
+ * 中国元で重なる。**同じ面に同じ字が 6 つ並ぶ**ことになり、どれを押したか
+ * 画面から分からなくなる。
+ */
+export const CURRENCY_LABELS: Record<CurrencyToken, string> = {
+  jpy: "JPY",
+  krw: "KRW",
+  vnd: "VND",
+  usd: "USD",
+  eur: "EUR",
+  gbp: "GBP",
+  chf: "CHF",
+  cny: "CNY",
+  thb: "THB",
+  sgd: "SGD",
+  hkd: "HKD",
+  twd: "TWD",
+  aud: "AUD",
+  cad: "CAD",
+  inr: "INR",
+  brl: "BRL",
+};
+
+/**
+ * 通貨の読み上げ名。**ISO コードをそのまま読ませない**(単位と同じ理由)
+ * ——`JPY` は「ジェイピーワイ」、`CHF` は読み手ごとに変わる。
+ *
+ * **「ドル」だけの名前を作らない。** 米ドル・豪ドル・カナダドル・香港ドル・
+ * シンガポールドルが耳で潰れる——単位の `gal(US)` / `gal(Imp)` を
+ * 「ガロン」とだけ読ませないのと同じ判断(U-2 spec §3.4)。
+ */
+const CURRENCY_ARIA_LABELS: Record<CurrencyToken, string> = {
+  jpy: "日本円",
+  krw: "韓国ウォン",
+  vnd: "ベトナムドン",
+  usd: "米ドル",
+  eur: "ユーロ",
+  gbp: "英ポンド",
+  chf: "スイスフラン",
+  cny: "中国元",
+  thb: "タイバーツ",
+  sgd: "シンガポールドル",
+  hkd: "香港ドル",
+  twd: "台湾ドル",
+  aud: "豪ドル",
+  cad: "カナダドル",
+  inr: "インドルピー",
+  brl: "ブラジルレアル",
+};
+
+/** 面に出るラベル。**通貨も単位である**(`ConvertFaceUnit`)。 */
+export const FACE_LABELS: Record<ConvertFaceUnit, string> = {
+  ...UNIT_LABELS,
+  ...CURRENCY_LABELS,
+};
+
+const FACE_ARIA_LABELS: Record<ConvertFaceUnit, string> = {
+  ...UNIT_ARIA_LABELS,
+  ...CURRENCY_ARIA_LABELS,
+};
+
+/**
+ * カテゴリの面に並ぶ単位。**通貨は `CURRENCY_TOKENS` の並びそのまま**
+ * ——`currency_units()` が返す順(= `Currency::ALL`)であり、
+ * **面の並びがレートの中身で動いてはいけない**(spec §7。動くと同じ位置に
+ * 違う通貨が来る)。**押せるかどうかは並びと別の話**で、盤面が `disabled`
+ * で決める。
+ */
+export function faceUnitsOf(
+  category: ConvertCategoryId,
+): readonly ConvertFaceUnit[] {
+  return category === "currency" ? CURRENCY_TOKENS : unitsOf(category);
+}
+
 const RESERVED: KeyDef<ConvertKeyToken> = {
   token: null,
   label: "—",
@@ -440,29 +540,64 @@ const PAD: KeypadSection<ConvertKeyToken> = {
 };
 
 /** 単位 1 つぶんのキー。**ラベル・読み上げ・トークンを手で 3 つ並べない**。 */
-function unitKey(unit: ConvertUnitToken): KeyDef<ConvertKeyToken> {
+function unitKey(unit: ConvertFaceUnit): KeyDef<ConvertKeyToken> {
   return {
     token: `unit:${unit}`,
-    label: UNIT_LABELS[unit],
-    ariaLabel: UNIT_ARIA_LABELS[unit],
+    label: FACE_LABELS[unit],
+    ariaLabel: FACE_ARIA_LABELS[unit],
     variant: "function",
   };
 }
 
 /**
+ * 2 行目以降に置ける単位の数。**1 行目は常に 3**(4・5 列目は DEL と AC)。
+ *
+ * **単位は左 3 列、通貨は 5 列**である。**なぜ揃えないか**——
+ * **通貨は 16 個あり、左 3 列では 15 スロットに入らない**(U-2 spec §0.0-4 の
+ * 【訂正 2026-08-20】が「15 は入り、16 は入らない」と実測している)。
+ *
+ * **実測**(2026-08-20、Playwright、mobile 390 × 844。数字面はどの
+ * カテゴリでも 366.0625 x 366.0625・DEL は枠から 224.4375,0):
+ *
+ * ```text
+ * 通貨 16 個・左 3 列 → 6 行 30 キー。単位面 440.875 x 440.875(+74.8125px)
+ *                       DEL も 224.4375,0 → 269.3125,0 へ動く   ← 枠があふれる
+ * 通貨 16 個・5 列    → 4 行 20 キー。単位面 366.0625 x 366.0625
+ *                       DEL 224.4375,0 / AC 299.25,0            ← 数字面と一致
+ * ```
+ *
+ * **共有の面パターンは破っていない。** 枠は 5 列 × 5 行のまま、DEL と AC は
+ * 1 行目の 4・5 列目のままである(実測で 8 カテゴリ 16 面すべて同値)。
+ * **動かしたのは 2 行目以降の 4・5 列目だけ**で、そこは他のカテゴリでは
+ * 恒久の空きだった場所である——**単位 63 個の面はどれも 3 列のままで、
+ * 1 キーも動いていない**。
+ *
+ * **通貨を落とすほうを採らなかった理由**: どれを落としても誰かの通貨が
+ * 消える。**枠の中に 16 個が収まる置き方が実在した**以上、落とす基準を
+ * 書く必要が無い。
+ *
+ * **キーは 66.8125 x 66.8125**(実測)で、44px の下限を割らない。
+ */
+const ROW_WIDTH = { units: 3, currency: 5 } as const;
+
+/**
  * 単位面を組む。**1 行目の 4・5 番目は DEL・AC**(数字面と同じ位置)。単位は
  * 1 行あたり左 3 セルに詰め、4・5 列目は恒久の空き(`dataScale.ts` の `TYPES` と
  * `llm.ts` の `buildCandidateFace` と同じ配り方)。
+ *
+ * **為替だけ 2 行目以降が 5 列である**(`ROW_WIDTH`)。16 通貨は左 3 列では
+ * 枠にあふれる——**実測してから決めた**。
  */
-function unitFace(
-  category: ConvertCategoryToken,
-): KeypadSection<ConvertKeyToken> {
-  const units = unitsOf(category);
+function unitFace(category: ConvertCategoryId): KeypadSection<ConvertKeyToken> {
+  const units = faceUnitsOf(category);
+  const width = ROW_WIDTH[category === "currency" ? "currency" : "units"];
   const keys: KeyDef<ConvertKeyToken>[] = [];
   let index = 0;
   let firstRow = true;
   do {
-    for (let column = 0; column < 3; column += 1) {
+    // **1 行目は必ず 3 列。** 4・5 列目は DEL と AC が取る(どの面でも同じ位置)。
+    const columns = firstRow ? 3 : width;
+    for (let column = 0; column < columns; column += 1) {
       const unit = units[index];
       keys.push(unit === undefined ? RESERVED : unitKey(unit));
       if (unit !== undefined) index += 1;
@@ -471,7 +606,7 @@ function unitFace(
       keys.push(DEL, AC);
       firstRow = false;
     } else {
-      keys.push(RESERVED, RESERVED);
+      for (let column = columns; column < 5; column += 1) keys.push(RESERVED);
     }
   } while (index < units.length);
   return {
@@ -488,7 +623,7 @@ function unitFace(
 export const CONVERT_SECTIONS: KeypadSection<ConvertKeyToken>[] = [FIELDS, PAD];
 
 const UNIT_SECTIONS: Record<
-  ConvertCategoryToken,
+  ConvertCategoryId,
   KeypadSection<ConvertKeyToken>[]
 > = {
   length: [FIELDS, unitFace("length")],
@@ -498,11 +633,12 @@ const UNIT_SECTIONS: Record<
   volume: [FIELDS, unitFace("volume")],
   speed: [FIELDS, unitFace("speed")],
   "data-size": [FIELDS, unitFace("data-size")],
+  currency: [FIELDS, unitFace("currency")],
 };
 
 /** 単位面。項目行はどちらの面でも上に居座る——面が変わっても項目は選べる。 */
 export function unitSections(
-  category: ConvertCategoryToken,
+  category: ConvertCategoryId,
 ): KeypadSection<ConvertKeyToken>[] {
   return UNIT_SECTIONS[category];
 }

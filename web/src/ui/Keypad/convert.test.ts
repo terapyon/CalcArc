@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONVERT_CATEGORY_IDS,
   CONVERT_CATEGORY_TOKENS,
   CONVERT_UNIT_TOKENS,
 } from "../../convert/types";
+import { CURRENCY_TOKENS } from "../../currency/types";
 import {
   CATEGORY_LABELS,
   CATEGORY_LABELS_EN,
   CONVERT_SECTIONS,
+  CURRENCY_LABELS,
+  faceUnitsOf,
   UNIT_LABELS,
   unitSections,
   unitsOf,
@@ -72,9 +76,7 @@ describe("Convert のキー集合", () => {
     // **枠が動かないことは E2E が見る。** ここで見るのは定義の位置である。
     const faces = [
       PAD,
-      ...CONVERT_CATEGORY_TOKENS.map((category) =>
-        face(unitSections(category)),
-      ),
+      ...CONVERT_CATEGORY_IDS.map((category) => face(unitSections(category))),
     ];
     let checked = 0;
     for (const f of faces) {
@@ -84,7 +86,9 @@ describe("Convert のキー集合", () => {
       expect(f.keys[4]?.token).toBe("ac");
       checked += 1;
     }
-    expect(checked).toBe(8);
+    // **数字面 + 8 カテゴリ。** 為替の面も同じ位置に DEL と AC を持つ
+    // ——2 行目以降が 5 列でも、**1 行目は 3 列 + DEL + AC のまま**である。
+    expect(checked).toBe(9);
   });
 
   it("spells the degree signs in the label, not in the token", () => {
@@ -111,15 +115,20 @@ describe("Convert のキー集合", () => {
   it("gives every unit key a spoken name of its own", () => {
     // 読み上げ名は日本語(base-spec §43)。`m` を「エム」と読ませない。
     const spoken = new Set<string>();
-    for (const category of CONVERT_CATEGORY_TOKENS) {
+    for (const category of CONVERT_CATEGORY_IDS) {
       for (const key of face(unitSections(category)).keys) {
         if (key.token === null || !key.token.startsWith("unit:")) continue;
-        // ASCII だけの読み上げ名は綴りをそのまま読ませることになる。
+        // ASCII だけの読み上げ名は綴りをそのまま読ませることになる
+        // (`JPY` は「ジェイピーワイ」、`CHF` は読み手ごとに変わる)。
         expect(key.ariaLabel).not.toMatch(/^[\u0020-\u007e]+$/);
         spoken.add(key.ariaLabel);
       }
     }
-    expect(spoken.size).toBe(CONVERT_UNIT_TOKENS.length);
+    // **単位 63 + 通貨 16。** 1 つでも重なれば件数が落ちる——
+    // 「ドル」だけの名前を 6 通貨に付けたら、ここで見つかる。
+    expect(spoken.size).toBe(
+      CONVERT_UNIT_TOKENS.length + CURRENCY_TOKENS.length,
+    );
   });
 
   it("offers the four fields the spec asks for", () => {
@@ -183,7 +192,10 @@ describe("Convert のキー集合", () => {
   });
 
   it("names every category in Japanese", () => {
-    expect(Object.keys(CATEGORY_LABELS)).toEqual([...CONVERT_CATEGORY_TOKENS]);
+    // **8 つある**——境界の 7 つ(`CONVERT_CATEGORY_TOKENS` = Rust の
+    // `Category::ALL`)に、U-4 の為替が 1 つ足される。**為替は core の
+    // カテゴリではない**ので、あちらの表には入らない(`convert/types.ts`)。
+    expect(Object.keys(CATEGORY_LABELS)).toEqual([...CONVERT_CATEGORY_IDS]);
     expect(CATEGORY_LABELS.length).toBe("長さ");
     expect(CATEGORY_LABELS.mass).toBe("質量");
     expect(CATEGORY_LABELS.temperature).toBe("温度");
@@ -191,14 +203,25 @@ describe("Convert のキー集合", () => {
     expect(CATEGORY_LABELS.volume).toBe("体積");
     expect(CATEGORY_LABELS.speed).toBe("速さ");
     expect(CATEGORY_LABELS["data-size"]).toBe("データ量");
+    expect(CATEGORY_LABELS.currency).toBe("為替");
   });
 
   it("names every category in English too", () => {
     // **併記のための表**(U-0 §9 の【変更 2026-08-20】)。日本語の表と鍵が
     // 揃っていないと、盤面が `undefined` を連結して出す。
-    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual([
-      ...CONVERT_CATEGORY_TOKENS,
-    ]);
+    //
+    // **鍵は `CONVERT_CATEGORY_IDS`(8)である。** ここには当初
+    // `CONVERT_CATEGORY_TOKENS`(7)と書いてあった——**併記を入れた日には
+    // 為替がまだ無く、7 と 8 の区別が付かなかった**。U-4 を積み直したときに
+    // この行が赤くなって見つかった。
+    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual([...CONVERT_CATEGORY_IDS]);
+    // **2 つの表の鍵が同じであること自体を主張する。** 上の 2 行は
+    // どちらも「この表は 8 つの id を持つ」と言っているだけで、
+    // **両者が同じ鍵であることは言っていない**——`ConvertPanel` が
+    // 同じ id で 2 つの表を同時に引く以上、こちらが本体の不変条件である。
+    expect(Object.keys(CATEGORY_LABELS_EN)).toEqual(
+      Object.keys(CATEGORY_LABELS),
+    );
     expect(CATEGORY_LABELS_EN.length).toBe("Length");
     expect(CATEGORY_LABELS_EN.mass).toBe("Mass");
     expect(CATEGORY_LABELS_EN.temperature).toBe("Temperature");
@@ -208,6 +231,7 @@ describe("Convert のキー集合", () => {
     // **Scale の `data-scale` は `Data Scale`** である。日本語はどちらも
     // `データ量` で、**英語だけが 2 つの系統を分けている**(U-2 §2)。
     expect(CATEGORY_LABELS_EN["data-size"]).toBe("Data Size");
+    expect(CATEGORY_LABELS_EN.currency).toBe("Currency");
   });
 
   it("writes the basis into the name where the unit has more than one", () => {
@@ -247,7 +271,7 @@ describe("Convert のキー集合", () => {
     // in the same place on every face" と同じ流儀で、`unitSections()` が
     // 実際に返すキー数を見る。枠は 5 行 × 5 列 = 25 セルが上限。
     let checked = 0;
-    for (const category of CONVERT_CATEGORY_TOKENS) {
+    for (const category of CONVERT_CATEGORY_IDS) {
       const keys = face(unitSections(category)).keys;
       expect(
         keys.length,
@@ -255,6 +279,57 @@ describe("Convert のキー集合", () => {
       ).toBeLessThanOrEqual(25);
       checked += 1;
     }
-    expect(checked).toBe(7);
+    expect(checked).toBe(8);
+    // **為替は 16 通貨で 4 行 20 セル**(実測 2026-08-20、spec §7)。
+    // 左 3 列に詰めると 6 行 30 セルになって枠があふれる——**2 行目以降を
+    // 5 列にしてある**。この件数が 30 に変わったら、それが起きている。
+    expect(face(unitSections("currency")).keys).toHaveLength(20);
+  });
+  it("names every currency of the eighth category exactly once", () => {
+    // **並びは境界の並びである**(`currency/types.ts` = Rust の
+    // `Currency::ALL`)。**面の並びがレートの中身で動いてはならない**
+    // (spec §7)ので、`unitSections` が返す順をそのまま突き合わせる。
+    const shown = face(unitSections("currency")).keys.flatMap((key) =>
+      key.token?.startsWith("unit:") ? [key.token.replace("unit:", "")] : [],
+    );
+    expect(shown).toEqual([...CURRENCY_TOKENS]);
+    expect(shown).toHaveLength(16);
+    expect(faceUnitsOf("currency")).toEqual(CURRENCY_TOKENS);
+  });
+
+  it("spells the currencies as ISO codes, not as symbols", () => {
+    // **`$` は 6 通貨で重なり、`¥` は 2 通貨で重なる。** 記号を使うと、
+    // 同じ面に同じ字が並んで、どれを押したか画面から分からなくなる。
+    let checked = 0;
+    for (const token of CURRENCY_TOKENS) {
+      expect(CURRENCY_LABELS[token]).toBe(token.toUpperCase());
+      expect(CURRENCY_LABELS[token]).toMatch(/^[A-Z]{3}$/);
+      checked += 1;
+    }
+    expect(checked).toBe(16);
+    expect(new Set(Object.values(CURRENCY_LABELS)).size).toBe(16);
+  });
+
+  it("keeps DEL and AC out of the first three columns on the currency face", () => {
+    // **枠のパターンは保つ**(spec §7 の【実測 2026-08-20】)。1 行目は
+    // 通貨 3 つ + DEL + AC で、**2 行目以降だけが 5 列**である。
+    const keys = face(unitSections("currency")).keys;
+    expect(keys.slice(0, 3).map((k) => k.token)).toEqual([
+      "unit:jpy",
+      "unit:krw",
+      "unit:vnd",
+    ]);
+    expect(keys[3]?.token).toBe("del");
+    expect(keys[4]?.token).toBe("ac");
+    // 2 行目は 5 通貨。**恒久の空きは最後の 2 つだけ**(16 = 3 + 5 + 5 + 3)。
+    expect(keys.slice(5, 10).map((k) => k.token)).toEqual([
+      "unit:usd",
+      "unit:eur",
+      "unit:gbp",
+      "unit:chf",
+      "unit:cny",
+    ]);
+    expect(keys.filter((k) => k.token === null)).toHaveLength(2);
+    expect(keys.slice(18).map((k) => k.token)).toEqual([null, null]);
   });
 });
