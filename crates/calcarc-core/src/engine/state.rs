@@ -428,11 +428,18 @@ impl EngineState {
     ///
     /// **`sexagesimal_view` は戻す**(S-4 設計書 §3.1)。あれは設定ではなく
     /// 「いま覗いている」という一時状態なので、`AC` でも解除される。
+    /// AC。**角度と表示形式は残す**——利用者が選んだ「見え方」であって、
+    /// 打った数ではない。
+    ///
+    /// **`notation` はここで持ち越さない**(【変更 2026-08-25、0.4.0】)。
+    /// ENG は覗くためのキーになり、`reduce` が ENG 以外のすべてのキーで
+    /// 通常表記に戻す——AC もその「すべて」に入る。**ここに
+    /// `notation: self.notation` を書いても、直後に上書きされて
+    /// 一度も観測されない。**
     pub fn cleared(&self) -> EngineState {
         EngineState {
             angle: self.angle,
             form: self.form,
-            notation: self.notation,
             ..EngineState::initial()
         }
     }

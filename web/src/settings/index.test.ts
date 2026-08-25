@@ -41,11 +41,11 @@ describe("readSettings", () => {
     // **これが「項目ごとに検査する」の本体**(P-1 設計書 §1-2)。
     // notation が壊れていても angle は生き残る。
     const storage = fakeStorage(
-      JSON.stringify({ v: 1, scientific: { angle: "Rad", notation: "Zzz" } }),
+      JSON.stringify({ v: 1, scientific: { angle: "Rad", form: "Zzz" } }),
     );
     const read = readSettings(storage);
     expect(read.scientific.angle).toBe("Rad");
-    expect(read.scientific.notation).toBe("Normal");
+    expect(read.scientific.form).toBe("Rect");
   });
 
   it("survives a version it does not know", () => {
@@ -129,7 +129,7 @@ describe("writeSettings", () => {
     // **全項目を 1 度は往復させる。** 1 項目でも配線を忘れると落ちる。
     const storage = fakeStorage();
     const next: ReturnType<typeof defaultSettings> = {
-      scientific: { angle: "Rad", form: "Polar", notation: "Eng" },
+      scientific: { angle: "Rad", form: "Polar" },
       dataScale: { dtype: "int8", primary: "binary" },
       finance: { mode: "compound", periodsPerYear: 1, withholding: true },
     };

@@ -10,8 +10,6 @@ import {
   type AngleMode,
   DISPLAY_FORMS,
   type DisplayForm,
-  NOTATIONS,
-  type Notation,
 } from "../calc";
 import { DATA_TYPE_TOKENS, type DataTypeToken } from "../datascale/types";
 import { LOAN_MODES } from "../finance/loan/types";
@@ -40,10 +38,21 @@ export type PanelMode = (typeof PANEL_MODES)[number];
 export const PERIODS_PER_YEAR = [1, 2, 12] as const;
 export type PeriodsPerYear = (typeof PERIODS_PER_YEAR)[number];
 
+/**
+ * **`notation` は保存しない**(【変更 2026-08-25、0.4.0】)。ENG がモードでは
+ * なくなり、**ENG 以外のどのキーでも通常表記に戻る**ようになったので、
+ * 保存しても復元した瞬間に次の 1 打鍵で消える。**保存できるのは打鍵を
+ * またいで残る設定だけ**である。
+ *
+ * **綴りは変えていない。** 古い保存に残る `notation` は、読み手が組み立て
+ * 直す側なので**黙って落ちる**——知らない値として捨てられるのと同じ結果で、
+ * 誤って解釈される道は無い(`SETTINGS_VERSION` の但し書きが言う
+ * 「意味が変わったら綴りを変える」に当たるのは、**同じ綴りが別の意味を持つ**
+ * 場合である)。
+ */
 export interface ScientificSettings {
   angle: AngleMode;
   form: DisplayForm;
-  notation: Notation;
 }
 
 export interface DataScaleSettings {
@@ -76,7 +85,7 @@ export interface Settings {
  */
 export function defaultSettings(): Settings {
   return {
-    scientific: { angle: "Deg", form: "Rect", notation: "Normal" },
+    scientific: { angle: "Deg", form: "Rect" },
     dataScale: { dtype: "float32", primary: "decimal" },
     finance: { mode: "payment", periodsPerYear: 12, withholding: false },
   };
@@ -86,7 +95,6 @@ export function defaultSettings(): Settings {
 export const ALLOWED = {
   angle: ANGLE_MODES,
   form: DISPLAY_FORMS,
-  notation: NOTATIONS,
   dtype: DATA_TYPE_TOKENS,
   primary: PRIMARY_UNITS,
   mode: PANEL_MODES,

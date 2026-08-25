@@ -476,13 +476,20 @@ fn the_two_entry_modes_ignore_each_other() {
 }
 
 #[test]
-fn sexagesimal_wins_over_engineering_notation() {
+fn the_last_peek_key_pressed_is_the_one_that_shows() {
     // どちらも表示層で、設計書 §9 は「排他にする」としか書いていない。
-    // **60 進を勝たせる**——押した直後だからである。
+    //
+    // **【変更 2026-08-25】両方が「覗くためのキー」になったので、規則が
+    // 対称になった**——以前は ENG がモード、`°'"` が覗くキーで、
+    // 「60 進を勝たせる」と非対称に決めていた。いまは**あとに押したほうが
+    // 勝つ**。互いに相手を消すので、2 つが同時に出ることはない。
     assert_eq!(
         main_of(&["3", "dot", "7", "5", "eq", "eng", "dms"]),
         "3°45'0\""
     );
+    // 逆順。**この 1 行が非対称な実装を捕まえる**——`°'"` だけが相手を
+    // 消す実装なら、こちらは 60 進のままになる。
+    assert_eq!(main_of(&["3", "dot", "7", "5", "eq", "dms", "eng"]), "3.75");
 }
 
 #[test]
@@ -943,9 +950,43 @@ fn eng_turns_the_answer_into_engineering_notation() {
 }
 
 #[test]
-fn eng_stays_on_for_the_next_answer() {
-    // **モードとして残る**——一度押したら以後の計算結果も ENG で出る。
-    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5", "eq"]), "12.345e3");
+fn eng_does_not_stay_on_for_the_next_answer() {
+    // **【変更 2026-08-25、0.4.0】ENG はモードではなくなった**(ユーザー指示)。
+    // 以前は「一度押したら以後の計算結果も ENG で出る」で、この列は
+    // `12.345e3` を返していた。**いまは覗くためのキーである**——
+    // `°'"` と同じ規律で、**ENG 以外のどのキーでも通常の表記に戻る**
+    // (`mod.rs` の §3.1 の隣に置いた)。
+    assert_eq!(main_of(&["eng", "1", "2", "3", "4", "5", "eq"]), "12,345");
+    // 答を ENG で見たあとに次の計算を始めても、持ち越さない。
+    assert_eq!(
+        main_of(&["1", "0", "0", "0", "eq", "eng", "2", "0", "0", "0", "eq"]),
+        "2,000"
+    );
+}
+
+#[test]
+fn any_other_key_puts_the_notation_back() {
+    // **1 打鍵で戻る。** ENG を押した直後にどのキーを押しても通常表記になる
+    // ——`°'"` の「例外を作らない」と同じ規則である。
+    for key in [
+        "add",
+        "eq",
+        "1",
+        "del",
+        "ac",
+        "angle_toggle",
+        "polar_toggle",
+    ] {
+        let shown = run(&["1", "0", "0", "0", "eq", "eng", key]);
+        assert!(
+            !shown.main.contains('e'),
+            "{key} left the display in engineering notation: {}",
+            shown.main
+        );
+    }
+    // **ENG 自身は戻さない**(押すたびに切り替わる)。この 1 行が無いと、
+    // 「常に通常表記に戻す」という変異が上のループだけでは捕まらない。
+    assert_eq!(main_of(&["1", "0", "0", "0", "eq", "eng"]), "1e3");
 }
 
 #[test]
@@ -964,8 +1005,13 @@ fn eng_does_not_touch_what_you_are_typing() {
 fn eng_reaches_the_pending_expression_too() {
     // 保留中の式(echo)と答(main)が同じ画面に出るので、表記が食い違うと読めない。
     // 設計書 §6 は main しか論じていなかった。
-    // 1000 を確定して ENG に入れ、演算子を押して保留を作る。
-    let shown = run(&["1", "0", "0", "0", "eq", "eng", "add"]);
+    //
+    // **【変更 2026-08-25】押す順を入れ替えた。** 以前は
+    // `1000 = ENG +` で、ENG がモードとして残るから `+` のあとも ENG だった。
+    // **いまは `+` が表記を戻す**ので、保留を先に作ってから ENG を押す
+    // ——**保留と答が同じ画面に居る状態で ENG を押す**、という
+    // この検査が見たかった形は変わっていない。
+    let shown = run(&["1", "0", "0", "0", "eq", "add", "eng"]);
     assert_eq!(shown.main, "1e3");
     assert_eq!(shown.echo, "1e3 +");
 }
