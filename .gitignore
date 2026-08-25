@@ -16,6 +16,8 @@ playwright-report/
 
 # 検出力の測定結果。pnpm heavy:power が毎回書き直す。
 web/detection-power.json
+# 0.3.0 の 3 計算の検出力。pnpm heavy:power:exact が毎回書き直す。
+web/exact-power.json
 # 走行の要約。pnpm heavy のたびに globalTeardown が上書きする。
 web/heavy-run.json
 # pnpm heavy:ui が押したキーを数える場所。globalSetup が毎回消す。

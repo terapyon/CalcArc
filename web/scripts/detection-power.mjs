@@ -744,7 +744,13 @@ export function verdictFor(mutation, m, allShards = ALL_SHARDS) {
  * どちらか片方だけが変わって食い違う** ので、ここに畳む。
  */
 function describeExpect(mutation) {
-  return mutation.expectShards.length === 0 ? "nothing" : mutation.expectShards.join(", ");
+  // **`expectShards` を持たない変異もここを通る。** 判定を注入できるように
+  // した以上、期待を別の名前(`expectTests`)で書く呼び手が居る。持たない
+  // 変異で `undefined.length` を投げると、注入した判定の結果が記録に
+  // 化ける前に例外で消える。既存の 18 種は `expectShards` を持つので、
+  // この分岐は既存の値を 1 つも変えない。
+  const expected = mutation.expectShards ?? mutation.expectTests ?? [];
+  return expected.length === 0 ? "nothing" : expected.join(", ");
 }
 
 /**
@@ -764,11 +770,24 @@ function describeExpect(mutation) {
  * `mismatchesByShard` のうち非ゼロのシャードだけ(レポートの「赤くなった
  * シャード」欄が表示するのはこれ)、`total` はその合計。`kind` は契約に
  * 無い追加項目――D+E がレポートで 5 種の失敗を区別するために使う。
+ *
+ * **シャードを数えない測定では、`caught` の鍵は赤くなったテストの名前、値は
+ * 常に 1、`total` は赤の本数になる。** どちらの測定でも「捕まえたものの
+ * 内訳」と「その合計」であることは変わらない。
  */
 export function resultRecord(mutation, measurement, verdict) {
-  const caught = Object.fromEntries(
-    Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
-  );
+  const caught = measurement.mismatchesByShard
+    ? Object.fromEntries(
+        Object.entries(measurement.mismatchesByShard).filter(([, count]) => count > 0),
+      )
+    : // **シャードを数えない測定もここを通る。** `exact-power.mjs` は赤く
+      // なった**テストの名前**で測る。ここを空のままにすると、記録には
+      // `caught: {}` / `total: 0` が並び、**1 本も捕まえなかった走行と
+      // 見分けがつかない**――実際に「赤 0 本」と誤読された(2026-08-20)。
+      // 赤の内訳は `why` の文にしか無かった。テスト 1 本を 1 と数えて埋める。
+      // `measure()` は常に `mismatchesByShard` を持つので、既存の 18 種の
+      // 記録は 1 件も変わらない。
+      Object.fromEntries((measurement.failed ?? []).map((name) => [name, 1]));
   const total = Object.values(caught).reduce((a, b) => a + b, 0);
   return {
     id: mutation.id,
@@ -798,8 +817,20 @@ export function resultRecord(mutation, measurement, verdict) {
  * ファイルは戻る」ことをテストで直接主張できるようになった――
  * `measure`/`root` を差し替えられる形自体が、この関数を切り出した動機
  * である。
+ *
+ * **`verdict` も差し替えられる。** 0.3.0 の 3 計算(単位換算・LLM メモリ・
+ * データ転送量)には生成コーパスが無いので、測り先は `cargo test` になり、
+ * 測定の形も判定の規則も別物になる。それでも**変異を当てて戻す手続きは
+ * ここ 1 か所に置く**――写すと戻し忘れの経路が 2 つになる。既定は
+ * `verdictFor` なので、既存の 18 種の判定は 1 つも変わらない。
+ *
+ * @param {*} mutation
+ * @param {{ root?: string, measure?: () => *, verdict?: (mutation: *, measurement: *) => { ok: boolean, kind: string, why: string } }} [options]
  */
-export function runOneMutation(mutation, { root = ROOT, measure: measureFn = measure } = {}) {
+export function runOneMutation(
+  mutation,
+  { root = ROOT, measure: measureFn = measure, verdict: verdictFn = verdictFor } = {},
+) {
   const path = join(root, mutation.file);
   const original = readFileSync(path, "utf-8");
   if (!original.includes(mutation.from)) {
@@ -822,7 +853,7 @@ export function runOneMutation(mutation, { root = ROOT, measure: measureFn = mea
   writeFileSync(path, original.replace(mutation.from, mutation.to));
   try {
     const measurement = measureFn();
-    const verdict = verdictFor(mutation, measurement);
+    const verdict = verdictFn(mutation, measurement);
     return resultRecord(mutation, measurement, verdict);
   } finally {
     // **必ず戻す。** `measureFn()` だけでなく `verdictFor`/`resultRecord`

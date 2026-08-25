@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   ALL_SHARDS,
@@ -8,6 +10,7 @@ import {
   measure,
   readMeasurement,
   resultRecord,
+  runOneMutation,
   verdictFor,
 } from "../../scripts/detection-power.mjs";
 
@@ -503,6 +506,20 @@ describe("resultRecord builds the JSON that report.ts reads", () => {
     expect(r.total).toBe(8);
   });
 
+  it("names the red tests in caught when the measurement counts tests, not shards", () => {
+    // **`caught: {}` / `total: 0` は「1 本も捕まえなかった」に読める。**
+    // `exact-power.mjs` の測定はシャードを数えず、赤くなったテストの名前を
+    // 持つ――実際にこの欄が空のまま記録され、「赤 0 本」と誤読された
+    // (2026-08-20)。赤の内訳が `why` の文にしか無い形に戻さない。
+    const r = resultRecord(
+      { id: "m", expectTests: ["alpha", "beta"] },
+      { buildOk: true, exitCode: 101, failed: ["alpha", "beta"] },
+      ok,
+    );
+    expect(r.caught).toEqual({ alpha: 1, beta: 1 });
+    expect(r.total).toBe(2);
+  });
+
   it('writes expect as the string "nothing" when expectShards is empty', () => {
     const r = resultRecord(nothingExpected, measurement(), ok);
     expect(r.expect).toBe("nothing");
@@ -575,5 +592,56 @@ describe("measure() removes the stale heavy-run.json before it can be misread as
 
     const firstExecIndex = calls.findIndex(([name]) => name === "execFileSync");
     expect(firstExecIndex).toBeGreaterThan(0);
+  });
+});
+
+describe("the caller can bring its own verdict", () => {
+  // **判定の差し替えは、戻しの手続きを写さないための口である。**
+  // `runOneMutation` は「変異を当てる → 測る → **必ず戻す** → 戻ったことを
+  // バイトで確かめる」を持っている。別の測り先(0.3.0 の 3 計算は生成
+  // コーパスを持たないので `cargo test` を見る)のために手続きを写すと、
+  // **戻し忘れの経路が 2 つになる。** 差し替えるのは測り方と判定だけ。
+  //
+  // このファイルは `node:fs` をモジュールごとモックしているので、実ファイル
+  // ではなく**メモリ上の 1 ファイル**で往復を見る。前のテストが
+  // `readFileSync` に ENOENT を投げる実装を残すため、ここで置き直す。
+  it("lets the caller decide the verdict, without touching the shard rules", () => {
+    const path = join(tmpdir(), "exact-power.txt");
+    const files = new Map<string, string>([[path, "alpha beta"]]);
+    vi.mocked(readFileSync).mockImplementation((target) => {
+      const found = files.get(String(target));
+      if (found === undefined) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      return found;
+    });
+    vi.mocked(writeFileSync).mockImplementation((target, data) => {
+      files.set(String(target), String(data));
+    });
+
+    const mutation = {
+      id: "m",
+      what: "w",
+      file: basename(path),
+      from: "beta",
+      to: "gamma",
+    };
+    const seen: string[] = [];
+    const record = runOneMutation(mutation, {
+      root: tmpdir(),
+      measure: () => {
+        seen.push(String(readFileSync(path, "utf-8")));
+        return { failed: ["x"] };
+      },
+      verdict: () => ({ ok: true, kind: "ok", why: "注入された判定" }),
+    });
+
+    // 測っているあいだは変異が当たっている
+    expect(seen).toEqual(["alpha gamma"]);
+    // 判定は注入されたものが使われる
+    expect(record.ok).toBe(true);
+    expect(record.why).toBe("注入された判定");
+    // **戻っている**——ここが写したくない手続きである
+    expect(files.get(path)).toBe("alpha beta");
   });
 });

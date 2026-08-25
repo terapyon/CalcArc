@@ -1886,3 +1886,356 @@ compound_grow fin-001792: the answer line reads "17,614,448,478 円",
 
 複利のほうは**税の 2 段の丸め**がそのまま差になっている（税引前 17,614,448,478
 に対し手取り 14,137,325,033）。画面から税の経路を通っていることの証拠でもある。
+
+---
+
+## 0.3.0 の 3 計算に欠陥を 6 種入れた（2026-08-20 実測、verify-0-3-0 Task 3）
+
+単位換算・LLM メモリ・データ転送量には**生成コーパスが無い**ので、
+`web/scripts/detection-power.mjs` の枠組みのうち**測り先だけを差し替えた**
+——`cargo test --workspace --no-fail-fast` を走らせ、**赤くなったテストの
+名前の集合**を期待と突き合わせる（`web/scripts/exact-power.mjs`、
+`pnpm heavy:power:exact`）。変異を当てて戻す手続きは写していない
+（`runOneMutation` に判定を注入している）。
+
+判定は**両側を主張する**。期待したテストが赤いこと**と**、期待していない
+テストが緑のままであること。
+
+### 実測表（6 種すべて、`cargo test` が 373 本の走行）
+
+| 変異 | 判定 | 赤くなったテスト（実測） |
+|---|---|---|
+| `binary-base-is-decimal` | ok | `data_scale_matches_the_reference` |
+| `degf-offset-dropped` | ok | `convert::tests::minus_forty_is_the_fixed_point_of_the_two_scales`、`convert::tests::the_offsets_check_out`、`convert_matches_the_reference` |
+| `micrometre-off-by-thousand` | ok | `convert_matches_the_reference` |
+| `half-even-becomes-half-up` | ok | `convert::format::tests::half_to_even_rounds_toward_the_even_digit`、`convert_matches_the_reference` |
+| `kv-counts-once-not-twice` | ok | `data_scale::llm::tests::overflow_is_an_error_not_a_wrap`、`data_scale::llm::tests::kv_heads_is_not_the_attention_head_count`、`data_scale::llm::tests::the_headline_case`、`data_scale::llm::tests::the_kv_side_never_needs_the_ceiling`、`llm_matches_the_reference` |
+| `partial-byte-truncated` | ok | `data_scale::transfer::tests::a_partial_byte_rounds_up`、`transfer_matches_the_reference` |
+
+**`expectTests` は実測から起こした。** 空で 1 度走らせ（6 種すべてが
+`unexpected-red`、すなわち「期待は空なのに赤が出た」）、**実際に赤くなった
+名前をそのまま書き入れて**から 2 度目を走らせた。2 度目は 6 種すべて `ok`
+で、赤の集合は 1 本も動かなかった。**先に期待を書いて実測を合わせると、
+「期待どおり」が「自分の推測どおり」になる**ので、順序を逆にしていない。
+
+### 暗い帯: 単体テストが 1 本も反応しない欠陥が 2 種ある
+
+**`binary-base-is-decimal` と `micrometre-off-by-thousand` を捕まえたのは
+golden 1 本だけ**で、`crates/calcarc-core/src/` の中の単体テストは 1 本も
+赤くならなかった。**この 2 つは Python の独立実装との突き合わせだけが
+見張っている。**
+
+- `micrometre-off-by-thousand`: `convert/mod.rs` の `mod tests` に
+  `Unit::Um` は 1 度も出てこない（Step 0 の実測。下記）。係数表のうち、
+  単体テストが literal で押さえているのは in/lb/°F/°C/K など
+  ごく一部で、**um は表に載っているだけ**である。
+  （**訂正 2026-08-20、Task 4**: ここに「係数表 27 行」と書いたのは誤り。
+  `affine()` の腕を数えると **63 行**で、`Unit::ALL` の 63 と一致する。）
+- `binary-base-is-decimal`: 2 進の基数は `units[0].1` から導いていて、
+  製品コードに `1024` の literal が無い。`base` が効くのは
+  **「丸めた後の整数部が基数に達したら 1 つ上の単位で丸め直す」1 か所だけ**
+  なので、基数を 1000 にしても差が出るのは**整数部が 1000 以上 1024 未満に
+  収まる 2 進の値**に限られる。`format.rs` の 8 本の単体テストのうち 2 進の
+  再選択を通るのは `a_carry_that_crosses_the_unit_boundary_reselects_the_unit`
+  の `format_binary(1_099_460_000_000)` だけで、これは整数部が 1023.95 →
+  丸めて 1024.0 になるため**基数が 1000 でも 1024 でも同じく再選択する**
+  ——だから緑のままだった。**例えば 1010 GiB 相当の値（`1.0 TiB` に化ける）
+  を 1 件足せば、この帯に単体テストの光が入る。**
+
+残る 4 種は単体テストと golden の両方が反応した（`kv-counts-once-not-twice`
+は 5 本、うち 4 本が単体テスト）。
+
+### Step 0: 変異 3 は単体テストで止まらなかった（差し替え不要）
+
+係数表を壊す変異は、**同じファイルの単体テストが literal で固定していれば
+そこで止まり、上の層まで届いたかを測れない**（transfer の
+`every_unit_has_its_factor` が 8 つの係数を literal で持つのが実例）。
+`convert/mod.rs` で確かめたところ、`Unit::Um` が出るのは `:42`（列挙）・
+`:137`（`ALL`）・`:207`（トークン）・`:283`（カテゴリ）・`:348`（係数表）
+の 5 か所だけで、**`mod tests`（`:535` 以降）には 1 度も出てこない**。
+止まらないので、計画どおりの係数変異のまま測った——**そして実際に、
+係数表の 1 行を壊すと golden だけが赤くなった。**
+
+### 実行時間（`pnpm heavy:power:exact`、壁時計）
+
+| 走行 | 時間 |
+|---|---:|
+| 1 度目（`expectTests` 空、6 種すべて `unexpected-red`） | 139 秒 |
+| 2 度目（`expectTests` 実測入り、6 種すべて `ok`） | 139 秒 |
+
+変異ごとに `cargo` が再ビルドするので、1 変異あたり約 23 秒。**計画の
+見積り「約 1 分」は実測 139 秒だった**（[[estimates-are-held-not-prosecuted]]
+のとおり、見積りは追及せず実測で差し替える）。
+
+### 変異は残っていない
+
+両方の走行のあとで `git diff -- crates/` が空であることを確かめた
+（`runOneMutation` が戻したうえでバイト比較している）。走行後の
+`cargo test --workspace` も 373 本すべて緑。
+
+## 暗い帯に単体テストを 1 件だけ足した（2026-08-20 実測、verify-0-3-0 Task 4）
+
+Task 3 が見つけた暗い帯は 2 種（`binary-base-is-decimal` と
+`micrometre-off-by-thousand`。どちらも golden 1 本だけが見張っていた）。
+**足したのはそのうち 1 種、1 件だけである。**
+
+### 足した 1 件: `binary-base-is-decimal`
+
+`crates/calcarc-core/src/data_scale/format.rs` の `mod tests` に
+`the_binary_base_is_ten_twenty_four_not_a_thousand` を足した。
+主張は `format_binary(1_084_479_242_240) == Some("1010.0 GiB")`
+——**ちょうど 1010 GiB**（1010 × 1024³）。
+
+**なぜこの値なのか。** `base` が効くのは「丸めた後の整数部が基数に達したら
+1 つ上の単位で丸め直す」1 か所だけなので、**整数部が 1000 以上 1024 未満に
+収まる 2 進の値でしか、基数の取り違えは見えない**。既存の唯一の再選択ケース
+`format_binary(1_099_460_000_000)` は整数部 1023.95 → 丸めて 1024 なので、
+基数が 1000 でも 1024 でも同じく再選択する——だから Task 3 で緑のままだった。
+
+| | 表示（実測） |
+|---|---|
+| `let base = units[0].1;`（製品） | `1010.0 GiB` |
+| `let base = 1000;`（変異） | `1.0 TiB` |
+
+**期待値は実行して確かめた。** 手計算では `0.9 TiB` に化けると読んでいたが、
+実測は `1.0 TiB` だった——TiB で丸め直すと 0.98632… の小数第 1 位が
+9 に丸まったあと `round_tenth` の繰り上がりを通り、`whole` が 1 に上がる。
+**変異後の値のほうが `round_tenth` の繰り上がりを通る**（1010 GiB ちょうどは
+剰余 0 で、製品側は繰り上がりを通らない）。テストのコメントに書いた化け方は
+この実測に合わせてある。
+
+**赤確認**（変異を当て、戻しは再編集）:
+
+```
+test data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand ... FAILED
+  left: Some("1.0 TiB")
+ right: Some("1010.0 GiB")
+test result: FAILED. 8 passed; 1 failed
+```
+
+戻したあと 9 本すべて緑。`pnpm heavy:power:exact` の
+`expectTests` にこのテスト名を足し、判定は `ok` のまま（赤は 1 本 → **2 本**）。
+**足し忘れれば `unexpected-red` になる**——両側主張の効き目である。
+
+### 足さなかった 1 件: `micrometre-off-by-thousand`
+
+**係数表 63 行を golden が 1 度以上すべて覆っている。** 起票時の実測を
+今日引き直した——`affine()` の腕は 63、`token()` の腕も 63、
+`testdata/convert.json` の 55 件が `input.from` / `input.to` に使う
+文字列は 64 通りで、そこから未知トークンの異常系 `furlong` を除いた
+**63 通りが 63 のトークンと完全に一致する**（覆われていない単位は 0）。
+1 行だけを単体テストで literal 固定するのは恣意的で、**golden の仕事を下手に
+写すことになる**。しかも「表を literal で固定した単体テスト」は、まさに
+この spec が Step 0 で「変異が下の層で止まって上まで届かない」と実証した形
+である（transfer の `every_unit_has_its_factor` が 8 つの係数を literal で
+持つ実例）。**係数表の見張りは Python の独立実装に任せる**——同じ表を Rust の
+テストに写しても、写し間違いは golden でしか見つからない。
+
+### 記録の欄を直した（`caught` / `total`）
+
+Task 3 の `web/exact-power.json` は 6 種すべてが `caught: {}` / `total: 0`
+だった。この 2 欄は `resultRecord` が `measurement.mismatchesByShard` から
+組み立てるもので、**シャードを数えない測定（`exact-power.mjs`）では埋まらない**。
+発注元はこれを見て「赤 0 本」と誤読した——赤の内訳は `why` の文にしか
+無かった。
+
+**欄を埋めるほうを選んだ**（「欄の意味が違う」と書き添えるほうではなく）。
+理由は 2 つある。① `web/exact-power.json` は `.gitignore` に載っていて
+**コミットされない**（`.gitignore:20`）ので、JSON の中に注意書きを置いても
+次に読む人の手元では生成し直されて消える。注意書きの置き場所は結局
+生成側のコードになる。② `caught` は「捕まえたものの内訳」、`total` は
+「その合計」であり、シャードを数えるかテストを数えるかで**意味は変わらない**
+——鍵がシャード名かテスト名か、値がミスマッチ件数か常に 1 か、の違いだけ。
+欄の意味を測定ごとに読み替えさせるより、**同じ意味で埋める**ほうが誤読の芽を
+残さない。
+
+`resultRecord` は `mismatchesByShard` を持つ測定では 1 件も値が変わらない
+（既存 18 種の記録は不変）。持たない測定では `failed` から
+`{テスト名: 1}` を組み立て、`total` は赤の本数になる。今回の走行の実測:
+
+| 変異 | `total`（赤の本数） |
+|---|---:|
+| `binary-base-is-decimal` | 2 |
+| `degf-offset-dropped` | 3 |
+| `micrometre-off-by-thousand` | 1 |
+| `half-even-becomes-half-up` | 2 |
+| `kv-counts-once-not-twice` | 5 |
+| `partial-byte-truncated` | 2 |
+
+### 実行時間・件数（壁時計）
+
+| 検査 | 結果 |
+|---|---|
+| `cargo test --workspace` | **374**（Task 3 時点 373 + 新規 1） |
+| `pnpm test`（vitest） | **365**（364 + `caught` の欄を主張する 1 本） |
+| `pnpm heavy:power:exact` | 6 種すべて `ok`、**138 秒** |
+
+走行後の `git diff -- crates/` は**足したテストの 18 行だけ**で、計算のコードは
+1 行も変わっていない。
+
+## フルスイープと 6 種の地図（2026-08-20 実測、verify-0-3-0 Task 6）
+
+この計画の締め。**走らせる一覧は `.github/workflows/ci.yml` から起こした**（計画の
+一覧を信じない）。BASE は `4145a85`（Task 5 のコミット）、前提の main は `f1fdc2e`。
+
+### フルスイープ（22 本、すべて緑。時間は壁時計）
+
+| # | コマンド | 結果 | 秒 |
+|---:|---|---|---:|
+| 1 | `cargo fmt --check` | 差分なし（出力 0 バイト） | 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | warning 0 | 0 |
+| 3 | `cargo test --workspace` | **374 passed** / 0 failed | 23 |
+| 4 | `wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm` | ok | 4 |
+| 5 | `wasm-pack test --headless --firefox crates/calcarc-wasm` | **34 passed** / 0 failed | 6 |
+| 6 | `pnpm typecheck` | ok | 2 |
+| 7 | `pnpm lint` | ok | 1 |
+| 8 | `pnpm test`（vitest） | **365 passed**（32 ファイル） | 8 |
+| 9 | `pnpm exec vite build` | ok | 2 |
+| 10 | `pnpm check:sw` | `prompt 形 / wasm precache / manifest 完備` | 1 |
+| 11 | `pnpm check:version` | `0.3.0`（`Cargo.toml` と `web/package.json` が一致） | 0 |
+| 12 | `pnpm exec playwright test`（Layer 5） | **170 passed**（12.5 秒） | 13 |
+| 13 | `uv sync --locked --no-config` | 9 パッケージ、ロック済み | 0 |
+| 14 | `uv run --no-config ruff check .` | `All checks passed!` | 0 |
+| 15 | `uv run --no-config ruff format --check .` | `42 files already formatted` | 0 |
+| 16 | `uv run --no-config pytest` | **362 passed**（23.88 秒） | 24 |
+| 17 | `uv run --no-config python scripts/generate.py` | 生成 ok | 1 |
+| 18-19 | `git add --intent-to-add testdata/` → `git diff --exit-code testdata/` | **差分なし** | 0 |
+| 20 | `pnpm heavy:power:exact` | **6 種すべて `ok`** | 139 |
+| 21 | `pnpm heavy` | **195 passed**（31.4 秒） | 36 |
+| 22 | `git diff --stat -- crates/ web/src/` | **空** | 0 |
+
+**手元は `--firefox`、CI は `--chrome`。** `wasm-pack test` のブラウザだけ CI と違う
+（手元に chromedriver が無い）。34 本の内訳は同じ。
+
+**指示された基準値との食い違いは無かった**——cargo 374 / vitest 365 / Layer 5 170（12.5 秒）
+／ pytest 362 / `pnpm heavy` 195 / `heavy:power:exact` 6 種 `ok`。時間だけ
+`heavy:power:exact` が 138 秒 → **139 秒**（壁時計の揺れ、± 1 秒）。
+
+**`pnpm heavy` は 195 のまま動かなかった。** これがこの走行の目的である——この計画は
+`crates/` の計算を 1 行も変えていないので、重量級の値も動かないはずで、**動いていたら
+この計画が壊したという意味**だった。動いていない。
+
+### 6 種の変異の最終的な地図
+
+**「捕まえた層」は、赤くなったテストがどこに住んでいるかで数える。** 単体テスト（Layer 1、
+`crates/calcarc-core/src/**` の `mod tests`）と言語間 golden（Layer 4、
+`crates/calcarc-core/tests/*_golden.rs` が `testdata/*.json` と突き合わせる）の 2 層。
+
+| # | 変異 | 変異を当てる先 | Layer 1（単体） | Layer 4（golden） | 見張る層 |
+|---:|---|---|---:|---:|---:|
+| 1 | `binary-base-is-decimal` | `data_scale/format.rs` | **1**（Task 4 で 0 → 1） | 1 | **1 → 2** |
+| 2 | `degf-offset-dropped` | `convert/mod.rs` | 2 | 1 | 2 |
+| 3 | `micrometre-off-by-thousand` | `convert/mod.rs` | **0** | 1 | **1** |
+| 4 | `half-even-becomes-half-up` | `convert/format.rs` | 1 | 1 | 2 |
+| 5 | `kv-counts-once-not-twice` | `data_scale/llm.rs` | 4 | 1 | 2 |
+| 6 | `partial-byte-truncated` | `data_scale/transfer.rs` | 1 | 1 | 2 |
+
+赤くなったテストの名前（最終走行の `web/exact-power.json` から。合計 15 本）:
+
+| # | 赤くなったテスト |
+|---:|---|
+| 1 | `data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand`（Task 4 で追加）、`data_scale_matches_the_reference` |
+| 2 | `convert::tests::minus_forty_is_the_fixed_point_of_the_two_scales`、`convert::tests::the_offsets_check_out`、`convert_matches_the_reference` |
+| 3 | `convert_matches_the_reference` |
+| 4 | `convert::format::tests::half_to_even_rounds_toward_the_even_digit`、`convert_matches_the_reference` |
+| 5 | `data_scale::llm::tests::kv_heads_is_not_the_attention_head_count`、`data_scale::llm::tests::overflow_is_an_error_not_a_wrap`、`data_scale::llm::tests::the_headline_case`、`data_scale::llm::tests::the_kv_side_never_needs_the_ceiling`、`llm_matches_the_reference` |
+| 6 | `data_scale::transfer::tests::a_partial_byte_rounds_up`、`transfer_matches_the_reference` |
+
+**6 種すべてが golden に捕まる。** 言語間 golden は 6 種の全部を見張っている——
+**Python の独立実装との突き合わせが、この 3 計算の最後の砦である**。単体テストのほうは
+偏りがあり、**変異 3 は今も単体テストが 1 本も反応しない**（下記のとおり、これは意図した
+残し方である）。
+
+### 足したもの / 足さなかったもの
+
+**足したのは単体テスト 1 件だけ。golden は 1 件も足していない**（上限 20 件に対して 0 件）。
+
+- **足した（変異 1）**: `data_scale::format::tests::the_binary_base_is_ten_twenty_four_not_a_thousand`。
+  `format_binary(1_084_479_242_240) == Some("1010.0 GiB")`。基数の取り違えは
+  **整数部が 1000 以上 1024 未満に収まる 2 進の値**でしか見えず、既存の唯一の再選択ケース
+  はその帯に入っていなかった。足したあと、この変異の赤は 1 本 → **2 本**になった。
+- **足さなかった（変異 3）**: `micrometre-off-by-thousand`。**係数表 63 行を golden が
+  63 単位すべて覆っている**（`affine()` の腕 63 = `token()` の腕 63 = `convert.json` が
+  使うトークン 63、未訪問 0）。1 行だけを単体テストで literal 固定するのは恣意的であり、
+  しかも**この spec 自身が Step 0 で「表の literal 固定は変異を下の層で止めて上まで
+  届かせない」と実証した形**である（transfer の `every_unit_has_its_factor` が 8 つの
+  係数を literal で持つ実例）。**係数表の見張りは Python の独立実装に任せる**——同じ表を
+  Rust に写しても、写し間違いは golden でしか見つからない。
+
+**「念のため足す」をしていない。** 暗い帯は 2 種見つかり、足したのは 1 種である。
+
+### 盤面経路の 6 件（盤面から打てない値は 1 つも無かった）
+
+Task 5 が `web/tests/e2e/convert.spec.ts` に足した 6 件。Convert の 6 カテゴリに
+1 件ずつで、**期待値は `testdata/convert.json` から引き写した**（各行に golden の id を
+書いてある）。押す名前は `UNIT_ARIA_LABELS`、表示は `UNIT_LABELS`。
+
+| カテゴリ | golden の id | 打つ | 表示（実測） |
+|---|---|---|---|
+| length | `convert/length/1intomm` | 1 インチ → ミリメートル | `25.4 mm` |
+| mass | `convert/mass/1lbtokg` | 1 ポンド → キログラム | `0.45359237 kg` |
+| area | `convert/area/1tsubotojo` | 1 坪 → 畳 | `2.040608101 畳(1.62m²)` |
+| volume | `convert/volume/1gal_ustol` | 1 ガロン(米) → リットル | `3.785411784 L` |
+| data-size | `convert/data-size/1gbtomib` | 1 ギガバイト → メビバイト | `953.6743164 MiB` |
+| speed | `convert/speed/1kntokmh` | 1 ノット → キロメートル毎時 | `1.852 km/h` |
+
+**打てない値は 1 つも無かった**——6 件とも、値も単位も盤面のキーだけで指定でき、
+表示に戻ってきた。U-1 の「計算はできるのに `±` が無くて不動点が打てない」型の穴は、
+Convert の 6 カテゴリには無い。
+
+温度は既存の `types the fixed point of the two temperature scales` が持っている。
+LLM・transfer も既存の `the headline case` が実画面から打っている（`llm.spec.ts` /
+`transfer.spec.ts`）ので、**新規は 6 件で spec の 9 件が揃う**（Convert 7 = 新規 6 +
+温度 1、LLM 1、transfer 1）。
+
+### 回さなかった走行と、その理由
+
+| 走行 | 所要（過去の実測） | 回さなかった理由 |
+|---|---:|---|
+| `pnpm heavy:power` | 11.2 分 | **`crates/` の計算を 1 行も変えていないので、重量級の検出力は動かない。** この走行が測るのは Finance / Scientific の 18 種の変異に対する生成コーパスの反応で、この計画はそのコーパスにも `MUTATIONS` にも `verdictFor` にも触れていない（触ったのは `runOneMutation` の判定注入口だけで、既定は `verdictFor` のまま）。 |
+| `pnpm heavy:ui` | 11.9 分 | 同上。加えて**この計画は `heavy:ui` に 1 本も足していない**（Task 5 の裁定 1: 盤面 6 件は Layer 5 に置き、11.9 分の走行を伸ばさない）。押下キーの台帳も変わらない。 |
+
+**回した重量級は `pnpm heavy`（31.4 秒）だけ**で、目的は検出力の測定ではなく
+**回帰の確認**である（195 のままかどうか)。
+
+### 重量級のコーパスは変異 1 を見ていない（シャードからの導出。注入では確かめていない）
+
+計画は「変異 1（基数）と 4（丸め）は `data_scale` の表示に触るので、**重量級のコーパスにも
+見えるはず**」と書いていた。**シャードを数えると、そうは読めない。**
+
+1. **`corpus/generated/*.json` の 18 枚に、0.3.0 の 3 計算のうち載っているのは
+   `data_scale` だけである**（`kind: "call"` の `op` を全シャードで数えた実測:
+   `data_scale` 2000 件、`convert` / `llm` / `transfer` は **0 件**）。
+   よって**変異 4 は `convert/format.rs` にあるので、重量級には構造的に見えない**
+   ——計画が「変異 4 は `data_scale` の表示に触る」と書いたのは誤りで、
+   変異 4 が触るのは **`convert` の表示**である。
+2. **`data-scale-000.json` の 2000 件のうち、`expect.binary` が非 null は 1984 件。
+   そのうち整数部が 1000 以上 1024 未満の帯に入るのは 3 件だけで、3 件とも `TiB` である**
+   （`ds-001107` `1005.3 TiB`、`ds-001261` `1015.3 TiB`、`ds-001630` `1015.2 TiB`）。
+   `scaled()` の再選択は `if whole >= base && index + 1 < units.len()` なので、
+   **最上位の `TiB` では `base` が読まれても再選択が起きない**。したがって
+   **2000 件のどれも、基数を 1000 に取り違えても表示が 1 文字も変わらない。**
+
+**これは導出であって、注入による実測ではない。** 変異 1 を当てた状態で `pnpm heavy` を
+1 度回して確かめようとしたが、その走行は実行環境に拒否された。計画の裁定 2 も測定先を
+`cargo test` に限っているので、**この節は「シャードのデータとコードから導いた見立て」
+として読むこと**。注入で確かめるなら、変異 1 を当てて wasm を作り直してから
+`pnpm heavy` を 1 度回せばよい（見積り 1 分未満、実測前）。
+
+**導出が正しければ、Task 4 で単体テストを足した判断が裏から支えられる**——
+`binary-base-is-decimal` を見張っていたのは golden 1 本だけで、**重量級 2000 件は
+1 件も見張っていなかった**ことになる。
+
+### spec §8 の完了条件（1 つずつ）
+
+| # | 完了条件 | 結果 |
+|---:|---|---|
+| 1 | 6 種の変異それぞれについて、**赤くなった検査の名前と件数**が記録されている | **達成**。上の表（合計 15 本、変異ごとの内訳つき） |
+| 2 | 赤くならなかった変異があれば、**その帯に足したケース**と、**足したあとに赤くなること**が記録されている | **達成（ただし文面どおりではない）**。暗い帯は 2 種で、**足したのは 1 種だけ**。変異 1 は足して赤 1 → 2 本を記録した。変異 3 は**足さない判断とその理由**を記録した——spec の文面は「足す」しか想定していないので、**片方は文面から外れている**。外した理由は上記のとおり（golden が 63 単位を全覆いしており、表の literal 固定は変異を下の層で止める） |
+| 3 | `testdata/*.json` が生成物と一致する | **達成**。`generate.py` のあと `git diff --exit-code testdata/` が差分なし |
+| 4 | `crates/` に**計算の変更が入っていない** | **達成**。`f1fdc2e..HEAD` の `crates/` は `data_scale/format.rs` の **+18 行のみ**で、全行が `mod tests` の中（`#[test] fn the_binary_base_is_ten_twenty_four_not_a_thousand`）。`web/src/` は **0 行**。走行後の作業ツリーも `git status` が空 |
+| 5 | 段 3 を含めた場合、**9 件が実画面から打てて表示に戻ること**が緑 | **達成**。新規 6 件（Convert の 6 カテゴリ）＋ 既存 3 件（Convert 温度・LLM・transfer の `headline case`）= 9 件。Layer 5 は 170 passed |
+| 6 | 実測値が `docs/corpus-measurements.md` に追記されている（**設計書に写さない**） | **達成**。Task 3・4・6 の 3 節。設計書と計画に数字を書き戻していない |
+
+**未達は無い。** 条件 2 だけ、spec の文面（「足したケース」）に対して**片方は足さない判断**
+であり、そのずれを上に明記した。

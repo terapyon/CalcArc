@@ -17,6 +17,7 @@
     "heavy": "pnpm wasm && playwright test --config playwright.heavy.config.ts",
     "heavy:ui": "pnpm wasm && playwright test --config playwright.heavy-ui.config.ts",
     "heavy:power": "node scripts/detection-power.mjs",
+    "heavy:power:exact": "node scripts/exact-power.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",

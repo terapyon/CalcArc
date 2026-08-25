@@ -279,3 +279,93 @@ test("types the fixed point of the two temperature scales", async ({
     "-40 °C = -40 °F",
   );
 });
+
+/**
+ * **カテゴリごとに 1 件、値が盤面から core まで往復することだけを見る。**
+ * 換算の正しさは golden(`testdata/convert.json`)が持っている——だから
+ * **期待値はそこから引き写す**(下の `id` がその行である)。ここが見るのは
+ * 「**その値をこの盤面から打てるか**」のほうで、U-1 では計算はできるのに
+ * `±` キーが無くて不動点が打てない、という穴を実機で見つけた前例がある。
+ *
+ * **温度以外の 6 カテゴリは、盤面から値を打って計算させる検査を 1 本も
+ * 持っていなかった**(実測 2026-08-20)。温度は上の
+ * `types the fixed point of the two temperature scales` が持っている。
+ *
+ * 押すときの名前は `Keypad/convert.ts` の **`UNIT_ARIA_LABELS`** が正で、
+ * 画面のラベル(`UNIT_LABELS`)ではない。表示のほうは単位付きで出るので、
+ * `expect` には `UNIT_LABELS` の綴りが並ぶ——**2 つの表を 1 本の走行で
+ * 突き合わせる**のはこの検査だけである。
+ */
+const TYPEABLE = [
+  {
+    category: "length",
+    golden: "convert/length/1intomm",
+    keys: ["1"],
+    from: "インチ",
+    to: "ミリメートル",
+    expect: "25.4 mm",
+    result: "1 in = 25.4 mm",
+  },
+  {
+    category: "mass",
+    golden: "convert/mass/1lbtokg",
+    keys: ["1"],
+    from: "ポンド",
+    to: "キログラム",
+    expect: "0.45359237 kg",
+    result: "1 lb = 0.45359237 kg",
+  },
+  {
+    category: "area",
+    golden: "convert/area/1tsubotojo",
+    keys: ["1"],
+    from: "坪",
+    to: "畳、1.62平方メートル",
+    expect: "2.040608101 畳(1.62m²)",
+    result: "1 坪 = 2.040608101 畳(1.62m²)",
+  },
+  {
+    category: "volume",
+    golden: "convert/volume/1gal_ustol",
+    keys: ["1"],
+    from: "ガロン、米国",
+    to: "リットル",
+    expect: "3.785411784 L",
+    result: "1 gal(US) = 3.785411784 L",
+  },
+  {
+    category: "data-size",
+    golden: "convert/data-size/1gbtomib",
+    keys: ["1"],
+    from: "ギガバイト",
+    to: "メビバイト",
+    expect: "953.6743164 MiB",
+    result: "1 GB = 953.6743164 MiB",
+  },
+  {
+    category: "speed",
+    golden: "convert/speed/1kntokmh",
+    keys: ["1"],
+    from: "ノット",
+    to: "キロメートル毎時",
+    expect: "1.852 km/h",
+    result: "1 kn = 1.852 km/h",
+  },
+] as const;
+
+for (const c of TYPEABLE) {
+  test(`${c.category}: a value typed on the keypad comes back converted`, async ({
+    page,
+  }) => {
+    await page.goto(`/#convert/${c.category}`);
+    await expect(panel(page)).toBeVisible();
+    await press(page, ["値を入力", ...c.keys]);
+    await press(page, ["変換元の単位を選ぶ", c.from]);
+    await press(page, ["変換先の単位を選ぶ", c.to]);
+    await expect(
+      main(page),
+      `${c.golden} should show on the display`,
+    ).toHaveText(c.expect);
+    await expect(page.getByTestId("convert-result")).toHaveText(c.result);
+  });
+}
