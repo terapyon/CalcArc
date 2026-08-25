@@ -2483,6 +2483,33 @@ def _pairwise_loan_forward_like_strata(op: str, bonus_key: str | None) -> tuple[
 PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 17
 
 
+@dataclass(frozen=True)
+class LoanTermFact:
+    """`loan_term` の 1 行が、目標期間に対して何をしたか(設計書 §8.2)。
+
+    **`target_n` は入力ではなく答である。** 正算で作った月額を逆算へ戻すと、
+    円単位の丸めのぶんだけ答がずれることがある——ずれた行は計算の照合には
+    使えるが、**目標期間セルを被覆したことにはならない。**
+
+    `state` の 3 値:
+
+    - `covered`  … `actual_n == target_n`
+    - `excluded` … 正算が本物のエラーで、逆算の入力そのものを構成できない
+    - `unmet`    … ケースは作れたが、目標期間を満たしていない
+    """
+
+    rate_level: str
+    target_n: int
+    principal: int
+    payment: int | None
+    actual_n: int | None
+    error: str | None
+    state: str
+
+
+_LOAN_TERM_FACTS: list[LoanTermFact] = []
+
+
 def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
     strata = []
     index = 0
@@ -2492,16 +2519,39 @@ def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
         resolved = _pairwise_forward_result(rate, n)
         if resolved is None:
             infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, 0, None, None, "no-candidate", "excluded")
+            )
             continue
         principal, payment, forward_expect = resolved
         if forward_expect != "ok":
             infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, None, None, forward_expect, "excluded")
+            )
             continue
         params = {"principal": str(principal), "rate": rate, "payment": str(payment)}
         if not _claim_pairwise_signature("loan_term", params):
+            # 実測(2026-08-25)ではここを通る行は無い(150 = 133 + 17)。**通った
+            # ときに黙って消えないよう**、記録だけは残す。
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, payment, None, "duplicate", "unmet")
+            )
             continue
         result = loan_ref.compute("loan_term", params)
         expect = result.get("error", "ok")
+        actual = None if "error" in result else int(result["n"])
+        _LOAN_TERM_FACTS.append(
+            LoanTermFact(
+                rate,
+                n,
+                principal,
+                payment,
+                actual,
+                None if actual is not None else expect,
+                "covered" if actual == n else "unmet",
+            )
+        )
         strata.append(
             Stratum(
                 "loan_term",
@@ -2740,6 +2790,20 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
 # モデルはそこから組み立てる——写しを持つと、因子表を直した日に片方だけが
 # 古くなる(設計書 §7.1)。
 # ---------------------------------------------------------------------------
+
+#: `loan_term` の 150 行の記録。**`FINANCE_STRATA` を組み立てた後に凍らせる**
+#: ——`_pairwise_loan_term_strata()` が走り終えるまで揃わない。
+LOAN_TERM_FACTS: tuple[LoanTermFact, ...] = tuple(_LOAN_TERM_FACTS)
+
+
+def loan_term_covered_cells() -> set[coverage.Cell]:
+    """設計書 §8.2。**答が目標と一致した行だけ**が目標期間セルを被覆する。"""
+    return {
+        coverage.Cell("loan_term", (("rate", fact.rate_level), ("target_n", str(fact.target_n))))
+        for fact in LOAN_TERM_FACTS
+        if fact.state == "covered"
+    }
+
 
 FINANCE_MODEL = "finance-v1"
 
