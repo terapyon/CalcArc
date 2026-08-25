@@ -897,7 +897,8 @@ Stop the app package from knowing that a heavy suite exists
 残ったテストにそのまま当てはまる。
 
 確認: `git grep -i heavy -- web/` が空。web 側は typecheck・lint 緑、
-vitest は 450 → **444 passed**（移した 6 ファイルぶん、ちょうど）。
+vitest は 36 ファイル / 450 件 → **30 ファイル / 364 passed**（移した 6 ファイルが
+86 件を持っていった。450 − 86 = 364）。
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 MSG
