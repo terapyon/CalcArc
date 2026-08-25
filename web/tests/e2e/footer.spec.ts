@@ -59,10 +59,46 @@ test("the footer stays on one line and never overflows sideways", async ({
   ).toBeLessThanOrEqual(0);
 });
 
+test("the footer leaves room for a wider font", async ({ page }) => {
+  // **溢れていないことだけを見ても足りない。**
+  //
+  // 2026-08-25 に実際に外した: 手元 1 台のフォントで「1 行に載る最大」を
+  // 3 桁まで測り、**そのすぐ下**(余裕 0.3%)に vw の頭打ちを置いた。
+  // 手元の検査は全部緑で、**CI が 2px 溢れた**——CI のフォントは手元より
+  // **4.6% 幅が広い**(1 文字あたり 32.665 対 34.18)。
+  //
+  // **だから余裕そのものを主張する。** この検査は「いま溢れているか」では
+  // なく「**別のフォントでも溢れないだけ空いているか**」を見る。フォントを
+  // 差し替えなくても、走っている端末のフォントで測った余裕が閾値を下回れば
+  // 赤くなる——**手元でも CI でも同じ穴を捕まえる。**
+  //
+  // 10% は「実測した端末間の差(4.6%)の 2 倍強」であって、理論値ではない。
+  const MIN_SLACK = 0.1;
+  for (const width of [430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("display-main")).toBeVisible();
+
+    // `scrollWidth` はフッタが必要とする幅そのもの(下の検査のコメント参照)。
+    const slack = await page.getByRole("contentinfo").evaluate((el) => {
+      const needed = el.scrollWidth;
+      return (window.innerWidth - needed) / window.innerWidth;
+    });
+    expect(
+      slack,
+      `at ${width}px the footer leaves only ${(slack * 100).toFixed(1)}% ` +
+        `— a font ${(slack * 100).toFixed(1)}% wider would overflow`,
+    ).toBeGreaterThanOrEqual(MIN_SLACK);
+  }
+});
+
 test("the footer survives a narrower phone", async ({ page }) => {
-  // **11px は 390px に載る最大**である(実測 11.45px。【変更 2026-08-25】。
-  // 0.2.1 では文言が長く、同じ「載る最大」が 8px だった)。360px(多くの
-  // Android)や 320px でも、折り返さず・横にも溢れないこと。
+  // **390px に載る最大は 11.45px**(手元のフォントでの実測。【変更
+  // 2026-08-25】。0.2.1 では文言が長く、同じ「載る最大」が 8px だった)。
+  // **採ったのは 10px** で、390px では vw の頭打ちが先に効いて 9.75px になる
+  // ——上限のすぐ下に置いてはいけない理由は上の「leaves room for a wider
+  // font」にある。360px(多くの Android)や 320px でも、折り返さず・横にも
+  // 溢れないこと。
   //
   // **`getByRole("contentinfo")` ではなく `footer-disclaimer` を測る**——上の
   // 「stays on one line」と同じ理由。<footer> はリンクと区切りと免責の複数
@@ -98,10 +134,15 @@ test("the footer survives a narrower phone", async ({ page }) => {
     // なので、それがビューポート幅を超えていれば、フッタの中身がその
     // ビューポートに収まりきらないと直接言える。祖先の広がり(Keypad の
     // 既存バグ)にも、中央寄せの副作用にも左右されない。
-    // vw の頭打ちを外して赤確認済み。**2026-08-25 に測り直した**——字を
-    // 11px に上げたので、いまは **360px でも +19px** 溢れて赤くなる
-    // (0.2.1 の 8px では 360px は収まる幅で、赤くなるのは 320px だけだった)。
-    // **この 1 行は前より効いている。**
+    // vw の頭打ちを外して赤確認済み(2026-08-25 に 10px で測り直し):
+    // **赤くなるのは 320px の 1 件だけで、27px 溢れる。** 360px は 10px でも
+    // 収まる幅なので赤くならない——**0.2.1 の 8px のときと同じ結論**である
+    // (ここを「11px なら 360px でも赤い」と書きかけたが、**採ったのは
+    // 10px なので誤り**だった。測って直した)。
+    //
+    // **この検査だけでは薄い余裕を捕まえられない。** 同じ変異で、上の
+    // 「leaves room for a wider font」は **375px で先に赤くなる**
+    // ——溢れる前に「もう危ない」と言うのはあちらの仕事である。
     const spill = await page.getByRole("contentinfo").evaluate((el) => {
       return el.scrollWidth - window.innerWidth;
     });
