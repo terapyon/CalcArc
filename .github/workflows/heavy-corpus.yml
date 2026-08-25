@@ -68,9 +68,22 @@ jobs:
       # 自ら書いている。`pnpm heavy` が中で wasm を作り直すので、これが要る。
       - uses: ./.github/actions/setup-wasm-pack
 
+      # **heavy は自分のパッケージなので、自分で依存を入れる。** pnpm と node は
+      # 上の setup-web が用意済みで、版の固定はあちらに一本化されている。
+      - name: Install the heavy package
+        run: pnpm install --frozen-lockfile
+        working-directory: heavy
+
+      # **11 分の変異を回す前に、数十秒で落ちるものを先に落とす。**
+      # 重量級のユニット 6 本は「測る道具そのもの」を見張っており、
+      # 普段の CI では走らない(2026-08-25 のユーザ裁定)。ここが唯一の場所である。
+      - name: The measuring instrument must be sound
+        run: pnpm typecheck && pnpm lint && pnpm test
+        working-directory: heavy
+
       - name: Install Playwright's browser
         run: pnpm exec playwright install --with-deps chromium
-        working-directory: web
+        working-directory: heavy
 
       - name: Set up Python for the reference implementation
         # ci.yml と同じ版に揃える。
@@ -97,7 +110,7 @@ jobs:
         # 変異はコミットされない(測ったあと原文に戻し、バイト一致を確かめる)。
         # この段の結果が次の段のレポートに載る。
         run: pnpm heavy:power
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -117,7 +130,7 @@ jobs:
         # CI に出ない。順番だけがそれを決めている。
         if: always()
         run: pnpm heavy:ui
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -133,7 +146,7 @@ jobs:
         # 測っていない走行が測った顔で出ることはない。
         if: always()
         run: pnpm heavy
-        working-directory: web
+        working-directory: heavy
         env:
           CI: "1"
 
@@ -142,8 +155,8 @@ jobs:
         # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。
         if: always()
         run: |
-          if [ -f web/heavy-report.md ]; then
-            cat web/heavy-report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f heavy/heavy-report.md ]; then
+            cat heavy/heavy-report.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## 報告書が書かれなかった" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -155,6 +168,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: heavy-report
-          path: web/heavy-report.md
+          path: heavy/heavy-report.md
           if-no-files-found: warn
           retention-days: 90

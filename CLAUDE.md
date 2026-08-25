@@ -19,6 +19,7 @@
 | `web/src/ui` | React。CSS Modules とデザイントークン |
 | `reference` | Python の独立実装。`testdata/*.json` を生成する |
 | `testdata` | 生成された期待値。コミットされている |
+| `heavy` | 重量級の検証。独立した pnpm パッケージで、`web` はこれを知らない |
 
 ## コマンド
 
@@ -32,6 +33,10 @@ cd web && pnpm e2e         # Playwright（内部で wasm をビルドする）
 
 cd reference && uv run pytest
 cd reference && uv run python scripts/generate.py   # golden の再生成
+
+cd heavy && pnpm heavy         # 生成コーパスと参照の照合（32 秒）
+cd heavy && pnpm heavy:ui      # 本物の盤面を叩く（12 分）
+cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ```
 
 `web` の型検査・lint・build は `web/src/wasm/` を必要とする。新しいクローンでは先に
@@ -58,6 +63,8 @@ cd reference && uv run python scripts/generate.py   # golden の再生成
   （「未リリース」でない）**ことまで見る。これは Heavy corpus のワークフローが
   タグから走ったときに自動で回すので、**リリース前に手で打つ必要はない**。
   画面に出る版数は `web/package.json` からビルド時に埋まる。
+- **重量級のテストを `web/` に置かない。** `heavy/` が持つ。`web` から
+  重量級への参照は 0 件であり、この向きを保つ。
 
 ## 踏んだ罠
 
