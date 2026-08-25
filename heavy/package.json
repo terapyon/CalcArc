@@ -22,5 +22,11 @@
     "vite-plugin-top-level-await": "^1.4.0",
     "vite-plugin-wasm": "^3.4.0",
     "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild"
+    ]
   }
 }

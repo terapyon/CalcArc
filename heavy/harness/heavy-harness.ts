@@ -1,13 +1,18 @@
 /**
  * 重量級コーパス(Layer 6)専用の入口。**配信物には入らない**——
- * vite.heavy.config.ts だけがこのエントリをビルドし、index.html からは
- * 誰も import しないので本番バンドルに到達しない(設計書 §6.4)。
+ * vite.harness.config.ts だけがこのエントリをビルドし、web の index.html
+ * からは誰も import しないので本番バンドルに到達しない(設計書 §6.4)。
  *
  * ここが存在する理由は一つだけ。本番バンドルは src/calc をグローバルに
  * 露出していないので、page.evaluate から dispatch を呼べないためである。
  * UI そのものの検証は ui 経路(本物のアプリ)が担う。
  */
-import { type Calc, initCalc, KEY_TOKENS, type KeyToken } from "./calc";
+import {
+  type Calc,
+  initCalc,
+  KEY_TOKENS,
+  type KeyToken,
+} from "../../web/src/calc";
 import {
   compound_deposit_for,
   compound_grow,
@@ -18,7 +23,7 @@ import {
   loan_forward,
   loan_principal,
   loan_term,
-} from "./wasm/calcarc_wasm.js";
+} from "../../web/src/wasm/calcarc_wasm.js";
 
 /** 1 ケースの結果。表示は整形済み文字列で、数値は取り出せない(設計書 §6.3)。 */
 export interface HarnessResult {
