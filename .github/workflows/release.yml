@@ -1,0 +1,139 @@
+name: Release
+
+# **`v*` タグが本番への唯一の扉である**(ユーザ裁定 2026-08-25、
+# `docs/superpowers/specs/2026-08-25-release-gate-design.md`)。
+#
+#   タグ → 版数ゲート → CI 全部 → 重量級コーパス → 本番展開 → 証拠と Release
+#
+# **検査の定義をここに写さない。** `ci.yml` と `heavy-corpus.yml` と `deploy.yml` を
+# `workflow_call` で**呼ぶ**だけにする——写しを持つと、片方だけ直された日に
+# 「リリース前に通した検査」と「毎回の CI」が別物になる(設計書 §3)。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  # 接頭辞 `release-` を外さない。呼ばれる側の群と重ならないようにするため
+  # (設計書 §3.2)。リリースは途中中断より直列完走。
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # **45 分を使う前に、1 分で分かることを先に見る。** 版数がタグと食い違って
+  # いるなら、そのリリースはもう間違っている。
+  #
+  # `heavy-corpus.yml` も自分の入口で同じ検査を持つ(手動で回すときのため)。
+  # **判定の実体は `web/scripts/check-version.mjs` の 1 つだけ**で、両方とも
+  # それを呼ぶ——写しているのは呼び出しであって、規則ではない。
+  version:
+    name: Version numbers agree with the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-web
+      - name: The five places must agree, and match the tag
+        # タグから走ったときだけタグ名と照合する。`workflow_dispatch` は
+        # ブランチからも走せるので、渡すと無意味な赤になる。
+        working-directory: web
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$IS_TAG" = "true" ]; then
+            node scripts/check-version.mjs --tag "$REF_NAME"
+          else
+            node scripts/check-version.mjs
+          fi
+
+  ci:
+    name: CI
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  heavy:
+    name: Heavy corpus
+    needs: ci
+    # **重量級を本番の条件にする**(ユーザ裁定 2026-08-25)。実測 35〜41 分。
+    # これは「Heavy をリリース前の必須ゲートにはしない」という 2026-08-25 の
+    # テスト空間モデル設計書 §3 の非目的を**撤回した**もので、あちらにも
+    # 撤回を書いてある。
+    uses: ./.github/workflows/heavy-corpus.yml
+
+  deploy:
+    name: Deploy
+    needs: heavy
+    uses: ./.github/workflows/deploy.yml
+    # Cloudflare の資格情報は呼ばれた側で要る。**呼ばれた側は
+    # 呼び出し元の secrets を自動では受け取らない。**
+    secrets: inherit
+
+  evidence:
+    name: Evidence and GitHub Release
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Release の作成と添付に要る。**この 1 ジョブだけが書き込みを持つ。**
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # 重量級の報告書と、実際に配った物。**どちらもこの走行が作ったもの**で、
+      # 別の走行から拾ってこない(別の走行の結果を添えたら、証拠にならない)。
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: heavy-report
+          path: evidence/
+        continue-on-error: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deployed-dist
+          path: dist/
+
+      - name: Pack what was deployed
+        # **`mkdir -p` を外さない。** 重量級の報告書の取得は
+        # `continue-on-error` なので、失敗すると `evidence/` が無いまま
+        # ここに来る——その場合でも、配った物だけは残す。
+        run: |
+          set -eu
+          mkdir -p evidence
+          tar -czf "evidence/calcarc-${GITHUB_REF_NAME}-dist.tar.gz" -C dist .
+
+      - name: Write the evidence
+        # **結論は走行そのものから読む。** ステップの出力を人が(あるいは私が)
+        # 書き写すと、「緑だったと書いてあるが実は落ちていた」が作れてしまう。
+        # 組み立ての中身は `web/tests/unit/release-evidence.test.ts` が固定して
+        # いる——落ちた検査が 1 つでもあれば、このスクリプトは証拠を書かずに
+        # 落ちる。
+        working-directory: web
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          attachments="$(ls ../evidence)"
+          # shellcheck disable=SC2086
+          node scripts/release-evidence.mjs $attachments > ../evidence/release-evidence.md
+
+      - name: Put the evidence in the job summary
+        run: cat evidence/release-evidence.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create the release and attach the evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          # 既に Release がある(手で作った・作り直し)なら、添付だけ更新する。
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" evidence/* --clobber
+          else
+            gh release create "$TAG" evidence/* \
+              --title "$TAG" \
+              --notes-file evidence/release-evidence.md
+          fi

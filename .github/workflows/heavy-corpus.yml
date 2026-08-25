@@ -6,17 +6,18 @@ name: Heavy corpus
 #
 # 走らせるのは:
 #  - 手動(workflow_dispatch)——確かめたくなったとき
-#  - タグを打ったとき——リリースの記録として残す
+#  - リリース(release.yml)から呼ばれたとき——**本番へ出す条件**である
 #
-# **週 1 の cron は外した**(ユーザ裁定 2026-08-25)。自動で走るのはタグを
-# 打ったときだけで、それ以外は手で回す。
+# **週 1 の cron は外した**(ユーザ裁定 2026-08-25)。
+# **`push: tags` も外した**(ユーザ裁定 2026-08-25)——タグからは `release.yml` が
+# 呼ぶので、両方を残すと同じタグで重量級が 2 回走る(設計書 §3.1)。
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # 接頭辞 `heavy-` を外さない(理由は ci.yml と同じ。設計書 §3.2)。
+  group: heavy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

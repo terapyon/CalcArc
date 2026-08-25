@@ -1,12 +1,19 @@
 name: Deploy
 
+# **本番へ出す扉はタグだけである**(ユーザ裁定 2026-08-25、設計書 §2)。
+#  - `release.yml` から呼ばれる——版数・CI・重量級を通した後の通常経路
+#  - 手動(workflow_dispatch)——**検査を迂回する緊急経路**。古いタグの ref を
+#    選んで配り直すためにある(設計書 §5)。使ったら Release に書き足すこと。
+#
+# **main への push では走らない。** 「main の先頭 = 配信物」は
+# 「最新の `v*` タグ = 配信物」に変わった(`docs/deploy.md`)。
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-deploy
+  # 接頭辞 `deploy-` を外さない(理由は ci.yml と同じ。設計書 §3.2)。
+  group: deploy-${{ github.workflow }}-deploy
   # デプロイは途中中断より直列完走(設計書 §1)。
   cancel-in-progress: false
 
@@ -17,11 +24,26 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Guard — deploy runs only from main
-        if: github.ref != 'refs/heads/main'
+      - name: Guard — deploy runs only from a v* tag
+        # 版数ゲートはタグ名と 5 箇所の版数の一致を見る。ここで見るのは
+        # **そもそもタグから走っているか**だけである——ブランチの先頭を
+        # 配ると、Release に添える証拠がどのリリースのものか言えなくなる。
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          echo "deploy は main からのみ。旧コミットへ戻すときは revert を main に積む(docs/deploy.md)" >&2
+          echo "deploy は v* タグからのみ。戻すときは revert を main に積んでパッチ版のタグを打つ(docs/deploy.md)" >&2
           exit 1
+      - name: Say so when the checks were bypassed
+        # 緊急経路で配ったことを、走行の一番上に残す。**黙って迂回しない。**
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          {
+            echo "## 検査を迂回して配った"
+            echo ""
+            echo "この走行は \`workflow_dispatch\` の緊急経路である。CI と重量級は**この走行では**"
+            echo "走っていない。配った ref は \`${GITHUB_REF_NAME}\`。"
+            echo ""
+            echo "**Release に何を配ったかを書き足すこと**(docs/deploy.md)。"
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup-wasm-pack
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
@@ -114,3 +136,14 @@ jobs:
           done
           echo "served HTML never referenced $bundle" >&2
           exit 1
+
+      # 配った物そのものを Release に添えるため、走行に残す(設計書 §4)。
+      # **スモーク 3 本の後**に置く——「配った物」と呼べるのは、それが実際に
+      # 配信されていることを確かめた後だけである。`build-info.json`(刻印)を
+      # 含む `web/dist/` をそのまま上げる。
+      - name: Keep what was deployed
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployed-dist
+          path: web/dist/
+          retention-days: 90
