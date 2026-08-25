@@ -602,14 +602,14 @@ export function measure() {
   rmSync(RUN_JSON, { force: true });
   let buildOk = true;
   try {
-    run("pnpm", ["wasm"]);
+    run("pnpm", ["--dir", "../web", "wasm"]);
   } catch {
     buildOk = false;
   }
   let playwrightExitCode = null;
   if (buildOk) {
     try {
-      run("pnpm", ["exec", "playwright", "test", "--config", "playwright.heavy.config.ts"]);
+      run("pnpm", ["exec", "playwright", "test", "--config", "playwright.corpus.config.ts"]);
       playwrightExitCode = 0;
     } catch (error) {
       // 赤くなるのが目的なので、失敗そのものは想定内。取り出し方は
@@ -893,7 +893,7 @@ function main() {
   // 走行の後始末として作り直しておけば、次に何を回しても原文の engine になる。
   if (MUTATIONS.length > 0) {
     process.stderr.write("原文の wasm を作り直しています ... ");
-    run("pnpm", ["wasm"]);
+    run("pnpm", ["--dir", "../web", "wasm"]);
     process.stderr.write("done\n");
   }
 

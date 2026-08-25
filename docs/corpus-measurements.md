@@ -2536,3 +2536,58 @@ test result: ok. 11 passed; 0 failed; ...    (token 突き合わせ)
 動かなくなっている。** `crates/` は原状回復できており、web の typecheck・lint・vitest・
 `cargo test --workspace`（393 passed）はすべて緑。`pnpm e2e` は共有ホストの
 プロセス障害で 2 度とも完走せず、1 度目の 179/181 passed が得られた実測の全てである。
+
+## `heavy:power` の 3 か所を直して測り直した（2026-08-25 実測、heavy-package-split Task 8 の続き）
+
+前節が「測定そのものが動かなかった」と記録した `pnpm heavy:power` を、原因の
+3 か所を直してから測り直した。**移動の検証で唯一残っていた 1 本である。**
+
+### 直したのは 3 行、どれも呼び出し先の名前
+
+`heavy/scripts/detection-power.mjs`。計算にも判定にも触っていない。
+
+| 場所 | 前 | 後 |
+|---|---|---|
+| `measure()` の wasm ビルド | `pnpm wasm` | `pnpm --dir ../web wasm` |
+| `measure()` の Playwright | `--config playwright.heavy.config.ts` | `--config playwright.corpus.config.ts` |
+| `main()` の後始末（原文の wasm を作り直す） | `pnpm wasm` | `pnpm --dir ../web wasm` |
+
+`heavy/` は `web/` と別パッケージになったので、`pnpm wasm` は `heavy` から見て
+解決できない（`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL`）。設定ファイル名は Task 5 の
+移動で `playwright.heavy.config.ts` → `playwright.corpus.config.ts` に変わっていた。
+
+### 実測（18/18 ok、移動前と 1 件も動いていない）
+
+```
+$ cd heavy && pnpm heavy:power
+[display-digits] ... ok — 期待したシャードだけが反応した(11 枚)
+... （18 行すべて ok）
+原文の wasm を作り直しています ... done
+detection-power: wrote /home/terapyon/dev/CalcArc-e2e/heavy/detection-power.json
+```
+
+**18 種すべて `ok`。検出件数は 18 種の総数も `display-digits` の 11 枚の内訳も、
+移動前の実測（`docs/heavy-corpus-implementation-report.md` §5 の表）と完全に一致した**
+——`detection-power.json` と表を機械で突き合わせて食い違い 0 件。検出率は件数と
+シャードの件数だけで決まるので、`minRate` に対する比も移動前と同じである。
+
+所要 **652 秒（10.9 分）**（ログの作成 19:26:48 から最終書き込み 19:37:40 まで）。
+移動前の 669 秒と同じ水準。
+
+### 走行後の状態
+
+```
+$ git status --short
+ M heavy/scripts/detection-power.mjs
+```
+
+`crates/` は空——18 回の変異当てはすべて戻っている。`heavy` パッケージ自身の
+検査も緑: `pnpm test` **86 passed（6 files）**、`pnpm typecheck` 出力 0 バイト、
+`pnpm lint` `Checked 43 files in 39ms.`（info 3 件はいずれも
+`tests/corpus/report.ts` の既存のもので、この変更とは無関係）。
+
+### まとめ
+
+**移動の検証は 4 本とも揃った。** `heavy` / `heavy:power:exact` / `heavy:ui` は
+前節でバイト単位の一致を確認済み、`heavy:power` はこの節で 18/18 ok・件数完全一致。
+**`heavy/` への移動は検出力を 1 件も動かしていない。**
