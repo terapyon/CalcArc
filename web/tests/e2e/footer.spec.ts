@@ -17,7 +17,7 @@ test("the footer shows on every tab, once", async ({ page }) => {
       "https://github.com/terapyon/CalcArc",
     );
     await expect(page.getByTestId("footer-disclaimer")).toHaveText(
-      "無保証。重要な判断に使わないでください。",
+      "計算結果は無保証です。",
     );
   }
 });
