@@ -254,14 +254,19 @@ cd /home/terapyon/dev/CalcArc-e2e/heavy && pnpm install
 
 Expected: `heavy/pnpm-lock.yaml` と `heavy/node_modules/` ができる。
 
-- [ ] **Step 7: 空の状態で型検査と lint が通ることを見る**
+- [ ] **Step 7: 道具が起動し、lint が通ることを見る**
 
 ```bash
-cd /home/terapyon/dev/CalcArc-e2e/heavy && pnpm typecheck && pnpm lint
+cd /home/terapyon/dev/CalcArc-e2e/heavy && pnpm exec tsc --version \
+  && pnpm exec biome --version && pnpm lint
 ```
 
-Expected: どちらも exit 0。**まだ 1 ファイルも移していないので、
-ここで落ちるなら設定そのものが誤っている。**
+Expected: すべて exit 0。
+
+**ここで `pnpm typecheck` を走らせてはいけない。** `include` に書いた `tests` も
+`*.config.ts` も**まだ存在しない**ので、tsc は TS18003（No inputs were found）で
+落ちる。空の状態で確かめたいのは**設定が壊れていないこと**であって型ではない。
+**最初の本物の型検査は Task 2 Step 6** である（事前スキャンの Ruling 1）。
 
 - [ ] **Step 8: commit**
 
@@ -824,7 +829,26 @@ MSG
 型検査の外にいた」という記録も残す**——重量級はもう居ないが、
 `tests` を include する理由は `tests/e2e` にそのまま当てはまる。
 
-- [ ] **Step 3: `web` に重量級の痕跡が残っていないことを grep で確かめる**
+- [ ] **Step 3: `web/vite.config.ts` のコメントが名指す directory を直す**
+
+`web/vite.config.ts:90` 付近に、こう書かれている:
+
+```
+    // `tests/unit` は Playwright の testDir(`tests/heavy`) の外にある——
+    // **中に置くと `**\/*.test.*` の既定に当たって両方が拾う。**
+```
+
+**`tests/heavy` はもう web に無い。** 理由づけ自体は生きている（`tests/unit` を
+Playwright の testDir の外に置く）ので**残し、名指している対象だけ直す**:
+
+```
+    // `tests/unit` は Playwright の testDir(`tests/e2e`) の外にある——
+    // **中に置くと `**\/*.test.*` の既定に当たって両方が拾う。**
+```
+
+（事前スキャンの Ruling 2。**理由は生きたまま、名指す先だけが腐る。**）
+
+- [ ] **Step 4: `web` に重量級の痕跡が残っていないことを grep で確かめる**
 
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e && git grep -n -i 'heavy' -- web/ | grep -v 'check-version'
@@ -833,7 +857,7 @@ cd /home/terapyon/dev/CalcArc-e2e && git grep -n -i 'heavy' -- web/ | grep -v 'c
 Expected: 出力が空（`check-version` 由来のものだけが除外で消え、残りゼロ）。
 **1 件でも残っていたら、それが「入り込んでいる」最後の 1 つである。**
 
-- [ ] **Step 4: `web` 側が何も失っていないことを見る**
+- [ ] **Step 5: `web` 側が何も失っていないことを見る**
 
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm typecheck && pnpm lint \
@@ -846,7 +870,7 @@ Expected: `typecheck` と `lint` は exit 0。vitest は
 450 − 86 = 364。**この引き算が合わないなら、消しすぎているか
 消し足りない。**
 
-- [ ] **Step 5: 通常の e2e が通ることを見る**
+- [ ] **Step 6: 通常の e2e が通ることを見る**
 
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm e2e 2>&1 | tail -5
@@ -858,7 +882,7 @@ Expected: **181 passed**。出典は 0.4.0 の最後のコミット `06503c6` �
 （437 + 13 = 450 で、いまの数と合う）。**違う数なら、その数を記録して
 報告する。**
 
-- [ ] **Step 6: commit**
+- [ ] **Step 7: commit**
 
 ```bash
 cd /home/terapyon/dev/CalcArc-e2e && git add web && git commit -F - <<'MSG'
