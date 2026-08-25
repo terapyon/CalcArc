@@ -2001,3 +2001,81 @@ def test_the_model_counts_pairs_not_rows() -> None:
     assert len(corpus_calls._PAIRWISE_COMPOUND_GROW_ROWS) == 140
     assert len(grow.cells) == 266
     assert all(len(cell.axes) == 2 for cell in grow.cells)
+
+
+def test_coverage_is_recomputed_from_the_generated_cases() -> None:
+    """設計書 §15.1 の 2 と 7。**被覆はケースから数え直せる。**
+
+    1 件のケースは複数のセルを踏む(§9.3)——4 因子なら 2 因子の組が 6 通り。
+    重複してケースを作らなくても、集合へ足すだけで済む。
+    """
+    one = {
+        "kind": "call",
+        "id": "fin-000000",
+        "op": "compound_grow",
+        "stratum": "compound_grow/pairwise_0000",
+        "input": {"rate": "20", "periods": 12, "periods_per_year": 2, "tax": True},
+        "expect": {},
+    }
+    assert len(corpus_calls.covered_cells_from_cases([one])) == 6
+
+
+def test_values_outside_the_level_table_are_not_counted() -> None:
+    """**水準表の外の値を 1 セルとして数えない。**
+
+    乱択のケースは水準の外の値を持つ。素朴に数えると要求セルと単位が合わなく
+    なる(実測 2026-08-25: `compound_deposit_for` の全 420 件は「因子と値の組」を
+    1,491 通り踏んでいる。要求セルは 266 しかない)。
+    """
+    stray = {
+        "kind": "call",
+        "id": "fin-000001",
+        "op": "compound_grow",
+        "stratum": "compound_grow/random",
+        "input": {"rate": "3.3", "periods": 7, "periods_per_year": 2, "tax": True},
+        "expect": {},
+    }
+    covered = corpus_calls.covered_cells_from_cases([stray])
+    assert all("rate=3.3" not in cell.id for cell in covered)
+    # `periods=7` と `ppy=2` と `tax=true` は水準なので、その 3 つの組だけが残る。
+    assert len(covered) == 3
+
+
+def test_the_recount_actually_compares_something() -> None:
+    """**「何も比較していないのに緑」を潰す**(監視役の指摘、2026-08-26)。
+
+    水準へ写す判定が全件を素通しするようになっても、被覆の合計だけを見ていると
+    気づけない。**踏んだ件数と弾いた件数の両方が 0 でないこと**を、実物の
+    コーパスに対して測る。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    cases = [c for c in shard["cases"] if c["op"] in corpus_calls.COVERAGE_FACTORS]
+    on_level = 0
+    off_level = 0
+    for case in cases:
+        factors = corpus_calls.COVERAGE_FACTORS[case["op"]]
+        keys = corpus_calls._COVERAGE_INPUT_KEYS.get(case["op"], ())
+        if not keys:
+            continue
+        if all(key in case["input"] and case["input"][key] in factors[name] for name, key in keys):
+            on_level += 1
+        else:
+            off_level += 1
+    # **どちらの帯も実在する。** 片方が 0 なら、判定は何も分けていない。
+    assert on_level >= 500, f"水準に載ったケースが {on_level} 件しかない"
+    assert off_level >= 500, f"水準の外のケースが {off_level} 件しかない(判定が素通しでは)"
+
+
+def test_loan_term_is_not_counted_from_its_input() -> None:
+    """設計書 §8.2。**`loan_term` の期間は入力ではなく答**なので、この関数は
+    `loan_term` のケースからセルを数えない(Task 4 の記録が担う)。
+    """
+    case = {
+        "kind": "call",
+        "id": "fin-000002",
+        "op": "loan_term",
+        "stratum": "loan_term/pairwise_0000",
+        "input": {"principal": "20000000", "rate": "20", "payment": "300000"},
+        "expect": {},
+    }
+    assert corpus_calls.covered_cells_from_cases([case]) == set()

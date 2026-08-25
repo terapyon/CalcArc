@@ -20,6 +20,7 @@ import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import combinations
 
 from . import compound_ref, data_scale_ref, loan_ref
 from . import corpus_coverage as coverage
@@ -2805,6 +2806,79 @@ FINANCE_REQUIREMENTS: tuple[coverage.Requirement, ...] = (
 )
 
 _REQUIREMENT_OF: dict[str, coverage.Requirement] = {r.scope: r for r in FINANCE_REQUIREMENTS}
+
+
+#: scope → (因子名, `case["input"]` の鍵)。**`loan_term` はここに置かない**
+#: ——`target_n` は入力に無く、答であるため(設計書 §8.2)。入力から数えると、
+#: 「入力に在った値」と「答として出た値」を混ぜることになる。
+_COVERAGE_INPUT_KEYS: dict[str, tuple[tuple[str, str], ...]] = {
+    op: (("rate", "rate"), ("n", "n"))
+    for op in ("loan_forward", "loan_principal", "loan_bonus_forward", "loan_bonus_principal")
+} | {
+    "compound_grow": (
+        ("rate", "rate"),
+        ("periods", "periods"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+    "compound_deposit_for": (
+        ("rate", "rate"),
+        ("periods", "periods"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+    "compound_periods_for": (
+        ("rate", "rate"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+}
+
+
+def covered_cells_from_cases(cases: Sequence[dict]) -> set[coverage.Cell]:
+    """生成済みのケースが踏んだ要求セル(設計書 §15.1 の 2)。
+
+    **入力の実値ではなく水準へ写してから数える。** 水準表に無い値は数えない
+    ——乱択のケースは水準の外の値を持つので、素朴に数えると要求セルと単位が
+    合わなくなる(実測 2026-08-25: `compound_deposit_for` の全 420 件は
+    「因子と値の組」を 1,491 通り踏む。要求セルは 266 しかない)。
+
+    **1 件が複数のセルを踏む**(設計書 §9.3)。集合へ足すので、同じセルを
+    埋めるためにケースを重複生成する必要はない——重複ケースを消しても
+    要求セルが未達として残る、という壊れ方を避けられる。
+
+    **層(`stratum`)で絞らない。** ペアワイズ行として重複で落ちた組合せが、
+    名指し境界層のケースとして実在することがある(実測: `compound_deposit_for`
+    の `rate=0 × periods=1`)。層で絞ると、その 1 ペアを取りこぼす。
+    """
+    covered: set[coverage.Cell] = set()
+    for case in cases:
+        axes = _COVERAGE_INPUT_KEYS.get(case["op"])
+        if axes is None:
+            continue
+        factors = COVERAGE_FACTORS[case["op"]]
+        requirement = _REQUIREMENT_OF[case["op"]]
+        on_level: list[tuple[str, str]] = []
+        for name, key in axes:
+            value = case["input"].get(key)
+            # **`in` の前に型を見ない。** 水準列は `("0", "20")` のような
+            # 文字列だったり `(1, 12)` のような整数だったりするので、
+            # 実値がそのまま水準列に在るかだけを見る。
+            if key not in case["input"] or value not in factors[name]:
+                continue
+            on_level.append((name, coverage.level_text(value)))
+        if requirement.strength == "all":
+            # 全組合せのセルは**両方の因子が水準に載っていて初めて**踏まれる。
+            if len(on_level) == len(axes):
+                covered.add(coverage.Cell(case["op"], tuple(on_level)))
+        else:
+            # **2 因子のセルは、その 2 つが水準なら踏まれている。** 同じケースの
+            # 他の因子が水準の外にあっても、この 2 つの組を試した事実は変わらない
+            # ——ここで全因子を要求すると、乱択のケースが踏んだ組を数え落とす。
+            for left, right in combinations(on_level, 2):
+                covered.add(coverage.Cell(case["op"], (left, right)))
+    return covered
+
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
     ("0", "1", "int8"),
