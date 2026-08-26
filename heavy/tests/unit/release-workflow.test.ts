@@ -69,3 +69,56 @@ describe("読み手の定数は、書き手のワークフローと一致する"
     expect(read("heavy-corpus.yml")).not.toContain("if-no-files-found: warn");
   });
 });
+
+describe("型検査より先に wasm を作る（2026-08-26、Wave C）", () => {
+  // **v0.4.1 の 1 回目を落とした欠陥はこれである。** `heavy` の型検査は
+  // `web/src/calc` を通って `web/src/wasm/` の型宣言に届くので、wasm を用意
+  // する前に走らせると `TS2307` で落ちる。**手元のワークツリーには生成物が
+  // 残っているため、手元では緑のまま気づけない。**
+  //
+  // 毎回の CI に heavy を載せても、この欠陥は捕まらない——**別のワークフローの
+  // 順序**だからである。だからここで順序そのものを固定する。
+
+  /** ジョブの steps を、`run` と `uses` を混ぜた行の並びとして取り出す。 */
+  const stepsOf = (yaml: string, jobName: string) => {
+    const body = yaml.split(`\n  ${jobName}:\n`)[1] ?? "";
+    const untilNextJob = body.split(/\n {2}\w[\w-]*:\n/)[0] ?? "";
+    return untilNextJob
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line.startsWith("- ") ||
+          line.startsWith("run:") ||
+          line.startsWith("name:"),
+      );
+  };
+
+  const indexOfLine = (steps: string[], needle: string) =>
+    steps.findIndex((line) => line.includes(needle));
+
+  it("heavy-corpus.yml は wasm を作ってから型検査する", () => {
+    const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
+    const build = indexOfLine(steps, "pnpm --dir ../web wasm");
+    const check = indexOfLine(steps, "pnpm typecheck");
+    expect(build).toBeGreaterThanOrEqual(0);
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(build).toBeLessThan(check);
+  });
+
+  it("ci.yml の heavy ジョブは wasm を取ってから型検査する", () => {
+    const steps = stepsOf(read("ci.yml"), "heavy");
+    const fetchWasm = indexOfLine(steps, "download-artifact");
+    const check = indexOfLine(steps, "pnpm typecheck");
+    expect(fetchWasm).toBeGreaterThanOrEqual(0);
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(fetchWasm).toBeLessThan(check);
+  });
+
+  it("ci.yml の heavy ジョブは本体（35 分）を走らせない", () => {
+    // 毎回の CI に載せるのは道具の健全性だけである。
+    const steps = stepsOf(read("ci.yml"), "heavy").join("\n");
+    expect(steps).not.toContain("pnpm heavy");
+    expect(steps).toContain("pnpm test");
+  });
+});
