@@ -124,16 +124,35 @@ jobs:
         run: cat evidence/release-evidence.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create the release and attach the evidence
+        # **本文にも証拠を載せる。** 添付とジョブのサマリーだけに置くと、
+        # **読む人が最初に見る場所**に結論が出ない。
+        #
+        # 「Release が既に在る」は例外ではなく**通常経路**である——GitHub の UI で
+        # Release を作る操作がタグを push し、この走行を起こす。v0.4.1 では
+        # Release の公開が走行開始の 2 秒前で、`create` 側は一度も走らなかった。
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           set -eu
-          # 既に Release がある(手で作った・作り直し)なら、添付だけ更新する。
           if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json body --jq .body > existing-notes.md
+            # **自動生成の "What's Changed" は消さない。** 前に残して証拠を継ぎ足す。
+            # 目印より後ろを落としてから貼り直すので、**再走行で二重に積まない。**
+            # 末尾の空行を落としてから継ぎ足す。落とさないと**走行のたびに
+            # 本文が 1 バイトずつ伸びる**(実測で確かめた)。
+            sed '/^<!-- release-evidence -->$/,$d' existing-notes.md \
+              | awk 'BEGIN{RS="\0"} {sub(/\n+$/,""); printf "%s\n", $0}' > notes.md
+            {
+              printf '\n<!-- release-evidence -->\n\n'
+              cat evidence/release-evidence.md
+            } >> notes.md
+            gh release edit "$TAG" --notes-file notes.md
             gh release upload "$TAG" evidence/* --clobber
           else
-            gh release create "$TAG" evidence/* \
-              --title "$TAG" \
-              --notes-file evidence/release-evidence.md
+            {
+              printf '<!-- release-evidence -->\n\n'
+              cat evidence/release-evidence.md
+            } > notes.md
+            gh release create "$TAG" evidence/* --title "$TAG" --notes-file notes.md
           fi
