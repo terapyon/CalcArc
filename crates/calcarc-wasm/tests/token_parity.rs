@@ -184,3 +184,39 @@ fn notations_match_between_typescript_and_rust() {
         "web/src/calc/types.ts の NOTATIONS と Notation::ALL が食い違っている"
     );
 }
+
+/// `marker` に続く 10 進の数を、ファイル `src` から抜き出す。
+///
+/// 上の配列の抽出と同じ流儀の構造依存で、TS をパースはしない。**宣言の
+/// 先頭からの完全一致**をマーカーにするので、接頭辞を共有する別の定数
+/// (`MAX_PERIODS` に対する `MAX_PERIODS_PER_YEAR` など)を掴まない。
+fn number_in_ts_const(src: &str, marker: &str) -> u32 {
+    let after = src
+        .split(marker)
+        .nth(1)
+        .unwrap_or_else(|| panic!("{marker} の宣言が見つからない"));
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    digits
+        .parse()
+        .unwrap_or_else(|e| panic!("{marker} の右辺が 10 進の数でない: {e}"))
+}
+
+#[test]
+fn the_panel_period_cap_matches_the_compound_domain() {
+    // **盤面の上限とコアの定義域が、別々に 1200 と書かれている。**
+    // 食い違っても誰も落ちない——盤面が小さすぎれば「打てない期数」が
+    // 静かに増え、大きすぎれば打てた値をコアが弾く。どちらも計算は
+    // 正しいままなので、既存のどの検査にも映らない。
+    //
+    // **掛かる先は複利である。** 数が同じ `loan::inverse::MAX_TERM_MONTHS`
+    // は期間逆算の**探索打ち切り**で、前進の償還表には上限が無い。
+    // 数だけを見ると 3 つとも 1200 で区別が付かないので、**どれに紐づくかを
+    // ここで名指しして固定する**(FinancePanel.tsx の註がこれを指している)。
+    let src = include_str!("../../../web/src/ui/Finance/FinancePanel.tsx");
+    let ts = number_in_ts_const(src, "const MAX_PERIODS = ");
+    assert_eq!(
+        ts,
+        calcarc_core::finance::compound::MAX_PERIODS,
+        "FinancePanel.tsx の MAX_PERIODS と finance::compound::MAX_PERIODS が食い違っている"
+    );
+}
