@@ -14,8 +14,22 @@ import { execFileSync } from "node:child_process";
 /** 終わっていて、成功ではない結論。**1 つでもあれば証拠を書かない。** */
 const BAD_CONCLUSIONS = new Set(["failure", "cancelled", "timed_out", "action_required"]);
 
-/** 走行に必ず居てほしいジョブの、名前の断片。無ければその旨を書く。 */
-const HEAVY_MARKER = "Heavy corpus";
+/**
+ * 走行に必ず居てほしい**重量級の本体**のジョブ名(設計書 §4、B-4)。
+ *
+ * **断片一致にしない。** `"Heavy corpus"` で `includes` していた頃は、
+ * 11 秒で終わる `Heavy corpus / Version numbers agree` にも当たっていた
+ * ——**35 分の本体が走っていなくても在席と認めていた。** 書き手(`release.yml`
+ * の `heavy` ジョブ名 + `heavy-corpus.yml` の `corpus` ジョブ名)との一致は
+ * `heavy/tests/unit/release-workflow.test.ts` が固定する。
+ */
+export const HEAVY_BODY_JOB = "Heavy corpus / Corpus vs reference";
+
+/** 重量級が走ったなら在るはずの添付(B-2)。 */
+export const HEAVY_REPORT = "heavy-report.md";
+
+/** 終わっていて成功でもない結論。**成功にも進行中にも数えない**(B-3)。 */
+const NOT_RUN_CONCLUSIONS = new Set(["skipped", "neutral"]);
 
 function duration(job) {
   if (!job.started_at || !job.completed_at) {
@@ -58,10 +72,19 @@ function duration(job) {
  *   runId: string,
  *   jobs: RunJob[],
  *   attachments?: string[],
+ *   selfName?: string,
  * }} input
  * @returns {string}
  */
-export function renderEvidence({ tag, sha, repo, runId, jobs, attachments = [] }) {
+export function renderEvidence({
+  tag,
+  sha,
+  repo,
+  runId,
+  jobs,
+  attachments = [],
+  selfName = "",
+}) {
   if (!Array.isArray(jobs) || jobs.length === 0) {
     throw new Error("この走行にはジョブが 1 つも無い。証拠を書かない");
   }
@@ -74,7 +97,12 @@ export function renderEvidence({ tag, sha, repo, runId, jobs, attachments = [] }
     );
   }
   const finished = jobs.filter((job) => job.conclusion === "success");
-  const running = jobs.filter((job) => job.conclusion !== "success");
+  // **3 つに分ける**(B-3)。`skipped` と `neutral` は「走らなかった」ので、
+  // 成功でも進行中でもない——「進行中」と書けば、そのうち終わるという嘘になる。
+  const notRun = jobs.filter((job) => NOT_RUN_CONCLUSIONS.has(job.conclusion));
+  const running = jobs.filter(
+    (job) => job.conclusion !== "success" && !NOT_RUN_CONCLUSIONS.has(job.conclusion),
+  );
   const runUrl = `https://github.com/${repo}/actions/runs/${runId}`;
   const lines = [
     `# ${tag} のリリース証拠`,
@@ -91,21 +119,48 @@ export function renderEvidence({ tag, sha, repo, runId, jobs, attachments = [] }
     "|---|---|---:|",
   ];
   for (const job of jobs) {
-    const verdict = job.conclusion === "success" ? "成功" : "進行中";
+    const verdict =
+      job.conclusion === "success"
+        ? "成功"
+        : NOT_RUN_CONCLUSIONS.has(job.conclusion)
+          ? `飛ばした(\`${job.conclusion}\`)`
+          : "進行中";
     lines.push(`| ${job.name} | ${verdict} | ${duration(job)} |`);
   }
+  // **「自分自身である」と断定してよいのは、進行中が本当に自分だけのとき。**
+  // 他にも進行中が居るのに名指しすると、その行は嘘になる(B-3)。
+  const onlySelfIsRunning =
+    running.length === 1 && selfName !== "" && running[0].name === selfName;
   lines.push(
     "",
     `**成功した検査: ${finished.length}**` +
       (running.length > 0
-        ? `（進行中 ${running.length}——この証拠を書いているジョブ自身がそれである）`
+        ? `（進行中 ${running.length}${
+            onlySelfIsRunning ? "——この証拠を書いているジョブ自身である" : ""
+          }）`
         : ""),
     "",
   );
-  if (!jobs.some((job) => job.name.includes(HEAVY_MARKER))) {
+  if (notRun.length > 0) {
+    lines.push(
+      `**飛ばした検査: ${notRun.length}。** 走らなかったので、成功にも進行中にも`,
+      "数えていない——通した検査の一覧に、この行は含まれない。",
+      "",
+    );
+  }
+  const heavyRan = jobs.some((job) => job.name === HEAVY_BODY_JOB);
+  if (!heavyRan) {
     lines.push(
       "**重量級コーパスはこの走行に含まれていない。**",
       "通常のリリース経路なら必ず居る——居ないなら、検査を迂回した配信である。",
+      "",
+    );
+  } else if (!attachments.includes(HEAVY_REPORT)) {
+    // **添付の実在を証拠の側が見る**(B-2)。走ったのに報告書が無いなら、
+    // 「重量級を通した」という主張の裏づけがこの Release に残っていない。
+    lines.push(
+      `**重量級の報告書が添付されていない**(\`${HEAVY_REPORT}\`)。`,
+      "走行そのものは通っているが、**この Release からは中身を読めない。**",
       "",
     );
   }
@@ -157,7 +212,17 @@ function main() {
   }
   const attachments = process.argv.slice(2);
   process.stdout.write(
-    renderEvidence({ tag, sha, repo, runId, jobs: fetchJobs(repo, runId), attachments }),
+    renderEvidence({
+      tag,
+      sha,
+      repo,
+      runId,
+      jobs: fetchJobs(repo, runId),
+      attachments,
+      // 自分自身のジョブ名。**渡されなければ名指ししない**——
+      // 名指しできないことと、嘘を書くことは別である(B-3)。
+      selfName: process.env.SELF_JOB_NAME ?? "",
+    }),
   );
 }
 

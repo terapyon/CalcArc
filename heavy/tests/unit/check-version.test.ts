@@ -141,3 +141,36 @@ describe("タグを打ったときの検査", () => {
     expect(checkVersions(input)).toEqual([]);
   });
 });
+
+describe("CHANGELOG の日付（2026-08-26、B-6）", () => {
+  // 自分のコメントは「**日付が入っている（「未リリース」でない）**ことまで見る」
+  // と言っているのに、判定は行全体の完全一致だった。**注記つきの日付が偽赤に
+  // なる**——検査が自分の宣言より厳しいのは、宣言のほうが読まれるので危ない。
+  const withEntry = (entry: string) =>
+    checkVersions({
+      cargoToml: cargoToml("0.5.0"),
+      pkgJson: pkgJson("0.5.0"),
+      readme: readme("0.5.0"),
+      readmeEn: readmeEn("0.5.0"),
+      changelog: ["# 変更履歴", "", `## 0.5.0 — ${entry}`, "", "本文", ""].join(
+        "\n",
+      ),
+      tag: "v0.5.0",
+    });
+
+  it("日付だけなら通る", () => {
+    expect(withEntry("2026-08-26")).toEqual([]);
+  });
+
+  it("日付のあとに注記があっても通る", () => {
+    expect(withEntry("2026-08-26 (hotfix)")).toEqual([]);
+  });
+
+  it("「未リリース」は通さない", () => {
+    expect(withEntry("未リリース")).not.toEqual([]);
+  });
+
+  it("日付で始まっていないものは通さない", () => {
+    expect(withEntry("(hotfix) 2026-08-26")).not.toEqual([]);
+  });
+});

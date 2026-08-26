@@ -31,8 +31,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Guard — Release runs only from a v* tag
+        # **タグ以外から回すと、45 分走ってから `deploy` のガードで落ちる。**
+        # その赤は「検査が落ちた」のか「そもそも回し方が違う」のか区別できない
+        # ——最初の 5 秒で、意味の定まった赤にする(B-9)。
+        # 手元の確認で回したいなら `Deploy` か `Heavy corpus` を直接起動する。
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "Release は v* タグからのみ。個別に確かめるなら Deploy / Heavy corpus を直接起動する" >&2
+          exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # **タグが main の子孫かを見るのに全履歴が要る**(B-8)。
+          fetch-depth: 0
       - uses: ./.github/actions/setup-web
+      - name: The tag must sit on main
+        # **誰も見ていなかった**——main に入っていないコミットにタグを打てば、
+        # そのまま本番へ出る。版数が揃っていても、それは main の内容ではない。
+        run: |
+          set -eu
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "このタグは main の履歴に入っていない(main へマージしてからタグを打つ)" >&2
+            exit 1
+          fi
+          echo "tag $GITHUB_REF_NAME is on main"
       - name: The five places must agree, and match the tag
         # タグから走ったときだけタグ名と照合する。`workflow_dispatch` は
         # ブランチからも走せるので、渡すと無意味な赤になる。
@@ -64,6 +87,10 @@ jobs:
     name: Deploy
     needs: heavy
     uses: ./.github/workflows/deploy.yml
+    with:
+      # **検査を通してここへ来たことを伝える。** 伝えないと、`release.yml` を
+      # 手動起動したときに「検査を迂回して配った」と偽の記録が残る(B-9)。
+      called_from_release: true
     # Cloudflare の資格情報は呼ばれた側で要る。**呼ばれた側は
     # 呼び出し元の secrets を自動では受け取らない。**
     secrets: inherit
@@ -76,25 +103,30 @@ jobs:
     permissions:
       # Release の作成と添付に要る。**この 1 ジョブだけが書き込みを持つ。**
       contents: write
+      # 走行のジョブ一覧を `gh api` で読むのに要る。public では既定で読めるが、
+      # **private 化した日に黙って証拠が書けなくなる**のを防ぐ(B-5)。
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # 重量級の報告書と、実際に配った物。**どちらもこの走行が作ったもの**で、
       # 別の走行から拾ってこない(別の走行の結果を添えたら、証拠にならない)。
+      # **`continue-on-error` を付けない。** このジョブは `deploy` を経て
+      # `heavy` の後ろに居るので、**重量級は必ず走っている**。報告書が取れない
+      # なら、それは「無くてもよい」ではなく**証拠が揃わない**ということである
+      # (2026-08-26、B-2)。
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: heavy-report
           path: evidence/
-        continue-on-error: true
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: deployed-dist
           path: dist/
 
       - name: Pack what was deployed
-        # **`mkdir -p` を外さない。** 重量級の報告書の取得は
-        # `continue-on-error` なので、失敗すると `evidence/` が無いまま
-        # ここに来る——その場合でも、配った物だけは残す。
+        # `mkdir -p` は残す。取得の順序を入れ替えたときに `evidence/` が
+        # 無い状態で来ても、ここが原因で落ちないようにするため。
         run: |
           set -eu
           mkdir -p evidence
@@ -112,6 +144,11 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          # **自分の名前を渡す。** 渡さないと「この証拠を書いているジョブ自身
+          # である」と名乗れない——名乗れないことと、嘘を書くことは別である。
+          # この名前が下の `name:` と一致することは
+          # `heavy/tests/unit/release-workflow.test.ts` が固定する(B-3)。
+          SELF_JOB_NAME: Evidence and GitHub Release
         run: |
           set -eu
           attachments="$(ls evidence)"
@@ -142,8 +179,11 @@ jobs:
             # 固定している**——ここをシェルで書いていた頃、それを見張るテストは
             # 0 本だった。
             node tools/release-notes.mjs existing-notes.md evidence/release-evidence.md > notes.md
-            gh release edit "$TAG" --notes-file notes.md
+            # **添付を先に、本文を後に。** 逆にすると、添付の途中で落ちたときに
+            # **存在しない添付を語る本文**が残る——証拠が嘘をつく側の壊れ方で
+            # ある。添付が済んでから、それを語る本文を書く。
             gh release upload "$TAG" evidence/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
           else
             node tools/release-notes.mjs /dev/null evidence/release-evidence.md > notes.md
             gh release create "$TAG" evidence/* --title "$TAG" --notes-file notes.md

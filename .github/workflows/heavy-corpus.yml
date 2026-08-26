@@ -184,5 +184,8 @@ jobs:
         with:
           name: heavy-report
           path: heavy/heavy-report.md
-          if-no-files-found: warn
+          # **`warn` にしない。** 報告書が書かれなかったことを警告で流すと、
+          # リリースの証拠が「重量級は走った」と言いながら報告書を持たない、
+          # という形で通ってしまう(2026-08-26、B-2)。走ったなら報告書は在る。
+          if-no-files-found: error
           retention-days: 90

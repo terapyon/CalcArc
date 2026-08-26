@@ -114,3 +114,100 @@ describe("renderEvidence", () => {
     expect(renderEvidence(args)).toBe(renderEvidence(args));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave B（2026-08-26）。**証拠が嘘をつく側から潰す。**
+// ---------------------------------------------------------------------------
+
+describe("renderEvidence — 証拠が嘘をつかないこと", () => {
+  const heavyBody = job("Heavy corpus / Corpus vs reference", "success");
+  const heavyGate = job("Heavy corpus / Version numbers agree", "success");
+
+  it("B-2: 重量級が走ったのに報告書が添付されていないなら、そう書く", () => {
+    // 添付の欠落は 2 段の許容（`if-no-files-found: warn` と
+    // `continue-on-error`）で黙って通っていた。**証拠の側も添付の実在を見る。**
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody],
+      attachments: ["calcarc-v0.5.0-dist.tar.gz"],
+    });
+    expect(out).toContain("重量級の報告書が添付されていない");
+  });
+
+  it("B-2: 報告書が在るなら、その注記は出さない", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody],
+      attachments: ["heavy-report.md", "calcarc-v0.5.0-dist.tar.gz"],
+    });
+    expect(out).not.toContain("重量級の報告書が添付されていない");
+  });
+
+  it("B-3: skipped を「進行中」と書かない", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody, job("Deploy / Build and deploy", "skipped")],
+    });
+    expect(out).toContain("飛ばした");
+    expect(out).not.toMatch(/Deploy \/ Build and deploy \| 進行中/);
+  });
+
+  it("B-3: skipped を成功に数えない", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody, job("Deploy / Build and deploy", "skipped")],
+    });
+    expect(out).toMatch(/成功した検査: *1/);
+    expect(out).toMatch(/飛ばした検査: *1/);
+  });
+
+  it("B-3: neutral も成功に数えない", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody, job("CI / Something", "neutral")],
+    });
+    expect(out).toMatch(/成功した検査: *1/);
+  });
+
+  it("B-3: 「この証拠を書いているジョブ自身」は、本当に自分自身のときだけ言う", () => {
+    // 進行中が自分以外にも居るなら、その断定は嘘になる。
+    const out = renderEvidence({
+      ...base,
+      jobs: [
+        heavyBody,
+        job("Evidence and GitHub Release", null, "in_progress"),
+        job("CI / X", null, "in_progress"),
+      ],
+      selfName: "Evidence and GitHub Release",
+    });
+    expect(out).not.toContain("この証拠を書いているジョブ自身である");
+  });
+
+  it("B-3: 自分だけが進行中なら、そう言ってよい", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [
+        heavyBody,
+        job("Evidence and GitHub Release", null, "in_progress"),
+      ],
+      selfName: "Evidence and GitHub Release",
+    });
+    expect(out).toContain("この証拠を書いているジョブ自身である");
+  });
+
+  it("B-4: 重量級の在席は、11 秒の版数ゲートでは満たされない", () => {
+    // `includes("Heavy corpus")` は `Heavy corpus / Version numbers agree`
+    // にも当たっていた。**35 分の本体が走ったこと**を見る。
+    const out = renderEvidence({ ...base, jobs: [heavyGate] });
+    expect(out).toContain("重量級コーパスはこの走行に含まれていない");
+  });
+
+  it("B-4: 本体が居れば在席と認める", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody],
+      attachments: ["heavy-report.md"],
+    });
+    expect(out).not.toContain("重量級コーパスはこの走行に含まれていない");
+  });
+});
