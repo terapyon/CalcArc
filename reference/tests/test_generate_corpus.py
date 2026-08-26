@@ -1,5 +1,6 @@
 """生成器。**同じ種から常に同じコーパスが出ること**が最重要である。"""
 
+import collections
 import importlib.util
 import json
 import math
@@ -2001,3 +2002,160 @@ def test_the_model_counts_pairs_not_rows() -> None:
     assert len(corpus_calls._PAIRWISE_COMPOUND_GROW_ROWS) == 140
     assert len(grow.cells) == 266
     assert all(len(cell.axes) == 2 for cell in grow.cells)
+
+
+def test_coverage_is_recomputed_from_the_generated_cases() -> None:
+    """設計書 §15.1 の 2 と 7。**被覆はケースから数え直せる。**
+
+    1 件のケースは複数のセルを踏む(§9.3)——4 因子なら 2 因子の組が 6 通り。
+    重複してケースを作らなくても、集合へ足すだけで済む。
+    """
+    one = {
+        "kind": "call",
+        "id": "fin-000000",
+        "op": "compound_grow",
+        "stratum": "compound_grow/pairwise_0000",
+        "input": {"rate": "20", "periods": 12, "periods_per_year": 2, "tax": True},
+        "expect": {},
+    }
+    assert len(corpus_calls.covered_cells_from_cases([one])) == 6
+
+
+def test_values_outside_the_level_table_are_not_counted() -> None:
+    """**水準表の外の値を 1 セルとして数えない。**
+
+    乱択のケースは水準の外の値を持つ。素朴に数えると要求セルと単位が合わなく
+    なる(実測 2026-08-25: `compound_deposit_for` の全 420 件は「因子と値の組」を
+    1,491 通り踏んでいる。要求セルは 266 しかない)。
+    """
+    stray = {
+        "kind": "call",
+        "id": "fin-000001",
+        "op": "compound_grow",
+        "stratum": "compound_grow/random",
+        "input": {"rate": "3.3", "periods": 7, "periods_per_year": 2, "tax": True},
+        "expect": {},
+    }
+    covered = corpus_calls.covered_cells_from_cases([stray])
+    assert all("rate=3.3" not in cell.id for cell in covered)
+    # `periods=7` と `ppy=2` と `tax=true` は水準なので、その 3 つの組だけが残る。
+    assert len(covered) == 3
+
+
+def test_the_recount_actually_compares_something() -> None:
+    """**「何も比較していないのに緑」を潰す**(監視役の指摘、2026-08-26)。
+
+    水準へ写す判定が全件を素通しするようになっても、被覆の合計だけを見ていると
+    気づけない。**踏んだ件数と弾いた件数の両方が 0 でないこと**を、実物の
+    コーパスに対して測る。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    cases = [c for c in shard["cases"] if c["op"] in corpus_calls.COVERAGE_FACTORS]
+    on_level = 0
+    off_level = 0
+    for case in cases:
+        factors = corpus_calls.COVERAGE_FACTORS[case["op"]]
+        keys = corpus_calls._COVERAGE_INPUT_KEYS.get(case["op"], ())
+        if not keys:
+            continue
+        if all(key in case["input"] and case["input"][key] in factors[name] for name, key in keys):
+            on_level += 1
+        else:
+            off_level += 1
+    # **どちらの帯も実在する。** 片方が 0 なら、判定は何も分けていない。
+    assert on_level >= 500, f"水準に載ったケースが {on_level} 件しかない"
+    assert off_level >= 500, f"水準の外のケースが {off_level} 件しかない(判定が素通しでは)"
+
+
+def test_loan_term_is_not_counted_from_its_input() -> None:
+    """設計書 §8.2。**`loan_term` の期間は入力ではなく答**なので、この関数は
+    `loan_term` のケースからセルを数えない(Task 4 の記録が担う)。
+    """
+    case = {
+        "kind": "call",
+        "id": "fin-000002",
+        "op": "loan_term",
+        "stratum": "loan_term/pairwise_0000",
+        "input": {"principal": "20000000", "rate": "20", "payment": "300000"},
+        "expect": {},
+    }
+    assert corpus_calls.covered_cells_from_cases([case]) == set()
+
+
+def test_loan_term_records_target_and_actual_separately() -> None:
+    """設計書 §8.2。**答が目標と一致した行だけが `covered`。**
+
+    正算で作った月額を逆算へ戻すと、円単位の丸めのぶんだけ答がずれることがある。
+    ずれた行は計算の照合には使えるが、**目標期間セルを被覆したことにはならない。**
+
+    実測(2026-08-25、この Task の時点): covered 74 / unmet 59 / excluded 17。
+    **この Task は挙動を変えない**——いまの構成のまま、何が起きているかを
+    記録するだけである。
+    """
+    facts = corpus_calls.LOAN_TERM_FACTS
+    assert len(facts) == 150, "要求セルと同じ数だけ記録が要る(構成できなかった行も含めて)"
+    states = collections.Counter(fact.state for fact in facts)
+    assert states == {"covered": 74, "unmet": 59, "excluded": 17}
+    for fact in facts:
+        if fact.state == "covered":
+            assert fact.actual_n == fact.target_n
+        if fact.state == "unmet":
+            assert fact.actual_n != fact.target_n
+        if fact.state == "excluded":
+            assert fact.actual_n is None
+
+
+def test_loan_term_coverage_counts_only_the_matching_rows() -> None:
+    """設計書 §15.1 の 8。**`actual_n == target_n` のときだけ目標期間セルを被覆する。**"""
+    covered = corpus_calls.loan_term_covered_cells()
+    assert len(covered) == 74
+    facts = {(f.rate_level, str(f.target_n)): f for f in corpus_calls.LOAN_TERM_FACTS}
+    for cell in covered:
+        axes = dict(cell.axes)
+        fact = facts[(axes["rate"], axes["target_n"])]
+        assert fact.actual_n == fact.target_n
+
+
+def test_the_recorded_rows_are_the_ones_the_corpus_actually_has() -> None:
+    """**記録が絵空事でないこと。** `covered` と `unmet` の行の入力は、
+    生成されたコーパスに実在するケースと一致していなければならない
+    ——記録だけが独り歩きすると、被覆の主張が現物から離れる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    in_corpus = {
+        (case["input"]["principal"], case["input"]["rate"], case["input"]["payment"])
+        for case in shard["cases"]
+        if case["op"] == "loan_term" and case["stratum"].startswith("loan_term/pairwise")
+    }
+    built = {
+        (str(fact.principal), fact.rate_level, str(fact.payment))
+        for fact in corpus_calls.LOAN_TERM_FACTS
+        if fact.state != "excluded"
+    }
+    assert built == in_corpus, "記録した行と、コーパスに在るペアワイズのケースが食い違う"
+    assert len(in_corpus) == 133
+
+
+def test_the_recorded_answers_come_from_the_reference() -> None:
+    """**`actual_n` は参照実装が返した値そのものである。** 写し間違いを防ぐため、
+    記録の全行を参照実装へ問い直して突き合わせる(133 行)。
+    """
+    checked = 0
+    for fact in corpus_calls.LOAN_TERM_FACTS:
+        if fact.state == "excluded":
+            continue
+        result = corpus_calls.loan_ref.compute(
+            "loan_term",
+            {
+                "principal": str(fact.principal),
+                "rate": fact.rate_level,
+                "payment": str(fact.payment),
+            },
+        )
+        if "error" in result:
+            assert fact.actual_n is None
+            assert fact.error == result["error"]
+        else:
+            assert fact.actual_n == int(result["n"])
+        checked += 1
+    assert checked == 133, f"問い直した行が {checked} 行しかない"

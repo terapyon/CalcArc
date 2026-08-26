@@ -20,6 +20,7 @@ import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import combinations
 
 from . import compound_ref, data_scale_ref, loan_ref
 from . import corpus_coverage as coverage
@@ -2482,6 +2483,33 @@ def _pairwise_loan_forward_like_strata(op: str, bonus_key: str | None) -> tuple[
 PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 17
 
 
+@dataclass(frozen=True)
+class LoanTermFact:
+    """`loan_term` の 1 行が、目標期間に対して何をしたか(設計書 §8.2)。
+
+    **`target_n` は入力ではなく答である。** 正算で作った月額を逆算へ戻すと、
+    円単位の丸めのぶんだけ答がずれることがある——ずれた行は計算の照合には
+    使えるが、**目標期間セルを被覆したことにはならない。**
+
+    `state` の 3 値:
+
+    - `covered`  … `actual_n == target_n`
+    - `excluded` … 正算が本物のエラーで、逆算の入力そのものを構成できない
+    - `unmet`    … ケースは作れたが、目標期間を満たしていない
+    """
+
+    rate_level: str
+    target_n: int
+    principal: int
+    payment: int | None
+    actual_n: int | None
+    error: str | None
+    state: str
+
+
+_LOAN_TERM_FACTS: list[LoanTermFact] = []
+
+
 def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
     strata = []
     index = 0
@@ -2491,16 +2519,39 @@ def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
         resolved = _pairwise_forward_result(rate, n)
         if resolved is None:
             infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, 0, None, None, "no-candidate", "excluded")
+            )
             continue
         principal, payment, forward_expect = resolved
         if forward_expect != "ok":
             infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, None, None, forward_expect, "excluded")
+            )
             continue
         params = {"principal": str(principal), "rate": rate, "payment": str(payment)}
         if not _claim_pairwise_signature("loan_term", params):
+            # 実測(2026-08-25)ではここを通る行は無い(150 = 133 + 17)。**通った
+            # ときに黙って消えないよう**、記録だけは残す。
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, payment, None, "duplicate", "unmet")
+            )
             continue
         result = loan_ref.compute("loan_term", params)
         expect = result.get("error", "ok")
+        actual = None if "error" in result else int(result["n"])
+        _LOAN_TERM_FACTS.append(
+            LoanTermFact(
+                rate,
+                n,
+                principal,
+                payment,
+                actual,
+                None if actual is not None else expect,
+                "covered" if actual == n else "unmet",
+            )
+        )
         strata.append(
             Stratum(
                 "loan_term",
@@ -2740,6 +2791,20 @@ FINANCE_STRATA: tuple[Stratum, ...] = (
 # 古くなる(設計書 §7.1)。
 # ---------------------------------------------------------------------------
 
+#: `loan_term` の 150 行の記録。**`FINANCE_STRATA` を組み立てた後に凍らせる**
+#: ——`_pairwise_loan_term_strata()` が走り終えるまで揃わない。
+LOAN_TERM_FACTS: tuple[LoanTermFact, ...] = tuple(_LOAN_TERM_FACTS)
+
+
+def loan_term_covered_cells() -> set[coverage.Cell]:
+    """設計書 §8.2。**答が目標と一致した行だけ**が目標期間セルを被覆する。"""
+    return {
+        coverage.Cell("loan_term", (("rate", fact.rate_level), ("target_n", str(fact.target_n))))
+        for fact in LOAN_TERM_FACTS
+        if fact.state == "covered"
+    }
+
+
 FINANCE_MODEL = "finance-v1"
 
 #: scope → 因子名 → 水準列。**`loan_term` だけ第 2 因子の名前が違う**
@@ -2805,6 +2870,79 @@ FINANCE_REQUIREMENTS: tuple[coverage.Requirement, ...] = (
 )
 
 _REQUIREMENT_OF: dict[str, coverage.Requirement] = {r.scope: r for r in FINANCE_REQUIREMENTS}
+
+
+#: scope → (因子名, `case["input"]` の鍵)。**`loan_term` はここに置かない**
+#: ——`target_n` は入力に無く、答であるため(設計書 §8.2)。入力から数えると、
+#: 「入力に在った値」と「答として出た値」を混ぜることになる。
+_COVERAGE_INPUT_KEYS: dict[str, tuple[tuple[str, str], ...]] = {
+    op: (("rate", "rate"), ("n", "n"))
+    for op in ("loan_forward", "loan_principal", "loan_bonus_forward", "loan_bonus_principal")
+} | {
+    "compound_grow": (
+        ("rate", "rate"),
+        ("periods", "periods"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+    "compound_deposit_for": (
+        ("rate", "rate"),
+        ("periods", "periods"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+    "compound_periods_for": (
+        ("rate", "rate"),
+        ("periods_per_year", "periods_per_year"),
+        ("tax", "tax"),
+    ),
+}
+
+
+def covered_cells_from_cases(cases: Sequence[dict]) -> set[coverage.Cell]:
+    """生成済みのケースが踏んだ要求セル(設計書 §15.1 の 2)。
+
+    **入力の実値ではなく水準へ写してから数える。** 水準表に無い値は数えない
+    ——乱択のケースは水準の外の値を持つので、素朴に数えると要求セルと単位が
+    合わなくなる(実測 2026-08-25: `compound_deposit_for` の全 420 件は
+    「因子と値の組」を 1,491 通り踏む。要求セルは 266 しかない)。
+
+    **1 件が複数のセルを踏む**(設計書 §9.3)。集合へ足すので、同じセルを
+    埋めるためにケースを重複生成する必要はない——重複ケースを消しても
+    要求セルが未達として残る、という壊れ方を避けられる。
+
+    **層(`stratum`)で絞らない。** ペアワイズ行として重複で落ちた組合せが、
+    名指し境界層のケースとして実在することがある(実測: `compound_deposit_for`
+    の `rate=0 × periods=1`)。層で絞ると、その 1 ペアを取りこぼす。
+    """
+    covered: set[coverage.Cell] = set()
+    for case in cases:
+        axes = _COVERAGE_INPUT_KEYS.get(case["op"])
+        if axes is None:
+            continue
+        factors = COVERAGE_FACTORS[case["op"]]
+        requirement = _REQUIREMENT_OF[case["op"]]
+        on_level: list[tuple[str, str]] = []
+        for name, key in axes:
+            value = case["input"].get(key)
+            # **`in` の前に型を見ない。** 水準列は `("0", "20")` のような
+            # 文字列だったり `(1, 12)` のような整数だったりするので、
+            # 実値がそのまま水準列に在るかだけを見る。
+            if key not in case["input"] or value not in factors[name]:
+                continue
+            on_level.append((name, coverage.level_text(value)))
+        if requirement.strength == "all":
+            # 全組合せのセルは**両方の因子が水準に載っていて初めて**踏まれる。
+            if len(on_level) == len(axes):
+                covered.add(coverage.Cell(case["op"], tuple(on_level)))
+        else:
+            # **2 因子のセルは、その 2 つが水準なら踏まれている。** 同じケースの
+            # 他の因子が水準の外にあっても、この 2 つの組を試した事実は変わらない
+            # ——ここで全因子を要求すると、乱択のケースが踏んだ組を数え落とす。
+            for left, right in combinations(on_level, 2):
+                covered.add(coverage.Cell(case["op"], (left, right)))
+    return covered
+
 
 DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
     ("0", "1", "int8"),
