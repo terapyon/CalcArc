@@ -24,7 +24,7 @@ jobs:
   # いるなら、そのリリースはもう間違っている。
   #
   # `heavy-corpus.yml` も自分の入口で同じ検査を持つ(手動で回すときのため)。
-  # **判定の実体は `web/scripts/check-version.mjs` の 1 つだけ**で、両方とも
+  # **判定の実体は `tools/check-version.mjs` の 1 つだけ**で、両方とも
   # それを呼ぶ——写しているのは呼び出しであって、規則ではない。
   version:
     name: Version numbers agree with the tag
@@ -36,15 +36,14 @@ jobs:
       - name: The five places must agree, and match the tag
         # タグから走ったときだけタグ名と照合する。`workflow_dispatch` は
         # ブランチからも走せるので、渡すと無意味な赤になる。
-        working-directory: web
         env:
           IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "$IS_TAG" = "true" ]; then
-            node scripts/check-version.mjs --tag "$REF_NAME"
+            node tools/check-version.mjs --tag "$REF_NAME"
           else
-            node scripts/check-version.mjs
+            node tools/check-version.mjs
           fi
 
   ci:
@@ -104,10 +103,9 @@ jobs:
       - name: Write the evidence
         # **結論は走行そのものから読む。** ステップの出力を人が(あるいは私が)
         # 書き写すと、「緑だったと書いてあるが実は落ちていた」が作れてしまう。
-        # 組み立ての中身は `web/tests/unit/release-evidence.test.ts` が固定して
+        # 組み立ての中身は `heavy/tests/unit/release-evidence.test.ts` が固定して
         # いる——落ちた検査が 1 つでもあれば、このスクリプトは証拠を書かずに
         # 落ちる。
-        working-directory: web
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -116,9 +114,9 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -eu
-          attachments="$(ls ../evidence)"
+          attachments="$(ls evidence)"
           # shellcheck disable=SC2086
-          node scripts/release-evidence.mjs $attachments > ../evidence/release-evidence.md
+          node tools/release-evidence.mjs $attachments > evidence/release-evidence.md
 
       - name: Put the evidence in the job summary
         run: cat evidence/release-evidence.md >> "$GITHUB_STEP_SUMMARY"
@@ -138,21 +136,15 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release view "$TAG" --json body --jq .body > existing-notes.md
             # **自動生成の "What's Changed" は消さない。** 前に残して証拠を継ぎ足す。
-            # 目印より後ろを落としてから貼り直すので、**再走行で二重に積まない。**
-            # 末尾の空行を落としてから継ぎ足す。落とさないと**走行のたびに
-            # 本文が 1 バイトずつ伸びる**(実測で確かめた)。
-            sed '/^<!-- release-evidence -->$/,$d' existing-notes.md \
-              | awk 'BEGIN{RS="\0"} {sub(/\n+$/,""); printf "%s\n", $0}' > notes.md
-            {
-              printf '\n<!-- release-evidence -->\n\n'
-              cat evidence/release-evidence.md
-            } >> notes.md
+            # 貼り直しの規則(二重に積まない・同じ入力なら同じ本文・1 バイトも
+            # 伸びない)は `tools/release-notes.mjs` の純関数が持ち、
+            # **`heavy/tests/unit/release-notes.test.ts` が v0.4.1 の実物の本文で
+            # 固定している**——ここをシェルで書いていた頃、それを見張るテストは
+            # 0 本だった。
+            node tools/release-notes.mjs existing-notes.md evidence/release-evidence.md > notes.md
             gh release edit "$TAG" --notes-file notes.md
             gh release upload "$TAG" evidence/* --clobber
           else
-            {
-              printf '<!-- release-evidence -->\n\n'
-              cat evidence/release-evidence.md
-            } > notes.md
+            node tools/release-notes.mjs /dev/null evidence/release-evidence.md > notes.md
             gh release create "$TAG" evidence/* --title "$TAG" --notes-file notes.md
           fi

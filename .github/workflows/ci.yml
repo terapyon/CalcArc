@@ -77,6 +77,10 @@ jobs:
       - run: pnpm exec vite build
       - run: pnpm check:sw
       - run: pnpm check:version
+      # **`web` が重量級を知らないこと**を毎回見る(CLAUDE.md の境界)。
+      # 「移した」と書いた時点では守られておらず、6 行が残っていた
+      # ——宣言ではなく実行で見張る(2026-08-26)。
+      - run: pnpm check:boundary
 
   e2e:
     name: End-to-end

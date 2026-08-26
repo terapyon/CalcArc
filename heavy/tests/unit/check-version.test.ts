@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkVersions } from "../../scripts/check-version.mjs";
+import { checkVersions } from "../../../tools/check-version.mjs";
 
 // 版数が書かれている 5 箇所を、実物と同じ形の最小限で組み立てる。
 // **実物と形が違えば検査は何も守らない**ので、綴りは現物から写している。

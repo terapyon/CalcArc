@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderEvidence } from "../../scripts/release-evidence.mjs";
+import { renderEvidence } from "../../../tools/release-evidence.mjs";
 
 // 走行から返ってくる形の最小限。**実物と形が違えば証拠は何も示さない**ので、
 // 綴りは `gh api repos/{repo}/actions/runs/{id}/jobs` の応答から写している。
