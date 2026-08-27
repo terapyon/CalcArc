@@ -5,6 +5,7 @@ import {
   CANDIDATE_VALUES,
   LLM_FIELD_LABELS,
   LLM_FIELD_SECTION,
+  type LlmField,
   type LlmKeyToken,
   llmPad,
 } from "./llm";
@@ -125,8 +126,22 @@ describe("LLM のキー集合", () => {
         .filter((t): t is LlmKeyToken => t?.startsWith("unit:") ?? false);
     // パラメータ数の手入力にだけ接尾辞キーが立つ(spec §4.3)。
     expect(units("parameters")).toEqual(["unit:b", "unit:m"]);
-    // 層数は手入力だけの項目で、単位を持たない。
-    expect(units("layers")).toEqual([]);
+
+    // **残りの 6 項目すべてで空であること**を言う。以前はここが `layers`
+    // 1 つだけで、`kvHeads`・`headDim`・`context`・`weight`・`kvPrecision` の
+    // 5 つは**一度も見られていなかった**。
+    //
+    // これは見た目の規則ではなく、**パネルが依っている前提**である
+    // ——`LlmPanel` の単位キーの処理は「立つのはパラメータ数の面だけ」を
+    // 当てにしている。前提を名指しで固定しておかないと、面を 1 つ足した日に
+    // 黙って別の項目へ書き込むことになる。
+    let checked = 0;
+    for (const field of Object.keys(LLM_FIELD_LABELS) as LlmField[]) {
+      if (field === "parameters") continue;
+      expect(units(field), field).toEqual([]);
+      checked += 1;
+    }
+    expect(checked, "no field was ever checked").toBe(6);
   });
 
   it("offers the way back only where there is a face to go back to", () => {

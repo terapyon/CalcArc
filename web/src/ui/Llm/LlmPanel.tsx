@@ -193,12 +193,21 @@ export function LlmPanel() {
     ];
   }
 
-  /** いま押せないキー。DEL は数字面以外で無効。単位は parameters だけ、
-   * かつ下る向きにしか置けない(設計書 §5・§4)。 */
+  /** いま押せないキー。DEL は数字面以外で無効。単位は下る向きにしか
+   * 置けない(設計書 §5・§4)。
+   *
+   * **見るのは「いま打っている項目」である。** 単位キーが立つ面は
+   * `parameters` だけだが(`llm.test.ts` が 7 項目すべてで見張っている)、
+   * **それは盤面の側の事実であって、ここが依ってよい前提ではない**
+   * ——面を 1 つ足した日に、ここが黙って別の項目を見ることになる。
+   * `numberField` が false のときは短絡するので、`Entry` を持たない
+   * `weight`/`kvPrecision` が `entryOf` に届くことはない。 */
   function keyDisabled(token: LlmKeyToken): boolean {
     if (token === "del") return !numberField;
-    if (token === "unit:b") return !numberField || !canPushUnit(parameters, B);
-    if (token === "unit:m") return !numberField || !canPushUnit(parameters, M);
+    if (token === "unit:b")
+      return !numberField || !canPushUnit(entryOf(active as EntryField), B);
+    if (token === "unit:m")
+      return !numberField || !canPushUnit(entryOf(active as EntryField), M);
     return false;
   }
 
@@ -281,9 +290,14 @@ export function LlmPanel() {
       case "unit:m": {
         if (!numberField) break;
         const unit = token === "unit:b" ? B : M;
+        // **いま打っている項目に入れる**(上の `digit:`・`del`・`ac` と同じ)。
+        // 単位キーが立つ面は `parameters` だけだが、そこを当てにして
+        // `parameters` を名指しすると、面が増えた日に**打っている項目とは
+        // 別のところへ書き込む**。
+        const field = active as EntryField;
         // 盤面は押せないようにしてあるので、null はここに来ない(設計書 §4)。
-        const next = pushUnit(parameters, unit);
-        if (next !== null) setParameters(next);
+        const next = pushUnit(entryOf(field), unit);
+        if (next !== null) setEntryOf(field, next);
         break;
       }
       case "del":
