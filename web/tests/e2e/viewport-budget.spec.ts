@@ -5,12 +5,8 @@ import { expect, type Page, test } from "@playwright/test";
 // ページ全体の高さもフッタの位置もタブで変わる。
 
 // **全 route は 13(scientific 1 + convert 8 + scale 3 + finance 1)、
-// この巡回が持つのは 6 だけである。** 巡回しているのは
-// `#scientific` `#convert/length` `#convert/mass` `#convert/temperature`
-// `#scale/data-scale` `#finance` の 6 つ。**外にいる 7 つ**は
-// `#convert/area` `#convert/volume` `#convert/speed` `#convert/data-size`
-// (U-2 で増えた 4 カテゴリ)、`#convert/currency`(U-4)、
-// `#scale/llm` `#scale/transfer`。
+// この巡回が持つのは 11 である。** 外にいるのは `#scale/llm` と
+// `#convert/currency` の 2 つだけで、**どちらも理由が下に書いてある**。
 // **カテゴリを足すたびにこの数は動く。** 在庫は 3 か所にある——この注記と、
 // `docs/definition-of-done.md` の表と、同ファイルの訂正印。U-2 のときに
 // 表だけ直して 2 か所を腐らせた。次に足す人は 3 か所を grep で起こすこと。
@@ -19,23 +15,35 @@ import { expect, type Page, test } from "@playwright/test";
 // (同じ画面に URL を 2 つ作らない)。
 //
 // **巡回に入っていない route は、緑を「収まっている」と読ませる**——
-// S-0 で記録したこの穴は、いまも 7 route ぶん残っている
-// (docs/definition-of-done.md【訂正 2026-08-20】)。**足さなかった理由は
-// 3 種類あり、性質が違う。**
+// S-0 が記録したこの穴は 7 route ぶんあった。**5 つを 0.5.0 で閉じ、
+// 2 つを理由つきで残す。**
 //
-// - **Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で
-//   溢れることが分かっている(ユーザー裁定で許容)。足すと赤になる——
-//   「承知のうえで許容した」溢れである。
-// - **Convert の 4 つ**は、**この巡回が測る 390×844 では 0**(手で実測済み)。
-//   360×640 では 66 だが、**それは既存の 3 route と同値の既知債務**で、
-//   U-2 が増やしたものではない(`docs/definition-of-done.md` の表)。
-//   **この巡回は 390×844 しか測らない**ので、足せば緑になる。足していない。U-2 spec §5 が `pnpm e2e` に足す
-//   検査を「面が枠に収まっているか」を見る 1 本
-//   (`convert.spec.ts` の "swapping faces moves neither the frame nor
-//   DEL and AC")に限っており、この巡回に route を足す判断ではなかった。
-//   **「収まっているのを機械が確認していない」穴であって、「溢れているのを
-//   許容した」穴ではない。**
-// - **通貨 `#convert/currency` は、上のどちらでもない。** レートが届いていれば
+// ## 閉じた 5 つ(2026-08-27 実測、390×844 の縦あふれ)
+//
+// `#convert/area` `#convert/volume` `#convert/speed` `#convert/data-size`
+// **と `#scale/transfer`。5 つとも 0** だった。360×640 では 66 だが、
+// **それは既存の 3 route と同値の既知債務**で、U-2 が増やしたものではない
+// (`docs/definition-of-done.md` の表)。**この巡回は 390×844 しか測らない**
+// ので、足せば緑になる。**「収まっているのを機械が確認していない」穴であって、
+// 「溢れているのを許容した」穴ではなかった。**
+//
+// **`#scale/transfer` について、この注記自身が間違っていた。** 以前ここには
+// 「**Scale の 2 つ**(`#scale/llm` `#scale/transfer`)は 390×844 で溢れる」と
+// 書いてあったが、**データ転送は溢れていない(実測 0)**。`definition-of-done.md`
+// の表も 2026-08-20 の時点で 390×844 は 0 と記録している——**2 つを
+// 「Scale の 2 つ」と束ねた注記のほうが、表と食い違っていた。** ユーザーが
+// 許容を裁定したのは **LLM だけ**である(同ファイル【ユーザー裁定 2026-08-20】)。
+//
+// ## 残した 2 つ
+//
+// - **LLM `#scale/llm` は溢れる。ユーザー裁定で許容**(実験的機能。同ファイル
+//   【ユーザー裁定 2026-08-20】)。足すと赤になる——**「承知のうえで許容した」
+//   溢れ**であって、直し忘れではない。**量は 2026-08-27 の実測で 39px**
+//   (裁定した日の記録は 33px)。**増えた 6px はフッタである**——
+//   `--footer-font-size` を 0.4.0 以前の 8px に戻して測ると 33 に戻り、
+//   12px では 39 になる(実測)。**この 6px は LLM に固有ではなく全 route が
+//   等しく払っている**ので、上の 5 つは 0 のままである。
+// - **通貨 `#convert/currency` は、寸法の話ではない。** レートが届いていれば
 //   390×844 で 0 だが、**キャッシュ無しの案内が出ている状態では 10px 溢れる**
 //   (360×640 では 181)。そして**足せない理由が寸法ではない**——
 //   **この巡回はネットワークを塞いでいない**(`page.route` を持つのは
@@ -47,7 +55,14 @@ const TABS = [
   ["#convert/length", "Convert 長さ"],
   ["#convert/mass", "Convert 質量"],
   ["#convert/temperature", "Convert 温度"],
+  // **U-2 の 4 カテゴリ**(0.5.0 で足した)。
+  ["#convert/area", "Convert 面積"],
+  ["#convert/volume", "Convert 体積"],
+  ["#convert/speed", "Convert 速さ"],
+  ["#convert/data-size", "Convert データ量"],
   ["#scale/data-scale", "Data Scale"],
+  // **データ転送**(0.5.0 で足した)。溢れていない。
+  ["#scale/transfer", "データ転送"],
   ["#finance", "Finance"],
 ] as const;
 
