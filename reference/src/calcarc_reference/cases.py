@@ -1014,6 +1014,21 @@ CONVERT_INPUTS: list[tuple[str, str, str, str]] = [
 #
 # **期待値は 2 通りで検算してある**——`Fraction` の参照実装と、
 # `decimal.Decimal`(精度 60) + `ROUND_HALF_EVEN` の別経路。
+#
+# **`from` に知らない通貨を置いたケースは、ここに書いても意味がない。**
+# golden を読む `crates/calcarc-core/tests/currency_golden.rs` の `Input` は
+# **`from` を持たない**（`value` / `to` / `from_rate` / `to_rate` の 4 つだけ）。
+# serde は JSON の `from` を黙って捨て、コアの `convert_currency` も `from` を
+# 引数に取らない——換算に効くのは `from_rate` のほうで、桁を決めるのは
+# 着地する `to` だけだからである。下の各ケースの 2 番目の値は
+# **id と読みやすさのためだけ**に入っている。
+#
+# だから `("100", "xyz", "jpy", …)` と書いても、**Rust 側は `xyz` を一度も
+# 見ずに正しい答えを出す**。これは実装の食い違いではないのに赤くなるので、
+# 置かない。**`from` の未知トークンを弾いているのは WASM 境界**
+# （`calcarc-wasm/src/lib.rs` の `convert_currency` が `Currency::from_token`
+# で復元する）で、そこは wasm のテストが見ている。**「コアが守っている」と
+# 「golden で表現できる」は別**である。
 CURRENCY_INPUTS: list[tuple[str, str, str, str, str]] = [
     # --- spec §8 の「名指しで置くケース」 ---
     # **基準通貨を経由すること。** `from_rate` を 1 にしない——1 だと、`from_rate` を
