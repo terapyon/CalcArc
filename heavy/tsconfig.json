@@ -19,11 +19,18 @@
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    // **`../tools/tests` からも `vitest` を引けるようにする。** TypeScript は
+    // ファイルの位置から上へ `node_modules` を探すので、`tools/` の下からは
+    // `heavy/node_modules` に届かない(実行時は vite が heavy を根として
+    // 解決するので、型検査だけが落ちる)。
+    "baseUrl": ".",
+    "paths": { "vitest": ["node_modules/vitest"] }
   },
   "include": [
     "tests",
     "harness",
+    "../tools/tests",
     "vite.harness.config.ts",
     "vitest.config.ts",
     "playwright.corpus.config.ts",

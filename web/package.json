@@ -17,7 +17,8 @@
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
-    "check:version": "node scripts/check-version.mjs"
+    "check:version": "node ../tools/check-version.mjs",
+    "check:boundary": "node ../tools/check-boundary.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

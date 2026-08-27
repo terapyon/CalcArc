@@ -9,11 +9,21 @@ name: Deploy
 # 「最新の `v*` タグ = 配信物」に変わった(`docs/deploy.md`)。
 on:
   workflow_call:
+    inputs:
+      called_from_release:
+        # **呼ばれたことを、呼ばれた側が知る手段が要る。** 呼ばれた側の
+        # `github.event_name` は**呼び出し元のもの**なので、`release.yml` を
+        # 手動起動すると `workflow_dispatch` になり、**検査を通した配信に
+        # 「迂回した」と刻んでしまう**(B-9)。
+        type: boolean
+        default: false
   workflow_dispatch:
 
 concurrency:
-  # 接頭辞 `deploy-` を外さない(理由は ci.yml と同じ。設計書 §3.2)。
-  group: deploy-${{ github.workflow }}-deploy
+  # **定数にする。** `github.workflow` を混ぜると、呼ばれた側では呼び出し元の
+  # 名前が入るので、`Release` 経由の配信と手動の緊急配信が**別の群**になり、
+  # **同時に走れてしまう**(B-7)。本番へ配るのは常に 1 本だけにする。
+  group: deploy-production
   # デプロイは途中中断より直列完走(設計書 §1)。
   cancel-in-progress: false
 
@@ -34,7 +44,9 @@ jobs:
           exit 1
       - name: Say so when the checks were bypassed
         # 緊急経路で配ったことを、走行の一番上に残す。**黙って迂回しない。**
-        if: github.event_name == 'workflow_dispatch'
+        # **`release.yml` から呼ばれたときは出さない**——あちらは版数・CI・
+        # 重量級を通してからここへ来るので、迂回していない(B-9)。
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.called_from_release }}
         run: |
           {
             echo "## 検査を迂回して配った"

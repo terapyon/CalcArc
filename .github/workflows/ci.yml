@@ -77,6 +77,39 @@ jobs:
       - run: pnpm exec vite build
       - run: pnpm check:sw
       - run: pnpm check:version
+      # **`web` が重量級を知らないこと**を毎回見る(CLAUDE.md の境界)。
+      # 「移した」と書いた時点では守られておらず、6 行が残っていた
+      # ——宣言ではなく実行で見張る(2026-08-26)。
+      - run: pnpm check:boundary
+
+  # **重量級の「道具そのもの」を毎回見る**(2026-08-26、Wave C)。
+  # 走らせるのは型検査・lint・ユニットの 3 つだけで、**35 分の本体は載せない**
+  # ——本体はタグのときだけ回る。ここが見張るのは、コーパスを叩く道具（ハーネス・
+  # 判定・レポート・リリースの証拠）が壊れていないか、である。
+  #
+  # **これが無かったので、`heavy/` の型検査の赤はタグを打つまで出なかった**
+  # ——v0.4.1 の 1 回目は 40 分走ってから重量級の段で落ちている。
+  heavy:
+    name: Heavy tooling
+    runs-on: ubuntu-latest
+    needs: wasm
+    defaults:
+      run:
+        working-directory: heavy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup-web
+      - run: pnpm install --frozen-lockfile
+      # **型検査より先に wasm が要る。** `heavy` の型検査は `web/src/calc` を
+      # 通って `web/src/wasm/` の型宣言に届く。ここでは `wasm` ジョブが作った
+      # ものを artifact から取る(`web`/`e2e` と同じ形)。
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wasm-pkg
+          path: web/src/wasm/
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
 
   e2e:
     name: End-to-end

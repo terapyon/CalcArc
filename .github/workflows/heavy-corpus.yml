@@ -40,15 +40,14 @@ jobs:
         #
         # `pnpm` 越しではなく node を直に呼ぶのは、引数の受け渡しを
         # pnpm の版の挙動に預けないためである。
-        working-directory: web
         env:
           IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "$IS_TAG" = "true" ]; then
-            node scripts/check-version.mjs --tag "$REF_NAME"
+            node tools/check-version.mjs --tag "$REF_NAME"
           else
-            node scripts/check-version.mjs
+            node tools/check-version.mjs
           fi
 
   corpus:
@@ -140,7 +139,7 @@ jobs:
         # 打てるかは別の問いで、片方の赤でもう片方を隠さない。
         #
         # **レポートを書く段より前に置く。** 報告書は `pnpm heavy` の走行末尾で
-        # 書かれ、**その時点でディスクにある `web/heavy-ui-run.json` を読む**。
+        # 書かれ、**その時点でディスクにある `heavy/heavy-ui-run.json` を読む**。
         # まっさらな runner にはその記録が無いので、あとに置くと盤面の行が
         # **毎回「記録が無い」になり**、`uiHealth` の 4 状態のうち 1 つしか
         # CI に出ない。順番だけがそれを決めている。
@@ -185,5 +184,8 @@ jobs:
         with:
           name: heavy-report
           path: heavy/heavy-report.md
-          if-no-files-found: warn
+          # **`warn` にしない。** 報告書が書かれなかったことを警告で流すと、
+          # リリースの証拠が「重量級は走った」と言いながら報告書を持たない、
+          # という形で通ってしまう(2026-08-26、B-2)。走ったなら報告書は在る。
+          if-no-files-found: error
           retention-days: 90

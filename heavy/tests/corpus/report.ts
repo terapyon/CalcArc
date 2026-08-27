@@ -278,7 +278,7 @@ export function readRunJson(): HeavyRun | null {
 }
 
 /**
- * **盤面を通る走行の要約(`web/heavy-ui-run.json`)を読む。読めなければ `null`。**
+ * **盤面を通る走行の要約(`heavy/heavy-ui-run.json`)を読む。読めなければ `null`。**
  *
  * `pnpm heavy` と `pnpm heavy:ui` は**別の走行**で、集計を共有しない。だから
  * 盤面の結果はこの走行の `heavy-run.json` には現れない——読まなければ、
@@ -1017,7 +1017,7 @@ function renderUiHealth(health: UiHealth): string[] {
   if (health.state === "not-run") {
     return [
       "  **盤面を通る走行——記録が無い。**",
-      "  `web/heavy-ui-run.json` がこの報告書からは読めない。その走行が",
+      "  `heavy/heavy-ui-run.json` がこの報告書からは読めない。その走行が",
       "  一度も行われていないか、要約を残す前に落ちたかのどちらかである。",
       "  **この報告書は盤面について何も言っていない**——「UI も確かめた」と",
       "  読まないこと。",
@@ -1026,7 +1026,7 @@ function renderUiHealth(health: UiHealth): string[] {
   if (health.state === "no-presses") {
     return [
       "  **盤面を通る走行——キーを 1 つも押していない。**",
-      "  `web/heavy-ui-run.json` は在るが、押下が 0 回である。盤面を叩く",
+      "  `heavy/heavy-ui-run.json` は在るが、押下が 0 回である。盤面を叩く",
       "  テストが 1 本も走らなかった走行(一部だけを走らせた場合を含む)か、",
       "  押下の記録が外れているかで、**どちらも盤面については何も確かめて",
       "  いない。** 指摘の内訳: " + describeUiFindings(health.kinds) + "。",
