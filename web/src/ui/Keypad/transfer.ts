@@ -91,7 +91,11 @@ export const DURATION_UNIT_LABELS: Record<DurationUnitToken, string> = {
 };
 
 /** 項目行に並べる順(spec §4.4 の 4 項目)。 */
-const FIELD_ORDER: TransferField[] = [
+/**
+ * **盤面の項目行と読み出しの一覧が、これ 1 つを共有する。**
+ * 由来は `llm.ts` の `LLM_FIELD_ORDER` と同じ(逐語の二重定義を 1 つにした)。
+ */
+export const TRANSFER_FIELD_ORDER: readonly TransferField[] = [
   "bandwidth",
   "bandwidthUnit",
   "duration",
@@ -124,7 +128,7 @@ export const TRANSFER_FIELD_SECTION: KeypadSection<TransferKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 4,
   height: "half",
-  keys: FIELD_ORDER.map((field) => ({
+  keys: TRANSFER_FIELD_ORDER.map((field) => ({
     token: `field:${field}` as TransferKeyToken,
     label: TRANSFER_FIELD_LABELS[field],
     ariaLabel: FIELD_ARIA_LABELS[field],

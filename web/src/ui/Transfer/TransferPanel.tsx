@@ -16,12 +16,14 @@ import {
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import { Keypad } from "../Keypad/Keypad";
+import { isDeadOperator } from "../Keypad/operators";
 import {
   BANDWIDTH_UNIT_LABELS,
   BANDWIDTH_UNIT_SECTION,
   DURATION_UNIT_LABELS,
   DURATION_UNIT_SECTION,
   TRANSFER_FIELD_LABELS,
+  TRANSFER_FIELD_ORDER,
   TRANSFER_FIELD_SECTION,
   TRANSFER_PAD,
   type TransferField,
@@ -42,14 +44,6 @@ const MAX_COUNT = "340282366920938463463374607431768211455";
  */
 const DEFAULT_BANDWIDTH_UNIT: BandwidthUnitToken = "mbps";
 const DEFAULT_DURATION_UNIT: DurationUnitToken = "hour";
-
-/** 項目の並び(項目行と同じ順、spec §4.4)。 */
-const FIELD_ORDER: readonly TransferField[] = [
-  "bandwidth",
-  "bandwidthUnit",
-  "duration",
-  "durationUnit",
-];
 
 const PRIMARY_STATUS: Record<Primary, string> = {
   decimal: "10 進を主表示",
@@ -131,8 +125,13 @@ export function TransferPanel() {
     return [TRANSFER_FIELD_SECTION, TRANSFER_PAD];
   }
 
-  /** いま押せないキー。単位面では DEL に消すものが無い(設計書 §5)。 */
+  /** いま押せないキー。単位面では DEL に消すものが無い(設計書 §5)。
+   *
+   * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
+   * 無く、**何をしても押せるようにならない**。DEL の「いまは押せない」とは
+   * 意味が違う(`Keypad/operators.ts` に理由がある)。 */
   function keyDisabled(token: TransferKeyToken): boolean {
+    if (isDeadOperator(token)) return true;
     return token === "del" && !numberField;
   }
 
@@ -247,7 +246,7 @@ export function TransferPanel() {
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。単位は常に値を持つので、消えるのは未入力の値だけである。
-  const entries = FIELD_ORDER.map((field) => ({
+  const entries = TRANSFER_FIELD_ORDER.map((field) => ({
     label: TRANSFER_FIELD_LABELS[field],
     value: typedIn(field),
     active: field === active,

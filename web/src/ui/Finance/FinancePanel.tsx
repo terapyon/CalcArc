@@ -71,7 +71,21 @@ const FIELD_ORDER: FinanceField[] = [
 /** 金額の上限。u64(設計書 §8 の着地表)。 */
 const MAX_YEN = "18446744073709551615";
 
-/** 期間の上限(月)。コアの MAX_TERM_MONTHS と同じ。 */
+/**
+ * 期間の上限。**盤面が置いている上限**であって、コアの上限の写しではない。
+ *
+ * **数がコアの `finance::compound::MAX_PERIODS` と一致すること**は
+ * `token_parity.rs` が見張っている——複利はそこが本当の定義域で、
+ * `grow` が `periods > MAX_PERIODS` を弾く。盤面が大きすぎれば打てた値を
+ * コアが弾き、小さすぎれば打てない期数が静かに増える。
+ *
+ * **`MAX_TERM_MONTHS` ではない。** 数は同じ 1200 だが、あちらは
+ * `loan/inverse.rs` の**期間逆算の探索打ち切り**であり、
+ * **前進の償還表には上限が無い**(`grep MAX_TERM_MONTHS` の出現は
+ * `inverse.rs` だけ)。つまりこの 1 つの定数は、コアの**別々の 2 つ**
+ * ——複利の定義域と、逆算の打ち切り——に掛かっており、ローンの前進には
+ * 対応するものが無い。**製品として置くべき上限**の議論は別件である。
+ */
 const MAX_PERIODS = 1200;
 
 const OPERATORS = { add: "+", sub: "-", mul: "*", div: "/" } as const;

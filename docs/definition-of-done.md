@@ -73,15 +73,13 @@ base-spec §50 の 14 項目に、根拠を 1 つずつ付ける。**根拠は�
   後者は**厳密一致の罠**に注意（[[exact-string-needs-exact-input]] と同じ型で、
   許容幅を決めると別の境で偽陽性が出る）。実測は重量級側の `docs/corpus-measurements.md` にある。
 
-- **`FinancePanel.tsx:74` の「コアの `MAX_TERM_MONTHS` と同じ」は、掛かる場所が違う。**
-  **数（1200）は同じだが、名指しした定数は別のものを縛っている**——`loan/inverse.rs:21` の
-  `MAX_TERM_MONTHS` は**期間逆算の探索打ち切り**であって、**前進の償還表に上限は無い**
-  （`grep MAX_TERM_MONTHS` の出現は `inverse.rs` だけ。**こちらで確認**）。複利のほうは
-  `compound.rs:18` に**別の** `MAX_PERIODS = 1_200` が在り、そちらが「ローンの
-  `MAX_TERM_MONTHS` と揃える」と書いている。**盤面の 1 つの定数が、コアの 2 つの別々の
-  ものに掛かっている**（片方は探索の打ち切り、片方は単調増加の上限、そして前進のローンには何も無い）。
-  **コメントの修正に裁定は要らない**（事実を書き直すだけ）。**製品として置くべき上限**の議論は別件。
-  出典は重量級の `docs/corpus-measurements.md` の Task 6 節。
+- ~~**`FinancePanel.tsx:74` の「コアの `MAX_TERM_MONTHS` と同じ」は、掛かる場所が違う。**~~
+  → **直した（0.5.0）。** 註を書き直し、**数の一致は機械が見張るようにした**——
+  `token_parity.rs` の `the_panel_period_cap_matches_the_compound_domain` が
+  盤面の `MAX_PERIODS` と `finance::compound::MAX_PERIODS` を突き合わせる。
+  **名指しの誤りは検査では捕まらなかった**（`compound::MAX_PERIODS`・
+  `loan::inverse::MAX_TERM_MONTHS`・盤面の 3 つとも 1200 で、数では区別が付かない）。
+  **製品として置くべき上限**の議論は別件のまま。
 - **期数 0 の複利は、コアの `SyntaxError` が画面から観測できない**（**欠陥とは限らない。設計の記録**）。
   盤面が `periods > 0` を先に見るので、コアの検査に到達しない。**「コアが守っている」と
   「画面で確かめられる」は別**という記録として残す。出典は同上。
