@@ -187,6 +187,25 @@ describe("レポートを書く段は最後（2026-08-27）", () => {
     ).toBeLessThan(report);
   });
 
+  it("ブラウザの導入は、ブラウザを使う段より前に置く", () => {
+    // **v0.4.1 で実際に踏んだ。** 前の段が落ちてこの段が飛ばされ、
+    // `if: always()` を持つ `heavy:ui` と `heavy` がブラウザ無しで走り、
+    // **型検査の赤が `browserType.launch: Executable doesn't exist` に化けて
+    // 36 本を全滅させた。** `if: always()` は付けたが、**位置は誰も見て
+    // いなかった。**
+    const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
+    const install = indexOfLine(steps, "playwright install");
+    const ui = indexOfLine(steps, "pnpm heavy:ui");
+    const report = steps.findIndex((line) => /run:\s*pnpm heavy$/.test(line));
+    expect(install).toBeGreaterThanOrEqual(0);
+    expect(
+      install,
+      "Playwright のブラウザ導入が、ブラウザを使う段より後ろにある。" +
+        "**その段が飛ばされると、赤が別の赤に化ける**——v0.4.1 では型検査の赤が " +
+        "`browserType.launch: Executable doesn't exist` として 36 本の失敗に見えた。",
+    ).toBeLessThan(Math.min(ui, report));
+  });
+
   it("heavy:power は、レポートを書く pnpm heavy より前に走る", () => {
     // 同じ形。`detection-power.json` が無いと、報告書は検出力を
     // 「測っていない」と書く——**嘘ではないが、毎回そう書くようになる。**
