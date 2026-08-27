@@ -12,6 +12,8 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** `web/` の中でこの語を見つけたら違反とする。大文字小文字は問わない。 */
 const FORBIDDEN = /heavy/i;
@@ -53,7 +55,9 @@ export function findBoundaryViolations(files) {
  * @returns {SourceFile[]}
  */
 export function readWebFiles() {
-  const root = new URL("..", import.meta.url).pathname;
+  // **`URL.pathname` を使わない。** %-encode が戻らないので、パスに空白が
+  // 入る環境（`/home/My Work/...`）でファイルを開けない(Fable の指摘)。
+  const root = fileURLToPath(new URL("..", import.meta.url));
   const listed = execFileSync("git", ["-C", root, "ls-files", "web"], {
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
@@ -63,7 +67,7 @@ export function readWebFiles() {
     .filter((path) => path !== "")
     .map((path) => {
       try {
-        return { path, text: readFileSync(`${root}${path}`, "utf8") };
+        return { path, text: readFileSync(join(root, path), "utf8") };
       } catch {
         // 画像などは読めない。**読めないものは判定しない**(黙って通す
         // のではなく、テキストとして扱えないという意味で対象外である)。

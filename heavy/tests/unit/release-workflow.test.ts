@@ -24,6 +24,21 @@ const jobNames = (yaml: string) =>
     .map((m) => m?.[1])
     .filter((name): name is string => name !== undefined);
 
+/**
+ * `gh release <動詞>` の呼び出しを、現れる順に取り出す。
+ *
+ * **生の `indexOf` で本文を探さない**（Fable の指摘）——コメントに
+ * `"gh release upload"` の綴りが入った日に、無主張化と偽赤の両方が起きる。
+ * 行頭がコメントの行は落とし、動詞だけを並べる。
+ */
+const ghReleaseCalls = (yaml: string): string[] =>
+  yaml
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith("#"))
+    .map((line) => line.match(/gh release (\w+)/)?.[1])
+    .filter((verb): verb is string => verb !== undefined);
+
 describe("読み手の定数は、書き手のワークフローと一致する", () => {
   it("重量級の本体のジョブ名が、呼び出し元と呼ばれる側の組み合わせで実在する", () => {
     // `HEAVY_BODY_JOB` は "呼び出し元のジョブ名 / 呼ばれた側のジョブ名" である。
@@ -57,10 +72,35 @@ describe("読み手の定数は、書き手のワークフローと一致する"
 
   it("添付は本文より先に上げる", () => {
     // 逆だと、添付の途中で落ちたときに**存在しない添付を語る本文**が残る（B-1）。
+    const calls = ghReleaseCalls(read("release.yml"));
+    expect(calls.indexOf("upload")).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf("upload")).toBeLessThan(calls.indexOf("edit"));
+  });
+
+  it("F-3: Release を作る経路も、本文より先に添付する", () => {
+    // `create` に本文と資産を一緒に渡していた頃、**B-1 が塞いだ壊れ方が
+    // `create` 側にだけ残っていた**（見張るテストも `upload`/`edit` の 2 つ
+    // しか見ておらず、`create` に盲目だった）。
+    //
+    // **`gh` が `create` の中で本文と資産をどの順に扱うかは測っていない。**
+    // だから測らなくても済む形にする——`create` は**空の本文で作るだけ**にし、
+    // 添付と本文は 1 本の経路へ合流させる。
     const release = read("release.yml");
-    expect(release.indexOf("gh release upload")).toBeLessThan(
-      release.indexOf("gh release edit"),
-    );
+    const create = release
+      .split("\n")
+      .find((line) => line.includes("gh release create"));
+    expect(create).toBeDefined();
+    expect(create).not.toContain("--notes-file");
+    expect(create).not.toContain("evidence/*");
+    expect(create).toContain('--notes ""');
+  });
+
+  it("gh の呼び出しは 1 本の順序で読める（分岐で二重化していない）", () => {
+    // 経路が 2 本あると、片方だけ直した日に**もう片方が古いまま緑**になる。
+    const calls = ghReleaseCalls(read("release.yml"));
+    expect(calls.filter((c) => c === "upload")).toHaveLength(1);
+    expect(calls.filter((c) => c === "edit")).toHaveLength(1);
+    expect(calls.filter((c) => c === "create")).toHaveLength(1);
   });
 
   it("報告書の欠落を警告で流さない", () => {

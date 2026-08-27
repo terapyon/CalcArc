@@ -211,3 +211,65 @@ describe("renderEvidence — 証拠が嘘をつかないこと", () => {
     expect(out).not.toContain("重量級コーパスはこの走行に含まれていない");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fable のレビュー（2026-08-27）。**実走で見つかった 3 件。**
+// ---------------------------------------------------------------------------
+
+describe("renderEvidence — 在席と結論の継ぎ目", () => {
+  const heavyBody = (conclusion: string | null, status = "completed") =>
+    job("Heavy corpus / Corpus vs reference", conclusion, status);
+
+  it("F-1: 名前が在っても、成功していなければ在席と認めない", () => {
+    // **同じ文書の中で矛盾していた。** 表は「飛ばした(skipped)」と正直に
+    // 書くのに、その下で「走行そのものは通っている」と言っていた
+    // ——在席の判定が**名前の実在だけ**を見ていたため。
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody("skipped")],
+      attachments: [],
+    });
+    expect(out).toContain("重量級コーパスはこの走行に含まれていない");
+    expect(out).not.toContain("走行そのものは通っている");
+  });
+
+  it("F-1: 進行中でも在席と認めない", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody(null, "in_progress")],
+      attachments: [],
+    });
+    expect(out).toContain("重量級コーパスはこの走行に含まれていない");
+  });
+
+  it("F-1: 成功していれば在席と認める", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody("success")],
+      attachments: ["heavy-report.md"],
+    });
+    expect(out).not.toContain("重量級コーパスはこの走行に含まれていない");
+  });
+
+  it("F-2: 知らない結論は、断って落ちる", () => {
+    // **ホワイトリストの向きが逆だった。** 知っている 7 種の網羅を仮定して
+    // 余りを「進行中」と断定していたので、`stale` や将来の新しい値が
+    // **終わった走行を「進行中」と語る**形になっていた。
+    expect(() =>
+      renderEvidence({ ...base, jobs: [job("CI / X", "stale")] }),
+    ).toThrow(/未知の結論/);
+    expect(() =>
+      renderEvidence({ ...base, jobs: [job("CI / X", "startup_failure")] }),
+    ).toThrow(/未知の結論/);
+  });
+
+  it("F-2: まだ終わっていないジョブは、結論が無くても通す", () => {
+    // `status` が `completed` でないなら、結論がまだ無いのは正常である。
+    const out = renderEvidence({
+      ...base,
+      jobs: [heavyBody("success"), job("Evidence", null, "in_progress")],
+      attachments: ["heavy-report.md"],
+    });
+    expect(out).toContain("進行中");
+  });
+});

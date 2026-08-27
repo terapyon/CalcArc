@@ -31,6 +31,20 @@ export const HEAVY_REPORT = "heavy-report.md";
 /** 終わっていて成功でもない結論。**成功にも進行中にも数えない**(B-3)。 */
 const NOT_RUN_CONCLUSIONS = new Set(["skipped", "neutral"]);
 
+/**
+ * **知っている結論の全部**(F-2)。ここに無い結論が来たら、証拠を書かずに落ちる。
+ *
+ * 以前は success / {skipped,neutral} / BAD 4 種の**網羅を仮定して、余りを
+ * すべて「進行中」と断定**していた。`stale` や `startup_failure`、そして
+ * 将来 GitHub が足す値は、そこへ落ちる——**終わった走行について「進行中」と
+ * 語る証拠**が出る。**知らないものは断る**のが、証拠が嘘をつかない側である。
+ */
+const KNOWN_CONCLUSIONS = new Set([
+  "success",
+  ...NOT_RUN_CONCLUSIONS,
+  ...BAD_CONCLUSIONS,
+]);
+
 function duration(job) {
   if (!job.started_at || !job.completed_at) {
     return "—";
@@ -87,6 +101,19 @@ export function renderEvidence({
 }) {
   if (!Array.isArray(jobs) || jobs.length === 0) {
     throw new Error("この走行にはジョブが 1 つも無い。証拠を書かない");
+  }
+  // **終わっているのに知らない結論なら、そこで止まる**(F-2)。
+  const unknown = jobs.filter(
+    (job) =>
+      job.status === "completed" &&
+      !KNOWN_CONCLUSIONS.has(/** @type {string} */ (job.conclusion)),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `未知の結論があるので証拠を書かない: ${unknown
+        .map((job) => `${job.name} = ${job.conclusion}`)
+        .join(", ")}`,
+    );
   }
   const bad = jobs.filter((job) => BAD_CONCLUSIONS.has(job.conclusion));
   if (bad.length > 0) {
@@ -148,7 +175,12 @@ export function renderEvidence({
       "",
     );
   }
-  const heavyRan = jobs.some((job) => job.name === HEAVY_BODY_JOB);
+  // **名前の実在だけでは在席にしない**(F-1)。`skipped` や進行中のジョブを
+  // 在席と数えると、表が「飛ばした」と書いている隣で「走行そのものは通って
+  // いる」と言う——**同じ文書の中で矛盾する。**
+  const heavyRan = jobs.some(
+    (job) => job.name === HEAVY_BODY_JOB && job.conclusion === "success",
+  );
   if (!heavyRan) {
     lines.push(
       "**重量級コーパスはこの走行に含まれていない。**",

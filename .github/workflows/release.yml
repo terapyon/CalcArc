@@ -170,21 +170,26 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -eu
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release view "$TAG" --json body --jq .body > existing-notes.md
-            # **自動生成の "What's Changed" は消さない。** 前に残して証拠を継ぎ足す。
-            # 貼り直しの規則(二重に積まない・同じ入力なら同じ本文・1 バイトも
-            # 伸びない)は `tools/release-notes.mjs` の純関数が持ち、
-            # **`heavy/tests/unit/release-notes.test.ts` が v0.4.1 の実物の本文で
-            # 固定している**——ここをシェルで書いていた頃、それを見張るテストは
-            # 0 本だった。
-            node tools/release-notes.mjs existing-notes.md evidence/release-evidence.md > notes.md
-            # **添付を先に、本文を後に。** 逆にすると、添付の途中で落ちたときに
-            # **存在しない添付を語る本文**が残る——証拠が嘘をつく側の壊れ方で
-            # ある。添付が済んでから、それを語る本文を書く。
-            gh release upload "$TAG" evidence/* --clobber
-            gh release edit "$TAG" --notes-file notes.md
-          else
-            node tools/release-notes.mjs /dev/null evidence/release-evidence.md > notes.md
-            gh release create "$TAG" evidence/* --title "$TAG" --notes-file notes.md
+          # **経路を 1 本にする**(F-3)。分岐は「Release を作るか、既に在るか」
+          # だけにして、**添付と本文の順序は両方で同じ**にする——`create` に
+          # 本文と資産を一緒に渡していた頃は、B-1 で塞いだ壊れ方（存在しない
+          # 添付を語る本文）が `create` 側にだけ残っていた。
+          #
+          # **`gh` が `create` の中で本文と資産をどの順で扱うかは測っていない。**
+          # 測れないなら**依存しない形にする**のが確実である。
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes ""
           fi
+          gh release view "$TAG" --json body --jq .body > existing-notes.md
+          # **自動生成の "What's Changed" は消さない。** 前に残して証拠を継ぎ足す。
+          # 貼り直しの規則(二重に積まない・同じ入力なら同じ本文・1 バイトも
+          # 伸びない)は `tools/release-notes.mjs` の純関数が持ち、
+          # **`heavy/tests/unit/release-notes.test.ts` が v0.4.1 の実物の本文で
+          # 固定している**——ここをシェルで書いていた頃、それを見張るテストは
+          # 0 本だった。
+          node tools/release-notes.mjs existing-notes.md evidence/release-evidence.md > notes.md
+          # **添付を先に、本文を後に。** 逆にすると、添付の途中で落ちたときに
+          # **存在しない添付を語る本文**が残る——証拠が嘘をつく側の壊れ方で
+          # ある。添付が済んでから、それを語る本文を書く。
+          gh release upload "$TAG" evidence/* --clobber
+          gh release edit "$TAG" --notes-file notes.md
