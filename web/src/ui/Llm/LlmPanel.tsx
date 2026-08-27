@@ -23,6 +23,7 @@ import { Keypad } from "../Keypad/Keypad";
 import {
   CANDIDATE_SECTIONS,
   LLM_FIELD_LABELS,
+  LLM_FIELD_ORDER,
   LLM_FIELD_SECTION,
   type LlmField,
   type LlmKeyToken,
@@ -58,17 +59,6 @@ function isCandidateField(field: LlmField): field is CandidateField {
     field === "context"
   );
 }
-
-/** 項目の並び(項目行と同じ順、spec §4.3)。 */
-const FIELD_ORDER: readonly LlmField[] = [
-  "parameters",
-  "weight",
-  "layers",
-  "kvHeads",
-  "headDim",
-  "context",
-  "kvPrecision",
-];
 
 const PRIMARY_STATUS: Record<Primary, string> = {
   decimal: "10 進を主表示",
@@ -390,7 +380,7 @@ export function LlmPanel() {
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。未入力の項目は出さない——層数が空のあいだは根拠にならない。
-  const entries = FIELD_ORDER.map((field) => ({
+  const entries = LLM_FIELD_ORDER.map((field) => ({
     label: LLM_FIELD_LABELS[field],
     value: typedIn(field),
     active: field === active,

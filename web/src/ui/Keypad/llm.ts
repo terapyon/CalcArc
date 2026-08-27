@@ -112,7 +112,15 @@ const FIELD_ARIA_LABELS: Record<LlmField, string> = {
 };
 
 /** 項目行に並べる順(spec §4.3 の表と同じ 4 列 × 2 段)。 */
-const FIELD_ORDER: LlmField[] = [
+/**
+ * **盤面の項目行と読み出しの一覧が、これ 1 つを共有する。**
+ *
+ * 以前は `LlmPanel.tsx` にも逐語で同じ並びが在り、**片方だけ動いても誰も
+ * 落ちなかった**。利用者から見ると 1 つの並びである——項目行を左から押す順と
+ * 読み出しを上から読む順が食い違うと、押した項目がどこに現れるか分からなく
+ * なる(`fieldOrder.test.tsx` が描画で見張っている)。
+ */
+export const LLM_FIELD_ORDER: readonly LlmField[] = [
   "parameters",
   "weight",
   "layers",
@@ -156,7 +164,7 @@ export const LLM_FIELD_SECTION: KeypadSection<LlmKeyToken> = {
   columns: 4,
   height: "half",
   keys: [
-    ...FIELD_ORDER.map((field) => ({
+    ...LLM_FIELD_ORDER.map((field) => ({
       token: `field:${field}` as LlmKeyToken,
       label: LLM_FIELD_LABELS[field],
       ariaLabel: FIELD_ARIA_LABELS[field],

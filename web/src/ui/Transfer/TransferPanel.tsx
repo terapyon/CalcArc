@@ -22,6 +22,7 @@ import {
   DURATION_UNIT_LABELS,
   DURATION_UNIT_SECTION,
   TRANSFER_FIELD_LABELS,
+  TRANSFER_FIELD_ORDER,
   TRANSFER_FIELD_SECTION,
   TRANSFER_PAD,
   type TransferField,
@@ -42,14 +43,6 @@ const MAX_COUNT = "340282366920938463463374607431768211455";
  */
 const DEFAULT_BANDWIDTH_UNIT: BandwidthUnitToken = "mbps";
 const DEFAULT_DURATION_UNIT: DurationUnitToken = "hour";
-
-/** 項目の並び(項目行と同じ順、spec §4.4)。 */
-const FIELD_ORDER: readonly TransferField[] = [
-  "bandwidth",
-  "bandwidthUnit",
-  "duration",
-  "durationUnit",
-];
 
 const PRIMARY_STATUS: Record<Primary, string> = {
   decimal: "10 進を主表示",
@@ -247,7 +240,7 @@ export function TransferPanel() {
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。単位は常に値を持つので、消えるのは未入力の値だけである。
-  const entries = FIELD_ORDER.map((field) => ({
+  const entries = TRANSFER_FIELD_ORDER.map((field) => ({
     label: TRANSFER_FIELD_LABELS[field],
     value: typedIn(field),
     active: field === active,
