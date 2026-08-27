@@ -67,6 +67,19 @@ test("every button the keypad claims can actually be pressed", async ({
         `${token}: expected exactly one button named "${button.ariaLabel}", ` +
           `found ${await locator.count()}`,
       );
+      continue;
+    }
+    // **押せることまで見る。** 上のコメントは「無効化されている」も
+    // 分からないと言っているのに、**実装は数えるだけだった**——名前が
+    // `can actually be pressed` のまま、無効化されたキーを緑で通す形に
+    // なっていた(2026-08-26 に発見)。`disabled` なボタンは Playwright の
+    // `click()` が actionability を待って**タイムアウトする**(実測: 3 秒指定で
+    // 3 秒後に TimeoutError、click は要素に届かない)ので、**押せないキーは
+    // 押せないと、ここで言う。**
+    if (!(await locator.isEnabled())) {
+      unreachable.push(
+        `${token}: "${button.ariaLabel}" は在るが無効化されている(押せない)`,
+      );
     }
   }
   expect(unreachable).toEqual([]);
