@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 const panel = (page: Page) =>
   page.getByRole("region", { name: "データ転送量計算" });

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, PROVIDER_GLOB, test } from "./fixtures";
 
 const panel = (page: Page) => page.getByRole("region", { name: "単位変換" });
 const echo = (page: Page) => page.getByTestId("display-entry-active");
@@ -447,19 +447,14 @@ for (const c of TYPEABLE) {
 // 為替(U-4)。**ここから下はレートの状態を作ってから盤面を見る。**
 // ---------------------------------------------------------------------------
 
-/**
- * レートの取得先。**`web/src/currency/provider.ts` の `PROVIDER_ENDPOINT` と
- * 二重管理である**(E2E は境界の定数を import しない)。
- *
- * **素で走らせると本物のネットワークに出る。** Task 7 の計測中、実ブラウザが
- * `open.er-api.com` を実際に叩いて**当日のレート**を表示した。塞がないと
- * **CI がプロバイダのレート制限(429)と当日のレートに依存する。**
- *
- * **綴りがずれたら塞ぎは効かない。** そのときこのファイルの検査は
- * 「取りに行った回数」が 0 のまま、日付も**当日のもの**になって赤くなる
- * ——**塞ぎ忘れても緑になる形にしない**、がこの下の検査の書き方である。
- */
-const PROVIDER_GLOB = "**/open.er-api.com/**";
+// **取得先の綴りは `./fixtures` が持つ**(0.5.0 で移した)。以前はこの
+// ファイルだけが塞いでおり、**別のファイルが為替を開けば黙って本物へ
+// 出た**——`beforeEach` はファイルの中でしか効かない。いまは既定で
+// 全 E2E が塞がっていて、ここはそのうえに**応答を返す**塞ぎを重ねる。
+//
+// **綴りがずれたら塞ぎは効かない。** そのときこのファイルの検査は
+// 「取りに行った回数」が 0 のまま、日付も**当日のもの**になって赤くなる
+// ——**塞ぎ忘れても緑になる形にしない**、がこの下の検査の書き方である。
 
 /** 帰属表示のリンク先。**`provider.ts` の `PROVIDER_ATTRIBUTION` と二重管理**(同上)。 */
 const PROVIDER_ORIGIN = "https://www.exchangerate-api.com";

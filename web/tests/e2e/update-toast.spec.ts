@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 // 実 SW の世代交代は自動テストで再現しない(設計書 §4: 本番ビルドでしか
 // 本物にならない)。ここが見るのは「出たときの形」——役割・フォーカス・
@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/?sw-toast=preview");
 });
 
-const toast = (page: import("@playwright/test").Page) =>
+const toast = (page: import("./fixtures").Page) =>
   page.getByRole("status", { name: "更新のお知らせ" });
 
 test("the toast announces itself as a status, not an alert", async ({

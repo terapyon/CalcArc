@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("the footer shows on every tab, once", async ({ page }) => {
   // **全タブに出す**のが要件である(0.2.0 設計書 §5)。以前は Scientific

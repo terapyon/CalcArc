@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 /**
  * **盤面の横幅と、カテゴリの器の横幅。**
