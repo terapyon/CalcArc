@@ -29,6 +29,7 @@ import {
   TYPE_SECTIONS,
 } from "../Keypad/dataScale";
 import { Keypad } from "../Keypad/Keypad";
+import { isDeadOperator } from "../Keypad/operators";
 import { Readout } from "../Readout/Readout";
 import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./DataScalePanel.module.css";
@@ -110,8 +111,13 @@ export function DataScalePanel() {
   const entry = active === "dimensions" ? dimensions : count;
   const setEntry = active === "dimensions" ? setDimensions : setCount;
 
-  /** いま押せないキー。型面・候補面では DEL に消すものが無い(設計書 §5)。 */
+  /** いま押せないキー。型面・候補面では DEL に消すものが無い(設計書 §5)。
+   *
+   * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
+   * 無く、**何をしても押せるようにならない**。下の 4 つの「いまは押せない」
+   * とは意味が違う(`Keypad/operators.ts` に理由がある)。 */
   function keyDisabled(token: DataScaleKeyToken): boolean {
+    if (isDeadOperator(token)) return true;
     if (token === "del") return !numberField;
     if (token === "k") return !numberField || !canPushUnit(entry, K);
     if (token === "m") return !numberField || !canPushUnit(entry, M);

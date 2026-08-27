@@ -28,6 +28,7 @@ import {
   type LlmKeyToken,
   llmPad,
 } from "../Keypad/llm";
+import { isDeadOperator } from "../Keypad/operators";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
@@ -204,8 +205,13 @@ export function LlmPanel() {
   }
 
   /** いま押せないキー。DEL は数字面以外で無効。単位は parameters だけ、
-   * かつ下る向きにしか置けない(設計書 §5・§4)。 */
+   * かつ下る向きにしか置けない(設計書 §5・§4)。
+   *
+   * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
+   * 無く、**何をしても押せるようにならない**。下の 3 つの「いまは押せない」
+   * とは意味が違う(`Keypad/operators.ts` に理由がある)。 */
   function keyDisabled(token: LlmKeyToken): boolean {
+    if (isDeadOperator(token)) return true;
     if (token === "del") return !numberField;
     if (token === "unit:b") return !numberField || !canPushUnit(parameters, B);
     if (token === "unit:m") return !numberField || !canPushUnit(parameters, M);
