@@ -105,6 +105,68 @@ test("every face keeps 44px touch targets", async ({ page }) => {
   expect(measured, "no key was ever measured").toBeGreaterThan(0);
 });
 
+test("no key label spills out of its key on any face", async ({ page }) => {
+  // **44px は「押せる大きさか」で、これは「読めるか」である。** 別の問いで、
+  // 別の壊れ方をする——キーは 44px を保ったまま、中の字だけがはみ出す。
+  // U-2 の spec §4 は「**機械が見張っていないもの**」としてこれを名指しで
+  // 繰り越していた(手で測っただけだった)。ここで機械に渡す。
+  //
+  // ## `scrollWidth` では見えない(実測)
+  //
+  // 最初は `scrollWidth - clientWidth` で書いたが、**ラベルを伸ばしても
+  // 赤くならなかった**。理由は 2 つある:
+  //
+  // - **字は切れずに折り返す。** キーは `white-space: normal` のままで、
+  //   長い字は幅を越えずに行が増える(実測: 幅の超過は -1px)。
+  // - **`<button>` は scroll 系の値ではみ出しを見せない。** 器いっぱいに
+  //   折り返しても `scrollHeight === clientHeight` のままだった(実測 61/61)。
+  //
+  // ## だから字そのものの箱を測る
+  //
+  // `Range.selectNodeContents` で**描かれた行の外接矩形**を取り、キーの箱と
+  // 比べる。実測で、長いラベルを入れると `ink 84 / key 61` = **縦に 23px**
+  // はみ出すのが見えた。**縦が本体である**——折り返す作りなので、
+  // 溢れるのは高さのほうで、幅はまず越えない。
+  //
+  // 幅は**対応する下限の実機幅**で見る(360px)。390px で入っていても、
+  // 360px ではみ出せば読めない人が出る。
+  await page.setViewportSize({ width: 360, height: 800 });
+  const spilled: string[] = [];
+  let measured = 0;
+  for (const [category, faceName, field, expectedCount] of FACES) {
+    await page.goto(`/#convert/${category}`);
+    await expect(panel(page)).toBeVisible();
+    await press(page, [field]);
+    const buttons = await face_(page, faceName).getByRole("button").all();
+    expect(
+      buttons,
+      `${category}/${faceName} should render its full key set`,
+    ).toHaveLength(expectedCount);
+    for (const button of buttons) {
+      const over = await button.evaluate((el) => {
+        const key = el.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const ink = range.getBoundingClientRect();
+        return {
+          text: (el.textContent ?? "").trim(),
+          w: Math.round(ink.width - key.width),
+          h: Math.round(ink.height - key.height),
+        };
+      });
+      if (over.w > 0 || over.h > 0) {
+        spilled.push(
+          `${category}/${faceName}: ${over.text} が 横 ${over.w}px・縦 ${over.h}px はみ出す`,
+        );
+      }
+      measured += 1;
+    }
+  }
+  // **測った件数を先に主張する。** 0 周でも `spilled` は空で緑になる。
+  expect(measured).toBe(FACES.reduce((sum, [, , , n]) => sum + n, 0));
+  expect(spilled).toEqual([]);
+});
+
 test("the swap key is wide enough even though the field row is half height", async ({
   page,
 }) => {
