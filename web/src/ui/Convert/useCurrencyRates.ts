@@ -35,6 +35,14 @@ export interface RateDeps {
   fetchLatest: () => Promise<CurrencyRateSet>;
   now: () => Date;
   online: () => boolean;
+  /**
+   * 回線の状態が変わったら呼ぶ。返り値は購読の解除。
+   *
+   * **`online()` を 1 度読むだけでは足りない。** 盤面を開いたまま電車に
+   * 入る・機内モードにする、というほうが「開く前から落ちている」より普通で、
+   * その変化は読み取りでは拾えない。
+   */
+  watchOnline: (onChange: () => void) => () => void;
 }
 
 const LIVE: RateDeps = {
@@ -43,6 +51,14 @@ const LIVE: RateDeps = {
   fetchLatest: () => exchangeRateApi.getLatestRates(),
   now: () => new Date(),
   online: () => globalThis.navigator?.onLine ?? true,
+  watchOnline: (onChange) => {
+    globalThis.addEventListener?.("online", onChange);
+    globalThis.addEventListener?.("offline", onChange);
+    return () => {
+      globalThis.removeEventListener?.("online", onChange);
+      globalThis.removeEventListener?.("offline", onChange);
+    };
+  },
 };
 
 /**
@@ -137,6 +153,23 @@ export function useCurrencyRates(
     return () => {
       cancelled = true;
     };
+  }, [enabled]);
+
+  // **回線の変化を購読する。** 上の効果が読む `deps.online()` は**開いた
+  // 瞬間の値**で、そのあと落ちても上がっても動かない。**キャッシュがある
+  // 限り換算は続く**ので、ここが決めるのは「いま出している数は取り直せない」
+  // と伝えるかどうかだけである(§5 の「オフラインは状態であってエラーでは
+  // ない」)。
+  //
+  // **取りに行き直しはしない。** 取得は「同一セッションで 1 回だけ」で
+  // (`attempted`)、オンラインに戻ったことをその抑制を解く合図にはしない
+  // ——§4.2 が決めた回数を、回線の上下で増やさない。
+  //
+  // `deps` を依存に入れないのは上の効果と同じ理由である。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 上のとおり
+  useEffect(() => {
+    if (!enabled) return;
+    return deps.watchOnline(() => setOffline(!deps.online()));
   }, [enabled]);
 
   return { set, loading, offline };

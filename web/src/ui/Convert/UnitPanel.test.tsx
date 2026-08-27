@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConvertCalc } from "../../convert";
@@ -778,6 +778,38 @@ describe("UnitPanel（為替の盤面）", () => {
     expect(keys.filter((key) => key.disabled)).toHaveLength(
       CURRENCY_TOKENS.length,
     );
+  });
+
+  it("notices going offline while the panel is already open", async () => {
+    // **オフラインは開いた瞬間の値ではない**(spec §5 は「端末がオフライン」と
+    // 書いており、いつ測るかは書いていない)。電車に入る、機内モードに切り替える
+    // ——**盤面を開いたまま落ちる**ほうが、開く前から落ちているより普通である。
+    //
+    // ここまで、この状態は**一度も見られていなかった**: `deps.online()` を
+    // 効果の中で 1 度読むだけで、`online`/`offline` の購読が web 全体に
+    // 1 つも無かった。**キャッシュがあるので換算は続く**——変わるのは
+    // 「いま出している数は取り直せない」と伝えるかどうかだけである。
+    setOnline(true);
+    vi.mocked(readRates).mockResolvedValue(rateSet(FULL_RATES, fresh()));
+    await renderPanel("currency");
+    await screen.findByTestId("currency-rate-date");
+    expect(screen.queryByTestId("currency-offline")).toBeNull();
+
+    setOnline(false);
+    await act(async () => {
+      window.dispatchEvent(new Event("offline"));
+    });
+    expect(await screen.findByTestId("currency-offline")).toBeVisible();
+
+    // **戻ったら消える。** 片道だけ直すと、機内モードを解いた人に
+    // 「オフライン」が残り続ける。
+    setOnline(true);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("currency-offline")).toBeNull();
+    });
   });
 
   it("shows the attribution the provider requires", async () => {
