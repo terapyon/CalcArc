@@ -16,6 +16,7 @@ import {
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import { Keypad } from "../Keypad/Keypad";
+import { isDeadOperator } from "../Keypad/operators";
 import {
   BANDWIDTH_UNIT_LABELS,
   BANDWIDTH_UNIT_SECTION,
@@ -124,8 +125,13 @@ export function TransferPanel() {
     return [TRANSFER_FIELD_SECTION, TRANSFER_PAD];
   }
 
-  /** いま押せないキー。単位面では DEL に消すものが無い(設計書 §5)。 */
+  /** いま押せないキー。単位面では DEL に消すものが無い(設計書 §5)。
+   *
+   * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
+   * 無く、**何をしても押せるようにならない**。DEL の「いまは押せない」とは
+   * 意味が違う(`Keypad/operators.ts` に理由がある)。 */
   function keyDisabled(token: TransferKeyToken): boolean {
+    if (isDeadOperator(token)) return true;
     return token === "del" && !numberField;
   }
 

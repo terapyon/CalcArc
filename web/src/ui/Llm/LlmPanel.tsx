@@ -29,6 +29,7 @@ import {
   type LlmKeyToken,
   llmPad,
 } from "../Keypad/llm";
+import { isDeadOperator } from "../Keypad/operators";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
@@ -193,16 +194,24 @@ export function LlmPanel() {
     ];
   }
 
-  /** いま押せないキー。DEL は数字面以外で無効。単位は下る向きにしか
-   * 置けない(設計書 §5・§4)。
+  /** 押せないキー。**2 つの理由が同居している。**
    *
-   * **見るのは「いま打っている項目」である。** 単位キーが立つ面は
+   * **1. 演算子の 7 個は、条件が付かない。** この面には式を組み立てる入口が
+   * 無く、**何をしても押せるようにならない**。下の「いまは押せない」とは
+   * 意味が違う(`Keypad/operators.ts` に理由がある)。
+   *
+   * **2. DEL と単位は、いまの状態で押せないだけである。** DEL は数字面以外で
+   * 無効、単位は下る向きにしか置けない(設計書 §5・§4)。状態が変われば押せる
+   * ようになる。
+   *
+   * **単位が見るのは「いま打っている項目」である。** 単位キーが立つ面は
    * `parameters` だけだが(`llm.test.ts` が 7 項目すべてで見張っている)、
    * **それは盤面の側の事実であって、ここが依ってよい前提ではない**
    * ——面を 1 つ足した日に、ここが黙って別の項目を見ることになる。
    * `numberField` が false のときは短絡するので、`Entry` を持たない
    * `weight`/`kvPrecision` が `entryOf` に届くことはない。 */
   function keyDisabled(token: LlmKeyToken): boolean {
+    if (isDeadOperator(token)) return true;
     if (token === "del") return !numberField;
     if (token === "unit:b")
       return !numberField || !canPushUnit(entryOf(active as EntryField), B);
