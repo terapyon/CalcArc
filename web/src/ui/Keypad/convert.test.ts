@@ -131,6 +131,37 @@ describe("Convert のキー集合", () => {
     );
   });
 
+  it("gives every unit key a label of its own too", () => {
+    // **上の検査は読み上げ名しか見ていなかった。** 画面に出る**ラベル**が
+    // 重なっても、読み上げ名が違えば緑のままである——そして
+    // **目で使う人にとって重なりは致命的**で、`m²` と `m³` が同じ字なら
+    // 押し分けようがない。読み上げ名と同じ強さでラベルも見る。
+    //
+    // **カテゴリをまたいで 1 つの集合にする。** 一度に見えるのは 1 カテゴリ
+    // だけだが、**同じ字に 2 つの意味がある**こと自体が危うい
+    // ——`t`(トン)と `t`(何か別のもの)が混ざった日に、どちらを押したのか
+    // 読み返して分からなくなる。
+    const labels = new Set<string>();
+    let counted = 0;
+    for (const category of CONVERT_CATEGORY_IDS) {
+      for (const key of face(unitSections(category)).keys) {
+        if (key.token === null || !key.token.startsWith("unit:")) continue;
+        // **空のラベルは押せる場所に見えない。** `—`(予約スロットの字)も
+        // 単位キーには来ない。
+        expect(key.label, key.token).not.toBe("");
+        expect(key.label, key.token).not.toBe("—");
+        labels.add(key.label);
+        counted += 1;
+      }
+    }
+    // **数えた数を先に主張する。** 面の綴りが変わって 0 周になっても
+    // 集合は空で「重なり無し」になり、緑を返してしまう。
+    expect(counted, "no unit key was ever seen").toBe(
+      CONVERT_UNIT_TOKENS.length + CURRENCY_TOKENS.length,
+    );
+    expect(labels.size).toBe(counted);
+  });
+
   it("offers the four fields the spec asks for", () => {
     const fields = CONVERT_SECTIONS[0];
     expect(fields?.columns).toBe(4);
