@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  HEAVY_BODY_JOB,
-  HEAVY_REPORT,
-} from "../../../tools/release-evidence.mjs";
+import { HEAVY_BODY_JOB, HEAVY_REPORT } from "../release-evidence.mjs";
 
 // **`release.yml` を読むテストは 0 本だった**(2026-08-26 の指摘)。
 // 証拠の読み手が持つ定数は、**書き手（ワークフローのジョブ名・添付名）**と
@@ -12,7 +9,7 @@ import {
 
 const read = (name: string) =>
   readFileSync(
-    new URL(`../../../.github/workflows/${name}`, import.meta.url),
+    new URL(`../../.github/workflows/${name}`, import.meta.url),
     "utf8",
   );
 
