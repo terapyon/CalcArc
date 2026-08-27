@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  HEAVY_BODY_JOB,
-  HEAVY_REPORT,
-} from "../../../tools/release-evidence.mjs";
+import { HEAVY_BODY_JOB, HEAVY_REPORT } from "../release-evidence.mjs";
 
 // **`release.yml` を読むテストは 0 本だった**(2026-08-26 の指摘)。
 // 証拠の読み手が持つ定数は、**書き手（ワークフローのジョブ名・添付名）**と
@@ -12,7 +9,7 @@ import {
 
 const read = (name: string) =>
   readFileSync(
-    new URL(`../../../.github/workflows/${name}`, import.meta.url),
+    new URL(`../../.github/workflows/${name}`, import.meta.url),
     "utf8",
   );
 
@@ -169,7 +166,7 @@ describe("レポートを書く段は最後（2026-08-27）", () => {
   // 状態の劣化で、盤面の行が毎回「記録が無い」になる。
   //
   // 報告書は `pnpm heavy` の走行末尾で書かれ、**その時点でディスクにある
-  // `web/heavy-ui-run.json` を読む**。まっさらな runner にはその記録が無いので、
+  // `heavy/heavy-ui-run.json` を読む**。まっさらな runner にはその記録が無いので、
   // `heavy:ui` をあとに置くと `uiHealth` の 4 状態のうち 1 つしか CI に出ない。
 
   it("heavy:ui は、レポートを書く pnpm heavy より前に走る", () => {
@@ -182,7 +179,7 @@ describe("レポートを書く段は最後（2026-08-27）", () => {
       ui,
       "heavy:ui がレポートを書く `pnpm heavy` より後ろにある。" +
         "**赤にはならないが、盤面の行が毎回「記録が無い」になる**" +
-        "（報告書は書く時点でディスクに在る web/heavy-ui-run.json を読むため）。" +
+        "（報告書は書く時点でディスクに在る heavy/heavy-ui-run.json を読むため）。" +
         "順序を戻すか、報告書が記録を読む方法を変えるか、どちらかを選ぶこと。",
     ).toBeLessThan(report);
   });

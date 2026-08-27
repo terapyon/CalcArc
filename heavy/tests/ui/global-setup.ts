@@ -7,7 +7,7 @@ import { resetPresses } from "./presses";
  * (`presses.ts` の `recordPress()`)。消さずに走ると、今回 1 度も押していない
  * キーが**前回の走行の数字で緑になる**——`../corpus/global-setup.ts` が
  * `.heavy-summaries/` を消すのとまったく同じ理由である。前回の
- * `web/heavy-ui-run.json` も一緒に消す。
+ * `heavy/heavy-ui-run.json` も一緒に消す。
  *
  * `testMatch` の既定は `**\/*.@(spec|test).*` なので、このファイルは
  * テストとして拾われない。

@@ -63,7 +63,7 @@ golden 再生成の byte 一致）。下は workflow の YAML から起こし直
 `web/heavy-report.md` の盤面の行は「**盤面を通る走行——通っている。** 最後に
 走った `pnpm heavy:ui` は 19904 回キーを押し、1266 件のケースを盤面から打鍵
 して、主張が全部通っている。」になった（4 状態のうち `passed`）。 レポートは `pnpm heavy` の
-走行末尾で書かれ、**その時点でディスクにある `web/heavy-ui-run.json` を読む**。
+走行末尾で書かれ、**その時点でディスクにある `heavy/heavy-ui-run.json` を読む**。
 逆順で回すと、前回の走行の残骸——このスイープの直前にディスクにあったのは
 Task 6 の finance 単独走行のもので、読んで確認したところ
 `pressedAnything: false` / `ok: false` / `totalPresses: 0` だった——を読んで
@@ -275,7 +275,7 @@ B+C Task 10 が入れた 4 つの逆算境界証明書（`web/tests/heavy/certif
 **このスイープで見つけて、この報告と同じコミットで直した。**
 
 改善前の段の順番は `heavy:power` → `heavy` → `heavy:ui` → ジョブ要約だった。
-レポートを書くのは `heavy` で、その走行末尾に `web/heavy-ui-run.json` を読む。
+レポートを書くのは `heavy` で、その走行末尾に `heavy/heavy-ui-run.json` を読む。
 **まっさらな runner にはその記録がまだ無い**ので、ジョブ要約に載るレポートの
 盤面の行は**毎回「記録が無い」になる**——D+E Task 10 が入れた 4 状態のうち、
 CI では 1 つしか出ない。レポートは嘘をついていない（本当に記録が無い）が、

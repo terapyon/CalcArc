@@ -12,7 +12,12 @@
 import { execFileSync } from "node:child_process";
 
 /** 終わっていて、成功ではない結論。**1 つでもあれば証拠を書かない。** */
-const BAD_CONCLUSIONS = new Set(["failure", "cancelled", "timed_out", "action_required"]);
+const BAD_CONCLUSIONS = new Set([
+  "failure",
+  "cancelled",
+  "timed_out",
+  "action_required",
+]);
 
 /**
  * 走行に必ず居てほしい**重量級の本体**のジョブ名(設計書 §4、B-4)。
@@ -128,7 +133,8 @@ export function renderEvidence({
   // 成功でも進行中でもない——「進行中」と書けば、そのうち終わるという嘘になる。
   const notRun = jobs.filter((job) => NOT_RUN_CONCLUSIONS.has(job.conclusion));
   const running = jobs.filter(
-    (job) => job.conclusion !== "success" && !NOT_RUN_CONCLUSIONS.has(job.conclusion),
+    (job) =>
+      job.conclusion !== "success" && !NOT_RUN_CONCLUSIONS.has(job.conclusion),
   );
   const runUrl = `https://github.com/${repo}/actions/runs/${runId}`;
   const lines = [
@@ -223,7 +229,10 @@ function fetchJobs(repo, runId) {
   );
   const payload = JSON.parse(raw);
   const jobs = payload.jobs ?? [];
-  if (typeof payload.total_count === "number" && payload.total_count > jobs.length) {
+  if (
+    typeof payload.total_count === "number" &&
+    payload.total_count > jobs.length
+  ) {
     // **黙って切り取らない。** 100 を超えたら、読めなかったことを言う。
     throw new Error(
       `ジョブが ${payload.total_count} 件あるのに ${jobs.length} 件しか読めていない`,
@@ -237,7 +246,12 @@ function main() {
   const runId = process.env.RUN_ID;
   const tag = process.env.TAG;
   const sha = process.env.SHA;
-  for (const [name, value] of Object.entries({ REPO: repo, RUN_ID: runId, TAG: tag, SHA: sha })) {
+  for (const [name, value] of Object.entries({
+    REPO: repo,
+    RUN_ID: runId,
+    TAG: tag,
+    SHA: sha,
+  })) {
     if (!value) {
       throw new Error(`環境変数 ${name} が空である`);
     }
@@ -259,6 +273,6 @@ function main() {
 }
 
 // vitest から import されたときは走らせない(`check-version.mjs` と同じ作法)。
-if (process.argv[1] && process.argv[1].endsWith("release-evidence.mjs")) {
+if (process.argv[1]?.endsWith("release-evidence.mjs")) {
   main();
 }

@@ -11,7 +11,7 @@
     "heavy:power:exact": "node scripts/exact-power.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check . && cd ../tools && biome check ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

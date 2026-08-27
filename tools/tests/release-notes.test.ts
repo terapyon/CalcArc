@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spliceEvidence } from "../../../tools/release-notes.mjs";
+import { spliceEvidence } from "../release-notes.mjs";
 
 // **v0.4.1 の Release の本文そのもの**(`gh api` で取得して貼った)。
 // GitHub が自動生成した "What's Changed" で、改行は CRLF、目印は入っていない

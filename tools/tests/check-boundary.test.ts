@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  findBoundaryViolations,
-  readWebFiles,
-} from "../../../tools/check-boundary.mjs";
+import { findBoundaryViolations, readWebFiles } from "../check-boundary.mjs";
 
 // **向きは片方向である**(CLAUDE.md)。`web` から重量級への参照は 0 件で、
 // この向きを保つ。逆(`heavy` が `web` を読む)は正常なので見ない。

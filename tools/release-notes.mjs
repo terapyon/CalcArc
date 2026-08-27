@@ -54,10 +54,12 @@ function main() {
   } catch {
     existing = "";
   }
-  process.stdout.write(spliceEvidence(existing, readFileSync(evidencePath, "utf8")));
+  process.stdout.write(
+    spliceEvidence(existing, readFileSync(evidencePath, "utf8")),
+  );
 }
 
 // vitest から import されたときは走らせない(`check-version.mjs` と同じ作法)。
-if (process.argv[1] && process.argv[1].endsWith("release-notes.mjs")) {
+if (process.argv[1]?.endsWith("release-notes.mjs")) {
   main();
 }
