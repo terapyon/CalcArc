@@ -79,7 +79,9 @@ export function readWebFiles() {
 function main() {
   const found = findBoundaryViolations(readWebFiles());
   if (found.length > 0) {
-    console.error(`check:boundary NG — web が重量級を知っている(${found.length} 行)`);
+    console.error(
+      `check:boundary NG — web が重量級を知っている(${found.length} 行)`,
+    );
     for (const { path, line, text } of found) {
       console.error(`  ${path}:${line}: ${text}`);
     }
@@ -89,6 +91,6 @@ function main() {
 }
 
 // vitest から import されたときは走らせない(`check-version.mjs` と同じ作法)。
-if (process.argv[1] && process.argv[1].endsWith("check-boundary.mjs")) {
+if (process.argv[1]?.endsWith("check-boundary.mjs")) {
   main();
 }

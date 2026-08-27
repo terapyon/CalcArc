@@ -129,7 +129,10 @@ export function checkVersions({
 
   const entry = changelogEntry(changelog, want);
   if (entry === null) {
-    add("CHANGELOG.md", `${want} の見出しが無い(\`## ${want} — …\` を足すこと)`);
+    add(
+      "CHANGELOG.md",
+      `${want} の見出しが無い(\`## ${want} — …\` を足すこと)`,
+    );
   } else if (tag !== undefined && !RELEASED.test(entry)) {
     add(
       "CHANGELOG.md",

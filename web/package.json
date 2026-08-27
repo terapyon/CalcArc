@@ -10,7 +10,7 @@
     "build": "pnpm wasm && tsc --noEmit && vite build",
     "preview": "vite preview --port 4179 --strictPort",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check . ../tools",
+    "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
