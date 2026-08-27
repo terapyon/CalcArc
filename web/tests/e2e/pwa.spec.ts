@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 /** 画面のボタンを順に押す(vertical-slice.spec.ts と同じ流儀)。 */
 async function press(page: Page, labels: string[]): Promise<void> {

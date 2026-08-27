@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 const panel = (page: Page) => page.getByRole("region", { name: "金融計算" });
 const echo = (page: Page) => page.getByTestId("display-entry-active");

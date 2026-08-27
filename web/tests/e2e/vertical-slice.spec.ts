@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "./fixtures";
 
 /** 画面のボタンを順に押す。 */
 async function press(page: Page, labels: string[]): Promise<void> {

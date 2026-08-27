@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 // **jsdom はレイアウトを計算しない。** 高さが動かないという主張は
 // 実ブラウザでしか確かめられない(CLAUDE.md)。

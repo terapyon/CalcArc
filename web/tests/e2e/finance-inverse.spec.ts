@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 const nav = (page: Page, label: "Scientific" | "Finance") =>
   page.getByRole("link", { name: label, exact: true });

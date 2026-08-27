@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, PROVIDER_GLOB, test } from "./fixtures";
 
 const panel = (page: Page) => page.getByRole("region", { name: "単位変換" });
 const echo = (page: Page) => page.getByTestId("display-entry-active");
@@ -103,6 +103,127 @@ test("every face keeps 44px touch targets", async ({ page }) => {
   // この検査が何も測らないまま緑を返し続けるのを止める。
   expect(measured).toBe(FACES.reduce((sum, [, , , n]) => sum + n, 0));
   expect(measured, "no key was ever measured").toBeGreaterThan(0);
+});
+
+/**
+ * ラベルが横にはみ出してよい量。**`a72281d`(ユーザー裁定 2026-08-20)が
+ * ページの横溢れに置いた許容と同じ 8px** で、理由も同じである
+ * ——**本物の崩れは 2 桁 px で出る**。詳しくは下の検査の註。
+ */
+const SIDEWAYS_ALLOWANCE = 8;
+
+test("keeps every key label inside its key, within the 8px the fonts move it", async ({
+  page,
+}) => {
+  // **44px は「押せる大きさか」で、これは「読めるか」である。** 別の問いで、
+  // 別の壊れ方をする——キーは 44px を保ったまま、中の字だけがはみ出す。
+  // U-2 の spec §4 は「**機械が見張っていないもの**」としてこれを名指しで
+  // 繰り越していた(手で測っただけだった)。ここで機械に渡す。
+  //
+  // ## `scrollWidth` では見えない(実測)
+  //
+  // 最初は `scrollWidth - clientWidth` で書いたが、**ラベルを伸ばしても
+  // 赤くならなかった**。理由は 2 つある:
+  //
+  // - **字は切れずに折り返す。** キーは `white-space: normal` のままで、
+  //   長い字は幅を越えずに行が増える(実測: 幅の超過は -1px)。
+  // - **`<button>` は scroll 系の値ではみ出しを見せない。** 器いっぱいに
+  //   折り返しても `scrollHeight === clientHeight` のままだった(実測 61/61)。
+  //
+  // ## だから字そのものの箱を測る
+  //
+  // `Range.selectNodeContents` で**描かれた行の外接矩形**を取り、キーの箱と
+  // 比べる。長いラベルを入れると `ink 84 / key 61` = **縦に 23px** はみ出す
+  // のが見える。
+  //
+  // ## 【訂正 2026-08-27】「幅はまず越えない」は誤りだった。CI が反証した
+  //
+  // ここには当初「**縦が本体である**——折り返す作りなので、溢れるのは高さの
+  // ほうで、**幅はまず越えない**」と書いてあった。**CI で 3 つ落ちた**:
+  //
+  //     area/単位のキー:   畳(1.62m²)    横 5px・縦 -24px
+  //     volume/単位のキー: gal(Imp)      横 2px・縦 -43px
+  //     volume/単位のキー: カップ(200mL) 横 3px・縦 -24px
+  //
+  // **縦は 24〜43px 余っていて、横だけが足りない。** 3 つとも括弧で切れ目が
+  // 無く、**折り返せないので幅が越える**。私が見ていたのは、たまたま手元の
+  // フォントで収まっていた状態だった。
+  //
+  // **原因はフォントである。** `tokens.css` の `body` は
+  // `font-family: system-ui` で、**どの字形になるかは端末が決める**。
+  // 手元は Noto Sans CJK JP、CI は DejaVu Sans に解決される
+  // ——`"DejaVu Sans"` を手元で強制すると**横の値が CI と 1px も違わず一致した**。
+  //
+  // | | `畳(1.62m²)` | `gal(Imp)` | `カップ(200mL)` |
+  // |---|---|---|---|
+  // | Noto Sans CJK JP(手元、15px) | −1px | −2px | −4px |
+  // | DejaVu Sans(CI、15px) | **+5px** | **+2px** | **+3px** |
+  //
+  // **手元で 1〜4px しか余っていなかった**、というのがこの検査が見つけたもの
+  // である。**許容したのは、余裕があるからではない。**
+  //
+  // ## 横は 8px まで許容する。理由は 3 段ある
+  //
+  // **1. 横一般(3 件すべてに掛かる)。** 2〜5px の食い込みは崩れではない
+  // ——実測で `ink` はキーの縁に触れるが、**隣のキーとは重ならない**。
+  // **本物の崩れは 2 桁 px で出る。** これは新しい判断ではなく、
+  // `a72281d`(ユーザー裁定 2026-08-20)が**ページの横溢れに同じ 8px を
+  // 許容した**ときの理由そのものである——**同じリポジトリが同じ問いに
+  // 一度答えているので、値も理由も揃える**。実測の最大値(5px)のすぐ上に
+  // 置かないのは、**次に 6px のフォントが来たときに同じ議論をしない**ため。
+  //
+  // **2. `畳(1.62m²)` と `カップ(200mL)` について。** **利用者は CJK フォントを
+  // 持っている前提である**(ユーザー裁定 2026-08-27)。**CI(DejaVu)で CJK が
+  // どの字形に落ちているかは未確認**——いずれにせよ**利用者が見る字ではない**。
+  //
+  // **3. `gal(Imp)` について。これは化けていない。** DejaVu は Latin を正しく
+  // 持つので、**まっとうに描かれたうえで 2px 広い**。**CJK の前提は効かず**、
+  // 上の 1 の許容だけで通っている。**「文字化けだから問題なし」で 3 件すべてを
+  // 説明しないこと**——この 1 件に当てはまらない。
+  //
+  // ## 縦には許容を入れない
+  //
+  // **縦が本体である**(`ink 84 / key 61` = 23px)。いま 24〜43px 余っており、
+  // ここが越えるのは**行が 1 つ増えた**ときで、それは字幅の差ではない。
+  //
+  // 幅は**対応する下限の実機幅**で見る(360px)。390px で入っていても、
+  // 360px ではみ出せば読めない人が出る。
+  await page.setViewportSize({ width: 360, height: 800 });
+  const spilled: string[] = [];
+  let measured = 0;
+  for (const [category, faceName, field, expectedCount] of FACES) {
+    await page.goto(`/#convert/${category}`);
+    await expect(panel(page)).toBeVisible();
+    await press(page, [field]);
+    const buttons = await face_(page, faceName).getByRole("button").all();
+    expect(
+      buttons,
+      `${category}/${faceName} should render its full key set`,
+    ).toHaveLength(expectedCount);
+    for (const button of buttons) {
+      const over = await button.evaluate((el) => {
+        const key = el.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const ink = range.getBoundingClientRect();
+        return {
+          text: (el.textContent ?? "").trim(),
+          w: Math.round(ink.width - key.width),
+          h: Math.round(ink.height - key.height),
+        };
+      });
+      // **横は 8px まで、縦は 1px も許さない**(上の 3 段の理由)。
+      if (over.w > SIDEWAYS_ALLOWANCE || over.h > 0) {
+        spilled.push(
+          `${category}/${faceName}: ${over.text} が 横 ${over.w}px・縦 ${over.h}px はみ出す`,
+        );
+      }
+      measured += 1;
+    }
+  }
+  // **測った件数を先に主張する。** 0 周でも `spilled` は空で緑になる。
+  expect(measured).toBe(FACES.reduce((sum, [, , , n]) => sum + n, 0));
+  expect(spilled).toEqual([]);
 });
 
 test("the swap key is wide enough even though the field row is half height", async ({
@@ -385,19 +506,14 @@ for (const c of TYPEABLE) {
 // 為替(U-4)。**ここから下はレートの状態を作ってから盤面を見る。**
 // ---------------------------------------------------------------------------
 
-/**
- * レートの取得先。**`web/src/currency/provider.ts` の `PROVIDER_ENDPOINT` と
- * 二重管理である**(E2E は境界の定数を import しない)。
- *
- * **素で走らせると本物のネットワークに出る。** Task 7 の計測中、実ブラウザが
- * `open.er-api.com` を実際に叩いて**当日のレート**を表示した。塞がないと
- * **CI がプロバイダのレート制限(429)と当日のレートに依存する。**
- *
- * **綴りがずれたら塞ぎは効かない。** そのときこのファイルの検査は
- * 「取りに行った回数」が 0 のまま、日付も**当日のもの**になって赤くなる
- * ——**塞ぎ忘れても緑になる形にしない**、がこの下の検査の書き方である。
- */
-const PROVIDER_GLOB = "**/open.er-api.com/**";
+// **取得先の綴りは `./fixtures` が持つ**(0.5.0 で移した)。以前はこの
+// ファイルだけが塞いでおり、**別のファイルが為替を開けば黙って本物へ
+// 出た**——`beforeEach` はファイルの中でしか効かない。いまは既定で
+// 全 E2E が塞がっていて、ここはそのうえに**応答を返す**塞ぎを重ねる。
+//
+// **綴りがずれたら塞ぎは効かない。** そのときこのファイルの検査は
+// 「取りに行った回数」が 0 のまま、日付も**当日のもの**になって赤くなる
+// ——**塞ぎ忘れても緑になる形にしない**、がこの下の検査の書き方である。
 
 /** 帰属表示のリンク先。**`provider.ts` の `PROVIDER_ATTRIBUTION` と二重管理**(同上)。 */
 const PROVIDER_ORIGIN = "https://www.exchangerate-api.com";
