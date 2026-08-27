@@ -31,6 +31,24 @@ const jobNames = (yaml: string) =>
  * `"gh release upload"` の綴りが入った日に、無主張化と偽赤の両方が起きる。
  * 行頭がコメントの行は落とし、動詞だけを並べる。
  */
+/** ジョブの steps を、`run` と `uses` を混ぜた行の並びとして取り出す。 */
+const stepsOf = (yaml: string, jobName: string) => {
+  const body = yaml.split(`\n  ${jobName}:\n`)[1] ?? "";
+  const untilNextJob = body.split(/\n {2}\w[\w-]*:\n/)[0] ?? "";
+  return untilNextJob
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.startsWith("- ") ||
+        line.startsWith("run:") ||
+        line.startsWith("name:"),
+    );
+};
+
+const indexOfLine = (steps: string[], needle: string) =>
+  steps.findIndex((line) => line.includes(needle));
+
 const ghReleaseCalls = (yaml: string): string[] =>
   yaml
     .split("\n")
@@ -119,24 +137,6 @@ describe("型検査より先に wasm を作る（2026-08-26、Wave C）", () => 
   // 毎回の CI に heavy を載せても、この欠陥は捕まらない——**別のワークフローの
   // 順序**だからである。だからここで順序そのものを固定する。
 
-  /** ジョブの steps を、`run` と `uses` を混ぜた行の並びとして取り出す。 */
-  const stepsOf = (yaml: string, jobName: string) => {
-    const body = yaml.split(`\n  ${jobName}:\n`)[1] ?? "";
-    const untilNextJob = body.split(/\n {2}\w[\w-]*:\n/)[0] ?? "";
-    return untilNextJob
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line.startsWith("- ") ||
-          line.startsWith("run:") ||
-          line.startsWith("name:"),
-      );
-  };
-
-  const indexOfLine = (steps: string[], needle: string) =>
-    steps.findIndex((line) => line.includes(needle));
-
   it("heavy-corpus.yml は wasm を作ってから型検査する", () => {
     const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
     const build = indexOfLine(steps, "pnpm --dir ../web wasm");
@@ -160,5 +160,42 @@ describe("型検査より先に wasm を作る（2026-08-26、Wave C）", () => 
     const steps = stepsOf(read("ci.yml"), "heavy").join("\n");
     expect(steps).not.toContain("pnpm heavy");
     expect(steps).toContain("pnpm test");
+  });
+});
+
+describe("レポートを書く段は最後（2026-08-27）", () => {
+  // **コメントだけが守っていた順序である**（`heavy-corpus.yml:142-146`
+  // 「順番だけがそれを決めている」）。破れても**赤にならない**——症状は
+  // 状態の劣化で、盤面の行が毎回「記録が無い」になる。
+  //
+  // 報告書は `pnpm heavy` の走行末尾で書かれ、**その時点でディスクにある
+  // `web/heavy-ui-run.json` を読む**。まっさらな runner にはその記録が無いので、
+  // `heavy:ui` をあとに置くと `uiHealth` の 4 状態のうち 1 つしか CI に出ない。
+
+  it("heavy:ui は、レポートを書く pnpm heavy より前に走る", () => {
+    const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
+    const ui = indexOfLine(steps, "pnpm heavy:ui");
+    const report = steps.findIndex((line) => /run:\s*pnpm heavy$/.test(line));
+    expect(ui).toBeGreaterThanOrEqual(0);
+    expect(report).toBeGreaterThanOrEqual(0);
+    expect(
+      ui,
+      "heavy:ui がレポートを書く `pnpm heavy` より後ろにある。" +
+        "**赤にはならないが、盤面の行が毎回「記録が無い」になる**" +
+        "（報告書は書く時点でディスクに在る web/heavy-ui-run.json を読むため）。" +
+        "順序を戻すか、報告書が記録を読む方法を変えるか、どちらかを選ぶこと。",
+    ).toBeLessThan(report);
+  });
+
+  it("heavy:power は、レポートを書く pnpm heavy より前に走る", () => {
+    // 同じ形。`detection-power.json` が無いと、報告書は検出力を
+    // 「測っていない」と書く——**嘘ではないが、毎回そう書くようになる。**
+    const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
+    const power = indexOfLine(steps, "pnpm heavy:power");
+    const report = steps.findIndex((line) => /run:\s*pnpm heavy$/.test(line));
+    expect(
+      power,
+      "heavy:power がレポートより後ろにある。**検出力の節が毎回「測っていない」になる。**",
+    ).toBeLessThan(report);
   });
 });
