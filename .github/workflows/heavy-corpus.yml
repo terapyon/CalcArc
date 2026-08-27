@@ -40,15 +40,14 @@ jobs:
         #
         # `pnpm` 越しではなく node を直に呼ぶのは、引数の受け渡しを
         # pnpm の版の挙動に預けないためである。
-        working-directory: web
         env:
           IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "$IS_TAG" = "true" ]; then
-            node scripts/check-version.mjs --tag "$REF_NAME"
+            node tools/check-version.mjs --tag "$REF_NAME"
           else
-            node scripts/check-version.mjs
+            node tools/check-version.mjs
           fi
 
   corpus:
@@ -185,5 +184,8 @@ jobs:
         with:
           name: heavy-report
           path: heavy/heavy-report.md
-          if-no-files-found: warn
+          # **`warn` にしない。** 報告書が書かれなかったことを警告で流すと、
+          # リリースの証拠が「重量級は走った」と言いながら報告書を持たない、
+          # という形で通ってしまう(2026-08-26、B-2)。走ったなら報告書は在る。
+          if-no-files-found: error
           retention-days: 90

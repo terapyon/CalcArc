@@ -25,7 +25,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SEMVER = /\d+\.\d+\.\d+/;
 
 /** `2026-08-25` の形。日付が入っているかだけを見て、値は問わない。 */
-const RELEASED = /^\d{4}-\d{2}-\d{2}$/;
+// **日付で始まっていれば通す。** 行全体の完全一致にしていたので、
+// `— 2026-08-26 (hotfix)` のような注記つきが偽赤になっていた——この検査の
+// コメントは「日付が入っている(「未リリース」でない)ことまで見る」と言って
+// いるので、**判定を宣言に合わせる**(2026-08-26、B-6)。
+const RELEASED = /^\d{4}-\d{2}-\d{2}\b/;
 
 const forRegExp = (literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -153,8 +157,11 @@ function main() {
     process.exit(1);
   }
 
-  const web = dirname(dirname(fileURLToPath(import.meta.url)));
-  const root = dirname(web);
+  // `tools/check-version.mjs` から見て、リポジトリの根は 1 つ上である
+  // (2026-08-26 に `web/scripts/` から移した。**`web` は根から降りて指す**
+  // ——`tools` が `web` の中に居た頃の導出のままだと、根が 1 段ずれる)。
+  const root = dirname(dirname(fileURLToPath(import.meta.url)));
+  const web = join(root, "web");
   const read = (...parts) => readFileSync(join(...parts), "utf8");
   const pkgJson = read(web, "package.json");
 

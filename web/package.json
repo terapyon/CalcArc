@@ -10,14 +10,15 @@
     "build": "pnpm wasm && tsc --noEmit && vite build",
     "preview": "vite preview --port 4179 --strictPort",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check . ../tools",
     "format": "biome check --write .",
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test",
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
-    "check:version": "node scripts/check-version.mjs"
+    "check:version": "node ../tools/check-version.mjs",
+    "check:boundary": "node ../tools/check-boundary.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
