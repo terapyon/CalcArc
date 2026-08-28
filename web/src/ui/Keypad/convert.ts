@@ -29,6 +29,12 @@ import type { KeyDef, KeypadSection } from "./types";
 /** 入力する項目(spec §4.1)。 */
 export type ConvertField = "value" | "from" | "to";
 
+/**
+ * 項目の一覧。**盤面の項目行と、トークンを解く側が共有する**
+ * (`Keypad/parse.ts`)。型だけの union は実行時に確かめられない。
+ */
+export const CONVERT_FIELDS: readonly ConvertField[] = ["value", "from", "to"];
+
 export type ConvertKeyToken =
   | "digit:0"
   | "digit:1"

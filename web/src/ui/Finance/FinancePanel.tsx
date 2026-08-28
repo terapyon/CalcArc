@@ -31,9 +31,11 @@ import {
 } from "../../finance/entry";
 import { initLoan, type LoanCalc } from "../../finance/loan";
 import type { PanelMode, PeriodsPerYear } from "../../settings";
+import { PANEL_MODES } from "../../settings/types";
 import {
   COMPOUND_FIELD_SECTION,
   DEPOSIT_FOR_FIELD_SECTION,
+  FINANCE_FIELDS,
   FINANCE_SECTIONS,
   type FinanceField,
   type FinanceKeyToken,
@@ -42,6 +44,7 @@ import {
   TAX_SECTION,
 } from "../Keypad/finance";
 import { Keypad } from "../Keypad/Keypad";
+import { parsePrefixed } from "../Keypad/parse";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings, updateSettings } from "../useSetting";
@@ -399,8 +402,9 @@ export function FinancePanel() {
 
   /** いま押せないキー(設計書 §6 の可否表 + 単位の文法)。 */
   function keyDisabled(token: FinanceKeyToken): boolean {
-    if (token.startsWith("field:")) {
-      return !fieldEnabled(token.slice("field:".length) as FinanceField);
+    const field = parsePrefixed(token, "field:", FINANCE_FIELDS);
+    if (field !== null) {
+      return !fieldEnabled(field);
     }
     if (token.startsWith("mode:")) return false;
     switch (token) {
@@ -463,8 +467,10 @@ export function FinancePanel() {
   }
 
   function press(token: FinanceKeyToken) {
-    if (token.startsWith("mode:")) {
-      const next = token.slice("mode:".length) as PanelMode;
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。
+    const mode_ = parsePrefixed(token, "mode:", PANEL_MODES);
+    if (mode_ !== null) {
+      const next = mode_;
       setMode(next);
       // **変わっていないなら書かない。** 書き込みの契機は「設定が変わった
       // その場」である(P-1 設計書 §6)。いま選ばれているモードをもう一度
@@ -483,8 +489,9 @@ export function FinancePanel() {
       }
       return;
     }
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as FinanceField);
+    const nextField = parsePrefixed(token, "field:", FINANCE_FIELDS);
+    if (nextField !== null) {
+      setActive(nextField);
       return;
     }
     if (token.startsWith("digit:")) {

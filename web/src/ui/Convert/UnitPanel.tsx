@@ -30,14 +30,17 @@ import { PROVIDER_ATTRIBUTION } from "../../currency/provider";
 import { CURRENCY_CODE } from "../../currency/rates";
 import type { CurrencyToken } from "../../currency/types";
 import {
+  CONVERT_FIELDS,
   CONVERT_SECTIONS,
   type ConvertFaceUnit,
   type ConvertField,
   type ConvertKeyToken,
   FACE_LABELS,
+  faceUnitsOf,
   unitSections,
 } from "../Keypad/convert";
 import { Keypad } from "../Keypad/Keypad";
+import { parsePrefixed } from "../Keypad/parse";
 import { Readout } from "../Readout/Readout";
 import styles from "./UnitPanel.module.css";
 import { useCurrencyRates } from "./useCurrencyRates";
@@ -205,8 +208,11 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     // **レート表に無い通貨は押せない**(spec §7)。`Key` が `:disabled` で
     // 薄くするので、**押せないキーは押せないように見える**——0.2.0 の
     // 予約スロットの穴(有効なキーと同じ見た目で無反応)を繰り返さない。
-    if (currency && token.startsWith("unit:")) {
-      return rateOf(token.slice("unit:".length) as ConvertFaceUnit) === null;
+    if (currency) {
+      const unit = parsePrefixed(token, "unit:", faceUnitsOf(category));
+      if (unit !== null) {
+        return rateOf(unit) === null;
+      }
     }
     switch (token) {
       case "del":
@@ -241,12 +247,16 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   }
 
   function press(token: ConvertKeyToken): void {
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as ConvertField);
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。単位の一覧は
+    // **いま出ているカテゴリのもの**である——為替の面で長さの単位を
+    // 受け取らない。
+    const field = parsePrefixed(token, "field:", CONVERT_FIELDS);
+    if (field !== null) {
+      setActive(field);
       return;
     }
-    if (token.startsWith("unit:")) {
-      const unit = token.slice("unit:".length) as ConvertFaceUnit;
+    const unit = parsePrefixed(token, "unit:", faceUnitsOf(category));
+    if (unit !== null) {
       if (active === "from") setFrom(unit);
       else if (active === "to") setTo(unit);
       return;
