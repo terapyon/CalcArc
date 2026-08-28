@@ -473,10 +473,8 @@ fn a_conversion_crosses_the_boundary_as_text() {
         get(&value, "text").as_string().as_deref(),
         Some("62.13711922")
     );
-    assert!(
-        get(&value, "error").is_null(),
-        "success carries null, not undefined"
-    );
+    // **成功に `error` の欄は無い。在るのは `kind` である**(設計書 §0)。
+    assert_eq!(get(&value, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -491,17 +489,15 @@ fn the_temperature_fixed_point_crosses_the_boundary() {
 fn an_unknown_unit_is_an_error_in_the_return_value_not_an_exception() {
     let value = calcarc_wasm::convert("1", "length", "km", "furlong");
     assert_eq!(
-        get(&value, "error").as_string().as_deref(),
+        get(&value, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    assert!(
-        get(&value, "text").is_null(),
-        "error carries null, not undefined"
-    );
+    // **失敗の枝に payload の鍵は無い**(設計書 §0)。
+    assert!(get(&value, "text").is_undefined());
     // カテゴリをまたぐ組み合わせも同じ扱い(例外ではなく戻り値)。
     let crossed = calcarc_wasm::convert("1", "length", "km", "kg");
     assert_eq!(
-        get(&crossed, "error").as_string().as_deref(),
+        get(&crossed, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -513,7 +509,7 @@ fn the_unit_list_comes_back_in_the_order_the_panel_shows() {
     assert_eq!(units.length(), 11);
     assert_eq!(units.get(0).as_string().as_deref(), Some("nm"));
     assert_eq!(units.get(10).as_string().as_deref(), Some("nmi"));
-    assert!(get(&value, "error").is_null());
+    assert_eq!(get(&value, "kind").as_string().as_deref(), Some("ok"));
     // 温度は 3 件。カテゴリごとに切り出されている。
     let temperature =
         js_sys::Array::from(&get(&calcarc_wasm::convert_units("temperature"), "units"));
@@ -522,10 +518,10 @@ fn the_unit_list_comes_back_in_the_order_the_panel_shows() {
     // 知らないカテゴリは例外ではなく戻り値のエラー。
     let unknown = calcarc_wasm::convert_units("furlongs");
     assert_eq!(
-        get(&unknown, "error").as_string().as_deref(),
+        get(&unknown, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    assert!(get(&unknown, "units").is_null());
+    assert!(get(&unknown, "units").is_undefined());
 }
 
 #[wasm_bindgen_test]
@@ -533,10 +529,8 @@ fn a_currency_conversion_crosses_the_boundary_as_text() {
     // 100 USD → JPY(golden `currency/100usdtojpy@1.0855-168.5` と同一)。
     let value = calcarc_wasm::convert_currency("100", "usd", "jpy", "1.0855", "168.5");
     assert_eq!(get(&value, "text").as_string().as_deref(), Some("15,523"));
-    assert!(
-        get(&value, "error").is_null(),
-        "success carries null, not undefined"
-    );
+    // **成功に `error` の欄は無い。在るのは `kind` である**(設計書 §0)。
+    assert_eq!(get(&value, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -546,34 +540,32 @@ fn an_unknown_from_currency_is_a_syntax_error_not_a_pass_through() {
     // 渡しても素通りしてしまう(`to` と `from_rate` だけで答が出るため)。
     let value = calcarc_wasm::convert_currency("100", "xyz", "jpy", "1.0855", "168.5");
     assert_eq!(
-        get(&value, "error").as_string().as_deref(),
+        get(&value, "code").as_string().as_deref(),
         Some("SyntaxError"),
         "an unknown `from` token must not be allowed through"
     );
-    assert!(
-        get(&value, "text").is_null(),
-        "error carries null, not undefined"
-    );
+    // **失敗の枝に payload の鍵は無い**(設計書 §0)。
+    assert!(get(&value, "text").is_undefined());
 }
 
 #[wasm_bindgen_test]
 fn an_unknown_to_currency_is_also_a_syntax_error() {
     let value = calcarc_wasm::convert_currency("100", "usd", "xyz", "1.0855", "168.5");
     assert_eq!(
-        get(&value, "error").as_string().as_deref(),
+        get(&value, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    assert!(get(&value, "text").is_null());
+    assert!(get(&value, "text").is_undefined());
 }
 
 #[wasm_bindgen_test]
 fn a_zero_from_rate_is_a_division_by_zero_not_an_exception() {
     let value = calcarc_wasm::convert_currency("100", "usd", "jpy", "0", "168.5");
     assert_eq!(
-        get(&value, "error").as_string().as_deref(),
+        get(&value, "code").as_string().as_deref(),
         Some("DivisionByZero")
     );
-    assert!(get(&value, "text").is_null());
+    assert!(get(&value, "text").is_undefined());
 }
 
 #[wasm_bindgen_test]
@@ -774,5 +766,33 @@ fn the_expression_evaluator_answers_in_two_shapes() {
         let err = calcarc_wasm::expr_integer(text, "18446744073709551615", "yen");
         let json = String::from(js_sys::JSON::stringify(&err).unwrap());
         assert_eq!(json, format!(r#"{{"kind":"error","code":"{code}"}}"#));
+    }
+}
+
+#[wasm_bindgen_test]
+fn the_conversion_family_answers_in_two_shapes() {
+    // 単位換算・為替・単位一覧の 3 本。**一覧だけ payload が配列**である。
+    let ok = [
+        calcarc_wasm::convert("100", "length", "km", "mi"),
+        calcarc_wasm::convert_currency("100", "usd", "jpy", "1.0855", "168.5"),
+    ];
+    for value in &ok {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","text":"#), "{json}");
+        assert!(!json.contains("null"), "成功に null は出ない: {json}");
+    }
+    let units = calcarc_wasm::convert_units("temperature");
+    let json = String::from(js_sys::JSON::stringify(&units).unwrap());
+    assert_eq!(json, r#"{"kind":"ok","units":["k","degc","degf"]}"#);
+
+    // 知らない綴りは 3 本とも同じ形で断る。**payload は 1 つも出ない。**
+    let err = [
+        calcarc_wasm::convert("1", "length", "km", "furlong"),
+        calcarc_wasm::convert_currency("100", "xyz", "jpy", "1.0855", "168.5"),
+        calcarc_wasm::convert_units("furlongs"),
+    ];
+    for value in &err {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
     }
 }

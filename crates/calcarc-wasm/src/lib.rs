@@ -602,20 +602,21 @@ pub fn expr_percent(text: &str) -> JsValue {
     to_expr_result(expr::evaluate_to_percent(text))
 }
 
-/// 単位換算の結果。TypeScript 側の `ConvertResult` に対応する。
-#[derive(Serialize, Default)]
+/// 単位換算の結果。TypeScript 側の `ConvertResult` の成功の payload。
+///
+/// **為替も同じ形で返す**(U-4 計画 Task 4)——換算した結果は、どちらも
+/// 整形済みの 1 行だからである。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertResult {
-    text: Option<String>,
-    error: Option<CalcError>,
+struct ConvertText {
+    text: String,
 }
 
-/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` に対応する。
-#[derive(Serialize, Default)]
+/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` の成功の payload。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertUnitsResult {
-    units: Option<Vec<String>>,
-    error: Option<CalcError>,
+struct ConvertUnits {
+    units: Vec<String>,
 }
 
 /// 単位換算(U-1 設計書 §5)。**例外を投げない。**
@@ -631,16 +632,7 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
         let to = convert_core::Unit::from_token(to).ok_or(CalcError::SyntaxError)?;
         convert_core::format::format_rational(convert_core::convert(value, category, from, to)?)
     })();
-    let result = match outcome {
-        Ok(text) => ConvertResult {
-            text: Some(text),
-            error: None,
-        },
-        Err(e) => ConvertResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertText> = outcome.map(|text| ConvertText { text }).into();
     to_js_value(&result)
 }
 
@@ -650,22 +642,16 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
 /// ときに表と画面の 2 か所を直さずに済ませるためである。
 #[wasm_bindgen]
 pub fn convert_units(category: &str) -> JsValue {
-    let result = match convert_core::Category::from_token(category) {
-        Some(category) => ConvertUnitsResult {
-            units: Some(
-                category
-                    .units()
-                    .iter()
-                    .map(|unit| unit.token().to_owned())
-                    .collect(),
-            ),
-            error: None,
-        },
-        None => ConvertUnitsResult {
-            error: Some(CalcError::SyntaxError),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertUnits> = convert_core::Category::from_token(category)
+        .ok_or(CalcError::SyntaxError)
+        .map(|category| ConvertUnits {
+            units: category
+                .units()
+                .iter()
+                .map(|unit| unit.token().to_owned())
+                .collect(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -709,16 +695,7 @@ pub fn convert_currency(
         let to = currency::Currency::from_token(to).ok_or(CalcError::SyntaxError)?;
         currency::convert_currency(value, to, from_rate, to_rate)
     })();
-    let result = match outcome {
-        Ok(text) => ConvertResult {
-            text: Some(text),
-            error: None,
-        },
-        Err(e) => ConvertResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertText> = outcome.map(|text| ConvertText { text }).into();
     to_js_value(&result)
 }
 

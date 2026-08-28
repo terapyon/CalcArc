@@ -359,3 +359,56 @@ fn the_expression_boundary_returns_only_the_codes_typescript_knows() {
         );
     }
 }
+
+/// TS の `ConvertErrorCode` が挙げている綴り(`web/src/convert/types.ts`)。
+/// `CurrencyConvertResult` も同じ 3 つを挙げている。
+const CONVERT_ERROR_CODES: &[&str] = &["Overflow", "SyntaxError", "DivisionByZero"];
+
+#[wasm_bindgen_test]
+fn the_conversion_boundary_returns_only_the_codes_typescript_knows() {
+    // **`convert` からは `DivisionByZero` を踏めない**(値の式が 0 除算なら
+    // expr 側で落ちるが、それも SyntaxError ではなく DivisionByZero で返る)。
+    // 為替のほうは `from_rate` が 0 で踏める——**同じ綴りの集合でも、
+    // 踏める関数が違う。**
+    let cases = [
+        // 単位の綴りが壊れている
+        calcarc_wasm::convert("1", "length", "km", "furlong"),
+        // 値の式が 0 で割っている
+        calcarc_wasm::convert("1/0", "length", "km", "mi"),
+        // 値が定義域を超える
+        calcarc_wasm::convert(
+            "99999999999999999999999999999999999999999",
+            "length",
+            "km",
+            "nm",
+        ),
+        // 為替: レートが 0
+        calcarc_wasm::convert_currency("100", "usd", "jpy", "0", "168.5"),
+        // 為替: 知らない通貨
+        calcarc_wasm::convert_currency("100", "xyz", "jpy", "1.0855", "168.5"),
+        // 一覧: 知らないカテゴリ
+        calcarc_wasm::convert_units("furlongs"),
+    ];
+    let codes: Vec<String> = cases
+        .iter()
+        .filter_map(|value| code_of(&String::from(js_sys::JSON::stringify(value).unwrap())))
+        .collect();
+
+    assert_eq!(
+        codes.len(),
+        cases.len(),
+        "失敗しなかった入力が在る: {codes:?}"
+    );
+    for code in &codes {
+        assert!(
+            CONVERT_ERROR_CODES.contains(&code.as_str()),
+            "TS が知らないエラーが境界を渡った: {code} ({codes:?})",
+        );
+    }
+    for expected in CONVERT_ERROR_CODES {
+        assert!(
+            codes.iter().any(|c| c == expected),
+            "{expected} を踏む入力が無い: {codes:?}",
+        );
+    }
+}

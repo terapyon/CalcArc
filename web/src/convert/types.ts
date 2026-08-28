@@ -1,7 +1,7 @@
 // エラー分類の共有は境界違反ではない: 設計書 §1 が「エラー分類
 // (CalcError)」を各モジュールの共有項目として明示している。ここで import
 // するのは型だけ(値・ロジックは持ち込まない)。
-import type { CalcErrorCode } from "../calc/types";
+import type { CalcErrorCode, Outcome } from "../calc/types";
 
 /**
  * 単位換算のトークン。
@@ -137,16 +137,15 @@ export type ConvertUnitToken = (typeof CONVERT_UNIT_TOKENS)[number];
  * (カテゴリ不一致の入口検査が `SyntaxError` を作る)。`TrigPole` と `DomainError` は
  * リポジトリ全体で `error.rs` の enum 定義以外に一度も構築されていない。
  */
-export interface ConvertResult {
-  text: string | null;
-  error: Extract<
-    CalcErrorCode,
-    "DivisionByZero" | "Overflow" | "SyntaxError"
-  > | null;
-}
+export type ConvertErrorCode = Extract<
+  CalcErrorCode,
+  "DivisionByZero" | "Overflow" | "SyntaxError"
+>;
+
+export type ConvertResult = Outcome<{ text: string }, ConvertErrorCode>;
 
 /** calcarc-wasm の `convert_units()` に対応。**並びは盤面の並びである。** */
-export interface ConvertUnitsResult {
-  units: ConvertUnitToken[] | null;
-  error: Extract<CalcErrorCode, "SyntaxError"> | null;
-}
+export type ConvertUnitsResult = Outcome<
+  { units: ConvertUnitToken[] },
+  Extract<CalcErrorCode, "SyntaxError">
+>;
