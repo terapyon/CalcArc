@@ -73,6 +73,18 @@ pub fn tan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     sin(v, mode)?.checked_div(cos(v, mode)?)
 }
 
+/// Deg モードの**実数**引数が tan の極（90 + 180n 度）に載っているか。
+///
+/// **複素数の引数は極として判定しない。**`tan(90 + εj)` は `TrigPole` に
+/// ならず、`sin / cos` の商がそのまま返る（値は巨大だが有限である）。
+///
+/// **これは制約から出た形であって、見落としではない。** 極かどうかは
+/// 下の `a >= 90.0 && (a - 90.0) % 180.0 == 0.0` という**実数の順序と剰余**で
+/// 決めている。複素数には順序が無いので、**実数であることを先に確かめないと
+/// この式が書けない**。複素の極を見るなら別の判定（`cos(z)` の絶対値が 0 に
+/// 近いか、など）が要り、それは近さの閾値を決める話になる。
+///
+/// `the_pole_guard_does_not_look_at_complex_arguments` が固定している。
 fn is_tan_pole(v: Value, mode: AngleMode) -> bool {
     if !v.is_real() || mode != AngleMode::Deg {
         return false;
@@ -610,5 +622,27 @@ mod tests {
         let r = sin(Value::new(0.0, 1.0), AngleMode::Rad).unwrap();
         close(r.re, 0.0);
         close(r.im, 1.0_f64.sinh());
+    }
+
+    #[test]
+    fn the_pole_guard_does_not_look_at_complex_arguments() {
+        // **極の検出は実数引数にしか掛からない**(`is_tan_pole`)。
+        // 実部がちょうど 90° でも、虚部を持つ値は `TrigPole` にならず、
+        // `sin / cos` の商がそのまま返る。
+        //
+        // **これは見落としではなく、比較の形から出た制約である**——
+        // 極かどうかは `a >= 90.0 && (a - 90.0) % 180.0 == 0.0` という
+        // **実数の順序と剰余**で判定している。複素数には順序が無いので、
+        // 実数であることを先に確かめないとこの式が書けない。
+        let z = Value::new(90.0, 1e-8);
+        let r = tan(z, AngleMode::Deg);
+        assert!(r.is_ok(), "複素数の引数は極判定を通らない: {r:?}");
+
+        // 対になる実数はエラーになる。**同じ実部で結果が分かれる**ことを、
+        // 片方だけ見て「極を見ている」と読まないために並べて置く。
+        assert_eq!(
+            tan(Value::real(90.0), AngleMode::Deg),
+            Err(CalcError::TrigPole)
+        );
     }
 }
