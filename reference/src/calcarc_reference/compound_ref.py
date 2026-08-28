@@ -61,6 +61,10 @@ def rate_fraction(percent: str, periods_per_year: int) -> tuple[int, int]:
 
     `loan_ref.rate_fraction` は分母に 12 を固定で掛ける。ここはそれを
     パラメータにしただけで、桁の扱い（小数 4 桁まで・100% 超は拒否）は同じ。
+
+    独立: 不可能（`Rate::from_annual_percent` と同じ手順——小数点で割り、桁数で
+    10^k を作り、分母に 100×期/年を掛ける。**受け付ける綴りと分母の作り方が
+    仕様そのもの**である）
     """
     if periods_per_year not in PERIODS_PER_YEAR:
         raise CompoundError("SyntaxError")
@@ -79,7 +83,12 @@ def rate_fraction(percent: str, periods_per_year: int) -> tuple[int, int]:
 
 
 def grow(principal: int, deposit: int, num: int, den: int, periods: int) -> int:
-    """厳密整数で期を回す。**答はこれが出す。**"""
+    """厳密整数で期を回す。**答はこれが出す。**
+
+    独立: 不可能（`compound::grow` と同じループ——1 期ごとに floor で利息を付け、
+    積立を足す。**各期の切り捨てが経路に依存する**ので閉形式に置き換えられない。
+    この経路の独立は、下の `closed_form` が外から検算することで担っている）
+    """
     if periods <= 0 or periods > MAX_PERIODS:
         raise CompoundError("SyntaxError")
     if principal == 0 and deposit == 0:
@@ -96,7 +105,11 @@ def grow(principal: int, deposit: int, num: int, den: int, periods: int) -> int:
 
 
 def closed_form(principal: int, deposit: int, num: int, den: int, periods: int) -> Decimal:
-    """番人。Decimal 50 桁で素直に評価する（int ループの式変形は写さない）。"""
+    """番人。Decimal 50 桁で素直に評価する（int ループの式変形は写さない）。
+
+    独立: 別手順（**Rust にこの経路は無い**。整数ループの答を、閉形式を Decimal 50 桁で
+    評価した値と突き合わせるためだけに在る。ここが実質的な独立軸である）
+    """
     with localcontext() as ctx:
         ctx.prec = PRECISION
         r = Decimal(num) / Decimal(den)
@@ -118,6 +131,9 @@ def check_against_closed_form(
     有限桁の Decimal で評価しているので、ずれが厳密に 0 のときに丸めが
     わずかに負へ倒すことがある。`closed_form` の `(growth - 1) / r` は
     `growth = 1 + r` が 1 に近いほど桁落ちする——低金利では 7〜8 桁失う。
+
+    独立: 別手順（**Rust にこの経路は無い**。ループの答が閉形式の下・上界の中に
+    居ることを確かめる番人で、向きと上界は数学から出している）
     実測（2026-08-20）: `principal=0`・`periods=1`・`ppy=12` の 15 通りで
     相対 4e-43 程度の負のずれが出て、**この検査が偽の失敗を出していた**。
 
@@ -149,14 +165,22 @@ def check_against_closed_form(
 
 
 def withholding_tax(interest: int) -> tuple[int, int]:
-    """(国税, 地方税)。**別々に**切り捨てる（国税庁 No.1310）。"""
+    """(国税, 地方税)。**別々に**切り捨てる（国税庁 No.1310）。
+
+    独立: 不可能（`tax::withholding` と同じ手順——国税と地方税を**別々に**掛けて
+    切り捨てる。合算 20.315% で 1 度に計算するのは別手順ではなく規則違反である）
+    """
     national = interest * NATIONAL_TAX_NUM // NATIONAL_TAX_DEN
     local = interest * LOCAL_TAX_NUM // LOCAL_TAX_DEN
     return national, local
 
 
 def reached(principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool) -> int:
-    """目標と比べる値。税 ON なら手取り、OFF なら残高（公開契約 6）。"""
+    """目標と比べる値。税 ON なら手取り、OFF なら残高（公開契約 6）。
+
+    独立: 不可能（何と比べるかは公開契約そのもの。`compound_inverse` の `reached` と
+    同じ規則になる）
+    """
     balance = grow(principal, deposit, num, den, periods)
     if not taxed:
         return balance
@@ -269,6 +293,9 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
     `ValueError` ではないので `corpus_calls._finance_entry` の分類に当てはまらず、
     **生成器ごと落ちる**（2026-08-20 実測）。他の期数 0 は歩きが `grow` に届いて
     `SyntaxError` になっていたので、**1 つの入力の組だけが別の壊れ方をしていた。**
+
+    独立: 別手順（`compound_inverse::deposit_for` は**二分探索**で挟む。こちらは
+    Decimal 閉形式の種から証明書を満たすまで歩く。**探索の構造そのものが違う。**）
     """
     if target <= 0:
         raise CompoundError("SyntaxError")
@@ -279,7 +306,12 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
 
 
 def periods_for(principal: int, deposit: int, num: int, den: int, target: int, taxed: bool) -> int:
-    """目標を下回らない最小の期数。**最初に届いた期**（設計書 §4）。"""
+    """目標を下回らない最小の期数。**最初に届いた期**（設計書 §4）。
+
+    独立: 不可能（`compound_inverse::periods_for` と同じ前進走査。**手取りは期数に
+    ついて非単調**（税の 2 つの floor が同じ期に跳ぶ実測反例がある）ので二分探索が
+    使えない。両方が同じ手順なのは、**それしか正しい手順が無いから**である）
+    """
     if target <= 0:
         raise CompoundError("SyntaxError")
     if principal == 0 and deposit == 0:
@@ -293,7 +325,10 @@ def periods_for(principal: int, deposit: int, num: int, den: int, target: int, t
 def check_deposit_certificate(
     d: int, principal: int, num: int, den: int, periods: int, target: int, taxed: bool
 ) -> None:
-    """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。"""
+    """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。
+
+    独立: 別手順（**Rust にこの経路は無い**。答が最小であることを両隣で確かめる証明書）
+    """
     assert reached(principal, d, num, den, periods, taxed) >= target, f"{d} が届かない"
     if d > 0:
         assert _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target, (
@@ -308,6 +343,9 @@ def check_periods_certificate(
 
     残高を持ち回る 1 本の走査で全接頭辞を評価する。**探索ではない**——打ち切りの
     判定を持たず、n まで必ず走り切る。
+
+    独立: 別手順（**Rust にこの経路は無い**。答が「その 1 つ手前では届かない」ことまで
+    確かめる証明書で、答の性質を外から言う）
     """
     balance = principal
     total = principal
@@ -327,7 +365,10 @@ def check_periods_certificate(
 
 
 def compute(op: str, params: dict) -> dict:
-    """生成スクリプトの入口。エラーは戻り値にする（loan_ref と同じ流儀）。"""
+    """生成スクリプトの入口。エラーは戻り値にする（loan_ref と同じ流儀）。
+
+    独立: 不可能（計算をしない。op の綴りで分岐して、上の関数へ渡すだけ）
+    """
     try:
         if op == "compound_grow":
             return _compute_grow(params)

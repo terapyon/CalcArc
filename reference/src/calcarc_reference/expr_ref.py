@@ -47,6 +47,9 @@ def unit_table(unit_set: str) -> list[tuple[str, int]]:
     """`periods:<n>` は複利。`年` の scale が 1 年あたりの期数になる。
 
     どの周期でも割り切れるので、端数の期が生まれない（設計書 §5）。
+
+    独立: 不可能（表の中身が仕様。コア側の `UnitSet::units()` と同じ係数で
+    なければならない——違えば単位の意味が変わる）
     """
     if unit_set.startswith("periods:"):
         per_year = int(unit_set.split(":", 1)[1])
@@ -68,7 +71,11 @@ def _guard(value: Fraction) -> Fraction:
 
 
 def tokenize(text: str, units: list[tuple[str, int]]) -> list[str]:
-    """数字列・単位・`+ - * / ( )`。**単位はコアが解釈する**（設計書 訂正 2）。"""
+    """数字列・単位・`+ - * / ( )`。**単位はコアが解釈する**（設計書 訂正 2）。
+
+    独立: 不可能（受け付ける綴りが仕様そのもの。コア側の字句解析と同じものを
+    認める必要があり、別の文法にはできない）
+    """
     labels = {label for label, _ in units}
     tokens: list[str] = []
     index = 0
@@ -178,6 +185,13 @@ def _number(text: str) -> Fraction:
 
 
 def evaluate(text: str, unit_set: str = "yen") -> Fraction:
+    """式を有理数で評価する。着地まで丸めない。
+
+    独立: 別手順（**評価する道具が違う**。コアは `expr/rational.rs` の
+    **`i128` 有界の自作既約分数**で、約分を正しさの一部として持ち、溢れを
+    自分で見る。こちらは**標準ライブラリの `Fraction`**——多倍長なので
+    溢れが無く、上限は着地の `land_*` が別に見る。**同じ式でも壊れ方が違う**）
+    """
     if text == "":
         raise ExprError("SyntaxError")
     units = unit_table(unit_set)
@@ -189,7 +203,10 @@ def evaluate(text: str, unit_set: str = "yen") -> Fraction:
 
 
 def land_integer(value: Fraction, maximum: int) -> int:
-    """floor して整数へ。負と上限超は弾く。"""
+    """floor して整数へ。負と上限超は弾く。
+
+    独立: 不可能（着地の規則が仕様。`floor` して定義域を見るほかに手が無い）
+    """
     if value < 0:
         raise ExprError("SyntaxError")
     landed = value.numerator // value.denominator
@@ -199,7 +216,10 @@ def land_integer(value: Fraction, maximum: int) -> int:
 
 
 def land_percent(value: Fraction) -> str:
-    """年利へ。**小数 4 桁に収まらなければ拒む**（`Rate` と同じ線）。"""
+    """年利へ。**小数 4 桁に収まらなければ拒む**（`Rate` と同じ線）。
+
+    独立: 不可能（拒む線が仕様。`Rate` の受け付ける桁と同じでなければならない）
+    """
     if value < 0 or value > 100:
         raise ExprError("SyntaxError")
     scaled = value * PERCENT_SCALE
@@ -212,7 +232,10 @@ def land_percent(value: Fraction) -> str:
 
 
 def compute(op: str, params: dict) -> dict:
-    """生成スクリプトの入口。エラーは戻り値にする（loan_ref と同じ流儀）。"""
+    """生成スクリプトの入口。エラーは戻り値にする（loan_ref と同じ流儀）。
+
+    独立: 不可能（計算をしない。op の綴りで分岐して、上の関数へ渡すだけ）
+    """
     try:
         if op == "expr_integer":
             value = evaluate(params["text"], params["unit_set"])
