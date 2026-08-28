@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = ["sympy>=1.13", "mpmath>=1.3"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 
 [build-system]
 requires = ["hatchling"]
@@ -17,6 +17,30 @@ packages = ["src/calcarc_reference"]
 
 [tool.ruff]
 line-length = 100
+
+# **`ruff` は lint であって型検査ではない。** 注釈は `src` の戻り値 99% /
+# 引数 98% に付いているのに、2026-08-28 まで**それを読む道具が 1 つも
+# 無かった**——注釈は書いた瞬間から腐りうるし、腐っても誰も気づかない。
+#
+# **範囲は参照実装の中核(`*_ref.py`)だけに絞ってある。** 絞ったのは
+# 「あとで広げる」ためであって、外した側が正しいからではない:
+# `corpus_calls.py`(43 件)と `corpus_eval.py`(16 件)に既定で 64 件中 59 件が
+# 集中しており、**現物を読んだ限りどれも本物の欠陥ではなく、「番人を検査が
+# 見抜けない」型だった**(`any(x is None)` の絞り込みなど)。
+# **それを型に合わせて書き換えると、正しいコードのほうが歪む。** 広げるのは
+# 別の仕事として起票してある(`docs/maintainability-2026-08-28.md` の P-1b)。
+[tool.mypy]
+python_version = "3.14"
+files = ["src/calcarc_reference"]
+# `*_ref.py` 以外を外す。**この綴りが範囲の唯一の宣言である**
+# (CI も手元も `uv run mypy` を引数なしで叩くので、両者がずれない)。
+exclude = "(corpus_[a-z]+|cases|corpus_coverage)\\.py$"
+
+# `sympy` と `mpmath` は型情報を配っていない(`py.typed` が無い)。
+# **こちらの落ち度ではないので黙らせる**——ただし対象は 2 つだけに限る。
+[[tool.mypy.overrides]]
+module = ["sympy.*", "mpmath.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

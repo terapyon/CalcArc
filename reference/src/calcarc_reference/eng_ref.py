@@ -55,9 +55,13 @@ def format_real_eng(x: float) -> str:
         # `repr(x)` を経由しない——あれは「往復できる最短の十進」であって、
         # 有効数字 10 桁の丸めとは別の操作である。
         rounded = +Decimal(x)
-    sign, digits, exponent = rounded.as_tuple()
-    # 10 進指数 = (最上位桁の位置)。`digits` は有効数字の並び。
-    decimal_exponent = len(digits) - 1 + exponent
+    sign = rounded.as_tuple().sign
+    # 10 進指数 = 最上位桁の位置。**`as_tuple()` から組み立てない**——
+    # あちらの `exponent` は NaN と無限大で `'n'`/`'N'`/`'F'` という**印**を返す
+    # ので、`len(digits) - 1 + exponent` は「数と印を足す」式になる(有限値しか
+    # 来ない前提なら動くが、その前提はどこにも書かれていない)。`adjusted()` は
+    # **同じ値を返し、型が `int` に閉じている。**
+    decimal_exponent = rounded.adjusted()
     eng_exponent = (decimal_exponent // 3) * 3
     shift = decimal_exponent - eng_exponent  # 0, 1, 2 のいずれか
     int_digits = shift + 1

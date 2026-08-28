@@ -32,6 +32,7 @@ cd web && pnpm test        # vitest
 cd web && pnpm e2e         # Playwright（内部で wasm をビルドする）
 
 cd reference && uv run pytest
+cd reference && uv run mypy                          # *_ref.py の型検査（範囲は pyproject）
 cd reference && uv run python scripts/generate.py   # golden の再生成
 
 cd heavy && pnpm heavy         # 生成コーパスと参照の照合（32 秒）
@@ -51,7 +52,12 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 - **許容誤差をテストコードに書かない。** 言語間検証は `testdata/*.json` の `tolerance`、
   Rust のユニットテストは `calcarc_core::TEST_EPSILON` から読む。
 - **参照実装を Rust の移植にしない。** 同じアルゴリズムを両方に書くと、同じバグが両方に
-  入って検証の意味がなくなる。
+  入って検証の意味がなくなる。**これは機械では検出できない**（同じ手順で書いても照合は
+  一致して緑になる）ので、**公開関数の docstring に `独立: 別手順／不可能／未確認` を
+  1 行書く**。書き方は [CONTRIBUTING.md](CONTRIBUTING.md) の「参照実装を足すとき」。
+- **規律を書いたら、同じコミットで番人を置く。** 番人とは**破ったときに赤くなるもの**
+  （テスト・lint の規則・CI の 1 段・生成器の assert）。**置けないなら、置けない理由と
+  代わりに何が守るのかを書く。**
 - **電卓の挙動は `crates/calcarc-core/tests/engine_table.rs` が仕様書。** キー列と表示の
   対応を先に変えてから実装を直す。
 - **版数を上げるときは 5 箇所を揃える。** `Cargo.toml`（workspace）、
