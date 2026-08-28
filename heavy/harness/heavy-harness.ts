@@ -24,6 +24,7 @@ import {
   loan_principal,
   loan_term,
 } from "../../web/src/wasm/calcarc_wasm.js";
+import { openOutcome } from "./outcome";
 
 /** 1 ケースの結果。表示は整形済み文字列で、数値は取り出せない(設計書 §6.3)。 */
 export interface HarnessResult {
@@ -220,7 +221,9 @@ function runCalls(cases: CallCase[]): unknown[] {
           `Known: ${Object.keys(CALLS).join(", ")}`,
       );
     }
-    return call(testCase.input as Record<string, never>);
+    // **境界の形をここで開く。** 素通しにすると、契約が変わった日に
+    // 「全件不一致」という形でしか気づけない（2026-08-28 に実際にそうなった）。
+    return openOutcome(call(testCase.input as Record<string, never>));
   });
 }
 
