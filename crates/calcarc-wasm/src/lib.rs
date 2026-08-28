@@ -3,6 +3,23 @@
 //! 計算ロジックを持たない。責務は型変換と export のみ(base-spec §6.2)。
 //! JavaScript 例外を投げない。計算エラーは戻り値の一部である(base-spec §27)。
 
+// 本番経路で panic しないことをコンパイラに守らせる(base-spec §27)。
+// `calcarc-core/src/lib.rs` と同じ形である。
+//
+// **JS の例外になるのは、こちらの panic である。** core が守られていて
+// ここが守られていないのは、守りが薄いのが境界のほうだった、という状態
+// だった(2026-08-28 の点検)。**足した時点で違反は 0 件**で、手作業で
+// 守れていたものをコンパイラに移しただけである。
+//
+// **`not(test)` は、いまは何も効いていない。** core では
+// `#[cfg(test)] mod tests` が unwrap を使うので効くが、**この crate は
+// インラインのテストを持たず、テストは `tests/` に住む**——統合テストは
+// 別の crate としてコンパイルされるので、**ここの属性はそもそも届かない**
+// (実測: `tests/token_parity.rs` に `unwrap()` を置いても clippy は
+// 落ちなかった)。それでも core と同じ形にしてあるのは、**インラインの
+// テストを 1 つ足した日に効いてほしい**からである。
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+
 // **関数名 `convert` はモジュール名 `convert` と衝突する**(境界の関数名は
 // 設計書 §5 が決めている)。別名で入れて、モジュールは `convert_core::` で呼ぶ。
 use calcarc_core::convert as convert_core;
