@@ -68,13 +68,18 @@ export interface ByteLines {
   binary: string | null;
 }
 
-/** calcarc-wasm の LlmResult に対応。3 組を返す(spec §6)。 */
-export interface LlmResult {
-  weight: ByteLines | null;
-  kv: ByteLines | null;
-  total: ByteLines | null;
-  error: Extract<CalcErrorCode, "Overflow" | "SyntaxError"> | null;
-}
+/** calcarc-wasm の `Outcome<LlmMemory>` に対応。3 組を返す(spec §6)。
+ *
+ * **3 組は揃って在るか、揃って無いか**なので、組そのものに `| null` は
+ * 付かない。組の中の `decimal`/`binary` だけが任意である。 */
+export type LlmResult = Outcome<
+  {
+    weight: ByteLines;
+    kv: ByteLines;
+    total: ByteLines;
+  },
+  DataScaleErrorCode
+>;
 
 /** 転送は data_scale と**同じ形**を返す(spec §6)。別名にするのは呼ぶ側の
  * 読みやすさのためで、構造は 1 つである。 */

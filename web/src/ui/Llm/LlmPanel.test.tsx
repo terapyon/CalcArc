@@ -127,18 +127,19 @@ function llmStub(
   const cl = BigInt(contextLength || "0");
   const weightBytes = (p * BITS[weightPrecision]) / 8n;
   const kvBytes = (2n * l * kh * hd * cl * BITS[kvPrecision]) / 8n;
+  // **失敗は payload を 1 つも持たない**(設計書 §0)。
   if (weightBytes > U128_MAX || kvBytes > U128_MAX) {
-    return { weight: null, kv: null, total: null, error: "Overflow" };
+    return { kind: "error", code: "Overflow" };
   }
   const totalBytes = weightBytes + kvBytes;
   if (totalBytes > U128_MAX) {
-    return { weight: null, kv: null, total: null, error: "Overflow" };
+    return { kind: "error", code: "Overflow" };
   }
   return {
+    kind: "ok",
     weight: byteLines(weightBytes),
     kv: byteLines(kvBytes),
     total: byteLines(totalBytes),
-    error: null,
   };
 }
 

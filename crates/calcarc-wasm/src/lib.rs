@@ -145,14 +145,16 @@ impl ByteLines {
     }
 }
 
-/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` に対応する。
+/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` の成功の payload。
+///
+/// **3 組は揃って在るか、揃って無いかのどちらかだった**ので、`Option` は
+/// 潰しのためだけに付いていた。`Outcome` に外して素の `ByteLines` にする。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LlmResult {
-    weight: Option<ByteLines>,
-    kv: Option<ByteLines>,
-    total: Option<ByteLines>,
-    error: Option<calcarc_core::CalcError>,
+struct LlmMemory {
+    weight: ByteLines,
+    kv: ByteLines,
+    total: ByteLines,
 }
 
 /// 重み ＋ KV cache を見積もる。純関数で、状態を持たない。
@@ -187,20 +189,13 @@ pub fn llm_memory(
             kv,
         )
     })();
-    let result = match outcome {
-        Ok(m) => LlmResult {
-            weight: Some(ByteLines::of(m.weight_bytes)),
-            kv: Some(ByteLines::of(m.kv_bytes)),
-            total: Some(ByteLines::of(m.total_bytes)),
-            error: None,
-        },
-        Err(e) => LlmResult {
-            weight: None,
-            kv: None,
-            total: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<LlmMemory> = outcome
+        .map(|m| LlmMemory {
+            weight: ByteLines::of(m.weight_bytes),
+            kv: ByteLines::of(m.kv_bytes),
+            total: ByteLines::of(m.total_bytes),
+        })
+        .into();
     to_js_value(&result)
 }
 

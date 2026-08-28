@@ -733,3 +733,21 @@ fn the_data_scale_family_answers_in_two_shapes() {
         assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
     }
 }
+
+#[wasm_bindgen_test]
+fn the_llm_estimate_answers_in_two_shapes() {
+    // 27B・int4・fp16 KV。**3 組とも単位が付く大きさ**なので、成功の JSON に
+    // null は 1 つも出ない。
+    let ok = calcarc_wasm::llm_memory("27000000000", "int4", "62", "16", "128", "8192", "fp16");
+    let json = String::from(js_sys::JSON::stringify(&ok).unwrap());
+    assert!(json.starts_with(r#"{"kind":"ok","weight":"#), "{json}");
+    assert!(!json.contains("null"), "成功に null は出ない: {json}");
+    // **入れ子の中まで綴りを見る。** 外側だけ見ていると、組の中の
+    // `bytes_grouped` を取り逃がす。
+    assert!(!json.contains('_'), "snake_case が漏れている: {json}");
+
+    // 精度の綴りが壊れていれば SyntaxError。**3 組とも出ない。**
+    let err = calcarc_wasm::llm_memory("27000000000", "x", "62", "16", "128", "8192", "fp16");
+    let json = String::from(js_sys::JSON::stringify(&err).unwrap());
+    assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+}

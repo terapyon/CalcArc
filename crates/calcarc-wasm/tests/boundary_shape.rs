@@ -244,3 +244,73 @@ fn the_data_scale_boundary_returns_only_the_codes_typescript_knows() {
         );
     }
 }
+
+/// LLM の JSON。**3 組の入れ子**を返すので、綴りの見落としが起きやすい。
+fn llm_json(parameters: &str, weight: &str, layers: &str, kv: &str) -> String {
+    let value = calcarc_wasm::llm_memory(parameters, weight, layers, "16", "128", "8192", kv);
+    String::from(js_sys::JSON::stringify(&value).unwrap())
+}
+
+#[wasm_bindgen_test]
+fn no_llm_field_is_written_in_snake_case() {
+    // **入れ子の中まで見る。** 外側の 3 つに `_` は無いので、外側だけ見る
+    // 番人は組の中の `bytes_grouped` を取り逃がす。
+    let json = llm_json("27000000000", "int4", "62", "fp16");
+    assert!(
+        !json.contains('_'),
+        "snake_case が漏れている(値に `_` は出ない payload である): {json}"
+    );
+    for key in ["\"kind\"", "\"weight\"", "\"kv\"", "\"total\""] {
+        assert!(json.contains(key), "{key} が無い: {json}");
+    }
+    // **組の中の 4 点も名指しする。** 3 回ずつ出る。
+    for key in ["\"bytes\"", "\"bytesGrouped\"", "\"decimal\"", "\"binary\""] {
+        assert_eq!(json.matches(key).count(), 3, "{key} が 3 組に無い: {json}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn the_llm_boundary_returns_only_the_codes_typescript_knows() {
+    let cases = [
+        // 重みが u128 を超える
+        (
+            "170141183460469231731687303715884105727",
+            "fp32",
+            "62",
+            "fp16",
+        ),
+        // KV cache が u128 を超える
+        (
+            "1",
+            "int4",
+            "170141183460469231731687303715884105727",
+            "fp16",
+        ),
+        // 重みの精度の綴りが壊れている
+        ("27000000000", "x", "62", "fp16"),
+        // KV の精度の綴りが壊れている
+        ("27000000000", "int4", "62", "x"),
+    ];
+    let codes: Vec<String> = cases
+        .iter()
+        .filter_map(|(p, w, l, k)| code_of(&llm_json(p, w, l, k)))
+        .collect();
+
+    assert_eq!(
+        codes.len(),
+        cases.len(),
+        "失敗しなかった入力が在る: {codes:?}"
+    );
+    for code in &codes {
+        assert!(
+            DATA_SCALE_ERROR_CODES.contains(&code.as_str()),
+            "TS が知らないエラーが境界を渡った: {code} ({codes:?})",
+        );
+    }
+    for expected in DATA_SCALE_ERROR_CODES {
+        assert!(
+            codes.iter().any(|c| c == expected),
+            "{expected} を踏む入力が無い: {codes:?}",
+        );
+    }
+}

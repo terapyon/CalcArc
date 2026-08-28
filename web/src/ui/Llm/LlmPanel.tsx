@@ -387,19 +387,18 @@ export function LlmPanel() {
   // main は合計の 主 → 副 → bytes の順に繰り上げる(設計書 §6)。**この
   // 参照は下の結果欄の行とは別に持つ**——赤確認(Step 8)がここではなく
   // 行の側を狙い撃てるようにするため。
-  const totalDecimal = shown?.total?.decimal ?? null;
-  const totalBinary = shown?.total?.binary ?? null;
+  // **成功と失敗は別の形**なので、先に枝を分けてから読む(設計書 §0)。
+  const ok = shown?.kind === "ok" ? shown : null;
+  const calcError = shown?.kind === "error" ? shown.code : null;
+  const totalDecimal = ok?.total.decimal ?? null;
+  const totalBinary = ok?.total.binary ?? null;
   const first = primary === "decimal" ? totalDecimal : totalBinary;
   const second = primary === "decimal" ? totalBinary : totalDecimal;
   const answer = exprError
     ? "Math ERROR"
-    : shown?.error
+    : calcError
       ? "Math ERROR"
-      : (first ??
-        second ??
-        (shown?.total?.bytesGrouped
-          ? `${shown.total.bytesGrouped} bytes`
-          : ""));
+      : (first ?? second ?? (ok ? `${ok.total.bytesGrouped} bytes` : ""));
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。未入力の項目は出さない——層数が空のあいだは根拠にならない。
@@ -414,7 +413,7 @@ export function LlmPanel() {
       <Readout
         entries={entries}
         main={answer}
-        error={exprError ?? shown?.error ?? null}
+        error={exprError ?? calcError}
         status={[
           {
             testId: "llm-primary",
@@ -434,11 +433,11 @@ export function LlmPanel() {
         pressed={keyPressed}
         disabled={keyDisabled}
       />
-      {shown && !shown.error && (
+      {ok && (
         <div className={styles.result} data-testid="llm-result">
-          {byteRow("llm-weight-bytes", "重み", shown.weight)}
-          {byteRow("llm-kv-bytes", "KV cache", shown.kv)}
-          {byteRow("llm-total-bytes", "合計", shown.total)}
+          {byteRow("llm-weight-bytes", "重み", ok.weight)}
+          {byteRow("llm-kv-bytes", "KV cache", ok.kv)}
+          {byteRow("llm-total-bytes", "合計", ok.total)}
         </div>
       )}
       {/* 免責は常設(Finance の免責と同じ扱い)。エラーではないので
