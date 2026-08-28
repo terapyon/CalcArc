@@ -314,3 +314,48 @@ fn the_llm_boundary_returns_only_the_codes_typescript_knows() {
         );
     }
 }
+
+/// TS の `ExprErrorCode` が挙げている綴り(`web/src/expr/types.ts`)。
+/// **ここだけ 3 つある**——他の関数と同じ 2 つだと思い込まないこと。
+const EXPR_ERROR_CODES: &[&str] = &["Overflow", "SyntaxError", "DivisionByZero"];
+
+#[wasm_bindgen_test]
+fn the_expression_boundary_returns_only_the_codes_typescript_knows() {
+    let cases = [
+        // 0 で割る
+        "1/0",
+        // 式が途中で終わっている
+        "1+",
+        // 上限(u64 の最大)を超える
+        "99999999999999999999",
+        // 知らない単位
+        "1兆",
+    ];
+    let codes: Vec<String> = cases
+        .iter()
+        .filter_map(|text| {
+            let value = calcarc_wasm::expr_integer(text, "18446744073709551615", "yen");
+            code_of(&String::from(js_sys::JSON::stringify(&value).unwrap()))
+        })
+        .collect();
+
+    assert_eq!(
+        codes.len(),
+        cases.len(),
+        "失敗しなかった入力が在る: {codes:?}"
+    );
+    for code in &codes {
+        assert!(
+            EXPR_ERROR_CODES.contains(&code.as_str()),
+            "TS が知らないエラーが境界を渡った: {code} ({codes:?})",
+        );
+    }
+    // **3 種類とも踏む。** `DivisionByZero` は expr にしか無い綴りなので、
+    // ここで踏まないとどこも見ていないことになる。
+    for expected in EXPR_ERROR_CODES {
+        assert!(
+            codes.iter().any(|c| c == expected),
+            "{expected} を踏む入力が無い: {codes:?}",
+        );
+    }
+}

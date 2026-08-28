@@ -583,22 +583,27 @@ export function FinancePanel() {
       return { value: null, error: null };
     const typed = typedIn(field);
     if (typed === "" || expr === null) return { value: null, error: null };
-    if (field === "rate") {
-      const r = expr.percent(typed);
-      return { value: r.value, error: r.error };
-    }
+    // **成功と失敗は別の形**なので、枝を分けてから読む(設計書 §0)。
     const { max, unitSet } = domainOf(field);
-    const r = expr.integer(typed, max, unitSet);
-    return { value: r.value, error: r.error };
+    const r =
+      field === "rate"
+        ? expr.percent(typed)
+        : expr.integer(typed, max, unitSet);
+    return r.kind === "error"
+      ? { value: null, error: r.code }
+      : { value: r.value, error: null };
   }
 
   /** 式を評価した値。壊れていれば null。 */
   function settle(field: FinanceField): string | null {
     const typed = typedIn(field);
     if (typed === "" || expr === null) return null;
-    if (field === "rate") return expr.percent(typed).value;
     const { max, unitSet } = domainOf(field);
-    return expr.integer(typed, max, unitSet).value;
+    const r =
+      field === "rate"
+        ? expr.percent(typed)
+        : expr.integer(typed, max, unitSet);
+    return r.kind === "ok" ? r.value : null;
   }
 
   function labelOf(field: FinanceField): string {

@@ -40,16 +40,16 @@ vi.mock("../../expr", () => ({
             else if (units[ch] !== undefined) {
               total += BigInt(digits || "0") * (units[ch] as bigint);
               digits = "";
-            } else return { value: null, error: "SyntaxError" };
+            } else return { kind: "error", code: "SyntaxError" };
           }
           value += total + BigInt(digits || "0");
         }
-        if (text === "") return { value: null, error: null };
+        if (text === "") return { kind: "ok", value: "" };
         // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
-        if (value > BigInt(max)) return { value: null, error: "Overflow" };
-        return { value: value.toString(), error: null };
+        if (value > BigInt(max)) return { kind: "error", code: "Overflow" };
+        return { kind: "ok", value: value.toString() };
       },
-      percent: (text: string) => ({ value: text, error: null }),
+      percent: (text: string) => ({ kind: "ok", value: text }),
     }),
 }));
 

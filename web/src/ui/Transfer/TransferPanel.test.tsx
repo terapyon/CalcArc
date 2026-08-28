@@ -35,14 +35,14 @@ vi.mock("../../expr", () => ({
     Promise.resolve({
       integer: (text: string, max: string, unitSet: string) => {
         evaluated.push({ text, unitSet });
-        if (text === "") return { value: null, error: null };
-        if (!/^\d+$/.test(text)) return { value: null, error: "SyntaxError" };
+        if (text === "") return { kind: "ok", value: "" };
+        if (!/^\d+$/.test(text)) return { kind: "error", code: "SyntaxError" };
         const value = BigInt(text);
         // **上限は着地に効く**(設計書 §5)。超えたら Overflow で値は出ない。
-        if (value > BigInt(max)) return { value: null, error: "Overflow" };
-        return { value: value.toString(), error: null };
+        if (value > BigInt(max)) return { kind: "error", code: "Overflow" };
+        return { kind: "ok", value: value.toString() };
       },
-      percent: (text: string) => ({ value: text, error: null }),
+      percent: (text: string) => ({ kind: "ok", value: text }),
     }),
 }));
 

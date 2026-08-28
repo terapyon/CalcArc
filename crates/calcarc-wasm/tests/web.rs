@@ -398,7 +398,7 @@ fn expressions_cross_the_boundary() {
         get(&result, "value").as_string().as_deref(),
         Some("1000000")
     );
-    assert!(get(&result, "error").is_null());
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
     // **単位はコアが解釈する**(設計書 訂正 2)。UI は展開しない。
     let with_units = calcarc_wasm::expr_integer("1億6000万-500万", "18446744073709551615", "yen");
     assert_eq!(
@@ -425,7 +425,7 @@ fn the_unit_table_is_chosen_by_name() {
     // 知らない名前は例外ではなく戻り値のエラー。
     let unknown = calcarc_wasm::expr_integer("10年", "1200", "periods:4");
     assert_eq!(
-        get(&unknown, "error").as_string().as_deref(),
+        get(&unknown, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -434,13 +434,12 @@ fn the_unit_table_is_chosen_by_name() {
 fn expression_errors_are_returned_not_thrown() {
     let zero = calcarc_wasm::expr_integer("100/0", "18446744073709551615", "yen");
     assert_eq!(
-        get(&zero, "error").as_string().as_deref(),
+        get(&zero, "code").as_string().as_deref(),
         Some("DivisionByZero")
     );
-    assert!(
-        get(&zero, "value").is_null(),
-        "error carries null, not undefined"
-    );
+    // **失敗の枝に payload の鍵は無い**(設計書 §0)。潰していた頃は
+    // `value: null` が並んでいたが、いまは鍵ごと出ない。
+    assert!(get(&zero, "value").is_undefined(), "失敗に value は出ない");
     // 中間オーバーフロー(数学的には戻るが仕様としてエラー)。
     let huge = "170141183460469231731687303715884105727";
     let middle = calcarc_wasm::expr_integer(
@@ -449,7 +448,7 @@ fn expression_errors_are_returned_not_thrown() {
         "count",
     );
     assert_eq!(
-        get(&middle, "error").as_string().as_deref(),
+        get(&middle, "code").as_string().as_deref(),
         Some("Overflow")
     );
 }
@@ -461,7 +460,7 @@ fn the_percent_landing_crosses_the_boundary() {
     // 4 桁で表せない値は拒む(Rate の入口と同じ線)。
     let refused = calcarc_wasm::expr_percent("1/3");
     assert_eq!(
-        get(&refused, "error").as_string().as_deref(),
+        get(&refused, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -750,4 +749,30 @@ fn the_llm_estimate_answers_in_two_shapes() {
     let err = calcarc_wasm::llm_memory("27000000000", "x", "62", "16", "128", "8192", "fp16");
     let json = String::from(js_sys::JSON::stringify(&err).unwrap());
     assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+}
+
+#[wasm_bindgen_test]
+fn the_expression_evaluator_answers_in_two_shapes() {
+    // **payload が 1 つでも構造体で包む。** 内部タグ付きは payload が map に
+    // なる形しか直列化できない——素の文字列を包むと実行時に失敗する。
+    let ok = [
+        calcarc_wasm::expr_integer("1億6000万-500万", "18446744073709551615", "yen"),
+        calcarc_wasm::expr_percent("1.5"),
+    ];
+    for value in &ok {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","value":"#), "{json}");
+        assert!(!json.contains("null"), "成功に null は出ない: {json}");
+    }
+
+    // **3 種類とも別々の綴りで返る**(TS の `ExprErrorCode` は 3 つ挙げている)。
+    for (text, code) in [
+        ("1/0", "DivisionByZero"),
+        ("1+", "SyntaxError"),
+        ("99999999999999999999", "Overflow"),
+    ] {
+        let err = calcarc_wasm::expr_integer(text, "18446744073709551615", "yen");
+        let json = String::from(js_sys::JSON::stringify(&err).unwrap());
+        assert_eq!(json, format!(r#"{{"kind":"error","code":"{code}"}}"#));
+    }
 }

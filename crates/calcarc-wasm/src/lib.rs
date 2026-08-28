@@ -565,25 +565,19 @@ pub fn compound_periods_for(
     to_js_value(&result)
 }
 
-/// 式の評価結果。TypeScript 側の `ExprResult` に対応する。
-#[derive(Serialize, Default)]
+/// 式の評価結果。TypeScript 側の `ExprResult` の成功の payload。
+///
+/// **1 つしかフィールドが無くても、`Outcome` の payload は構造体である。**
+/// 内部タグ付き(`tag = "kind"`)は、payload が map になる形しか直列化できない
+/// ——素の `String` を包むと実行時に失敗する。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ExprResult {
-    value: Option<String>,
-    error: Option<CalcError>,
+struct ExprValue {
+    value: String,
 }
 
 fn to_expr_result(outcome: CalcResult<String>) -> JsValue {
-    let result = match outcome {
-        Ok(value) => ExprResult {
-            value: Some(value),
-            error: None,
-        },
-        Err(e) => ExprResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ExprValue> = outcome.map(|value| ExprValue { value }).into();
     to_js_value(&result)
 }
 

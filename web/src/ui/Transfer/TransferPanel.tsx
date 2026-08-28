@@ -210,7 +210,10 @@ export function TransferPanel() {
     const typed = text(value);
     if (typed === "" || expr === null) return { value: "", error: null };
     const r = expr.integer(typed, MAX_COUNT, "none");
-    return { value: r.value ?? "", error: r.error };
+    // **成功と失敗は別の形**なので、枝を分けてから読む(設計書 §0)。
+    return r.kind === "error"
+      ? { value: "", error: r.code }
+      : { value: r.value, error: null };
   }
 
   const bandwidthResult = evaluate(bandwidth);
