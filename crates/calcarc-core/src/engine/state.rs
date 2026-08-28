@@ -130,7 +130,7 @@ pub struct Buffer {
     /// `1 °'" 30 °'"` なら `["1", "30"]` で `digits` は空。
     ///
     /// **最大 2 つ**——度・分・秒の 3 段なので、確定するのは 2 つまで。
-    /// **指数とは排他**である(下の `push_sexagesimal_separator` を見ること)。
+    /// **指数とは排他**である(下の `try_push_sexagesimal_separator` を見ること)。
     #[serde(default)]
     pub sexagesimal: Vec<String>,
 }
@@ -304,7 +304,15 @@ impl Buffer {
     /// 打てたら true。**指数入力中と、段が 3 つ埋まっているときは false**
     /// ——前者は排他(上の `push_exponent` と対)、後者は度・分・秒で
     /// 打ち止めだからである(裁定 3)。
-    pub fn push_sexagesimal_separator(&mut self) -> bool {
+    ///
+    /// **`try_` が付いているのは、`push` が std では可謬でないからである**
+    /// (`api-style.md` の「名前の嘘」)。`Vec::push` は `()` を返して失敗しない
+    /// ので、`push_…() -> bool` は**押せなかったことがある**という事実を名前が
+    /// 隠す。`Result` ではなく `bool` なのは、**断る理由が呼び出し側にとって
+    /// 1 つしかない**からである——`Key::Dms` は「区切れたか、そうでなければ
+    /// 表示のトグルか」しか見ない。
+    #[must_use = "打てなかったことは戻り値にしか出ない"]
+    pub fn try_push_sexagesimal_separator(&mut self) -> bool {
         if self.exponent.is_some() || self.sexagesimal.len() >= 2 {
             return false;
         }
@@ -314,6 +322,12 @@ impl Buffer {
 
     /// `+/−`。指数入力中なら指数の符号を反転して true を返す。そうでなければ
     /// 何もせず false——呼び出し側が確定値の符号を反転する(設計書 §2)。
+    ///
+    /// **`try_` は付けない。** `toggle` は std の名前ではないので、可謬で
+    /// あることを名前が偽っていない(`api-style.md`「std の慣習は名前の嘘を
+    /// 直すために採り、ドメイン語彙を消すためには採らない」)。**戻り値は
+    /// 失敗の合図ではなく、どちらが符号を反転するかの割り振り**である。
+    #[must_use = "どちらが符号を反転するかは戻り値にしか出ない"]
     pub fn toggle_exponent_sign(&mut self) -> bool {
         match self.exponent.as_mut() {
             Some(exponent) => {
@@ -458,10 +472,10 @@ mod tests {
         // 1 °'" 30 °'" 0 → 1.5(S-4 設計書 §3)
         let mut b = Buffer::default();
         b.push_digit(1);
-        assert!(b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
         b.push_digit(3);
         b.push_digit(0);
-        assert!(b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
         b.push_digit(0);
         assert_eq!(b.value().unwrap(), Value::real(1.5));
     }
@@ -471,10 +485,10 @@ mod tests {
         // 1 °'" 30 °'" で秒を省ける(設計書 §3)。
         let mut b = Buffer::default();
         b.push_digit(1);
-        assert!(b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
         b.push_digit(3);
         b.push_digit(0);
-        assert!(b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
         assert_eq!(b.value().unwrap(), Value::real(1.5));
     }
 
@@ -483,9 +497,9 @@ mod tests {
         // 段は 3 つまで(裁定 3)。4 つ目の区切りは打てない。
         let mut b = Buffer::default();
         b.push_digit(1);
-        assert!(b.push_sexagesimal_separator());
-        assert!(b.push_sexagesimal_separator());
-        assert!(!b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
+        assert!(!b.try_push_sexagesimal_separator());
     }
 
     #[test]
@@ -496,14 +510,14 @@ mod tests {
         // ならないが、その答えが無い(1.5e3 の 3 は指数か秒か)。
         let mut b = Buffer::default();
         b.push_digit(1);
-        assert!(b.push_sexagesimal_separator());
+        assert!(b.try_push_sexagesimal_separator());
         b.push_exponent();
         assert!(b.exponent.is_none());
 
         let mut c = Buffer::default();
         c.push_digit(1);
         c.push_exponent();
-        assert!(!c.push_sexagesimal_separator());
+        assert!(!c.try_push_sexagesimal_separator());
         assert!(c.sexagesimal.is_empty());
     }
 
@@ -512,7 +526,9 @@ mod tests {
         // 入力中は打った通りに見せる(既存の規則)。
         let mut b = Buffer::default();
         b.push_digit(1);
-        b.push_sexagesimal_separator();
+        // **段に入れたことを主張する。** ここが false なら以下の `text()` は
+        // 60 進ではなく十進を見ていることになり、検査が別のものを測る。
+        assert!(b.try_push_sexagesimal_separator());
         b.push_digit(3);
         b.push_digit(0);
         assert_eq!(b.text(), "1°30");
@@ -523,7 +539,9 @@ mod tests {
         // 段は 1 つずつ戻る(I7)。1 °'" 30 から 3 回で 1 に戻る。
         let mut b = Buffer::default();
         b.push_digit(1);
-        b.push_sexagesimal_separator();
+        // **段に入れたことを主張する。** ここが false なら以下の `text()` は
+        // 60 進ではなく十進を見ていることになり、検査が別のものを測る。
+        assert!(b.try_push_sexagesimal_separator());
         b.push_digit(3);
         b.push_digit(0);
         assert_eq!(b.backspace(), Backspace::Removed);
