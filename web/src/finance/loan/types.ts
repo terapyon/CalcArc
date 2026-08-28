@@ -3,7 +3,7 @@
 // ロジックも持ち込まない。narrowing の根拠は loan の WASM 境界がこの 2 つしか
 // 返さないこと(lib.rs の Loan*Result::error、calcarc-core の
 // Overflow/SyntaxError)。
-import type { CalcErrorCode } from "../../calc/types";
+import type { CalcErrorCode, Outcome } from "../../calc/types";
 
 export type LoanErrorCode = Extract<CalcErrorCode, "Overflow" | "SyntaxError">;
 
@@ -42,16 +42,18 @@ export interface LoanTermResult {
 }
 
 /** ボーナス併用の正算。 */
-export interface LoanBonusForwardResult {
-  monthlyPayment: string | null;
-  bonusPayment: string | null;
-  bonusRows: number | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  monthlyFinalPayment: string | null;
-  bonusFinalPayment: string | null;
-  error: LoanErrorCode | null;
-}
+export type LoanBonusForwardResult = Outcome<
+  {
+    monthlyPayment: string;
+    bonusPayment: string;
+    bonusRows: number;
+    totalPayment: string;
+    totalInterest: string;
+    monthlyFinalPayment: string;
+    bonusFinalPayment: string;
+  },
+  LoanErrorCode
+>;
 
 /** ボーナス併用の借入可能額逆算。 */
 export interface LoanBonusPrincipalResult {

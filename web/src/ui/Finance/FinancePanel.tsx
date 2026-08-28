@@ -745,8 +745,16 @@ export function FinancePanel() {
           rate,
           monthsNumber,
         );
-        error = r.error;
-        if (!r.error && r.monthlyPayment && r.bonusPayment) {
+        // **`&& r.monthlyPayment && r.bonusPayment` が消えた。** `ok` の枝では
+        // 7 つとも `string` であることが型で分かる(設計書 §3)。
+        //
+        // **`error` の代入が判定の内側へ移った。** 以前は `error = r.error;` が
+        // 判定の外に在ったが、**この枝に入る条件が `error === null` である**
+        // (:739)。成功のときの代入は `null` に `null` を入れていただけで、
+        // 消していた前の値は存在しない。
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.monthlyPayment)} 円`;
           breakdown = [
             {

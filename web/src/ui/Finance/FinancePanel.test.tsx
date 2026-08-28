@@ -117,7 +117,9 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
       finalPayment: "91762",
       error: null,
     }),
+    // **`kind` が付き、`error: null` は無くなった**(設計書 §0)。
     bonusForward: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPayment: "73484",
       bonusPayment: "276219",
       bonusRows: 70,
@@ -125,7 +127,6 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
       totalInterest: "8600000",
       monthlyFinalPayment: "46013",
       bonusFinalPayment: "276227",
-      error: null,
     }),
     bonusPrincipal: vi.fn().mockReturnValue({
       monthlyPrincipal: "26128204",
