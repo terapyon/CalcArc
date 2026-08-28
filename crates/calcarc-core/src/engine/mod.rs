@@ -388,7 +388,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             let separated = state
                 .buffer
                 .as_mut()
-                .is_some_and(Buffer::push_sexagesimal_separator);
+                .is_some_and(Buffer::try_push_sexagesimal_separator);
             if !separated && state.buffer.is_none() {
                 state.sexagesimal_view = !state.sexagesimal_view;
             }
