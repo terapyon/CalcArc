@@ -1,6 +1,12 @@
 # WASM 境界の結果型を 2 択にする（設計書）
 
-対象: `crates/calcarc-wasm` が返す **10 個の結果型**と、それを受ける `web/src/*/types.ts`。
+対象: `crates/calcarc-wasm` が返す**結果型**と、それを受ける `web/src/*/types.ts`。
+
+**訂正印（2026-08-28）: 「10 個」は誤り。実際は 12 個である**（`error: Option<…>` を持つ
+struct を grep で数え直した——Loan 5 / Compound 2 / DataScale / Llm / Expr / Convert /
+ConvertUnits。`CurrencyUnitsResult` は `error` を持たないので対象外）。
+**私が数えずに書いた。** 実装役が段階 2 の途中で「spec は 10、計画の表は 9 行、実際は 12」と
+突き合わせて見つけた。**表や本文の数を根拠に使わないこと——現物を grep すること。**
 測ったのは `origin/main` = `3f2affe`（v0.5.0）。
 
 **base-spec §27 の原則「計算エラーは戻り値の一部」は変わらない。** 変えるのはその**形**である。
@@ -231,7 +237,18 @@ error: Extract<CalcErrorCode, "Overflow" | "SyntaxError"> | null     // datascal
 
 ## §9 完了条件
 
-1. 10 個すべてが `Outcome<T>` になり、**payload から `Option` が消えている**
+1. **12 個**すべてが `Outcome<T>` になり、**payload の `Option` のうち
+   「失敗したから無い」を表していたものが消えている**
+
+   **訂正印（2026-08-28）**: 元の文言は「payload から `Option` が消えている」だった。
+   **loan 系 5 個だけを見て書いた文言で、誤り。** `Compound`/`CompoundInverse` の
+   税 3 フィールド（税 OFF のとき無い）と `ByteLines` の `decimal`/`binary`
+   （1000/1024 bytes 未満に単位が無い）は**本当に任意**で、消すと嘘になる。**§3 が優先。**
+
+   **そして本当の完了条件は、残した `Option` が「いつ null になるか」を機械が見ていること**である
+   ——実装役が `web.rs` に「税ありなら null は 1 つも出ない／税なしならこの 3 つだけ」
+   「1 / 1000 / 1024 bytes の 3 点で `decimal` と `binary` の境目が別々」を名指しで固定した。
+   **曖昧な規則を、検査できる主張に変えてある。**
 2. **境界の `match` が 10 個から総称 1 つに畳まれている**
 3. TS 側の 10 個の名前が残り、**`| null` が payload から消えている**
 4. §4 と §5 の番人が在り、**それぞれ赤確認が取れている**

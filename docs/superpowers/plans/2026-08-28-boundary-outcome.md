@@ -306,8 +306,11 @@ describe("Outcome", () => {
 
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `cd web && pnpm vitest run tests/unit/outcome.test.ts`
-Expected: FAIL — `Outcome` が無い
+**訂正印（2026-08-28）: `vitest` では赤くならない。** vitest は型を消すので通ってしまう
+（実測 3 passed）。**型の主張の赤確認は `tsc` で取る。**
+
+Run: `cd web && pnpm typecheck`
+Expected: FAIL — `Module has no exported member 'Outcome'` ほか
 
 - [ ] **Step 3: 型を書く**
 
@@ -569,7 +572,12 @@ cd web && pnpm typecheck && pnpm lint && pnpm test && pnpm e2e
 
 ---
 
-## 段階 2 — 残り 9
+## 段階 2 — 残り 11
+
+**訂正印（2026-08-28）: 下の表は 9 行だが、実際の対象は 12 個**（段階 1 の
+`LoanBonusForward` を除いて **11**）。表に無いものが 2 つある——`CompoundInverse` と
+`ConvertUnits`。**表を数の根拠に使わないこと。** 現物を grep すること
+（`error: Option<` を持つ struct）。
 
 **段階 1 と同じ手順を、payload の広い順に繰り返す。** 新しい設計判断は無い。
 
