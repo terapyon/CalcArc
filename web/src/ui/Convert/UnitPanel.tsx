@@ -198,7 +198,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     const folded = currency
       ? calc.convert(typed, FOLD_CATEGORY, FOLD_UNIT, FOLD_UNIT)
       : calc.convert(typed, category as ConvertCategoryToken, from, from);
-    if (folded.text === null) return null;
+    if (folded.kind === "error") return null;
     const plain = folded.text.replace(/,/g, "");
     return /^-?\d+(\.\d+)?$/.test(plain) ? plain : null;
   }
@@ -343,12 +343,15 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
           ? null
           : calc.convertCurrency(typed, from, to, fromRate, toRate)
         : calc.convert(typed, category as ConvertCategoryToken, from, to);
+  // **成功と失敗は別の形**なので、先に枝を分けてから読む(設計書 §0)。
+  const ok = shown?.kind === "ok" ? shown : null;
+  const calcError = shown?.kind === "error" ? shown.code : null;
   const answer =
     shown === null
       ? ""
-      : shown.text === null
+      : ok === null
         ? "Math ERROR"
-        : `${shown.text} ${FACE_LABELS[to]}`;
+        : `${ok.text} ${FACE_LABELS[to]}`;
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**(設計書 §2)。
   // 単位は常に値を持つので、消えるのは未入力の値だけである。
@@ -364,7 +367,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
       <Readout
         entries={entries}
         main={answer}
-        error={shown?.error ?? null}
+        error={calcError}
         status={[
           {
             testId: "convert-field",
@@ -411,9 +414,9 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         pressed={keyPressed}
         disabled={keyDisabled}
       />
-      {shown !== null && shown.text !== null && (
+      {ok !== null && (
         <p className={styles.result} data-testid="convert-result">
-          {`${typed} ${FACE_LABELS[from]} = ${shown.text} ${FACE_LABELS[to]}`}
+          {`${typed} ${FACE_LABELS[from]} = ${ok.text} ${FACE_LABELS[to]}`}
         </p>
       )}
     </section>

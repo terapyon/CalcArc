@@ -23,6 +23,7 @@ import type {
 export type {
   BandwidthUnitToken,
   ByteLines,
+  DataScaleErrorCode,
   DataScaleResult,
   DataTypeToken,
   DurationUnitToken,

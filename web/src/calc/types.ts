@@ -107,3 +107,20 @@ export interface Step {
   state: EngineState;
   display: DisplayState;
 }
+
+/**
+ * 境界を渡る 2 択。**無効な状態を表現できない**——成功なら payload が全部在り、
+ * 失敗なら `code` だけが在る(設計書 §0)。
+ *
+ * 以前は「N 個の payload `| null` ＋ `error: E | null`」で、
+ * `LoanBonusForwardResult` が**ありうる**と言っていた状態は 256 通りだった。
+ * **実際に起きるのは 2 通り**である。
+ *
+ * **規約はここ 1 箇所、名前は関数ごとに実体化して残す。** 10 個を手で書くと、
+ * 11 個目を書く人が写し間違える。
+ *
+ * Rust 側は `crates/calcarc-wasm/src/outcome.rs` の `Outcome<T>` で、
+ * **内側 tag**——`{"kind":"ok", …payload}` / `{"kind":"error","code":"…"}`。
+ * 実物は `tests/web.rs` が実ブラウザで固定している。
+ */
+export type Outcome<T, E> = ({ kind: "ok" } & T) | { kind: "error"; code: E };

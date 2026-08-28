@@ -221,7 +221,10 @@ export function TransferPanel() {
     const typed = text(value);
     if (typed === "" || expr === null) return { value: "", error: null };
     const r = expr.integer(typed, MAX_COUNT, "none");
-    return { value: r.value ?? "", error: r.error };
+    // **成功と失敗は別の形**なので、枝を分けてから読む(設計書 §0)。
+    return r.kind === "error"
+      ? { value: "", error: r.code }
+      : { value: r.value, error: null };
   }
 
   const bandwidthResult = evaluate(bandwidth);
@@ -243,17 +246,20 @@ export function TransferPanel() {
 
   // main は主 → 副 → bytes の順に繰り上げる(設計書 §6)。1 バイトのように
   // どの単位にも届かない値では bytes だけが残る。
-  const decimal = shown?.decimal ?? null;
-  const binary = shown?.binary ?? null;
+  // **成功と失敗は別の形**なので、先に枝を分けてから読む(設計書 §0)。
+  const ok = shown?.kind === "ok" ? shown : null;
+  const calcError = shown?.kind === "error" ? shown.code : null;
+  // `decimal` と `binary` は成功でも無いことがある——**本当に任意**である
+  // (1000/1024 bytes 未満に単位が無い)。`bytesGrouped` は必ず在る。
+  const decimal = ok?.decimal ?? null;
+  const binary = ok?.binary ?? null;
   const first = primary === "decimal" ? decimal : binary;
   const second = primary === "decimal" ? binary : decimal;
   const answer = exprError
     ? "Math ERROR"
-    : shown?.error
+    : calcError
       ? "Math ERROR"
-      : (first ??
-        second ??
-        (shown?.bytesGrouped ? `${shown.bytesGrouped} bytes` : ""));
+      : (first ?? second ?? (ok ? `${ok.bytesGrouped} bytes` : ""));
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。単位は常に値を持つので、消えるのは未入力の値だけである。
@@ -268,7 +274,7 @@ export function TransferPanel() {
       <Readout
         entries={entries}
         main={answer}
-        error={exprError ?? shown?.error ?? null}
+        error={exprError ?? calcError}
         status={[
           {
             testId: "transfer-primary",
@@ -288,9 +294,9 @@ export function TransferPanel() {
         pressed={keyPressed}
         disabled={keyDisabled}
       />
-      {shown && !shown.error && (
+      {ok && (
         <div className={styles.result} data-testid="transfer-result">
-          {shown.bytesGrouped !== null && <p>{shown.bytesGrouped} bytes</p>}
+          <p>{ok.bytesGrouped} bytes</p>
           {first !== null && <p className={styles.primary}>{first}</p>}
           {second !== null && <p className={styles.secondary}>{second}</p>}
         </div>

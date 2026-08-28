@@ -33,6 +33,9 @@ use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::finance::{compound, compound_inverse, tax};
 use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
+mod outcome;
+use outcome::Outcome;
+
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -57,7 +60,12 @@ pub fn start() {
 ///
 /// 開発時に panic を可視化するためのフック以外では、panic は起きない想定。
 /// 万一シリアライズに失敗したら null を返し、呼び出し側が初期化し直す。
-fn to_js_value<T: Serialize>(value: &T) -> JsValue {
+/// **`pub(crate)` なのは、`outcome.rs` のテストが**本番の経路そのもの**を
+/// 通すためである。** テストの中で `Serializer` を組み直すこともできるが、
+/// それは「同じ設定で組んだ別のシリアライザ」を測ることになり、
+/// ここの `serialize_missing_as_null(true)` が動いても気づけない。
+/// crate の外へは出ない(`pub` ではない)ので、公開面は広がらない。
+pub(crate) fn to_js_value<T: Serialize>(value: &T) -> JsValue {
     let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
     value.serialize(&serializer).unwrap_or(JsValue::NULL)
 }
@@ -107,17 +115,6 @@ pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// Data Scale の 1 回の計算結果。TypeScript 側の `DataScaleResult` に対応する。
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DataScaleResult {
-    bytes: Option<String>,
-    bytes_grouped: Option<String>,
-    decimal: Option<String>,
-    binary: Option<String>,
-    error: Option<calcarc_core::CalcError>,
-}
-
 /// count × dimensions × dtype を計算する。純関数で、状態を持たない。
 ///
 /// Scientific の reduce と違いキーストローク状態機械ではないので、
@@ -132,27 +129,19 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
             data_scale::size_in_bytes(c, d, t)
         });
-    let result = match outcome {
-        Ok(bytes) => DataScaleResult {
-            bytes: Some(bytes.to_string()),
-            bytes_grouped: Some(group_digits(bytes)),
-            decimal: format_decimal(bytes),
-            binary: format_binary(bytes),
-            error: None,
-        },
-        Err(e) => DataScaleResult {
-            bytes: None,
-            bytes_grouped: None,
-            decimal: None,
-            binary: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<ByteLines> = outcome.map(ByteLines::of).into();
     to_js_value(&result)
 }
 
-/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、DataScaleResult を
-/// そのまま 3 つ並べるのではなく、組を型にした(spec §6)。
+/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、4 点をそのまま
+/// 3 つ並べるのではなく、組を型にした(spec §6)。
+///
+/// `data_scale` と `data_transfer` の成功の payload は**この 4 点そのもの**
+/// だったので、Outcome 化のときに専用の構造体を畳んだ。
+///
+/// **`decimal` と `binary` は `Option` のまま残す。** 1000 bytes 未満に 10 進の
+/// 単位は無く、1024 bytes 未満に 2 進の単位は無い(`format.rs`)——失敗を潰す
+/// ための `Option` ではなく、**本当に任意である**(設計書 §3)。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ByteLines {
@@ -173,14 +162,16 @@ impl ByteLines {
     }
 }
 
-/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` に対応する。
+/// LLM の 1 回の見積り。TypeScript 側の `LlmResult` の成功の payload。
+///
+/// **3 組は揃って在るか、揃って無いかのどちらかだった**ので、`Option` は
+/// 潰しのためだけに付いていた。`Outcome` に外して素の `ByteLines` にする。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LlmResult {
-    weight: Option<ByteLines>,
-    kv: Option<ByteLines>,
-    total: Option<ByteLines>,
-    error: Option<calcarc_core::CalcError>,
+struct LlmMemory {
+    weight: ByteLines,
+    kv: ByteLines,
+    total: ByteLines,
 }
 
 /// 重み ＋ KV cache を見積もる。純関数で、状態を持たない。
@@ -215,20 +206,13 @@ pub fn llm_memory(
             kv,
         )
     })();
-    let result = match outcome {
-        Ok(m) => LlmResult {
-            weight: Some(ByteLines::of(m.weight_bytes)),
-            kv: Some(ByteLines::of(m.kv_bytes)),
-            total: Some(ByteLines::of(m.total_bytes)),
-            error: None,
-        },
-        Err(e) => LlmResult {
-            weight: None,
-            kv: None,
-            total: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<LlmMemory> = outcome
+        .map(|m| LlmMemory {
+            weight: ByteLines::of(m.weight_bytes),
+            kv: ByteLines::of(m.kv_bytes),
+            total: ByteLines::of(m.total_bytes),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -248,22 +232,7 @@ pub fn data_transfer(
         let per = DurationUnit::from_token(duration_unit).ok_or(CalcError::SyntaxError)?;
         transfer::transferred_bytes(bandwidth_value, unit, duration_value, per)
     })();
-    let result = match outcome {
-        Ok(bytes) => DataScaleResult {
-            bytes: Some(bytes.to_string()),
-            bytes_grouped: Some(group_digits(bytes)),
-            decimal: format_decimal(bytes),
-            binary: format_binary(bytes),
-            error: None,
-        },
-        Err(e) => DataScaleResult {
-            bytes: None,
-            bytes_grouped: None,
-            decimal: None,
-            binary: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<ByteLines> = outcome.map(ByteLines::of).into();
     to_js_value(&result)
 }
 
@@ -276,64 +245,65 @@ pub fn data_transfer(
 // 例外は投げない。エラーは戻り値の一部である。
 
 /// 正算(月額を求める)の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanForwardResult {
-    monthly_payment: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    rows_paid: Option<u32>,
-    error: Option<CalcError>,
+struct LoanForward {
+    monthly_payment: String,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
+    rows_paid: u32,
 }
 
 /// 借入可能額逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanPrincipalResult {
-    principal: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    rows_paid: Option<u32>,
-    error: Option<CalcError>,
+struct LoanPrincipal {
+    principal: String,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
+    rows_paid: u32,
 }
 
 /// 期間逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanTermResult {
-    months: Option<u32>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    error: Option<CalcError>,
+struct LoanTerm {
+    months: u32,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
 }
 
-/// ボーナス併用の正算の結果。
-#[derive(Serialize, Default)]
+/// ボーナス併用の正算の結果。**`Outcome` の payload なので `Option` を持たない。**
+///
+/// **`Default` も持たない。** 全フィールドが必須になったので、
+/// 「空の結果」という状態がそもそも無い——以前はそれが失敗側の
+/// `..Default::default()` に使われていた。
+#[derive(Serialize)]
+// **外すと `monthly_payment` のまま出る**(設計書 §4)。enum 側の `rename_all` は
+// tag の値しか決めない。`tests/boundary_shape.rs` が見張る。
 #[serde(rename_all = "camelCase")]
-struct LoanBonusForwardResult {
-    monthly_payment: Option<String>,
-    bonus_payment: Option<String>,
-    bonus_rows: Option<u32>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    monthly_final_payment: Option<String>,
-    bonus_final_payment: Option<String>,
-    error: Option<CalcError>,
+struct LoanBonusForward {
+    monthly_payment: String,
+    bonus_payment: String,
+    bonus_rows: u32,
+    total_payment: String,
+    total_interest: String,
+    monthly_final_payment: String,
+    bonus_final_payment: String,
 }
 
 /// ボーナス併用の借入可能額逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanBonusPrincipalResult {
-    monthly_principal: Option<String>,
-    bonus_principal: Option<String>,
-    total_principal: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    error: Option<CalcError>,
+struct LoanBonusPrincipal {
+    monthly_principal: String,
+    bonus_principal: String,
+    total_principal: String,
+    total_payment: String,
+    total_interest: String,
 }
 
 /// 元利均等の正算。`residual` は残価(既定は "0")。
@@ -347,20 +317,15 @@ pub fn loan_forward(principal: &str, rate: &str, months: u32, residual: &str) ->
             parse_yen(residual)?,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanForwardResult {
-            monthly_payment: Some(r.monthly_payment.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            rows_paid: Some(r.rows_paid),
-            error: None,
-        },
-        Err(e) => LoanForwardResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanForward> = outcome
+        .map(|r| LoanForward {
+            monthly_payment: r.monthly_payment.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+            rows_paid: r.rows_paid,
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -369,20 +334,15 @@ pub fn loan_forward(principal: &str, rate: &str, months: u32, residual: &str) ->
 pub fn loan_principal(payment: &str, rate: &str, months: u32) -> JsValue {
     let outcome: CalcResult<_> =
         (|| inverse::principal_for(parse_yen(payment)?, &Rate::from_percent(rate)?, months))();
-    let result = match outcome {
-        Ok(r) => LoanPrincipalResult {
-            principal: Some(r.principal.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            rows_paid: Some(r.rows_paid),
-            error: None,
-        },
-        Err(e) => LoanPrincipalResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanPrincipal> = outcome
+        .map(|r| LoanPrincipal {
+            principal: r.principal.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+            rows_paid: r.rows_paid,
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -396,19 +356,14 @@ pub fn loan_term(principal: &str, rate: &str, payment: &str) -> JsValue {
             parse_yen(payment)?,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanTermResult {
-            months: Some(r.n),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            error: None,
-        },
-        Err(e) => LoanTermResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanTerm> = outcome
+        .map(|r| LoanTerm {
+            months: r.n,
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -428,22 +383,18 @@ pub fn loan_bonus_forward(
             months,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanBonusForwardResult {
-            monthly_payment: Some(r.monthly_payment.to_string()),
-            bonus_payment: Some(r.bonus_payment.to_string()),
-            bonus_rows: Some(r.bonus_rows),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            monthly_final_payment: Some(r.monthly_final_payment.to_string()),
-            bonus_final_payment: Some(r.bonus_final_payment.to_string()),
-            error: None,
-        },
-        Err(e) => LoanBonusForwardResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    // **`match` が消えた。** 潰していたのはここで、`CalcResult` は既に 2 択だった。
+    let result: Outcome<LoanBonusForward> = outcome
+        .map(|r| LoanBonusForward {
+            monthly_payment: r.monthly_payment.to_string(),
+            bonus_payment: r.bonus_payment.to_string(),
+            bonus_rows: r.bonus_rows,
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            monthly_final_payment: r.monthly_final_payment.to_string(),
+            bonus_final_payment: r.bonus_final_payment.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -463,20 +414,15 @@ pub fn loan_bonus_principal(
             months,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanBonusPrincipalResult {
-            monthly_principal: Some(r.monthly_principal.to_string()),
-            bonus_principal: Some(r.bonus_principal.to_string()),
-            total_principal: Some(r.total_principal.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            error: None,
-        },
-        Err(e) => LoanBonusPrincipalResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanBonusPrincipal> = outcome
+        .map(|r| LoanBonusPrincipal {
+            monthly_principal: r.monthly_principal.to_string(),
+            bonus_principal: r.bonus_principal.to_string(),
+            total_principal: r.total_principal.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -484,51 +430,53 @@ pub fn loan_bonus_principal(
 ///
 /// 税の 3 項目は `tax` が偽なら `null` になる。**既定はタックスフリー**
 /// (NISA 前提。設計書 §6)。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CompoundResult {
-    final_balance: Option<String>,
-    principal_total: Option<String>,
-    interest: Option<String>,
+struct Compound {
+    final_balance: String,
+    principal_total: String,
+    interest: String,
+    /// **税 OFF のときは無い。潰しのための `Option` ではなく、本当に任意である**
+    /// (設計書 §3)。税を引かない計算では「国税」という値が存在しない。
     national_tax: Option<String>,
     local_tax: Option<String>,
+    /// 税引後の受取額。上の 2 つと同じ理由で任意である。
     net: Option<String>,
-    error: Option<CalcError>,
 }
 
 /// 逆算の結果。**答(`deposit` か `periods`)と、その答における全体像**。
 ///
 /// `CompoundResult` と分けてあるのは、`compound_grow` の出力に常に `null` の
 /// `deposit` / `periods` が混ざるのを避けるためである。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CompoundInverseResult {
+struct CompoundInverse {
     /// 必要積立額。`compound_periods_for` では入力そのまま。
-    deposit: Option<String>,
+    deposit: String,
     /// 必要期数。`compound_deposit_for` では入力そのまま。
-    periods: Option<String>,
-    final_balance: Option<String>,
-    principal_total: Option<String>,
-    interest: Option<String>,
+    periods: String,
+    final_balance: String,
+    principal_total: String,
+    interest: String,
+    /// **税 OFF のときは無い。潰しのための `Option` ではなく、本当に任意である**
+    /// (設計書 §3)。`Compound` と同じ扱いにしてある。
     national_tax: Option<String>,
     local_tax: Option<String>,
     net: Option<String>,
-    error: Option<CalcError>,
 }
 
 /// `Solution` を境界の形に詰める。**税 OFF のとき税の 3 項目は `None`**
 /// ——`compound_grow` が同じ扱いなので、TS 側の読み方を揃える。
-fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverseResult {
-    CompoundInverseResult {
-        deposit: Some(s.deposit.to_string()),
-        periods: Some(s.periods.to_string()),
-        final_balance: Some(s.growth.final_balance.to_string()),
-        principal_total: Some(s.growth.principal_total.to_string()),
-        interest: Some(s.growth.interest.to_string()),
+fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverse {
+    CompoundInverse {
+        deposit: s.deposit.to_string(),
+        periods: s.periods.to_string(),
+        final_balance: s.growth.final_balance.to_string(),
+        principal_total: s.growth.principal_total.to_string(),
+        interest: s.growth.interest.to_string(),
         national_tax: taxed.then(|| s.national_tax.to_string()),
         local_tax: taxed.then(|| s.local_tax.to_string()),
         net: taxed.then(|| s.net.to_string()),
-        error: None,
     }
 }
 
@@ -555,16 +503,16 @@ pub fn compound_grow(
         };
         Ok((growth, taxes))
     })();
-    let result = match outcome {
-        Ok((growth, taxes)) => {
+    let result: Outcome<Compound> = outcome
+        .map(|(growth, taxes)| {
             let (national, local) = match taxes {
                 Some((n, l)) => (Some(n), Some(l)),
                 None => (None, None),
             };
-            CompoundResult {
-                final_balance: Some(growth.final_balance.to_string()),
-                principal_total: Some(growth.principal_total.to_string()),
-                interest: Some(growth.interest.to_string()),
+            Compound {
+                final_balance: growth.final_balance.to_string(),
+                principal_total: growth.principal_total.to_string(),
+                interest: growth.interest.to_string(),
                 national_tax: national.map(|v| v.to_string()),
                 local_tax: local.map(|v| v.to_string()),
                 net: match (national, local) {
@@ -575,14 +523,9 @@ pub fn compound_grow(
                         .map(|v| v.to_string()),
                     _ => None,
                 },
-                error: None,
             }
-        }
-        Err(e) => CompoundResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -608,13 +551,7 @@ pub fn compound_deposit_for(
             tax,
         )
     })();
-    let result = match outcome {
-        Ok(s) => inverse_result(s, tax),
-        Err(e) => CompoundInverseResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();
     to_js_value(&result)
 }
 
@@ -641,35 +578,23 @@ pub fn compound_periods_for(
             tax,
         )
     })();
-    let result = match outcome {
-        Ok(s) => inverse_result(s, tax),
-        Err(e) => CompoundInverseResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();
     to_js_value(&result)
 }
 
-/// 式の評価結果。TypeScript 側の `ExprResult` に対応する。
-#[derive(Serialize, Default)]
+/// 式の評価結果。TypeScript 側の `ExprResult` の成功の payload。
+///
+/// **1 つしかフィールドが無くても、`Outcome` の payload は構造体である。**
+/// 内部タグ付き(`tag = "kind"`)は、payload が map になる形しか直列化できない
+/// ——素の `String` を包むと実行時に失敗する。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ExprResult {
-    value: Option<String>,
-    error: Option<CalcError>,
+struct ExprValue {
+    value: String,
 }
 
 fn to_expr_result(outcome: CalcResult<String>) -> JsValue {
-    let result = match outcome {
-        Ok(value) => ExprResult {
-            value: Some(value),
-            error: None,
-        },
-        Err(e) => ExprResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ExprValue> = outcome.map(|value| ExprValue { value }).into();
     to_js_value(&result)
 }
 
@@ -694,20 +619,21 @@ pub fn expr_percent(text: &str) -> JsValue {
     to_expr_result(expr::evaluate_to_percent(text))
 }
 
-/// 単位換算の結果。TypeScript 側の `ConvertResult` に対応する。
-#[derive(Serialize, Default)]
+/// 単位換算の結果。TypeScript 側の `ConvertResult` の成功の payload。
+///
+/// **為替も同じ形で返す**(U-4 計画 Task 4)——換算した結果は、どちらも
+/// 整形済みの 1 行だからである。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertResult {
-    text: Option<String>,
-    error: Option<CalcError>,
+struct ConvertText {
+    text: String,
 }
 
-/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` に対応する。
-#[derive(Serialize, Default)]
+/// カテゴリの単位一覧。TypeScript 側の `ConvertUnitsResult` の成功の payload。
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConvertUnitsResult {
-    units: Option<Vec<String>>,
-    error: Option<CalcError>,
+struct ConvertUnits {
+    units: Vec<String>,
 }
 
 /// 単位換算(U-1 設計書 §5)。**例外を投げない。**
@@ -723,16 +649,7 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
         let to = convert_core::Unit::from_token(to).ok_or(CalcError::SyntaxError)?;
         convert_core::format::format_rational(convert_core::convert(value, category, from, to)?)
     })();
-    let result = match outcome {
-        Ok(text) => ConvertResult {
-            text: Some(text),
-            error: None,
-        },
-        Err(e) => ConvertResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertText> = outcome.map(|text| ConvertText { text }).into();
     to_js_value(&result)
 }
 
@@ -742,22 +659,16 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
 /// ときに表と画面の 2 か所を直さずに済ませるためである。
 #[wasm_bindgen]
 pub fn convert_units(category: &str) -> JsValue {
-    let result = match convert_core::Category::from_token(category) {
-        Some(category) => ConvertUnitsResult {
-            units: Some(
-                category
-                    .units()
-                    .iter()
-                    .map(|unit| unit.token().to_owned())
-                    .collect(),
-            ),
-            error: None,
-        },
-        None => ConvertUnitsResult {
-            error: Some(CalcError::SyntaxError),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertUnits> = convert_core::Category::from_token(category)
+        .ok_or(CalcError::SyntaxError)
+        .map(|category| ConvertUnits {
+            units: category
+                .units()
+                .iter()
+                .map(|unit| unit.token().to_owned())
+                .collect(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -801,16 +712,7 @@ pub fn convert_currency(
         let to = currency::Currency::from_token(to).ok_or(CalcError::SyntaxError)?;
         currency::convert_currency(value, to, from_rate, to_rate)
     })();
-    let result = match outcome {
-        Ok(text) => ConvertResult {
-            text: Some(text),
-            error: None,
-        },
-        Err(e) => ConvertResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<ConvertText> = outcome.map(|text| ConvertText { text }).into();
     to_js_value(&result)
 }
 

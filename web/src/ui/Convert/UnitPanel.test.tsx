@@ -198,15 +198,16 @@ function convertStub(
   calls.push({ value, category, from, to });
   // **知らない綴りは SyntaxError**(コアの `Unit::from_token` と同じ)。画面の
   // ラベル(`°C`)を渡したら、ここで落ちる。
-  if (!isUnit(from) || !isUnit(to)) return { text: null, error: "SyntaxError" };
+  if (!isUnit(from) || !isUnit(to))
+    return { kind: "error", code: "SyntaxError" };
   const parsed = evaluate(value);
-  if (parsed === null) return { text: null, error: "SyntaxError" };
+  if (parsed === null) return { kind: "error", code: "SyntaxError" };
   const source = affine(from);
   const target = affine(to);
   const base = parsed * source.factor + source.offset;
   return {
+    kind: "ok",
     text: format((base - target.offset) / target.factor),
-    error: null,
   };
 }
 
@@ -265,21 +266,21 @@ function convertCurrencyStub(
   // **知らない綴りは SyntaxError**(コアの `Currency::from_token` と同じ)。
   // 画面のラベル(`USD`)を渡したら、ここで落ちる。
   if (!isCurrencyToken(from) || !isCurrencyToken(to)) {
-    return { text: null, error: "SyntaxError" };
+    return { kind: "error", code: "SyntaxError" };
   }
   const parsed = evaluate(value);
-  if (parsed === null) return { text: null, error: "SyntaxError" };
+  if (parsed === null) return { kind: "error", code: "SyntaxError" };
   const source = Number(fromRate);
-  if (source === 0) return { text: null, error: "DivisionByZero" };
+  if (source === 0) return { kind: "error", code: "DivisionByZero" };
   const amount = (parsed / source) * Number(toRate);
   const fixed = amount.toFixed(DECIMALS[to]);
   const [integer = "0", fraction] = fixed.replace(/^-/, "").split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return {
+    kind: "ok",
     text: `${fixed.startsWith("-") ? "-" : ""}${grouped}${
       fraction === undefined ? "" : `.${fraction}`
     }`,
-    error: null,
   };
 }
 

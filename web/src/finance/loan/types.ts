@@ -3,7 +3,7 @@
 // ロジックも持ち込まない。narrowing の根拠は loan の WASM 境界がこの 2 つしか
 // 返さないこと(lib.rs の Loan*Result::error、calcarc-core の
 // Overflow/SyntaxError)。
-import type { CalcErrorCode } from "../../calc/types";
+import type { CalcErrorCode, Outcome } from "../../calc/types";
 
 export type LoanErrorCode = Extract<CalcErrorCode, "Overflow" | "SyntaxError">;
 
@@ -13,52 +13,62 @@ export const LOAN_MODES = ["payment", "principal", "term"] as const;
 export type LoanMode = (typeof LOAN_MODES)[number];
 
 /** 正算(月額を求める)。金額はすべて文字列 —— 円は JS の number を超えうる。 */
-export interface LoanForwardResult {
-  monthlyPayment: string | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  finalPayment: string | null;
-  rowsPaid: number | null;
-  error: LoanErrorCode | null;
-}
+export type LoanForwardResult = Outcome<
+  {
+    monthlyPayment: string;
+    totalPayment: string;
+    totalInterest: string;
+    finalPayment: string;
+    rowsPaid: number;
+  },
+  LoanErrorCode
+>;
 
 /** 借入可能額逆算。 */
-export interface LoanPrincipalResult {
-  principal: string | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  finalPayment: string | null;
-  rowsPaid: number | null;
-  error: LoanErrorCode | null;
-}
+export type LoanPrincipalResult = Outcome<
+  {
+    principal: string;
+    totalPayment: string;
+    totalInterest: string;
+    finalPayment: string;
+    rowsPaid: number;
+  },
+  LoanErrorCode
+>;
 
 /** 期間逆算。回数だけは数値(月数は JS の number に収まる)。 */
-export interface LoanTermResult {
-  months: number | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  finalPayment: string | null;
-  error: LoanErrorCode | null;
-}
+export type LoanTermResult = Outcome<
+  {
+    months: number;
+    totalPayment: string;
+    totalInterest: string;
+    finalPayment: string;
+  },
+  LoanErrorCode
+>;
 
 /** ボーナス併用の正算。 */
-export interface LoanBonusForwardResult {
-  monthlyPayment: string | null;
-  bonusPayment: string | null;
-  bonusRows: number | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  monthlyFinalPayment: string | null;
-  bonusFinalPayment: string | null;
-  error: LoanErrorCode | null;
-}
+export type LoanBonusForwardResult = Outcome<
+  {
+    monthlyPayment: string;
+    bonusPayment: string;
+    bonusRows: number;
+    totalPayment: string;
+    totalInterest: string;
+    monthlyFinalPayment: string;
+    bonusFinalPayment: string;
+  },
+  LoanErrorCode
+>;
 
 /** ボーナス併用の借入可能額逆算。 */
-export interface LoanBonusPrincipalResult {
-  monthlyPrincipal: string | null;
-  bonusPrincipal: string | null;
-  totalPrincipal: string | null;
-  totalPayment: string | null;
-  totalInterest: string | null;
-  error: LoanErrorCode | null;
-}
+export type LoanBonusPrincipalResult = Outcome<
+  {
+    monthlyPrincipal: string;
+    bonusPrincipal: string;
+    totalPrincipal: string;
+    totalPayment: string;
+    totalInterest: string;
+  },
+  LoanErrorCode
+>;

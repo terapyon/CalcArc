@@ -200,21 +200,23 @@ const FIELD_UNITS: Record<FinanceField, string> = {
  * 一番大きく出す(裁定 Q5)。
  */
 function compoundInverseBreakdown(
-  r: CompoundInverseResult,
+  r: Extract<CompoundInverseResult, { kind: "ok" }>,
   withholding: boolean,
 ): Line[] {
   return [
     {
       label: withholding ? "手取り" : "残高",
-      value: `${grouped(withholding && r.net ? r.net : (r.finalBalance ?? ""))} 円`,
+      value: `${grouped(withholding && r.net ? r.net : r.finalBalance)} 円`,
     },
-    { label: "元本合計", value: `${grouped(r.principalTotal ?? "")} 円` },
-    { label: "運用収益", value: `${grouped(r.interest ?? "")} 円` },
+    { label: "元本合計", value: `${grouped(r.principalTotal)} 円` },
+    { label: "運用収益", value: `${grouped(r.interest)} 円` },
     ...(withholding
       ? [
+          // **税の 3 項目だけは `| null` が残る**(税 OFF のとき無い)。
+          // 潰しの null ではなく、本当に任意である(設計書 §3)。
           { label: "国税", value: `${grouped(r.nationalTax ?? "")} 円` },
           { label: "地方税", value: `${grouped(r.localTax ?? "")} 円` },
-          { label: "税引前", value: `${grouped(r.finalBalance ?? "")} 円` },
+          { label: "税引前", value: `${grouped(r.finalBalance)} 円` },
         ]
       : []),
   ];
@@ -588,22 +590,27 @@ export function FinancePanel() {
       return { value: null, error: null };
     const typed = typedIn(field);
     if (typed === "" || expr === null) return { value: null, error: null };
-    if (field === "rate") {
-      const r = expr.percent(typed);
-      return { value: r.value, error: r.error };
-    }
+    // **成功と失敗は別の形**なので、枝を分けてから読む(設計書 §0)。
     const { max, unitSet } = domainOf(field);
-    const r = expr.integer(typed, max, unitSet);
-    return { value: r.value, error: r.error };
+    const r =
+      field === "rate"
+        ? expr.percent(typed)
+        : expr.integer(typed, max, unitSet);
+    return r.kind === "error"
+      ? { value: null, error: r.code }
+      : { value: r.value, error: null };
   }
 
   /** 式を評価した値。壊れていれば null。 */
   function settle(field: FinanceField): string | null {
     const typed = typedIn(field);
     if (typed === "" || expr === null) return null;
-    if (field === "rate") return expr.percent(typed).value;
     const { max, unitSet } = domainOf(field);
-    return expr.integer(typed, max, unitSet).value;
+    const r =
+      field === "rate"
+        ? expr.percent(typed)
+        : expr.integer(typed, max, unitSet);
+    return r.kind === "ok" ? r.value : null;
   }
 
   function labelOf(field: FinanceField): string {
@@ -682,13 +689,14 @@ export function FinancePanel() {
         periods,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.finalBalance) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         // 税ありのときは**手取り**を一番大きく出す(裁定 Q5)。
         answer = `${grouped(withholding && r.net ? r.net : r.finalBalance)} 円`;
         breakdown = [
-          { label: "元本合計", value: `${grouped(r.principalTotal ?? "")} 円` },
-          { label: "運用収益", value: `${grouped(r.interest ?? "")} 円` },
+          { label: "元本合計", value: `${grouped(r.principalTotal)} 円` },
+          { label: "運用収益", value: `${grouped(r.interest)} 円` },
           ...(withholding
             ? [
                 { label: "国税", value: `${grouped(r.nationalTax ?? "")} 円` },
@@ -712,8 +720,9 @@ export function FinancePanel() {
         periods,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.deposit) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${grouped(r.deposit)} 円`;
         breakdown = compoundInverseBreakdown(r, withholding);
       }
@@ -737,8 +746,9 @@ export function FinancePanel() {
         periodsPerYear,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.periods) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${r.periods} 期`;
         breakdown = compoundInverseBreakdown(r, withholding);
       }
@@ -752,8 +762,16 @@ export function FinancePanel() {
           rate,
           monthsNumber,
         );
-        error = r.error;
-        if (!r.error && r.monthlyPayment && r.bonusPayment) {
+        // **`&& r.monthlyPayment && r.bonusPayment` が消えた。** `ok` の枝では
+        // 7 つとも `string` であることが型で分かる(設計書 §3)。
+        //
+        // **`error` の代入が判定の内側へ移った。** 以前は `error = r.error;` が
+        // 判定の外に在ったが、**この枝に入る条件が `error === null` である**
+        // (:739)。成功のときの代入は `null` に `null` を入れていただけで、
+        // 消していた前の値は存在しない。
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.monthlyPayment)} 円`;
           breakdown = [
             {
@@ -770,11 +788,14 @@ export function FinancePanel() {
           monthsNumber,
           residualDigits === "" ? "0" : residualDigits,
         );
-        error = r.error;
-        if (!r.error && r.monthlyPayment) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.monthlyPayment)} 円`;
           breakdown = [
-            ...(residualDigits !== "" && r.finalPayment
+            // **`&& r.finalPayment` が消えた。** 残っている条件は
+            // 「残価を打ったか」だけで、これは値の有無ではなく入力の有無である。
+            ...(residualDigits !== ""
               ? [
                   {
                     label: "最終回（残価）",
@@ -794,29 +815,31 @@ export function FinancePanel() {
           rate,
           monthsNumber,
         );
-        error = r.error;
-        if (!r.error && r.totalPrincipal && r.monthlyPrincipal) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.totalPrincipal)} 円`;
           breakdown = [
             {
               label: "うち月払い分",
               value: `${grouped(r.monthlyPrincipal)} 円`,
             },
-            ...(r.bonusPrincipal
-              ? [
-                  {
-                    label: "うちボーナス分",
-                    value: `${grouped(r.bonusPrincipal)} 円`,
-                  },
-                ]
-              : []),
+            // **条件ごと消えた。** `r.bonusPrincipal` は成功の枝では必ず
+            // 文字列で、**ボーナス 0 円でも `"0"` は truthy** だった
+            // ——この条件は最初から「値が在るか」しか見ておらず、
+            // 「ボーナスが在るか」は見ていない。
+            {
+              label: "うちボーナス分",
+              value: `${grouped(r.bonusPrincipal)} 円`,
+            },
             ...totals(r.totalPayment, r.totalInterest),
           ];
         }
       } else {
         const r = calc.principal(paymentDigits, rate, monthsNumber);
-        error = r.error;
-        if (!r.error && r.principal) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.principal)} 円`;
           breakdown = totals(r.totalPayment, r.totalInterest);
         }
@@ -827,8 +850,9 @@ export function FinancePanel() {
       paymentDigits !== ""
     ) {
       const r = calc.term(principalDigits, rate, paymentDigits);
-      error = r.error;
-      if (!r.error && r.months !== null) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${r.months} か月`;
         breakdown = totals(r.totalPayment, r.totalInterest);
       }
