@@ -15,40 +15,46 @@ vi.mock("../../finance/loan", () => ({
 vi.mock("../../finance", () => ({
   initFinance: () =>
     Promise.resolve({
+      // **`kind` を書き忘れると、この mock は黙って成功の枝に落ちる**
+      // ——`undefined === "error"` は false なので、テストは緑のまま
+      // 「盤面が失敗をどう出すか」を 1 度も見なくなる。
       grow: () => ({
+        kind: "ok",
         finalBalance: "1051136",
         principalTotal: "1000000",
         interest: "51136",
+        // 税の 3 項目**だけ**が null になりうる(税 OFF。設計書 §3)。
         nationalTax: null,
         localTax: null,
         net: null,
-        error: null,
       }),
       // 設計書 §7 の必須ケース #1(golden)。元本 0・年 3%・月次・240 期・
       // 目標 1,000 万・税なし → 積立 30,461、残高 10,000,251。
       depositFor: () => ({
+        kind: "ok",
         deposit: "30461",
-        periods: null,
+        // 逆算は**答と、その答における全体像**を両方返す。求めなかった側
+        // (ここでは期数)は入力そのままで、null にはならない。
+        periods: "240",
         finalBalance: "10000251",
         principalTotal: "7310640",
         interest: "2689611",
         nationalTax: null,
         localTax: null,
         net: null,
-        error: null,
       }),
       // 同 §7 の非単調ペア(a)(golden #4)。元本 999・年 1.5%・月次・積立 0・
       // 目標 1,016・税あり → 19 期。次の期がまた下回ることがある(§3 帰結 2)。
       periodsFor: () => ({
-        deposit: null,
+        kind: "ok",
+        deposit: "0",
         periods: "19",
         finalBalance: "1018",
         principalTotal: "999",
         interest: "19",
-        nationalTax: null,
-        localTax: null,
+        nationalTax: "0",
+        localTax: "0",
         net: "1016",
-        error: null,
       }),
     }),
 }));

@@ -197,21 +197,23 @@ const FIELD_UNITS: Record<FinanceField, string> = {
  * 一番大きく出す(裁定 Q5)。
  */
 function compoundInverseBreakdown(
-  r: CompoundInverseResult,
+  r: Extract<CompoundInverseResult, { kind: "ok" }>,
   withholding: boolean,
 ): Line[] {
   return [
     {
       label: withholding ? "手取り" : "残高",
-      value: `${grouped(withholding && r.net ? r.net : (r.finalBalance ?? ""))} 円`,
+      value: `${grouped(withholding && r.net ? r.net : r.finalBalance)} 円`,
     },
-    { label: "元本合計", value: `${grouped(r.principalTotal ?? "")} 円` },
-    { label: "運用収益", value: `${grouped(r.interest ?? "")} 円` },
+    { label: "元本合計", value: `${grouped(r.principalTotal)} 円` },
+    { label: "運用収益", value: `${grouped(r.interest)} 円` },
     ...(withholding
       ? [
+          // **税の 3 項目だけは `| null` が残る**(税 OFF のとき無い)。
+          // 潰しの null ではなく、本当に任意である(設計書 §3)。
           { label: "国税", value: `${grouped(r.nationalTax ?? "")} 円` },
           { label: "地方税", value: `${grouped(r.localTax ?? "")} 円` },
-          { label: "税引前", value: `${grouped(r.finalBalance ?? "")} 円` },
+          { label: "税引前", value: `${grouped(r.finalBalance)} 円` },
         ]
       : []),
   ];
@@ -675,13 +677,14 @@ export function FinancePanel() {
         periods,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.finalBalance) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         // 税ありのときは**手取り**を一番大きく出す(裁定 Q5)。
         answer = `${grouped(withholding && r.net ? r.net : r.finalBalance)} 円`;
         breakdown = [
-          { label: "元本合計", value: `${grouped(r.principalTotal ?? "")} 円` },
-          { label: "運用収益", value: `${grouped(r.interest ?? "")} 円` },
+          { label: "元本合計", value: `${grouped(r.principalTotal)} 円` },
+          { label: "運用収益", value: `${grouped(r.interest)} 円` },
           ...(withholding
             ? [
                 { label: "国税", value: `${grouped(r.nationalTax ?? "")} 円` },
@@ -705,8 +708,9 @@ export function FinancePanel() {
         periods,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.deposit) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${grouped(r.deposit)} 円`;
         breakdown = compoundInverseBreakdown(r, withholding);
       }
@@ -730,8 +734,9 @@ export function FinancePanel() {
         periodsPerYear,
         withholding,
       );
-      error = r.error;
-      if (!r.error && r.periods) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${r.periods} 期`;
         breakdown = compoundInverseBreakdown(r, withholding);
       }

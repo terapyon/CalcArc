@@ -452,51 +452,53 @@ pub fn loan_bonus_principal(
 ///
 /// 税の 3 項目は `tax` が偽なら `null` になる。**既定はタックスフリー**
 /// (NISA 前提。設計書 §6)。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CompoundResult {
-    final_balance: Option<String>,
-    principal_total: Option<String>,
-    interest: Option<String>,
+struct Compound {
+    final_balance: String,
+    principal_total: String,
+    interest: String,
+    /// **税 OFF のときは無い。潰しのための `Option` ではなく、本当に任意である**
+    /// (設計書 §3)。税を引かない計算では「国税」という値が存在しない。
     national_tax: Option<String>,
     local_tax: Option<String>,
+    /// 税引後の受取額。上の 2 つと同じ理由で任意である。
     net: Option<String>,
-    error: Option<CalcError>,
 }
 
 /// 逆算の結果。**答(`deposit` か `periods`)と、その答における全体像**。
 ///
 /// `CompoundResult` と分けてあるのは、`compound_grow` の出力に常に `null` の
 /// `deposit` / `periods` が混ざるのを避けるためである。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CompoundInverseResult {
+struct CompoundInverse {
     /// 必要積立額。`compound_periods_for` では入力そのまま。
-    deposit: Option<String>,
+    deposit: String,
     /// 必要期数。`compound_deposit_for` では入力そのまま。
-    periods: Option<String>,
-    final_balance: Option<String>,
-    principal_total: Option<String>,
-    interest: Option<String>,
+    periods: String,
+    final_balance: String,
+    principal_total: String,
+    interest: String,
+    /// **税 OFF のときは無い。潰しのための `Option` ではなく、本当に任意である**
+    /// (設計書 §3)。`Compound` と同じ扱いにしてある。
     national_tax: Option<String>,
     local_tax: Option<String>,
     net: Option<String>,
-    error: Option<CalcError>,
 }
 
 /// `Solution` を境界の形に詰める。**税 OFF のとき税の 3 項目は `None`**
 /// ——`compound_grow` が同じ扱いなので、TS 側の読み方を揃える。
-fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverseResult {
-    CompoundInverseResult {
-        deposit: Some(s.deposit.to_string()),
-        periods: Some(s.periods.to_string()),
-        final_balance: Some(s.growth.final_balance.to_string()),
-        principal_total: Some(s.growth.principal_total.to_string()),
-        interest: Some(s.growth.interest.to_string()),
+fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverse {
+    CompoundInverse {
+        deposit: s.deposit.to_string(),
+        periods: s.periods.to_string(),
+        final_balance: s.growth.final_balance.to_string(),
+        principal_total: s.growth.principal_total.to_string(),
+        interest: s.growth.interest.to_string(),
         national_tax: taxed.then(|| s.national_tax.to_string()),
         local_tax: taxed.then(|| s.local_tax.to_string()),
         net: taxed.then(|| s.net.to_string()),
-        error: None,
     }
 }
 
@@ -523,16 +525,16 @@ pub fn compound_grow(
         };
         Ok((growth, taxes))
     })();
-    let result = match outcome {
-        Ok((growth, taxes)) => {
+    let result: Outcome<Compound> = outcome
+        .map(|(growth, taxes)| {
             let (national, local) = match taxes {
                 Some((n, l)) => (Some(n), Some(l)),
                 None => (None, None),
             };
-            CompoundResult {
-                final_balance: Some(growth.final_balance.to_string()),
-                principal_total: Some(growth.principal_total.to_string()),
-                interest: Some(growth.interest.to_string()),
+            Compound {
+                final_balance: growth.final_balance.to_string(),
+                principal_total: growth.principal_total.to_string(),
+                interest: growth.interest.to_string(),
                 national_tax: national.map(|v| v.to_string()),
                 local_tax: local.map(|v| v.to_string()),
                 net: match (national, local) {
@@ -543,14 +545,9 @@ pub fn compound_grow(
                         .map(|v| v.to_string()),
                     _ => None,
                 },
-                error: None,
             }
-        }
-        Err(e) => CompoundResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -576,13 +573,7 @@ pub fn compound_deposit_for(
             tax,
         )
     })();
-    let result = match outcome {
-        Ok(s) => inverse_result(s, tax),
-        Err(e) => CompoundInverseResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();
     to_js_value(&result)
 }
 
@@ -609,13 +600,7 @@ pub fn compound_periods_for(
             tax,
         )
     })();
-    let result = match outcome {
-        Ok(s) => inverse_result(s, tax),
-        Err(e) => CompoundInverseResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();
     to_js_value(&result)
 }
 

@@ -284,11 +284,12 @@ fn compound_crosses_the_boundary() {
         get(&result, "interest").as_string().as_deref(),
         Some("51136")
     );
-    // 税を求めなければ 3 項目は null(undefined ではない)。
+    // 税を求めなければ 3 項目は null(undefined ではない)——**本当に任意**な
+    // フィールドなので、Outcome 化しても `Option` のまま残っている(設計書 §3)。
     assert!(get(&result, "nationalTax").is_null());
     assert!(get(&result, "localTax").is_null());
     assert!(get(&result, "net").is_null());
-    assert!(get(&result, "error").is_null());
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -326,14 +327,14 @@ fn compound_errors_are_returned_not_thrown() {
     // 単調増加なので u64 を超えうる——ローンには無かった経路。
     let overflowed = calcarc_wasm::compound_grow("18446744073709551615", "0", "100", 12, 12, false);
     assert_eq!(
-        get(&overflowed, "error").as_string().as_deref(),
+        get(&overflowed, "code").as_string().as_deref(),
         Some("Overflow")
     );
-    assert!(get(&overflowed, "finalBalance").is_null());
+    assert!(get(&overflowed, "finalBalance").is_undefined());
     // 四半期複利は持たない。境界も例外を投げず SyntaxError を返す。
     let bad_period = calcarc_wasm::compound_grow("1000000", "0", "1", 4, 10, false);
     assert_eq!(
-        get(&bad_period, "error").as_string().as_deref(),
+        get(&bad_period, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -351,7 +352,7 @@ fn compound_deposit_for_crosses_the_boundary() {
         Some("10000251")
     );
     assert!(get(&result, "nationalTax").is_null());
-    assert!(get(&result, "error").is_null());
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -360,7 +361,7 @@ fn compound_periods_for_crosses_the_boundary() {
     let result = calcarc_wasm::compound_periods_for("999", "0", "1016", "1.5", 12, true);
     assert_eq!(get(&result, "periods").as_string().as_deref(), Some("19"));
     assert_eq!(get(&result, "net").as_string().as_deref(), Some("1016"));
-    assert!(get(&result, "error").is_null());
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -368,10 +369,11 @@ fn compound_inverse_errors_are_returned_not_thrown() {
     // 目標 0 は SyntaxError。境界は例外を投げず、戻り値の error に出す。
     let result = calcarc_wasm::compound_deposit_for("0", "0", "3", 12, 240, false);
     assert_eq!(
-        get(&result, "error").as_string().as_deref(),
+        get(&result, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    assert!(get(&result, "deposit").is_null());
+    // 失敗の枝に payload の鍵は**無い**(null ではなく undefined)。
+    assert!(get(&result, "deposit").is_undefined());
 }
 
 #[wasm_bindgen_test]
@@ -381,10 +383,10 @@ fn compound_periods_inverse_errors_are_returned_not_thrown() {
     // 無かった検査を揃える)。
     let result = calcarc_wasm::compound_periods_for("1000000", "0", "0", "3", 12, false);
     assert_eq!(
-        get(&result, "error").as_string().as_deref(),
+        get(&result, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    assert!(get(&result, "periods").is_null());
+    assert!(get(&result, "periods").is_undefined());
 }
 
 #[wasm_bindgen_test]
@@ -629,4 +631,50 @@ fn the_loan_family_answers_in_two_shapes() {
         let json = String::from(js_sys::JSON::stringify(value).unwrap());
         assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
     }
+}
+
+#[wasm_bindgen_test]
+fn the_compound_family_answers_in_two_shapes() {
+    // **税ありなら null は 1 つも出ない。**
+    let ok = [
+        // (principal, deposit, rate, periods/year, periods, tax)
+        calcarc_wasm::compound_grow("1000000", "0", "1", 12, 60, true),
+        // (principal, target, rate, periods/year, periods, tax)
+        calcarc_wasm::compound_deposit_for("0", "1000000", "1", 12, 60, true),
+        // (principal, deposit, target, rate, periods/year, tax)
+        calcarc_wasm::compound_periods_for("0", "10000", "1000000", "1", 12, true),
+    ];
+    for value in &ok {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","#), "{json}");
+        assert!(
+            !json.contains("null"),
+            "税ありの成功に null は出ない: {json}"
+        );
+    }
+
+    // **税なしのときだけ、税の 3 項目が null になる**——これは「失敗したから
+    // 無い」ではなく**本当に任意**である(設計書 §3)。潰しの `Option` と
+    // 区別が付くように、**どれが null になるかを名指しで固定する。**
+    let untaxed = calcarc_wasm::compound_grow("1000000", "0", "1", 12, 60, false);
+    let json = String::from(js_sys::JSON::stringify(&untaxed).unwrap());
+    assert!(json.starts_with(r#"{"kind":"ok","#), "{json}");
+    for (key, null) in [
+        ("finalBalance", false),
+        ("principalTotal", false),
+        ("interest", false),
+        ("nationalTax", true),
+        ("localTax", true),
+        ("net", true),
+    ] {
+        assert_eq!(
+            get(&untaxed, key).is_null(),
+            null,
+            "{key} の任意性が違う: {json}"
+        );
+    }
+    // 期数 0 は SyntaxError(コアの定義域)。
+    let err = calcarc_wasm::compound_grow("1000000", "0", "1", 12, 0, false);
+    let json = String::from(js_sys::JSON::stringify(&err).unwrap());
+    assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
 }

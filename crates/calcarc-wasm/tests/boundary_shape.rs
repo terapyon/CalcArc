@@ -45,6 +45,35 @@ fn no_boundary_field_is_written_in_snake_case() {
     }
 }
 
+/// 複利の成功の JSON。**税 ON** で取る——税 OFF だと、本当に任意な 3 項目が
+/// `null` になって「フィールドが在るか」の主張とまぎれる(設計書 §3)。
+fn compound_json(principal: &str, deposit: &str, rate: &str, periods: u32) -> String {
+    let value = calcarc_wasm::compound_grow(principal, deposit, rate, 12, periods, true);
+    String::from(js_sys::JSON::stringify(&value).unwrap())
+}
+
+#[wasm_bindgen_test]
+fn no_compound_field_is_written_in_snake_case() {
+    // **`_` を含む綴りが 3 つある**(`final_balance`・`principal_total`・
+    // `national_tax`)。ローン側より書き忘れが出やすい。
+    let json = compound_json("1000000", "0", "1", 60);
+    assert!(
+        !json.contains('_'),
+        "snake_case が漏れている(値に `_` は出ない payload である): {json}"
+    );
+    for key in [
+        "\"kind\"",
+        "\"finalBalance\"",
+        "\"principalTotal\"",
+        "\"interest\"",
+        "\"nationalTax\"",
+        "\"localTax\"",
+        "\"net\"",
+    ] {
+        assert!(json.contains(key), "{key} が無い: {json}");
+    }
+}
+
 /// 失敗の JSON から `code` を取り出す。成功なら `None`。
 fn code_of(json: &str) -> Option<String> {
     json.split(r#""code":""#)
@@ -77,8 +106,6 @@ fn the_loan_boundary_returns_only_the_codes_typescript_knows() {
         ("18446744073709551615", "18446744073709551615", "100", 1200),
         // 期間が u32 の上限
         ("30000000", "5000000", "1.5", 4294967295),
-        // u64 の上限 × 上限の金利 → 計算の途中で溢れる
-        // 期間が u32 の上限
     ];
     let codes: Vec<String> = cases
         .iter()
@@ -103,6 +130,46 @@ fn the_loan_boundary_returns_only_the_codes_typescript_knows() {
     // **2 種類とも実際に踏んでいること。** 片方しか踏まない入力集合になると、
     // この番人はもう片方について何も言っていない。
     for expected in LOAN_ERROR_CODES {
+        assert!(
+            codes.iter().any(|c| c == expected),
+            "{expected} を踏む入力が無い: {codes:?}",
+        );
+    }
+}
+
+/// TS の `CompoundErrorCode` が挙げている綴り。ローン側と同じ 2 つだが、
+/// **同じである保証は無い**——`web/src/finance/types.ts` から別に写してある。
+const COMPOUND_ERROR_CODES: &[&str] = &["Overflow", "SyntaxError"];
+
+#[wasm_bindgen_test]
+fn the_compound_boundary_returns_only_the_codes_typescript_knows() {
+    let cases = [
+        // 単調増加なので u64 を超えうる——**ローンには無い経路**である。
+        ("18446744073709551615", "0", "100", 12u32),
+        // 積立の側から溢れる
+        ("0", "18446744073709551615", "100", 1200),
+        // 金利の綴りが壊れている
+        ("1000000", "0", "x", 12),
+        // 期数 0 はコアの定義域の外
+        ("1000000", "0", "1", 0),
+    ];
+    let codes: Vec<String> = cases
+        .iter()
+        .filter_map(|(p, d, r, n)| code_of(&compound_json(p, d, r, *n)))
+        .collect();
+
+    assert_eq!(
+        codes.len(),
+        cases.len(),
+        "失敗しなかった入力が在る: {codes:?}"
+    );
+    for code in &codes {
+        assert!(
+            COMPOUND_ERROR_CODES.contains(&code.as_str()),
+            "TS が知らないエラーが境界を渡った: {code} ({codes:?})",
+        );
+    }
+    for expected in COMPOUND_ERROR_CODES {
         assert!(
             codes.iter().any(|c| c == expected),
             "{expected} を踏む入力が無い: {codes:?}",
