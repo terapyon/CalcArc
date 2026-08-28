@@ -267,38 +267,35 @@ pub fn data_transfer(
 // 例外は投げない。エラーは戻り値の一部である。
 
 /// 正算(月額を求める)の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanForwardResult {
-    monthly_payment: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    rows_paid: Option<u32>,
-    error: Option<CalcError>,
+struct LoanForward {
+    monthly_payment: String,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
+    rows_paid: u32,
 }
 
 /// 借入可能額逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanPrincipalResult {
-    principal: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    rows_paid: Option<u32>,
-    error: Option<CalcError>,
+struct LoanPrincipal {
+    principal: String,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
+    rows_paid: u32,
 }
 
 /// 期間逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanTermResult {
-    months: Option<u32>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    final_payment: Option<String>,
-    error: Option<CalcError>,
+struct LoanTerm {
+    months: u32,
+    total_payment: String,
+    total_interest: String,
+    final_payment: String,
 }
 
 /// ボーナス併用の正算の結果。**`Outcome` の payload なので `Option` を持たない。**
@@ -321,15 +318,14 @@ struct LoanBonusForward {
 }
 
 /// ボーナス併用の借入可能額逆算の結果。
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LoanBonusPrincipalResult {
-    monthly_principal: Option<String>,
-    bonus_principal: Option<String>,
-    total_principal: Option<String>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    error: Option<CalcError>,
+struct LoanBonusPrincipal {
+    monthly_principal: String,
+    bonus_principal: String,
+    total_principal: String,
+    total_payment: String,
+    total_interest: String,
 }
 
 /// 元利均等の正算。`residual` は残価(既定は "0")。
@@ -343,20 +339,15 @@ pub fn loan_forward(principal: &str, rate: &str, months: u32, residual: &str) ->
             parse_yen(residual)?,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanForwardResult {
-            monthly_payment: Some(r.monthly_payment.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            rows_paid: Some(r.rows_paid),
-            error: None,
-        },
-        Err(e) => LoanForwardResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanForward> = outcome
+        .map(|r| LoanForward {
+            monthly_payment: r.monthly_payment.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+            rows_paid: r.rows_paid,
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -365,20 +356,15 @@ pub fn loan_forward(principal: &str, rate: &str, months: u32, residual: &str) ->
 pub fn loan_principal(payment: &str, rate: &str, months: u32) -> JsValue {
     let outcome: CalcResult<_> =
         (|| inverse::principal_for(parse_yen(payment)?, &Rate::from_percent(rate)?, months))();
-    let result = match outcome {
-        Ok(r) => LoanPrincipalResult {
-            principal: Some(r.principal.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            rows_paid: Some(r.rows_paid),
-            error: None,
-        },
-        Err(e) => LoanPrincipalResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanPrincipal> = outcome
+        .map(|r| LoanPrincipal {
+            principal: r.principal.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+            rows_paid: r.rows_paid,
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -392,19 +378,14 @@ pub fn loan_term(principal: &str, rate: &str, payment: &str) -> JsValue {
             parse_yen(payment)?,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanTermResult {
-            months: Some(r.n),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            final_payment: Some(r.final_payment.to_string()),
-            error: None,
-        },
-        Err(e) => LoanTermResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanTerm> = outcome
+        .map(|r| LoanTerm {
+            months: r.n,
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            final_payment: r.final_payment.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 
@@ -455,20 +436,15 @@ pub fn loan_bonus_principal(
             months,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanBonusPrincipalResult {
-            monthly_principal: Some(r.monthly_principal.to_string()),
-            bonus_principal: Some(r.bonus_principal.to_string()),
-            total_principal: Some(r.total_principal.to_string()),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            error: None,
-        },
-        Err(e) => LoanBonusPrincipalResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    let result: Outcome<LoanBonusPrincipal> = outcome
+        .map(|r| LoanBonusPrincipal {
+            monthly_principal: r.monthly_principal.to_string(),
+            bonus_principal: r.bonus_principal.to_string(),
+            total_principal: r.total_principal.to_string(),
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 

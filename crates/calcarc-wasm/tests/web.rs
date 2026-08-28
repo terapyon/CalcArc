@@ -163,9 +163,11 @@ fn loan_forward_crosses_the_boundary() {
         Some("91762")
     );
     assert_eq!(get(&result, "rowsPaid").as_f64(), Some(420.0));
+    // **成功に `error` の欄は無い**(設計書 §0)。**在るのは `kind` である。**
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
     assert!(
-        get(&result, "error").is_null(),
-        "success carries null error"
+        get(&result, "error").is_undefined(),
+        "成功に error は出ない"
     );
 }
 
@@ -188,7 +190,7 @@ fn loan_bonus_crosses_the_boundary() {
     assert!(get(&result, "bonusPayment").as_string().is_some());
     let inverted = calcarc_wasm::loan_bonus_principal("80000", "100000", "1.5", 420);
     assert!(get(&inverted, "totalPrincipal").as_string().is_some());
-    assert!(get(&inverted, "error").is_null());
+    assert_eq!(get(&inverted, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -207,25 +209,42 @@ fn loan_survives_values_beyond_js_numbers() {
 
 #[wasm_bindgen_test]
 fn loan_errors_are_returned_not_thrown() {
-    // 残価 ≥ 元本 は SyntaxError。金額の欄は undefined ではなく null。
+    // 残価 ≥ 元本 は SyntaxError。**例外ではなく戻り値で返る**(base-spec §27)。
     let result = calcarc_wasm::loan_forward("1000000", "1.5", 12, "1000000");
+    // **失敗は `code` で名乗る。** 潰していた頃は `error` だった。
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("error"));
     assert_eq!(
-        get(&result, "error").as_string().as_deref(),
+        get(&result, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
-    let monthly = get(&result, "monthlyPayment");
-    assert!(monthly.is_null(), "error results carry null, not undefined");
-    assert!(get(&result, "rowsPaid").is_null());
+
+    // **【契約の変更 2026-08-28】失敗に payload の欄は 1 つも無い。**
+    //
+    // ここには「金額の欄は undefined ではなく null」と書いてあった
+    // ——潰した形では失敗にも 5 つの欄が並び、`serialize_missing_as_null(true)`
+    // が `undefined` を `null` に均していた。TS が `X | null` と宣言していたので、
+    // `undefined` が来ると `!== null` が常に真になり、**失敗が成功として読まれた**
+    // からである。
+    //
+    // **2 択にした結果、その心配ごと自体が消えた。** 失敗の枝に欄が無いので、
+    // 「欄はあるが中身が無い」という状態を作らない。**`kind` を見ずに payload を
+    // 読むコードは、TS の型が書かせない。**
+    assert!(
+        get(&result, "monthlyPayment").is_undefined(),
+        "失敗に payload の欄は無い"
+    );
+    assert!(get(&result, "rowsPaid").is_undefined());
+
     // 1 回払いで P + 利息があふれる入力は Overflow。
     let overflowed = calcarc_wasm::loan_forward("18446744073709551615", "1.5", 1, "0");
     assert_eq!(
-        get(&overflowed, "error").as_string().as_deref(),
+        get(&overflowed, "code").as_string().as_deref(),
         Some("Overflow")
     );
     // 金利文字列が読めないのも戻り値のエラー。
     let bad_rate = calcarc_wasm::loan_term("1000000", "abc", "50000");
     assert_eq!(
-        get(&bad_rate, "error").as_string().as_deref(),
+        get(&bad_rate, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -582,4 +601,32 @@ fn the_bonus_forward_answers_in_two_shapes() {
     let err = calcarc_wasm::loan_bonus_forward("30000000", "5000000", "x", 420);
     let json = String::from(js_sys::JSON::stringify(&err).unwrap());
     assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+}
+
+#[wasm_bindgen_test]
+fn the_loan_family_answers_in_two_shapes() {
+    // 段階 1 の `loan_bonus_forward` と同じ形が、残り 4 つにも掛かる。
+    let ok = [
+        calcarc_wasm::loan_forward("30000000", "1.5", 420, "0"),
+        calcarc_wasm::loan_principal("85000", "1.5", 420),
+        calcarc_wasm::loan_term("30000000", "1.5", "85000"),
+        calcarc_wasm::loan_bonus_principal("80000", "100000", "1.5", 420),
+    ];
+    for value in &ok {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","#), "{json}");
+        assert!(!json.contains("null"), "成功に null は出ない: {json}");
+    }
+
+    // 金利の綴りが壊れていれば、4 つとも同じ形で断る。
+    let err = [
+        calcarc_wasm::loan_forward("30000000", "x", 420, "0"),
+        calcarc_wasm::loan_principal("85000", "x", 420),
+        calcarc_wasm::loan_term("30000000", "x", "85000"),
+        calcarc_wasm::loan_bonus_principal("80000", "100000", "x", 420),
+    ];
+    for value in &err {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+    }
 }

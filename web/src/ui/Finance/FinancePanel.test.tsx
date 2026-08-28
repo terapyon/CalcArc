@@ -92,32 +92,34 @@ vi.mock("../../expr", () => ({
 import { initLoan } from "../../finance/loan";
 import { FinancePanel } from "./FinancePanel";
 
+// **`kind` が付き、`error: null` は無くなった**(設計書 §0)。境界が実際に
+// 返す形と揃えておかないと、**パネルが `kind` を見ていなくても緑になる**
+// ——`undefined === "error"` は偽なので、成功の枝へ落ちて payload が読めてしまう。
 function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
   return {
     forward: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPayment: "91855",
       totalPayment: "38579007",
       totalInterest: "8579007",
       finalPayment: "91762",
       rowsPaid: 420,
-      error: null,
     }),
     principal: vi.fn().mockReturnValue({
+      kind: "ok",
       principal: "27761211",
       totalPayment: "35699999",
       totalInterest: "7938788",
       finalPayment: "84999",
       rowsPaid: 420,
-      error: null,
     }),
     term: vi.fn().mockReturnValue({
+      kind: "ok",
       months: 420,
       totalPayment: "38579007",
       totalInterest: "8579007",
       finalPayment: "91762",
-      error: null,
     }),
-    // **`kind` が付き、`error: null` は無くなった**(設計書 §0)。
     bonusForward: vi.fn().mockReturnValue({
       kind: "ok",
       monthlyPayment: "73484",
@@ -129,12 +131,12 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
       bonusFinalPayment: "276227",
     }),
     bonusPrincipal: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPrincipal: "26128204",
       bonusPrincipal: "5430487",
       totalPrincipal: "31558691",
       totalPayment: "40599999",
       totalInterest: "9041302",
-      error: null,
     }),
     ...overrides,
   };
@@ -490,12 +492,11 @@ describe("FinancePanel（電卓）", () => {
   it("shows an error from the core on the main line", async () => {
     const calc = await renderPanel(
       stubCalc({
+        // **失敗は `code` だけを持つ**(設計書 §0)。以前は 4 つの `null` が
+        // 並んでいた——「欄はあるが中身が無い」という状態を、いまは作らない。
         term: vi.fn().mockReturnValue({
-          months: null,
-          totalPayment: null,
-          totalInterest: null,
-          finalPayment: null,
-          error: "SyntaxError",
+          kind: "error",
+          code: "SyntaxError",
         }),
       }),
     );

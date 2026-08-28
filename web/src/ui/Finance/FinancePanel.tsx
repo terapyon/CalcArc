@@ -771,11 +771,14 @@ export function FinancePanel() {
           monthsNumber,
           residualDigits === "" ? "0" : residualDigits,
         );
-        error = r.error;
-        if (!r.error && r.monthlyPayment) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.monthlyPayment)} 円`;
           breakdown = [
-            ...(residualDigits !== "" && r.finalPayment
+            // **`&& r.finalPayment` が消えた。** 残っている条件は
+            // 「残価を打ったか」だけで、これは値の有無ではなく入力の有無である。
+            ...(residualDigits !== ""
               ? [
                   {
                     label: "最終回（残価）",
@@ -795,29 +798,31 @@ export function FinancePanel() {
           rate,
           monthsNumber,
         );
-        error = r.error;
-        if (!r.error && r.totalPrincipal && r.monthlyPrincipal) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.totalPrincipal)} 円`;
           breakdown = [
             {
               label: "うち月払い分",
               value: `${grouped(r.monthlyPrincipal)} 円`,
             },
-            ...(r.bonusPrincipal
-              ? [
-                  {
-                    label: "うちボーナス分",
-                    value: `${grouped(r.bonusPrincipal)} 円`,
-                  },
-                ]
-              : []),
+            // **条件ごと消えた。** `r.bonusPrincipal` は成功の枝では必ず
+            // 文字列で、**ボーナス 0 円でも `"0"` は truthy** だった
+            // ——この条件は最初から「値が在るか」しか見ておらず、
+            // 「ボーナスが在るか」は見ていない。
+            {
+              label: "うちボーナス分",
+              value: `${grouped(r.bonusPrincipal)} 円`,
+            },
             ...totals(r.totalPayment, r.totalInterest),
           ];
         }
       } else {
         const r = calc.principal(paymentDigits, rate, monthsNumber);
-        error = r.error;
-        if (!r.error && r.principal) {
+        if (r.kind === "error") {
+          error = r.code;
+        } else {
           answer = `${grouped(r.principal)} 円`;
           breakdown = totals(r.totalPayment, r.totalInterest);
         }
@@ -828,8 +833,9 @@ export function FinancePanel() {
       paymentDigits !== ""
     ) {
       const r = calc.term(principalDigits, rate, paymentDigits);
-      error = r.error;
-      if (!r.error && r.months !== null) {
+      if (r.kind === "error") {
+        error = r.code;
+      } else {
         answer = `${r.months} か月`;
         breakdown = totals(r.totalPayment, r.totalInterest);
       }
