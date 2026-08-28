@@ -18,9 +18,11 @@ import {
   pushUnit,
   text,
 } from "../../datascale/entry";
+import { DATA_TYPE_TOKENS } from "../../datascale/types";
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import {
+  DATA_SCALE_FIELDS,
   DATA_SCALE_SECTIONS,
   type DataScaleField,
   type DataScaleKeyToken,
@@ -30,6 +32,7 @@ import {
 } from "../Keypad/dataScale";
 import { Keypad } from "../Keypad/Keypad";
 import { isDeadOperator } from "../Keypad/operators";
+import { parsePrefixed } from "../Keypad/parse";
 import { Readout } from "../Readout/Readout";
 import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./DataScalePanel.module.css";
@@ -160,12 +163,15 @@ export function DataScalePanel() {
   }
 
   function press(token: DataScaleKeyToken) {
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as DataScaleField);
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。
+    const field = parsePrefixed(token, "field:", DATA_SCALE_FIELDS);
+    if (field !== null) {
+      setActive(field);
       return;
     }
-    if (token.startsWith("dtype:")) {
-      chooseDtype(token.slice("dtype:".length) as DataTypeToken);
+    const dtype = parsePrefixed(token, "dtype:", DATA_TYPE_TOKENS);
+    if (dtype !== null) {
+      chooseDtype(dtype);
       return;
     }
     if (token.startsWith("dim:")) {

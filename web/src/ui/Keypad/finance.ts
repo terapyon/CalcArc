@@ -70,6 +70,20 @@ export type FinanceField =
   | "bonus"
   | "target";
 
+/** 項目の一覧。理由は `convert.ts` の `CONVERT_FIELDS` と同じ。 */
+export const FINANCE_FIELDS: readonly FinanceField[] = [
+  "principal",
+  "deposit",
+  "periods",
+  "tax",
+  "rate",
+  "months",
+  "payment",
+  "residual",
+  "bonus",
+  "target",
+];
+
 const MODES: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "計算の種類",
   columns: 6,

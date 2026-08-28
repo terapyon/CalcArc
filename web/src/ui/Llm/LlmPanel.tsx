@@ -17,6 +17,7 @@ import {
   text,
   type Unit,
 } from "../../datascale/entry";
+import { PRECISION_TOKENS } from "../../datascale/types";
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import { Keypad } from "../Keypad/Keypad";
@@ -30,6 +31,7 @@ import {
   llmPad,
 } from "../Keypad/llm";
 import { isDeadOperator } from "../Keypad/operators";
+import { parsePrefixed } from "../Keypad/parse";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
@@ -231,8 +233,10 @@ export function LlmPanel() {
   }
 
   function press(token: LlmKeyToken): void {
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as LlmField);
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。
+    const field = parsePrefixed(token, "field:", LLM_FIELD_ORDER);
+    if (field !== null) {
+      setActive(field);
       return;
     }
     if (token.startsWith("param:")) {
@@ -251,10 +255,10 @@ export function LlmPanel() {
       setContext(fromDigits(token.slice("ctx:".length)));
       return;
     }
-    if (token.startsWith("precision:")) {
-      const value = token.slice("precision:".length) as PrecisionToken;
-      if (active === "weight") setWeight(value);
-      else if (active === "kvPrecision") setKvPrecision(value);
+    const precision = parsePrefixed(token, "precision:", PRECISION_TOKENS);
+    if (precision !== null) {
+      if (active === "weight") setWeight(precision);
+      else if (active === "kvPrecision") setKvPrecision(precision);
       return;
     }
     if (token === "entry:manual") {

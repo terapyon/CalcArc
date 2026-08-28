@@ -13,10 +13,15 @@ import {
   pushDigit,
   text,
 } from "../../datascale/entry";
+import {
+  BANDWIDTH_UNIT_TOKENS,
+  DURATION_UNIT_TOKENS,
+} from "../../datascale/types";
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import { Keypad } from "../Keypad/Keypad";
 import { isDeadOperator } from "../Keypad/operators";
+import { parsePrefixed } from "../Keypad/parse";
 import {
   BANDWIDTH_UNIT_LABELS,
   BANDWIDTH_UNIT_SECTION,
@@ -148,16 +153,22 @@ export function TransferPanel() {
   }
 
   function press(token: TransferKeyToken): void {
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as TransferField);
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。解けないのは盤面と一覧が
+    // ずれたときだけで、そのときは下の枝も当たらず何も起きない
+    // ——ずれは `parse.test.ts` が盤面定義に対して捕まえる。
+    const field = parsePrefixed(token, "field:", TRANSFER_FIELD_ORDER);
+    if (field !== null) {
+      setActive(field);
       return;
     }
-    if (token.startsWith("bandwidth:")) {
-      setBandwidthUnit(token.slice("bandwidth:".length) as BandwidthUnitToken);
+    const bandwidth = parsePrefixed(token, "bandwidth:", BANDWIDTH_UNIT_TOKENS);
+    if (bandwidth !== null) {
+      setBandwidthUnit(bandwidth);
       return;
     }
-    if (token.startsWith("duration:")) {
-      setDurationUnit(token.slice("duration:".length) as DurationUnitToken);
+    const duration = parsePrefixed(token, "duration:", DURATION_UNIT_TOKENS);
+    if (duration !== null) {
+      setDurationUnit(duration);
       return;
     }
     if (token.startsWith("digit:")) {
