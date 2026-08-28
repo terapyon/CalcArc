@@ -254,24 +254,27 @@ export function DataScalePanel() {
 
   // main は主 → 副 → bytes の順に繰り上げる(設計書 §6)。空の主表示を
   // 見せない——値が無いときだけ空になるべきである。
-  const decimal = shown?.decimal ?? null;
-  const binary = shown?.binary ?? null;
+  // **成功と失敗は別の形**なので、先に枝を分けてから読む(設計書 §0)。
+  const ok = shown?.kind === "ok" ? shown : null;
+  const calcError = shown?.kind === "error" ? shown.code : null;
+  // `decimal` と `binary` は成功でも無いことがある——**本当に任意**である
+  // (1000/1024 bytes 未満に単位が無い)。`bytesGrouped` は必ず在る。
+  const decimal = ok?.decimal ?? null;
+  const binary = ok?.binary ?? null;
   const first = primary === "decimal" ? decimal : binary;
   const second = primary === "decimal" ? binary : decimal;
   const answer = exprError
     ? "Math ERROR"
-    : shown?.error
+    : calcError
       ? "Math ERROR"
-      : (first ??
-        second ??
-        (shown?.bytesGrouped ? `${shown.bytesGrouped} bytes` : ""));
+      : (first ?? second ?? (ok ? `${ok.bytesGrouped} bytes` : ""));
 
   return (
     <section className={styles.panel} aria-label="データスケール計算">
       <Readout
         entries={entries}
         main={answer}
-        error={exprError ?? shown?.error ?? null}
+        error={exprError ?? calcError}
         status={[
           {
             testId: "datascale-primary",
@@ -313,9 +316,9 @@ export function DataScalePanel() {
           </button>
         ))}
       </fieldset>
-      {shown && !shown.error && (
+      {ok && (
         <div className={styles.result} data-testid="datascale-result">
-          {shown.bytesGrouped !== null && <p>{shown.bytesGrouped} bytes</p>}
+          <p>{ok.bytesGrouped} bytes</p>
           {first !== null && <p className={styles.primary}>{first}</p>}
           {second !== null && <p className={styles.secondary}>{second}</p>}
         </div>

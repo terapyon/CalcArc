@@ -176,3 +176,71 @@ fn the_compound_boundary_returns_only_the_codes_typescript_knows() {
         );
     }
 }
+
+/// Data Scale の成功の JSON。**単位が付く大きさ**で取る——小さい値だと
+/// `decimal`/`binary` が null になって「フィールドが在るか」とまぎれる。
+fn data_scale_json(count: &str, dimensions: &str, dtype: &str) -> String {
+    let value = calcarc_wasm::data_scale(count, dimensions, dtype);
+    String::from(js_sys::JSON::stringify(&value).unwrap())
+}
+
+#[wasm_bindgen_test]
+fn no_data_scale_field_is_written_in_snake_case() {
+    let json = data_scale_json("1000000", "1024", "float32");
+    assert!(
+        !json.contains('_'),
+        "snake_case が漏れている(値に `_` は出ない payload である): {json}"
+    );
+    for key in [
+        "\"kind\"",
+        "\"bytes\"",
+        "\"bytesGrouped\"",
+        "\"decimal\"",
+        "\"binary\"",
+    ] {
+        assert!(json.contains(key), "{key} が無い: {json}");
+    }
+}
+
+/// TS の `DataScaleErrorCode` が挙げている綴り(`web/src/datascale/types.ts`)。
+const DATA_SCALE_ERROR_CODES: &[&str] = &["Overflow", "SyntaxError"];
+
+#[wasm_bindgen_test]
+fn the_data_scale_boundary_returns_only_the_codes_typescript_knows() {
+    let cases = [
+        // u128 を超える(2^127 を 2 次元)
+        ("170141183460469231731687303715884105728", "2", "uint8"),
+        // 掛け算の途中で溢れる
+        (
+            "170141183460469231731687303715884105727",
+            "170141183460469231731687303715884105727",
+            "uint8",
+        ),
+        // dtype の綴りが壊れている
+        ("1000", "1", "x"),
+        // 個数の綴りが壊れている
+        ("x", "1", "int8"),
+    ];
+    let codes: Vec<String> = cases
+        .iter()
+        .filter_map(|(c, d, t)| code_of(&data_scale_json(c, d, t)))
+        .collect();
+
+    assert_eq!(
+        codes.len(),
+        cases.len(),
+        "失敗しなかった入力が在る: {codes:?}"
+    );
+    for code in &codes {
+        assert!(
+            DATA_SCALE_ERROR_CODES.contains(&code.as_str()),
+            "TS が知らないエラーが境界を渡った: {code} ({codes:?})",
+        );
+    }
+    for expected in DATA_SCALE_ERROR_CODES {
+        assert!(
+            codes.iter().any(|c| c == expected),
+            "{expected} を踏む入力が無い: {codes:?}",
+        );
+    }
+}

@@ -105,10 +105,12 @@ fn data_scale_survives_values_beyond_js_numbers() {
 #[wasm_bindgen_test]
 fn data_scale_errors_are_returned_not_thrown() {
     let result = calcarc_wasm::data_scale("170141183460469231731687303715884105728", "2", "uint8");
-    let error = get(&result, "error");
-    assert_eq!(error.as_string().as_deref(), Some("Overflow"));
+    let code = get(&result, "code");
+    assert_eq!(code.as_string().as_deref(), Some("Overflow"));
+    // **失敗の枝に payload の鍵は無い**(設計書 §0)。潰していた頃は
+    // `bytes: null` が並んでいたが、いまは鍵ごと出ない。
     let bytes = get(&result, "bytes");
-    assert!(bytes.is_null(), "error results carry null, not undefined");
+    assert!(bytes.is_undefined(), "失敗に payload の鍵は出ない");
 }
 
 #[wasm_bindgen_test]
@@ -123,8 +125,7 @@ fn data_scale_sub_unit_success_carries_null_lines() {
     assert!(decimal.is_null(), "decimal must be null, not undefined");
     let binary = get(&result, "binary");
     assert!(binary.is_null(), "binary must be null, not undefined");
-    let error = get(&result, "error");
-    assert!(error.is_null());
+    assert_eq!(get(&result, "kind").as_string().as_deref(), Some("ok"));
 }
 
 #[wasm_bindgen_test]
@@ -145,7 +146,7 @@ fn the_llm_headline_crosses_the_boundary() {
 fn a_transfer_error_is_a_value_not_an_exception() {
     let value = calcarc_wasm::data_transfer("1", "tbps", "1", "second");
     assert_eq!(
-        get(&value, "error").as_string().as_deref(),
+        get(&value, "code").as_string().as_deref(),
         Some("SyntaxError")
     );
 }
@@ -677,4 +678,58 @@ fn the_compound_family_answers_in_two_shapes() {
     let err = calcarc_wasm::compound_grow("1000000", "0", "1", 12, 0, false);
     let json = String::from(js_sys::JSON::stringify(&err).unwrap());
     assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+}
+
+#[wasm_bindgen_test]
+fn the_data_scale_family_answers_in_two_shapes() {
+    // `data_scale` と `data_transfer` は**同じ形**を返す(spec §6)。
+    // 大きい値を選ぶと `decimal` も `binary` も埋まる。
+    let ok = [
+        // (count, dimensions, dtype)
+        calcarc_wasm::data_scale("1000000", "1024", "float32"),
+        // (bandwidth, unit, duration, unit)
+        calcarc_wasm::data_transfer("100", "mbps", "3", "hour"),
+    ];
+    for value in &ok {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","bytes":"#), "{json}");
+        assert!(!json.contains("null"), "成功に null は出ない: {json}");
+    }
+
+    // **`decimal` と `binary` は本当に任意である**(設計書 §3)——1000 bytes
+    // 未満に 10 進の単位は無く、1024 bytes 未満に 2 進の単位は無い
+    // (`format.rs`)。**境目が別々なので、片方だけ埋まる帯がある。**
+    for (count, decimal, binary) in [
+        ("1", false, false),
+        // 1000..1023 の帯: 10 進だけ単位が付く
+        ("1000", true, false),
+        ("1024", true, true),
+    ] {
+        let value = calcarc_wasm::data_scale(count, "1", "int8");
+        let json = String::from(js_sys::JSON::stringify(&value).unwrap());
+        assert!(json.starts_with(r#"{"kind":"ok","#), "{json}");
+        assert_eq!(
+            !get(&value, "decimal").is_null(),
+            decimal,
+            "{count} bytes の decimal: {json}"
+        );
+        assert_eq!(
+            !get(&value, "binary").is_null(),
+            binary,
+            "{count} bytes の binary: {json}"
+        );
+        // **こちらは任意ではない。** 潰しの `Option` が戻ったら落ちる。
+        assert!(!get(&value, "bytes").is_null(), "{json}");
+        assert!(!get(&value, "bytesGrouped").is_null(), "{json}");
+    }
+
+    // dtype の綴りが壊れていれば SyntaxError。**payload は 1 つも出ない。**
+    let err = [
+        calcarc_wasm::data_scale("1000", "1", "x"),
+        calcarc_wasm::data_transfer("100", "x", "3", "hour"),
+    ];
+    for value in &err {
+        let json = String::from(js_sys::JSON::stringify(value).unwrap());
+        assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+    }
 }

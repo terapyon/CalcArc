@@ -1,7 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DataScaleCalc, DataScaleResult } from "../../datascale";
+import type {
+  ByteLines,
+  DataScaleCalc,
+  DataScaleErrorCode,
+  DataScaleResult,
+} from "../../datascale";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (App.test.tsx と同じ流儀)。
@@ -52,15 +57,21 @@ import { initDataScale } from "../../datascale";
 import { DATA_SCALE_SECTIONS } from "../Keypad/dataScale";
 import { DataScalePanel } from "./DataScalePanel";
 
-function result(overrides: Partial<DataScaleResult> = {}): DataScaleResult {
+/** 成功の答。**失敗は別の形**なので、この helper では作れない(設計書 §0)。 */
+function result(overrides: Partial<ByteLines> = {}): DataScaleResult {
   return {
+    kind: "ok",
     bytes: "307200000000",
     bytesGrouped: "307,200,000,000",
     decimal: "307.2 GB",
     binary: "286.1 GiB",
-    error: null,
     ...overrides,
   };
+}
+
+/** 失敗の答。**payload は 1 つも持たない。** */
+function failure(code: DataScaleErrorCode): DataScaleResult {
+  return { kind: "error", code };
 }
 
 function stubCalc(compute?: DataScaleCalc["compute"]): DataScaleCalc {
@@ -357,19 +368,7 @@ describe("DataScalePanel（電卓）", () => {
   });
 
   it("shows an error when the core reports one", async () => {
-    await renderPanel(
-      stubCalc(
-        vi.fn().mockReturnValue(
-          result({
-            bytes: null,
-            bytesGrouped: null,
-            decimal: null,
-            binary: null,
-            error: "Overflow",
-          }),
-        ),
-      ),
-    );
+    await renderPanel(stubCalc(vi.fn().mockReturnValue(failure("Overflow"))));
     await fillHeadline();
     await waitFor(() => expect(main()).toHaveTextContent("Math ERROR"));
     expect(main()).toHaveAttribute("data-error", "Overflow");

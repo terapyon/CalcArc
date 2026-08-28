@@ -98,17 +98,6 @@ pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// Data Scale の 1 回の計算結果。TypeScript 側の `DataScaleResult` に対応する。
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DataScaleResult {
-    bytes: Option<String>,
-    bytes_grouped: Option<String>,
-    decimal: Option<String>,
-    binary: Option<String>,
-    error: Option<calcarc_core::CalcError>,
-}
-
 /// count × dimensions × dtype を計算する。純関数で、状態を持たない。
 ///
 /// Scientific の reduce と違いキーストローク状態機械ではないので、
@@ -123,27 +112,19 @@ pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
             let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
             data_scale::size_in_bytes(c, d, t)
         });
-    let result = match outcome {
-        Ok(bytes) => DataScaleResult {
-            bytes: Some(bytes.to_string()),
-            bytes_grouped: Some(group_digits(bytes)),
-            decimal: format_decimal(bytes),
-            binary: format_binary(bytes),
-            error: None,
-        },
-        Err(e) => DataScaleResult {
-            bytes: None,
-            bytes_grouped: None,
-            decimal: None,
-            binary: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<ByteLines> = outcome.map(ByteLines::of).into();
     to_js_value(&result)
 }
 
-/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、DataScaleResult を
-/// そのまま 3 つ並べるのではなく、組を型にした(spec §6)。
+/// バイト数 1 つぶんの表示 4 点。**LLM は 3 組を返す**ので、4 点をそのまま
+/// 3 つ並べるのではなく、組を型にした(spec §6)。
+///
+/// `data_scale` と `data_transfer` の成功の payload は**この 4 点そのもの**
+/// だったので、Outcome 化のときに専用の構造体を畳んだ。
+///
+/// **`decimal` と `binary` は `Option` のまま残す。** 1000 bytes 未満に 10 進の
+/// 単位は無く、1024 bytes 未満に 2 進の単位は無い(`format.rs`)——失敗を潰す
+/// ための `Option` ではなく、**本当に任意である**(設計書 §3)。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ByteLines {
@@ -239,22 +220,7 @@ pub fn data_transfer(
         let per = DurationUnit::from_token(duration_unit).ok_or(CalcError::SyntaxError)?;
         transfer::transferred_bytes(bandwidth_value, unit, duration_value, per)
     })();
-    let result = match outcome {
-        Ok(bytes) => DataScaleResult {
-            bytes: Some(bytes.to_string()),
-            bytes_grouped: Some(group_digits(bytes)),
-            decimal: format_decimal(bytes),
-            binary: format_binary(bytes),
-            error: None,
-        },
-        Err(e) => DataScaleResult {
-            bytes: None,
-            bytes_grouped: None,
-            decimal: None,
-            binary: None,
-            error: Some(e),
-        },
-    };
+    let result: Outcome<ByteLines> = outcome.map(ByteLines::of).into();
     to_js_value(&result)
 }
 

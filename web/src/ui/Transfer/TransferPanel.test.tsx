@@ -122,22 +122,18 @@ function transferStub(
     BigInt(duration || "0") *
     SECONDS[durationUnit];
   if (bits > U128_MAX) {
-    return {
-      bytes: null,
-      bytesGrouped: null,
-      decimal: null,
-      binary: null,
-      error: "Overflow",
-    };
+    // **失敗は payload を 1 つも持たない**(設計書 §0)。
+    return { kind: "error", code: "Overflow" };
   }
   // 1 bit でも 1 byte を数える(切り上げ、spec §3.5)。
   const bytes = (bits + 7n) / 8n;
   return {
+    kind: "ok",
     bytes: bytes.toString(),
     bytesGrouped: grouped(bytes),
+    // **この 2 つだけは成功でも null になりうる**——単位に届かない値である。
     decimal: formatUnit(bytes, DECIMAL_UNITS),
     binary: formatUnit(bytes, BINARY_UNITS),
-    error: null,
   };
 }
 

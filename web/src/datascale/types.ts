@@ -2,8 +2,9 @@
 // (CalcError)」を Scientific と Data Scale の共有項目として明示している。
 // ここで import するのは型だけ(値・ロジックは持ち込まない)。narrowing の
 // 根拠は data_scale の WASM 境界がこの 2 つしか返さないこと
-// (lib.rs の DataScaleResult::error、calcarc-core の Overflow/SyntaxError)。
-import type { CalcErrorCode } from "../calc/types";
+// (calcarc-core の Overflow/SyntaxError)。**Rust 側はこれを保証していない**
+// ので、crates/calcarc-wasm/tests/boundary_shape.rs が実測で見張っている。
+import type { CalcErrorCode, Outcome } from "../calc/types";
 
 /** calcarc-core の data_scale::DataType に対応するトークン。 */
 export const DATA_TYPE_TOKENS = [
@@ -20,14 +21,14 @@ export const DATA_TYPE_TOKENS = [
 
 export type DataTypeToken = (typeof DATA_TYPE_TOKENS)[number];
 
-/** calcarc-wasm の DataScaleResult に対応。 */
-export interface DataScaleResult {
-  bytes: string | null;
-  bytesGrouped: string | null;
-  decimal: string | null;
-  binary: string | null;
-  error: Extract<CalcErrorCode, "Overflow" | "SyntaxError"> | null;
-}
+export type DataScaleErrorCode = Extract<
+  CalcErrorCode,
+  "Overflow" | "SyntaxError"
+>;
+
+/** calcarc-wasm の `Outcome<ByteLines>` に対応。成功の payload は
+ * **ByteLines そのもの**である(Rust 側で専用の構造体を畳んだ)。 */
+export type DataScaleResult = Outcome<ByteLines, DataScaleErrorCode>;
 
 /** calcarc-core の data_scale::llm::Precision に対応するトークン。 */
 export const PRECISION_TOKENS = [
@@ -55,7 +56,11 @@ export const DURATION_UNIT_TOKENS = [
 
 export type DurationUnitToken = (typeof DURATION_UNIT_TOKENS)[number];
 
-/** バイト数 1 つぶんの表示 4 点(calcarc-wasm の ByteLines)。 */
+/** バイト数 1 つぶんの表示 4 点(calcarc-wasm の ByteLines)。
+ *
+ * **`decimal` と `binary` の `| null` は残る。** 1000 bytes 未満に 10 進の
+ * 単位は無く、1024 bytes 未満に 2 進の単位は無い——**失敗したから無いのでは
+ * なく、本当に任意である**(設計書 §3)。UI はその行ごと隠す。 */
 export interface ByteLines {
   bytes: string;
   bytesGrouped: string;
