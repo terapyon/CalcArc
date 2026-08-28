@@ -19,7 +19,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from itertools import combinations
 
 from . import compound_ref, data_scale_ref, loan_ref
@@ -2968,7 +2968,7 @@ DATA_SCALE_BOUNDARIES: tuple[tuple[str, str, str], ...] = (
 )
 
 
-class GaveUpReason(str, Enum):
+class GaveUpReason(StrEnum):
     """`ReferenceGaveUp` の理由(設計書 §4.9)。
 
     `near_yen_boundary` は 0 件を要求しない(意図的な棄却)。
