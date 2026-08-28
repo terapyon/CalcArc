@@ -16,6 +16,9 @@ use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::finance::{compound, compound_inverse, tax};
 use calcarc_core::{CalcError, CalcResult, DisplayState, EngineState, Key, reduce, render};
+mod outcome;
+use outcome::Outcome;
+
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -40,7 +43,12 @@ pub fn start() {
 ///
 /// 開発時に panic を可視化するためのフック以外では、panic は起きない想定。
 /// 万一シリアライズに失敗したら null を返し、呼び出し側が初期化し直す。
-fn to_js_value<T: Serialize>(value: &T) -> JsValue {
+/// **`pub(crate)` なのは、`outcome.rs` のテストが**本番の経路そのもの**を
+/// 通すためである。** テストの中で `Serializer` を組み直すこともできるが、
+/// それは「同じ設定で組んだ別のシリアライザ」を測ることになり、
+/// ここの `serialize_missing_as_null(true)` が動いても気づけない。
+/// crate の外へは出ない(`pub` ではない)ので、公開面は広がらない。
+pub(crate) fn to_js_value<T: Serialize>(value: &T) -> JsValue {
     let serializer = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
     value.serialize(&serializer).unwrap_or(JsValue::NULL)
 }
@@ -293,18 +301,23 @@ struct LoanTermResult {
     error: Option<CalcError>,
 }
 
-/// ボーナス併用の正算の結果。
-#[derive(Serialize, Default)]
+/// ボーナス併用の正算の結果。**`Outcome` の payload なので `Option` を持たない。**
+///
+/// **`Default` も持たない。** 全フィールドが必須になったので、
+/// 「空の結果」という状態がそもそも無い——以前はそれが失敗側の
+/// `..Default::default()` に使われていた。
+#[derive(Serialize)]
+// **外すと `monthly_payment` のまま出る**(設計書 §4)。enum 側の `rename_all` は
+// tag の値しか決めない。`tests/boundary_shape.rs` が見張る。
 #[serde(rename_all = "camelCase")]
-struct LoanBonusForwardResult {
-    monthly_payment: Option<String>,
-    bonus_payment: Option<String>,
-    bonus_rows: Option<u32>,
-    total_payment: Option<String>,
-    total_interest: Option<String>,
-    monthly_final_payment: Option<String>,
-    bonus_final_payment: Option<String>,
-    error: Option<CalcError>,
+struct LoanBonusForward {
+    monthly_payment: String,
+    bonus_payment: String,
+    bonus_rows: u32,
+    total_payment: String,
+    total_interest: String,
+    monthly_final_payment: String,
+    bonus_final_payment: String,
 }
 
 /// ボーナス併用の借入可能額逆算の結果。
@@ -411,22 +424,18 @@ pub fn loan_bonus_forward(
             months,
         )
     })();
-    let result = match outcome {
-        Ok(r) => LoanBonusForwardResult {
-            monthly_payment: Some(r.monthly_payment.to_string()),
-            bonus_payment: Some(r.bonus_payment.to_string()),
-            bonus_rows: Some(r.bonus_rows),
-            total_payment: Some(r.total_payment.to_string()),
-            total_interest: Some(r.total_interest.to_string()),
-            monthly_final_payment: Some(r.monthly_final_payment.to_string()),
-            bonus_final_payment: Some(r.bonus_final_payment.to_string()),
-            error: None,
-        },
-        Err(e) => LoanBonusForwardResult {
-            error: Some(e),
-            ..Default::default()
-        },
-    };
+    // **`match` が消えた。** 潰していたのはここで、`CalcResult` は既に 2 択だった。
+    let result: Outcome<LoanBonusForward> = outcome
+        .map(|r| LoanBonusForward {
+            monthly_payment: r.monthly_payment.to_string(),
+            bonus_payment: r.bonus_payment.to_string(),
+            bonus_rows: r.bonus_rows,
+            total_payment: r.total_payment.to_string(),
+            total_interest: r.total_interest.to_string(),
+            monthly_final_payment: r.monthly_final_payment.to_string(),
+            bonus_final_payment: r.bonus_final_payment.to_string(),
+        })
+        .into();
     to_js_value(&result)
 }
 

@@ -565,3 +565,21 @@ fn the_currency_list_comes_back_in_currency_all_order() {
     assert_eq!(units.get(2).as_string().as_deref(), Some("vnd"));
     assert_eq!(units.get(15).as_string().as_deref(), Some("brl"));
 }
+
+#[wasm_bindgen_test]
+fn the_bonus_forward_answers_in_two_shapes() {
+    // **成功と失敗が別の形になる**(設計書 §0)。潰した形では、成功にも
+    // `"error":null` が並び、失敗にも 7 つの `null` が並んでいた。
+    let ok = calcarc_wasm::loan_bonus_forward("30000000", "5000000", "1.5", 420);
+    let json = String::from(js_sys::JSON::stringify(&ok).unwrap());
+    assert!(
+        json.starts_with(r#"{"kind":"ok","monthlyPayment":"#),
+        "{json}"
+    );
+    assert!(!json.contains("null"), "成功に null は出ない: {json}");
+
+    // 金利の綴りが壊れていれば SyntaxError。**payload は 1 つも出ない。**
+    let err = calcarc_wasm::loan_bonus_forward("30000000", "5000000", "x", 420);
+    let json = String::from(js_sys::JSON::stringify(&err).unwrap());
+    assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
+}
