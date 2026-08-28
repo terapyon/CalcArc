@@ -9,6 +9,12 @@
 // この検査が毎回の CI で確かめる。
 //
 // 逆向き（`heavy` や `tools` が `web` を読む）は正常なので見ない。
+//
+// **2 本目(2026-08-28)**: `web/src/calc/` は UI Framework を知らない
+// (CLAUDE.md「`web/src/calc/` に React を import しない」)。こちらも
+// **宣言ではなく実行で見張る**——それまでは `src/calc/index.ts` の
+// コメントに「ここに react を書かない」と在るだけで、検査は 0 件だった
+// (2026-08-28 の点検)。**足した時点で違反は 0 件**である。
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -17,6 +23,16 @@ import { fileURLToPath } from "node:url";
 
 /** `web/` の中でこの語を見つけたら違反とする。大文字小文字は問わない。 */
 const FORBIDDEN = /heavy/i;
+
+/**
+ * `web/src/calc/` で見つけたら違反とする import。
+ *
+ * `from "react"` / `from "react-dom/client"` / `import("react")` と、
+ * `from "../ui/…"`（何段の `../` でも）を拾う。**語ではなく import を見る**
+ * ので、react に触れた註釈は違反にならない。
+ */
+const UI_IMPORT =
+  /(?:from|import)\s*\(?\s*["'](?:react(?:-dom)?(?:\/[^"']*)?|(?:\.\.\/)+ui\/[^"']*)["']/;
 
 /**
  * @typedef {{path: string, text: string}} SourceFile
@@ -41,6 +57,43 @@ export function findBoundaryViolations(files) {
     }
     file.text.split("\n").forEach((text, index) => {
       if (FORBIDDEN.test(text)) {
+        found.push({ path: file.path, line: index + 1, text: text.trim() });
+      }
+    });
+  }
+  return found;
+}
+
+/**
+ * `web/src/calc/` が UI Framework を読んでいたら違反とする。
+ *
+ * **React だけでなく `ui/` も見る。** CLAUDE.md が書いているのは
+ * 「react を import しない」だが、**理由は「UI Framework から独立させる」**
+ * ほうである——`web/src/ui/Keypad/Keypad.tsx:1` が `react` を import して
+ * いるので、`calc` から `ui` を読めば **React は推移的に入る**。
+ * react だけを見張ると、`from "../ui/Key/Key"` が素通りして**同じ独立性が
+ * 壊れる**。だから規則の文言ではなく、規則の理由のほうを見張る。
+ *
+ * **行の中の語ではなく import を見る。** `src/calc/index.ts:4` には
+ * 「ここに react を」というコメントが在り、語で拾うとそれが違反になる
+ * ——**規律を書いた行が規律違反になる**のは検査の側の誤りである。
+ *
+ * **`calc/` だけを見る。** `expr/` `finance/` `convert/` なども実測では
+ * 0 件だが(2026-08-28)、**CLAUDE.md が名指ししているのは `calc/` である**。
+ * 広げるかどうかは規律を決める側の判断で、検査が勝手に決めない。
+ *
+ * @param {SourceFile[]} files
+ * @returns {Violation[]}
+ */
+export function findUiLeakIntoCalc(files) {
+  /** @type {Violation[]} */
+  const found = [];
+  for (const file of files) {
+    if (!file.path.startsWith("web/src/calc/")) {
+      continue;
+    }
+    file.text.split("\n").forEach((text, index) => {
+      if (UI_IMPORT.test(text)) {
         found.push({ path: file.path, line: index + 1, text: text.trim() });
       }
     });
@@ -76,18 +129,34 @@ export function readWebFiles() {
     });
 }
 
+/**
+ * 違反を印字する。**どこを直せばよいかが分かる形で**——ファイルと行番号と
+ * その行の中身を出す。
+ *
+ * @param {string} headline
+ * @param {Violation[]} found
+ */
+function report(headline, found) {
+  console.error(`check:boundary NG — ${headline}(${found.length} 行)`);
+  for (const { path, line, text } of found) {
+    console.error(`  ${path}:${line}: ${text}`);
+  }
+}
+
 function main() {
-  const found = findBoundaryViolations(readWebFiles());
-  if (found.length > 0) {
-    console.error(
-      `check:boundary NG — web が重量級を知っている(${found.length} 行)`,
-    );
-    for (const { path, line, text } of found) {
-      console.error(`  ${path}:${line}: ${text}`);
-    }
+  const files = readWebFiles();
+  const heavy = findBoundaryViolations(files);
+  const ui = findUiLeakIntoCalc(files);
+  // **両方を印字してから落ちる。** 片方で `exit` すると、2 つ壊れている日に
+  // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
+  if (heavy.length > 0) report("web が重量級を知っている", heavy);
+  if (ui.length > 0) report("web/src/calc が UI Framework を知っている", ui);
+  if (heavy.length > 0 || ui.length > 0) {
     process.exit(1);
   }
-  console.log("check:boundary OK — web から重量級への参照は 0 件");
+  console.log(
+    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件",
+  );
 }
 
 // vitest から import されたときは走らせない(`check-version.mjs` と同じ作法)。
