@@ -84,9 +84,11 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ## 踏んだ罠
 
 - **コミット前に `cargo fmt` を実行する。** `--check` は直してくれない。
-- **`uv lock` / `uv sync` は `--no-config` を付ける。** 付けないと手元の
-  `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに書き込まれ、CI の
-  `uv sync --locked` が落ちる。
+- **`uv` は `--no-config` を付ける。`lock` / `sync` だけでなく `run` もである。**
+  付けないと手元の `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに
+  書き込まれ、CI の `uv sync --locked` が落ちる。**`uv run pytest` でも起きる**
+  ——依存を解決するので、走らせるだけのつもりでも `uv.lock` が書き換わる
+  (2026-08-29 に実際に踏んだ。`git status` で気づいた)。
 - **pnpm のバージョンは `web/package.json` の `packageManager` が持つ。** CI の
   `pnpm/action-setup` はそこを見る。
 - **道具の版は固定する。範囲で書かない。** 実例が 3 つある。

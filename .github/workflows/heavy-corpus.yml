@@ -71,6 +71,7 @@ jobs:
       # **heavy は自分のパッケージなので、自分で依存を入れる。** pnpm と node は
       # 上の setup-web が用意済みで、版の固定はあちらに一本化されている。
       - name: Install the heavy package
+        # 種別: 前提を整える
         run: pnpm install --frozen-lockfile
         working-directory: heavy
 
@@ -80,6 +81,8 @@ jobs:
       # 既にあるため、手元では緑のまま気づけない(v0.4.1 の走行で実際に踏んだ。
       # CLAUDE.md の「新しいクローンでは先に `pnpm wasm`」と同じ罠である)。
       - name: Build the wasm the type checker needs
+        # 種別: 前提を整える
+        id: wasm
         run: pnpm --dir ../web wasm
         working-directory: heavy
 
@@ -87,6 +90,7 @@ jobs:
       # 重量級のユニット 6 本は「測る道具そのもの」を見張っており、
       # 普段の CI では走らない(2026-08-25 のユーザ裁定)。ここが唯一の場所である。
       - name: The measuring instrument must be sound
+        # 種別: 判定する
         run: pnpm typecheck && pnpm lint && pnpm test
         working-directory: heavy
 
@@ -96,27 +100,52 @@ jobs:
       # 全滅する——v0.4.1 の走行で実際にそうなり、本当の原因(型検査の赤)が
       # 埋もれた。段ごとの失敗を独立させる。
       - name: Install Playwright's browser
-        if: always()
+        # 種別: 前提を整える
+        id: browser
+        if: '!cancelled()'
         run: pnpm exec playwright install --with-deps chromium
         working-directory: heavy
 
       - name: Set up Python for the reference implementation
-        # ci.yml と同じ版に揃える。
+        # 種別: 前提を整える
+        #
+        # **`always()` が要る。** 土台の検査(下)は TypeScript の道具立てと
+        # 何の関係も無い。ここを飛ばすと、**道具の赤が土台の未検査に化ける**
+        # ——v0.4.1 の走行では実際にそうなり、期待値が生成器の出力かどうかを
+        # 一度も見ないまま走行が終わった。
+        if: '!cancelled()'
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
 
-      - run: uv sync --locked
+      - name: Install the reference implementation
+        # 種別: 前提を整える
+        id: deps
+        if: '!cancelled()'
+        run: uv sync --locked
         working-directory: reference
 
       - name: The committed corpus must equal a fresh generation
+        # 種別: 判定する
+        #
         # **これが固定コーパスの土台である。** コミットされた JSON が
         # 生成器の出力と 1 バイトでも違えば、期待値が手で触られたことになる。
-        # ここが赤いまま下の照合が緑でも、その緑は何も意味しない。
+        #
+        # **ここが赤いとジョブが赤くなり、本番へは出ない**——落ちた段が 1 つでも
+        # あればジョブは失敗で、`release.yml` の `Deploy` は走らない(v0.4.1 の
+        # 走行 32857987219 で実測: 道具の段が赤く、`Deploy` は skipped)。
+        # **門はジョブの側に在る。** この段が下の照合を止めないのはそのためで、
+        # 止める代わりに**報告書が「土台が赤かった」と書く**
+        # (`heavy/reproducibility.json` → `renderReproducibility`)。
+        #
+        # 自分の前提だけを名指しする。**道具の赤に巻き込まれない。**
+        id: repro
+        if: "!cancelled() && steps.deps.outcome == 'success'"
         run: uv run pytest tests/test_corpus_reproducibility.py -q
         working-directory: reference
 
       - name: Measure what this corpus can detect
+        # 種別: 測る
         # **「不一致 0 件」の意味を決める段である。** engine に既知の壊れ方を
         # 一時的に入れ、何件が赤くなるかを数える。**赤くならないことを期待した
         # 変異も含む**——レポートが「この領域は踏んでいない」と書いているなら、
@@ -124,12 +153,21 @@ jobs:
         #
         # 変異はコミットされない(測ったあと原文に戻し、バイト一致を確かめる)。
         # この段の結果が次の段のレポートに載る。
+        #
+        # **土台を名指しで前提にする。** この段が出すのは「この網はこれだけの
+        # 壊れ方を捕まえる」という**数**であり、報告書に主張として載る。
+        # **期待値が生成器の出力でないなら、その数は誰も信じない**ので、
+        # 11 分を費やさない。**以前も同じ挙動だったが、それは段の並びが
+        # 偶然そうなっていただけで、条件としては書かれていなかった。**
+        # 飛ばされたことは報告書が言う(「回し忘れではない」の枝)。
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success' && steps.repro.outcome == 'success'"
         run: pnpm heavy:power
         working-directory: heavy
         env:
           CI: "1"
 
       - name: Type a sample on the real keypad
+        # 種別: 判定する
         # **計算コアの経路とはブラウザに載るものが違う。** あちらは
         # `heavy-harness.html` だけを配信するので画面が存在せず、
         # 「そのキーが盤面のどこにあるか」を一度も通らない。ここは
@@ -143,13 +181,20 @@ jobs:
         # まっさらな runner にはその記録が無いので、あとに置くと盤面の行が
         # **毎回「記録が無い」になり**、`uiHealth` の 4 状態のうち 1 つしか
         # CI に出ない。順番だけがそれを決めている。
-        if: always()
+        #
+        # **前提だけを名指しする。土台は前提ではない。** 盤面から打てるかは、
+        # 期待値が生成器の出力かどうかと何の関係も無い。**逆に、wasm と
+        # ブラウザは前提である**——無いまま走らせると、道具の不調が
+        # 「`Executable doesn't exist`」に化けて 36 本が全滅する(v0.4.1)。
+        # **`always()` だけでは、その化け方を止められなかった。**
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success'"
         run: pnpm heavy:ui
         working-directory: heavy
         env:
           CI: "1"
 
       - name: Run the heavy corpus
+        # 種別: 判定する
         # CI=1 で wasm を作り直し、プレビューも立て直す
         # (前の走行のサーバを掴んだまま「緑」にしない)。
         #
@@ -159,13 +204,30 @@ jobs:
         # `heavy:power` が落ちて `detection-power.json` が無いときは、報告書が
         # 「測っていない」と書く(`renderDetectionPower` の `null` の枝)ので、
         # 測っていない走行が測った顔で出ることはない。
-        if: always()
+        #
+        # **土台が赤くても走らせる。** 止めるのはジョブの側で既に効いており
+        # (`Deploy` は skipped)、ここで止めると**どのファイルが食い違ったのか
+        # という診断が失われる。** 報告書は土台が赤いことを先頭近くで書き、
+        # 「下に並ぶ『不一致 0 件』を結果として読まないこと」と付ける。
+        # **前提(wasm・ブラウザ)だけを名指しする。**
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success'"
         run: pnpm heavy
         working-directory: heavy
         env:
           CI: "1"
 
       - name: Put the verdict in the job summary
+        # 種別: 集める
+        #
+        # **ここだけ `always()` のままである。** 上の段は `!cancelled()` で、
+        # **手で止めた走行では走らない**——止めた人は理由を知っているので、
+        # 23 分の測定を続ける意味がない。**しかし証拠は残す。** 止められた
+        # 走行でも、どこまで進んでいたかは読めるほうがよい。
+        #
+        # **代償を 1 つ引き受けている**——止めた走行では報告書が無いので、
+        # 次の添付の段が `if-no-files-found: error` で赤くなる。走行の結論は
+        # `cancelled` なので下流は動かず害は無いが、**赤い段が 1 つ見える。**
+        #
         # **記録はここに残る。** コミットされたログファイルは作らない
         # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。
         if: always()
@@ -179,6 +241,7 @@ jobs:
           fi
 
       - name: Keep the report as an artifact
+        # 種別: 集める
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

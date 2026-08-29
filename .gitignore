@@ -24,3 +24,5 @@ heavy/heavy-run.json
 heavy/.heavy-ui-presses/
 # 盤面を通る走行の要約。pnpm heavy:ui のたびに globalTeardown が上書きする。
 heavy/heavy-ui-run.json
+# 固定コーパスの再現性検査の結果。reference の pytest が走るたびに上書きする。
+heavy/reproducibility.json
