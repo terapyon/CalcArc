@@ -8,16 +8,25 @@ import { describe, expect, it, vi } from "vitest";
 // **`transfer` は空の結果を返す。** 両方の値が埋まった時点でパネルが
 // 呼ぶので、無いと落ちる——ここが見たいのは並びだけなので、答えは空でよい。
 vi.mock("../../datascale", () => ({
-  initDataScale: () => Promise.resolve({ transfer: () => ({ error: null }) }),
+  initDataScale: () =>
+    Promise.resolve({
+      transfer: () => ({
+        kind: "ok",
+        bytes: "0",
+        bytesGrouped: "0",
+        decimal: null,
+        binary: null,
+      }),
+    }),
 }));
 vi.mock("../../expr", () => ({
   initExpr: () =>
     Promise.resolve({
       integer: (text: string) => ({
-        value: text === "" ? null : text,
-        error: null,
+        kind: "ok",
+        value: text,
       }),
-      percent: () => ({ value: null, error: null }),
+      percent: () => ({ kind: "ok", value: "" }),
     }),
 }));
 

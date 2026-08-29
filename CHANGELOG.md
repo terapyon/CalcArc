@@ -3,6 +3,41 @@
 このファイルは利用者から見えた変更を記録する。開発の詳細は
 [docs/superpowers/](docs/superpowers/) の設計書と計画書にある。
 
+## 0.6.0 — 2026-08-29
+
+**内部の変更のみ。画面の動作に変化はありません。**
+
+### 型と検査の強化
+
+- **WASM 境界の結果型を判別可能 union にした（結果型 12 個、境界の関数 15 本）。**
+  値とエラーが同時に存在する状態を、型が表現できなくなった。Rust 側は
+  `CalcResult<T>` を潰さず、内側 tag の `Outcome<T>` として serde に渡す
+- **`calcarc-wasm` に `deny(clippy::unwrap_used, clippy::expect_used)` を追加。**
+  これまで `calcarc-core` にしか無かった
+- **Python 参照実装に mypy を導入し、CI で実行**（`*_ref.py` の範囲）
+- **`ruff` の規則を 8 群に拡張**（`E` `W` `F` `I` `UP` `B` `SIM` `PT`）
+- **文字列を union にキャストしていた 13 か所を、検証つきの parse に置き換え**
+
+### 実行時の検査を追加
+
+- **`web/src/calc` が React と `ui/` を import していないことを CI で検査**
+- **参照実装の各関数に、Rust と別手順である／別手順にできない旨を宣言**
+  （複利・ローン・式評価の 28 関数）
+- **重量級コーパスのハーネスが、境界の新しい形を開けることを検査。**
+  tag を外して比較側へ渡す変換と、**知らない形（`kind` が無い／未知の `kind`
+  ／`code` の無い `error`）が来たら例外で落ちること**を固定した
+
+### 名前と仕様の整理
+
+- `Buffer::push_sexagesimal_separator` → `try_push_sexagesimal_separator`
+  （失敗しうる操作であることを名前で示す）
+- `is_tan_pole` が複素数引数では極を判定しないことを、仕様と検査に明記
+- `convert::convert` のスタッターを、`docs/api-style.md` に例外として明文化
+
+### 依存とツール
+
+- **`@biomejs/biome` を `2.5.8` に固定**（範囲指定をやめた）
+
 ## 0.5.0 — 2026-08-27
 
 **押しても何も起きなかったキーが、押せない見た目になった。**

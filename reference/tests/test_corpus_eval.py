@@ -64,7 +64,7 @@ def test_constants_are_the_mpmath_ones() -> None:
 
 
 def test_an_unknown_constant_is_refused_loudly() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown constant"):
         evaluate(Const("tau"))
 
 
@@ -146,9 +146,9 @@ def test_power_has_a_real_value_only_sometimes() -> None:
 
 def test_an_unknown_function_is_refused_loudly() -> None:
     # mpmath がたまたま同名の関数を持っていると、無関係な値を返す。
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown"):
         evaluate(Un("cbrt", Num(8)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown"):
         evaluate(Bin("%", Num(5), Num(2)))
 
 

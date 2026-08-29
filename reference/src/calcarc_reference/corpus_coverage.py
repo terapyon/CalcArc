@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from itertools import combinations, product
 
 #: `coverage` 自身のスキーマ番号。**15 枚が共有する `corpus_calls.SCHEMA` とは
@@ -27,7 +27,7 @@ from itertools import combinations, product
 COVERAGE_SCHEMA = 1
 
 
-class Reason(str, Enum):
+class Reason(StrEnum):
     """除外の理由コード(設計書 §10.1)。
 
     **`other` は無い。** 未知の理由は生成器を落とす側の仕事で、ここに逃げ場を
@@ -46,7 +46,7 @@ class Reason(str, Enum):
     CANDIDATE_DUPLICATE = "candidate_duplicate"
 
 
-class Disposition(str, Enum):
+class Disposition(StrEnum):
     """判断区分(設計書 §10.1)。**`accepted_risk` は「安全」を意味しない。**"""
 
     SAFE = "safe"
@@ -149,7 +149,10 @@ def all_combination_cells(scope: str, factors: Mapping[str, Sequence[object]]) -
     """全組合せ(設計書 §7.2 の「全組合せ」)。因子の宣言順を保つ。"""
     names = list(factors)
     return tuple(
-        Cell(scope, tuple((name, level_text(value)) for name, value in zip(names, values)))
+        Cell(
+            scope,
+            tuple((name, level_text(value)) for name, value in zip(names, values, strict=True)),
+        )
         for values in product(*(factors[name] for name in names))
     )
 

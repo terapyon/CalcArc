@@ -64,7 +64,13 @@ def _overflow() -> LoanError:
 
 
 def rate_fraction(percent: str) -> tuple[int, int]:
-    """年利のパーセント文字列 → 月利の分数 (分子, 分母)。約分しない。"""
+    """年利のパーセント文字列 → 月利の分数 (分子, 分母)。約分しない。
+
+    独立: 不可能（`Rate::from_annual_percent` と同じ手順——小数点で割り、桁数で
+    10^k を作り、分母に 100×期/年を掛ける。**受け付ける綴りと分母の作り方が
+    仕様そのもの**なので、別手順にすると別の規則になる。一致は独立の証拠に
+    ならない）
+    """
     integer, _, fraction = percent.partition(".")
     if not integer and not fraction:
         raise _syntax()
@@ -81,12 +87,22 @@ def rate_fraction(percent: str) -> tuple[int, int]:
 
 
 def half_year(num: int, den: int) -> tuple[int, int]:
-    """ボーナス列の半年利 = 年利÷2 = 月利×6（設計書 §4）。"""
+    """ボーナス列の半年利 = 年利÷2 = 月利×6（設計書 §4）。
+
+    独立: 不可能（`Rate::half_year` と同じ 1 行——分子はそのまま、分母を 6 で
+    割る。分母は scale·1200 なので常に割り切れる）
+    """
     return num, den // 6
 
 
 def monthly_interest(balance: int, num: int, den: int) -> int:
-    """公開契約 1: 各行の利息。"""
+    """公開契約 1: 各行の利息。
+
+    独立: 不可能（`Rate::monthly_interest_floor` と同じ手順——掛けてから
+    整数除算する。floor(残高×利率) に別解が無い。**この一致は独立の証拠に
+    ならない**。Rust 側が u128 に広げて溢れを見るのに対し、こちらは Python の
+    多倍長整数がそれを担う、という違いだけがある）
+    """
     return balance * num // den
 
 
@@ -110,7 +126,13 @@ def _residual_target(residual: int, num: int, den: int) -> int:
 
 
 def run_schedule(principal: int, num: int, den: int, n: int, payment: int, residual: int) -> dict:
-    """償還表を 1 行ずつ愚直に走らせる（公開契約 2）。"""
+    """償還表を 1 行ずつ愚直に走らせる（公開契約 2）。
+
+    独立: 不可能（`schedule::run_schedule` と同じ手順。**表そのものが仕様**で
+    あり、各行の利息が floor で決まる以上、経路に依存する——閉形式で総額を
+    出す別解が無い。守っているのは「表を歩く」という規則の側で、**一致は
+    独立の証拠にならない**）
+    """
     if n == 0 or principal == 0 or payment == 0 or residual >= principal:
         raise _syntax()
     if residual > 0 and n < 2:
@@ -176,7 +198,13 @@ def _guard_boundary(value: Decimal) -> None:
 
 
 def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -> int:
-    """閉形式で月額を出す。Decimal 50 桁で素直に評価する（独立軸）。"""
+    """閉形式で月額を出す。Decimal 50 桁で素直に評価する（独立軸）。
+
+    独立: 別手順（`closed_form::monthly_payment` は **f64** で `annuity` を
+    組み立て、桁落ちを避けるため `ln_1p`/`exp_m1` を使う。こちらは **Decimal
+    50 桁**で式のまま評価する。**同じ式を別の演算系で解く**ので、評価の誤りは
+    共有しない。式そのものの誤りは共有する）
+    """
     if n == 0 or principal == 0 or residual >= principal:
         raise _syntax()
     if residual > 0 and n < 2:
@@ -205,7 +233,12 @@ def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -
 
 
 def forward(principal: int, num: int, den: int, n: int, residual: int) -> dict:
-    """正算: 月額を決め、表で総額を確定する。"""
+    """正算: 月額を決め、表で総額を確定する。
+
+    独立: 一部（組み立ては `forward::compute` と同じ——閉形式で月額を出し、
+    表で総額を確定する。**独立に効いているのは `monthly_payment` の評価**
+    （Rust は f64、こちらは Decimal 50 桁）だけで、表の歩き方は共有している）
+    """
     payment = monthly_payment(principal, num, den, n, residual)
     schedule = run_schedule(principal, num, den, n, payment, residual)
     return {"monthly_payment": payment, **schedule}
@@ -230,7 +263,14 @@ def _probe(principal: int, num: int, den: int, n: int, payment: int) -> bool:
 
 
 def term_for(principal: int, num: int, den: int, payment: int) -> dict:
-    """期間逆算: 完済する最小の回数。候補は Decimal の対数、確定は厳密表。"""
+    """期間逆算: 完済する最小の回数。候補は Decimal の対数、確定は厳密表。
+
+    独立: 一部。**種を出す式は同じで、評価する演算系が違う**——`inverse::term_for`
+    は f64 の `ln_1p(-ratio)/ln_1p(r)`、こちらは Decimal 50 桁の `ln()`。式が
+    同じなのは、これが年金現価の逆関数だからで、**式の側の誤りは両方に入る**。
+    **確定はどちらも厳密な償還表を歩く**（種から 1 期ずつ動かす）ので、
+    そこも一致は独立の証拠にならない。**独立に効いているのは評価だけである。**
+    """
     if principal == 0 or payment == 0:
         raise _syntax()
     if payment <= monthly_interest(principal, num, den):
@@ -262,7 +302,13 @@ def term_for(principal: int, num: int, den: int, payment: int) -> dict:
 
 
 def principal_for(payment: int, num: int, den: int, n: int) -> dict:
-    """借入可能額逆算: n 回で表が完済する最大の元本。確定は厳密表（設計書 §5）。"""
+    """借入可能額逆算: n 回で表が完済する最大の元本。確定は厳密表（設計書 §5）。
+
+    独立: 一部。`inverse::principal_for` と**同じ年金現価の式を、別の演算系で**
+    評価する（Rust は f64 の `annuity`、こちらは Decimal 50 桁）。確定は
+    どちらも厳密表で境界を挟む。**独立に効いているのは評価だけ**で、式と
+    確定の規則は共有している。
+    """
     if payment == 0 or n == 0:
         raise _syntax()
     if num == 0:
@@ -300,7 +346,12 @@ def _check_bonus_share(bonus_principal: int, principal: int) -> None:
 
 
 def bonus_forward(principal: int, bonus_principal: int, num: int, den: int, n: int) -> dict:
-    """ボーナス併用の正算: 2 本の償還列を独立に併走させる（設計書 §4）。"""
+    """ボーナス併用の正算: 2 本の償還列を独立に併走させる（設計書 §4）。
+
+    独立: 不可能（`bonus::compute_forward` と同じ組み立て——月々の列と半年の列を
+    別々に走らせて足す。**併走させる規則そのものが仕様**である。独立に効いて
+    いるのは内側の `monthly_payment` の評価だけ）
+    """
     _check_bonus_share(bonus_principal, principal)
     if bonus_principal > 0 and n < BONUS_INTERVAL_MONTHS:
         raise _syntax()
@@ -335,7 +386,12 @@ def bonus_forward(principal: int, bonus_principal: int, num: int, den: int, n: i
 def bonus_principal_for(
     monthly_payment_amount: int, bonus_payment: int, num: int, den: int, n: int
 ) -> dict:
-    """ボーナス併用の借入可能額逆算（設計書 §4-b）。50% は解いた後に検証する。"""
+    """ボーナス併用の借入可能額逆算（設計書 §4-b）。50% は解いた後に検証する。
+
+    独立: 不可能（`bonus::principal_for` と同じ組み立て——月々の逆算を 1 回、
+    半年利で ボーナス列の逆算を 1 回、足す。**組み立て方そのものが仕様**である。
+    独立に効いているのは、内側の `principal_for` の評価だけ）
+    """
     if bonus_payment > 0 and n < BONUS_INTERVAL_MONTHS:
         raise _syntax()
     monthly = principal_for(monthly_payment_amount, num, den, n)
@@ -374,7 +430,10 @@ _COUNT_KEYS = {"rows_paid", "bonus_rows", "n"}
 
 
 def compute(op: str, params: dict) -> dict:
-    """生成スクリプトの入口。op ごとに 5 分岐し、エラーは戻り値にする。"""
+    """生成スクリプトの入口。op ごとに 5 分岐し、エラーは戻り値にする。
+
+    独立: 不可能（計算をしない。op の綴りで分岐して、上の関数へ渡すだけ）
+    """
     try:
         num, den = rate_fraction(params["rate"])
         if op == "loan_forward":

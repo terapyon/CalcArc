@@ -47,6 +47,13 @@ export type DataScaleKeyToken =
 /** 入力する項目。 */
 export type DataScaleField = "count" | "dimensions" | "dtype";
 
+/** 項目の一覧。理由は `convert.ts` の `CONVERT_FIELDS` と同じ。 */
+export const DATA_SCALE_FIELDS: readonly DataScaleField[] = [
+  "count",
+  "dimensions",
+  "dtype",
+];
+
 /** 次元数の候補(spec §4.2)。**選択で入れた値も、手入力で打った値と同じ
  * `Entry` になる**——面は入り口が 2 つあるだけで、下流は 1 本である。 */
 export const DIMENSION_CANDIDATES = [

@@ -1,6 +1,6 @@
 // エラー分類の共有は境界違反ではない: 設計書 §9 が「エラー分類(CalcError)」を
 // モジュール間の共有項目として明示している。import するのは型だけ。
-import type { CalcErrorCode } from "../calc/types";
+import type { CalcErrorCode, Outcome } from "../calc/types";
 
 export type ExprErrorCode = Extract<
   CalcErrorCode,
@@ -23,7 +23,4 @@ export type UnitSetName =
   | `periods:${1 | 2 | 12}`;
 
 /** 式の評価結果。値は文字列 —— 円も件数も JS の number を超えうる。 */
-export interface ExprResult {
-  value: string | null;
-  error: ExprErrorCode | null;
-}
+export type ExprResult = Outcome<{ value: string }, ExprErrorCode>;

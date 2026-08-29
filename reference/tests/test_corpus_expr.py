@@ -206,9 +206,9 @@ def test_a_constant_reads_as_itself() -> None:
 def test_an_unknown_constant_is_refused_loudly() -> None:
     # 未知の名前を通すと、キー列に存在しないトークンが載って
     # ブラウザ側で黙って読み飛ばされ、別の式が計算される。
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown constant"):
         to_keys(Const("tau"))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown constant"):
         to_expr_text(Const("tau"))
 
 

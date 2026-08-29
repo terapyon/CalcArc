@@ -151,6 +151,12 @@ jobs:
         working-directory: reference
       - run: uv run ruff format --check .
         working-directory: reference
+      # **注釈を書いたなら、それを読む道具を回す。** `ruff` は lint であって
+      # 型検査ではない——2026-08-28 まで、`src` の 99% に付いた注釈を
+      # 誰も検査していなかった。範囲(`*_ref.py` だけ)と、外した理由は
+      # `reference/pyproject.toml` の `[tool.mypy]` が持つ。
+      - run: uv run mypy
+        working-directory: reference
       - run: uv run pytest
         working-directory: reference
       - run: uv run python scripts/generate.py

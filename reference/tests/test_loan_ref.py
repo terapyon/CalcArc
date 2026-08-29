@@ -109,14 +109,14 @@ def test_the_u64_domain_is_a_contract() -> None:
 def test_the_boundary_guard_keeps_coin_tosses_out_of_the_golden() -> None:
     # ガードは「f64 の floor が転ぶ値」を golden に入れない番人(設計書 §1-4)。
     loan_ref._guard_boundary(Decimal("1000.5"))  # 十分離れている
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="yen boundary"):
         loan_ref._guard_boundary(Decimal("1000.0000000001"))
     # 絶対 1e-6 円だけでは巨大な月額を守れない——相対の限度が効く。
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="yen boundary"):
         loan_ref._guard_boundary(Decimal("1000000000000000.4"))
     # 実入力でも触れる: 3,000 万・2 回・年 2.4% の月額は境界に近すぎる。
     num, den = rate_fraction("2.4")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="yen boundary"):
         monthly_payment(30_000_000, num, den, 2, 0)
 
 

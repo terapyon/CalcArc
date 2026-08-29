@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = ["sympy>=1.13", "mpmath>=1.3"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 
 [build-system]
 requires = ["hatchling"]
@@ -17,6 +17,48 @@ packages = ["src/calcarc_reference"]
 
 [tool.ruff]
 line-length = 100
+
+# **既定は狭い。** 2026-08-28 まで `select` を書いていなかったので、
+# 有効なのは `E4`/`E7`/`E9` + `F` 相当だけだった——pyupgrade も bugbear も
+# pytest の作法も 1 件も見ていない。**絞っていたのではなく、設定していなかった。**
+#
+# 広げる規則は 1 つずつ理由を持って選ぶ。**実測（2026-08-28）:**
+# `E,W,F` 0 件 / `I` 0 件 / `SIM` 0 件（既に整っている）、`UP` 3・`B` 1・`PT` 15。
+# **入れなかったもの**: `RUF` は 884 件すべてが `RUF001/002/003`（曖昧な
+# ユニコード）で、**日本語のコメントと docstring に反応しているだけ**。
+# `D` は 1,228 件で、日本語の散文 docstring に英語圏の様式を当てるだけ。
+# `ANN` は型検査（`[tool.mypy]`）が同じ穴を塞ぐ。`PL` は 189 件のうち 142 件が
+# `PLR2004`（直値比較）で、**このプロジェクトでは直値が主張そのもの**である。
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "PT"]
+# `PT018`（複合 assert を分ける）は入れない。5 件あるが、`a and b` を 2 行に
+# 割ると**どちらが破れたか**は分かる代わりに、**両方を同時に見る主張**という
+# 意図が消える。好みの範囲であり、検査の強度は上がらない。
+ignore = ["PT018"]
+
+# **`ruff` は lint であって型検査ではない。** 注釈は `src` の戻り値 99% /
+# 引数 98% に付いているのに、2026-08-28 まで**それを読む道具が 1 つも
+# 無かった**——注釈は書いた瞬間から腐りうるし、腐っても誰も気づかない。
+#
+# **範囲は参照実装の中核(`*_ref.py`)だけに絞ってある。** 絞ったのは
+# 「あとで広げる」ためであって、外した側が正しいからではない:
+# `corpus_calls.py`(43 件)と `corpus_eval.py`(16 件)に既定で 64 件中 59 件が
+# 集中しており、**現物を読んだ限りどれも本物の欠陥ではなく、「番人を検査が
+# 見抜けない」型だった**(`any(x is None)` の絞り込みなど)。
+# **それを型に合わせて書き換えると、正しいコードのほうが歪む。** 広げるのは
+# 別の仕事として起票してある(`docs/maintainability-2026-08-28.md` の P-1b)。
+[tool.mypy]
+python_version = "3.14"
+files = ["src/calcarc_reference"]
+# `*_ref.py` 以外を外す。**この綴りが範囲の唯一の宣言である**
+# (CI も手元も `uv run mypy` を引数なしで叩くので、両者がずれない)。
+exclude = "(corpus_[a-z]+|cases|corpus_coverage)\\.py$"
+
+# `sympy` と `mpmath` は型情報を配っていない(`py.typed` が無い)。
+# **こちらの落ち度ではないので黙らせる**——ただし対象は 2 つだけに限る。
+[[tool.mypy.overrides]]
+module = ["sympy.*", "mpmath.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

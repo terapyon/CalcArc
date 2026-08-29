@@ -44,10 +44,14 @@ def compute(
     context_length: str,
     kv_precision: str,
 ) -> dict:
-    numbers = [parse_u128(t) for t in (parameters, layers, kv_heads, head_dim, context_length)]
+    parsed = [parse_u128(t) for t in (parameters, layers, kv_heads, head_dim, context_length)]
     weight_bits_per = BITS_PER_PARAMETER.get(weight_precision)
     kv_bits_per = BITS_PER_PARAMETER.get(kv_precision)
-    if any(n is None for n in numbers) or weight_bits_per is None or kv_bits_per is None:
+    # **`any(n is None …)` ではなく、絞り込んだ列の長さで見る。** 読み方は同じで
+    # (1 つでも読めなければ SyntaxError)、こちらは**残った列が `int` だけである
+    # ことを型でも言える**。`any()` の判定は型検査器から見えない。
+    numbers = [n for n in parsed if n is not None]
+    if len(numbers) != len(parsed) or weight_bits_per is None or kv_bits_per is None:
         return {"error": "SyntaxError"}
     params, layer_count, heads, dim, context = numbers
 

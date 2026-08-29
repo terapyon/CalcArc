@@ -1,7 +1,7 @@
 // エラー分類の共有は境界違反ではない: 設計書 §1 が「エラー分類
 // (CalcError)」を各モジュールの共有項目として明示している。ここで import
 // するのは型だけ(値・ロジックは持ち込まない)。
-import type { CalcErrorCode } from "../calc/types";
+import type { CalcErrorCode, Outcome } from "../calc/types";
 
 /**
  * 為替換算のトークン(U-4 設計書 §3.1)。
@@ -47,13 +47,10 @@ export type CurrencyToken = (typeof CURRENCY_TOKENS)[number];
  * すべて `SyntaxError` に落ちる(WASM 境界が `Currency::from_token` で
  * 両方を復元してから core を呼ぶ。core 自身は `from` を取らない)。
  */
-export interface CurrencyConvertResult {
-  text: string | null;
-  error: Extract<
-    CalcErrorCode,
-    "DivisionByZero" | "Overflow" | "SyntaxError"
-  > | null;
-}
+export type CurrencyConvertResult = Outcome<
+  { text: string },
+  Extract<CalcErrorCode, "DivisionByZero" | "Overflow" | "SyntaxError">
+>;
 
 /** calcarc-wasm の `currency_units()` に対応。**並びは盤面の通貨面の並びである。** */
 export interface CurrencyUnitsResult {

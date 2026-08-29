@@ -11,8 +11,8 @@ vi.mock("../../datascale", () => ({
 vi.mock("../../expr", () => ({
   initExpr: () =>
     Promise.resolve({
-      integer: () => ({ value: null, error: null }),
-      percent: () => ({ value: null, error: null }),
+      integer: () => ({ kind: "ok", value: "" }),
+      percent: () => ({ kind: "ok", value: "" }),
     }),
 }));
 

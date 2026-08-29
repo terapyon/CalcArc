@@ -15,40 +15,46 @@ vi.mock("../../finance/loan", () => ({
 vi.mock("../../finance", () => ({
   initFinance: () =>
     Promise.resolve({
+      // **`kind` を書き忘れると、この mock は黙って成功の枝に落ちる**
+      // ——`undefined === "error"` は false なので、テストは緑のまま
+      // 「盤面が失敗をどう出すか」を 1 度も見なくなる。
       grow: () => ({
+        kind: "ok",
         finalBalance: "1051136",
         principalTotal: "1000000",
         interest: "51136",
+        // 税の 3 項目**だけ**が null になりうる(税 OFF。設計書 §3)。
         nationalTax: null,
         localTax: null,
         net: null,
-        error: null,
       }),
       // 設計書 §7 の必須ケース #1(golden)。元本 0・年 3%・月次・240 期・
       // 目標 1,000 万・税なし → 積立 30,461、残高 10,000,251。
       depositFor: () => ({
+        kind: "ok",
         deposit: "30461",
-        periods: null,
+        // 逆算は**答と、その答における全体像**を両方返す。求めなかった側
+        // (ここでは期数)は入力そのままで、null にはならない。
+        periods: "240",
         finalBalance: "10000251",
         principalTotal: "7310640",
         interest: "2689611",
         nationalTax: null,
         localTax: null,
         net: null,
-        error: null,
       }),
       // 同 §7 の非単調ペア(a)(golden #4)。元本 999・年 1.5%・月次・積立 0・
       // 目標 1,016・税あり → 19 期。次の期がまた下回ることがある(§3 帰結 2)。
       periodsFor: () => ({
-        deposit: null,
+        kind: "ok",
+        deposit: "0",
         periods: "19",
         finalBalance: "1018",
         principalTotal: "999",
         interest: "19",
-        nationalTax: null,
-        localTax: null,
+        nationalTax: "0",
+        localTax: "0",
         net: "1016",
-        error: null,
       }),
     }),
 }));
@@ -76,48 +82,52 @@ vi.mock("../../expr", () => ({
             else if (units[ch] !== undefined) {
               total += BigInt(digits || "0") * (units[ch] as bigint);
               digits = "";
-            } else return { value: null, error: "SyntaxError" };
+            } else return { kind: "error", code: "SyntaxError" };
           }
           value += total + BigInt(digits || "0");
         }
-        if (text === "") return { value: null, error: null };
+        if (text === "") return { kind: "ok", value: "" };
         // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
-        if (value > BigInt(max)) return { value: null, error: "Overflow" };
-        return { value: value.toString(), error: null };
+        if (value > BigInt(max)) return { kind: "error", code: "Overflow" };
+        return { kind: "ok", value: value.toString() };
       },
-      percent: (text: string) => ({ value: text, error: null }),
+      percent: (text: string) => ({ kind: "ok", value: text }),
     }),
 }));
 
 import { initLoan } from "../../finance/loan";
 import { FinancePanel } from "./FinancePanel";
 
+// **`kind` が付き、`error: null` は無くなった**(設計書 §0)。境界が実際に
+// 返す形と揃えておかないと、**パネルが `kind` を見ていなくても緑になる**
+// ——`undefined === "error"` は偽なので、成功の枝へ落ちて payload が読めてしまう。
 function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
   return {
     forward: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPayment: "91855",
       totalPayment: "38579007",
       totalInterest: "8579007",
       finalPayment: "91762",
       rowsPaid: 420,
-      error: null,
     }),
     principal: vi.fn().mockReturnValue({
+      kind: "ok",
       principal: "27761211",
       totalPayment: "35699999",
       totalInterest: "7938788",
       finalPayment: "84999",
       rowsPaid: 420,
-      error: null,
     }),
     term: vi.fn().mockReturnValue({
+      kind: "ok",
       months: 420,
       totalPayment: "38579007",
       totalInterest: "8579007",
       finalPayment: "91762",
-      error: null,
     }),
     bonusForward: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPayment: "73484",
       bonusPayment: "276219",
       bonusRows: 70,
@@ -125,15 +135,14 @@ function stubCalc(overrides: Partial<LoanCalc> = {}): LoanCalc {
       totalInterest: "8600000",
       monthlyFinalPayment: "46013",
       bonusFinalPayment: "276227",
-      error: null,
     }),
     bonusPrincipal: vi.fn().mockReturnValue({
+      kind: "ok",
       monthlyPrincipal: "26128204",
       bonusPrincipal: "5430487",
       totalPrincipal: "31558691",
       totalPayment: "40599999",
       totalInterest: "9041302",
-      error: null,
     }),
     ...overrides,
   };
@@ -489,12 +498,11 @@ describe("FinancePanel（電卓）", () => {
   it("shows an error from the core on the main line", async () => {
     const calc = await renderPanel(
       stubCalc({
+        // **失敗は `code` だけを持つ**(設計書 §0)。以前は 4 つの `null` が
+        // 並んでいた——「欄はあるが中身が無い」という状態を、いまは作らない。
         term: vi.fn().mockReturnValue({
-          months: null,
-          totalPayment: null,
-          totalInterest: null,
-          finalPayment: null,
-          error: "SyntaxError",
+          kind: "error",
+          code: "SyntaxError",
         }),
       }),
     );

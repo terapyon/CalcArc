@@ -21,10 +21,10 @@ def test_the_guard_rejects_a_loop_that_drifted_too_far():
     # **番人自身に判別力があること**を確かめる。否定的な保証(「ずれていない」)を
     # 出す側なので、陽性を出せることを見てからでないと信じられない。
     num, den = compound_ref.rate_fraction("1", 2)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="ずれが範囲外"):
         compound_ref.check_against_closed_form(0, 1_000_000, 0, num, den, 10)
     # 逆向き(厳密ループが閉形式を上回る)も弾く。
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="ずれが範囲外"):
         compound_ref.check_against_closed_form(2_000_000, 1_000_000, 0, num, den, 10)
 
 

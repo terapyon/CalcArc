@@ -40,15 +40,15 @@ vi.mock("../../expr", () => ({
           else if (units[ch] !== undefined) {
             value += BigInt(digits || "0") * (units[ch] as bigint);
             digits = "";
-          } else return { value: null, error: "SyntaxError" };
+          } else return { kind: "error", code: "SyntaxError" };
         }
-        if (text === "") return { value: null, error: null };
+        if (text === "") return { kind: "ok", value: "" };
         value += BigInt(digits || "0");
         // **上限は着地に効く**(設計書 §5)。超えたら Overflow で、値は出ない。
-        if (value > BigInt(max)) return { value: null, error: "Overflow" };
-        return { value: value.toString(), error: null };
+        if (value > BigInt(max)) return { kind: "error", code: "Overflow" };
+        return { kind: "ok", value: value.toString() };
       },
-      percent: (text: string) => ({ value: text, error: null }),
+      percent: (text: string) => ({ kind: "ok", value: text }),
     }),
 }));
 
@@ -127,18 +127,19 @@ function llmStub(
   const cl = BigInt(contextLength || "0");
   const weightBytes = (p * BITS[weightPrecision]) / 8n;
   const kvBytes = (2n * l * kh * hd * cl * BITS[kvPrecision]) / 8n;
+  // **失敗は payload を 1 つも持たない**(設計書 §0)。
   if (weightBytes > U128_MAX || kvBytes > U128_MAX) {
-    return { weight: null, kv: null, total: null, error: "Overflow" };
+    return { kind: "error", code: "Overflow" };
   }
   const totalBytes = weightBytes + kvBytes;
   if (totalBytes > U128_MAX) {
-    return { weight: null, kv: null, total: null, error: "Overflow" };
+    return { kind: "error", code: "Overflow" };
   }
   return {
+    kind: "ok",
     weight: byteLines(weightBytes),
     kv: byteLines(kvBytes),
     total: byteLines(totalBytes),
-    error: null,
   };
 }
 

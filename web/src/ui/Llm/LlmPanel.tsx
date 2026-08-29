@@ -17,6 +17,7 @@ import {
   text,
   type Unit,
 } from "../../datascale/entry";
+import { PRECISION_TOKENS } from "../../datascale/types";
 import { type ExprCalc, initExpr } from "../../expr";
 import type { Primary } from "../../settings";
 import { Keypad } from "../Keypad/Keypad";
@@ -30,6 +31,7 @@ import {
   llmPad,
 } from "../Keypad/llm";
 import { isDeadOperator } from "../Keypad/operators";
+import { parsePrefixed } from "../Keypad/parse";
 import type { KeypadSection } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
@@ -231,8 +233,10 @@ export function LlmPanel() {
   }
 
   function press(token: LlmKeyToken): void {
-    if (token.startsWith("field:")) {
-      setActive(token.slice("field:".length) as LlmField);
+    // **解けたときだけ進む**(`Keypad/parse.ts`)。
+    const field = parsePrefixed(token, "field:", LLM_FIELD_ORDER);
+    if (field !== null) {
+      setActive(field);
       return;
     }
     if (token.startsWith("param:")) {
@@ -251,10 +255,10 @@ export function LlmPanel() {
       setContext(fromDigits(token.slice("ctx:".length)));
       return;
     }
-    if (token.startsWith("precision:")) {
-      const value = token.slice("precision:".length) as PrecisionToken;
-      if (active === "weight") setWeight(value);
-      else if (active === "kvPrecision") setKvPrecision(value);
+    const precision = parsePrefixed(token, "precision:", PRECISION_TOKENS);
+    if (precision !== null) {
+      if (active === "weight") setWeight(precision);
+      else if (active === "kvPrecision") setKvPrecision(precision);
       return;
     }
     if (token === "entry:manual") {
@@ -343,7 +347,10 @@ export function LlmPanel() {
     const typed = text(entry);
     if (typed === "" || expr === null) return { value: "", error: null };
     const r = expr.integer(typed, MAX_COUNT, unitSet);
-    return { value: r.value ?? "", error: r.error };
+    // **成功と失敗は別の形**なので、枝を分けてから読む(設計書 §0)。
+    return r.kind === "error"
+      ? { value: "", error: r.code }
+      : { value: r.value, error: null };
   }
 
   const parametersResult = evaluate(parameters, "params");
@@ -387,19 +394,18 @@ export function LlmPanel() {
   // main は合計の 主 → 副 → bytes の順に繰り上げる(設計書 §6)。**この
   // 参照は下の結果欄の行とは別に持つ**——赤確認(Step 8)がここではなく
   // 行の側を狙い撃てるようにするため。
-  const totalDecimal = shown?.total?.decimal ?? null;
-  const totalBinary = shown?.total?.binary ?? null;
+  // **成功と失敗は別の形**なので、先に枝を分けてから読む(設計書 §0)。
+  const ok = shown?.kind === "ok" ? shown : null;
+  const calcError = shown?.kind === "error" ? shown.code : null;
+  const totalDecimal = ok?.total.decimal ?? null;
+  const totalBinary = ok?.total.binary ?? null;
   const first = primary === "decimal" ? totalDecimal : totalBinary;
   const second = primary === "decimal" ? totalBinary : totalDecimal;
   const answer = exprError
     ? "Math ERROR"
-    : shown?.error
+    : calcError
       ? "Math ERROR"
-      : (first ??
-        second ??
-        (shown?.total?.bytesGrouped
-          ? `${shown.total.bytesGrouped} bytes`
-          : ""));
+      : (first ?? second ?? (ok ? `${ok.total.bytesGrouped} bytes` : ""));
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
   // (設計書 §2)。未入力の項目は出さない——層数が空のあいだは根拠にならない。
@@ -414,7 +420,7 @@ export function LlmPanel() {
       <Readout
         entries={entries}
         main={answer}
-        error={exprError ?? shown?.error ?? null}
+        error={exprError ?? calcError}
         status={[
           {
             testId: "llm-primary",
@@ -434,11 +440,11 @@ export function LlmPanel() {
         pressed={keyPressed}
         disabled={keyDisabled}
       />
-      {shown && !shown.error && (
+      {ok && (
         <div className={styles.result} data-testid="llm-result">
-          {byteRow("llm-weight-bytes", "重み", shown.weight)}
-          {byteRow("llm-kv-bytes", "KV cache", shown.kv)}
-          {byteRow("llm-total-bytes", "合計", shown.total)}
+          {byteRow("llm-weight-bytes", "重み", ok.weight)}
+          {byteRow("llm-kv-bytes", "KV cache", ok.kv)}
+          {byteRow("llm-total-bytes", "合計", ok.total)}
         </div>
       )}
       {/* 免責は常設(Finance の免責と同じ扱い)。エラーではないので
