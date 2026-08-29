@@ -234,3 +234,234 @@ describe("レポートを書く段は最後（2026-08-27）", () => {
     ).toBeLessThan(report);
   });
 });
+
+// ---------------------------------------------------------------------------
+// **`always()` の意味を分ける**(2026-08-29)。
+//
+// もともと `always()` は 2 つの意味を兼ねていた——**①落ちても結果を集める**
+// (サマリー・添付・前提を整える段)と、**②赤を独立させる**(盤面の赤で計算の赤を
+// 隠さない)。**兼ねていたせいで、v0.4.1 では前提が欠けたまま走った段が
+// 「本当の原因ではない赤」を 36 本出し、真犯人(型検査の赤)を埋めた。**
+//
+// いまは段ごとに `# 種別:` を書き、**判定・測る段は自分の前提を名指しする。**
+// ここはその規律の番人である——**次に段を足す人が、どちらの意味で
+// `always()` を付けるのかを選ばずには書けない。**
+// ---------------------------------------------------------------------------
+
+interface CorpusStep {
+  name: string | null;
+  kind: string | null;
+  id: string | null;
+  /** `if:` を 1 行に畳んだもの。無ければ `null`。 */
+  cond: string | null;
+}
+
+const corpusSteps = (): CorpusStep[] => {
+  const yaml = read("heavy-corpus.yml");
+  const body = yaml.split("\n  corpus:\n")[1] ?? "";
+  const untilNextJob = body.split(/\n {2}\w[\w-]*:\n/)[0] ?? "";
+  const chunks = untilNextJob.split(/\n(?= {6}- )/).slice(1);
+  return chunks.map((chunk) => {
+    const lines = chunk.split("\n");
+    let cond: string | null = null;
+    const at = lines.findIndex((line) => /^\s*if:\s/.test(line));
+    if (at >= 0) {
+      const head = (lines[at].match(/^\s*if:\s*(.*)$/) ?? [])[1] ?? "";
+      if (head.startsWith(">")) {
+        const folded: string[] = [];
+        for (const line of lines.slice(at + 1)) {
+          if (!/^ {10}\S/.test(line)) break;
+          folded.push(line.trim());
+        }
+        cond = folded.join(" ");
+      } else {
+        cond = head.trim();
+      }
+    }
+    return {
+      name: (chunk.match(/^\s*-?\s*name:\s*(.+?)\s*$/m) ?? [])[1] ?? null,
+      kind: (chunk.match(/^\s*# 種別:\s*(\S+)/m) ?? [])[1] ?? null,
+      id: (chunk.match(/^\s*id:\s*(\S+)/m) ?? [])[1] ?? null,
+      cond,
+    };
+  });
+};
+
+const KINDS = ["前提を整える", "判定する", "測る", "集める"];
+
+describe("always() の意味を分ける（2026-08-29）", () => {
+  it("名前のある段は、すべて種別を宣言している", () => {
+    const named = corpusSteps().filter((step) => step.name !== null);
+    expect(named.length).toBeGreaterThan(5);
+    for (const step of named) {
+      expect(step.kind, `「${step.name}」に種別が無い`).not.toBe(null);
+      expect(KINDS, `「${step.name}」の種別 ${step.kind} を知らない`).toContain(
+        step.kind,
+      );
+    }
+  });
+
+  it("名前を持たない段は、頭の 3 つ（checkout と複合アクション）だけである", () => {
+    // **除外が黙って増えないようにする。** ここが増えると、種別を書かずに
+    // 段を足す抜け道になる。
+    const nameless = corpusSteps().filter((step) => step.name === null);
+    expect(nameless).toHaveLength(3);
+    expect(nameless.every((step) => step.cond === null)).toBe(true);
+  });
+
+  it("条件の形は「always()」か「always() && 前提の名指し」だけである", () => {
+    // **形を狭めておくと、下の場面表が条件式を正しく読める。**
+    // 知らない形が入ったら、場面表が黙って間違うより先にここが赤くなる。
+    for (const step of corpusSteps()) {
+      if (step.cond === null) continue;
+      expect(step.cond, `「${step.name}」の条件が想定の形ではない`).toMatch(
+        /^always\(\)( && steps\.[a-z]+\.outcome == 'success')*$/,
+      );
+    }
+  });
+
+  it("裸の always() を持つのは「前提を整える」と「集める」の段だけである", () => {
+    // **これが意味の分割そのものである。** 裸の `always()` は「何があっても
+    // 走る」であり、**判定や測定がそれを名乗ってはいけない**——前提が欠けた
+    // まま走ると、本当の原因ではない赤が出る(v0.4.1 の 36 本)。
+    for (const step of corpusSteps()) {
+      if (step.cond !== "always()") continue;
+      expect(
+        ["前提を整える", "集める"],
+        `「${step.name}」が裸の always() を名乗っている`,
+      ).toContain(step.kind);
+    }
+  });
+
+  it("判定・測る段は、自分の前提を名指ししている", () => {
+    const byName = new Map(
+      corpusSteps().map((step) => [step.name ?? "", step.cond ?? ""]),
+    );
+    const needs = (name: string) =>
+      [...(byName.get(name) ?? "").matchAll(/steps\.([a-z]+)\.outcome/g)]
+        .map((m) => m[1])
+        .sort();
+    expect(needs("The committed corpus must equal a fresh generation")).toEqual(
+      ["deps"],
+    );
+    // **土台は「測る」段の前提である。** 期待値が生成器の出力でないなら、
+    // 網の検出力という数は誰も信じない——11 分を費やさない。
+    expect(needs("Measure what this corpus can detect")).toEqual([
+      "browser",
+      "repro",
+      "wasm",
+    ]);
+    // **盤面と照合は、土台を前提にしない。** 盤面から打てるかは期待値の
+    // 素性と無関係で、照合はどのファイルが食い違ったかを教えてくれる。
+    expect(needs("Type a sample on the real keypad")).toEqual([
+      "browser",
+      "wasm",
+    ]);
+    expect(needs("Run the heavy corpus")).toEqual(["browser", "wasm"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// **「赤くなるべき日」を作って、条件式を実際に動かす。**
+//
+// `always()` の付け外しは、**壊れた日を作らないと入ったかどうか分からない。**
+// 本当の確認は CI の走行だが、ここでは条件式の論理をそのまま評価して、
+// **どの段が走り、どの段が飛ぶか**を場面ごとに固定する。**形の規則(上)が
+// 条件を狭めているので、この評価器が本物と食い違ったまま緑になることはない。**
+// ---------------------------------------------------------------------------
+
+/** `steps.<id>.outcome` を見ながら、走る段と飛ぶ段を場面から求める。 */
+const simulate = (failing: string[]): Map<string, string> => {
+  const outcome = new Map<string, string>();
+  let somethingFailed = false;
+  for (const step of corpusSteps()) {
+    const label = step.name ?? "(名前なし)";
+    let runs: boolean;
+    if (step.cond === null) {
+      // 既定は `success()`——前の段が 1 つでも落ちていれば走らない。
+      runs = !somethingFailed;
+    } else {
+      runs = [...step.cond.matchAll(/steps\.([a-z]+)\.outcome/g)].every(
+        (m) => outcome.get(m[1]) === "success",
+      );
+    }
+    const result = !runs
+      ? "skipped"
+      : failing.includes(label)
+        ? "failure"
+        : "success";
+    outcome.set(label, result);
+    if (step.id !== null) outcome.set(step.id, result);
+    if (result === "failure") somethingFailed = true;
+  }
+  return outcome;
+};
+
+const POWER = "Measure what this corpus can detect";
+const KEYPAD = "Type a sample on the real keypad";
+const CORPUS = "Run the heavy corpus";
+const REPRO = "The committed corpus must equal a fresh generation";
+const TOOLS = "The measuring instrument must be sound";
+const BROWSER = "Install Playwright's browser";
+const WASM = "Build the wasm the type checker needs";
+
+describe("赤くなるべき日（条件式を場面ごとに動かす）", () => {
+  it("何も落ちない日は、全部走る", () => {
+    const out = simulate([]);
+    for (const name of [REPRO, POWER, KEYPAD, CORPUS]) {
+      expect(out.get(name), name).toBe("success");
+    }
+  });
+
+  it("道具の段が落ちた日でも、土台は確かめられる（v0.4.1 の直し）", () => {
+    // **v0.4.1 ではここが飛ばされた。** 型検査の赤が「土台を一度も見ない
+    // まま終わった走行」に化け、期待値が生成器の出力かどうかを誰も
+    // 確かめないまま走行が終わっている(走行 32857987219、実測)。
+    const out = simulate([TOOLS]);
+    expect(out.get(REPRO)).toBe("success");
+    expect(out.get(POWER)).toBe("success");
+    expect(out.get(KEYPAD)).toBe("success");
+    expect(out.get(CORPUS)).toBe("success");
+  });
+
+  it("ブラウザが入らない日は、ブラウザを使う段が「飛ぶ」——偽の赤を出さない", () => {
+    // **これが v0.4.1 の 36 本の再発防止である。** `always()` だけだと
+    // ブラウザ不在のまま走り、道具の不調が
+    // 「`Executable doesn't exist`」に化けて全滅した。
+    const out = simulate([BROWSER]);
+    expect(out.get(KEYPAD)).toBe("skipped");
+    expect(out.get(CORPUS)).toBe("skipped");
+    expect(out.get(POWER)).toBe("skipped");
+    // **土台はブラウザに依らない。**
+    expect(out.get(REPRO)).toBe("success");
+  });
+
+  it("土台が赤い日は、検出力だけが飛び、盤面と照合は走る", () => {
+    // **意味の分割がいちばん見える場面である。** 数(検出力)は信じられない
+    // ので測らない。診断(どのファイルが食い違ったか・盤面から打てるか)は
+    // 集める。**報告書は「回し忘れではない」と書く。**
+    const out = simulate([REPRO]);
+    expect(out.get(POWER)).toBe("skipped");
+    expect(out.get(KEYPAD)).toBe("success");
+    expect(out.get(CORPUS)).toBe("success");
+  });
+
+  it("wasm が作れない日は、測る 3 本がすべて飛ぶ", () => {
+    const out = simulate([WASM]);
+    expect(out.get(POWER)).toBe("skipped");
+    expect(out.get(KEYPAD)).toBe("skipped");
+    expect(out.get(CORPUS)).toBe("skipped");
+  });
+
+  it("どの場面でも、集める段は走る", () => {
+    for (const failing of [[TOOLS], [BROWSER], [REPRO], [WASM], [CORPUS]]) {
+      const out = simulate(failing);
+      expect(out.get("Put the verdict in the job summary"), failing[0]).toBe(
+        "success",
+      );
+      expect(out.get("Keep the report as an artifact"), failing[0]).toBe(
+        "success",
+      );
+    }
+  });
+});
