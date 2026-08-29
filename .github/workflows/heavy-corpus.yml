@@ -102,7 +102,7 @@ jobs:
       - name: Install Playwright's browser
         # 種別: 前提を整える
         id: browser
-        if: always()
+        if: '!cancelled()'
         run: pnpm exec playwright install --with-deps chromium
         working-directory: heavy
 
@@ -113,7 +113,7 @@ jobs:
         # 何の関係も無い。ここを飛ばすと、**道具の赤が土台の未検査に化ける**
         # ——v0.4.1 の走行では実際にそうなり、期待値が生成器の出力かどうかを
         # 一度も見ないまま走行が終わった。
-        if: always()
+        if: '!cancelled()'
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
@@ -121,7 +121,7 @@ jobs:
       - name: Install the reference implementation
         # 種別: 前提を整える
         id: deps
-        if: always()
+        if: '!cancelled()'
         run: uv sync --locked
         working-directory: reference
 
@@ -140,7 +140,7 @@ jobs:
         #
         # 自分の前提だけを名指しする。**道具の赤に巻き込まれない。**
         id: repro
-        if: always() && steps.deps.outcome == 'success'
+        if: "!cancelled() && steps.deps.outcome == 'success'"
         run: uv run pytest tests/test_corpus_reproducibility.py -q
         working-directory: reference
 
@@ -160,9 +160,7 @@ jobs:
         # 11 分を費やさない。**以前も同じ挙動だったが、それは段の並びが
         # 偶然そうなっていただけで、条件としては書かれていなかった。**
         # 飛ばされたことは報告書が言う(「回し忘れではない」の枝)。
-        if: >-
-          always() && steps.wasm.outcome == 'success' && steps.browser.outcome
-          == 'success' && steps.repro.outcome == 'success'
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success' && steps.repro.outcome == 'success'"
         run: pnpm heavy:power
         working-directory: heavy
         env:
@@ -189,9 +187,7 @@ jobs:
         # ブラウザは前提である**——無いまま走らせると、道具の不調が
         # 「`Executable doesn't exist`」に化けて 36 本が全滅する(v0.4.1)。
         # **`always()` だけでは、その化け方を止められなかった。**
-        if: >-
-          always() && steps.wasm.outcome == 'success' && steps.browser.outcome
-          == 'success'
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success'"
         run: pnpm heavy:ui
         working-directory: heavy
         env:
@@ -214,9 +210,7 @@ jobs:
         # という診断が失われる。** 報告書は土台が赤いことを先頭近くで書き、
         # 「下に並ぶ『不一致 0 件』を結果として読まないこと」と付ける。
         # **前提(wasm・ブラウザ)だけを名指しする。**
-        if: >-
-          always() && steps.wasm.outcome == 'success' && steps.browser.outcome
-          == 'success'
+        if: "!cancelled() && steps.wasm.outcome == 'success' && steps.browser.outcome == 'success'"
         run: pnpm heavy
         working-directory: heavy
         env:
@@ -224,6 +218,15 @@ jobs:
 
       - name: Put the verdict in the job summary
         # 種別: 集める
+        #
+        # **ここだけ `always()` のままである。** 上の段は `!cancelled()` で、
+        # **手で止めた走行では走らない**——止めた人は理由を知っているので、
+        # 23 分の測定を続ける意味がない。**しかし証拠は残す。** 止められた
+        # 走行でも、どこまで進んでいたかは読めるほうがよい。
+        #
+        # **代償を 1 つ引き受けている**——止めた走行では報告書が無いので、
+        # 次の添付の段が `if-no-files-found: error` で赤くなる。走行の結論は
+        # `cancelled` なので下流は動かず害は無いが、**赤い段が 1 つ見える。**
         #
         # **記録はここに残る。** コミットされたログファイルは作らない
         # ——走らせた事実と結果が GitHub 上で読めれば足りる(ユーザ裁定 2026-08-17)。

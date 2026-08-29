@@ -266,7 +266,7 @@ const corpusSteps = (): CorpusStep[] => {
     let cond: string | null = null;
     const at = lines.findIndex((line) => /^\s*if:\s/.test(line));
     if (at >= 0) {
-      const head = (lines[at].match(/^\s*if:\s*(.*)$/) ?? [])[1] ?? "";
+      const head = ((lines[at] ?? "").match(/^\s*if:\s*(.*)$/) ?? [])[1] ?? "";
       if (head.startsWith(">")) {
         const folded: string[] = [];
         for (const line of lines.slice(at + 1)) {
@@ -277,6 +277,9 @@ const corpusSteps = (): CorpusStep[] => {
       } else {
         cond = head.trim();
       }
+      // **YAML の引用符を剥ぐ。** `!` で始まる値は裸で書けない
+      // (`!` は YAML のタグ記法なので)ため、条件は必ず引用符に包まれている。
+      cond = cond.replace(/^(['"])(.*)\1$/, "$2");
     }
     return {
       name: (chunk.match(/^\s*-?\s*name:\s*(.+?)\s*$/m) ?? [])[1] ?? null,
@@ -309,28 +312,78 @@ describe("always() の意味を分ける（2026-08-29）", () => {
     expect(nameless.every((step) => step.cond === null)).toBe(true);
   });
 
-  it("条件の形は「always()」か「always() && 前提の名指し」だけである", () => {
+  it("条件の形は 2 つだけである（always() か !cancelled() + 前提の名指し）", () => {
     // **形を狭めておくと、下の場面表が条件式を正しく読める。**
     // 知らない形が入ったら、場面表が黙って間違うより先にここが赤くなる。
     for (const step of corpusSteps()) {
       if (step.cond === null) continue;
       expect(step.cond, `「${step.name}」の条件が想定の形ではない`).toMatch(
-        /^always\(\)( && steps\.[a-z]+\.outcome == 'success')*$/,
+        /^(always\(\)|!cancelled\(\)( && steps\.[a-z]+\.outcome == 'success')*)$/,
       );
     }
   });
 
-  it("裸の always() を持つのは「前提を整える」と「集める」の段だけである", () => {
-    // **これが意味の分割そのものである。** 裸の `always()` は「何があっても
-    // 走る」であり、**判定や測定がそれを名乗ってはいけない**——前提が欠けた
-    // まま走ると、本当の原因ではない赤が出る(v0.4.1 の 36 本)。
+  it("always() を名乗れるのは「集める」だけである", () => {
+    // **これが意味の分割そのものである。** `always()` は「**手で止めても
+    // 走る**」であり、**証拠を残す段だけがそれを名乗ってよい。**
+    // 前提と判定・測る段は `!cancelled()`——失敗のあとは走るが、
+    // 止められた走行では走らない(止めた人は理由を知っている)。
     for (const step of corpusSteps()) {
       if (step.cond !== "always()") continue;
       expect(
-        ["前提を整える", "集める"],
-        `「${step.name}」が裸の always() を名乗っている`,
-      ).toContain(step.kind);
+        step.kind,
+        `「${step.name}」が always() を名乗っている。集める段だけの綴りである`,
+      ).toBe("集める");
     }
+  });
+
+  it("「前提を整える」と「判定・測る」は !cancelled() で始まる", () => {
+    for (const step of corpusSteps()) {
+      if (step.cond === null || step.kind === "集める") continue;
+      expect(
+        step.cond,
+        `「${step.name}」が !cancelled() で始まっていない`,
+      ).toMatch(/^!cancelled\(\)/);
+    }
+  });
+
+  it("★ 名指しされた step id は、同じジョブに実在する", () => {
+    // **存在しない id への参照は、GitHub では黙って偽になる。** 打ち間違えても
+    // 改名しても**エラーにならず、その段が永遠に飛ぶ。** 名指しの規律が、
+    // 名指しの外れで裏返る形である。
+    //
+    // 場面表も同じ理由でこれを捕まえる——未知の id は決して success に
+    // ならないので「何も落ちない日は全部走る」が落ちる(実測で 4 本赤)。
+    // **ただしその失敗文は原因を言わない。** ここは診断名のために在る。
+    const steps = corpusSteps();
+    const declared = new Set(
+      steps.map((step) => step.id).filter((id): id is string => id !== null),
+    );
+    for (const step of steps) {
+      for (const [, id] of (step.cond ?? "").matchAll(
+        /steps\.([a-z]+)\.outcome/g,
+      )) {
+        expect(
+          declared,
+          `「${step.name}」が名指しした id「${id}」が同じジョブに無い`,
+        ).toContain(id);
+      }
+    }
+  });
+
+  it("条件を持たない段は、頭の 6 つだけである", () => {
+    // **そこまでは並びが依存そのものである**(checkout → 複合アクション →
+    // 依存の導入 → wasm → 道具の健全性)。**それより後ろは並びが依存を
+    // 意味しない**ので、条件を書かずに段を足せてはならない。
+    const bare = corpusSteps().filter((step) => step.cond === null);
+    expect(bare.map((step) => step.name)).toEqual([
+      null,
+      null,
+      null,
+      "Install the heavy package",
+      "Build the wasm the type checker needs",
+      "The measuring instrument must be sound",
+    ]);
   });
 
   it("判定・測る段は、自分の前提を名指ししている", () => {
@@ -371,7 +424,10 @@ describe("always() の意味を分ける（2026-08-29）", () => {
 // ---------------------------------------------------------------------------
 
 /** `steps.<id>.outcome` を見ながら、走る段と飛ぶ段を場面から求める。 */
-const simulate = (failing: string[]): Map<string, string> => {
+const simulate = (
+  failing: string[],
+  cancelled = false,
+): Map<string, string> => {
   const outcome = new Map<string, string>();
   let somethingFailed = false;
   for (const step of corpusSteps()) {
@@ -379,10 +435,14 @@ const simulate = (failing: string[]): Map<string, string> => {
     let runs: boolean;
     if (step.cond === null) {
       // 既定は `success()`——前の段が 1 つでも落ちていれば走らない。
-      runs = !somethingFailed;
+      // 走行が止められたときも走らない。
+      runs = !somethingFailed && !cancelled;
+    } else if (cancelled && !step.cond.startsWith("always()")) {
+      // `!cancelled()` は、止められた走行では偽になる。
+      runs = false;
     } else {
       runs = [...step.cond.matchAll(/steps\.([a-z]+)\.outcome/g)].every(
-        (m) => outcome.get(m[1]) === "success",
+        (m) => outcome.get(m[1] ?? "") === "success",
       );
     }
     const result = !runs
@@ -451,6 +511,19 @@ describe("赤くなるべき日（条件式を場面ごとに動かす）", () =
     expect(out.get(POWER)).toBe("skipped");
     expect(out.get(KEYPAD)).toBe("skipped");
     expect(out.get(CORPUS)).toBe("skipped");
+  });
+
+  it("手で止めた走行では、測る段が走らず、証拠だけが残る", () => {
+    // **`always()` は cancel でも走る。** 全部 `always()` のままだと、
+    // 止めたはずの走行が 23 分の測定を続ける。**止めた人は理由を知っている
+    // ので、測り直す意味がない**——`!cancelled()` がそこを分ける。
+    const out = simulate([], true);
+    for (const name of [REPRO, POWER, KEYPAD, CORPUS, BROWSER]) {
+      expect(out.get(name), name).toBe("skipped");
+    }
+    // **証拠は残す。** どこまで進んでいたかは読めるほうがよい。
+    expect(out.get("Put the verdict in the job summary")).toBe("success");
+    expect(out.get("Keep the report as an artifact")).toBe("success");
   });
 
   it("どの場面でも、集める段は走る", () => {
