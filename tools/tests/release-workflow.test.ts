@@ -143,6 +143,25 @@ describe("型検査より先に wasm を作る（2026-08-26、Wave C）", () => 
     expect(build).toBeLessThan(check);
   });
 
+  it("heavy-corpus.yml は再現性検査を報告書より前に走らせる", () => {
+    // **報告書は再現性検査が残した信号を読む**(`heavy/reproducibility.json`)。
+    // あとに置くと、報告書は毎回「土台を確かめていない」と書く——`heavy:ui` を
+    // レポートより前に置いている理由とまったく同じ形である。**順番だけが
+    // それを決めている。**
+    const steps = stepsOf(read("heavy-corpus.yml"), "corpus");
+    const reproducibility = indexOfLine(
+      steps,
+      "pytest tests/test_corpus_reproducibility.py",
+    );
+    const report = steps.findIndex((line) => /run:\s*pnpm heavy$/.test(line));
+    expect(reproducibility).toBeGreaterThanOrEqual(0);
+    expect(report).toBeGreaterThanOrEqual(0);
+    expect(
+      reproducibility,
+      "再現性検査がレポートより後ろにある。**土台の節が毎回「確かめていない」になる。**",
+    ).toBeLessThan(report);
+  });
+
   it("ci.yml の heavy ジョブは wasm を取ってから型検査する", () => {
     const steps = stepsOf(read("ci.yml"), "heavy");
     const fetchWasm = indexOfLine(steps, "download-artifact");
