@@ -2259,3 +2259,98 @@ def test_a_constructed_row_really_hits_its_target() -> None:
         assert int(result["n"]) == fact.target_n
         checked += 1
     assert checked == 126, f"問い直した行が {checked} 行しかない"
+
+
+def test_compound_deposit_for_coverage_uses_only_its_own_cases() -> None:
+    """設計書 §15.1 の 9。**`compound_grow` が同じペアを踏んでいても数えない。**
+
+    **258 であって 247 ではない**(2026-08-29、Task 6)。計画は 247 被覆 / 19 除外
+    を見込んでいたが、**19 のうち 11 は溢れていなかった**——ペアワイズ 1 行が
+    運ぶのはペア 6 組で、**期間で溢れて行ごと捨てると、期間を含まない組まで
+    一緒に落ちていた。** `_deposit_for_construction` が周期を先に振るように
+    なり、**溢れずに作れるものは作る**ようになった。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    mine = {cell for cell in covered if cell.scope == "compound_deposit_for"}
+    assert len(mine) == 258
+    grow_only = {
+        corpus_coverage.Cell("compound_deposit_for", cell.axes)
+        for cell in covered
+        if cell.scope == "compound_grow"
+    }
+    assert grow_only - mine, "compound_grow だけが踏んでいるペアが在るはず(混ぜていない証拠)"
+
+
+def test_the_overflowing_pairs_are_excluded_as_source_overflow() -> None:
+    """正算が u64 を溢れさせるので、逆算の目標値が作れない(設計書 §10.1)。
+
+    **積立額を最小の 1 円にしても溢れる**ことを、参照実装に聞いて確かめる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    exclusions = corpus_calls.compound_deposit_for_exclusions(covered)
+    assert len(exclusions) == 8
+    assert all(e.reason is corpus_coverage.Reason.SOURCE_OVERFLOW for e in exclusions.values())
+    for cell in exclusions:
+        axes = dict(cell.axes)
+        assert (
+            corpus_calls._compound_reached(0, 1, axes["rate"], 1, int(axes["periods"]), False)
+            is None
+        )
+    # **整合式が閉じている。** 266 = 258 + 8 + 0。
+    mine = {cell for cell in covered if cell.scope == "compound_deposit_for"}
+    requirement = corpus_calls._REQUIREMENT_OF["compound_deposit_for"]
+    assert len(requirement.cells) == len(mine) + len(exclusions)
+
+
+def test_the_excluded_pairs_are_the_ones_no_construction_can_reach() -> None:
+    """**除外の下限を、探索とは独立に確かめる。**
+
+    除外の一覧は「いまの生成器が作れなかったもの」だが、それだけでは
+    **生成器を弱くすれば除外を増やせてしまう。** ここは因子表の全通り
+    (金利 × 期間 × 周期 × 税)を直接あたって、**どう構成しても正算が溢れる
+    セル**を数える——**この 8 は生成器の都合ではなく、u64 の都合である。**
+    """
+    factors = corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS
+    requirement = corpus_calls._REQUIREMENT_OF["compound_deposit_for"]
+    unreachable = set()
+    for cell in requirement.cells:
+        axes = dict(cell.axes)
+        rates = [axes["rate"]] if "rate" in axes else list(factors["rate"])
+        periods = [int(axes["periods"])] if "periods" in axes else list(factors["periods"])
+        per_years = (
+            [int(axes["periods_per_year"])]
+            if "periods_per_year" in axes
+            else list(factors["periods_per_year"])
+        )
+        taxes = [axes["tax"] == "True"] if "tax" in axes else list(factors["tax"])
+        if not any(
+            corpus_calls._compound_reached(0, 1, str(r), int(p), int(n), bool(t)) not in (None, 0)
+            for r in rates
+            for n in periods
+            for p in per_years
+            for t in taxes
+        ):
+            unreachable.add(cell)
+    assert len(unreachable) == 8
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    assert set(corpus_calls.compound_deposit_for_exclusions(covered)) == unreachable
+
+
+def test_an_unexplained_gap_is_not_given_a_reason() -> None:
+    """**説明できない未達に理由を貼らない**(設計書 §10、CLAUDE.md の「未分類理由」)。
+
+    被覆の集合から 1 つ抜くと、その分だけ「構成できるはずなのに未達」が生まれる
+    ——そこで `source_overflow` を貼れば表は綺麗になるが、**嘘になる。**
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    reachable = next(
+        cell
+        for cell in covered
+        if cell.scope == "compound_deposit_for" and "periods" in dict(cell.axes)
+    )
+    with pytest.raises(RuntimeError, match="理由を説明できない"):
+        corpus_calls.compound_deposit_for_exclusions(covered - {reachable})

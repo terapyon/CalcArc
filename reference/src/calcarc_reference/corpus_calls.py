@@ -17,7 +17,7 @@ Rust の f64 / u64 とは別物である。**ここで計算し直さない**—
 from __future__ import annotations
 
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import combinations
@@ -2566,6 +2566,64 @@ def _construct_loan_term_row(rate: str, target: int) -> tuple[int, int] | None:
     return None
 
 
+def compound_deposit_for_exclusions(
+    covered: set[coverage.Cell],
+) -> dict[coverage.Cell, coverage.Exclusion]:
+    """踏めなかったペアに理由を付ける(設計書 §9.1・§10)。
+
+    **一律に貼らない。セルごとに、参照実装へ聞いて確かめる。** 目標値は
+    `_compound_reached` が正算で作るので、そこが u64 を溢れると逆算の入力
+    そのものを作れない。**積立額は既に最小(1 円)**なので、`(1+r)^n` が溢れる
+    組は元本や積立額をどう振っても救えない(§9.2 の代替構成の外にある)。
+
+    **説明できないセルが 1 つでもあれば落とす。** 計画は 19 件へ一律に
+    `source_overflow` を貼る形だったが、**実測(2026-08-29)ではそのうち 2 件が
+    溢れていなかった**——`(rate=100, ppy=12)` と `(rate=99.9999, ppy=12)` は
+    期間を振り直せば構成でき、いまは `_deposit_for_construction` が覆っている。
+    **一律に貼っていたら、偽の理由が 2 件コーパスに載っていた。**
+    未分類の理由を `other` として通さないのと同じ姿勢である。
+    """
+    requirement = _REQUIREMENT_OF["compound_deposit_for"]
+    out: dict[coverage.Cell, coverage.Exclusion] = {}
+    unexplained: list[str] = []
+    for cell in requirement.cells:
+        if cell in covered:
+            continue
+        axes = dict(cell.axes)
+        rate, periods = axes.get("rate"), axes.get("periods")
+        if rate is None or periods is None or _deposit_for_target_exists(str(rate), int(periods)):
+            # 溢れていない(または期間を名指ししていない)セルは、**構成できる
+            # はずのものが未達で残っている**ということである。理由を作らない。
+            unexplained.append(cell.id)
+            continue
+        out[cell] = coverage.Exclusion(
+            cell,
+            coverage.Reason.SOURCE_OVERFLOW,
+            "積立 1 円でも正算が u64 を溢れるので、逆算の目標値を作れない",
+            (f"compound_grow/{','.join(f'{k}={v}' for k, v in cell.axes)}",),
+        )
+    if unexplained:
+        raise RuntimeError(
+            "compound_deposit_for: 理由を説明できない未達セルがある——"
+            f"構成できるはずのものが漏れている: {sorted(unexplained)[:5]}"
+        )
+    return out
+
+
+def _deposit_for_target_exists(rate: str, periods: int) -> bool:
+    """その (金利, 期間) で、積立 1 円の正算が答を出せるか。
+
+    **周期と税の全通りを試す。** 1 つでも通れば「溢れて作れない」とは言えない
+    ——セルが要求しているのは金利と期間だけで、残りは構成の自由度である。
+    """
+    for per_year in PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]:
+        for tax in PAIRWISE_COMPOUND_GROW_FACTORS["tax"]:
+            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax))
+            if reached is not None and reached > 0:
+                return True
+    return False
+
+
 def loan_term_exclusions() -> dict[coverage.Cell, coverage.Exclusion]:
     """構成できなかった目標期間セルに理由を付ける(設計書 §8.3・§10)。
 
@@ -2729,7 +2787,50 @@ def _pairwise_compound_grow_strata() -> tuple[Stratum, ...]:
 # 組が残る——`compound_grow` の pairwise 層が同じ (rate, periods,
 # periods_per_year, tax) の組を Overflow として持っているので、コーパス
 # 全体で見ればその組は「現れている」(テストが確かめる)。
-PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 17
+# **2026-08-29(Task 6)に 17 → 0 へ動いた。数え方ではなく作り方が変わった。**
+# 以前は期間で溢れた行をそのまま捨てていたが、**1 行が運ぶのはペア 6 組**で、
+# **期間を含まない 3 組まで一緒に落ちていた**——実測で `(rate=100, ppy=12)` と
+# `(rate=99.9999, ppy=12)` の 2 組が、溢れていないのに未達として残っていた。
+# いまは `_deposit_for_construction` が期間の水準を振り直すので、
+# **構成できない行は無い。** 溢れた (金利,期間) のセルは未達のまま残り、
+# `compound_deposit_for_exclusions` がセルごとに理由を付ける。
+PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 0
+
+
+def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int] | None:
+    """ペアワイズ 1 行から `(periods, target)` を作る。**溢れたら期間を振り直す。**
+
+    **1 行が運ぶのはペア 6 組である**(設計書 §7.2): (金利,期間)・(金利,周期)・
+    (金利,税)・(期間,周期)・(期間,税)・(周期,税)。**期間で溢れて行ごと捨てると、
+    期間を含まない 3 組まで一緒に落ちる**——実測(2026-08-29)では
+    `(rate=100, ppy=12)` と `(rate=99.9999, ppy=12)` の 2 組が、
+    **溢れていないのに未達として残っていた。**
+
+    **期間の水準を因子表の順で振り直す。** 決定的で、上限は水準の数である。
+    振り直した行が覆うのは**別の期間のセル**なので、**溢れた (金利,期間) の
+    セルは未達のまま残る**——そちらは `compound_deposit_for_exclusions` が
+    セルごとに溢れを確かめて理由を付ける。**救えるものだけを救う。**
+    """
+    rate = str(row["rate"])
+    per_year = int(row["periods_per_year"])  # type: ignore[arg-type]
+    tax = bool(row["tax"])
+    periods0 = int(row["periods"])  # type: ignore[arg-type]
+    # **因子表を直接見る。** `COVERAGE_FACTORS` はこの下で組まれるので、
+    # 層の構築時にはまだ存在しない——写しを持たず、素の表を指す。
+    per_years = PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]
+    # **周期を先に振る。期間は最後まで動かさない。** 枯れているのは
+    # (金利, 期間) の組で、周期は他の行がいくらでも運ぶ——**動かす順が
+    # そのまま「何を諦めるか」の順である。**
+    for per in (per_year, *per_years):
+        target = _compound_reached(0, 1, rate, int(per), periods0, tax)
+        if target is not None and target > 0:
+            return periods0, int(per), target
+    for periods in PAIRWISE_COMPOUND_GROW_FACTORS["periods"]:
+        for per in (per_year, *per_years):
+            target = _compound_reached(0, 1, rate, int(per), int(periods), tax)
+            if target is not None and target > 0:
+                return int(periods), int(per), target
+    return None
 
 
 def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
@@ -2737,18 +2838,17 @@ def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
     index = 0
     infeasible = 0
     for row in _PAIRWISE_COMPOUND_DEPOSIT_FOR_ROWS:
-        target = _compound_reached(
-            0, 1, row["rate"], row["periods_per_year"], row["periods"], row["tax"]
-        )
-        if target is None or target <= 0:
+        constructed = _deposit_for_construction(row)
+        if constructed is None:
             infeasible += 1
             continue
+        periods, per_year, target = constructed
         params = {
             "principal": "0",
             "target": str(target),
-            "periods": row["periods"],
+            "periods": periods,
             "rate": row["rate"],
-            "periods_per_year": row["periods_per_year"],
+            "periods_per_year": per_year,
             "tax": row["tax"],
         }
         if not _claim_pairwise_signature("compound_deposit_for", params):
@@ -2765,6 +2865,10 @@ def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
             )
         )
         index += 1
+    # **2026-08-29(Task 6)に 17 → 0 へ動いた。** 期間で溢れた行を捨てるのを
+    # やめ、**期間の水準を振り直して行を作る**ようにしたため。溢れた
+    # (金利,期間) のセルは未達のまま残り、`compound_deposit_for_exclusions`
+    # がセルごとに理由を付ける——**行の救済とセルの除外は別の話である。**
     assert infeasible == PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT, (
         f"compound_deposit_for pairwise: 構成できなかった数が実測"
         f"({PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT})と違う(実際は {infeasible})"
