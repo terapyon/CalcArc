@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { DataScaleCalc } from "../../datascale";
+import type { ExprCalc } from "../../expr";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx と同じ流儀)。**答えは一切見ない**ので、
@@ -8,8 +10,23 @@ import { describe, expect, it, vi } from "vitest";
 // **`transfer` は空の結果を返す。** 両方の値が埋まった時点でパネルが
 // 呼ぶので、無いと落ちる——ここが見たいのは並びだけなので、答えは空でよい。
 vi.mock("../../datascale", () => ({
-  initDataScale: () =>
+  // **ファクトリの戻り値に型を付ける。** これが無いと TS はこの中身を
+  // 一切見ない——`vi.mock` は巻き上げられるので値は参照できないが、
+  // **型は消えるので参照できる**。境界の形が変わった日に、ここが
+  // `pnpm typecheck` で落ちる（付けていなかった 0.6.0 では、9 本の
+  // スタブが古い形のまま緑だった）。
+  initDataScale: (): Promise<DataScaleCalc> =>
     Promise.resolve({
+      // **使わない method も埋める。** 型を満たすためであり、
+      // **呼ばれたら失敗させて検知する**（`DataScalePanel.test.tsx` の
+      // `stubCalc` と同じ流儀）——この盤面がここを呼ぶようになった日に、
+      // 黙って `undefined` を返すのではなく落ちる。
+      compute: vi.fn(() => {
+        throw new Error("compute is not wired in this test");
+      }),
+      llm: vi.fn(() => {
+        throw new Error("llm is not wired in this test");
+      }),
       transfer: () => ({
         kind: "ok",
         bytes: "0",
@@ -20,7 +37,7 @@ vi.mock("../../datascale", () => ({
     }),
 }));
 vi.mock("../../expr", () => ({
-  initExpr: () =>
+  initExpr: (): Promise<ExprCalc> =>
     Promise.resolve({
       integer: (text: string) => ({
         kind: "ok",

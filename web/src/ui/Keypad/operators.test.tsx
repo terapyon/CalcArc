@@ -1,15 +1,35 @@
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { DataScaleCalc } from "../../datascale";
+import type { ExprCalc } from "../../expr";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx / LlmPanel.test.tsx と同じ流儀)。**ここは
 // 計算の答えを一切見ない**ので、盤面が立つだけの最小限でよい。
 vi.mock("../../datascale", () => ({
-  initDataScale: () => Promise.resolve({}),
+  // **ファクトリの戻り値に型を付ける。** これが無いと TS はこの中身を
+  // 一切見ない——`vi.mock` は巻き上げられるので値は参照できないが、
+  // **型は消えるので参照できる**。境界の形が変わった日に、ここが
+  // `pnpm typecheck` で落ちる（付けていなかった 0.6.0 では、9 本の
+  // スタブが古い形のまま緑だった）。
+  initDataScale: (): Promise<DataScaleCalc> =>
+    // **3 つとも呼ばれたら落ちる。** この検査は計算の答えを 1 つも見ない
+    // ——盤面が立つことだけを見る——ので、**呼ばれたらそれ自体が異常**である。
+    Promise.resolve({
+      compute: vi.fn(() => {
+        throw new Error("compute is not wired in this test");
+      }),
+      llm: vi.fn(() => {
+        throw new Error("llm is not wired in this test");
+      }),
+      transfer: vi.fn(() => {
+        throw new Error("transfer is not wired in this test");
+      }),
+    }),
 }));
 vi.mock("../../expr", () => ({
-  initExpr: () =>
+  initExpr: (): Promise<ExprCalc> =>
     Promise.resolve({
       integer: () => ({ kind: "ok", value: "" }),
       percent: () => ({ kind: "ok", value: "" }),
