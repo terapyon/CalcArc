@@ -26,6 +26,16 @@
 - コミット末尾に `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` を付ける。`git push` と PR 作成は行わない。
 - **作業ディレクトリは `/home/terapyon/dev/CalcArc-e2e`。** 全コマンドを `...` の形で打つ。`/home/terapyon/dev/CalcArc` は別セッションのもので触らない。
 - Python は `cd reference && uv run --no-config pytest`、重量級は `cd heavy && pnpm ...`、web は `cd web && pnpm ...`。
+- **【2026-08-29 追記】node 系のコマンドは `. ~/.nvm/nvm.sh && nvm use --silent 22.23.2 &&` を
+  前置する。** `#94` で `engine-strict=true` が main に入り、**22.23.2 以外では `pnpm install` が
+  一切通らない**。**この harness は Bash 呼び出しごとに新しいシェルを起こす**ので、
+  **1 回切り替えれば以後は通る、ではない**（実測）。
+- **【2026-08-29 追記】生成器かコーパスを触ったら、`pnpm heavy` の前に再現性検査を回す。**
+  `#94` で `reference/tests/test_corpus_reproducibility.py` が
+  `heavy/reproducibility.json`（コーパスと**生成器**の指紋つき）を書き、報告書がそれを読む。
+  **regenerate したまま `pnpm heavy` を回すと、報告書の土台の節が「古い」になる**
+  ——嘘ではないが、その走行の報告書は土台について何も言えていない。
+  **この計画は Task 5〜7 で生成器を、Task 9 でコーパスを動かすので、両方に掛かる。**
 
 ## 着手前に実測で分かっていること（この計画の前提）
 
@@ -50,6 +60,22 @@
 **`loan_term` の 59 未達は、決定的な候補探索で 52 が被覆へ動く**（実測。50 件は月額 +1 円、2 件は別の元本）。
 **残る 7 はすべて `target_n = 1201`** で、`loan_ref.MAX_TERM_MONTHS = 1200` である以上
 `loan_term` は 1201 を返しようがない——`not_applicable` に分類する。
+
+### 2026-08-29: 当て直した（0.6.0 と `#94` のあと）
+
+**上の表は動いていない。** コミット済みの `finance-000.json`（3,500 ケース）から数え直した:
+`loan_term` は **被覆 74 / 未達 59 / 除外 17**、`compound_deposit_for` は **247 / 19**、
+他の 6 対象は全被覆。**`loan_ref.MAX_TERM_MONTHS` も 1200 のまま**で、未達 59 のうち
+**7 行はすべて `target_n = 1201`** である。
+
+**52 行（1201 を除く未達）の内訳も測った**——**47 行が「答が目標より 1 か月長い」**、
+1 行が「1 か月短い」（`rate=20 / target_n=599 / actual=598`）、**4 行は逆算がエラーを返して
+答が無い**（いずれも `target_n=1200` / `principal=20,000,000`）。
+
+> **この 47 を「50 に届かない」と読まないこと。** 答が無い 4 行も、月額を +1 円して
+> 逆算が通れば目標に乗りうる（丸め下げで 1 か月はみ出しているだけの形である）。
+> **「52 行のうち 50 行が +1 で目標に乗る」は探索を走らせないと確かめられない**
+> ——Task 5 の Step で実測して、違っていたら目標のほうを直す。
 
 **この計画は `finance-000.json` を作り直す。** 金融の入力が 52 行変わるので、golden も
 変異検出件数も動きうる。**動いた分は Task 12 で測って記録する**（仕様 §15.4）。
@@ -1234,7 +1260,9 @@ git commit -m "Prove the coverage count can go red"
 
 **Files:**
 - Modify: `corpus/generated/finance-000.json`（生成物。手で編集しない）
-- Test: `reference/tests/test_generate_corpus.py`（既存の再現性テスト）
+- Test: `reference/tests/test_corpus_reproducibility.py`（**固定コーパスの再現性ゲートはこちら**。
+  2026-08-29 訂正——`test_generate_corpus.py` は生成器のテストで、再現性ゲートではない。
+  Step 4 が `pytest -q` を丸ごと回すので結果は変わらないが、名前が指す先が違っていた）
 
 **Interfaces:**
 - Consumes: Task 7 の `coverage` 付き `build_finance_shard`
@@ -1279,10 +1307,16 @@ PY
 
 **この出力を Task 12 の記録に使う。**
 
-- [ ] **Step 4: 再現性テストを通す**
+- [ ] **Step 4: 再現性テストを通す（＝報告書が読む信号を書き直す）**
 
 Run: `cd /home/terapyon/dev/CalcArc-e2e/reference && uv run --no-config pytest -q`
 Expected: PASS（コミット済みコーパスと生成結果の厳密一致を見るテストを含む）
+
+**この段は 2 つの仕事をする**（2026-08-29 追記）。厳密一致を確かめるだけでなく、
+**`heavy/reproducibility.json` を書き直す**——ここを飛ばして `pnpm heavy` を回すと、
+コーパスと生成器の指紋が信号と食い違い、**報告書が「この記録は、いまここに在る
+コーパスについて書かれたものではない」と書く。** 以降の Task で `pnpm heavy` を
+回すときは、**必ずこの段の後**であること。
 
 - [ ] **Step 5: コミット**
 
@@ -1669,10 +1703,18 @@ Expected: **18/18 ok**。`finance-000.json` を触ったので Finance の 10 �
 - [ ] **Step 3: 残りのスイープ**
 
 ```bash
+# **reference を先に回す。** 信号（heavy/reproducibility.json）を書き直してから
+# でないと、下の pnpm heavy の報告書が「土台の記録が古い」と書く。
 cd /home/terapyon/dev/CalcArc-e2e/reference && uv run --no-config pytest -q
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+. ~/.nvm/nvm.sh && nvm use --silent 22.23.2
 cd /home/terapyon/dev/CalcArc-e2e/web && pnpm test && pnpm typecheck && pnpm lint && pnpm e2e
-cd /home/terapyon/dev/CalcArc-e2e/heavy && pnpm test && pnpm heavy && pnpm heavy:ui
+# **heavy も typecheck と lint を回す**(2026-08-29 追記)。vitest は型を消すので、
+# **型の主張は tsc でしか赤くならない**——`pnpm test` が緑でも型検査は赤いことがある
+# (2026-08-29 に実際に踏んだ)。CI では corpus ジョブの最初の段で落ちる。
+cd /home/terapyon/dev/CalcArc-e2e/heavy && pnpm typecheck && pnpm lint && pnpm test \
+  && pnpm heavy && pnpm heavy:ui
 ```
 
 Expected: すべて緑。`cargo` と `web` は**この計画が 1 行も触っていない**ので、
