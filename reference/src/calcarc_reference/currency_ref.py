@@ -69,6 +69,34 @@ MINOR_UNITS: dict[str, int] = {
 _LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z", re.ASCII)
 
 
+# **リテラルの天井は公開契約である**（`docs/numerical-policy.md`「分子・分母は
+# `i128` で有界」）。**アルゴリズムではない**——Rust が 1 桁ずつ積み上げるのも、
+# こちらが数字列を丸ごと `int` にするのも、**同じ天井を別の手順で測っている**。
+# `data_scale_ref.U128_MAX` と同じ扱いで、**この定数は 1 つである**——写すと、
+# 天井が動いた日に片方だけ古くなる。
+I128_MAX = (1 << 127) - 1
+
+
+def literal_fits(text: str) -> bool:
+    """10 進リテラルが `i128` の分子・分母に収まるか（公開契約）。
+
+    独立: 別手順（Rust は 1 桁ずつ `checked_mul(10).checked_add(d)` で積み上げ、
+    溢れた時点で `Overflow` を返す。こちらは多倍長なので**数字列を丸ごと整数に
+    して天井と比べる**——桁上げのループを持たない。だから片方の積み上げの誤りは
+    もう片方に写らない）。
+
+    **写しているのは天井の値だけ**である。`i128` の上限は numerical-policy の
+    「分子・分母は `i128` で有界」が固定した**公開契約**であって、実装の都合では
+    ない——だから両方に書いても「参照実装を Rust の移植にしない」に触れない。
+
+    **分母は `10 ** 小数桁数`** である（`0.5` なら 10、`0.05` なら 100）。約分は
+    しない——Rust もリテラルを読む段では約分しないので、**ここで約分すると
+    「何桁で溢れるか」が食い違う**。
+    """
+    integer, _, fraction = text.lstrip("-").partition(".")
+    return int(integer + fraction) <= I128_MAX and 10 ** len(fraction) <= I128_MAX
+
+
 def exchange(value: Fraction, from_rate: Fraction, to_rate: Fraction) -> Fraction:
     """spec §3 の式。レートは「**1 基準通貨 = rate 通貨**」である。
 
@@ -129,6 +157,13 @@ def compute(value: str, src: str, dst: str, from_rate: str, to_rate: str) -> dic
     for text in (value, from_rate, to_rate):
         if not _LITERAL.match(text):
             return {"error": "SyntaxError"}
+    # **3 つとも読んでから換算に入る**（Rust の `convert_currency` も
+    # `parse_decimal` を 3 回通してから `exchange` を呼ぶ）。だから天井の検査は
+    # **0 レートの検査より先**である——順が逆だと、両方に当たる入力で
+    # 2 実装が別のエラーを返す。
+    for text in (value, from_rate, to_rate):
+        if not literal_fits(text):
+            return {"error": "Overflow"}
     rate_from = Fraction(from_rate)
     if rate_from == 0:
         # **レートは外から来る**（spec §3）。0 は割り算ではなくエラーである。

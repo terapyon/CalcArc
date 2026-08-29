@@ -192,7 +192,11 @@ def test_the_golden_inputs_carry_no_surprises() -> None:
     ok = [r for r in results if "text" in r]
     errors = [r for r in results if "error" in r]
     assert len(ok) + len(errors) == len(results)
-    assert len(errors) == 5
+    # **内訳**: DivisionByZero 1 / SyntaxError 4 / Overflow 2。
+    # Overflow の 2 件は `i128` の天井（2026-08-29 に足した）——数を書いて
+    # あるのは、**エラーのつもりで置いた入力が答を返してしまった日に落ちる**
+    # ようにするためである。増やしたらここも直す。
+    assert len(errors) == 7
     # **0 桁の通貨の答には小数点が 1 つも無い。**
     for row, result in zip(cases.CURRENCY_INPUTS, results, strict=True):
         dst = row[2]
