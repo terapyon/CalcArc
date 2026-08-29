@@ -254,6 +254,62 @@
     },
     {
       "expect": {
+        "text": "-170,141,183,460,469,231,731,687,303,715,884,105,727"
+      },
+      "id": "currency/-170141183460469231731687303715884105727jpytojpy@1-1",
+      "input": {
+        "from": "jpy",
+        "from_rate": "1",
+        "to": "jpy",
+        "to_rate": "1",
+        "value": "-170141183460469231731687303715884105727"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "currency/-170141183460469231731687303715884105728jpytojpy@1-1",
+      "input": {
+        "from": "jpy",
+        "from_rate": "1",
+        "to": "jpy",
+        "to_rate": "1",
+        "value": "-170141183460469231731687303715884105728"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "currency/170141183460469231731687303715884105728usdtousd@1-abc",
+      "input": {
+        "from": "usd",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "abc",
+        "value": "170141183460469231731687303715884105728"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "currency/1e3usdtousd@1-170141183460469231731687303715884105728",
+      "input": {
+        "from": "usd",
+        "from_rate": "1",
+        "to": "usd",
+        "to_rate": "170141183460469231731687303715884105728",
+        "value": "1e3"
+      },
+      "op": "currency"
+    },
+    {
+      "expect": {
         "text": "86,795"
       },
       "id": "currency/10000jpytokrw@168.5-1462.5",

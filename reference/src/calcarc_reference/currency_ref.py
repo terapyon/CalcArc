@@ -29,6 +29,16 @@ from __future__ import annotations
 import re
 from fractions import Fraction
 
+# **リテラルの天井は公開契約である**（`docs/numerical-policy.md`「分子・分母は
+# `i128` で有界」）。**アルゴリズムではない**——Rust が 1 桁ずつ積み上げるのも、
+# こちらが数字列を丸ごと `int` にするのも、**同じ天井を別の手順で測っている**。
+#
+# **定義せず `expr_ref` から取る。** 註に「この定数は 1 つである」と書きながら
+# 2 つ目を作っていた（2026-08-29 のレビュー指摘）。`llm_ref` と `transfer_ref` が
+# `data_scale_ref.U128_MAX` を import しているのと同じ形にする——**天井が動いた
+# 日に片方だけ古くなる道を、構文で閉じる。**
+from calcarc_reference.expr_ref import I128_MAX
+
 # ISO 4217 List One の minor unit（spec §3.1 の表）。
 # **これは為替レートと違い定義値である**——だから spec はここに表を書き、
 # 【ISO 4217 の確認 2026-08-20】が `list-one.xml`（`Pblshd="2026-01-01"`、
@@ -69,12 +79,6 @@ MINOR_UNITS: dict[str, int] = {
 _LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z", re.ASCII)
 
 
-# **リテラルの天井は公開契約である**（`docs/numerical-policy.md`「分子・分母は
-# `i128` で有界」）。**アルゴリズムではない**——Rust が 1 桁ずつ積み上げるのも、
-# こちらが数字列を丸ごと `int` にするのも、**同じ天井を別の手順で測っている**。
-# `data_scale_ref.U128_MAX` と同じ扱いで、**この定数は 1 つである**——写すと、
-# 天井が動いた日に片方だけ古くなる。
-I128_MAX = (1 << 127) - 1
 
 
 def literal_fits(text: str) -> bool:
@@ -154,14 +158,20 @@ def compute(value: str, src: str, dst: str, from_rate: str, to_rate: str) -> dic
     """
     if src not in MINOR_UNITS or dst not in MINOR_UNITS:
         return {"error": "SyntaxError"}
+    # **引数の位置順に、1 つずつ完全に検査する**（numerical-policy の契約）。
+    # `value` → `from_rate` → `to_rate` の順で、**各引数について構文 → 天井**を
+    # 見る。前の引数で落ちたら後ろは読まない。
+    #
+    # **写しているのは「どの引数から見るか」だけ**である——各引数の中身の見方は
+    # `literal_fits` の丸ごと比較のままで、Rust の桁上げループはなぞっていない。
+    # だから `literal_fits` の `独立: 別手順` は、この順序を合わせたあとも妥当である。
+    #
+    # **3 つとも読んでから換算に入る**（Rust の `convert_currency` も
+    # `parse_decimal` を 3 回通してから `exchange` を呼ぶ）。だから天井の検査は
+    # **0 レートの検査より先**である。
     for text in (value, from_rate, to_rate):
         if not _LITERAL.match(text):
             return {"error": "SyntaxError"}
-    # **3 つとも読んでから換算に入る**（Rust の `convert_currency` も
-    # `parse_decimal` を 3 回通してから `exchange` を呼ぶ）。だから天井の検査は
-    # **0 レートの検査より先**である——順が逆だと、両方に当たる入力で
-    # 2 実装が別のエラーを返す。
-    for text in (value, from_rate, to_rate):
         if not literal_fits(text):
             return {"error": "Overflow"}
     rate_from = Fraction(from_rate)
