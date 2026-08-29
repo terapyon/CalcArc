@@ -2520,9 +2520,12 @@ class LoanTermFact:
 _LOAN_TERM_FACTS: list[LoanTermFact] = []
 
 
-#: 月額の増分の候補。**固定順**(設計書 §8.3)。円単位に丸めた月額を逆算へ戻すと
-#: 1 期ぶん長く出ることが多いので、**`+1` を先に試す**——空回しの実測
-#: (2026-08-29)では、構成できた 126 行のうち **50 行が `+1`**、76 行が `+0` である。
+#: 月額の増分の候補。**固定順**(設計書 §8.3)。**`+0` を先に試す**——まず素の
+#: 月額で目標に乗るかを見て、乗らなければ `+1` へ進む。円単位に丸めた月額を
+#: 逆算へ戻すと 1 期ぶん長く出ることが多いので、**2 番目が `+1`** である。
+#: 実測(2026-08-29): 構成できた 126 行のうち **76 行が `+0`、50 行が `+1`**。
+#: (2026-08-29 訂正: ここは「`+1` を先に試す」と書いていたが、**タプルは `0` が
+#: 先**で、引いている実測もそちらと整合していた。**誤っていたのは注釈だけ。**)
 _LOAN_TERM_PAYMENT_DELTAS: tuple[int, ...] = (0, 1, -1, 2, -2)
 
 
@@ -2648,12 +2651,29 @@ def loan_term_exclusions() -> dict[coverage.Cell, coverage.Exclusion]:
                 f"{fact.target_n} か月は答になり得ない",
                 (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
             )
+        elif fact.state == "excluded" and fact.error not in (None, "no-construction"):
+            # **走った手順だけを書く。** この行では正算が最初の元本でエラーを
+            # 返し、**構成探索(元本 12 通り × 月額 5 通り)は 1 度も走っていない**
+            # ——`_pairwise_loan_term_strata` が `forward_expect != "ok"` の時点で
+            # ここへ回すからである。**「尽くした」と書けるのは尽くしたときだけ。**
+            #
+            # 元本を変えても消えないことは別に確かめてある——
+            # `test_the_unconstructible_rows_really_have_no_principal_that_works`
+            # が 12 通りすべてを実際に試す(実測 2026-08-29: 14 行とも全滅)。
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE,
+                f"正算が {fact.error} を返すので、逆算の入力を作る元ネタが無い",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
         else:
+            # 正算は通ったが、構成探索が候補を尽くしても目標に乗らなかった行。
+            # **こちらは実際に尽くしている。**
             out[cell] = coverage.Exclusion(
                 cell,
                 coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE,
                 "決定的な候補(元本 12 通り × 月額の増分 5 通り)を尽くしても、"
-                "正算が本物のエラーになり逆算の入力を作れない",
+                "逆算が目標期間に乗らない",
                 (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
             )
     return out

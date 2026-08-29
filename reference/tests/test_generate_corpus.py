@@ -2454,3 +2454,88 @@ def test_an_unknown_reason_code_is_refused() -> None:
     made_up = corpus_coverage.Exclusion(cell, "made_up_reason", "x")  # type: ignore[arg-type]
     with pytest.raises((KeyError, ValueError)):
         _ = made_up.disposition
+
+
+def test_the_unconstructible_rows_really_have_no_principal_that_works() -> None:
+    """**`inverse_target_unconstructible` の根拠を、実際に尽くして確かめる。**
+
+    生成器はこの行で**最初の元本**が `LoanError` を返した時点で諦める
+    ——`_pairwise_forward_result` がそう書いてある(元本を変えても消えない、
+    という 2026-08-20 の実測に依拠している)。**依拠したままにしない。**
+    ここで**元本 12 通りすべて**を試し、1 つも正算が通らないことを見る。
+
+    **通る元本が 1 つでも見つかったら、この除外は根拠を失う**
+    ——そのときは除外を消すのではなく、**その元本で行を作る**のが直しである。
+    """
+    unconstructible = [
+        cell
+        for cell, exclusion in corpus_calls.loan_term_exclusions().items()
+        if exclusion.reason is corpus_coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE
+    ]
+    assert len(unconstructible) == 14
+    for cell in unconstructible:
+        axes = dict(cell.axes)
+        rate, target = axes["rate"], int(axes["target_n"])
+        num, den = loan_ref.rate_fraction(rate)
+        for offset in corpus_calls._LOAN_PAIRWISE_PRINCIPAL_OFFSETS:
+            principal = corpus_calls._LOAN_PAIRWISE_PRINCIPAL_BASE + offset
+            try:
+                loan_ref.forward(principal, num, den, target, 0)
+            except loan_ref.LoanError, ValueError:
+                continue
+            raise AssertionError(
+                f"{cell.id}: 元本 {principal} なら正算が通る。"
+                "構成できないという除外の根拠が崩れている"
+            )
+
+
+def test_the_two_unconstructible_reasons_say_different_things(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**「正算が落ちた」と「探索が尽きた」を同じ文で書かない。**
+
+    実データでは前者しか出ない(後者に当たる行はすべて `target_n = 1201` で
+    `not_applicable` に吸われる)ので、**分岐を作り物で通す**——通らない枝は
+    書いた本人しか読まないまま腐る。
+    """
+    facts = (
+        corpus_calls.LoanTermFact("1.5", 12, 20_000_000, None, None, "Overflow", "excluded"),
+        corpus_calls.LoanTermFact(
+            "1.5", 13, 20_000_000, 100_000, None, "no-construction", "excluded"
+        ),
+    )
+    monkeypatch.setattr(corpus_calls, "LOAN_TERM_FACTS", facts)
+    details = {
+        int(dict(cell.axes)["target_n"]): exclusion.detail
+        for cell, exclusion in corpus_calls.loan_term_exclusions().items()
+    }
+    assert "正算が Overflow を返す" in details[12]
+    assert "尽くしても" not in details[12], "走っていない探索を根拠にしている"
+    assert "尽くしても" in details[13]
+    assert "逆算が目標期間に乗らない" in details[13]
+
+
+def test_every_covered_elsewhere_pointer_resolves_to_a_real_cell() -> None:
+    """**補足のポインタが、モデルの中の実在するセルを指していること。**
+
+    `covered_elsewhere` は「別の操作で同じ組を踏んでいる」という補足で、
+    **元のセルを被覆済みには変えない**。ただの文字列なので、**因子表や
+    `cell_id` の書式が変わると黙って腐る**——指す先が消えても誰も気づかない。
+
+    **自分自身は指さない。** 指したら「別のところで踏んでいる」は嘘になる。
+    """
+    known = {cell.id for req in corpus_calls.FINANCE_REQUIREMENTS for cell in req.cells}
+    exclusions = {
+        **corpus_calls.loan_term_exclusions(),
+        **corpus_calls.compound_deposit_for_exclusions(
+            corpus_calls.covered_cells_from_cases(
+                corpus_calls.build_finance_shard(seed=20260821, count=3500)["cases"]
+            )
+            | corpus_calls.loan_term_covered_cells()
+        ),
+    }
+    pointers = [(cell, p) for cell, e in exclusions.items() for p in e.covered_elsewhere]
+    assert len(pointers) == 32
+    for cell, pointer in pointers:
+        assert pointer in known, f"{cell.id} の covered_elsewhere が指す {pointer} が無い"
+        assert pointer != cell.id, f"{cell.id} が自分自身を指している"

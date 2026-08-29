@@ -551,12 +551,58 @@ export function assertCoverageIsSound(name: string, shard: CallShard): void {
       throw new Error(`${name}/${id}: 測定していない`);
     }
   }
+  const seen = new Set<string>();
+  const byScope = new Map<string, number>();
   for (const exclusion of coverage.excluded_cells) {
     if (!COVERAGE_REASONS.has(exclusion.reason)) {
       throw new Error(`${name}: 未知の除外理由 ${exclusion.reason}`);
     }
     if (!COVERAGE_DISPOSITIONS.has(exclusion.disposition)) {
       throw new Error(`${name}: 未知の判断区分 ${exclusion.disposition}`);
+    }
+    if (seen.has(exclusion.cell_id)) {
+      throw new Error(
+        `${name}: 同じセルを 2 度除外している(重複): ${exclusion.cell_id}`,
+      );
+    }
+    seen.add(exclusion.cell_id);
+    byScope.set(exclusion.scope, (byScope.get(exclusion.scope) ?? 0) + 1);
+  }
+  // **宣言した数と、並べた一覧を突き合わせる**(2026-08-29 の厳格レビュー F3)。
+  //
+  // これが無いと、**一覧から 1 件消しても門は緑のまま通る**——宣言は
+  // 「除外 24 + 8」と言い続け、読む人は理由の在る 32 件を見たつもりになる。
+  // **実物の数を焼き付けたテストは今日の数の pin でしかなく、再生成や
+  // 2 枚目のシャードには効かない。** 門の側が、シャード自身の中で閉じて
+  // いることを見る。
+  const declaredTotal = coverage.requirements.reduce(
+    (sum, requirement) => sum + requirement.excluded_cells,
+    0,
+  );
+  if (declaredTotal !== coverage.excluded_cells.length) {
+    throw new Error(
+      `${name}: 宣言した除外数 ${declaredTotal} と一覧の長さ ` +
+        `${coverage.excluded_cells.length} が合わない`,
+    );
+  }
+  // **合計だけでは足りない。** どの対象の除外かがずれていても合計は合う。
+  const scopes = new Set(
+    coverage.requirements.map((requirement) => requirement.scope),
+  );
+  for (const scope of byScope.keys()) {
+    if (!scopes.has(scope)) {
+      throw new Error(
+        `${name}: どの対象にも属さない除外がある(scope: ${scope})`,
+      );
+    }
+  }
+  for (const requirement of coverage.requirements) {
+    const listed = byScope.get(requirement.scope) ?? 0;
+    if (listed !== requirement.excluded_cells) {
+      throw new Error(
+        `${name}/${requirement.id}: 対象ごとの除外数が合わない` +
+          `(宣言 ${requirement.excluded_cells} / 一覧 ${listed})`,
+      );
     }
   }
 }

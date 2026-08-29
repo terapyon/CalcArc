@@ -1947,8 +1947,12 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   // **2026-08-29(空間モデル Task 5・6)で動いた。** `loan_term` の 7 行が
   // 構成できずコーパスから出て、`compound_deposit_for` の 11 行が救われた
   // ——**総数は 3500 のまま**で、乱択の尾が差を吸収している。
-  // **正常が 11 件増え、SyntaxError が 11 件減った**: 救われた行は計算が
-  // 通るケースで、出た行は正算が本物のエラーになる組だった。
+  // **正常が 11 件増え、SyntaxError が 11 件減った。** 消えた 11 件は 1 件
+  // 残らず `loan_term` で、**エラーは逆算側**である(この op は月額から期間を
+  // 求めるので、`expect.error` は逆算の結果)。内訳は **7 件が `target_n=1201`**
+  // (**正算は通っている**——月額が作れているのがその証拠。逆算が 1201 を
+  // 返せないだけ)と、**4 件が `target_n=1200`**(逆算がエラーだった行が
+  // 月額 +1 円の構成行に置き換わった)。詳しくは `docs/corpus-measurements.md`。
   // **エラー経路の件数が減った**ことは、`docs/corpus-measurements.md` に
   // 記録する(検出力の測定とは別の量である)。
   const totals: Record<string, number> = {};
@@ -3126,8 +3130,14 @@ test("10. 候補棄却があるとき、単位が「生成候補」と書かれ�
       }),
     ),
   );
-  expect(lines.join("\n")).toContain("生成候補");
-  expect(lines.join("\n")).toContain("未検証空間の大きさではない");
+  // **「生成候補」だけを見ない**(2026-08-29 の厳格レビュー F5)。その語は
+  // 節見出し「生成候補の棄却」に常に含まれるので、**`coverage` が非 null なら
+  // 任意の入力で緑になる**——行の単位を落としても赤くならない。
+  // **見たいのは、数のとなりに単位が付いていること**である。
+  const text = lines.join("\n");
+  expect(text).toContain("- `candidate_duplicate`: 12 生成候補");
+  expect(text).toContain("- `oracle_near_yen_boundary`: 7 生成候補");
+  expect(text).toContain("未検証空間の大きさではない");
 });
 
 test("網羅率を書かない（有限のモデルへの被覆を、入力空間への被覆に見せない）", () => {
