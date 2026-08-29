@@ -2354,3 +2354,70 @@ def test_an_unexplained_gap_is_not_given_a_reason() -> None:
     )
     with pytest.raises(RuntimeError, match="理由を説明できない"):
         corpus_calls.compound_deposit_for_exclusions(covered - {reachable})
+
+
+def test_the_finance_shard_carries_its_coverage() -> None:
+    """設計書 §11.2・§18。**空間の地図を、覆ったケースの隣に置く。**"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    cov = shard["coverage"]
+    assert cov["schema"] == corpus_coverage.COVERAGE_SCHEMA
+    assert cov["model"] == "finance-v1"
+    assert [r["id"] for r in cov["requirements"]] == [
+        r.id for r in corpus_calls.FINANCE_REQUIREMENTS
+    ]
+    for r in cov["requirements"]:
+        assert r["required_cells"] == r["covered_cells"] + r["excluded_cells"] + r["unmet_cells"]
+        assert r["unmet_cells"] == 0, f"{r['id']} に未達が残っている"
+    assert cov["generation_rejections"]["oracle_search_limit"] == 0
+    assert list(shard) == ["schema", "generated_by", "rejections", "coverage", "cases"]
+
+
+def test_the_coverage_totals_are_the_ones_we_measured() -> None:
+    """**8 対象それぞれの数を固定する。**
+
+    合計だけを見ると、**片方が減って片方が増えた**走行を見逃す。実測
+    (2026-08-29、Task 5・6 のあと): `loan_term` は 126 + 24、
+    `compound_deposit_for` は 258 + 8、残る 6 対象は全被覆。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    got = {
+        r["scope"]: (r["covered_cells"], r["excluded_cells"], r["required_cells"])
+        for r in shard["coverage"]["requirements"]
+    }
+    assert got == {
+        "loan_forward": (150, 0, 150),
+        "loan_principal": (150, 0, 150),
+        "loan_bonus_forward": (150, 0, 150),
+        "loan_bonus_principal": (150, 0, 150),
+        "loan_term": (126, 24, 150),
+        "compound_grow": (266, 0, 266),
+        "compound_deposit_for": (258, 8, 266),
+        "compound_periods_for": (56, 0, 56),
+    }
+
+
+def test_the_rejections_are_copied_not_merged() -> None:
+    """設計書 §10.3。**乱択候補の棄却と、要求セルの除外を同じ入れ物に混ぜない。**
+
+    `rejections` の綴りは既存の読み手(`report.ts` の `renderGaveUp`)が使うので
+    変えない——`coverage.generation_rejections` はその**写し**である。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    rejections, cov = shard["rejections"], shard["coverage"]
+    assert cov["generation_rejections"]["candidate_duplicate"] == rejections["dup"]
+    assert (
+        cov["generation_rejections"]["oracle_near_yen_boundary"]
+        == rejections["reference_gave_up"]["near_yen_boundary"]
+    )
+    # **除外セルは棄却の合計に入らない。** 混ざっていれば、この 2 つは一致しない。
+    assert len(cov["excluded_cells"]) == 32
+    assert cov["generation_rejections"]["candidate_duplicate"] != len(cov["excluded_cells"])
+
+
+def test_generating_twice_is_byte_identical_including_coverage() -> None:
+    """設計書 §15.1 の 10。**順序が走行ごとに動くと、固定コーパスが一致しない。**"""
+    first = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    second = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    # **並びそのものも固定する。** `sort_keys` を通すと順序の崩れが隠れる。
+    assert json.dumps(first) == json.dumps(second)

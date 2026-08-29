@@ -3310,10 +3310,34 @@ def build_finance_shard(seed: int, count: int) -> dict:
             entries.append(_finance_entry(len(entries), op, params, f"{op}/random"))
         except ReferenceGaveUp as gave_up:
             rejections["reference_gave_up"][gave_up.reason.value] += 1
+    # **空間の地図を、覆ったケースの隣に置く**(設計書 §11.2)。ここで初めて
+    # 「何を要求し、何を覆い、何を理由付きで諦めたか」が 1 枚に揃う。
+    #
+    # **`loan_term` の被覆は入力から数えられない。** `target_n` は入力ではなく
+    # 答なので、`covered_cells_from_cases` は `loan_term` を見ない
+    # (§8.2)——`loan_term_covered_cells()` が答の側から数えたものを足す。
+    covered = covered_cells_from_cases(entries) | loan_term_covered_cells()
+    exclusions = {**loan_term_exclusions(), **compound_deposit_for_exclusions(covered)}
+    gave_up = rejections["reference_gave_up"]
+    coverage_payload = coverage.build_payload(
+        FINANCE_MODEL,
+        FINANCE_REQUIREMENTS,
+        covered,
+        exclusions,
+        {
+            # **綴りは設計書 §11.2 のもの。** 既存の `rejections` の綴りは
+            # 読み手(`report.ts` の `renderGaveUp`)が使っているので変えない
+            # ——ここは**写し**であって、同じ入れ物ではない(§10.3)。
+            "candidate_duplicate": rejections["dup"],
+            "oracle_near_yen_boundary": gave_up["near_yen_boundary"],
+            "oracle_search_limit": gave_up["compound_deposit_search_limit"],
+        },
+    )
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "rejections": rejections,
+        "coverage": coverage_payload,
         "cases": entries,
     }
 
