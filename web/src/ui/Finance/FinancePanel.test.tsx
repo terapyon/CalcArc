@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ExprCalc } from "../../expr";
+import type { FinanceCalc } from "../../finance";
 import type { LoanCalc } from "../../finance/loan";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
@@ -13,7 +15,12 @@ vi.mock("../../finance/loan", () => ({
 // コア**(設計書 訂正 2)なので、ここでは打った文字列から数字だけを拾う
 // 簡易版で足りる——値の正しさは golden が見る。
 vi.mock("../../finance", () => ({
-  initFinance: () =>
+  // **ファクトリの戻り値に型を付ける。** これが無いと TS はこの中身を
+  // 一切見ない——`vi.mock` は巻き上げられるので値は参照できないが、
+  // **型は消えるので参照できる**。境界の形が変わった日に、ここが
+  // `pnpm typecheck` で落ちる（付けていなかった 0.6.0 では、9 本の
+  // スタブが古い形のまま緑だった）。
+  initFinance: (): Promise<FinanceCalc> =>
     Promise.resolve({
       // **`kind` を書き忘れると、この mock は黙って成功の枝に落ちる**
       // ——`undefined === "error"` は false なので、テストは緑のまま
@@ -60,7 +67,7 @@ vi.mock("../../finance", () => ({
 }));
 
 vi.mock("../../expr", () => ({
-  initExpr: () =>
+  initExpr: (): Promise<ExprCalc> =>
     Promise.resolve({
       integer: (text: string, max: string) => {
         const units: Record<string, bigint> = {
