@@ -14,6 +14,7 @@ import {
   BANDWIDTH_UNIT_TOKENS,
   DURATION_UNIT_TOKENS,
 } from "../../datascale/types";
+import type { ExprCalc } from "../../expr";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx / LlmPanel.test.tsx と同じ流儀)。
@@ -31,7 +32,12 @@ const evaluated = vi.hoisted(() => [] as { text: string; unitSet: string }[]);
 // (`"none"`)なので、数字以外が来たらコアと同じく SyntaxError を返す
 // ——第 3 引数を捨てると、パネルが別の表を渡していても緑のままになる。
 vi.mock("../../expr", () => ({
-  initExpr: () =>
+  // **ファクトリの戻り値に型を付ける。** これが無いと TS はこの中身を
+  // 一切見ない——`vi.mock` は巻き上げられるので値は参照できないが、
+  // **型は消えるので参照できる**。境界の形が変わった日に、ここが
+  // `pnpm typecheck` で落ちる（付けていなかった 0.6.0 では、9 本の
+  // スタブが古い形のまま緑だった）。
+  initExpr: (): Promise<ExprCalc> =>
     Promise.resolve({
       integer: (text: string, max: string, unitSet: string) => {
         evaluated.push({ text, unitSet });

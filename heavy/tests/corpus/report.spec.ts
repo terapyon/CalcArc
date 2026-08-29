@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { HeavyUiRun } from "../ui/presses";
@@ -26,6 +28,7 @@ import {
   buildRun,
   CERTIFICATE_PROBES,
   CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  corpusDigest,
   type DetectionPower,
   ENTRY_SHARD,
   ERRORS_SHARD,
@@ -33,14 +36,20 @@ import {
   errorCaseCount,
   errorPaths,
   expectedSummaryNames,
+  generatorDigest,
   type HeavyRun,
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
   type Provenance,
+  parseReproducibility,
   type RecordedShard,
+  type Reproducibility,
+  type ReproducibilitySignal,
   renderCallBreakdowns,
   renderDetectionPower,
   renderReport,
+  renderReproducibility,
+  reproducibilityHealth,
   runHealth,
   type ShardSummary,
   SPEC_TRANSCRIPTION_MARK,
@@ -2618,4 +2627,264 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
     "宣言していない",
   );
   expect(undeclared.includes("捨てた件数")).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// **報告書の土台**——期待値そのものが生成器の出力なのか(2026-08-29)。
+//
+// `uiHealth` と同じ形で状態を持たせている。**畳まないのが要点**である:
+// 「確かめていない」「古い」「途中で落ちた」「食い違っている」「通った」は、
+// 読む人の次の一手が全部違う。
+// ---------------------------------------------------------------------------
+
+/** 通った信号。個々のテストは、崩したいところだけを上書きする。 */
+function signalFixture(
+  overrides: Partial<ReproducibilitySignal> = {},
+): ReproducibilitySignal {
+  return {
+    schema: 1,
+    corpusDigest: "deadbeef",
+    generatorDigest: "cafe",
+    generatorFiles: ["scripts/generate_corpus.py"],
+    fileSetChecked: true,
+    extra: [],
+    missing: [],
+    bytesChecked: 18,
+    mismatched: [],
+    ok: true,
+    ...overrides,
+  };
+}
+
+test("state 1: with no signal the report says the foundation was never checked", () => {
+  // **「無い」は「健全」ではない。** ここを黙って省くと、再現性検査を
+  // 一度も走らせていない作業ツリーの報告書が、走らせた走行と同じ顔になる。
+  expect(reproducibilityHealth(null, "abc")).toEqual({ state: "not-run" });
+  const markdown = renderReproducibility({ state: "not-run" }).join("\n");
+  expect(markdown).toContain("確かめていない");
+  expect(markdown).toContain("何も保証していない");
+});
+
+test("state 2: a signal about other bytes is stale, not green", () => {
+  // **これが指紋を持たせた理由である。** 検査を通したあとで期待値を書き
+  // 換えると、ディスクには「緑」と書かれた信号だけが残る。
+  const state = reproducibilityHealth(
+    signalFixture({ corpusDigest: "old" }),
+    "new",
+  );
+  expect(state).toEqual({
+    state: "stale",
+    what: "corpus",
+    signed: "old",
+    actual: "new",
+  });
+  const markdown = renderReproducibility(state).join("\n");
+  expect(markdown).toContain(
+    "いまここに在るコーパスについて書かれたものではない",
+  );
+});
+
+test("state 2: a corpus that cannot be read is not called stale", () => {
+  // **比べられなかったことと、比べて違ったことを混ぜない。**
+  expect(reproducibilityHealth(signalFixture(), null).state).toBe("passed");
+});
+
+test("state 3: half a run is incomplete, which is not the same as red", () => {
+  expect(
+    reproducibilityHealth(signalFixture({ bytesChecked: null }), "deadbeef")
+      .state,
+  ).toBe("incomplete");
+  expect(
+    reproducibilityHealth(signalFixture({ fileSetChecked: false }), "deadbeef")
+      .state,
+  ).toBe("incomplete");
+  expect(renderReproducibility({ state: "incomplete" }).join("\n")).toContain(
+    "赤いのではなく、分からない",
+  );
+});
+
+test("state 4: drift names every kind of drift separately", () => {
+  const state = reproducibilityHealth(
+    signalFixture({
+      mismatched: ["scientific-000.json"],
+      extra: ["handwritten-001.json"],
+      missing: ["loan-000.json"],
+    }),
+    "deadbeef",
+  );
+  expect(state.state).toBe("drifted");
+  const markdown = renderReproducibility(state).join("\n");
+  expect(markdown).toContain("`scientific-000.json`");
+  expect(markdown).toContain("`handwritten-001.json`");
+  expect(markdown).toContain("`loan-000.json`");
+  // **下の件数を結果として読ませない。**
+  expect(markdown).toContain("「不一致 0 件」を結果として読まないこと");
+});
+
+test("state 5: a clean run says how many files it compared", () => {
+  const state = reproducibilityHealth(signalFixture(), "deadbeef");
+  expect(state).toEqual({ state: "passed", checked: 18 });
+  expect(renderReproducibility(state).join("\n")).toContain("18 枚");
+});
+
+test("the report believes the parts, not the signal's own ok flag", () => {
+  // **要約のフラグを信じない。** 書く側が壊れた日に、報告書が「緑」と
+  // 書いてしまう経路をここで塞ぐ——`openOutcome` が「知らない形を黙って
+  // 通さない」のと同じ姿勢である。
+  const forged = signalFixture({
+    ok: true,
+    mismatched: ["scientific-000.json"],
+  });
+  expect(reproducibilityHealth(forged, "deadbeef").state).toBe("drifted");
+});
+
+test("★ 「測っていない」の 2 つの理由が、報告書の上で別物になる", () => {
+  // **これが段階 1 の目的そのものである。**
+  //
+  // `detection-power.json` が無いとき、理由は 2 つある——回していないか、
+  // **土台が赤くて飛ばされたか**である(CI ではこの段は再現性検査の後ろに
+  // 在り、`if:` を持たない)。同じ文で両方を指すと、読む人は「回し忘れ」だと
+  // 思い、**この報告書のすべてが宙に浮いていることに気づかない。**
+  const forgot = renderDetectionPower(null, { state: "not-run" }).join("\n");
+  const skipped = renderDetectionPower(null, {
+    state: "drifted",
+    extra: [],
+    missing: [],
+    mismatched: ["scientific-000.json"],
+    checked: 18,
+  }).join("\n");
+
+  expect(forgot).toContain("測っていない");
+  expect(skipped).toContain("測っていない");
+  // **同じ文字列では終わらない。**
+  expect(forgot).not.toBe(skipped);
+  expect(forgot.includes("回し忘れではない")).toBe(false);
+  expect(skipped).toContain("回し忘れではない");
+  expect(skipped).toContain("先に直すのは土台のほう");
+});
+
+test("土台が古い・途中で落ちたときも、飛ばされた側として読める", () => {
+  // 「赤い」だけを特別扱いすると、**古い信号のまま測定が飛んだ走行**が
+  // 「回し忘れ」の顔で出る。3 つとも土台が通っていない状態である。
+  for (const state of [
+    { state: "stale", signed: "a", actual: "b" },
+    { state: "incomplete" },
+  ] as Reproducibility[]) {
+    expect(renderDetectionPower(null, state).join("\n")).toContain(
+      "回し忘れではない",
+    );
+  }
+  // **通った走行では、その但し書きは出ない。**
+  expect(
+    renderDetectionPower(null, { state: "passed", checked: 18 }).join("\n"),
+  ).not.toContain("回し忘れではない");
+});
+
+test("報告書の本体に土台の節が出て、読む順にも載っている", () => {
+  const markdown = renderReport([summary()], PROVENANCE, [], null, null, null, {
+    state: "passed",
+    checked: 18,
+  });
+  expect(markdown).toContain("## 期待値そのものは、生成器の出力なのか");
+  expect(markdown).toContain("結論の土台");
+});
+
+test("既定の renderReport は土台について何も知らないと言う", () => {
+  // **引数を渡さない呼び出しが「緑」を書かない。** 既定が
+  // `{ state: "not-run" }` であることの意味はこれである。
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(markdown).toContain("確かめていない");
+});
+
+test("2 つの言語が同じ指紋を出す(Python 側と同じ数字に留める)", () => {
+  // 相方は `reference/tests/test_corpus_reproducibility.py` の
+  // `DIGEST_OF_THE_SHARED_FIXTURE`。**片方だけ手順を変えると、報告書は
+  // 正しい走行でも「この記録は古い」と言い続ける。**
+  // **割れうる差を狙って入れてある**(Python 側の `write_shared_fixture` と
+  // 同じ 4 枚): `a` / `ab` / `b` は並べ替えが割れうる形、`Z` は大文字が
+  // 小文字より前に来ること、そして**非 ASCII の中身**。
+  const dir = mkdtempSync(join(tmpdir(), "calcarc-digest-"));
+  writeFileSync(join(dir, "Z.json"), '{"ラベル": "度分秒"}\n', "utf-8");
+  writeFileSync(join(dir, "a.json"), '{"x": 1}\n');
+  writeFileSync(join(dir, "ab.json"), '["b.json1"]\n');
+  writeFileSync(join(dir, "b.json"), "[]\n");
+  expect(corpusDigest(dir)).toBe(
+    "ca21c606610226a41e841fbc2a63b89e1e4eb7470d13604c5ff8bc888bb4cb82",
+  );
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("読めないディレクトリの指紋は null(「一致しなかった」ではない)", () => {
+  expect(corpusDigest(join(tmpdir(), "calcarc-does-not-exist-9e3f"))).toBe(
+    null,
+  );
+});
+
+/**
+ * **報告書が読む欄の一覧。Python 側が同じ綴りを持っている**
+ * (`test_corpus_reproducibility.py` の `SIGNAL_FIELDS`)。
+ */
+const SIGNAL_FIELDS = [
+  "bytesChecked",
+  "corpusDigest",
+  "extra",
+  "fileSetChecked",
+  "generatorDigest",
+  "generatorFiles",
+  "mismatched",
+  "missing",
+  "ok",
+  "schema",
+] as const;
+
+test("書き手と読み手の欄が揃っている(欠けたら読み手は信号を捨てる)", () => {
+  // **これが「計器自身を見張る」テストである。** 書き手と読み手で欄がずれると、
+  // 読み手は黙って「信号が無い」に落ちる——**信号の仕組みが壊れたまま、
+  // 報告書は「土台を確かめていない」と書き続ける。** 静かな壊れ方なので、
+  // 欄の綴りそのものを両側から同じ一覧に留める。
+  const full = signalFixture() as unknown as Record<string, unknown>;
+  expect(Object.keys(full).sort()).toEqual([...SIGNAL_FIELDS].sort());
+
+  // **1 欄でも欠ければ、読み手は受け取らない。**
+  for (const field of SIGNAL_FIELDS) {
+    const missing = { ...full };
+    delete missing[field];
+    expect(
+      parseReproducibility(missing),
+      `${field} が欠けても読めてしまう`,
+    ).toBe(null);
+  }
+});
+
+test("生成器が変わっていれば、期待値が動いていなくても古いと言う", () => {
+  // **コーパスの指紋だけでは足りない。** 検査を通したあとで参照実装を
+  // 直した作業ツリーでは、期待値が 1 バイトも動いていなくても
+  // 「今日書くはずのもの」は変わっている。
+  const state = reproducibilityHealth(
+    signalFixture({ generatorDigest: "old" }),
+    "deadbeef",
+    "new",
+  );
+  expect(state).toEqual({
+    state: "stale",
+    what: "generator",
+    signed: "old",
+    actual: "new",
+  });
+  const markdown = renderReproducibility(state).join("\n");
+  expect(markdown).toContain("いまここに在る生成器ではない");
+  // **期待値が動いたときとは別の文である。**
+  expect(markdown.includes("期待値が書き換えられている")).toBe(false);
+});
+
+test("生成器の指紋は、信号が名指しした一式だけを数える", () => {
+  const dir = mkdtempSync(join(tmpdir(), "calcarc-gen-"));
+  writeFileSync(join(dir, "one.py"), "x = 1\n");
+  writeFileSync(join(dir, "two.py"), "y = 2\n");
+  const both = generatorDigest(["one.py", "two.py"], dir);
+  expect(generatorDigest(["one.py"], dir)).not.toBe(both);
+  // **1 枚でも消えていれば指紋は無い(= 古い)。**
+  rmSync(join(dir, "two.py"));
+  expect(generatorDigest(["one.py", "two.py"], dir)).toBe(null);
+  rmSync(dir, { recursive: true, force: true });
 });

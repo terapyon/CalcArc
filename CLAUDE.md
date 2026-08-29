@@ -84,9 +84,11 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ## 踏んだ罠
 
 - **コミット前に `cargo fmt` を実行する。** `--check` は直してくれない。
-- **`uv lock` / `uv sync` は `--no-config` を付ける。** 付けないと手元の
-  `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに書き込まれ、CI の
-  `uv sync --locked` が落ちる。
+- **`uv` は `--no-config` を付ける。`lock` / `sync` だけでなく `run` もである。**
+  付けないと手元の `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに
+  書き込まれ、CI の `uv sync --locked` が落ちる。**`uv run pytest` でも起きる**
+  ——依存を解決するので、走らせるだけのつもりでも `uv.lock` が書き換わる
+  (2026-08-29 に実際に踏んだ。`git status` で気づいた)。
 - **pnpm のバージョンは `web/package.json` の `packageManager` が持つ。** CI の
   `pnpm/action-setup` はそこを見る。
 - **道具の版は固定する。範囲で書かない。** 実例が 3 つある。
@@ -98,6 +100,17 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
     **範囲のままだと、lockfile が 2 本あるので片方だけ `pnpm install` が走った日にずれる**
     ——実際に web 2.5.6 / heavy 2.5.8 の 2 版が同居していた。**揃えるだけでは再発する。**
     揃えるだけなら手数は小さいが、**その手数で何も解決しない**。
+- **道具の版を上げるのは、リリースから 2 週間以上経ってから。** クールダウンを
+  置く（ユーザー方針 2026-08-29）。
+- **`node` の版は 4 か所に在る。同時に上げる。** `.nvmrc`（`nvm use` が読む）、
+  `web/package.json` と `heavy/package.json` の `engines`、
+  `.github/actions/setup-web/action.yml` の `node-version`。
+  **系列（`22`）で書かない**——「そのときの最新の 22.x」が入るので、走行ごとに
+  違う node で回りうる。**4 か所とも同じ綴りにしてある**ので
+  `git grep 22.23.2` で照合できる（`.nvmrc` に `v` を付けないのはそのため）。
+  **`engines` だけでは止まらない**——版が違っても `pnpm install` は警告して
+  exit 0 になる（実測）。止めるのは `web/.npmrc` と `heavy/.npmrc` の
+  `engine-strict=true` で、これがあると `ERR_PNPM_UNSUPPORTED_ENGINE` で落ちる。
 - **jsdom はアクセシビリティツリーを組み立てない。** ロールの意味論に関わる回帰は
   vitest では捕まらないので、E2E で実ブラウザに確認させる。
 
