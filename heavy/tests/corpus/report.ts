@@ -14,6 +14,7 @@ import type { HeavyUiRun } from "../ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallBreakdown,
+  CoverageExclusion,
   Quantiles,
   ShapeSummary,
   Tolerance,
@@ -1297,12 +1298,127 @@ export function renderCallBreakdowns(entries: ShardSummary[]): string[] {
         kinds.map((kind) => `**${totalOf(kind)}**`).join(" | ") +
         " |",
     );
-    lines.push("", ...renderStrata(breakdown), ...renderGaveUp(breakdown));
+    lines.push(
+      "",
+      ...renderCoverage(breakdown),
+      ...renderStrata(breakdown),
+      ...renderGaveUp(breakdown),
+    );
   }
   return lines;
 }
 
 /** 層の内訳。**全層は並べない**——実測 1,187 層で、その大半は 1 件ずつである。 */
+/** 設計書 §12.3。**「理由付き未実行あり」を「完全網羅」と書かない。** */
+const COVERAGE_STATUS_LABELS: Record<string, string> = {
+  complete: "完全網羅",
+  accounted_with_exclusions: "理由付き未実行あり",
+  incomplete: "不足",
+  not_measured: "測定していない",
+};
+
+/**
+ * 試験空間の網羅(設計書 §12.2・§12.4・§12.5)。
+ *
+ * **数はシャードが宣言したものをそのまま出す。割合も率も足さない**
+ * ——「網羅率 95%」を作ると、**有限のモデル(この因子・この水準・この組合せ)に
+ * 対する被覆が、金融入力の全体に対する被覆に見える。** §12.5 の注意文を
+ * 必ず添えるのはそのためで、`report.spec.ts` が「% が 1 つも出ないこと」を
+ * 見張っている。
+ *
+ * **知らない綴りの理由も行を落とさない。** 読み手(`assertCoverageIsSound`)が
+ * 既に拒んでいるが、表示で落とすと**合計と行数が食い違ったまま読まれる。**
+ */
+export function renderCoverage(breakdown: CallBreakdown): string[] {
+  const coverage = breakdown.coverage;
+  if (coverage === null) {
+    // **「宣言していない」は「全部覆った」ではない。**
+    return [
+      "",
+      // 言い回しは `renderGaveUp` の「棄却を宣言していない」と**わざと変えて
+      // いる**——同じ綴りにすると、片方を見張るテストがもう片方でも当たり、
+      // **どちらの節を見ているのか分からなくなる**(2026-08-29 に実際に衝突した)。
+      "**このシャードは試験空間のモデルを持たない(測定していない)。**",
+      "",
+    ];
+  }
+  const lines = [
+    "",
+    `#### テスト空間 \`${coverage.model}\``,
+    "",
+    "| 対象 | 被覆規則 | 必須セル | 実行 | 理由付き除外 | 未達 | 状態 |",
+    "|---|---|---:|---:|---:|---:|---|",
+  ];
+  for (const requirement of coverage.requirements) {
+    const consistent =
+      requirement.covered_cells +
+        requirement.excluded_cells +
+        requirement.unmet_cells ===
+      requirement.required_cells;
+    const rule =
+      requirement.strength === "all" ? "全組合せ" : "2 因子ペアワイズ";
+    const label =
+      COVERAGE_STATUS_LABELS[requirement.status] ?? requirement.status;
+    lines.push(
+      `| \`${requirement.scope}\` | ${rule} | ${requirement.required_cells} | ` +
+        `${requirement.covered_cells} | ${requirement.excluded_cells} | ` +
+        `${requirement.unmet_cells} | ${label}` +
+        `${consistent ? "" : "(**合計が合わない**)"} |`,
+    );
+  }
+  lines.push(
+    "",
+    "**完全網羅は、ここで定義した有限の因子・水準・組合せに対する表現であり、",
+    "金融入力全体を数学的に全列挙したことを意味しない。**",
+    "",
+  );
+  if (coverage.excluded_cells.length > 0) {
+    const byReason = new Map<string, CoverageExclusion[]>();
+    for (const exclusion of coverage.excluded_cells) {
+      byReason.set(exclusion.reason, [
+        ...(byReason.get(exclusion.reason) ?? []),
+        exclusion,
+      ]);
+    }
+    lines.push(
+      "#### 理由付き除外",
+      "",
+      "| 理由 | 判断 | 対象数 | 単位 | 例 |",
+      "|---|---|---:|---|---|",
+    );
+    for (const [reason, list] of [...byReason].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      const disposition = list[0]?.disposition ?? "(不明)";
+      const risky = disposition === "accepted_risk";
+      const examples = list
+        .slice(0, 3)
+        .map((exclusion) => `\`${exclusion.cell_id}\``)
+        .join(" / ");
+      lines.push(
+        `| \`${reason}\` | ${disposition}${risky ? "(**未検証**)" : ""} | ` +
+          `${list.length} | 要求セル | ${examples} |`,
+      );
+    }
+    lines.push("");
+  }
+  // **生成候補の棄却は、要求セルの除外とは別の単位である**(設計書 §10.3)。
+  // 0 件でも節を出す——**0 は「無かった」であって「測っていない」ではない。**
+  const rejections = Object.entries(coverage.generation_rejections).sort(
+    ([a], [b]) => a.localeCompare(b),
+  );
+  lines.push(
+    "#### 生成候補の棄却",
+    "",
+    "**これは乱択候補の試行回数であり、未検証空間の大きさではない。**",
+    "要求セルの除外(上の表)とは単位が違うので、足し合わせない。",
+    "",
+    ...rejections.map(([reason, n]) => `- \`${reason}\`: ${n} 生成候補`),
+    "",
+  );
+  return lines;
+}
+
 function renderStrata(breakdown: CallBreakdown): string[] {
   const strata = Object.entries(breakdown.byStratum);
   if (strata.length === 0) {

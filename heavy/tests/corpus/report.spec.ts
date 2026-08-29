@@ -13,6 +13,10 @@ import type {
   ToleranceBand,
 } from "./corpus";
 import {
+  type CallBreakdown,
+  type Coverage,
+  type CoverageExclusion,
+  type CoverageRequirement,
   countSequencesWithoutEq,
   displaySequences,
   loadCallShards,
@@ -46,6 +50,7 @@ import {
   type Reproducibility,
   type ReproducibilitySignal,
   renderCallBreakdowns,
+  renderCoverage,
   renderDetectionPower,
   renderReport,
   renderReproducibility,
@@ -1986,7 +1991,10 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   expect(onlyLine(markdown, "3500 件のうち")).toContain(
     "3150 件が正常で、350 件",
   );
-  expect(onlyLine(markdown, "| `loan_bonus_forward` |")).toBe(
+  // **needle に件数を含める(2026-08-29)。** 空間モデルの網羅表が同じ op 名を
+  // 先頭列に持つので、`| \`loan_bonus_forward\` |` だけでは 2 本に当たる
+  // ——**主張は行の全体一致のままで、探す手がかりだけを狭めた。**
+  expect(onlyLine(markdown, "| `loan_bonus_forward` | 456 |")).toBe(
     "| `loan_bonus_forward` | 456 | 301 | 0 | 155 |",
   );
   expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
@@ -2899,4 +2907,246 @@ test("生成器の指紋は、信号が名指しした一式だけを数える",
   rmSync(join(dir, "two.py"));
   expect(generatorDigest(["one.py", "two.py"], dir)).toBe(null);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// **試験空間の表**(設計書 §12、計画 Task 11)。
+//
+// **数はシャードが宣言したものをそのまま出す。割合も率も足さない**
+// ——「網羅率」を作ると、**有限のモデルに対する被覆が、入力空間全体に
+// 対する被覆に見える。** 注意文を必ず添えるのはそのためである。
+// ---------------------------------------------------------------------------
+
+const coverageRequirement = (
+  over: Partial<CoverageRequirement> = {},
+): CoverageRequirement => ({
+  id: "op/a/all",
+  scope: "op",
+  strength: "all",
+  required_cells: 10,
+  covered_cells: 10,
+  excluded_cells: 0,
+  unmet_cells: 0,
+  status: "complete",
+  ...over,
+});
+
+const coverageExclusion = (
+  over: Partial<CoverageExclusion> = {},
+): CoverageExclusion => ({
+  cell_id: "op/a=1",
+  scope: "op",
+  reason: "duplicate_equivalent",
+  disposition: "safe",
+  detail: "x",
+  covered_elsewhere: [],
+  ...over,
+});
+
+const coverageOf = (
+  requirements: CoverageRequirement[],
+  excluded: CoverageExclusion[],
+  rejections: Record<string, number> = { candidate_duplicate: 0 },
+): Coverage => ({
+  schema: 1,
+  model: "finance-v1",
+  requirements,
+  excluded_cells: excluded,
+  generation_rejections: rejections,
+});
+
+const withCoverage = (coverage: Coverage | null): CallBreakdown => ({
+  byOp: { op: { ok: 1 } },
+  byStratum: {},
+  gaveUp: null,
+  coverage,
+});
+
+test("1. 全セル被覆・除外 0 は「完全網羅」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(coverageOf([coverageRequirement()], [])),
+  );
+  expect(lines.join("\n")).toContain("| 10 | 10 | 0 | 0 | 完全網羅 |");
+});
+
+test("2. 安全な重複除外は safe として並ぶ", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "duplicate_equivalent",
+            disposition: "safe",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("`duplicate_equivalent`");
+  expect(lines.join("\n")).toContain("safe");
+  // **注意文にも「未検証空間」という語が出る。** 見たいのは判断区分の欄なので
+  // 印そのもので見る——素の「未検証」だと注意文に当たって常に緑になる。
+  expect(lines.join("\n")).not.toContain("(**未検証**)");
+});
+
+test("3. reasonable の除外は「理由付き未実行あり」になる（完全網羅とは書かない）", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "source_overflow",
+            disposition: "reasonable",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("理由付き未実行あり");
+  // **注意文が「完全網羅は…を意味しない」と書いている。** 状態の欄を見る。
+  expect(lines.join("\n")).not.toContain("| 完全網羅 |");
+});
+
+test("4. accepted risk は「未検証」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "oracle_near_yen_boundary",
+            disposition: "accepted_risk",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("(**未検証**)");
+});
+
+test("5. 未達があれば「不足」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            unmet_cells: 1,
+            status: "incomplete",
+          }),
+        ],
+        [],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("不足");
+});
+
+test("6. coverage が無いシャードは「測定していない」と書き、表を出さない", () => {
+  const lines = renderCoverage(withCoverage(null)).join("\n");
+  expect(lines).toContain("測定していない");
+  expect(lines).not.toContain("| 対象 |");
+});
+
+test("7. 未知理由は行を落とさずそのまま出す", () => {
+  // **読み手(`assertCoverageIsSound`)が拒否済みでも、表示は落とさない。**
+  // 落とすと、表の合計と行の数が食い違ったまま読まれる。
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [coverageExclusion({ reason: "made_up", disposition: "safe" })],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("`made_up`");
+});
+
+test("8. 合計が合わないときはその旨を書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [coverageRequirement({ required_cells: 10, covered_cells: 9 })],
+        [],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("合計が合わない");
+});
+
+test("9. 候補棄却 0 のときも節を出す", () => {
+  // **0 件は「無かった」であって「測っていない」ではない。** 節ごと消すと
+  // 区別が付かなくなる。
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf([coverageRequirement()], [], {
+        candidate_duplicate: 0,
+        oracle_near_yen_boundary: 0,
+        oracle_search_limit: 0,
+      }),
+    ),
+  );
+  expect(lines.join("\n")).toContain("生成候補の棄却");
+  expect(lines.join("\n")).toContain("`candidate_duplicate`: 0");
+});
+
+test("10. 候補棄却があるとき、単位が「生成候補」と書かれる", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf([coverageRequirement()], [], {
+        candidate_duplicate: 12,
+        oracle_near_yen_boundary: 7,
+        oracle_search_limit: 0,
+      }),
+    ),
+  );
+  expect(lines.join("\n")).toContain("生成候補");
+  expect(lines.join("\n")).toContain("未検証空間の大きさではない");
+});
+
+test("網羅率を書かない（有限のモデルへの被覆を、入力空間への被覆に見せない）", () => {
+  const lines = renderCoverage(
+    withCoverage(coverageOf([coverageRequirement()], [])),
+  ).join("\n");
+  expect(lines).not.toMatch(/\d+(\.\d+)?\s*%/);
+  expect(lines).toContain("金融入力全体を数学的に全列挙したことを意味しない");
+});
+
+test("実物の finance-000.json でも表が出る", () => {
+  const finance = loadCallShards().find((e) => e.name === "finance-000.json");
+  if (finance === undefined) {
+    throw new Error("finance-000.json is not among the call shards");
+  }
+  const lines = renderCoverage(summarizeCallShard(finance.shard)).join("\n");
+  expect(lines).toContain("`finance-v1`");
+  expect(lines).toContain("loan_term");
+  // **実物の数がそのまま出ている。**
+  expect(lines).toContain("| 150 | 126 | 24 | 0 | 理由付き未実行あり |");
+  expect(lines).toContain("`source_overflow`");
 });
