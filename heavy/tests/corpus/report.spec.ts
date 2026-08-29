@@ -1936,15 +1936,23 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   expect(Object.keys(byOp).length, "op が 1 つも無い").toBeGreaterThan(0);
   expect(Object.keys(byStratum).length, "層が 1 つも無い").toBeGreaterThan(0);
 
-  // **実測を焼き付ける(2026-08-20)。** 3500 件の内訳が動いたら、報告書が
-  // 外の読み手にしている主張のほうを先に見直すこと。
+  // **実測を焼き付ける(2026-08-20、2026-08-29 に更新)。** 3500 件の内訳が
+  // 動いたら、報告書が外の読み手にしている主張のほうを先に見直すこと。
+  //
+  // **2026-08-29(空間モデル Task 5・6)で動いた。** `loan_term` の 7 行が
+  // 構成できずコーパスから出て、`compound_deposit_for` の 11 行が救われた
+  // ——**総数は 3500 のまま**で、乱択の尾が差を吸収している。
+  // **正常が 11 件増え、SyntaxError が 11 件減った**: 救われた行は計算が
+  // 通るケースで、出た行は正算が本物のエラーになる組だった。
+  // **エラー経路の件数が減った**ことは、`docs/corpus-measurements.md` に
+  // 記録する(検出力の測定とは別の量である)。
   const totals: Record<string, number> = {};
   for (const counts of Object.values(byOp)) {
     for (const [kind, n] of Object.entries(counts)) {
       totals[kind] = (totals[kind] ?? 0) + n;
     }
   }
-  expect(totals).toEqual({ ok: 3139, SyntaxError: 270, Overflow: 91 });
+  expect(totals).toEqual({ ok: 3150, SyntaxError: 259, Overflow: 91 });
   expect(
     Object.fromEntries(
       Object.entries(byOp).map(([op, counts]) => [
@@ -1955,10 +1963,10 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   ).toEqual({
     loan_forward: 599,
     loan_bonus_forward: 456,
-    compound_grow: 439,
-    loan_principal: 433,
-    loan_term: 426,
-    compound_deposit_for: 420,
+    compound_grow: 437,
+    loan_principal: 432,
+    compound_deposit_for: 431,
+    loan_term: 418,
     loan_bonus_principal: 412,
     compound_periods_for: 315,
   });
@@ -1976,16 +1984,16 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   // **行を 1 本だけ取り出して主張する(Task 7 の実測)。** 「どこかに 270 と
   // 書いてある」検査は、枠を畳んだ実装でも緑になる。
   expect(onlyLine(markdown, "3500 件のうち")).toContain(
-    "3139 件が正常で、361 件",
+    "3150 件が正常で、350 件",
   );
   expect(onlyLine(markdown, "| `loan_bonus_forward` |")).toBe(
     "| `loan_bonus_forward` | 456 | 301 | 0 | 155 |",
   );
   expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
-    "| **合計** | **3500** | **3139** | **91** | **270** |",
+    "| **合計** | **3500** | **3150** | **91** | **259** |",
   );
   expect(onlyLine(markdown, "の層から引かれている")).toContain(
-    "3500 件は 1187 の層から引かれている",
+    "3500 件は 1191 の層から引かれている",
   );
   expect(onlyLine(markdown, "- `near_yen_boundary`:")).toBe(
     "- `near_yen_boundary`: 7",
@@ -2037,6 +2045,7 @@ test("an error kind the design did not name gets a column of its own", () => {
           byOp: { loan_forward: { ok: 2, DivisionByZero: 3 } },
           byStratum: {},
           gaveUp: null,
+          coverage: null,
         },
       }),
     ],
@@ -2583,6 +2592,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { loan_forward: { ok: 2000 } },
           byStratum: {},
           gaveUp: { dup: 2, reasons: { near_yen_boundary: 7, other: 0 } },
+          coverage: null,
         },
       }),
     ],
@@ -2602,6 +2612,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { loan_forward: { ok: 2000 } },
           byStratum: {},
           gaveUp: { dup: 0, reasons: { near_yen_boundary: 0, other: 0 } },
+          coverage: null,
         },
       }),
     ],
@@ -2618,6 +2629,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { to_bytes: { ok: 2000 } },
           byStratum: {},
           gaveUp: null,
+          coverage: null,
         },
       }),
     ],

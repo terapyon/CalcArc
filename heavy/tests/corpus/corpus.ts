@@ -426,7 +426,139 @@ export interface CallShard {
     dup: number;
     reference_gave_up: Record<string, number>;
   };
+  /**
+   * **このシャードが狙った試験空間**(設計書 §11.2)。第 1 段階では金融だけが
+   * 持つ。**`undefined` は「宣言していない」であって「全部覆った」ではない**
+   * ——`COVERAGE_REQUIRED_SHARDS` に載っているシャードが持たなければ落とす。
+   */
+  coverage?: Coverage;
   cases: CallCase[];
+}
+
+/** `coverage` 自身のスキーマ。**15 枚が共有する `KNOWN_SCHEMA` とは別物**(設計書 §11.1)。 */
+export const KNOWN_COVERAGE_SCHEMA = 1;
+
+export const SUPPORTED_COVERAGE_MODELS = new Set(["finance-v1"]);
+
+/**
+ * 設計書 §10.1 の理由コード。**`other` は無い。**
+ *
+ * 生成器が「分類できなかった」ものを `other` として通すと、**理由の表が
+ * 埋まっているのに何も説明していない**状態になる。知らない綴りはここで落とす。
+ */
+export const COVERAGE_REASONS = new Set([
+  "duplicate_equivalent",
+  "not_applicable",
+  "inverse_target_unconstructible",
+  "source_overflow",
+  "oracle_near_yen_boundary",
+  "oracle_search_limit",
+  "candidate_domain",
+  "candidate_out_of_range",
+  "candidate_overflow",
+  "candidate_duplicate",
+]);
+
+export const COVERAGE_DISPOSITIONS = new Set([
+  "safe",
+  "reasonable",
+  "accepted_risk",
+]);
+
+export const COVERAGE_STATUSES = new Set([
+  "complete",
+  "accounted_with_exclusions",
+  "incomplete",
+  "not_measured",
+]);
+
+/** `coverage` を必ず持つシャード(第 1 段階は金融だけ。設計書 §11.1)。 */
+export const COVERAGE_REQUIRED_SHARDS = new Set(["finance-000.json"]);
+
+export interface CoverageRequirement {
+  id: string;
+  scope: string;
+  strength: string;
+  required_cells: number;
+  covered_cells: number;
+  excluded_cells: number;
+  unmet_cells: number;
+  status: string;
+}
+
+export interface CoverageExclusion {
+  cell_id: string;
+  scope: string;
+  reason: string;
+  disposition: string;
+  detail: string;
+  covered_elsewhere: string[];
+}
+
+export interface Coverage {
+  schema: number;
+  model: string;
+  requirements: CoverageRequirement[];
+  excluded_cells: CoverageExclusion[];
+  generation_rejections: Record<string, number>;
+}
+
+/**
+ * **読み手は数え直さない。宣言が自分自身と矛盾していないかだけを見る**
+ * (設計書 §13.2)。
+ *
+ * 数え直せるのは生成の時点だけである——ここでコーパスを走査して被覆を
+ * 数え直すと、**同じ数え方の間違いが両側に入って一致してしまう**
+ * (参照実装を Rust の移植にしないのと同じ理由)。ここができるのは検算である:
+ * 整合式が閉じているか、知らない綴りが混ざっていないか、**未達を残したまま
+ * 「覆った」と言っていないか。**
+ */
+export function assertCoverageIsSound(name: string, shard: CallShard): void {
+  const coverage = shard.coverage;
+  if (coverage === undefined) {
+    if (COVERAGE_REQUIRED_SHARDS.has(name)) {
+      throw new Error(`${name}: coverage を持たない(設計書 §13.2)`);
+    }
+    return;
+  }
+  if (coverage.schema !== KNOWN_COVERAGE_SCHEMA) {
+    throw new Error(`${name}: 未知の coverage.schema ${coverage.schema}`);
+  }
+  if (!SUPPORTED_COVERAGE_MODELS.has(coverage.model)) {
+    throw new Error(`${name}: 未知の model ${coverage.model}`);
+  }
+  for (const requirement of coverage.requirements) {
+    const { id, status } = requirement;
+    if (!COVERAGE_STATUSES.has(status)) {
+      throw new Error(`${name}/${id}: 未知の status ${status}`);
+    }
+    const sum =
+      requirement.covered_cells +
+      requirement.excluded_cells +
+      requirement.unmet_cells;
+    if (sum !== requirement.required_cells) {
+      throw new Error(
+        `${name}/${id}: 件数の整合が取れない(${requirement.covered_cells}+` +
+          `${requirement.excluded_cells}+${requirement.unmet_cells}≠${requirement.required_cells})`,
+      );
+    }
+    if (requirement.unmet_cells > 0 || status === "incomplete") {
+      throw new Error(
+        `${name}/${id}: 未達セルが ${requirement.unmet_cells} 件ある`,
+      );
+    }
+    if (status === "not_measured") {
+      throw new Error(`${name}/${id}: 測定していない`);
+    }
+  }
+  for (const exclusion of coverage.excluded_cells) {
+    if (!COVERAGE_REASONS.has(exclusion.reason)) {
+      throw new Error(`${name}: 未知の除外理由 ${exclusion.reason}`);
+    }
+    if (!COVERAGE_DISPOSITIONS.has(exclusion.disposition)) {
+      throw new Error(`${name}: 未知の判断区分 ${exclusion.disposition}`);
+    }
+  }
 }
 
 /**
@@ -465,6 +597,13 @@ export interface CallBreakdown {
    * 報告書がその行を落とさないため。
    */
   gaveUp: { dup: number; reasons: Record<string, number> } | null;
+  /**
+   * **シャードが宣言した試験空間。この走行が数え直したものではない。**
+   *
+   * `null` は「このシャードは `coverage` を持たない」であって
+   * **「全部覆った」ではない**——`gaveUp` の `null` と同じ扱いである。
+   */
+  coverage: Coverage | null;
 }
 
 /**
@@ -498,6 +637,7 @@ export function summarizeCallShard(shard: CallShard): CallBreakdown {
       rejections === undefined
         ? null
         : { dup: rejections.dup, reasons: rejections.reference_gave_up },
+    coverage: shard.coverage ?? null,
   };
 }
 

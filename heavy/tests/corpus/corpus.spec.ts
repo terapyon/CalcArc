@@ -1,10 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 import { type ComplexValue, magnitude, parseComplexDisplay } from "./complex";
 import {
+  assertCoverageIsSound,
   assertNoCaseTolerance,
   assertShardIsSound,
   assertSupportedMode,
   assertToleranceIsSane,
+  type CallShard,
   type Classification,
   classify,
   classifyComplex,
@@ -874,3 +876,134 @@ for (const { name, shard, equivalences } of partitions) {
     ).toBe("");
   });
 }
+
+// ---------------------------------------------------------------------------
+// **試験空間の宣言を読む側**(設計書 §13.2、計画 Task 10)。
+//
+// **読み手は数え直さない。** 数え直せるのは生成の時点だけで、ここでできるのは
+// 「宣言が自分自身と矛盾していないか」の検算である。**矛盾していたら落とす**
+// ——`unmet` が残ったシャードや、知らない理由コードを載せたシャードは、
+// 「覆えないなら理由を書く」という約束を破っている。
+// ---------------------------------------------------------------------------
+
+const sound = (): CallShard => ({
+  schema: 1,
+  generated_by: "test",
+  cases: [],
+  coverage: {
+    schema: 1,
+    model: "finance-v1",
+    requirements: [
+      {
+        id: "r",
+        scope: "op",
+        strength: "all",
+        required_cells: 3,
+        covered_cells: 2,
+        excluded_cells: 1,
+        unmet_cells: 0,
+        status: "accounted_with_exclusions",
+      },
+    ],
+    excluded_cells: [
+      {
+        cell_id: "op/a=1",
+        scope: "op",
+        reason: "not_applicable",
+        disposition: "reasonable",
+        detail: "x",
+        covered_elsewhere: [],
+      },
+    ],
+    generation_rejections: { candidate_duplicate: 0 },
+  },
+});
+
+test("整った coverage は通る（下の拒否が、拒否そのものを見ている証拠）", () => {
+  expect(() =>
+    assertCoverageIsSound("finance-000.json", sound()),
+  ).not.toThrow();
+});
+
+test("未知の coverage.schema を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.schema = 2;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /schema/,
+  );
+});
+
+test("未知の model を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.model = "finance-v2";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /model/,
+  );
+});
+
+test("件数の整合が取れないシャードを拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.requirements[0]!.covered_cells = 3; // 3 + 1 + 0 ≠ 3
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /整合/,
+  );
+});
+
+test("未知の除外理由を拒む（`other` は無い）", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.reason = "other";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /理由/,
+  );
+});
+
+test("未知の判断区分を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.disposition = "probably_fine";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /判断区分/,
+  );
+});
+
+test("未達が残っているシャードを拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const requirement = shard.coverage!.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 1;
+  requirement.unmet_cells = 1;
+  requirement.status = "incomplete";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /未達/,
+  );
+});
+
+test("not_measured を拒む（測っていないことを、通ったことにしない）", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.requirements[0]!.status = "not_measured";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /測定/,
+  );
+});
+
+test("finance-000.json が coverage を持たないことを拒む", () => {
+  const shard = sound();
+  shard.coverage = undefined;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /coverage/,
+  );
+});
+
+test("coverage を要求しないシャードには何も言わない", () => {
+  const shard = sound();
+  shard.coverage = undefined;
+  expect(() =>
+    assertCoverageIsSound("data-scale-000.json", shard),
+  ).not.toThrow();
+});
