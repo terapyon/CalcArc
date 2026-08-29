@@ -75,6 +75,48 @@ CORPUS = generate_corpus.CORPUS
 SIGNAL = pathlib.Path(__file__).resolve().parents[2] / "heavy" / "reproducibility.json"
 
 
+#: **`reference` の根。生成器の指紋をここからの相対パスで組む。**
+REFERENCE_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def _digest_of(base: pathlib.Path, names: list[str]) -> str:
+    """並べた名前と中身を 1 本の指紋にする。**両側の共通の土台。**
+
+    1 枚ごとに `名前 / 改行 / バイト長 / 改行 / 中身` を流し込む。
+    **長さを挟むのは、名前と中身の境目がずれても同じ指紋にならないため**
+    である。TypeScript 側(`heavy/tests/corpus/report.ts` の `digestOfFiles`)が
+    同じ手順でこれを組み直す。
+    """
+    digest = hashlib.sha256()
+    for name in names:
+        raw = (base / name).read_bytes()
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\n")
+        digest.update(str(len(raw)).encode("ascii"))
+        digest.update(b"\n")
+        digest.update(raw)
+    return digest.hexdigest()
+
+
+def generator_files() -> list[str]:
+    """**指紋を取る生成器の一式**(`reference/` からの相対パス)。
+
+    **選ぶのはここだけである。** 信号にこの一覧を書き込み、読む側は
+    **書かれた名前だけ**を数え直す。選び方が 2 か所に在ると、片方が
+    増えた日に静かにずれる。
+
+    **限界を 1 つ書いておく**——ここに載っていない新しいファイルが生成に
+    効くようになった場合、それだけでは指紋が動かない。ただし、それを
+    import する既存のファイルはたいてい一緒に変わる。
+    """
+    names = ["scripts/generate_corpus.py"]
+    names += [
+        path.relative_to(REFERENCE_ROOT).as_posix()
+        for path in (REFERENCE_ROOT / "src").rglob("*.py")
+    ]
+    return sorted(names)
+
+
 def corpus_digest(directory: pathlib.Path) -> str:
     """コミット済みコーパスの**生バイト列**を 1 本の指紋にする。
 
@@ -94,15 +136,8 @@ def corpus_digest(directory: pathlib.Path) -> str:
     **同じ手順**でこれを組み直す。区切りに長さを挟むのは、名前と中身の境目が
     ずれても同じ指紋にならないようにするためである。
     """
-    digest = hashlib.sha256()
-    for name in sorted(entry.name for entry in directory.iterdir() if entry.is_file()):
-        raw = (directory / name).read_bytes()
-        digest.update(name.encode("utf-8"))
-        digest.update(b"\n")
-        digest.update(str(len(raw)).encode("ascii"))
-        digest.update(b"\n")
-        digest.update(raw)
-    return digest.hexdigest()
+    names = sorted(entry.name for entry in directory.iterdir() if entry.is_file())
+    return _digest_of(directory, names)
 
 
 def signal_payload(record: dict[str, Any]) -> dict[str, Any]:
@@ -117,6 +152,8 @@ def signal_payload(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": 1,
         "corpusDigest": record["corpusDigest"],
+        "generatorDigest": record["generatorDigest"],
+        "generatorFiles": record["generatorFiles"],
         "fileSetChecked": record["fileSetChecked"],
         "extra": sorted(record["extra"]),
         "missing": sorted(record["missing"]),
@@ -137,8 +174,11 @@ def signal() -> Any:
     生成器の呼び出しが落ちても——つまり 2 つの検査が 1 つも走らなくても——
     ここは必ず動き、`ok: false` の信号が残る。
     """
+    files = generator_files()
     record: dict[str, Any] = {
         "corpusDigest": corpus_digest(CORPUS),
+        "generatorDigest": _digest_of(REFERENCE_ROOT, files),
+        "generatorFiles": files,
         "fileSetChecked": False,
         "extra": [],
         "missing": [],
@@ -248,15 +288,105 @@ def test_every_generated_file_matches_a_fresh_generation(
 #: 土台が読めなくなる。互いを呼び合わずに済むよう、**同じ作り物のディレクトリ
 #: から出る指紋**をこの 1 つの定数に留める。TS 側の `report.spec.ts` が同じ値を
 #: 持っている。どちらかを直すと、そちらが赤くなる。
-DIGEST_OF_THE_SHARED_FIXTURE = "a8082f740d94e376dbf63f3ebc3379bce480ba11583d8a90185df8413dcefb55"
+#: **報告書が読む欄の一覧。TypeScript 側が同じ綴りを持っている**
+#: (`heavy/tests/corpus/report.ts` の `SIGNAL_FIELDS`)。書き手と読み手で欄が
+#: ずれると、**読み手は黙って「信号が無い」に落ちる**——信号の仕組みが壊れた
+#: まま、報告書は「土台を確かめていない」と書き続ける。
+#: **その静かな壊れ方を、両側から同じ綴りに留める。**
+SIGNAL_FIELDS = [
+    "bytesChecked",
+    "corpusDigest",
+    "extra",
+    "fileSetChecked",
+    "generatorDigest",
+    "generatorFiles",
+    "mismatched",
+    "missing",
+    "ok",
+    "schema",
+]
+
+#: 欄だけ揃えた最小の記録。個々のテストは崩したいところだけを上書きする。
+_BARE: dict[str, Any] = {
+    "corpusDigest": "x",
+    "generatorDigest": "y",
+    "generatorFiles": ["scripts/generate_corpus.py"],
+    "fileSetChecked": False,
+    "extra": [],
+    "missing": [],
+    "bytesChecked": None,
+    "mismatched": [],
+}
+
+
+def test_the_signal_has_exactly_the_fields_the_report_reads() -> None:
+    assert sorted(signal_payload(_BARE)) == SIGNAL_FIELDS
+
+
+def test_the_generator_fingerprint_moves_when_the_generator_moves(
+    tmp_path: pathlib.Path,
+) -> None:
+    """**生成器が変われば指紋が動く。**
+
+    コーパスの指紋だけでは足りない——**期待値が 1 バイトも変わっていなくても、
+    生成器が変われば「今日書くはずのもの」は変わる。** 検査を通したあとに
+    生成器を直した作業ツリーでは、古い信号が緑のまま残る。
+    """
+    (tmp_path / "g.py").write_text("x = 1\n", encoding="utf-8")
+    before = _digest_of(tmp_path, ["g.py"])
+    (tmp_path / "g.py").write_text("x = 2\n", encoding="utf-8")
+    assert _digest_of(tmp_path, ["g.py"]) != before
+
+
+def test_the_generator_list_covers_the_script_and_the_package() -> None:
+    files = generator_files()
+    assert "scripts/generate_corpus.py" in files
+    assert any(name.startswith("src/calcarc_reference/") for name in files)
+    assert files == sorted(files)
+    assert all(name.endswith(".py") for name in files)
+
+
+DIGEST_OF_THE_SHARED_FIXTURE = "ca21c606610226a41e841fbc2a63b89e1e4eb7470d13604c5ff8bc888bb4cb82"
+
+
+def write_shared_fixture(directory: pathlib.Path) -> None:
+    """**両側が同じ指紋を出すことを確かめるための作り物。**
+
+    素朴に作ると、割れうる差が 1 つも入らない。ここは狙って入れてある:
+
+    - **`a` / `ab` / `b`** ——名前の並べ替えが実装で割れうる形そのもの。
+      片側が「短い方が先」でない並べ方をすれば、ここで露見する。
+    - **`Z`** ——大文字は小文字より前(符号位置 90 < 97)。「アルファベット順」を
+      大小無視で実装すると割れる。
+    - **非 ASCII の中身** ——エンコーディングの差は、並べ替えと並ぶ典型である。
+      **コーパスの実物も日本語のラベルを含む。**
+    """
+    (directory / "Z.json").write_bytes('{"ラベル": "度分秒"}\n'.encode())
+    (directory / "a.json").write_bytes(b'{"x": 1}\n')
+    (directory / "ab.json").write_bytes(b'["b.json1"]\n')
+    (directory / "b.json").write_bytes(b"[]\n")
 
 
 def test_corpus_digest_matches_the_value_the_typescript_side_pins(
     tmp_path: pathlib.Path,
 ) -> None:
-    (tmp_path / "a.json").write_bytes(b'{"x": 1}\n')
-    (tmp_path / "b.json").write_bytes(b"[]\n")
+    write_shared_fixture(tmp_path)
     assert corpus_digest(tmp_path) == DIGEST_OF_THE_SHARED_FIXTURE
+
+
+def test_the_shared_fixture_really_contains_the_things_that_split(
+    tmp_path: pathlib.Path,
+) -> None:
+    """**作り物が狙いを満たしているかを見張る。**
+
+    fixture が痩せても指紋は変わらないので、**弱くなったことは指紋では
+    分からない。** 中身の条件そのものを assert する。
+    """
+    write_shared_fixture(tmp_path)
+    names = sorted(entry.name for entry in tmp_path.iterdir())
+    assert names == ["Z.json", "a.json", "ab.json", "b.json"]
+    joined = b"".join((tmp_path / name).read_bytes() for name in names)
+    assert not joined.isascii(), "非 ASCII の中身が要る(エンコーディング差の検出)"
 
 
 def test_corpus_digest_notices_a_byte(tmp_path: pathlib.Path) -> None:
@@ -284,7 +414,7 @@ def test_signal_is_not_green_when_only_half_the_checks_ran() -> None:
     緑の顔をする**——このファイルが最初に塞いだ穴と同じ形である。
     """
     half: dict[str, Any] = {
-        "corpusDigest": "x",
+        **_BARE,
         "fileSetChecked": True,
         "extra": [],
         "missing": [],
@@ -298,7 +428,7 @@ def test_signal_is_not_green_when_only_half_the_checks_ran() -> None:
 
 def test_signal_is_not_green_when_anything_drifted() -> None:
     base: dict[str, Any] = {
-        "corpusDigest": "x",
+        **_BARE,
         "fileSetChecked": True,
         "extra": [],
         "missing": [],

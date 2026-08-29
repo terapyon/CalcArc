@@ -36,10 +36,12 @@ import {
   errorCaseCount,
   errorPaths,
   expectedSummaryNames,
+  generatorDigest,
   type HeavyRun,
   PRECEDENCE_CHANGES_MEANING,
   PRECEDENCE_SHARD,
   type Provenance,
+  parseReproducibility,
   type RecordedShard,
   type Reproducibility,
   type ReproducibilitySignal,
@@ -2642,6 +2644,8 @@ function signalFixture(
   return {
     schema: 1,
     corpusDigest: "deadbeef",
+    generatorDigest: "cafe",
+    generatorFiles: ["scripts/generate_corpus.py"],
     fileSetChecked: true,
     extra: [],
     missing: [],
@@ -2668,7 +2672,12 @@ test("state 2: a signal about other bytes is stale, not green", () => {
     signalFixture({ corpusDigest: "old" }),
     "new",
   );
-  expect(state).toEqual({ state: "stale", signed: "old", actual: "new" });
+  expect(state).toEqual({
+    state: "stale",
+    what: "corpus",
+    signed: "old",
+    actual: "new",
+  });
   const markdown = renderReproducibility(state).join("\n");
   expect(markdown).toContain(
     "いまここに在るコーパスについて書かれたものではない",
@@ -2791,11 +2800,16 @@ test("2 つの言語が同じ指紋を出す(Python 側と同じ数字に留め�
   // 相方は `reference/tests/test_corpus_reproducibility.py` の
   // `DIGEST_OF_THE_SHARED_FIXTURE`。**片方だけ手順を変えると、報告書は
   // 正しい走行でも「この記録は古い」と言い続ける。**
+  // **割れうる差を狙って入れてある**(Python 側の `write_shared_fixture` と
+  // 同じ 4 枚): `a` / `ab` / `b` は並べ替えが割れうる形、`Z` は大文字が
+  // 小文字より前に来ること、そして**非 ASCII の中身**。
   const dir = mkdtempSync(join(tmpdir(), "calcarc-digest-"));
+  writeFileSync(join(dir, "Z.json"), '{"ラベル": "度分秒"}\n', "utf-8");
   writeFileSync(join(dir, "a.json"), '{"x": 1}\n');
+  writeFileSync(join(dir, "ab.json"), '["b.json1"]\n');
   writeFileSync(join(dir, "b.json"), "[]\n");
   expect(corpusDigest(dir)).toBe(
-    "a8082f740d94e376dbf63f3ebc3379bce480ba11583d8a90185df8413dcefb55",
+    "ca21c606610226a41e841fbc2a63b89e1e4eb7470d13604c5ff8bc888bb4cb82",
   );
   rmSync(dir, { recursive: true, force: true });
 });
@@ -2804,4 +2818,73 @@ test("読めないディレクトリの指紋は null(「一致しなかった�
   expect(corpusDigest(join(tmpdir(), "calcarc-does-not-exist-9e3f"))).toBe(
     null,
   );
+});
+
+/**
+ * **報告書が読む欄の一覧。Python 側が同じ綴りを持っている**
+ * (`test_corpus_reproducibility.py` の `SIGNAL_FIELDS`)。
+ */
+const SIGNAL_FIELDS = [
+  "bytesChecked",
+  "corpusDigest",
+  "extra",
+  "fileSetChecked",
+  "generatorDigest",
+  "generatorFiles",
+  "mismatched",
+  "missing",
+  "ok",
+  "schema",
+] as const;
+
+test("書き手と読み手の欄が揃っている(欠けたら読み手は信号を捨てる)", () => {
+  // **これが「計器自身を見張る」テストである。** 書き手と読み手で欄がずれると、
+  // 読み手は黙って「信号が無い」に落ちる——**信号の仕組みが壊れたまま、
+  // 報告書は「土台を確かめていない」と書き続ける。** 静かな壊れ方なので、
+  // 欄の綴りそのものを両側から同じ一覧に留める。
+  const full = signalFixture() as unknown as Record<string, unknown>;
+  expect(Object.keys(full).sort()).toEqual([...SIGNAL_FIELDS].sort());
+
+  // **1 欄でも欠ければ、読み手は受け取らない。**
+  for (const field of SIGNAL_FIELDS) {
+    const missing = { ...full };
+    delete missing[field];
+    expect(
+      parseReproducibility(missing),
+      `${field} が欠けても読めてしまう`,
+    ).toBe(null);
+  }
+});
+
+test("生成器が変わっていれば、期待値が動いていなくても古いと言う", () => {
+  // **コーパスの指紋だけでは足りない。** 検査を通したあとで参照実装を
+  // 直した作業ツリーでは、期待値が 1 バイトも動いていなくても
+  // 「今日書くはずのもの」は変わっている。
+  const state = reproducibilityHealth(
+    signalFixture({ generatorDigest: "old" }),
+    "deadbeef",
+    "new",
+  );
+  expect(state).toEqual({
+    state: "stale",
+    what: "generator",
+    signed: "old",
+    actual: "new",
+  });
+  const markdown = renderReproducibility(state).join("\n");
+  expect(markdown).toContain("いまここに在る生成器ではない");
+  // **期待値が動いたときとは別の文である。**
+  expect(markdown.includes("期待値が書き換えられている")).toBe(false);
+});
+
+test("生成器の指紋は、信号が名指しした一式だけを数える", () => {
+  const dir = mkdtempSync(join(tmpdir(), "calcarc-gen-"));
+  writeFileSync(join(dir, "one.py"), "x = 1\n");
+  writeFileSync(join(dir, "two.py"), "y = 2\n");
+  const both = generatorDigest(["one.py", "two.py"], dir);
+  expect(generatorDigest(["one.py"], dir)).not.toBe(both);
+  // **1 枚でも消えていれば指紋は無い(= 古い)。**
+  rmSync(join(dir, "two.py"));
+  expect(generatorDigest(["one.py", "two.py"], dir)).toBe(null);
+  rmSync(dir, { recursive: true, force: true });
 });

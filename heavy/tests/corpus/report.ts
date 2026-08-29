@@ -213,6 +213,11 @@ const CORPUS_DIR = fileURLToPath(
   new URL("../../../corpus/generated/", import.meta.url),
 );
 
+/** 生成器の在処。**期待値を作った側が変わっていないか**を見るために要る。 */
+const REFERENCE_ROOT = fileURLToPath(
+  new URL("../../../reference/", import.meta.url),
+);
+
 /** 走行 1 回ぶんの機械可読な要約。**欠陥注入の測定はこれだけを読む。** */
 export interface HeavyRunShard {
   name: string;
@@ -777,6 +782,26 @@ export function verdictOf(
  * 読めなければ `null`——**「一致しなかった」ではない。** 比べられなかった
  * ことと、比べて違ったことを混ぜない。
  */
+export function digestOfFiles(base: string, names: string[]): string | null {
+  const digest = createHash("sha256");
+  for (const name of names) {
+    let raw: Buffer;
+    try {
+      raw = readFileSync(join(base, name));
+    } catch {
+      // **1 枚でも読めなければ指紋は無い。** 欠けたまま数えると、
+      // 「消えたファイル」が指紋に現れず、古い信号が通ってしまう。
+      return null;
+    }
+    digest.update(name, "utf-8");
+    digest.update("\n");
+    digest.update(String(raw.length));
+    digest.update("\n");
+    digest.update(raw);
+  }
+  return digest.digest("hex");
+}
+
 export function corpusDigest(directory: string = CORPUS_DIR): string | null {
   let names: string[];
   try {
@@ -787,22 +812,29 @@ export function corpusDigest(directory: string = CORPUS_DIR): string | null {
   } catch {
     return null;
   }
-  const digest = createHash("sha256");
-  for (const name of names) {
-    const raw = readFileSync(join(directory, name));
-    digest.update(name, "utf-8");
-    digest.update("\n");
-    digest.update(String(raw.length));
-    digest.update("\n");
-    digest.update(raw);
-  }
-  return digest.digest("hex");
+  return digestOfFiles(directory, names);
+}
+
+/**
+ * **信号が名指しした生成器一式を、いまのバイト列で数え直す。**
+ *
+ * **選ぶのは Python 側だけである**(`generator_files()`)。こちらは信号に
+ * 書かれた名前をそのまま数える——選び方が 2 か所に在ると、片方が増えた日に
+ * 静かにずれる。1 枚でも消えていれば `null`(= 古い)になる。
+ */
+export function generatorDigest(
+  files: string[],
+  base: string = REFERENCE_ROOT,
+): string | null {
+  return digestOfFiles(base, files);
 }
 
 /** 再現性検査が書く 1 枚。**この形を知っているのはここだけである。** */
 export interface ReproducibilitySignal {
   schema: number;
   corpusDigest: string;
+  generatorDigest: string;
+  generatorFiles: string[];
   fileSetChecked: boolean;
   extra: string[];
   missing: string[];
@@ -821,6 +853,13 @@ export interface ReproducibilitySignal {
  *
  * 状態が 5 つあるのは、**読む人の次の一手がそれぞれ違うから**である:
  * 走らせる／作り直す／生成器を直す／期待値を戻す／何もしなくてよい。
+ *
+ * **これは門ではなく計器である。** 土台が赤くても走行は止まらない——止めるのは
+ * 次の作業（`docs/superpowers/sdd/heavy-BACKLOG-red-propagation.md` の (3)、
+ * `always()` の意味を「集める」と「判定する」に分ける）の仕事である。
+ * **計器の義務は走行を止めることではなく、嘘を書かないことである。**
+ * そして**この信号は、その門の前提でもある**——門が後続を飛ばすようになったとき、
+ * 報告書の「測っていない」が飛ばされた結果なのかを言えるのはここだけである。
  */
 export type Reproducibility =
   /** 信号が無い(または読めない)。**「土台は健全」ではない。** */
@@ -829,7 +868,13 @@ export type Reproducibility =
    * 信号は在るが、**いまディスクに在るコーパスについて書かれたものではない。**
    * 検査を通したあとで期待値を書き換えると、この状態になる。
    */
-  | { state: "stale"; signed: string; actual: string }
+  | {
+      state: "stale";
+      /** **何が動いたのか。** 期待値そのものか、それを作った生成器か。 */
+      what: "corpus" | "generator";
+      signed: string;
+      actual: string;
+    }
   /** 検査そのものが途中で落ちた(生成器が呼べない等)。**赤とは違う。** */
   | { state: "incomplete" }
   /** 生成器の出力と食い違っている。**下の「不一致 0 件」は意味を失う。** */
@@ -860,12 +905,29 @@ export type Reproducibility =
 export function reproducibilityHealth(
   signal: ReproducibilitySignal | null,
   digest: string | null,
+  generator: string | null = null,
 ): Reproducibility {
   if (signal === null) {
     return { state: "not-run" };
   }
   if (digest !== null && signal.corpusDigest !== digest) {
-    return { state: "stale", signed: signal.corpusDigest, actual: digest };
+    return {
+      state: "stale",
+      what: "corpus",
+      signed: signal.corpusDigest,
+      actual: digest,
+    };
+  }
+  // **生成器も見る。期待値が 1 バイトも動いていなくても、生成器が変われば
+  // 「今日書くはずのもの」は変わる。** コーパスの指紋だけだと、検査を通した
+  // あとで参照実装を直した作業ツリーで、古い信号が緑のまま残る。
+  if (generator !== null && signal.generatorDigest !== generator) {
+    return {
+      state: "stale",
+      what: "generator",
+      signed: signal.generatorDigest,
+      actual: generator,
+    };
   }
   if (!signal.fileSetChecked || signal.bytesChecked === null) {
     return { state: "incomplete" };
@@ -886,14 +948,17 @@ export function reproducibilityHealth(
   return { state: "passed", checked: signal.bytesChecked };
 }
 
-/** 形を見てから返す。**読めない JSON を「緑」にしない。** */
-function readReproducibility(): ReproducibilitySignal | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(REPRODUCIBILITY_PATH, "utf-8"));
-  } catch {
-    return null;
-  }
+/**
+ * **形を見てから返す。読めない JSON を「緑」にしない。**
+ *
+ * ディスクから切り離してあるのは、**欄の一致をテストから叩けるようにする
+ * ため**である。書き手(Python)と読み手(ここ)で欄がずれると、**読み手は黙って
+ * 「信号が無い」に落ちる**——信号の仕組みが壊れたまま、報告書は「土台を
+ * 確かめていない」と書き続ける。その静かな壊れ方を見張るテストが要る。
+ */
+export function parseReproducibility(
+  parsed: unknown,
+): ReproducibilitySignal | null {
   if (typeof parsed !== "object" || parsed === null) {
     return null;
   }
@@ -901,6 +966,8 @@ function readReproducibility(): ReproducibilitySignal | null {
   if (
     signal.schema !== 1 ||
     typeof signal.corpusDigest !== "string" ||
+    typeof signal.generatorDigest !== "string" ||
+    !Array.isArray(signal.generatorFiles) ||
     typeof signal.fileSetChecked !== "boolean" ||
     typeof signal.ok !== "boolean" ||
     !Array.isArray(signal.extra) ||
@@ -911,6 +978,16 @@ function readReproducibility(): ReproducibilitySignal | null {
     return null;
   }
   return signal as ReproducibilitySignal;
+}
+
+function readReproducibility(): ReproducibilitySignal | null {
+  try {
+    return parseReproducibility(
+      JSON.parse(readFileSync(REPRODUCIBILITY_PATH, "utf-8")),
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -934,11 +1011,20 @@ export function renderReproducibility(state: Reproducibility): string[] {
   if (state.state === "stale") {
     return [
       ...heading,
-      "**この記録は、いまここに在るコーパスについて書かれたものではない。**",
-      `検査が見たコーパスの指紋は \`${state.signed.slice(0, 12)}\` で、`,
-      `いまディスクに在るものは \`${state.actual.slice(0, 12)}\` である。`,
-      "**検査を通したあとで期待値が書き換えられている。** 下の「不一致 0 件」は、",
-      "その書き換えを一度も見ていない。`pnpm heavy` の前に再現性検査を回し直すこと。",
+      ...(state.what === "corpus"
+        ? [
+            "**この記録は、いまここに在るコーパスについて書かれたものではない。**",
+            "**検査を通したあとで期待値が書き換えられている。**",
+          ]
+        : [
+            "**この記録を書いた生成器は、いまここに在る生成器ではない。**",
+            "**検査を通したあとで参照実装が変わっている**——期待値が 1 バイトも",
+            "動いていなくても、生成器が変われば「今日書くはずのもの」は変わる。",
+          ]),
+      `検査が見た指紋は \`${state.signed.slice(0, 12)}\` で、`,
+      `いま在るものは \`${state.actual.slice(0, 12)}\` である。`,
+      "下の「不一致 0 件」は、その変化を一度も見ていない。`pnpm heavy` の前に",
+      "再現性検査を回し直すこと。",
     ];
   }
   if (state.state === "incomplete") {
@@ -3171,7 +3257,15 @@ export function writeReport(): void {
     // **土台もここで初めて読む。** 信号は `reference` の再現性検査が書く
     // 別の走行の産物で、`power` / `uiRun` と同じ扱いである。**指紋を一緒に
     // 取るのは、その信号が目の前のコーパスについて書かれたのかを見るため。**
-    reproducibilityHealth(readReproducibility(), corpusDigest()),
+    (() => {
+      const signal = readReproducibility();
+      return reproducibilityHealth(
+        signal,
+        corpusDigest(),
+        // **生成器の指紋は、信号が名指しした一式について数える。**
+        signal === null ? null : generatorDigest(signal.generatorFiles),
+      );
+    })(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);
