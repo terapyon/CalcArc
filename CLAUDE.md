@@ -58,7 +58,7 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
   `web/package.json`、`README.md` の「現在の版」、`README.en.md` の
   「Current version」、`CHANGELOG.md` の見出し。**`pnpm check:version` が
   5 箇所すべてを見る**（毎回の CI が回している）。
-  **タグを打つときは 1 段厳しくなる**——`node scripts/check-version.mjs --tag v0.5.0`
+  **タグを打つときは 1 段厳しくなる**——`node tools/check-version.mjs --tag v0.5.0`
   は、4 つの版数がタグ名と一致し、CHANGELOG の見出しに**日付が入っている
   （「未リリース」でない）**ことまで見る。これは Release のワークフローが
   タグから走ったときに最初のジョブとして自動で回すので、**リリース前に手で
