@@ -3333,6 +3333,20 @@ def build_finance_shard(seed: int, count: int) -> dict:
             "oracle_search_limit": gave_up["compound_deposit_search_limit"],
         },
     )
+    # **未達を黙って通さない**(設計書 §13.1)。要求セルは被覆・理由付き除外・
+    # 未達のいずれかに必ず入るが、**未達のまま出荷してよいものは 1 つも無い**
+    # ——覆えないなら理由を書く、が空間モデルの約束である。
+    #
+    # **門が無いと、この集計は何も主張しない。** 実測(2026-08-29): 除外を
+    # 空にすると `loan_term` に 24 件の未達が残るが、門を足す前の生成器は
+    # そのまま出力していた。`test_removing_one_exclusion_makes_the_generator_fail`
+    # がこの門の番人である。
+    for summary in coverage_payload["requirements"]:  # type: ignore[attr-defined]
+        if summary["unmet_cells"]:
+            raise RuntimeError(
+                f"{summary['id']}: 未達セルが {summary['unmet_cells']} 件ある"
+                "(被覆にも理由付き除外にも入っていない。設計書 §13.1)"
+            )
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),

@@ -2421,3 +2421,36 @@ def test_generating_twice_is_byte_identical_including_coverage() -> None:
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
     # **並びそのものも固定する。** `sort_keys` を通すと順序の崩れが隠れる。
     assert json.dumps(first) == json.dumps(second)
+
+
+def test_dropping_one_required_cell_shows_up_as_unmet() -> None:
+    """設計書 §15.1 の 5。**要求セルを 1 つ落とすと `unmet` になる。**
+
+    緑のまま通ってしまうなら、この集計は何も主張していない。
+    """
+    requirement = corpus_calls._REQUIREMENT_OF["compound_grow"]
+    covered = set(requirement.cells) - {requirement.cells[0]}
+    summary = corpus_coverage.summarize(requirement, covered, {})
+    assert summary["unmet_cells"] == 1
+    assert summary["status"] == "incomplete"
+
+
+def test_removing_one_exclusion_makes_the_generator_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """設計書 §15.1 の 6・§13.1。**除外を 1 つ消すと未達が残り、生成器が落ちる。**
+
+    **変異はファイルではなく `monkeypatch` で当てる**——同じワークツリーに別の
+    作業が居るので、書き換えて戻す手順は使わない。
+    """
+    monkeypatch.setattr(corpus_calls, "loan_term_exclusions", dict)
+    with pytest.raises(RuntimeError, match="未達"):
+        corpus_calls.build_finance_shard(seed=20260821, count=3500)
+
+
+def test_an_unknown_reason_code_is_refused() -> None:
+    """設計書 §13.1。**`other` は無い。** 文字列を理由として渡せない。"""
+    cell = corpus_calls._REQUIREMENT_OF["loan_term"].cells[0]
+    made_up = corpus_coverage.Exclusion(cell, "made_up_reason", "x")  # type: ignore[arg-type]
+    with pytest.raises((KeyError, ValueError)):
+        _ = made_up.disposition
