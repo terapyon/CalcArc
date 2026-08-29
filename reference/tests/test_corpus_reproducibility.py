@@ -43,10 +43,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import pathlib
 import sys
+from typing import Any
 
 import pytest
 
@@ -59,6 +61,97 @@ _SPEC.loader.exec_module(generate_corpus)
 
 CORPUS = generate_corpus.CORPUS
 
+#: **この検査の結果を、報告書が読める形で残す場所。**
+#:
+#: 重量級の報告書(`heavy/heavy-report.md`)は、自分の土台がここで確かめられて
+#: いることを前提に「不一致 0 件」と書く。**その土台が赤かった走行と、土台を
+#: 一度も確かめていない走行が、報告書の上で同じ顔をしてはならない。**
+#:
+#: **なぜ `heavy/` に書くのか。** 報告書が読む信号は 3 つとも `heavy/` に在る
+#: (`detection-power.json` / `heavy-run.json` / `heavy-ui-run.json`)。読む側から
+#: 見て 1 か所に揃っている方が、次に足す人が探す場所を間違えない。
+#: `reference` が自分の外へ書くこと自体は前からある——`corpus/generated/` も
+#: `testdata/` もここが書いている。
+SIGNAL = pathlib.Path(__file__).resolve().parents[2] / "heavy" / "reproducibility.json"
+
+
+def corpus_digest(directory: pathlib.Path) -> str:
+    """コミット済みコーパスの**生バイト列**を 1 本の指紋にする。
+
+    **信号が古びたことを、読む側が気づけるようにするためである。** この検査を
+    通したあとで `corpus/generated/` を手で書き換えると、ディスクには「緑」と
+    書かれた信号だけが残る——報告書はそれを読んで「土台は確かめてある」と言う。
+    **それは、このテストが塞いだはずの穴が信号の側から開き直った状態である。**
+
+    指紋が合わなければ、信号は**目の前のバイト列について何も言っていない**。
+    報告書はそれを「確かめていない」ではなく「**古い**」として出す。
+
+    整形ではなく生バイトを読む(`read_bytes`)。`json.load` して比べると、
+    キーの並びやインデントの崩れ——値は同じで整形だけ違う状態——が指紋に
+    出ない。それは `_rendered()` が生文字列で比べているのと同じ理由である。
+
+    TypeScript 側(`heavy/tests/corpus/report.ts` の `corpusDigest`)が
+    **同じ手順**でこれを組み直す。区切りに長さを挟むのは、名前と中身の境目が
+    ずれても同じ指紋にならないようにするためである。
+    """
+    digest = hashlib.sha256()
+    for name in sorted(entry.name for entry in directory.iterdir() if entry.is_file()):
+        raw = (directory / name).read_bytes()
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\n")
+        digest.update(str(len(raw)).encode("ascii"))
+        digest.update(b"\n")
+        digest.update(raw)
+    return digest.hexdigest()
+
+
+def signal_payload(record: dict[str, Any]) -> dict[str, Any]:
+    """集めた結果を、報告書が読む 1 枚に畳む。**純関数。**
+
+    **`ok` は「赤が無い」ではなく「2 つとも確かめて、赤が無い」である。**
+    片方が走らないまま(生成器自身が落ちるとそうなる)`ok: true` を書くと、
+    **一度も比べていない走行が緑の顔をする**——このファイルが最初に塞いだ
+    穴とまったく同じ形である。
+    """
+    complete = record["fileSetChecked"] and record["bytesChecked"] is not None
+    return {
+        "schema": 1,
+        "corpusDigest": record["corpusDigest"],
+        "fileSetChecked": record["fileSetChecked"],
+        "extra": sorted(record["extra"]),
+        "missing": sorted(record["missing"]),
+        "bytesChecked": record["bytesChecked"],
+        "mismatched": sorted(record["mismatched"]),
+        "ok": bool(
+            complete and not record["extra"] and not record["missing"] and not record["mismatched"]
+        ),
+    }
+
+
+@pytest.fixture(scope="module")
+def signal() -> Any:
+    """**結果を集めて、成否によらず書き出す。**
+
+    テストが赤くなった走行でこそ信号が要るので、`assert` より前に記録し、
+    書き出しは teardown で行う。**`fresh` がこれを引数に取る**ので、
+    生成器の呼び出しが落ちても——つまり 2 つの検査が 1 つも走らなくても——
+    ここは必ず動き、`ok: false` の信号が残る。
+    """
+    record: dict[str, Any] = {
+        "corpusDigest": corpus_digest(CORPUS),
+        "fileSetChecked": False,
+        "extra": [],
+        "missing": [],
+        "bytesChecked": None,
+        "mismatched": [],
+    }
+    yield record
+    SIGNAL.parent.mkdir(parents=True, exist_ok=True)
+    SIGNAL.write_text(
+        json.dumps(signal_payload(record), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
 
 def _rendered(payload: dict) -> str:
     """`generate_corpus.write()` と同じ整形。差分をここだけ見れば揃えられる。"""
@@ -66,7 +159,7 @@ def _rendered(payload: dict) -> str:
 
 
 @pytest.fixture(scope="module")
-def fresh() -> dict[str, str]:
+def fresh(signal: Any) -> dict[str, str]:
     """生成器が**今日書くはずのもの**を、ディスクに触れずに丸ごと取る。
 
     `write()` を差し替えて `main()` を呼ぶ。こうするとファイル名も種も件数も
@@ -94,7 +187,9 @@ def _files_on_disk() -> set[str]:
     return {entry.name for entry in CORPUS.iterdir() if entry.is_file()}
 
 
-def test_generated_holds_exactly_the_files_the_generator_writes(fresh: dict[str, str]) -> None:
+def test_generated_holds_exactly_the_files_the_generator_writes(
+    fresh: dict[str, str], signal: Any
+) -> None:
     """余分なファイルは赤、足りなくても赤。
 
     名指しで 2 ファイルだけを読んでいたとき、`corpus/generated/` に手書きの
@@ -103,6 +198,10 @@ def test_generated_holds_exactly_the_files_the_generator_writes(fresh: dict[str,
     """
     on_disk = _files_on_disk()
     expected = set(fresh)
+    # **assert より前に記録する。** 赤くなった走行でこそ信号が要る。
+    signal["extra"] = sorted(on_disk - expected)
+    signal["missing"] = sorted(expected - on_disk)
+    signal["fileSetChecked"] = True
     assert on_disk == expected, (
         f"corpus/generated/ holds {sorted(on_disk)} but the generator writes "
         f"{sorted(expected)}. Extra files never pass through the regeneration "
@@ -112,9 +211,101 @@ def test_generated_holds_exactly_the_files_the_generator_writes(fresh: dict[str,
     )
 
 
-def test_every_generated_file_matches_a_fresh_generation(fresh: dict[str, str]) -> None:
-    """列挙したファイルの中身を 1 枚ずつ、生バイト列で突き合わせる。"""
+def test_every_generated_file_matches_a_fresh_generation(
+    fresh: dict[str, str], signal: Any
+) -> None:
+    """列挙したファイルの中身を 1 枚ずつ、生バイト列で突き合わせる。
+
+    **最初の 1 枚で止めず、全部数えてから落ちる。** 途中で `assert` すると、
+    信号に載る不一致が「最初に見つかった 1 件」になり、**報告書が
+    「1 枚だけずれている」と読める**——実際には何枚ずれているか分からない。
+    生成器が書かないファイル(余分なファイル)は上のテストが持つので、
+    ここでは数えない。
+    """
+    mismatched: list[str] = []
+    checked = 0
     for name in sorted(_files_on_disk()):
+        if name not in fresh:
+            continue
         committed = (CORPUS / name).read_text(encoding="utf-8")
-        assert name in fresh, f"{name} is not something the generator writes"
-        assert fresh[name] == committed, f"{name} does not match a fresh generation"
+        checked += 1
+        if fresh[name] != committed:
+            mismatched.append(name)
+    # **assert より前に記録する。**
+    signal["bytesChecked"] = checked
+    signal["mismatched"] = mismatched
+    assert not mismatched, (
+        f"{len(mismatched)} of {checked} committed corpus files do not match a "
+        f"fresh generation: {mismatched}"
+    )
+
+
+#: **2 つの言語が同じ指紋を出すことを、両側から同じ数字に釘で留める。**
+#:
+#: `corpus_digest` の相方は TypeScript 側の `corpusDigest`
+#: (`heavy/tests/corpus/report.ts`)である。**片方だけ手順を変えると、報告書は
+#: 毎回「この記録は古い」と言い続ける**——静かに壊れはしないが、正しい走行でも
+#: 土台が読めなくなる。互いを呼び合わずに済むよう、**同じ作り物のディレクトリ
+#: から出る指紋**をこの 1 つの定数に留める。TS 側の `report.spec.ts` が同じ値を
+#: 持っている。どちらかを直すと、そちらが赤くなる。
+DIGEST_OF_THE_SHARED_FIXTURE = "a8082f740d94e376dbf63f3ebc3379bce480ba11583d8a90185df8413dcefb55"
+
+
+def test_corpus_digest_matches_the_value_the_typescript_side_pins(
+    tmp_path: pathlib.Path,
+) -> None:
+    (tmp_path / "a.json").write_bytes(b'{"x": 1}\n')
+    (tmp_path / "b.json").write_bytes(b"[]\n")
+    assert corpus_digest(tmp_path) == DIGEST_OF_THE_SHARED_FIXTURE
+
+
+def test_corpus_digest_notices_a_byte(tmp_path: pathlib.Path) -> None:
+    """**1 バイト変えたら別の指紋になる。** これが「古い記録」を見つける仕掛け。"""
+    (tmp_path / "a.json").write_bytes(b'{"x": 1}\n')
+    before = corpus_digest(tmp_path)
+    (tmp_path / "a.json").write_bytes(b'{"x": 2}\n')
+    assert corpus_digest(tmp_path) != before
+
+
+def test_corpus_digest_separates_the_name_from_the_body(tmp_path: pathlib.Path) -> None:
+    """名前と中身の境目がずれても同じ指紋にならない(長さを挟んでいる理由)。"""
+    (tmp_path / "ab.json").write_bytes(b"1\n")
+    one = corpus_digest(tmp_path)
+    (tmp_path / "ab.json").unlink()
+    (tmp_path / "a.json").write_bytes(b"b.json1\n")
+    assert corpus_digest(tmp_path) != one
+
+
+def test_signal_is_not_green_when_only_half_the_checks_ran() -> None:
+    """**片方しか走っていない走行は `ok: false`。**
+
+    生成器そのものが落ちると 2 つの検査は 1 つも走らず、`fileSetChecked` は
+    `False` のまま残る。ここで `ok: true` を書くと、**一度も比べていない走行が
+    緑の顔をする**——このファイルが最初に塞いだ穴と同じ形である。
+    """
+    half: dict[str, Any] = {
+        "corpusDigest": "x",
+        "fileSetChecked": True,
+        "extra": [],
+        "missing": [],
+        "bytesChecked": None,
+        "mismatched": [],
+    }
+    assert signal_payload(half)["ok"] is False
+    assert signal_payload({**half, "fileSetChecked": False})["ok"] is False
+    assert signal_payload({**half, "bytesChecked": 18})["ok"] is True
+
+
+def test_signal_is_not_green_when_anything_drifted() -> None:
+    base: dict[str, Any] = {
+        "corpusDigest": "x",
+        "fileSetChecked": True,
+        "extra": [],
+        "missing": [],
+        "bytesChecked": 18,
+        "mismatched": [],
+    }
+    assert signal_payload(base)["ok"] is True
+    assert signal_payload({**base, "extra": ["z.json"]})["ok"] is False
+    assert signal_payload({**base, "missing": ["z.json"]})["ok"] is False
+    assert signal_payload({**base, "mismatched": ["z.json"]})["ok"] is False

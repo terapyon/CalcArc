@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   readdirSync,
@@ -196,6 +197,20 @@ const RUN_PATH = fileURLToPath(
  */
 const UI_RUN_PATH = fileURLToPath(
   new URL("../../heavy-ui-run.json", import.meta.url),
+);
+
+/**
+ * **固定コーパスの再現性検査が残す信号。** `reference/tests/
+ * test_corpus_reproducibility.py` が書く。この走行が書くものではない——
+ * `UI_RUN_PATH` と同じく**読むだけ**である。
+ */
+const REPRODUCIBILITY_PATH = fileURLToPath(
+  new URL("../../reproducibility.json", import.meta.url),
+);
+
+/** コミット済みコーパス。信号が**このバイト列について**書かれたのかを見る。 */
+const CORPUS_DIR = fileURLToPath(
+  new URL("../../../corpus/generated/", import.meta.url),
 );
 
 /** 走行 1 回ぶんの機械可読な要約。**欠陥注入の測定はこれだけを読む。** */
@@ -751,6 +766,231 @@ export function verdictOf(
  * ある。判定だけを並べると、`検証していない` が他の 3 段と同じ重さに見える。
  */
 /**
+ * `corpus/generated/` の生バイト列の指紋。**Python 側と同じ手順で組む**
+ * (`reference/tests/test_corpus_reproducibility.py` の `corpus_digest`)。
+ *
+ * 名前を昇順に並べ、1 枚ごとに `名前 / 改行 / バイト長 / 改行 / 中身` を
+ * 流し込む。**長さを挟むのは、名前と中身の境目がずれても同じ指紋にならない
+ * ようにするため**である。ファイル名は ASCII なので、Python の文字列順と
+ * JS の既定の並べ替えは一致する。
+ *
+ * 読めなければ `null`——**「一致しなかった」ではない。** 比べられなかった
+ * ことと、比べて違ったことを混ぜない。
+ */
+export function corpusDigest(directory: string = CORPUS_DIR): string | null {
+  let names: string[];
+  try {
+    names = readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return null;
+  }
+  const digest = createHash("sha256");
+  for (const name of names) {
+    const raw = readFileSync(join(directory, name));
+    digest.update(name, "utf-8");
+    digest.update("\n");
+    digest.update(String(raw.length));
+    digest.update("\n");
+    digest.update(raw);
+  }
+  return digest.digest("hex");
+}
+
+/** 再現性検査が書く 1 枚。**この形を知っているのはここだけである。** */
+export interface ReproducibilitySignal {
+  schema: number;
+  corpusDigest: string;
+  fileSetChecked: boolean;
+  extra: string[];
+  missing: string[];
+  bytesChecked: number | null;
+  mismatched: string[];
+  ok: boolean;
+}
+
+/**
+ * **報告書の土台の状態。畳まない。**
+ *
+ * `uiHealth` と同じ考え方である——**「無い」と「赤い」を同じ行にしない。**
+ * ここで畳むと、**期待値を一度も確かめていない走行**と、**期待値が手で
+ * 触られていた走行**が同じ顔になる。前者はまだ何も分かっていないだけだが、
+ * 後者は**下に並ぶ「不一致 0 件」が嘘である**ことを意味する。
+ *
+ * 状態が 5 つあるのは、**読む人の次の一手がそれぞれ違うから**である:
+ * 走らせる／作り直す／生成器を直す／期待値を戻す／何もしなくてよい。
+ */
+export type Reproducibility =
+  /** 信号が無い(または読めない)。**「土台は健全」ではない。** */
+  | { state: "not-run" }
+  /**
+   * 信号は在るが、**いまディスクに在るコーパスについて書かれたものではない。**
+   * 検査を通したあとで期待値を書き換えると、この状態になる。
+   */
+  | { state: "stale"; signed: string; actual: string }
+  /** 検査そのものが途中で落ちた(生成器が呼べない等)。**赤とは違う。** */
+  | { state: "incomplete" }
+  /** 生成器の出力と食い違っている。**下の「不一致 0 件」は意味を失う。** */
+  | {
+      state: "drifted";
+      extra: string[];
+      missing: string[];
+      mismatched: string[];
+      checked: number | null;
+    }
+  /** 全部が生成器の出力とバイト単位で一致した。 */
+  | { state: "passed"; checked: number };
+
+/**
+ * **純関数。** ディスクを触らないので、5 つの状態を走行の外から全部作れる
+ * (`uiHealth` と同じ理由)。
+ *
+ * **`ok` は読まない。** 判定は `extra` / `missing` / `mismatched` /
+ * `bytesChecked` という**部品の側から**組み直す。要約のフラグを信じると、
+ * 書く側が壊れた日に**報告書が「緑」と書いてしまう**——`openOutcome` が
+ * 「知らない形を黙って通さない」のと同じ姿勢である。`ok` は人が JSON を
+ * 覗いたときのためだけに在る。
+ *
+ * **古さを先に見る。** 指紋が合わない信号は、中身が何であれ目の前の
+ * コーパスについて何も言っていない。`digest` が `null`(コーパスを読めない)の
+ * ときだけ比べずに進む——比べられなかったことを「古い」と言い張らない。
+ */
+export function reproducibilityHealth(
+  signal: ReproducibilitySignal | null,
+  digest: string | null,
+): Reproducibility {
+  if (signal === null) {
+    return { state: "not-run" };
+  }
+  if (digest !== null && signal.corpusDigest !== digest) {
+    return { state: "stale", signed: signal.corpusDigest, actual: digest };
+  }
+  if (!signal.fileSetChecked || signal.bytesChecked === null) {
+    return { state: "incomplete" };
+  }
+  if (
+    signal.extra.length > 0 ||
+    signal.missing.length > 0 ||
+    signal.mismatched.length > 0
+  ) {
+    return {
+      state: "drifted",
+      extra: signal.extra,
+      missing: signal.missing,
+      mismatched: signal.mismatched,
+      checked: signal.bytesChecked,
+    };
+  }
+  return { state: "passed", checked: signal.bytesChecked };
+}
+
+/** 形を見てから返す。**読めない JSON を「緑」にしない。** */
+function readReproducibility(): ReproducibilitySignal | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(REPRODUCIBILITY_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const signal = parsed as Partial<ReproducibilitySignal>;
+  if (
+    signal.schema !== 1 ||
+    typeof signal.corpusDigest !== "string" ||
+    typeof signal.fileSetChecked !== "boolean" ||
+    typeof signal.ok !== "boolean" ||
+    !Array.isArray(signal.extra) ||
+    !Array.isArray(signal.missing) ||
+    !Array.isArray(signal.mismatched) ||
+    !(signal.bytesChecked === null || typeof signal.bytesChecked === "number")
+  ) {
+    return null;
+  }
+  return signal as ReproducibilitySignal;
+}
+
+/**
+ * **この報告書の土台についての節である。**
+ *
+ * 下に並ぶ「不一致 0 件」は、**期待値が Python の独立実装の出力である**
+ * ことを前提にしている。その前提が確かめられているかどうかは、報告書自身が
+ * 言わなければ読む人には分からない。
+ */
+export function renderReproducibility(state: Reproducibility): string[] {
+  const heading = ["", "## 期待値そのものは、生成器の出力なのか", ""];
+  if (state.state === "not-run") {
+    return [
+      ...heading,
+      "**確かめていない。** コミット済みのコーパスが生成器の出力と一致するかを",
+      "見る検査(`reference/tests/test_corpus_reproducibility.py`)は、この作業",
+      "ツリーでは走っていない。**下の「不一致 0 件」は、期待値が手で書き換えられ",
+      "ていないことを何も保証していない。**",
+    ];
+  }
+  if (state.state === "stale") {
+    return [
+      ...heading,
+      "**この記録は、いまここに在るコーパスについて書かれたものではない。**",
+      `検査が見たコーパスの指紋は \`${state.signed.slice(0, 12)}\` で、`,
+      `いまディスクに在るものは \`${state.actual.slice(0, 12)}\` である。`,
+      "**検査を通したあとで期待値が書き換えられている。** 下の「不一致 0 件」は、",
+      "その書き換えを一度も見ていない。`pnpm heavy` の前に再現性検査を回し直すこと。",
+    ];
+  }
+  if (state.state === "incomplete") {
+    return [
+      ...heading,
+      "**確かめようとして、途中で落ちた。** 検査は始まったが、2 つの照合",
+      "(ファイルの集合・中身のバイト列)が最後まで走っていない——生成器そのものが",
+      "呼べなかった走行がこれである。**赤いのではなく、分からない。**",
+    ];
+  }
+  if (state.state === "drifted") {
+    const lines = [
+      ...heading,
+      "**一致していない。** コミット済みのコーパスが、生成器が今日書くものと",
+      "食い違っている。**期待値が手で触られているか、生成器が変わったのに",
+      "コーパスが作り直されていない。**",
+      "",
+      "**下に並ぶ「不一致 0 件」を結果として読まないこと**——照合は、その",
+      "食い違った期待値に対して行われている。",
+      "",
+    ];
+    if (state.mismatched.length > 0) {
+      lines.push(
+        `- **中身が違うファイル(${state.mismatched.length} 枚)。** ` +
+          state.mismatched.map((name) => `\`${name}\``).join(" "),
+      );
+    }
+    if (state.extra.length > 0) {
+      lines.push(
+        `- **生成器が書かないファイル(${state.extra.length} 枚)。** ` +
+          state.extra.map((name) => `\`${name}\``).join(" ") +
+          " ——これらの期待値は Python が独立に出したものではない。",
+      );
+    }
+    if (state.missing.length > 0) {
+      lines.push(
+        `- **生成器が書くのに無いファイル(${state.missing.length} 枚)。** ` +
+          state.missing.map((name) => `\`${name}\``).join(" ") +
+          " ——確かめている範囲が黙って狭まっている。",
+      );
+    }
+    return lines;
+  }
+  return [
+    ...heading,
+    `**確かめた。** コミット済みのコーパス ${state.checked} 枚が、生成器の出力と`,
+    "バイト単位で一致する。**下の件数は、Python の独立実装が出した期待値に対する",
+    "ものである。**",
+  ];
+}
+
+/**
  * `pnpm heavy:power` の測定結果を読む。**無ければ `null`。**
  *
  * 無いときに黙って節を省くと、「測ったが 0 件だった」と「測っていない」が
@@ -788,8 +1028,26 @@ export interface DetectionPower {
  * **赤くならないことを期待した変異も載せる。** レポートが「この領域は
  * 踏んでいない」と書いているなら、その主張はこの表で確かめられている。
  */
-export function renderDetectionPower(power: DetectionPower | null): string[] {
+export function renderDetectionPower(
+  power: DetectionPower | null,
+  /**
+   * **土台の状態。「測っていない」の理由を分けるためだけに要る。**
+   *
+   * この節が「測っていない」と書く状態には、**理由が 2 つある**——
+   * `pnpm heavy:power` を回していないか、**回そうとして飛ばされたか**である。
+   * CI ではこの段は再現性検査の後ろに在り、`if:` を持たないので、
+   * **再現性が赤いと走らない**(`.github/workflows/heavy-corpus.yml`)。
+   *
+   * **同じ文で両方を指すと、読む人は「回し忘れ」だと思う。** 実際には
+   * 土台が崩れていて、この報告書のすべてが宙に浮いている場合がある。
+   */
+  reproducibility: Reproducibility = { state: "not-run" },
+): string[] {
   if (power === null || power.results.length === 0) {
+    const foundationIsRed =
+      reproducibility.state === "drifted" ||
+      reproducibility.state === "stale" ||
+      reproducibility.state === "incomplete";
     return [
       "",
       "## この検査は壊れたものを見つけられるのか",
@@ -798,6 +1056,15 @@ export function renderDetectionPower(power: DetectionPower | null): string[] {
       "壊れ方を一時的に入れて何件が赤くなるかを測り、ここに表が出る。",
       "**それが無い限り、上の「不一致 0 件」は「見つからなかった」以上のことを",
       "言っていない。**",
+      ...(foundationIsRed
+        ? [
+            "",
+            "**この走行では、回し忘れではない。** 上の節のとおり土台が通って",
+            "おらず、CI ではこの測定は再現性検査の後ろに置かれていて、そこが",
+            "赤いと走らない。**つまりこれは、土台が崩れたことの二次的な結果",
+            "である**——先に直すのは土台のほうである。",
+          ]
+        : []),
     ];
   }
   const rows = power.results.map((r) => {
@@ -1387,6 +1654,15 @@ export function renderReport(
    * 読まずに黙っていると、この報告書は「UI も通した」と読める顔をする。
    */
   uiRun: HeavyUiRun | null = null,
+  /**
+   * **この報告書の土台の状態。呼び出し側が渡す。**
+   *
+   * 既定が `{ state: "not-run" }` なのは `power` / `run` / `uiRun` と同じ
+   * 理由である——ここでディスクを読むと、`renderReport` の出力が引数に無い
+   * ファイルに依存する。**そして既定が「確かめていない」であること自体が
+   * 正しい**: 何も渡されていない呼び出しは、土台について何も知らない。
+   */
+  reproducibility: Reproducibility = { state: "not-run" },
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -1472,12 +1748,14 @@ export function renderReport(
     "独立実装が作っており、**Rust のコードを移植したものではない**。同じ間違いが",
     "両方に入って一致してしまうことがないよう、別の道具・別の手順で計算している。",
     "",
-    "読む順は上から: **判定**(結論)→ **この検査は壊れたものを見つけられるのか**",
-    "(結論の裏付け)→ **この結果が主張していないこと**(結論が届かない範囲)。",
+    "読む順は上から: **判定**(結論)→ **期待値そのものは、生成器の出力なのか**",
+    "(結論の土台)→ **この検査は壊れたものを見つけられるのか**(結論の裏付け)→",
+    "**この結果が主張していないこと**(結論が届かない範囲)。",
     "シャードごとの内訳や誤差の分布は**付録**にある。",
     "",
     ...renderVerdicts(entries),
-    ...renderDetectionPower(power),
+    ...renderReproducibility(reproducibility),
+    ...renderDetectionPower(power, reproducibility),
     "",
     "## 数えたもの",
     "",
@@ -2890,6 +3168,10 @@ export function writeReport(): void {
     // 読ませると、走行のあとの作業ツリーとそうでない作業ツリーで別の文書が
     // 出る(`power` / `run` と同じ理由)。
     readUiRunJson(),
+    // **土台もここで初めて読む。** 信号は `reference` の再現性検査が書く
+    // 別の走行の産物で、`power` / `uiRun` と同じ扱いである。**指紋を一緒に
+    // 取るのは、その信号が目の前のコーパスについて書かれたのかを見るため。**
+    reproducibilityHealth(readReproducibility(), corpusDigest()),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);
