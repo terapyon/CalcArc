@@ -17,7 +17,7 @@ Rust の f64 / u64 とは別物である。**ここで計算し直さない**—
 from __future__ import annotations
 
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import combinations
@@ -2480,7 +2480,17 @@ def _pairwise_loan_forward_like_strata(op: str, bonus_key: str | None) -> tuple[
 # 答から作る」が成り立たない)。他の 4 op(forward 系・principal 系)は `n` が
 # 答ではなくそのまま入力なので、この飛ばしを持たない——同じ (rate, n) の
 # 組は必ずどれかの loan op でコーパスに現れる(集計はテストで確かめる)。
-PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 17
+#
+# **2026-08-29 に 17 → 24 へ動かした(Task 5)。数を測り直したのではなく、
+# 数える対象が増えた。** 以前ここが数えていたのは「正算が本物のエラーで、
+# 逆算の入力を作る元ネタが無い」行だけ(17 行)だった。Task 5 が
+# `_construct_loan_term_row` を入れたので、**「入力は作れたが、決定的な候補を
+# 尽くしても目標期間に乗らない」行(7 行)も飛ばす**ようになった——以前は
+# それを飛ばさず、**目標と違う期間のケースとして黙って混ぜていた。**
+# 7 行はすべて `target_n = 1201` で、`loan_ref.MAX_TERM_MONTHS = 1200` である
+# 以上 `loan_term` は 1201 を返しようがない(`loan_term_exclusions` が
+# `not_applicable` として理由を付ける)。
+PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 24
 
 
 @dataclass(frozen=True)
@@ -2510,6 +2520,165 @@ class LoanTermFact:
 _LOAN_TERM_FACTS: list[LoanTermFact] = []
 
 
+#: 月額の増分の候補。**固定順**(設計書 §8.3)。**`+0` を先に試す**——まず素の
+#: 月額で目標に乗るかを見て、乗らなければ `+1` へ進む。円単位に丸めた月額を
+#: 逆算へ戻すと 1 期ぶん長く出ることが多いので、**2 番目が `+1`** である。
+#: 実測(2026-08-29): 構成できた 126 行のうち **76 行が `+0`、50 行が `+1`**。
+#: (2026-08-29 訂正: ここは「`+1` を先に試す」と書いていたが、**タプルは `0` が
+#: 先**で、引いている実測もそちらと整合していた。**誤っていたのは注釈だけ。**)
+_LOAN_TERM_PAYMENT_DELTAS: tuple[int, ...] = (0, 1, -1, 2, -2)
+
+
+def _construct_loan_term_row(rate: str, target: int) -> tuple[int, int] | None:
+    """`actual_n == target` になる `(principal, payment)` を**固定順**で探す。
+
+    **乱数を使わない。候補順は `_LOAN_PAIRWISE_PRINCIPAL_OFFSETS`(12 通り) ×
+    `_LOAN_TERM_PAYMENT_DELTAS`(5 通り)の 60 通りで、試行上限もこれである。**
+    上限を宣言するだけでは検証にならないので、**尽きたら `None` を返し、
+    呼び手が理由付きの除外にする**——黙って別の期間のケースへ置き換えない。
+
+    `LoanError` は元本を変えても消えない本物の結果なので、その場で諦める
+    (`_pairwise_forward_result` と同じ判断。実測: 高金利 × 長期は元本を
+    10 万円から 5 億円まで振っても同じ SyntaxError になる)。
+    `ValueError` は円境界の番人で、**特定の元本にだけ起きる artifact**
+    なので次の元本へ進む。
+
+    **`_pairwise_forward_result` との違いは、最初の候補で打ち切らないこと**
+    である。あちらは正算が通った時点で確定するが、こちらは**逆算が目標に
+    乗るまで**進む——実測で 2 行が、これだけで被覆へ動く。
+    """
+    num, den = loan_ref.rate_fraction(rate)
+    for offset in _LOAN_PAIRWISE_PRINCIPAL_OFFSETS:
+        principal = _LOAN_PAIRWISE_PRINCIPAL_BASE + offset
+        try:
+            forward = loan_ref.forward(principal, num, den, target, 0)
+        except loan_ref.LoanError:
+            return None
+        except ValueError:
+            continue
+        for delta in _LOAN_TERM_PAYMENT_DELTAS:
+            payment = forward["monthly_payment"] + delta
+            if payment <= 0:
+                continue
+            result = loan_ref.compute(
+                "loan_term",
+                {"principal": str(principal), "rate": rate, "payment": str(payment)},
+            )
+            if "error" not in result and int(result["n"]) == target:
+                return principal, payment
+    return None
+
+
+def compound_deposit_for_exclusions(
+    covered: set[coverage.Cell],
+) -> dict[coverage.Cell, coverage.Exclusion]:
+    """踏めなかったペアに理由を付ける(設計書 §9.1・§10)。
+
+    **一律に貼らない。セルごとに、参照実装へ聞いて確かめる。** 目標値は
+    `_compound_reached` が正算で作るので、そこが u64 を溢れると逆算の入力
+    そのものを作れない。**積立額は既に最小(1 円)**なので、`(1+r)^n` が溢れる
+    組は元本や積立額をどう振っても救えない(§9.2 の代替構成の外にある)。
+
+    **説明できないセルが 1 つでもあれば落とす。** 計画は 19 件へ一律に
+    `source_overflow` を貼る形だったが、**実測(2026-08-29)ではそのうち 2 件が
+    溢れていなかった**——`(rate=100, ppy=12)` と `(rate=99.9999, ppy=12)` は
+    期間を振り直せば構成でき、いまは `_deposit_for_construction` が覆っている。
+    **一律に貼っていたら、偽の理由が 2 件コーパスに載っていた。**
+    未分類の理由を `other` として通さないのと同じ姿勢である。
+    """
+    requirement = _REQUIREMENT_OF["compound_deposit_for"]
+    out: dict[coverage.Cell, coverage.Exclusion] = {}
+    unexplained: list[str] = []
+    for cell in requirement.cells:
+        if cell in covered:
+            continue
+        axes = dict(cell.axes)
+        rate, periods = axes.get("rate"), axes.get("periods")
+        if rate is None or periods is None or _deposit_for_target_exists(str(rate), int(periods)):
+            # 溢れていない(または期間を名指ししていない)セルは、**構成できる
+            # はずのものが未達で残っている**ということである。理由を作らない。
+            unexplained.append(cell.id)
+            continue
+        out[cell] = coverage.Exclusion(
+            cell,
+            coverage.Reason.SOURCE_OVERFLOW,
+            "積立 1 円でも正算が u64 を溢れるので、逆算の目標値を作れない",
+            (f"compound_grow/{','.join(f'{k}={v}' for k, v in cell.axes)}",),
+        )
+    if unexplained:
+        raise RuntimeError(
+            "compound_deposit_for: 理由を説明できない未達セルがある——"
+            f"構成できるはずのものが漏れている: {sorted(unexplained)[:5]}"
+        )
+    return out
+
+
+def _deposit_for_target_exists(rate: str, periods: int) -> bool:
+    """その (金利, 期間) で、積立 1 円の正算が答を出せるか。
+
+    **周期と税の全通りを試す。** 1 つでも通れば「溢れて作れない」とは言えない
+    ——セルが要求しているのは金利と期間だけで、残りは構成の自由度である。
+    """
+    for per_year in PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]:
+        for tax in PAIRWISE_COMPOUND_GROW_FACTORS["tax"]:
+            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax))
+            if reached is not None and reached > 0:
+                return True
+    return False
+
+
+def loan_term_exclusions() -> dict[coverage.Cell, coverage.Exclusion]:
+    """構成できなかった目標期間セルに理由を付ける(設計書 §8.3・§10)。
+
+    **2 つの理由を混ぜない。** `not_applicable` は「その操作にその水準が
+    存在しない」——`loan_term` は `MAX_TERM_MONTHS` を上限に探索するので、
+    それを超える期間は**答になり得ない**。`inverse_target_unconstructible` は
+    「努力したが作れなかった」で、正算そのものが本物のエラーを返す行である。
+    **前者は何も失っていないが、後者は失っている**(設計書 §10.2 の判断区分)。
+    """
+    out: dict[coverage.Cell, coverage.Exclusion] = {}
+    for fact in LOAN_TERM_FACTS:
+        if fact.state == "covered":
+            continue
+        cell = coverage.Cell(
+            "loan_term", (("rate", fact.rate_level), ("target_n", str(fact.target_n)))
+        )
+        if fact.target_n > loan_ref.MAX_TERM_MONTHS:
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.NOT_APPLICABLE,
+                f"loan_term は {loan_ref.MAX_TERM_MONTHS} か月を上限に探索するので、"
+                f"{fact.target_n} か月は答になり得ない",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
+        elif fact.state == "excluded" and fact.error not in (None, "no-construction"):
+            # **走った手順だけを書く。** この行では正算が最初の元本でエラーを
+            # 返し、**構成探索(元本 12 通り × 月額 5 通り)は 1 度も走っていない**
+            # ——`_pairwise_loan_term_strata` が `forward_expect != "ok"` の時点で
+            # ここへ回すからである。**「尽くした」と書けるのは尽くしたときだけ。**
+            #
+            # 元本を変えても消えないことは別に確かめてある——
+            # `test_the_unconstructible_rows_really_have_no_principal_that_works`
+            # が 12 通りすべてを実際に試す(実測 2026-08-29: 14 行とも全滅)。
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE,
+                f"正算が {fact.error} を返すので、逆算の入力を作る元ネタが無い",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
+        else:
+            # 正算は通ったが、構成探索が候補を尽くしても目標に乗らなかった行。
+            # **こちらは実際に尽くしている。**
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE,
+                "決定的な候補(元本 12 通り × 月額の増分 5 通り)を尽くしても、"
+                "逆算が目標期間に乗らない",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
+    return out
+
+
 def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
     strata = []
     index = 0
@@ -2530,6 +2699,19 @@ def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
                 LoanTermFact(rate, n, principal, None, None, forward_expect, "excluded")
             )
             continue
+        # **目標期間に乗る組を、固定順で探す**(設計書 §8.3)。`_pairwise_forward_result`
+        # は正算が通った最初の元本で確定するが、**その月額を逆算へ戻すと丸めの
+        # ぶんだけ答がずれる**——ずれた行は計算の照合には使えるが、目標期間セルを
+        # 被覆したことにはならない。尽きたら `None` で、**その行は除外になる**
+        # (`loan_term_exclusions` が理由を付ける)。黙って別の期間へ置き換えない。
+        constructed = _construct_loan_term_row(rate, n)
+        if constructed is None:
+            infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, payment, None, "no-construction", "excluded")
+            )
+            continue
+        principal, payment = constructed
         params = {"principal": str(principal), "rate": rate, "payment": str(payment)}
         if not _claim_pairwise_signature("loan_term", params):
             # 実測(2026-08-25)ではここを通る行は無い(150 = 133 + 17)。**通った
@@ -2625,7 +2807,50 @@ def _pairwise_compound_grow_strata() -> tuple[Stratum, ...]:
 # 組が残る——`compound_grow` の pairwise 層が同じ (rate, periods,
 # periods_per_year, tax) の組を Overflow として持っているので、コーパス
 # 全体で見ればその組は「現れている」(テストが確かめる)。
-PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 17
+# **2026-08-29(Task 6)に 17 → 0 へ動いた。数え方ではなく作り方が変わった。**
+# 以前は期間で溢れた行をそのまま捨てていたが、**1 行が運ぶのはペア 6 組**で、
+# **期間を含まない 3 組まで一緒に落ちていた**——実測で `(rate=100, ppy=12)` と
+# `(rate=99.9999, ppy=12)` の 2 組が、溢れていないのに未達として残っていた。
+# いまは `_deposit_for_construction` が期間の水準を振り直すので、
+# **構成できない行は無い。** 溢れた (金利,期間) のセルは未達のまま残り、
+# `compound_deposit_for_exclusions` がセルごとに理由を付ける。
+PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 0
+
+
+def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int] | None:
+    """ペアワイズ 1 行から `(periods, target)` を作る。**溢れたら期間を振り直す。**
+
+    **1 行が運ぶのはペア 6 組である**(設計書 §7.2): (金利,期間)・(金利,周期)・
+    (金利,税)・(期間,周期)・(期間,税)・(周期,税)。**期間で溢れて行ごと捨てると、
+    期間を含まない 3 組まで一緒に落ちる**——実測(2026-08-29)では
+    `(rate=100, ppy=12)` と `(rate=99.9999, ppy=12)` の 2 組が、
+    **溢れていないのに未達として残っていた。**
+
+    **期間の水準を因子表の順で振り直す。** 決定的で、上限は水準の数である。
+    振り直した行が覆うのは**別の期間のセル**なので、**溢れた (金利,期間) の
+    セルは未達のまま残る**——そちらは `compound_deposit_for_exclusions` が
+    セルごとに溢れを確かめて理由を付ける。**救えるものだけを救う。**
+    """
+    rate = str(row["rate"])
+    per_year = int(row["periods_per_year"])  # type: ignore[arg-type]
+    tax = bool(row["tax"])
+    periods0 = int(row["periods"])  # type: ignore[arg-type]
+    # **因子表を直接見る。** `COVERAGE_FACTORS` はこの下で組まれるので、
+    # 層の構築時にはまだ存在しない——写しを持たず、素の表を指す。
+    per_years = PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]
+    # **周期を先に振る。期間は最後まで動かさない。** 枯れているのは
+    # (金利, 期間) の組で、周期は他の行がいくらでも運ぶ——**動かす順が
+    # そのまま「何を諦めるか」の順である。**
+    for per in (per_year, *per_years):
+        target = _compound_reached(0, 1, rate, int(per), periods0, tax)
+        if target is not None and target > 0:
+            return periods0, int(per), target
+    for periods in PAIRWISE_COMPOUND_GROW_FACTORS["periods"]:
+        for per in (per_year, *per_years):
+            target = _compound_reached(0, 1, rate, int(per), int(periods), tax)
+            if target is not None and target > 0:
+                return int(periods), int(per), target
+    return None
 
 
 def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
@@ -2633,18 +2858,17 @@ def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
     index = 0
     infeasible = 0
     for row in _PAIRWISE_COMPOUND_DEPOSIT_FOR_ROWS:
-        target = _compound_reached(
-            0, 1, row["rate"], row["periods_per_year"], row["periods"], row["tax"]
-        )
-        if target is None or target <= 0:
+        constructed = _deposit_for_construction(row)
+        if constructed is None:
             infeasible += 1
             continue
+        periods, per_year, target = constructed
         params = {
             "principal": "0",
             "target": str(target),
-            "periods": row["periods"],
+            "periods": periods,
             "rate": row["rate"],
-            "periods_per_year": row["periods_per_year"],
+            "periods_per_year": per_year,
             "tax": row["tax"],
         }
         if not _claim_pairwise_signature("compound_deposit_for", params):
@@ -2661,6 +2885,10 @@ def _pairwise_compound_deposit_for_strata() -> tuple[Stratum, ...]:
             )
         )
         index += 1
+    # **2026-08-29(Task 6)に 17 → 0 へ動いた。** 期間で溢れた行を捨てるのを
+    # やめ、**期間の水準を振り直して行を作る**ようにしたため。溢れた
+    # (金利,期間) のセルは未達のまま残り、`compound_deposit_for_exclusions`
+    # がセルごとに理由を付ける——**行の救済とセルの除外は別の話である。**
     assert infeasible == PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT, (
         f"compound_deposit_for pairwise: 構成できなかった数が実測"
         f"({PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT})と違う(実際は {infeasible})"
@@ -3102,10 +3330,48 @@ def build_finance_shard(seed: int, count: int) -> dict:
             entries.append(_finance_entry(len(entries), op, params, f"{op}/random"))
         except ReferenceGaveUp as gave_up:
             rejections["reference_gave_up"][gave_up.reason.value] += 1
+    # **空間の地図を、覆ったケースの隣に置く**(設計書 §11.2)。ここで初めて
+    # 「何を要求し、何を覆い、何を理由付きで諦めたか」が 1 枚に揃う。
+    #
+    # **`loan_term` の被覆は入力から数えられない。** `target_n` は入力ではなく
+    # 答なので、`covered_cells_from_cases` は `loan_term` を見ない
+    # (§8.2)——`loan_term_covered_cells()` が答の側から数えたものを足す。
+    covered = covered_cells_from_cases(entries) | loan_term_covered_cells()
+    exclusions = {**loan_term_exclusions(), **compound_deposit_for_exclusions(covered)}
+    gave_up = rejections["reference_gave_up"]
+    coverage_payload = coverage.build_payload(
+        FINANCE_MODEL,
+        FINANCE_REQUIREMENTS,
+        covered,
+        exclusions,
+        {
+            # **綴りは設計書 §11.2 のもの。** 既存の `rejections` の綴りは
+            # 読み手(`report.ts` の `renderGaveUp`)が使っているので変えない
+            # ——ここは**写し**であって、同じ入れ物ではない(§10.3)。
+            "candidate_duplicate": rejections["dup"],
+            "oracle_near_yen_boundary": gave_up["near_yen_boundary"],
+            "oracle_search_limit": gave_up["compound_deposit_search_limit"],
+        },
+    )
+    # **未達を黙って通さない**(設計書 §13.1)。要求セルは被覆・理由付き除外・
+    # 未達のいずれかに必ず入るが、**未達のまま出荷してよいものは 1 つも無い**
+    # ——覆えないなら理由を書く、が空間モデルの約束である。
+    #
+    # **門が無いと、この集計は何も主張しない。** 実測(2026-08-29): 除外を
+    # 空にすると `loan_term` に 24 件の未達が残るが、門を足す前の生成器は
+    # そのまま出力していた。`test_removing_one_exclusion_makes_the_generator_fail`
+    # がこの門の番人である。
+    for summary in coverage_payload["requirements"]:  # type: ignore[attr-defined]
+        if summary["unmet_cells"]:
+            raise RuntimeError(
+                f"{summary['id']}: 未達セルが {summary['unmet_cells']} 件ある"
+                "(被覆にも理由付き除外にも入っていない。設計書 §13.1)"
+            )
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "rejections": rejections,
+        "coverage": coverage_payload,
         "cases": entries,
     }
 

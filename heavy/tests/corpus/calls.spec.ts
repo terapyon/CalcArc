@@ -5,7 +5,12 @@ import {
   countDegenerateLoanPrincipalCases,
   runProbes,
 } from "./certificates";
-import { type CallCase, loadCallShards, summarizeCallShard } from "./corpus";
+import {
+  assertCoverageIsSound,
+  type CallCase,
+  loadCallShards,
+  summarizeCallShard,
+} from "./corpus";
 import { openHarness } from "./harness";
 import { record, summaryName } from "./report";
 
@@ -198,5 +203,52 @@ test("loan_principal's degenerate answers are counted, not silently dropped", ()
   // ここが赤くなったときに直す先はこの数字ではなく、まず
   // `docs/corpus-measurements.md` の「Heavy の逆算証明書」の記録である
   // ——何件が境界の証明を持たないかは、外の読み手に対する主張の一部。
-  expect({ total, excluded }).toEqual({ total: 432, excluded: 17 });
+  // **2026-08-29(空間モデル Task 5・6)で 432 → 431 になった。** 乱択の尾が
+  // 1 件ぶんずれただけで、**証明書の穴(17)は動いていない**——覆う範囲が
+  // 縮んだのではない。
+  expect({ total, excluded }).toEqual({ total: 431, excluded: 17 });
+});
+
+test("金融のシャードは自分の試験空間を宣言し、未達を残していない", () => {
+  // **Heavy の合否につなぐ**(設計書 §13.2)。宣言が矛盾していたり、未達を
+  // 残したまま「覆った」と言っているコーパスは、**照合が全件緑でも
+  // 受け取らない**——「覆えないなら理由を書く」は約束であって努力目標ではない。
+  for (const { name, shard } of loadCallShards()) {
+    assertCoverageIsSound(name, shard);
+  }
+});
+
+test("実物の finance-000.json が、測った数をそのまま載せている", () => {
+  // **作り物ではなく現物を見る。** 上の検算は「宣言が自分と矛盾しないか」
+  // しか見ないので、**数そのものが実測と合っているか**はここで留める。
+  const finance = loadCallShards().find((s) => s.name === "finance-000.json");
+  expect(finance, "finance-000.json が読めない").toBeDefined();
+  const coverage = finance?.shard.coverage;
+  expect(coverage?.model).toBe("finance-v1");
+  const totals = Object.fromEntries(
+    (coverage?.requirements ?? []).map((r) => [
+      r.scope,
+      [r.covered_cells, r.excluded_cells, r.required_cells],
+    ]),
+  );
+  expect(totals).toEqual({
+    loan_forward: [150, 0, 150],
+    loan_principal: [150, 0, 150],
+    loan_bonus_forward: [150, 0, 150],
+    loan_bonus_principal: [150, 0, 150],
+    loan_term: [126, 24, 150],
+    compound_grow: [266, 0, 266],
+    compound_deposit_for: [258, 8, 266],
+    compound_periods_for: [56, 0, 56],
+  });
+  // **理由の内訳も留める。** 合計 32 だけだと、理由が入れ替わっても気づかない。
+  const reasons: Record<string, number> = {};
+  for (const exclusion of coverage?.excluded_cells ?? []) {
+    reasons[exclusion.reason] = (reasons[exclusion.reason] ?? 0) + 1;
+  }
+  expect(reasons).toEqual({
+    not_applicable: 10,
+    inverse_target_unconstructible: 14,
+    source_overflow: 8,
+  });
 });
