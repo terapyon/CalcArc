@@ -2480,7 +2480,17 @@ def _pairwise_loan_forward_like_strata(op: str, bonus_key: str | None) -> tuple[
 # 答から作る」が成り立たない)。他の 4 op(forward 系・principal 系)は `n` が
 # 答ではなくそのまま入力なので、この飛ばしを持たない——同じ (rate, n) の
 # 組は必ずどれかの loan op でコーパスに現れる(集計はテストで確かめる)。
-PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 17
+#
+# **2026-08-29 に 17 → 24 へ動かした(Task 5)。数を測り直したのではなく、
+# 数える対象が増えた。** 以前ここが数えていたのは「正算が本物のエラーで、
+# 逆算の入力を作る元ネタが無い」行だけ(17 行)だった。Task 5 が
+# `_construct_loan_term_row` を入れたので、**「入力は作れたが、決定的な候補を
+# 尽くしても目標期間に乗らない」行(7 行)も飛ばす**ようになった——以前は
+# それを飛ばさず、**目標と違う期間のケースとして黙って混ぜていた。**
+# 7 行はすべて `target_n = 1201` で、`loan_ref.MAX_TERM_MONTHS = 1200` である
+# 以上 `loan_term` は 1201 を返しようがない(`loan_term_exclusions` が
+# `not_applicable` として理由を付ける)。
+PAIRWISE_LOAN_TERM_SKIPPED_COUNT = 24
 
 
 @dataclass(frozen=True)
@@ -2510,6 +2520,87 @@ class LoanTermFact:
 _LOAN_TERM_FACTS: list[LoanTermFact] = []
 
 
+#: 月額の増分の候補。**固定順**(設計書 §8.3)。円単位に丸めた月額を逆算へ戻すと
+#: 1 期ぶん長く出ることが多いので、**`+1` を先に試す**——空回しの実測
+#: (2026-08-29)では、構成できた 126 行のうち **50 行が `+1`**、76 行が `+0` である。
+_LOAN_TERM_PAYMENT_DELTAS: tuple[int, ...] = (0, 1, -1, 2, -2)
+
+
+def _construct_loan_term_row(rate: str, target: int) -> tuple[int, int] | None:
+    """`actual_n == target` になる `(principal, payment)` を**固定順**で探す。
+
+    **乱数を使わない。候補順は `_LOAN_PAIRWISE_PRINCIPAL_OFFSETS`(12 通り) ×
+    `_LOAN_TERM_PAYMENT_DELTAS`(5 通り)の 60 通りで、試行上限もこれである。**
+    上限を宣言するだけでは検証にならないので、**尽きたら `None` を返し、
+    呼び手が理由付きの除外にする**——黙って別の期間のケースへ置き換えない。
+
+    `LoanError` は元本を変えても消えない本物の結果なので、その場で諦める
+    (`_pairwise_forward_result` と同じ判断。実測: 高金利 × 長期は元本を
+    10 万円から 5 億円まで振っても同じ SyntaxError になる)。
+    `ValueError` は円境界の番人で、**特定の元本にだけ起きる artifact**
+    なので次の元本へ進む。
+
+    **`_pairwise_forward_result` との違いは、最初の候補で打ち切らないこと**
+    である。あちらは正算が通った時点で確定するが、こちらは**逆算が目標に
+    乗るまで**進む——実測で 2 行が、これだけで被覆へ動く。
+    """
+    num, den = loan_ref.rate_fraction(rate)
+    for offset in _LOAN_PAIRWISE_PRINCIPAL_OFFSETS:
+        principal = _LOAN_PAIRWISE_PRINCIPAL_BASE + offset
+        try:
+            forward = loan_ref.forward(principal, num, den, target, 0)
+        except loan_ref.LoanError:
+            return None
+        except ValueError:
+            continue
+        for delta in _LOAN_TERM_PAYMENT_DELTAS:
+            payment = forward["monthly_payment"] + delta
+            if payment <= 0:
+                continue
+            result = loan_ref.compute(
+                "loan_term",
+                {"principal": str(principal), "rate": rate, "payment": str(payment)},
+            )
+            if "error" not in result and int(result["n"]) == target:
+                return principal, payment
+    return None
+
+
+def loan_term_exclusions() -> dict[coverage.Cell, coverage.Exclusion]:
+    """構成できなかった目標期間セルに理由を付ける(設計書 §8.3・§10)。
+
+    **2 つの理由を混ぜない。** `not_applicable` は「その操作にその水準が
+    存在しない」——`loan_term` は `MAX_TERM_MONTHS` を上限に探索するので、
+    それを超える期間は**答になり得ない**。`inverse_target_unconstructible` は
+    「努力したが作れなかった」で、正算そのものが本物のエラーを返す行である。
+    **前者は何も失っていないが、後者は失っている**(設計書 §10.2 の判断区分)。
+    """
+    out: dict[coverage.Cell, coverage.Exclusion] = {}
+    for fact in LOAN_TERM_FACTS:
+        if fact.state == "covered":
+            continue
+        cell = coverage.Cell(
+            "loan_term", (("rate", fact.rate_level), ("target_n", str(fact.target_n)))
+        )
+        if fact.target_n > loan_ref.MAX_TERM_MONTHS:
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.NOT_APPLICABLE,
+                f"loan_term は {loan_ref.MAX_TERM_MONTHS} か月を上限に探索するので、"
+                f"{fact.target_n} か月は答になり得ない",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
+        else:
+            out[cell] = coverage.Exclusion(
+                cell,
+                coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE,
+                "決定的な候補(元本 12 通り × 月額の増分 5 通り)を尽くしても、"
+                "正算が本物のエラーになり逆算の入力を作れない",
+                (f"loan_forward/rate={fact.rate_level},n={fact.target_n}",),
+            )
+    return out
+
+
 def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
     strata = []
     index = 0
@@ -2530,6 +2621,19 @@ def _pairwise_loan_term_strata() -> tuple[Stratum, ...]:
                 LoanTermFact(rate, n, principal, None, None, forward_expect, "excluded")
             )
             continue
+        # **目標期間に乗る組を、固定順で探す**(設計書 §8.3)。`_pairwise_forward_result`
+        # は正算が通った最初の元本で確定するが、**その月額を逆算へ戻すと丸めの
+        # ぶんだけ答がずれる**——ずれた行は計算の照合には使えるが、目標期間セルを
+        # 被覆したことにはならない。尽きたら `None` で、**その行は除外になる**
+        # (`loan_term_exclusions` が理由を付ける)。黙って別の期間へ置き換えない。
+        constructed = _construct_loan_term_row(rate, n)
+        if constructed is None:
+            infeasible += 1
+            _LOAN_TERM_FACTS.append(
+                LoanTermFact(rate, n, principal, payment, None, "no-construction", "excluded")
+            )
+            continue
+        principal, payment = constructed
         params = {"principal": str(principal), "rate": rate, "payment": str(payment)}
         if not _claim_pairwise_signature("loan_term", params):
             # 実測(2026-08-25)ではここを通る行は無い(150 = 133 + 17)。**通った

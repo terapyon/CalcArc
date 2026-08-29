@@ -13,7 +13,7 @@ from fractions import Fraction
 import mpmath as mp
 import pytest
 
-from calcarc_reference import corpus_calls
+from calcarc_reference import corpus_calls, corpus_coverage, loan_ref
 from calcarc_reference.corpus_eval import evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_KEYS,
@@ -2088,14 +2088,21 @@ def test_loan_term_records_target_and_actual_separately() -> None:
     正算で作った月額を逆算へ戻すと、円単位の丸めのぶんだけ答がずれることがある。
     ずれた行は計算の照合には使えるが、**目標期間セルを被覆したことにはならない。**
 
-    実測(2026-08-25、この Task の時点): covered 74 / unmet 59 / excluded 17。
-    **この Task は挙動を変えない**——いまの構成のまま、何が起きているかを
-    記録するだけである。
+    実測(2026-08-25、Task 4 の時点): covered 74 / unmet 59 / excluded 17。
+    **その Task は挙動を変えず**、いまの構成のまま何が起きているかを記録した。
+
+    **2026-08-29(Task 5)に covered 126 / unmet 0 / excluded 24 へ動いた。**
+    決定的な構成探索(`_construct_loan_term_row`)が入り、**目標期間に乗る
+    `(元本, 月額)` を固定順で探すようになった**ため。**基準を緩めたのではなく、
+    ケースの作り方を変えた**——`unmet` が 0 になったのは、乗らなかった行を
+    除外へ逃がしたからではなく、**52 行が実際に目標へ乗るようになった**からである
+    (乗らない 7 行は `target_n = 1201` で、`MAX_TERM_MONTHS = 1200` である以上
+    答になり得ない)。
     """
     facts = corpus_calls.LOAN_TERM_FACTS
     assert len(facts) == 150, "要求セルと同じ数だけ記録が要る(構成できなかった行も含めて)"
     states = collections.Counter(fact.state for fact in facts)
-    assert states == {"covered": 74, "unmet": 59, "excluded": 17}
+    assert states == {"covered": 126, "excluded": 24}
     for fact in facts:
         if fact.state == "covered":
             assert fact.actual_n == fact.target_n
@@ -2108,7 +2115,9 @@ def test_loan_term_records_target_and_actual_separately() -> None:
 def test_loan_term_coverage_counts_only_the_matching_rows() -> None:
     """設計書 §15.1 の 8。**`actual_n == target_n` のときだけ目標期間セルを被覆する。**"""
     covered = corpus_calls.loan_term_covered_cells()
-    assert len(covered) == 74
+    # 74 → 126(2026-08-29、Task 5 の決定的構成探索)。**数え方は変えていない**
+    # ——`actual_n == target_n` の行だけを数えるのは同じで、その行が増えた。
+    assert len(covered) == 126
     facts = {(f.rate_level, str(f.target_n)): f for f in corpus_calls.LOAN_TERM_FACTS}
     for cell in covered:
         axes = dict(cell.axes)
@@ -2133,7 +2142,11 @@ def test_the_recorded_rows_are_the_ones_the_corpus_actually_has() -> None:
         if fact.state != "excluded"
     }
     assert built == in_corpus, "記録した行と、コーパスに在るペアワイズのケースが食い違う"
-    assert len(in_corpus) == 133
+    # 133 → 126(2026-08-29、Task 5)。**`unmet` が 0 になったので、
+    # 「除外でない行」＝「被覆した行」になった**——以前は 74 の被覆に 59 の
+    # 未達が混ざって 133 だった。**行が減ったのではなく、乗らない行が
+    # コーパスから出て理由付きの除外になった。**
+    assert len(in_corpus) == 126
 
 
 def test_the_recorded_answers_come_from_the_reference() -> None:
@@ -2158,4 +2171,91 @@ def test_the_recorded_answers_come_from_the_reference() -> None:
         else:
             assert fact.actual_n == int(result["n"])
         checked += 1
-    assert checked == 133, f"問い直した行が {checked} 行しかない"
+    # 133 → 126(2026-08-29、Task 5)。除外でない行がそのまま被覆した行になった。
+    assert checked == 126, f"問い直した行が {checked} 行しかない"
+
+
+def test_the_deterministic_search_moves_fifty_two_rows_into_coverage() -> None:
+    """設計書 §8.3。**乱数を使わない固定順の候補列で目標期間を狙う。**
+
+    空回しの実測(2026-08-29、コミット済みの生成器に対して): 150 行のうち
+    **126 行が構成でき、24 行が構成できない。** 決め手の内訳は
+    **月額 +0 円が 76 行・+1 円が 50 行**で、+0 の 76 は「もともと乗っていた
+    74 行」＋「**別の元本で乗るようになった 2 行**」である
+    ——**元本候補を最初の 1 つで打ち切らず、12 通り全部試すようになった**ため。
+
+    **`unmet` が 0 であることがこの Task の主張である。** 被覆数はそこから
+    導かれる量なので、両方を書く(片方だけだと、除外へ逃がして緑にできる)。
+    """
+    states = collections.Counter(fact.state for fact in corpus_calls.LOAN_TERM_FACTS)
+    assert states["unmet"] == 0, "構成できなかった行は、除外として理由を付ける"
+    assert states["covered"] == 126
+    assert states["excluded"] == 24  # 17(正算が本物のエラー) + 7(1201 は答になり得ない)
+    assert sum(states.values()) == 150
+
+
+def test_the_unreachable_term_is_excluded_as_not_applicable() -> None:
+    """`loan_ref.MAX_TERM_MONTHS` が 1200 なので、`loan_term` は 1201 を返せない。
+
+    **構成の失敗ではなく、その操作にその水準が無い**——理由コードを取り違えない。
+    `inverse_target_unconstructible` は「努力したが作れなかった」であり、
+    こちらは「**そもそも答の範囲に無い**」である。
+    """
+    exclusions = corpus_calls.loan_term_exclusions()
+    not_applicable = [
+        e for e in exclusions.values() if e.reason is corpus_coverage.Reason.NOT_APPLICABLE
+    ]
+    # **10 であって 7 ではない**(2026-08-29、計画の数を訂正した)。計画のテストは
+    # 7 を期待していたが、それは Task 4 の「探索が尽きた 7 行」を数えた値である。
+    # **`target_n = 1201` の行は 10 ある**——7 行は探索が尽き、3 行は正算が本物の
+    # エラーを返す。**後者も 1201 は答になり得ない**ので、理由は同じである。
+    # **根拠が症状に勝つ**: 入力を作れないことは結果であって、覆えない理由ではない。
+    assert len(not_applicable) == 10
+    assert all("target_n=1201" in e.cell.id for e in not_applicable)
+    assert all(str(loan_ref.MAX_TERM_MONTHS) in e.detail for e in not_applicable)
+    # 1201 のセルが**ほかの理由に紛れていない**ことも見る(取り違えの逆向き)。
+    assert not [
+        e
+        for e in exclusions.values()
+        if "target_n=1201" in e.cell.id and e.reason is not corpus_coverage.Reason.NOT_APPLICABLE
+    ]
+
+
+def test_the_unconstructible_rows_say_the_forward_calculation_failed() -> None:
+    """残り 17 は「正算が本物のエラー」である。**2 つの理由を混ぜない。**"""
+    exclusions = corpus_calls.loan_term_exclusions()
+    unconstructible = [
+        e
+        for e in exclusions.values()
+        if e.reason is corpus_coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE
+    ]
+    assert len(unconstructible) == 14
+    assert all("target_n=1201" not in e.cell.id for e in unconstructible)
+    assert len(exclusions) == 24
+    # **判断区分は動かない。** 両方 `reasonable` なので、10/14 と 7/17 のどちらに
+    # 分けても「安全」欄の数は同じである——**変わるのは理由の綴りだけ**である。
+    assert all(e.disposition is corpus_coverage.Disposition.REASONABLE for e in exclusions.values())
+
+
+def test_a_constructed_row_really_hits_its_target() -> None:
+    """設計書 §8.3 の「成功時は assert する」。
+
+    **構成不能を黙って別の期間のケースへ置き換えていないこと**を、参照実装に
+    聞いて確かめる。**探索が「見つけた」と言った行を、もう一度外から問い直す。**
+    """
+    checked = 0
+    for fact in corpus_calls.LOAN_TERM_FACTS:
+        if fact.state != "covered":
+            continue
+        result = loan_ref.compute(
+            "loan_term",
+            {
+                "principal": str(fact.principal),
+                "rate": fact.rate_level,
+                "payment": str(fact.payment),
+            },
+        )
+        assert "error" not in result, f"被覆と記録した行が逆算でエラーになる: {fact}"
+        assert int(result["n"]) == fact.target_n
+        checked += 1
+    assert checked == 126, f"問い直した行が {checked} 行しかない"
