@@ -2710,9 +2710,16 @@ currency-half-even-becomes-half-up 2 / rounded-zero-keeps-its-sign 2
 `bonus-half-year-becomes-monthly` 368 / `periods-for-binary-search` 1 /
 `compound-inverse-ignores-tax-flag` 272。
 
-**下限(`minRate`)には手を伸ばしていない。** スクリプトの差分は 0 行で、
-`minRate` の綴りはこの作業の diff に 1 度も現れない。9 つの金融変異はいずれも
-下限の 2 倍前後を保っている:
+**下限(`minRate`)には手を伸ばしていない。** 確かめ方は
+`git diff origin/main..HEAD -- heavy/scripts/` で、**差分は 0 行**である
+——**`minRate` を読む・書くコードは 1 行も動いていない。**
+
+> **「diff に `minRate` の綴りが現れない」では確かめないこと。**
+> 最初この節はそう書いていた。**書く前に測ったときは真で、書いた瞬間に偽に
+> なった**——その文自身が diff に入るからである。**測定と主張の順序が逆転して
+> いた。** 範囲を「触ったファイル」で言えば、その文を含めても真である。
+
+9 つの金融変異はいずれも下限の 2 倍前後を保っている:
 
 | 変異 | 実測率 | 下限 | 余裕 |
 |---|---:|---:|---:|
