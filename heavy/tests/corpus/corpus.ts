@@ -560,6 +560,17 @@ export function assertCoverageIsSound(name: string, shard: CallShard): void {
     if (!COVERAGE_DISPOSITIONS.has(exclusion.disposition)) {
       throw new Error(`${name}: 未知の判断区分 ${exclusion.disposition}`);
     }
+    // **`cell_id` の接頭辞と `scope` 欄を突き合わせる**(2026-08-29 の差分レビュー)。
+    // 下の数え上げは `scope` 欄だけを見るので、**接頭辞だけ別の対象に書き換えると
+    // 門は緑だった**。生成器は両方を同じ `Cell` から導くので生成の側では
+    // 食い違わないが、**この門は「人が golden を触ったとき」に効くもので、
+    // 生成器が正しいことは前提にできない**——前提にできるなら門が要らない。
+    if (!exclusion.cell_id.startsWith(`${exclusion.scope}/`)) {
+      throw new Error(
+        `${name}: cell_id の接頭辞が scope と食い違う` +
+          `(${exclusion.cell_id} / scope: ${exclusion.scope})`,
+      );
+    }
     if (seen.has(exclusion.cell_id)) {
       throw new Error(
         `${name}: 同じセルを 2 度除外している(重複): ${exclusion.cell_id}`,

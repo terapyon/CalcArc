@@ -1082,9 +1082,30 @@ test("同じセルを 2 度除外しているシャードを拒む", () => {
 
 test("どの対象にも属さない除外を拒む", () => {
   const shard = sound();
+  // **`cell_id` の接頭辞も一緒に動かす。** 片方だけ変えると先に発火するのは
+  // 接頭辞の検査のほうで、**この検査を一度も通らないまま緑になる**
+  // (2026-08-29、接頭辞の検査を足したときに実際にそうなった)。
   // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
-  shard.coverage!.excluded_cells[0]!.scope = "nowhere";
+  const exclusion = shard.coverage!.excluded_cells[0]!;
+  exclusion.scope = "nowhere";
+  exclusion.cell_id = "nowhere/a=1";
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
     /対象/,
+  );
+});
+
+test("cell_id の接頭辞が scope 欄と食い違うシャードを拒む", () => {
+  // **この門は「人が golden を触ったとき」に効く番人である。**
+  // 生成器は `cell_id` と `scope` を同じ `Cell` から導くので、生成の側では
+  // 食い違わない——**だが、生成器が正しいことを前提にできるなら門は要らない。**
+  //
+  // 実測(2026-08-29 の差分レビュー): `scope` 欄はそのままに `cell_id` の
+  // 接頭辞だけ別の対象に変えると、**門は緑だった**——数えているのが
+  // `scope` 欄だけだったため。
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.cell_id = "elsewhere/a=1";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /接頭辞/,
   );
 });
