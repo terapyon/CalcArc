@@ -315,7 +315,7 @@ export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
  * 即座に落ちる**(assertShardIsSound が守る)。
  */
 export const DISPLAY_SHARD_PATTERN =
-  /^(display|complex-display|entry|errors)-\d+\.json$/;
+  /^(display|complex-display|combinatorics-display|entry|errors)-\d+\.json$/;
 
 /**
  * 表示を主張するケース。`expect.main` は**表示文字列そのもの**。
@@ -491,6 +491,10 @@ export const COVERAGE_REQUIRED_SHARDS = new Set([
   "display-000.json",
   "complex-000.json",
   "complex-display-000.json",
+  // **`combinatorics` 領域の 2 枚目**（2026-08-30）。**組合せの誤入力を
+  // 体系的に確かめる場所が無かった**ので作った——`errors-000.json` の
+  // 5 件を写したのではなく、定義の破れ方を尽くした格子である。
+  "combinatorics-display-000.json",
 ]);
 
 export interface CoverageRequirement {

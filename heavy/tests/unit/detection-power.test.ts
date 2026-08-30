@@ -172,8 +172,8 @@ const ALL = ["a (values)", "b (values)"];
 /**
  * **判定に「居るべきシャード」を注入して呼ぶ。**
  *
- * 既定は実物の 18 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
- * テストは全部「17 枚足りない」で赤くなる。検査が引数に無いものに依存しない
+ * 既定は実物の 19 枚（`ALL_SHARDS`）なので、渡さずに呼ぶとこのファイルの
+ * テストは全部「18 枚足りない」で赤くなる。検査が引数に無いものに依存しない
  * ようにした結果で、ここで偽の 2 枚を渡すのが正しい使い方である。
  */
 const verdict = (
@@ -281,11 +281,15 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names eighteen shards, and names them once", () => {
+  it("names nineteen shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
-    expect(ALL_SHARDS).toHaveLength(18);
-    expect(new Set(ALL_SHARDS).size).toBe(18);
+    //
+    // **19 枚目は 2026-08-30**（`combinatorics-display-000.json`）。
+    // `ALL_SHARDS` の docstring が「正当に 19 枚目を足す日には、ここの更新が
+    // 意識的な 1 行になる」と書いていた——**そのとおりになった。**
+    expect(ALL_SHARDS).toHaveLength(19);
+    expect(new Set(ALL_SHARDS).size).toBe(19);
   });
 
   it("expects only shards that this run is supposed to load", () => {

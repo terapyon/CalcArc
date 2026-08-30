@@ -3248,7 +3248,7 @@ test("科学: 読めなかった走行を「全部覆った」と書かない", 
   expect(text).not.toContain("| 対象 | 必須セル |");
 });
 
-test("科学: 実物の報告書に、9 領域の表と 2 件の名指しが出る", () => {
+test("科学: 実物の報告書に、9 領域の表が出て、名指しは 0 件になる", () => {
   const finance = loadCallShards().find((s) => s.name === "finance-000.json");
   const shards = loadShards();
   const science = shards.find((s) => s.name === "angle-mode-000.json");
@@ -3266,13 +3266,25 @@ test("科学: 実物の報告書に、9 領域の表と 2 件の名指しが出�
     coverage ?? null,
   );
   expect(markdown).toContain("## 科学計算の試験空間 `scientific-v1`");
-  expect(markdown).toContain("- `combinatorics/path=domain`");
-  expect(markdown).toContain("- `combinatorics/path=overflow_near`");
-  // **`complex/zero_part=both_zero` は Task 13 で埋めた。**
-  // **消えたことを見る**——名指しの一覧が古いまま残ると、
-  // **報告書が「まだ空だ」と言い続ける。**
-  expect(markdown).not.toContain("- `complex/zero_part=both_zero`");
-  expect(markdown).not.toContain("- `complex/operation=power`");
+  // **2026-08-30、名指しは 0 件になった。** 段 C を通しながら 7 → 0 へ
+  // 減った——埋めたもの（`Rad × 逆三角` / `asin(1)` / `acos(1)` / `e^0` /
+  // `e^-5` / `(j5 - j5)` / 組合せの誤入力 13 件）、理由を貼ったもの
+  // （複素の冪は engine が拒む）、**射影の誤りだったもの**（`Overflow 近傍`）
+  // の 3 通りが混ざっている。
+  expect(markdown).toContain("**データに無いセルは 1 つも無い。**");
+  // **消えたことを見る**——名指しの一覧が古いまま残ると、**報告書が
+  // 「まだ空だ」と言い続ける。**
+  for (const gone of [
+    "- `combinatorics/path=domain`",
+    "- `combinatorics/path=overflow_near`",
+    "- `complex/zero_part=both_zero`",
+    "- `complex/operation=power`",
+  ]) {
+    expect(markdown).not.toContain(gone);
+  }
+  // **「測れない軸」はまだ 16 件ある。** 穴が 0 件であることと、
+  // **全部を測れていることは別**である——混ぜて読ませない。
+  expect(markdown).toContain("うち測れない軸");
   // **金融の表を壊していない。**
   expect(finance).toBeDefined();
   expect(markdown).toContain("## 期待値そのものは、生成器の出力なのか");

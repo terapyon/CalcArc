@@ -74530,16 +74530,7 @@
     }
   ],
   "coverage": {
-    "covered_outside_model": [
-      {
-        "cell_id": "combinatorics/path=domain",
-        "where": "errors-000.json\uff08C(5,6) / C(5,-1)\uff09"
-      },
-      {
-        "cell_id": "combinatorics/path=overflow_near",
-        "where": "errors-000.json\uff08\u5b9a\u7fa9\u57df\u3068\u6ea2\u308c\u306e\u30b7\u30e3\u30fc\u30c9\uff09"
-      }
-    ],
+    "covered_outside_model": [],
     "excluded_cells": [
       {
         "cell_id": "complex/operation=power",
@@ -74648,19 +74639,16 @@
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 4,
+        "covered_cells": 6,
         "excluded_cells": 0,
         "id": "combinatorics/function-path/one_way",
         "required_cells": 6,
         "scope": "combinatorics",
-        "status": "incomplete",
+        "status": "complete",
         "strength": "one_way",
-        "unmet_cells": 2,
+        "unmet_cells": 0,
         "unmet_from_unmeasured_axes": 0,
-        "unmet_real_cells": [
-          "combinatorics/path=domain",
-          "combinatorics/path=overflow_near"
-        ]
+        "unmet_real_cells": []
       },
       {
         "covered_cells": 2,

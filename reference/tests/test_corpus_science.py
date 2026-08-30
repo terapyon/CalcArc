@@ -16,6 +16,7 @@ from __future__ import annotations
 import collections
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -131,6 +132,7 @@ NINE_SHARDS = (
     "display-000.json",
     "complex-000.json",
     "complex-display-000.json",
+    "combinatorics-display-000.json",
 )
 
 
@@ -217,6 +219,9 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     Task 8  のあと 未達 33 = 測れない 30 + 本当の穴  3   （Rad の逆三角を埋めた）
     Task 11 の途中 未達 27 = 測れない 20 + 本当の穴  7   （帯を測れる側へ移した）
     Task 11 のあと 未達 23 = 測れない 20 + 本当の穴  3   （境界 4 件を埋めた）
+    Task 13 のあと 未達 18 = 測れない 16 + 本当の穴  2   （複素を両側から読んだ）
+    Task 14 のあと 未達 17 = 測れない 16 + 本当の穴  1   （近傍の射影を直した）
+    Task 14 ② のあと 未達 16 = 測れない 16 + 本当の穴 0   （誤入力の 1 枚を作った）
     ```
 
     **「測れない」が 10 件減って、そこから本当の穴が 4 件出てきた。**
@@ -228,10 +233,13 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     unobservable = {
         (scope, axis) for scope, axes in corpus_science.UNOBSERVABLE_AXES.items() for axis in axes
     }
+    # **除外したセルを未達に数えない**——`build_science_coverage` と同じ意味に
+    # そろえる。**ここだけ違う数え方をすると、テストと成果物が別のことを言う。**
+    excluded = set(corpus_science.science_exclusions())
     real, declared = [], []
     for requirement in corpus_science.SCIENCE_REQUIREMENTS:
         for cell in requirement.cells:
-            if cell in covered:
+            if cell in covered or cell in excluded:
                 continue
             names = {name for name, _ in cell.axes}
             target = (
@@ -243,11 +251,7 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     assert len(declared) == 16
     # **Task 13 で `complex` の 2 件が消えた**——`operation=power` は engine が
     # 拒むので理由付き除外、`zero_part=both_zero` は `(j5 - j5)` で埋めた。
-    assert sorted(real) == [
-        "combinatorics/path=domain",
-        "combinatorics/path=overflow_near",
-        "complex/operation=power",
-    ]
+    assert real == []
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +440,7 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     # **`complex` も満点ではないが、残りは理由付き除外である**（複素の冪）。
     assert by_scope["complex"]["unmet_real_cells"] == []
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert real == 2, "本当の穴は combinatorics の 2 件だけ"
+    assert real == 0, "本当の穴は 0 件"
     # **7 → 4。** `elementary/band`・`inverse_trig/band`・`complex/operation` を外した。
     assert len(payload["not_measured_axes"]) == 4
 
@@ -565,19 +569,18 @@ def test_the_real_holes_match_what_the_gate_reports() -> None:
     Task 11 の途中 7 件（帯を測れる側へ移し、隠れていた 4 件が出た）
     Task 11 のあと 3 件（境界 4 件を埋めた）
     Task 13 のあと 2 件（複素の冪は理由付き除外、both_zero は埋めた）
+    Task 14 のあと 1 件（**「Overflow 近傍」の射影が「した」を見ていた**）
+    Task 14 ② のあと **0 件**（組合せの誤入力の 1 枚を作った）
     ```
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
     by_scope = {r["scope"]: r for r in payload["requirements"]}
     # **Task 8 のあと、`inverse_trig` の本当の穴は 0 件**である。
     assert by_scope["inverse_trig"]["unmet_real_cells"] == []
-    assert set(by_scope["combinatorics"]["unmet_real_cells"]) == {
-        "combinatorics/path=domain",
-        "combinatorics/path=overflow_near",
-    }
+    assert by_scope["combinatorics"]["unmet_real_cells"] == []
     assert by_scope["complex"]["unmet_real_cells"] == []
     total = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert total == 2
+    assert total == 0, "本当の穴は 0 件。**この時点で `pnpm heavy` の意図した赤が解ける**"
 
 
 # ---------------------------------------------------------------------------
@@ -691,12 +694,53 @@ def test_what_the_outside_covers_is_recorded_but_not_counted() -> None:
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
     outside = {entry["cell_id"] for entry in payload["covered_outside_model"]}
-    assert outside == {
-        "combinatorics/path=domain",
-        "combinatorics/path=overflow_near",
-    }
+    # **2026-08-30 に空になった。** `overflow_near` は**内に在るのに射影が
+    # 読めていなかった**（`OVERFLOW_NEAR_FLOOR`）、`domain` は
+    # **`combinatorics-display-000.json` を作って内側で踏むようにした。**
+    # **「よそが覆っている」は、どちらも一時の札だった。**
+    assert outside == set()
     by_scope = {r["scope"]: r for r in payload["requirements"]}
     assert set(by_scope["combinatorics"]["unmet_real_cells"]) == outside
+
+
+def test_the_outside_citation_names_cases_that_exist() -> None:
+    """**★ 「よそが覆っている」の引用が、実在するケースを指していること。**
+
+    **上のテストでは捕まらない。** あれは「外が覆うと書いたセルが、内では
+    未達であること」を見る——**2 つが揃って間違っていれば通る。**
+    **2026-08-30 に実際にそうだった**: `combinatorics/path=overflow_near` の
+    引用は **「errors-000.json（定義域と溢れのシャード）」**という、
+    **ケースを 1 件も名指ししない文**で、**そして実はそのセルは内側で
+    9 件が踏んでいた**（射影が読めていなかっただけ）。
+    **「よそが覆っている」という札が、自分の見落としを隠していた。**
+
+    **だから引用に id を書かせ、その id が在ることを見る。**
+    """
+    known = {
+        case["id"]
+        for name in ("errors-000.json", "entry-000.json")
+        for case in json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]
+    }
+
+    def check(entries: list[dict], ids: set[str]) -> list[str]:
+        problems: list[str] = []
+        for entry in entries:
+            cited = set(re.findall(r"[a-z]+-\d{6}", entry["where"]))
+            if not cited:
+                problems.append(f"{entry['cell_id']}: 引用が id を 1 件も名指ししていない")
+            elif cited - ids:
+                problems.append(f"{entry['cell_id']}: 引用が指す id が無い: {sorted(cited - ids)}")
+        return problems
+
+    # **表が空でも、検査そのものは主張する。** 2026-08-30 に表は空になった
+    # （`path=domain` を内側で踏むようにしたため）——**空の表を素通りさせると、
+    # 次に 1 行足された日に誰も見ていないことになる。**
+    assert check([{"cell_id": "x", "where": "errors-000.json（定義域と溢れのシャード）"}], known)
+    assert check([{"cell_id": "x", "where": "errors-000.json の err-999999"}], known)
+    assert not check([{"cell_id": "x", "where": "errors-000.json の err-000019"}], known)
+
+    payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    assert not check(payload["covered_outside_model"], known)
 
 
 #: **測れないと宣言した「帯」の領域が、自分の因子表の関数へリテラル引数を

@@ -23,7 +23,14 @@ from collections.abc import Iterator
 import mpmath as mp
 import sympy as sp
 
-from calcarc_reference import corpus_complex, corpus_science, eng_ref, real_ref, sexagesimal_ref
+from calcarc_reference import (
+    corpus_combinatorics,
+    corpus_complex,
+    corpus_science,
+    eng_ref,
+    real_ref,
+    sexagesimal_ref,
+)
 from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
 from calcarc_reference.corpus_complex import (
     COMPLEX_BINARY_OPS,
@@ -2291,6 +2298,9 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # エラー種別。**乱択も `count` も持たない**——設計書 §5.1 の 9 経路を
     # 数学の定義域・値域から 1 つずつ書き写した固定の列挙(計画 Task 2)。
     yield "errors-000.json", build_errors_shard()
+    # **組合せの誤入力を体系的に確かめる 1 枚**（2026-08-30 のユーザー裁定）。
+    # **表を埋めるためではない**——理由は `corpus_combinatorics` の docstring。
+    yield "combinatorics-display-000.json", corpus_combinatorics.build_shard()
 
 
 #: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。
@@ -2306,6 +2316,9 @@ SCIENCE_SHARDS = (
     "display-000.json",
     "complex-000.json",
     "complex-display-000.json",
+    # **9 領域の 11 枚目。** `combinatorics` 領域は `complex` と同じく 2 枚組で、
+    # **値のシャードと表示（誤入力）のシャード**を持つ。
+    "combinatorics-display-000.json",
 )
 
 
@@ -2323,7 +2336,7 @@ def main() -> None:
     for name, payload in built:
         total_cases += len(payload["cases"])
         if name in SCIENCE_SHARDS:
-            # **10 枚すべてに同じブロックを載せる**（裁定 5）。任意の 1 枚を
+            # **11 枚すべてに同じブロックを載せる**（裁定 5）。任意の 1 枚を
             # 選ぶ恣意性を避け、**どれを開いても同じ会計が読める**。
             # `cases` の前に置く（金融と同じ並び）。
             payload = {

@@ -154,6 +154,35 @@ ASSOC_SHAPES = ("flat", "parenthesized")
 #: 組合せ関数の経路。**§14.2 が「正常/定義域/Overflow近傍」と名指ししている。**
 COMBINATORICS_PATHS = ("normal", "domain", "overflow_near")
 
+#: **「Overflow 近傍」の下限。**
+#:
+#: **【訂正 2026-08-30】射影が「近傍」を「した」に写していた。** 元は
+#: `error == "Overflow"` のときだけ `overflow_near` にしていた——**それは
+#: 溢れ**た**ケースであって、近傍ではない。§14.2 の語は「近傍」である。**
+#:
+#: **★ この訂正で、赤が 1 つ消えた。** `combinatorics/path=overflow_near` は
+#: 「データに 1 件も入力が無いセル」として門に名指しされていたが、**直した
+#: 射影では 9 件が踏んでいる。** **穴が埋まったのではなく、穴ではなかった。**
+#:
+#: **★ 切れ目は私が選んだ。** `f64` が表せる最大の指数が 308 であることは
+#: **形式が決めている**が、**「その 1 つ下（指数 307 以上）までを近傍とする」の
+#: 部分は私の選択である。** 候補と実測（2026-08-30）:
+#:
+#: ```
+#: >= 1e308        2 件    薄い。種を変えると 0 になりうる
+#: >= 1e307        9 件    ← これを採った
+#: >= f64max/10    6 件    上と同じ発想だが、切れ目が 1.7977e307 と読みにくい
+#: >= 1e300       38 件
+#: n >= 171     1,753 件   素朴な階乗が溢れる帯。**2,000 件中 1,753 件では、
+#:                         水準として何も区別しない**
+#: ```
+#:
+#: **この帯がこのシャードの存在理由である**——生成器の docstring が
+#: `ncr_does_not_overflow_on_the_way_to_an_answer_that_fits` を独立に検証すると
+#: 書き、engine のコメントが **「n = 1022〜1028 の中心二項係数は答が収まるのに
+#: 落ちる」**と名指ししている。実測の最大は `(1099 nPr 102) = 1.2037e308`。
+OVERFLOW_NEAR_FLOOR = 1e307
+
 #: 表示の種別。**§14.2 が「ENG/DMS」と名指ししている。**
 DISPLAY_KINDS = ("eng", "dms")
 
@@ -512,11 +541,20 @@ def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
 
     if functions & set(COMBINATORICS_FNS + COMBINATORICS_BINS):
         # **経路はエラーの種類で決まる**（§14.2「正常/定義域/Overflow近傍」）。
-        error = case.get("expect", {}).get("error")
+        expect = case.get("expect", {})
+        error = expect.get("error")
+        value = expect.get("re")
+        near = (
+            error == "Overflow"
+            # **溢れずに、上限のすぐ下に着いたケース**——`OVERFLOW_NEAR_FLOOR`。
+            or (isinstance(value, (int, float)) and abs(value) >= OVERFLOW_NEAR_FLOOR)
+        )
         put(
             "combinatorics",
             "path",
-            "normal" if error is None else ("overflow_near" if error == "Overflow" else "domain"),
+            "domain"
+            if (error is not None and error != "Overflow")
+            else ("overflow_near" if near else "normal"),
         )
 
     if "eng" in keys:
@@ -930,6 +968,12 @@ def unmet_is_only_from_unmeasured_axes(requirement_scope: str, cell: coverage.Ce
 #: 弾かれ、溢れは `_within_range` が False を返す。**`errors-000.json` が
 #: 別の作り方で持っている**（`C(5,6)` と `C(5,-1)`）。
 COVERED_OUTSIDE_MODEL: dict[str, str] = {
-    "combinatorics/path=domain": "errors-000.json（C(5,6) / C(5,-1)）",
-    "combinatorics/path=overflow_near": "errors-000.json（定義域と溢れのシャード）",
+    # **`combinatorics/path=domain` はここに在った（2026-08-30 に外した）。**
+    # `combinatorics-display-000.json` を作って、**9 領域の内側で踏むようにした**
+    # ——`errors-000.json` の 5 件を複製したのではなく、**定義の破れ方を
+    # 尽くした格子 13 件**である（`corpus_combinatorics` を見よ）。
+    # **`combinatorics/path=overflow_near` はここに在った（2026-08-30 に外した）。**
+    # 「errors-000.json（定義域と溢れのシャード）」と書いてあったが、**外に在る
+    # というより、内に在るのに射影が読めていなかった**——`OVERFLOW_NEAR_FLOOR`
+    # を見よ。**「よそが覆っている」という札が、自分の見落としを隠していた。**
 }

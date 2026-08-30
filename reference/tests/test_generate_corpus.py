@@ -1594,7 +1594,7 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     ——`_summary_line` を直接呼ぶだけでは、「`main` が総件数ではなく `count`
     を渡す」という元の壊れ方そのものを捕まえられない。
 
-    finance は下限合計まで、他の 14 枚は 5 件まで落として速く回す(分母の
+    finance は下限合計まで、残りは 5 件まで落として速く回す(分母の
     正しさは件数の大小によらない)。
     """
     monkeypatch.setattr(generate_corpus, "CORPUS", tmp_path)
@@ -1614,7 +1614,11 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     )
     # 18 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
     # 数字のままなので、枚数も見る。
-    assert len(written) == 18
+    # **19 枚目は 2026-08-30 に増えた**（`combinatorics-display-000.json`）。
+    # **数を持っているのはここだけではない**——`ALL_SHARDS`（heavy の検出力）と
+    # `SCIENCE_SHARDS`、`COVERAGE_REQUIRED_SHARDS`、`DISPLAY_SHARD_PATTERN` が
+    # それぞれ一覧を持つ。**足す日には全部が意識的な 1 行になる。**
+    assert len(written) == 19
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)

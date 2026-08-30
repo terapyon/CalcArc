@@ -2616,6 +2616,9 @@ export function errorCaseCount(entry: ShardSummary): number {
 /** 定義域外・極・ゼロ除算を**わざと**期待値として持つシャード。 */
 export const ERRORS_SHARD = "errors-000.json";
 
+/** 組合せの誤入力のシャード（2026-08-30）。**エラー経路は `errors` と同じ枠。** */
+export const COMBINATORICS_ERRORS_SHARD = "combinatorics-display-000.json";
+
 /** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
 export const ENTRY_SHARD = "entry-000.json";
 
@@ -2675,9 +2678,18 @@ export interface ErrorPaths {
  */
 function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
   const stem = shardStem(shardName);
-  if (stem === shardStem(ERRORS_SHARD)) {
+  if (
+    stem === shardStem(ERRORS_SHARD) ||
+    stem === shardStem(COMBINATORICS_ERRORS_SHARD)
+  ) {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
+    //
+    // **`combinatorics-display` も同じ枠である**（2026-08-30 に増えた）。
+    // **枠はエラー経路の軸**であって、シャードの軸ではない——組合せの
+    // 誤入力は科学計算の定義域エラーそのものである。**別の枠を作ると、
+    // 「同じ経路が 2 か所で数えられている」という読みにくさだけが増える。**
+    // どのシャードが数を出したかは、枠の `shards` に名前で残る。
     return "scientific-domain";
   }
   if (stem === shardStem(ENTRY_SHARD)) {
