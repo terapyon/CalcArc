@@ -124,29 +124,54 @@ INVERSE_TRIG_BANDS = ("inside", "boundary", "outside")
 #: `CANCELLATION_TOLERANCE_*`。**私が作った数ではない。**
 CANCELLATION_BANDS = ("mild", "near_tolerance", "severe")
 
-#: **相殺のシャードが `tolerance` として宣言している 2 つの数。**
+#: **表示の有効数字**（`docs/numerical-policy.md`「有効数字 10 桁」）。
+#: **2 か所が使う**——表示境界（`display_edges`）と、相殺の帯の切れ目
+#: （`CANCELLATION_FULL_LOSS`）。**同じ「10 桁」を指しているので 1 つにする。**
+DISPLAY_SIGNIFICANT_DIGITS = 10
+
+#: **帯の切れ目 2 つ。どちらも無次元の比である。**
 #:
-#: **写しである。** `corpus_science` は生成器を import しないので、
-#: ここに数を置く——**一致はテストが見る**
-#: （`test_the_cancellation_cuts_are_the_shard's_own_tolerance`）。
+#: **判定に使うのは `|a-b| / max(|a|,|b|)`**——**比**であり、単位を持たない。
+#: **だから切れ目も比でなければならない。**
 #:
-#: **この 2 つを切れ目にすると、実データはこう分かれる**（2026-08-30 実測）:
+#: **【訂正 2026-08-30・3 度目】ここには `abs 5e-10` を使っていた。次元が合わない。**
+#: シャードが宣言する `tolerance` の `abs` は、生成器のコメントが
+#: **「表示分解能」**と書いているとおり**結果の絶対誤差の単位を持つ数**である。
+#: **比と比べてよい数ではなかった。** `rel 1e-6` のほうは比なので整合する。
+#:
+#: **これは同じ日に 2 度目の「借りた数の量が違う」である**——1 度目は
+#: `numerical-policy.md` の `1e-6` が Loan の月額の話だった件
+#: （`CANCELLATION_BANDS` の訂正を見よ）。**「シャード自身が宣言している数だから
+#: 安全」ではない。何を測った数かを見る。**
+#:
+#: **下の切れ目は、どちらも比として意味が立つ:**
+#:
+#: - `CANCELLATION_FULL_LOSS` = `10 ** -DISPLAY_SIGNIFICANT_DIGITS` = `1e-10`。
+#:   **電卓が表示する有効数字は 10 桁**（`docs/numerical-policy.md`）なので、
+#:   **比がここを下回ると、表示できる桁が 1 つも残らない**
+#: - `CANCELLATION_TOLERANCE_REL` = `1e-6`。**シャードが宣言している相対許容**
+#:   ——**ここを下回ると、合否を決めているのは相対許容のほうになる**
+#:
+#: **実データ**（2026-08-30 実測、2,001 件）:
 #:
 #: ```
-#: r < 5e-10            severe            693 件
-#: 5e-10 <= r < 1e-6    near_tolerance  1,307 件
-#: r >= 1e-6            mild                0 件  ← 穴
+#: r < 1e-10            severe            571 件   表示できる桁が残らない
+#: 1e-10 <= r < 1e-6    near_tolerance  1,429 件   相対許容が合否を決める帯
+#: r >= 1e-6            mild                1 件   許容の中に収まる
 #: ```
 #:
-#: **`mild` が 0 件なのは発見である**——**このシャードは「桁が少ししか
-#: 落ちない引き算」を 1 件も作っていない。** 対照が無い。
-CANCELLATION_TOLERANCE_ABS = 5e-10
+#: **`mild` は最初 0 件だった**——**このシャードは「桁がほとんど落ちない
+#: 引き算」を 1 件も作っていなかった。対照が無かった。**
+CANCELLATION_FULL_LOSS = 10.0**-DISPLAY_SIGNIFICANT_DIGITS
+
+#: **シャードが `tolerance.rel` として宣言している数の写し。**
+#: **一致はテストが見る**（`test_the_cancellation_cuts_are_the_shards_own_tolerance`）。
 CANCELLATION_TOLERANCE_REL = 1e-6
 
 
 def cancellation_band(ratio: float) -> str:
     """**近さの比 → 帯。** 切れ目はシャードが宣言している許容そのもの。"""
-    if ratio < CANCELLATION_TOLERANCE_ABS:
+    if ratio < CANCELLATION_FULL_LOSS:
         return "severe"
     return "near_tolerance" if ratio < CANCELLATION_TOLERANCE_REL else "mild"
 
@@ -162,6 +187,13 @@ def cancellation_band(ratio: float) -> str:
 #: 見分けられない」であって「生成器が知らない」ではない。**
 #:
 #: **`stratum` に書く**（Task 18）。`associativity/shape` と同じ扱いである。
+#:
+#: **★ ただし、shape の突合は「2 つの読み経路」ではない。**
+#: **観測側も記録側も同じ `stratum` を読む**ので、**一致は定義上成り立つ。**
+#: **`stratum` が木と食い違っても、両側から同じ値が出るだけで assert は鳴らない**
+#: ——鳴るのは**帯のほう**（木とキーで別々に比を計算するので）である。
+#: **shape を守っているのは分布の pin**（`stratum` が壊れれば帯の合計が
+#: 2,001 でなくなる）で、**間接的である。**
 CANCELLATION_SHAPES = (
     "near_subtraction",
     "sqrt_difference",
@@ -446,10 +478,6 @@ def literal_arguments(keys: list[str]) -> list[tuple[str, float]]:
             continue
         found.append((KEY_TO_FUNCTION[key], value))
     return found
-
-
-#: **表示の有効数字**（`docs/numerical-policy.md`「有効数字 10 桁」）。
-DISPLAY_SIGNIFICANT_DIGITS = 10
 
 
 def display_edges(text: str) -> set[str]:

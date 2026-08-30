@@ -923,17 +923,41 @@ def test_the_cancellation_cuts_are_the_shards_own_tolerance() -> None:
     declared = json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))[
         "tolerance"
     ]
-    assert declared["abs"] == corpus_science.CANCELLATION_TOLERANCE_ABS
     assert declared["rel"] == corpus_science.CANCELLATION_TOLERANCE_REL
+    # **`abs` は借りない。** あれは生成器のコメントが「表示分解能」と書いている
+    # **絶対量**で、**無次元の比と比べてよい数ではない**（2026-08-30 のレビュー
+    # 指摘。**同じ日に 2 度目の「借りた数の量が違う」**）。
+    # **`severe` の切れ目は有効数字 10 桁から引く。**
+    from_digits = 10.0**-corpus_science.DISPLAY_SIGNIFICANT_DIGITS
+    assert from_digits == corpus_science.CANCELLATION_FULL_LOSS
+    assert declared["abs"] != corpus_science.CANCELLATION_FULL_LOSS
 
 
 def test_the_cancellation_bands_are_pinned_against_the_real_shard() -> None:
-    """**★ `cancellation` の切れ目の番人。**
+    """**再生成したあとの分布を固定する。**
 
-    **A-1（`OVERFLOW_NEAR_FLOOR`）と同じ形である**——切れ目は**それを動かした
-    ときに赤くなるもの**でしか守られない。**分布を実データで固定する。**
+    **★ A-1（`OVERFLOW_NEAR_FLOOR`）の番人とは形が違う。** そう書いていたが、
+    **変異で測ったら違った**（2026-08-30 のレビュー指摘 → 私も再現した）:
 
-    実測（2026-08-30）: `severe` 693 / `near_tolerance` 1,307 / `mild` 1。
+    | 動かしたもの | 落ちるもの |
+    |---|---|
+    | `CANCELLATION_TOLERANCE_REL` `1e-6 → 1e-5` | **写しの一致テストだけ**。このテストは落ちない |
+    | `CANCELLATION_FULL_LOSS` `→ 1e-12` | 写しの一致と、**記録と観測の突合** |
+
+    **このテストは、保存された `levels` を数える。** だから**切れ目を動かしても、
+    再生成するまで動かない。** **守っているのは「再生成後の分布」であって、
+    切れ目そのものではない。**
+
+    **切れ目を守っているのは 2 つ**——**写しの一致**（`rel` はシャードの宣言と、
+    `FULL_LOSS` は有効数字 10 桁と）と、**記録と観測の突合**（木とキーで別々に
+    比を計算するので、片方だけ動かせば鳴る）。
+
+    **ここが要るのは、その 2 つが見ない側**である——**分布が偏っても、
+    切れ目が同じなら上の 2 つは緑**であり、**帯が 1 つ空になったことは
+    ここでしか見えない。**
+
+    実測（2026-08-30、切れ目を次元の合うものへ引き直したあと）:
+    `severe` 571 / `near_tolerance` 1,429 / `mild` 1。
     **`mild` の 1 件は、乱択が 1 件も作らなかったので手で足したもの**
     （`_append_mild_cancellation`）——**この 1 が 0 になったら、対照が
     また消えている。**
@@ -943,7 +967,7 @@ def test_the_cancellation_bands_are_pinned_against_the_real_shard() -> None:
         levels = case.get("levels", {}).get("cancellation", {})
         for band in levels.get("band", []):
             counts[band] = counts.get(band, 0) + 1
-    assert counts == {"severe": 693, "near_tolerance": 1307, "mild": 1}
+    assert counts == {"severe": 571, "near_tolerance": 1429, "mild": 1}
 
 
 def test_every_cancellation_case_declares_its_shape() -> None:

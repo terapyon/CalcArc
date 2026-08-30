@@ -2297,7 +2297,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -2767,7 +2767,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -3246,7 +3246,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -3511,7 +3511,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -3984,7 +3984,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -4319,7 +4319,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -4642,7 +4642,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -5311,7 +5311,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -6819,7 +6819,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -7186,7 +7186,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -7772,7 +7772,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -8605,7 +8605,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -10592,7 +10592,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -12807,7 +12807,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -15007,7 +15007,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -15724,7 +15724,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -16197,7 +16197,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -16521,7 +16521,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -16666,7 +16666,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -16890,7 +16890,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -18235,7 +18235,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -20773,7 +20773,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -20874,7 +20874,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -21077,7 +21077,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -21959,7 +21959,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -24546,7 +24546,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -24655,7 +24655,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -25131,7 +25131,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -27806,7 +27806,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -28020,7 +28020,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -29020,7 +29020,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -31387,7 +31387,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -31810,7 +31810,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -32767,7 +32767,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -33141,7 +33141,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -33461,7 +33461,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -35475,7 +35475,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -36211,7 +36211,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -36796,7 +36796,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -39082,7 +39082,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "absorption"
@@ -39689,7 +39689,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -39952,7 +39952,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -40663,7 +40663,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -42177,7 +42177,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -42751,7 +42751,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -44651,7 +44651,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -45325,7 +45325,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "absorption"
@@ -45947,7 +45947,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -46254,7 +46254,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -47896,7 +47896,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -48096,7 +48096,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -48471,7 +48471,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -48743,7 +48743,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -49158,7 +49158,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -49699,7 +49699,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -51504,7 +51504,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -54748,7 +54748,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -54862,7 +54862,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -55023,7 +55023,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -59676,7 +59676,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -59897,7 +59897,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -61496,7 +61496,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -61605,7 +61605,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -63960,7 +63960,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -65021,7 +65021,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -65179,7 +65179,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -66191,7 +66191,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -66412,7 +66412,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -67191,7 +67191,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -67451,7 +67451,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -68549,7 +68549,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -68772,7 +68772,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -69140,7 +69140,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -70249,7 +70249,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -70462,7 +70462,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -70820,7 +70820,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -71192,7 +71192,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -74362,7 +74362,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -74474,7 +74474,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -75100,7 +75100,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -75948,7 +75948,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -76804,7 +76804,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -77640,7 +77640,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -77844,7 +77844,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -78266,7 +78266,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -78424,7 +78424,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -79258,7 +79258,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -79422,7 +79422,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -79839,7 +79839,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -80000,7 +80000,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -80164,7 +80164,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -80842,7 +80842,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -80899,7 +80899,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -82239,7 +82239,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -82351,7 +82351,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -83382,7 +83382,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -83702,7 +83702,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -85066,7 +85066,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -85549,7 +85549,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -85814,7 +85814,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -86302,7 +86302,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -86469,7 +86469,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -86853,7 +86853,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -87277,7 +87277,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -89958,7 +89958,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -90284,7 +90284,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -91090,7 +91090,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -91461,7 +91461,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -93123,7 +93123,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -93808,7 +93808,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -95078,7 +95078,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -95916,7 +95916,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -95973,7 +95973,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -96335,7 +96335,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -97025,7 +97025,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -97433,7 +97433,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -98873,7 +98873,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -100158,7 +100158,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -103171,7 +103171,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -104236,7 +104236,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -104293,7 +104293,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"
@@ -104619,7 +104619,7 @@
         },
         "cancellation": {
           "band": [
-            "severe"
+            "near_tolerance"
           ],
           "shape": [
             "near_subtraction"

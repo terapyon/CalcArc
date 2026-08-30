@@ -122,6 +122,10 @@ function git(args, input) {
  *
  * **これは「git が変更に気づいているファイル」である。** 除くために使う
  * ——**この道具が見たいのは、git が気づいていない変化のほう**だからである。
+ *
+ * **編集したものだけではない**——**未追跡のファイルもここに入る。**
+ * どちらも「index と比べる相手が無い」ので扱いは同じだが、
+ * **印字を「編集中」と書くと、未追跡の分を数え落としたように読める。**
  */
 export function editedPaths(porcelain) {
   const found = new Set();
@@ -185,7 +189,12 @@ function report(when) {
   const { checked, mismatches, skipped } = verifyWorktree();
   // **除いた数も印字する。** 黙って除くと、**「全部見た」と読まれる**
   // ——道具は自分が何を見ていないかを言わない、というのが今日の教訓である。
-  const note = skipped === 0 ? "" : `（編集中の ${skipped} 件は対象外）`;
+  // **「編集中」は正確でない。** `git status --porcelain` は**未追跡の
+  // ファイルも挙げる**ので、この数には**まだ追跡していないもの**も入る
+  // （2026-08-30 のレビューが symlink 2 本で実測）。**照合の対象外である
+  // ことに変わりはない**ので、**印字の語を実態に合わせる。**
+  const note =
+    skipped === 0 ? "" : `（git が変更を把握している ${skipped} 件は対象外）`;
   if (mismatches.length === 0) {
     console.log(`[${when}] ${checked} / ${checked} 一致${note}`);
     return true;
