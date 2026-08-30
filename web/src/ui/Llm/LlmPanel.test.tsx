@@ -214,6 +214,15 @@ async function type(digits: string) {
 }
 
 const echo = () => screen.getByTestId("display-echo");
+/**
+ * **打っている項目の行だけ**を取る。`display-echo` 全体を見ると、
+ * **「空になった」を否定形でしか書けない**——`not.toHaveTextContent("文脈長 4096")`
+ * は、AC が 4096 を**何にでも**変えれば緑になる（**1 桁消すだけの変異が通った**。
+ * 2026-08-30 のレビューが実証）。**この行だけなら正の形で書ける。**
+ */
+const activeEntry = () => screen.getByTestId("display-entry-active");
+/** 値が空のとき、`Readout` はラベルだけを出す（`text()` の規則）。 */
+const EMPTY_CONTEXT = /^文脈長$/;
 const main = () => screen.getByTestId("display-main");
 
 /** 基準例(spec §5): 27B / INT4 / 62 層 / KV 16 ヘッド / 128 次元 / 8K 文脈 / KV FP16。 */
@@ -333,9 +342,11 @@ describe("LlmPanel（電卓）", () => {
   /**
    * **AC の 3 つの判断を固定する**（0.3.x triage C2）。
    *
-   * **spec はこの 3 つについて沈黙している**——`2026-08-19-scale-llm-transfer-design.md`
-   * が `AC` に触れるのは盤面のセル数の話 1 か所だけで、**押したときに何が起きるかは
-   * 書いていない**。つまり仕様は**実装とそのコメント**にしか無く、**検査は 0 件**だった。
+   * **spec は LLM 盤面の `AC` の挙動について沈黙している**——
+   * `2026-08-19-scale-llm-transfer-design.md` に `AC` は 2 行出るが、
+   * **`:51` は DataScalePanel の `switch` の枝一覧、`:75` は盤面のセル数の話**で、
+   * **この盤面で押したときに何が起きるかは書いていない**。つまり仕様は
+   * **実装とそのコメント**にしか無く、**検査は 0 件**だった。
    *
    * **だから「正しさ」ではなく「いまこう決まっている」を留める。** 変えたくなった日に
    * ここが赤くなり、**裁定が要ることに気づける**のが役目である。
@@ -344,41 +355,46 @@ describe("LlmPanel（電卓）", () => {
     it("選択のみの項目は、既定の精度へ戻る（空にはならない）", async () => {
       await renderPanel();
       await press([FIELD_NAMES.weight, "INT4"]);
-      expect(echo()).toHaveTextContent("重みの精度 INT4");
+      expect(activeEntry()).toHaveTextContent(/^重みの精度 INT4$/);
 
       await press(["この項目を消去"]);
       // **既定値は「候補を選んだのと同じ状態」であって、AC が守る不変ではない**
       // ——`LlmPanel.tsx` のコメントが言っているとおり、空ではなく既定へ戻る。
-      expect(echo()).toHaveTextContent("重みの精度 FP16");
+      expect(activeEntry()).toHaveTextContent(/^重みの精度 FP16$/);
     });
 
     it("候補面を出している項目は、空になる（既定へは戻らない）", async () => {
       await renderPanel();
       await press([FIELD_NAMES.context]);
-      expect(echo()).toHaveTextContent("文脈長 4096");
+      expect(activeEntry()).toHaveTextContent(/^文脈長 4096$/);
 
       await press(["この項目を消去"]);
       // **選択のみの項目と違う扱いである。** 候補面を出していても、
       // 中身は打てる値なので空に戻る。
-      expect(echo()).not.toHaveTextContent("文脈長 4096");
+      expect(activeEntry()).toHaveTextContent(EMPTY_CONTEXT);
     });
 
-    it("「手入力」は値を捨て、「候補から選ぶ」は値を保つ", async () => {
+    it("「手入力」へ移ると、それまでの値を捨てる", async () => {
       await renderPanel();
       await press([FIELD_NAMES.context]);
-      expect(echo()).toHaveTextContent("文脈長 4096");
+      expect(activeEntry()).toHaveTextContent(/^文脈長 4096$/);
 
       // **手入力へ移るときは空から打ち始める**（実装のコメント）。
       await press(["手入力"]);
-      expect(echo()).not.toHaveTextContent("文脈長 4096");
+      expect(activeEntry()).toHaveTextContent(EMPTY_CONTEXT);
+    });
 
+    it("「候補から選ぶ」で戻っても、打った値は残る", async () => {
+      // **上の 1 本と対である。** 「候補を選び直したいだけ」なので、
+      // 戻る側は消さない——**この非対称が C2 の 3 件目**。
+      // **2 本に分けてあるのは、どちらが壊れたかを失敗文だけで読めるようにするため。**
+      await renderPanel();
+      await press([FIELD_NAMES.context, "手入力"]);
       await type("2048");
-      expect(echo()).toHaveTextContent("文脈長 2048");
+      expect(activeEntry()).toHaveTextContent(/^文脈長 2048$/);
 
-      // **戻る側は消さない。** 「候補を選び直したいだけ」なので、
-      // 打った値はそのまま残る——**この非対称が C2 の 3 件目である。**
       await press(["候補から選ぶ"]);
-      expect(echo()).toHaveTextContent("文脈長 2048");
+      expect(activeEntry()).toHaveTextContent(/^文脈長 2048$/);
     });
   });
 
