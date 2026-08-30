@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error — `.mjs` に型は無い。他の tools のテストと同じ扱い。
-import { compareShas, parseIndexLine } from "../verified-run.mjs";
+import { compareShas, editedPaths, parseIndexLine } from "../verified-run.mjs";
 
 describe("index の 1 行を読む", () => {
   it("mode と stage を捨てて sha と path を取る", () => {
-    const line = "100644 6073ef2bfd5a7a5a1e9e0e6d5d5e5e5e5e5e5e5e 0\tcorpus/generated/complex-000.json";
+    const line =
+      "100644 6073ef2bfd5a7a5a1e9e0e6d5d5e5e5e5e5e5e5e 0\tcorpus/generated/complex-000.json";
     expect(parseIndexLine(line)).toEqual({
       sha: "6073ef2bfd5a7a5a1e9e0e6d5d5e5e5e5e5e5e5e",
       path: "corpus/generated/complex-000.json",
@@ -53,5 +53,26 @@ describe("index とディスクの sha を突き合わせる", () => {
     // **黙って `zip` すると、1 件ずれた瞬間に全件が「不一致」になるか、
     // あるいは短いほうで打ち切って「一致」と言う。** どちらも嘘である。
     expect(() => compareShas(entries, ["aaa", "bbb"])).toThrow(/数が合わない/);
+  });
+});
+
+describe("編集中のファイルを除く", () => {
+  it("porcelain の 3 文字目以降を path として拾う", () => {
+    const found = editedPaths(
+      " M web/src/a.ts\n?? tools/new.mjs\nA  docs/b.md",
+    );
+    expect(found).toEqual(
+      new Set(["web/src/a.ts", "tools/new.mjs", "docs/b.md"]),
+    );
+  });
+
+  it("改名は旧と新の両方を除く", () => {
+    expect(editedPaths("R  old/a.ts -> new/a.ts")).toEqual(
+      new Set(["old/a.ts", "new/a.ts"]),
+    );
+  });
+
+  it("空行と短すぎる行を無視する", () => {
+    expect(editedPaths("\n \n")).toEqual(new Set());
   });
 });

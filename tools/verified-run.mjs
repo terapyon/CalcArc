@@ -69,7 +69,11 @@ export function compareShas(entries, hashed) {
   const mismatches = [];
   for (let i = 0; i < entries.length; i += 1) {
     if (entries[i].sha !== hashed[i]) {
-      mismatches.push({ path: entries[i].path, index: entries[i].sha, disk: hashed[i] });
+      mismatches.push({
+        path: entries[i].path,
+        index: entries[i].sha,
+        disk: hashed[i],
+      });
     }
   }
   return { checked: entries.length, mismatches };
@@ -87,22 +91,64 @@ function git(args, input) {
   return run.stdout;
 }
 
-/** 追跡下の全ファイルを照合する。**ディスクから読み直して sha を取り直す。** */
+/**
+ * `git status --porcelain` が挙げた path の集合。
+ *
+ * **これは「git が変更に気づいているファイル」である。** 除くために使う
+ * ——**この道具が見たいのは、git が気づいていない変化のほう**だからである。
+ */
+export function editedPaths(porcelain) {
+  const found = new Set();
+  for (const line of porcelain.split("\n")) {
+    if (line.length < 4) {
+      continue;
+    }
+    const path = line.slice(3);
+    // 改名は `旧 -> 新`。両方を除く。
+    for (const one of path.split(" -> ")) {
+      found.add(one.replace(/^"|"$/g, ""));
+    }
+  }
+  return found;
+}
+
+/**
+ * 追跡下のファイルを照合する。**ディスクから読み直して sha を取り直す。**
+ *
+ * **★ 編集中のファイルは除く。** そうしないと、**この道具は普通の作業を
+ * 全部止めてしまい、使われずに迂回される**（2026-08-30、置いた直後に
+ * 自分の編集で止まった）。
+ *
+ * **除いて何が残るか**——**「git が変更なしと言っているのに、中身が違う」**
+ * である。**それがこの作業台で 3 回起きた形そのもの**であり、
+ * **`git status` の死角そのもの**である（stat が一致すると中身を読まない）。
+ *
+ * **★ 埋まらない穴を書いておく。** **編集中のファイルが同時に化けたら、
+ * ここは見つけない。** 走行の入力が生成物（`corpus/generated/` など）で、
+ * それを直前に作り直していれば、**その走行はこの検査の外にある。**
+ * **その場合は、作り直してからコミットし、きれいな木で走らせること。**
+ */
 export function verifyWorktree() {
+  const edited = editedPaths(git(["status", "--porcelain"]));
   const entries = git(["ls-files", "-s"])
     .split("\n")
     .map(parseIndexLine)
     .filter((entry) => entry !== null)
     // **削除されたファイルは飛ばす。** `git status` の仕事であって、
     // ここが見たいのは「在るファイルの中身が化けていないか」である。
-    .filter((entry) => existsOnDisk(entry.path));
+    .filter((entry) => existsOnDisk(entry.path))
+    .filter((entry) => !edited.has(entry.path));
   if (entries.length === 0) {
     throw new Error("追跡下のファイルが 1 件も無い。照合が空振りしている");
   }
-  const hashed = git(["hash-object", "--stdin-paths"], `${entries.map((e) => e.path).join("\n")}\n`)
+  const hashed = git(
+    ["hash-object", "--stdin-paths"],
+    `${entries.map((e) => e.path).join("\n")}\n`,
+  )
     .split("\n")
     .filter((line) => line !== "");
-  return compareShas(entries, hashed);
+  const found = compareShas(entries, hashed);
+  return { ...found, skipped: edited.size };
 }
 
 function existsOnDisk(path) {
@@ -110,17 +156,24 @@ function existsOnDisk(path) {
 }
 
 function report(when) {
-  const { checked, mismatches } = verifyWorktree();
+  const { checked, mismatches, skipped } = verifyWorktree();
+  // **除いた数も印字する。** 黙って除くと、**「全部見た」と読まれる**
+  // ——道具は自分が何を見ていないかを言わない、というのが今日の教訓である。
+  const note = skipped === 0 ? "" : `（編集中の ${skipped} 件は対象外）`;
   if (mismatches.length === 0) {
-    console.log(`[${when}] ${checked} / ${checked} 一致`);
+    console.log(`[${when}] ${checked} / ${checked} 一致${note}`);
     return true;
   }
-  console.error(`[${when}] ${checked - mismatches.length} / ${checked} 一致。**${mismatches.length} 件が index と違う**:`);
+  console.error(
+    `[${when}] ${checked - mismatches.length} / ${checked} 一致。**${mismatches.length} 件が index と違う**:`,
+  );
   for (const one of mismatches) {
     console.error(`  ${one.path}  index ${one.index}  ディスク ${one.disk}`);
   }
   console.error("  復元は `rm <path> && git checkout HEAD -- <path>`。");
-  console.error("  **`git checkout --` だけでは戻らない**——git が「変更なし」と思っている。");
+  console.error(
+    "  **`git checkout --` だけでは戻らない**——git が「変更なし」と思っている。",
+  );
   return false;
 }
 
@@ -132,13 +185,17 @@ function main() {
     process.exit(report("照合") ? 0 : 1);
   }
   if (!report("走行前")) {
-    console.error("**走行しない。** 壊れた入力の上で出た緑は、緑の意味を持たない。");
+    console.error(
+      "**走行しない。** 壊れた入力の上で出た緑は、緑の意味を持たない。",
+    );
     process.exit(1);
   }
   const run = spawnSync(command[0], command.slice(1), { stdio: "inherit" });
   const after = report("走行後");
   if (!after) {
-    console.error("**走行中に中身が変わった。この走行の結果は、緑でも赤でも信用できない。**");
+    console.error(
+      "**走行中に中身が変わった。この走行の結果は、緑でも赤でも信用できない。**",
+    );
     process.exit(1);
   }
   process.exit(run.status ?? 1);
