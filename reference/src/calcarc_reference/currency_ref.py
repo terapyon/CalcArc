@@ -79,8 +79,6 @@ MINOR_UNITS: dict[str, int] = {
 _LITERAL = re.compile(r"\A-?\d+(\.\d+)?\Z", re.ASCII)
 
 
-
-
 def literal_fits(text: str) -> bool:
     """10 進リテラルが `i128` の分子・分母に収まるか（公開契約）。
 
