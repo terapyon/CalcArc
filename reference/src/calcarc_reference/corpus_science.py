@@ -599,6 +599,10 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
         ("complex", "operation"): "演算種別は式の構造で決まる",
         ("display", "edge"): "表示境界はリテラルの値で決まる",
     }
+    payload["covered_outside_model"] = [
+        {"cell_id": cell_id, "where": where}
+        for cell_id, where in sorted(COVERED_OUTSIDE_MODEL.items())
+    ]
     payload["not_measured_axes"] = [
         {"scope": scope, "axis": axis, "why": reasons[(scope, axis)]}
         for scope, axes in sorted(UNOBSERVABLE_AXES.items())
@@ -615,3 +619,20 @@ def unmet_is_only_from_unmeasured_axes(requirement_scope: str, cell: coverage.Ce
     """
     unmeasured = {(scope, axis) for scope, axes in UNOBSERVABLE_AXES.items() for axis in axes}
     return any((requirement_scope, name) in unmeasured for name, _ in cell.axes)
+
+
+#: **9 領域の外が踏んでいるセル**（裁定 2 の B の帰結）。
+#:
+#: **これは除外ではない。** B は「9 領域を横断して数え、外は数えない」と決めた
+#: ので、**外が踏んでいることを理由に除外すると、裏口から C を採ることになる。**
+#: **未達のまま残し、「外の 1 枚が踏んでいる」を別欄で見せる**——
+#: 埋めるかどうかの判断材料であって、埋まったことにはしない。
+#:
+#: 実測（2026-08-30）: `combinatorics` の 2 経路は、**この領域の生成器が設計上
+#: 作らない**——`nCr` の定義域外は `OutOfShard: nCr with r greater than n` で
+#: 弾かれ、溢れは `_within_range` が False を返す。**`errors-000.json` が
+#: 別の作り方で持っている**（`C(5,6)` と `C(5,-1)`）。
+COVERED_OUTSIDE_MODEL: dict[str, str] = {
+    "combinatorics/path=domain": "errors-000.json（C(5,6) / C(5,-1)）",
+    "combinatorics/path=overflow_near": "errors-000.json（定義域と溢れのシャード）",
+}

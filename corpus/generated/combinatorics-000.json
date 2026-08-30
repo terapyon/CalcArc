@@ -71504,6 +71504,16 @@
     }
   ],
   "coverage": {
+    "covered_outside_model": [
+      {
+        "cell_id": "combinatorics/path=domain",
+        "where": "errors-000.json\uff08C(5,6) / C(5,-1)\uff09"
+      },
+      {
+        "cell_id": "combinatorics/path=overflow_near",
+        "where": "errors-000.json\uff08\u5b9a\u7fa9\u57df\u3068\u6ea2\u308c\u306e\u30b7\u30e3\u30fc\u30c9\uff09"
+      }
+    ],
     "excluded_cells": [],
     "generation_rejections": {},
     "model": "scientific-v1",

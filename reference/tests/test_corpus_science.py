@@ -527,3 +527,107 @@ def test_the_real_holes_match_what_the_gate_reports() -> None:
     assert set(by_scope["complex"]["unmet_real_cells"]) == {"complex/zero_part=both_zero"}
     total = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
     assert total == 7
+
+
+# ---------------------------------------------------------------------------
+# 未達に理由を貼らない（Task 7）
+# ---------------------------------------------------------------------------
+
+#: **作れることを、毎回その場で確かめるセル**（Task 7 の実測、2026-08-30）。
+#: 「作れない」と書けるのは**作ろうとして作れなかったとき**だけである
+#: ——第 1 段階の F1（「元本 12 通りを尽くしても」と書いて探索が 1 度も
+#: 走っていなかった）が、この形だった。
+CONSTRUCTIBLE_HOLES = {
+    "inverse_trig/function=asin,angle_mode=Rad",
+    "inverse_trig/function=acos,angle_mode=Rad",
+    "inverse_trig/function=atan,angle_mode=Rad",
+    "inverse_trig/angle_mode=Rad",
+    "complex/zero_part=both_zero",
+}
+
+
+def _probe_cases() -> list[dict]:
+    """**作れることを示す探針。** 主張ではなく、実際に組んだケースを返す。"""
+    probes: list[dict] = [
+        {
+            "id": f"probe-{fn}",
+            "kind": "value",
+            "mode": "Rad",
+            "keys": ["angle_toggle", "0", "dot", "5", fn, "eq"],
+            "expr": f"{fn}(0.5) を Rad で",
+            "expect": {"re": 0.0, "im": 0.0},
+        }
+        for fn in ("asin", "acos", "atan")
+    ]
+    probes.append(
+        {
+            "id": "probe-both-zero",
+            "kind": "value",
+            "mode": "Deg",
+            "keys": [
+                "lparen",
+                "1",
+                "add",
+                "j",
+                "1",
+                "rparen",
+                "sub",
+                "lparen",
+                "1",
+                "add",
+                "j",
+                "1",
+                "rparen",
+                "eq",
+            ],
+            "expr": "(1+j1)-(1+j1)",
+            "expect": {"re": 0.0, "im": 0.0},
+        }
+    )
+    return probes
+
+
+def test_the_holes_we_could_fill_are_actually_reachable() -> None:
+    """**「作れるのに作っていない」を、主張ではなく測る。**
+
+    探針を実際に組み、**そのケースが目当てのセルに当たる**ことを見る。
+    **当たらなくなったら、この一覧のほうが嘘になっている。**
+    """
+    reached: set[str] = set()
+    for case in _probe_cases():
+        reached |= {cell.id for cell in corpus_science.observed_cells(case)}
+    missing = sorted(CONSTRUCTIBLE_HOLES - reached)
+    assert not missing, f"作れると書いてあるのに、探針が当たらないセル: {missing}"
+
+
+def test_a_reachable_hole_is_never_given_a_reason() -> None:
+    """**★ この段の門。** 作れるセルに理由を貼ってはいけない。
+
+    **`Rad × 逆三角` は「構成できない」のではない——作れるのに作っていない。**
+    理由を貼れば表は綺麗になるが、**嘘になる**（第 1 段階で 2 回踏んだ形）。
+
+    **いまの除外は 0 件である**——それがこの Task の正しい成果物である。
+    **空を「仕事をしていない」と読まない**: **空であることを測って示した。**
+    """
+    payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    excluded = {entry["cell_id"] for entry in payload["excluded_cells"]}
+    wrongly = sorted(excluded & CONSTRUCTIBLE_HOLES)
+    assert not wrongly, f"作れるセルに理由を貼っている: {wrongly}——貼るのではなく、作ること"
+    assert excluded == set(), "この段では理由を 1 つも貼らない"
+
+
+def test_what_the_outside_covers_is_recorded_but_not_counted() -> None:
+    """**「未達だが、9 領域の外の 1 枚が踏んでいる」が読み取れること。**
+
+    **除外ではない**——裁定 2 の B は「外は数えない」と決めたので、
+    **外が踏んでいることを理由に除外すると、裏口から C を採ることになる。**
+    **未達のまま残し、判断材料として別欄で見せる。**
+    """
+    payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    outside = {entry["cell_id"] for entry in payload["covered_outside_model"]}
+    assert outside == {
+        "combinatorics/path=domain",
+        "combinatorics/path=overflow_near",
+    }
+    by_scope = {r["scope"]: r for r in payload["requirements"]}
+    assert set(by_scope["combinatorics"]["unmet_real_cells"]) == outside
