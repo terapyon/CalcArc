@@ -123,12 +123,16 @@ pub fn core_version() -> String {
 /// 例外は投げない。エラーは戻り値の一部である。
 #[wasm_bindgen]
 pub fn data_scale(count: &str, dimensions: &str, dtype: &str) -> JsValue {
-    let outcome = data_scale::parse_count(count)
-        .and_then(|c| Ok((c, data_scale::parse_count(dimensions)?)))
-        .and_then(|(c, d)| {
-            let t = DataType::from_token(dtype).ok_or(calcarc_core::CalcError::SyntaxError)?;
-            data_scale::size_in_bytes(c, d, t)
-        });
+    // **引数を読む段は IIFE で書く**(この境界の 14 関数すべて)。`.and_then` の
+    // 連鎖でも書けるが、**引数の数に比例して苦しくなる**——2 つ目を足すだけで
+    // タプルを作るための `Ok((c, ...?))` が要り、`llm_memory` の 7 引数なら
+    // 6 段になる。IIFE は `let x = f(a)?;` を並べるだけなので**比例しない**。
+    let outcome: CalcResult<_> = (|| {
+        let count = data_scale::parse_count(count)?;
+        let dimensions = data_scale::parse_count(dimensions)?;
+        let dtype = DataType::from_token(dtype).ok_or(CalcError::SyntaxError)?;
+        data_scale::size_in_bytes(count, dimensions, dtype)
+    })();
     let result: Outcome<ByteLines> = outcome.map(ByteLines::of).into();
     to_js_value(&result)
 }
