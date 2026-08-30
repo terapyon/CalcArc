@@ -118,6 +118,26 @@ INVERSE_TRIG_BANDS = ("inside", "boundary", "outside")
 CANCELLATION_BANDS = ("mild", "near_tolerance", "severe")
 
 #: 相殺の形。**生成器が名指ししている 4 つ**（`CANCELLATION_SHAPES`）。
+#:
+#: **【測定 2026-08-30】骨格はキー列から読める。しかしそれでは足りない。**
+#: 4 つの木の形は互いに違う——`Bin(-, lit, lit)` / `Bin(-, sqrt, sqrt)` /
+#: `Un(ln, lit)` / `Bin(+, lit, lit)`。**だが 9 領域を横断して数えると、
+#: 同じ骨格が相殺以外の領域にもある:**
+#:
+#: ```
+#: ln(リテラル) : cancellation 365 / elementary   233
+#: lit - lit    : cancellation 527 / inverse-trig  66
+#: lit + lit    : cancellation 573 / inverse-trig  73
+#: sqrt - sqrt  : cancellation 535 / （他は 0）
+#: ```
+#:
+#: **4 つを分けているのは骨格ではなく「近さ」である**——生成器の docstring が
+#: 「近接する 2 数」「a と b が近い」「1 に近いところ」「大小の吸収」と書いている。
+#: **そして近さの切れ目を、仕様はどこにも決めていない。**
+#:
+#: **★ 生成器のパラメータ（`base`/`frac`/`tail` の範囲）を観測側へ写せば分けられる。
+#: 採らなかった。** 写した時点で、**観測は生成器の設定の複製**になる——
+#: 裁定 1 が「2 つの読み経路」を求めた意味が薄れる。**測れないまま残す。**
 CANCELLATION_SHAPES = (
     "near_subtraction",
     "sqrt_difference",
@@ -771,7 +791,12 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
             "強度の切れ目を仕様が決めていない。生成器の CANCELLATION_TOLERANCE から"
             "引ける見込みだが、相殺の両辺は式なのでリテラルからは読めない"
         ),
-        ("cancellation", "shape"): "相殺の形は生成器の意図で決まる",
+        ("cancellation", "shape"): (
+            "形の骨格はキー列から読めるが、4 つを分けているのは「近さ」であり、"
+            "近さの切れ目を仕様が決めていない。骨格だけで分けると取り違える"
+            "（実測: ln(リテラル) は elementary に 233 件、lit±lit は"
+            " inverse-trig に 139 件ある）"
+        ),
         ("precedence", "grammar_class"): "文法クラスは式の構造で決まる",
         ("complex", "operation"): "演算種別は式の構造で決まる",
         ("display", "edge"): "表示境界はリテラルの値で決まる",
