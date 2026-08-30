@@ -23,7 +23,7 @@ from collections.abc import Iterator
 import mpmath as mp
 import sympy as sp
 
-from calcarc_reference import corpus_complex, eng_ref, real_ref, sexagesimal_ref
+from calcarc_reference import corpus_complex, corpus_science, eng_ref, real_ref, sexagesimal_ref
 from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
 from calcarc_reference.corpus_complex import (
     COMPLEX_BINARY_OPS,
@@ -350,16 +350,20 @@ def build_precedence_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"prec-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_minimal_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"prec-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_minimal_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        # ここのキー列は**括弧を省いた形**なので、`parenthesis` の観測は
+        # 木と食い違いうる——だからそれは観測のみの軸である。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -525,6 +529,14 @@ def _assoc_pair(
     documented, _ = _assoc_trees(terms, ops)
     expr = to_expr_text(documented)
     expect = {"re": float(value), "im": 0.0}
+    # **双子は同じ木から出る。** 層だけが違うので、記録も層ごとに取る
+    # （`shape` は `stratum` で決まる。裁定 1 の (c)）。
+    flat_levels = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(documented, "Deg", stratum)
+    )
+    paren_levels = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(documented, "Deg", ASSOC_CONTROL_STRATUM)
+    )
     return [
         {
             "kind": "value",
@@ -534,6 +546,7 @@ def _assoc_pair(
             "keys": _flat_key_sequence(terms, ops),
             "expr": expr,
             "expect": expect,
+            "levels": flat_levels,
         },
         {
             "kind": "value",
@@ -543,6 +556,7 @@ def _assoc_pair(
             "keys": to_key_sequence(documented),
             "expr": expr,
             "expect": expect,
+            "levels": paren_levels,
         },
     ]
 
@@ -731,16 +745,20 @@ def build_family_shard(
             rejections["dup"] += 1
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"{prefix}-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"{prefix}-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて水準を記録し、キーから読んだものと突き合わせる**
+        # (試験空間モデル `scientific-v1` の裁定 1 の (c))。
+        # **食い違ったら生成を止める**——警告で流さない。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -1275,16 +1293,18 @@ def build_complex_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"cplx-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": re, "im": im},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"cplx-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": re, "im": im},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance_sympy(),
@@ -1356,6 +1376,9 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
         re, im = corpus_complex.evaluate(node)
         keys = to_key_sequence(node)
         expr = to_expr_text(node)
+        # **同じ木から 2 件出る。** 記録も同じ木から取る（裁定 1 の (c)）。
+        # `form` は `polar_toggle` を**木の外で押す**ので観測のみの軸である。
+        levels = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
         entries.append(
             {
                 "kind": "display",
@@ -1364,6 +1387,7 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
                 "keys": keys,
                 "expr": f"{expr} を直交形式で",
                 "expect": {"main": real_ref.format_rect(re, im)},
+                "levels": levels,
             }
         )
         r, theta = corpus_complex.to_polar(re, im)
@@ -1375,6 +1399,7 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
                 "keys": [*keys, "polar_toggle"],
                 "expr": f"{expr} を極形式で",
                 "expect": {"main": real_ref.format_polar(r, theta)},
+                "levels": levels,
             }
         )
         # **`▸∠` を 2 回押すと元の表示に戻る。** 値の主張ではなく表示の主張
@@ -1719,6 +1744,13 @@ def build_display_shard(seed: int, count: int) -> dict:
                 "left": keys,
                 "right": [*keys, toggle, toggle],
                 "expr": f"{expr} で {toggle} を 2 回押すと元の表示に戻る",
+                # **木が在るケースだけ記録する**（裁定 1 の (c)）。リテラルを
+                # 直に打つケース（A 群）は木を経由しないので、`levels` を持たない
+                # ——**「無い」は「空」ではない**。表示の種別(`eng`/`dms`)は
+                # **木の外で押す**ので観測のみの軸である。
+                "levels": corpus_science.levels_as_json(
+                    corpus_science.recorded_levels(node, "Deg")
+                ),
             }
         )
     return {
@@ -1805,17 +1837,18 @@ def build_angle_mode_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"rad-{len(entries):06d}",
-                "mode": "Rad",
-                # **先頭で押す。** これが無いと engine は Deg で評価する。
-                "keys": ["angle_toggle", *to_key_sequence(node)],
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"rad-{len(entries):06d}",
+            "mode": "Rad",
+            "keys": ["angle_toggle", *to_key_sequence(node)],
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Rad"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -1905,16 +1938,18 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"canc-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"canc-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -1983,16 +2018,18 @@ def build_combinatorics_shard(seed: int, count: int) -> dict:
             rejections["dup"] += 1
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"comb-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": landed, "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"comb-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": landed, "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),

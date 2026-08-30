@@ -399,3 +399,162 @@ def observed_cells(case: dict) -> set[coverage.Cell]:
                     for b in axes[right]:
                         found.add(coverage.Cell(scope, ((left, a), (right, b))))
     return found & known
+
+
+# ---------------------------------------------------------------------------
+# 記録と突合（Task 3）——**生成器が作った木を歩いて、水準を記録する。**
+#
+# **観測（`observed_levels`）はキー列を読む。記録はこの木を読む。** 2 つの経路が
+# 食い違ったら生成を止める（裁定 1 の (c)）。**捕まえるのは「木 → キー」の描画と
+# 「キー → 水準」の読みであって、木そのもののバグは捕まえない**
+# ——正確には「意図と観測の突合」ではなく「同じ木の、2 つの読み経路の突合」である。
+# ---------------------------------------------------------------------------
+
+
+def _walk(node: object) -> list[object]:
+    """木の全ノードを平らに並べる。**キー列を経由しない。**"""
+    out = [node]
+    for attr in ("arg", "left", "right"):
+        child = getattr(node, attr, None)
+        if child is not None:
+            out.extend(_walk(child))
+    return out
+
+
+def recorded_levels(
+    node: object, mode: str, stratum: str | None = None
+) -> dict[str, dict[str, set[str]]]:
+    """生成器が作った木から、踏んでいる水準を読む。
+
+    **`observed_levels` と同じ形を返すが、読む先が違う**——あちらは
+    `to_key_sequence` が描画したキー列、こちらは木そのもの。**2 つが食い違えば、
+    描画か読みのどちらかが壊れている。**
+
+    **観測できない軸（`UNOBSERVABLE_AXES`）はここでも読まない。** 木からは
+    帯や文法クラスを出せる余地があるが、**出すと突合の相手が居なくなる**
+    ——自己申告になり、(b) と同じになる。**この関数は突合できる軸だけを持つ。**
+    """
+    nodes = _walk(node)
+    fns = {getattr(n, "fn", None) for n in nodes} - {None}
+    ops = {getattr(n, "op", None) for n in nodes} - {None}
+    out: dict[str, dict[str, set[str]]] = {}
+
+    def put(scope: str, axis: str, level: str) -> None:
+        out.setdefault(scope, {}).setdefault(axis, set()).add(level)
+
+    for fn in sorted(fns & set(TRIG_FNS)):
+        put("angle_mode", "function", str(fn))
+    for fn in sorted(fns & set(INVERSE_TRIG_FNS)):
+        put("inverse_trig", "function", str(fn))
+    for fn in sorted(fns & set(ELEMENTARY_FNS)):
+        put("elementary", "function", str(fn))
+    for fn in sorted(fns & set(COMBINATORICS_FNS)):
+        put("combinatorics", "function", str(fn))
+    for op in sorted(ops & set(COMBINATORICS_BINS)):
+        put("combinatorics", "function", str(op))
+
+    if mode in ANGLE_MODES:
+        if fns & set(TRIG_FNS):
+            put("angle_mode", "angle_mode", mode)
+        if fns & set(INVERSE_TRIG_FNS):
+            put("inverse_trig", "angle_mode", mode)
+
+    # **演算子群は木の演算子から。** キー側は `add`/`sub`… の綴りで読む。
+    op_to_group = {
+        "+": "additive",
+        "-": "additive",
+        "*": "multiplicative",
+        "/": "multiplicative",
+        "nPr": "combinatorial",
+        "nCr": "combinatorial",
+        "^": "power",
+    }
+    groups = {op_to_group[str(op)] for op in ops if str(op) in op_to_group}
+    for group in sorted(groups):
+        put("associativity", "operator_group", group)
+    if groups:
+        put("associativity", "shape", "parenthesized" if stratum == "parenthesized" else "flat")
+
+    return out
+
+
+def levels_as_json(levels: dict[str, dict[str, set[str]]]) -> dict[str, dict[str, list[str]]]:
+    """コーパスに載る形。**並びを固定する**——走行ごとに動くとバイト一致しない。"""
+    return {
+        scope: {axis: sorted(vals) for axis, vals in sorted(axes.items())}
+        for scope, axes in sorted(levels.items())
+    }
+
+
+#: **観測できるが、記録できない軸。**
+#:
+#: 木には無く、**期待値から出る**もの——`combinatorics` の `path` は
+#: 「正常 / 定義域 / Overflow 近傍」で、**エラーの種類が決める**。木を歩いても
+#: 出ない（2026-08-30、突合の assert が初回の実走で見つけた）。
+#:
+#: **軸には 3 つの類型がある**、と分かった:
+#:
+#: 1. **記録も観測もできる** → 突き合わせられる（(c) が成立する軸）
+#: 2. **観測できない**（`UNOBSERVABLE_AXES`）→ 記録するしかない = (b)
+#: 3. **観測できるが記録できない**（ここ）→ 観測するしかない。**突合の相手が居ない**
+#:
+#: **3 を宣言しないと、突合が「記録に無い」を食い違いとして毎回落とす。**
+OBSERVATION_ONLY_AXES: dict[str, tuple[str, ...]] = {
+    # 期待値のエラー種別から出る。木を歩いても出ない
+    "combinatorics": ("path",),
+    # `eng` / `dms` は**木の外で押す**——`to_key_sequence(node)` の後ろに足される
+    "display": ("kind",),
+    # キー列は**括弧を省いた形**なので、木の括弧とは対応しない
+    "precedence": ("parenthesis",),
+    # `polar_toggle` は木の外。ゼロ成分は期待値から出る
+    "complex": ("form", "zero_part"),
+}
+
+
+class LevelsDisagree(RuntimeError):
+    """記録と観測が食い違った。**生成を止める。**"""
+
+
+def assert_record_matches_observation(case: dict, node: object) -> None:
+    """**この段の主番人。** 記録と観測を、**1 本の assert で**突き合わせる。
+
+    **どちらが正しいかは決めてある**（裁定 1 の (c) の代償）——**木が事実、
+    キーからの読みが解釈**である。**一致しなければ射影を直す**（記録を
+    観測に合わせて書き換えない）。
+
+    **突合できる軸だけを見る。** `UNOBSERVABLE_AXES` に挙げた軸は観測側が
+    出さないので、記録側も出していない（`recorded_levels` の docstring）。
+    """
+    recorded = levels_as_json(recorded_levels(node, case.get("mode", ""), case.get("stratum")))
+    observed_all = observed_levels(case)
+    # **突き合わせるのは、両方の経路が出す軸だけ**である。片方しか出さない軸を
+    # 混ぜると、**突合が毎回落ちる**（初回の実走で `combinatorics/path` が
+    # そうなった）——それは食い違いではなく、**相手が居ない**だけである。
+    skip = {
+        (scope, axis)
+        for table in (UNOBSERVABLE_AXES, OBSERVATION_ONLY_AXES)
+        for scope, axes in table.items()
+        for axis in axes
+    }
+    observed = levels_as_json(
+        {
+            scope: {
+                axis: vals
+                for axis, vals in axes.items()
+                # **`scope in recorded` で絞らない。** 絞ると、**記録が空の
+                # ときに観測側も空になり、記録の欠落を捕まえられない**
+                # ——2026-08-30、テストがこの穴を見つけた（木を関数の無いものに
+                # 差し替えても assert が通った）。**絞りが番人を片側検査に
+                # していた。**
+                if (scope, axis) not in skip
+            }
+            for scope, axes in observed_all.items()
+        }
+    )
+    observed = {scope: axes for scope, axes in observed.items() if axes}
+    if recorded != observed:
+        raise LevelsDisagree(
+            f"{case.get('id')}: 木から読んだ水準と、キーから読んだ水準が違う。"
+            f"木={recorded} / キー={observed}。"
+            "**木が事実、キーからの読みが解釈である**——射影を直すこと"
+        )

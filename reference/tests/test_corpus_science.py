@@ -17,6 +17,8 @@ import collections
 import json
 import pathlib
 
+import pytest
+
 from calcarc_reference import corpus_expr, corpus_science
 
 
@@ -226,3 +228,120 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
         "inverse_trig/function=asin,angle_mode=Rad",
         "inverse_trig/function=atan,angle_mode=Rad",
     ]
+
+
+# ---------------------------------------------------------------------------
+# 記録と突合（Task 3）
+# ---------------------------------------------------------------------------
+
+
+def test_the_two_paths_agree_on_a_tree_that_carries_several_functions() -> None:
+    """**記録（木）と観測（キー列）が一致する。**"""
+    node = corpus_expr.Bin(
+        "+", corpus_expr.Un("sin", corpus_expr.Num(3)), corpus_expr.Un("ln", corpus_expr.Num(4))
+    )
+    case = {
+        "id": "t-0",
+        "mode": "Deg",
+        "keys": corpus_expr.to_key_sequence(node),
+        "expr": corpus_expr.to_expr_text(node),
+    }
+    corpus_science.assert_record_matches_observation(case, node)
+    recorded = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+    assert recorded["angle_mode"]["function"] == ["sin"]
+    assert recorded["elementary"]["function"] == ["ln"]
+
+
+def test_the_assert_falls_when_the_record_is_wrong() -> None:
+    """**記録側がずれたら落ちる。**（赤確認①）"""
+    node = corpus_expr.Un("ln", corpus_expr.Num(4))
+    case = {
+        "id": "t-1",
+        "mode": "Deg",
+        "keys": corpus_expr.to_key_sequence(node),
+        "expr": "x",
+    }
+    # 木から読んだ結果を、手で 1 つ落とした形で渡す
+    wrong = corpus_expr.Num(4)  # 関数を持たない木
+    with pytest.raises(corpus_science.LevelsDisagree):
+        corpus_science.assert_record_matches_observation(case, wrong)
+
+
+def test_the_assert_falls_when_the_observation_is_wrong() -> None:
+    """**観測側がずれても、同じ assert が落ちる。**（赤確認②）
+
+    **片方向だけ落ちる門は、突合ではなく片側検査である。**
+    """
+    node = corpus_expr.Un("ln", corpus_expr.Num(4))
+    case = {
+        "id": "t-2",
+        "mode": "Deg",
+        # キー列を手でずらす（`ln` を `log10` と読ませる）
+        "keys": ["4", "log10", "eq"],
+        "expr": "x",
+    }
+    with pytest.raises(corpus_science.LevelsDisagree):
+        corpus_science.assert_record_matches_observation(case, node)
+
+
+def test_axes_come_in_three_kinds_and_each_is_declared() -> None:
+    """**軸には 3 つの類型がある。** 宣言しないと突合が毎回落ちる。
+
+    2026-08-30、突合の assert が初回の実走で第 3 の類型を見つけた
+    ——`combinatorics/path` は**観測できるが記録できない**（期待値の
+    エラー種別から出るので、木を歩いても出ない）。
+
+    **残り 4 つは、その後テストが見つけた**——`display/kind`（`eng`/`dms` は
+    木の外で押す）・`precedence/parenthesis`（キー列は括弧を省いた形）・
+    `complex/form`（`polar_toggle` は木の外）・`complex/zero_part`（期待値から出る）。
+    **宣言せずに `scope in recorded` で絞っていたので、絞りが番人を
+    片側検査にしていた。**
+    """
+    assert corpus_science.OBSERVATION_ONLY_AXES == {
+        "combinatorics": ("path",),
+        "display": ("kind",),
+        "precedence": ("parenthesis",),
+        "complex": ("form", "zero_part"),
+    }
+    overlap = {
+        (scope, axis) for scope, axes in corpus_science.UNOBSERVABLE_AXES.items() for axis in axes
+    } & {
+        (scope, axis)
+        for scope, axes in corpus_science.OBSERVATION_ONLY_AXES.items()
+        for axis in axes
+    }
+    assert not overlap, "同じ軸が 2 つの類型に入っている"
+
+
+def test_every_recorded_case_agrees_with_its_keys() -> None:
+    """**コミット済みの golden 全件で、記録と観測が一致する。**
+
+    生成時にも同じ assert が走るが、**それは生成器を信じている**
+    ——ここはコミットされた成果物そのものを読み直す。
+    """
+    checked = 0
+    for name in NINE_SHARDS:
+        for case in json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]:
+            if "levels" not in case:
+                continue
+            unobservable = {
+                (scope, axis)
+                for table in (
+                    corpus_science.UNOBSERVABLE_AXES,
+                    corpus_science.OBSERVATION_ONLY_AXES,
+                )
+                for scope, axes in table.items()
+                for axis in axes
+            }
+            observed = {
+                scope: {
+                    axis: sorted(vals)
+                    for axis, vals in axes.items()
+                    if (scope, axis) not in unobservable and scope in case["levels"]
+                }
+                for scope, axes in corpus_science.observed_levels(case).items()
+            }
+            observed = {s: a for s, a in observed.items() if a}
+            assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
+            checked += 1
+    assert checked == 17823, f"突き合わせたのが {checked} 件しかない"
