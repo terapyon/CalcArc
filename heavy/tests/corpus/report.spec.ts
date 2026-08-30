@@ -54,6 +54,7 @@ import {
   renderDetectionPower,
   renderReport,
   renderReproducibility,
+  renderScienceCoverage,
   reproducibilityHealth,
   runHealth,
   type ShardSummary,
@@ -3159,4 +3160,115 @@ test("実物の finance-000.json でも表が出る", () => {
   // **実物の数がそのまま出ている。**
   expect(lines).toContain("| 150 | 126 | 24 | 0 | 理由付き未実行あり |");
   expect(lines).toContain("`source_overflow`");
+});
+
+// ---------------------------------------------------------------------------
+// **科学計算の試験空間の節**（2026-08-30、`scientific-v1`）。
+//
+// **未達を 1 つの数に畳まない。** 3 つが区別して読めること——**本当の穴**
+// （門が落とすのはこれだけ）／**測れない軸に起因する未達**／**9 領域の外が
+// 踏んでいるもの**。**畳むと、埋める判断を誤る。**
+// ---------------------------------------------------------------------------
+
+const scienceCoverage = (over: Partial<Coverage> = {}): Coverage => ({
+  schema: 1,
+  model: "scientific-v1",
+  requirements: [
+    {
+      id: "op/a/one_way",
+      scope: "op",
+      strength: "one_way",
+      required_cells: 6,
+      covered_cells: 3,
+      excluded_cells: 0,
+      unmet_cells: 3,
+      status: "incomplete",
+      unmet_from_unmeasured_axes: 2,
+      unmet_real_cells: ["op/band=zero"],
+    },
+  ],
+  excluded_cells: [],
+  generation_rejections: {},
+  not_measured_axes: [{ scope: "op", axis: "band", why: "引数の値が要る" }],
+  covered_outside_model: [{ cell_id: "op/x=1", where: "errors-000.json" }],
+  ...over,
+});
+
+test("科学: 本当の穴は、セル id ごと名指しされる", () => {
+  const text = renderScienceCoverage(scienceCoverage()).join("\n");
+  // **注意文に含まれない綴りで見る。** 「データに無い」は見出しにも表にも
+  // 出るので、**行の全体一致**で当てる（第 1 段階で 3 回踏んだ型）。
+  expect(text).toContain("- `op/band=zero`");
+  expect(text).toContain("**データに 1 件も入力が無いセルが 1 件ある。**");
+});
+
+test("科学: 測れない軸は、理由つきで別の表に出る", () => {
+  const text = renderScienceCoverage(scienceCoverage()).join("\n");
+  expect(text).toContain("| `op` | `band` | 引数の値が要る |");
+  expect(text).toContain(
+    "**この経路では読めない軸に起因する未達が 2 件ある。**",
+  );
+});
+
+test("科学: 外が踏んでいるものは、被覆と混ぜずに別の節へ", () => {
+  const text = renderScienceCoverage(scienceCoverage()).join("\n");
+  expect(text).toContain("### モデルの外が踏んでいるもの");
+  expect(text).toContain("| `op/x=1` | errors-000.json |");
+  // **被覆の表には現れない。**
+  expect(text).not.toContain("| `op` | 6 | 4 |");
+});
+
+test("科学: 穴が無い走行では、そう書く", () => {
+  const clean = scienceCoverage({
+    requirements: [
+      {
+        id: "op/a/one_way",
+        scope: "op",
+        strength: "one_way",
+        required_cells: 6,
+        covered_cells: 6,
+        excluded_cells: 0,
+        unmet_cells: 0,
+        status: "complete",
+        unmet_from_unmeasured_axes: 0,
+        unmet_real_cells: [],
+      },
+    ],
+    covered_outside_model: [],
+  });
+  const text = renderScienceCoverage(clean).join("\n");
+  expect(text).toContain("**データに無いセルは 1 つも無い。**");
+  expect(text).not.toContain("### モデルの外が踏んでいるもの");
+});
+
+test("科学: 読めなかった走行を「全部覆った」と書かない", () => {
+  const text = renderScienceCoverage(null).join("\n");
+  expect(text).toContain("この走行は科学計算のモデルを読んでいない");
+  expect(text).toContain("**「全部覆った」ではない。**");
+  expect(text).not.toContain("| 対象 | 必須セル |");
+});
+
+test("科学: 実物の報告書に、9 領域の表と 3 件の名指しが出る", () => {
+  const finance = loadCallShards().find((s) => s.name === "finance-000.json");
+  const shards = loadShards();
+  const science = shards.find((s) => s.name === "angle-mode-000.json");
+  const coverage = (science?.shard as unknown as { coverage?: Coverage })
+    ?.coverage;
+  expect(coverage?.model).toBe("scientific-v1");
+  const markdown = renderReport(
+    [summary()],
+    PROVENANCE,
+    [],
+    null,
+    null,
+    null,
+    { state: "passed", checked: 18 },
+    coverage ?? null,
+  );
+  expect(markdown).toContain("## 科学計算の試験空間 `scientific-v1`");
+  expect(markdown).toContain("- `combinatorics/path=domain`");
+  expect(markdown).toContain("- `complex/zero_part=both_zero`");
+  // **金融の表を壊していない。**
+  expect(finance).toBeDefined();
+  expect(markdown).toContain("## 期待値そのものは、生成器の出力なのか");
 });

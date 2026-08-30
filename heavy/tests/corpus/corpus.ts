@@ -539,6 +539,14 @@ export interface Coverage {
    * ——**宣言が無ければ、未達はすべて本当の穴として扱う**のが厳しい側である。
    */
   not_measured_axes?: NotMeasuredAxis[];
+  /**
+   * **9 領域の外が踏んでいるセル**（2026-08-30、`scientific-v1`）。
+   *
+   * **被覆としては数えない。** モデルは 9 領域を横断して数えると決めたので、
+   * **外が踏んでいることを理由に数えると、範囲の決め方が骨抜きになる。**
+   * **埋めるかどうかの判断材料**として持つ。
+   */
+  covered_outside_model?: { cell_id: string; where: string }[];
 }
 
 /**
