@@ -33,6 +33,12 @@
 | 作業台 | **きれい**（未コミット 0・追跡外 0） |
 | 監視役 | **calcarc-e4**（再起動前は calcarc-25。Fable は呼ばれたときだけの裁定役） |
 
+**★ いま `pnpm heavy` は意図して赤い**（2026-08-30〜）。試験空間モデル
+`scientific-v1` が、**データに無いセルを 7 件**指している。**リリースは止まるが
+マージは止まらない。** 経緯・解ける条件・踏んだ人への説明は
+[heavy-INTENDED-RED.md](heavy-INTENDED-RED.md)。**知らない人には壊れた赤と
+区別が付かない**ので、先に読ませること。
+
 **`git push` と PR 作成は行わない**（ユーザー専権）。コミット末尾は
 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`、件名の次は空行。
 

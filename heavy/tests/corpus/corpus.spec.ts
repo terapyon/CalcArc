@@ -8,12 +8,14 @@ import {
   assertToleranceIsSane,
   type CallShard,
   type Classification,
+  type Coverage,
   classify,
   classifyComplex,
   countInjectedTokens,
   countSequencesWithoutEq,
   type EquivalenceCase,
   equivalenceNeedsPrecedence,
+  loadDisplayShards,
   loadShards,
   needsPrecedence,
   partitionCases,
@@ -982,7 +984,7 @@ test("未達が残っているシャードを拒む", () => {
   // 分けたので、**測れない軸の宣言が無いシャードでは、未達はすべて本当の穴**
   // として扱う（金融がそれ）。
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
-    /本当の穴/,
+    /データに無いセル/,
   );
 });
 
@@ -1005,7 +1007,7 @@ test("測れない軸を宣言しても、本当の穴では落ちる", () => {
   coverage.excluded_cells = []; // 宣言と一覧を揃える
   coverage.not_measured_axes = [{ scope: "op", axis: "band", why: "測れない" }];
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
-    /本当の穴が 1 件/,
+    /データに無いセルを 1 件/,
   );
 });
 
@@ -1152,4 +1154,20 @@ test("cell_id の接頭辞が scope 欄と食い違うシャードを拒む", ()
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
     /接頭辞/,
   );
+});
+
+test("値シャードと表示シャードにも、試験空間の門を掛ける", () => {
+  // **2026-08-30 まで、門は呼び出しシャードにしか掛かっていなかった**
+  // （`calls.spec.ts` が `loadCallShards()` を回すだけ）。科学計算の 9 領域は
+  // **値シャードと表示シャード**なので、**1 度も通っていなかった。**
+  //
+  // **ここが赤くなるのは意図した赤である**——モデルが「データに無いセル」を
+  // 指しているあいだ、`pnpm heavy` は落ちる。経緯は
+  // `docs/superpowers/sdd/heavy-INTENDED-RED.md`。
+  for (const { name, shard } of loadShards()) {
+    assertCoverageIsSound(name, shard as unknown as { coverage?: Coverage });
+  }
+  for (const { name, shard } of loadDisplayShards()) {
+    assertCoverageIsSound(name, shard as unknown as { coverage?: Coverage });
+  }
 });

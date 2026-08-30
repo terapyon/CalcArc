@@ -438,7 +438,10 @@ export interface CallShard {
 /** `coverage` 自身のスキーマ。**15 枚が共有する `KNOWN_SCHEMA` とは別物**(設計書 §11.1)。 */
 export const KNOWN_COVERAGE_SCHEMA = 1;
 
-export const SUPPORTED_COVERAGE_MODELS = new Set(["finance-v1"]);
+export const SUPPORTED_COVERAGE_MODELS = new Set([
+  "finance-v1",
+  "scientific-v1",
+]);
 
 /**
  * 設計書 §10.1 の理由コード。**`other` は無い。**
@@ -473,7 +476,22 @@ export const COVERAGE_STATUSES = new Set([
 ]);
 
 /** `coverage` を必ず持つシャード(第 1 段階は金融だけ。設計書 §11.1)。 */
-export const COVERAGE_REQUIRED_SHARDS = new Set(["finance-000.json"]);
+export const COVERAGE_REQUIRED_SHARDS = new Set([
+  "finance-000.json",
+  // **科学計算の 9 領域**（2026-08-30、`scientific-v1`）。モデルがシャードを
+  // またぐので、**10 枚すべてが同じブロックを持つ**——どれを開いても同じ
+  // 会計が読める（任意の 1 枚を選ぶ恣意性を避けた）。
+  "elementary-000.json",
+  "inverse-trig-000.json",
+  "angle-mode-000.json",
+  "precedence-000.json",
+  "associativity-000.json",
+  "cancellation-000.json",
+  "combinatorics-000.json",
+  "display-000.json",
+  "complex-000.json",
+  "complex-display-000.json",
+]);
 
 export interface CoverageRequirement {
   id: string;
@@ -533,7 +551,12 @@ export interface Coverage {
  * 整合式が閉じているか、知らない綴りが混ざっていないか、**未達を残したまま
  * 「覆った」と言っていないか。**
  */
-export function assertCoverageIsSound(name: string, shard: CallShard): void {
+export function assertCoverageIsSound(
+  name: string,
+  // **値シャードと表示シャードにも掛ける**（2026-08-30、`scientific-v1`）。
+  // 見るのは `coverage` だけなので、**シャードの種別は問わない**。
+  shard: { coverage?: Coverage },
+): void {
   const coverage = shard.coverage;
   if (coverage === undefined) {
     if (COVERAGE_REQUIRED_SHARDS.has(name)) {
@@ -576,12 +599,24 @@ export function assertCoverageIsSound(name: string, shard: CallShard): void {
     const fromUnmeasured = requirement.unmet_from_unmeasured_axes ?? 0;
     const realHoles = requirement.unmet_cells - fromUnmeasured;
     if (realHoles > 0) {
-      const named = (requirement.unmet_real_cells ?? [])
-        .slice(0, 3)
-        .join(" / ");
+      // **踏んだ人が、その場で「意図した赤」だと分かる文面にする。**
+      // 「未達が N 件」だけだと、**踏んだ人は自分の変更を疑って半日溶かす**
+      // ——このコーパスは手動起動とリリースでしか走らないので、
+      // **踏むのはたいてい、その変更をしていない人である。**
+      const named = (requirement.unmet_real_cells ?? []).join(" / ");
       throw new Error(
-        `${name}/${id}: 本当の穴が ${realHoles} 件ある` +
-          (named === "" ? "" : `: ${named}`),
+        `${name}/${id}: 試験空間モデル「${coverage.model}」が、` +
+          `データに無いセルを ${realHoles} 件指している` +
+          (named === "" ? "" : `: ${named}`) +
+          "\n  **これはあなたの変更が壊したのではない可能性が高い。**" +
+          " モデルが「ここに入力が 1 件も無い」と言っている。" +
+          (fromUnmeasured > 0
+            ? `\n  (この対象には「まだ測れない軸」に起因する未達も ` +
+              `${fromUnmeasured} 件あるが、それでは落としていない。` +
+              "落としたのは上の分だけである)"
+            : "") +
+          "\n  埋めるか、理由付き除外にするかは人が決める。" +
+          "経緯は docs/superpowers/sdd/heavy-INTENDED-RED.md にある。",
       );
     }
     if (fromUnmeasured > requirement.unmet_cells) {
