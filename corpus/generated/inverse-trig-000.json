@@ -82036,6 +82036,84 @@
         }
       },
       "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 0.0
+      },
+      "expr": "deg(asin(0))",
+      "id": "itrig-002000",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "asin",
+        "eq"
+      ],
+      "kind": "value",
+      "levels": {
+        "inverse_trig": {
+          "angle_mode": [
+            "Rad"
+          ],
+          "function": [
+            "asin"
+          ]
+        }
+      },
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 1.5707963267948966
+      },
+      "expr": "deg(acos(0))",
+      "id": "itrig-002001",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "acos",
+        "eq"
+      ],
+      "kind": "value",
+      "levels": {
+        "inverse_trig": {
+          "angle_mode": [
+            "Rad"
+          ],
+          "function": [
+            "acos"
+          ]
+        }
+      },
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 0.0
+      },
+      "expr": "deg(atan(0))",
+      "id": "itrig-002002",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "atan",
+        "eq"
+      ],
+      "kind": "value",
+      "levels": {
+        "inverse_trig": {
+          "angle_mode": [
+            "Rad"
+          ],
+          "function": [
+            "atan"
+          ]
+        }
+      },
+      "mode": "Rad"
     }
   ],
   "coverage": {
@@ -82103,21 +82181,16 @@
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 7,
+        "covered_cells": 11,
         "excluded_cells": 0,
         "id": "inverse_trig/angle_mode-band-function/one_way+pairs",
         "required_cells": 16,
         "scope": "inverse_trig",
         "status": "incomplete",
         "strength": "one_way+pairs",
-        "unmet_cells": 9,
+        "unmet_cells": 5,
         "unmet_from_unmeasured_axes": 5,
-        "unmet_real_cells": [
-          "inverse_trig/angle_mode=Rad",
-          "inverse_trig/function=acos,angle_mode=Rad",
-          "inverse_trig/function=asin,angle_mode=Rad",
-          "inverse_trig/function=atan,angle_mode=Rad"
-        ]
+        "unmet_real_cells": []
       },
       {
         "covered_cells": 6,

@@ -78460,21 +78460,16 @@
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 7,
+        "covered_cells": 11,
         "excluded_cells": 0,
         "id": "inverse_trig/angle_mode-band-function/one_way+pairs",
         "required_cells": 16,
         "scope": "inverse_trig",
         "status": "incomplete",
         "strength": "one_way+pairs",
-        "unmet_cells": 9,
+        "unmet_cells": 5,
         "unmet_from_unmeasured_axes": 5,
-        "unmet_real_cells": [
-          "inverse_trig/angle_mode=Rad",
-          "inverse_trig/function=acos,angle_mode=Rad",
-          "inverse_trig/function=asin,angle_mode=Rad",
-          "inverse_trig/function=atan,angle_mode=Rad"
-        ]
+        "unmet_real_cells": []
       },
       {
         "covered_cells": 6,

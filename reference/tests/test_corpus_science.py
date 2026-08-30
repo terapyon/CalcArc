@@ -198,7 +198,8 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     「データに無い」ではなく「**この経路では読めない**」である
     ——Task 3 が記録を足せば埋まる。**本当の穴と混ぜると、埋める判断を誤る。**
 
-    実測（2026-08-30）: 未達 37 = 観測できない 30 + 本当の穴 7。
+    実測（2026-08-30、**Task 8 で Rad の逆三角 4 件を埋めたあと**）:
+    未達 33 = 観測できない 30 + 本当の穴 3。**埋める前は 37 = 30 + 7 だった。**
     """
     covered: set = set()
     for case in _nine_domain_cases():
@@ -223,10 +224,6 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
         "combinatorics/path=domain",
         "combinatorics/path=overflow_near",
         "complex/zero_part=both_zero",
-        "inverse_trig/angle_mode=Rad",
-        "inverse_trig/function=acos,angle_mode=Rad",
-        "inverse_trig/function=asin,angle_mode=Rad",
-        "inverse_trig/function=atan,angle_mode=Rad",
     ]
 
 
@@ -344,7 +341,8 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             observed = {s: a for s, a in observed.items() if a}
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
-    assert checked == 17823, f"突き合わせたのが {checked} 件しかない"
+    # 17,823 → 17,826（Task 8 が Rad の逆三角を 3 件足した）
+    assert checked == 17826, f"突き合わせたのが {checked} 件しかない"
 
 
 # ---------------------------------------------------------------------------
@@ -401,11 +399,13 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     """
     payload = json.loads((CORPUS / "elementary-000.json").read_text(encoding="utf-8"))["coverage"]
     by_scope = {r["scope"]: r for r in payload["requirements"]}
-    assert by_scope["inverse_trig"]["unmet_cells"] == 9
+    # **Task 8 で `inverse_trig` の本当の穴 4 件が消えた**——残るのは
+    # 「測れない軸（帯）」に起因する 5 件だけである。
+    assert by_scope["inverse_trig"]["unmet_cells"] == 5
     assert by_scope["inverse_trig"]["unmet_from_unmeasured_axes"] == 5
-    assert len(by_scope["inverse_trig"]["unmet_real_cells"]) == 4
+    assert by_scope["inverse_trig"]["unmet_real_cells"] == []
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert real == 7, "本当の穴は 7 件"
+    assert real == 3, "本当の穴は 3 件（Task 8 のあと。前は 7 件）"
     assert len(payload["not_measured_axes"]) == 7
 
 
@@ -473,17 +473,29 @@ def test_the_model_tells_the_two_inputs_apart() -> None:
         for name in NINE_SHARDS
     }
 
-    # ① Rad の逆三角が無い入力（いまの実物）
-    without = _unmet_ids(real)
+    # ① Rad の逆三角を**取り除いた**入力。
+    #
+    # **実物をそのまま「無い側」に使わない**——Task 8 が穴を埋めた瞬間に、
+    # 実物には Rad の逆三角が入る。**それに依存していると、埋めた日に
+    # このテストが壊れる**（2026-08-30、実際に壊れた）。**主張は「入力の
+    # 有無で答が変わる」ことなので、両方の入力をこちらで作る。**
+    def carries_rad_inverse_trig(case: dict) -> bool:
+        levels = corpus_science.observed_levels(case).get("inverse_trig", {})
+        return "Rad" in levels.get("angle_mode", set())
+
+    stripped = {
+        name: [c for c in cases if not carries_rad_inverse_trig(c)] for name, cases in real.items()
+    }
+    without = _unmet_ids(stripped)
     assert without >= RAD_INVERSE_TRIG_CELLS, (
         "Rad の逆三角が 1 件も無いのに、未達として出ていない——モデルか射影が壊れている"
     )
 
     # ② Rad の逆三角を 3 件足した入力（合成）
     added = {
-        **real,
+        **stripped,
         "inverse-trig-000.json": [
-            *real["inverse-trig-000.json"],
+            *stripped["inverse-trig-000.json"],
             *(
                 {
                     "id": f"synthetic-{fn}",
@@ -519,14 +531,15 @@ def test_the_real_holes_match_what_the_gate_reports() -> None:
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
     by_scope = {r["scope"]: r for r in payload["requirements"]}
-    assert set(by_scope["inverse_trig"]["unmet_real_cells"]) == RAD_INVERSE_TRIG_CELLS
+    # **Task 8 のあと、`inverse_trig` の本当の穴は 0 件**である。
+    assert by_scope["inverse_trig"]["unmet_real_cells"] == []
     assert set(by_scope["combinatorics"]["unmet_real_cells"]) == {
         "combinatorics/path=domain",
         "combinatorics/path=overflow_near",
     }
     assert set(by_scope["complex"]["unmet_real_cells"]) == {"complex/zero_part=both_zero"}
     total = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert total == 7
+    assert total == 3
 
 
 # ---------------------------------------------------------------------------
@@ -610,6 +623,8 @@ def test_a_reachable_hole_is_never_given_a_reason() -> None:
     **空を「仕事をしていない」と読まない**: **空であることを測って示した。**
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    # **埋めたあとも、この門は生きる**——`CONSTRUCTIBLE_HOLES` は
+    # 「作れると測ったセル」であって「いま空いているセル」ではない。
     excluded = {entry["cell_id"] for entry in payload["excluded_cells"]}
     wrongly = sorted(excluded & CONSTRUCTIBLE_HOLES)
     assert not wrongly, f"作れるセルに理由を貼っている: {wrongly}——貼るのではなく、作ること"

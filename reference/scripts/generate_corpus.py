@@ -2049,7 +2049,50 @@ def build_inverse_trig_shard(seed: int, count: int) -> dict:
     `BINARY_OPS` は**引数として渡すだけ**でタプルには触っていない。生成器は
     独自の `random.Random(seed)` を持つので、既存シャードの乱数に影響しない。
     """
-    return build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
+    shard = build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
+    _append_rad_boundaries(shard["cases"])
+    return shard
+
+
+#: **Rad の逆三角の名指し境界**（試験空間モデル `scientific-v1` の Task 8）。
+#:
+#: **§14.2 は「関数種別 × 角度モード × 境界帯」を要求している**が、
+#: **`Rad × 逆三角` はコーパス 18 枚のどこにも 1 件も無かった**（2026-08-30 実測）
+#: ——`angle-mode` の生成器は `("sin","cos","tan")` しか通さず、この系統は
+#: `build_family_shard` が `Deg` を焼き付けている。**構造的な穴だった。**
+#:
+#: **引数は 0 にする。** `asin` / `acos` は `[-1, 1]` の外で `DomainError` に
+#: なる（`docs/numerical-policy.md` の「関数の定義域」）ので、**3 つとも
+#: 定義域の中に在る値**を選ぶ。答は `asin(0)=0` / `acos(0)=π/2` / `atan(0)=0`。
+RAD_INVERSE_TRIG_ARGUMENT = 0
+
+
+def _append_rad_boundaries(entries: list[dict]) -> None:
+    """**乱択のループが終わったあとに足す。draw の列に触らない。**
+
+    **これが道の選択そのものである**（計画の Task 8 Step 1）。ループの中で
+    分岐すると**乱数の並びが動き、2000 件の中身が全部変わる**——挙動は
+    変わらないのに**差分が 2000 件になり、次に読む人が何が変わったか追えない。**
+    このプロジェクトは**golden の差分を人が読んで判断している。**
+
+    `DISPLAY_EDGE_LITERALS` が「並びを先頭に固定し、種を変えても動かない」と
+    しているのと**同型**で、こちらは末尾に置く。
+    """
+    for fn in INVERSE_TRIG_FNS:
+        node = Un(fn, Num(RAD_INVERSE_TRIG_ARGUMENT))
+        value = evaluate(node, "Rad")
+        case = {
+            "kind": "value",
+            "id": f"itrig-{len(entries):06d}",
+            "mode": "Rad",
+            # **先頭で押す。** 押さなければ engine は既定の Deg で評価する。
+            "keys": ["angle_toggle", *to_key_sequence(node)],
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Rad"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
 
 
 def write(name: str, payload: dict) -> None:
