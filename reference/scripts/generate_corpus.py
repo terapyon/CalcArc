@@ -1558,8 +1558,15 @@ DISPLAY_EDGE_LITERALS = (
     "10",  # 指数 1。仮数 10
     "100",  # 指数 2。仮数 100
     "1000",  # 指数 3 ちょうど。`1e3`
-    "999.9999999",  # 10 桁に丸めると 1000 に繰り上がり、指数が 1 つ上がる
-    "999999999.9",  # 10 桁ちょうど、繰り上がりで 1e9
+    # **【訂正 2026-08-30】この 2 つに「繰り上がる」と書いてあったが、繰り上がらない。**
+    # `999.9999999` は**既に有効数字 10 桁**なので 10 桁への丸めが恒等であり、
+    # 参照実装に通すと `999.9999999` のまま。`999999999.9` も `999,999,999.9`
+    # と表示される（`real_ref.format_real` で実測）。**註が主張していた境界を、
+    # コーパスは 1 度も踏んでいなかった**——試験空間モデルが `display/edge`
+    # を読めるようにして初めて出た（`corpus_science.display_edges`）。
+    # **本物の繰り上がりは末尾の `DISPLAY_ROUNDING_CARRY_LITERAL` が踏む。**
+    "999.9999999",  # 有効数字 10 桁。仮数が 9 で埋まる側の代表
+    "999999999.9",  # 10 桁ちょうど。カンマを要する最大の桁数
     "0.5",  # 1 未満。`500e-3`。60 進では 0°30'00"
     "0.001",  # 指数 -3 ちょうど
     "0.0001234",  # 指数 -4。3 の倍数へ**下向き**に丸める側
@@ -1679,38 +1686,7 @@ def build_display_shard(seed: int, count: int) -> dict:
     # 並びを先頭に固定し、**1 つの値につき eng と dms を両方**作る。
     # 種を変えても、木の作り方を変えても、この 2n 件は動かない。
     for text in DISPLAY_EDGE_LITERALS:
-        landed = float(text)
-        keys = to_key_sequence(Typed(_literal_keys(text), text))
-        entries.append(
-            {
-                "kind": "display",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": [*keys, "eng"],
-                "expr": f"{text} を工学表記で",
-                "expect": {"main": eng_ref.format_real_eng(landed)},
-            }
-        )
-        shown = sexagesimal_ref.format_sexagesimal(landed)
-        entries.append(
-            {
-                "kind": "display",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": [*keys, "dms"],
-                "expr": f"{text} を 60 進で",
-                "expect": {"main": shown},
-            }
-            if shown is not None
-            else {
-                "kind": "equivalence",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "left": keys,
-                "right": [*keys, "dms"],
-                "expr": f"{text} は 60 進にできないので表示が変わらない",
-            }
-        )
+        _append_display_pair(entries, text)
         seen.add(text)
 
     attempts = 0
@@ -1797,6 +1773,7 @@ def build_display_shard(seed: int, count: int) -> dict:
                 ),
             }
         )
+    _append_rounding_carry(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -2208,6 +2185,72 @@ def _append_elementary_boundaries(entries: list[dict]) -> None:
         case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
         corpus_science.assert_record_matches_observation(case, node)
         entries.append(case)
+
+
+#: **10 桁に丸めると指数が 1 つ上がる値**（試験空間モデルの Task 17）。
+#:
+#: `9999999999.5` は有効数字 11 桁。10 桁に丸めると `1e10` になり、
+#: **指数が 9 から 10 へ上がる**——`docs/numerical-policy.md` が
+#: 「`|x| >= 1e10` で指数表記」と書いている閾値をまたぐ。
+#: 実測（`real_ref.format_real`）: `"1e10"`。
+#:
+#: **`DISPLAY_EDGE_LITERALS` の末尾ではなく、シャードの末尾に足す。**
+#: あの一覧は**先頭に固定**されており、そこへ 1 つ足すと**後続 1,900 件余りの
+#: `id` がずれる**——**このプロジェクトは golden の差分を人が読んで判断して
+#: いる**（Task 8 で選んだ道と同じ理由）。
+DISPLAY_ROUNDING_CARRY_LITERAL = "9999999999.5"
+
+
+def _append_display_pair(entries: list[dict], text: str) -> None:
+    """**1 つの十進リテラルを、`eng` と `dms` の 2 件にする。**
+
+    **60 進にできない値がある**——度の桁数が多いと「10 桁 − 度 − 4」が
+    負になり、`format_sexagesimal` は `None` を返す（S-4 設計書 §3、裁定 6）。
+    そのときは**同値のケース**にする——「表示が変わらない」という主張である。
+
+    **【2026-08-30】この関数はループの中身を括り出したものである。**
+    Task 17 で末尾に 1 件足すとき、**私はこのループを写した。写しは
+    `None` の分岐を落としていて、`expect.main` が `null` のケースを
+    書き出した**——**分岐が 1 つ足りない写しは、動くように見えて嘘を書く。**
+    **括り出せば、写しは 1 つも要らなかった。**
+    """
+    landed = float(text)
+    keys = to_key_sequence(Typed(_literal_keys(text), text))
+    entries.append(
+        {
+            "kind": "display",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": [*keys, "eng"],
+            "expr": f"{text} を工学表記で",
+            "expect": {"main": eng_ref.format_real_eng(landed)},
+        }
+    )
+    shown = sexagesimal_ref.format_sexagesimal(landed)
+    entries.append(
+        {
+            "kind": "display",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": [*keys, "dms"],
+            "expr": f"{text} を 60 進で",
+            "expect": {"main": shown},
+        }
+        if shown is not None
+        else {
+            "kind": "equivalence",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "left": keys,
+            "right": [*keys, "dms"],
+            "expr": f"{text} は 60 進にできないので表示が変わらない",
+        }
+    )
+
+
+def _append_rounding_carry(entries: list[dict]) -> None:
+    """**丸めで指数が上がる 1 件を、一覧の他の値と同じ手で足す。**"""
+    _append_display_pair(entries, DISPLAY_ROUNDING_CARRY_LITERAL)
 
 
 def write(name: str, payload: dict) -> None:

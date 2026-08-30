@@ -222,6 +222,7 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     Task 13 のあと 未達 18 = 測れない 16 + 本当の穴  2   （複素を両側から読んだ）
     Task 14 のあと 未達 17 = 測れない 16 + 本当の穴  1   （近傍の射影を直した）
     Task 14 ② のあと 未達 16 = 測れない 16 + 本当の穴 0   （誤入力の 1 枚を作った）
+    Task 17  のあと 未達 11 = 測れない 11 + 本当の穴 0   （**表示境界も読めた**）
     ```
 
     **「測れない」が 10 件減って、そこから本当の穴が 4 件出てきた。**
@@ -248,7 +249,7 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
                 else real
             )
             target.append(cell.id)
-    assert len(declared) == 16
+    assert len(declared) == 11
     # **Task 13 で `complex` の 2 件が消えた**——`operation=power` は engine が
     # 拒むので理由付き除外、`zero_part=both_zero` は `(j5 - j5)` で埋めた。
     assert real == []
@@ -323,7 +324,11 @@ def test_axes_come_in_three_kinds_and_each_is_declared() -> None:
     """
     assert corpus_science.OBSERVATION_ONLY_AXES == {
         "combinatorics": ("path",),
-        "display": ("kind",),
+        # **`display/edge` は 2026-08-30 に「測れない」からここへ移した。**
+        # 打った十進のリテラルから読めるが、**表示のケースは木を経由しない**
+        # ので記録側に相手が居ない（実測: 表示シャード 2,000 件のうち
+        # `levels` を持つ 493 件はすべて同値のケースである）。
+        "display": ("kind", "edge"),
         "precedence": ("parenthesis",),
         "complex": ("form", "zero_part"),
     }
@@ -411,11 +416,10 @@ def test_the_declaration_list_is_pinned() -> None:
         # **`elementary` と `inverse_trig` の `band` は 2026-08-30 に外した**
         # ——宣言が実データと食い違っていた（下の
         # `test_a_band_declared_unreadable_has_no_readable_argument` が番人）。
+        # **残っているのはこの 2 領域だけ**（2026-08-30）。`display/edge` は
+        # **打った十進のリテラルから読める**ので観測専用へ移した。
         "cancellation": ("shape", "band"),
         "precedence": ("grammar_class",),
-        # **`complex/operation` は 2026-08-30 に外した**——演算子はキー列にも
-        # 木にも在り、両側から読める（門は `j` / `Imag`）。
-        "display": ("edge",),
     }
 
 
@@ -441,8 +445,10 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     assert by_scope["complex"]["unmet_real_cells"] == []
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
     assert real == 0, "本当の穴は 0 件"
-    # **7 → 4。** `elementary/band`・`inverse_trig/band`・`complex/operation` を外した。
-    assert len(payload["not_measured_axes"]) == 4
+    # **7 → 3。** `elementary/band`・`inverse_trig/band`・`complex/operation`・
+    # `display/edge` を外した。**残るのは `cancellation` の 2 軸と
+    # `precedence/grammar_class` だけ**である。
+    assert len(payload["not_measured_axes"]) == 3
 
 
 def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> None:

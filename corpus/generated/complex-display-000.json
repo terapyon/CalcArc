@@ -71642,14 +71642,9 @@
         "why": "\u5f37\u5ea6\u306e\u5207\u308c\u76ee\u3092\u4ed5\u69d8\u304c\u6c7a\u3081\u3066\u3044\u306a\u3044\u3002\u751f\u6210\u5668\u306e CANCELLATION_TOLERANCE \u304b\u3089\u5f15\u3051\u308b\u898b\u8fbc\u307f\u3060\u304c\u3001\u76f8\u6bba\u306e\u4e21\u8fba\u306f\u5f0f\u306a\u306e\u3067\u30ea\u30c6\u30e9\u30eb\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
       },
       {
-        "axis": "edge",
-        "scope": "display",
-        "why": "\u8868\u793a\u5883\u754c\u306f\u30ea\u30c6\u30e9\u30eb\u306e\u5024\u3067\u6c7a\u307e\u308b"
-      },
-      {
         "axis": "grammar_class",
         "scope": "precedence",
-        "why": "\u6587\u6cd5\u30af\u30e9\u30b9\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308b"
+        "why": "\u6587\u6cd5\u30af\u30e9\u30b9\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308a\u3001\u3053\u306e\u30b7\u30e3\u30fc\u30c9\u306e\u30ad\u30fc\u5217\u306f\u62ec\u5f27\u3092\u7701\u3044\u305f\u5f62\u3067\u3042\u308b\u2014\u2014\u69cb\u9020\u3092\u30ad\u30fc\u304b\u3089\u5fa9\u5143\u3067\u304d\u308b\u304b\u3069\u3046\u304b\u304c\u3001\u3053\u306e\u30b7\u30e3\u30fc\u30c9\u304c\u78ba\u304b\u3081\u3066\u3044\u308b\u5f53\u306e\u3082\u306e\u3067\u3042\u308b\u3002\u6728\u304b\u3089\u306f\u8aad\u3081\u308b\u304c\u3001\u8aad\u3081\u3070\u30ad\u30fc\u5074\u306b\u76f8\u624b\u304c\u5c45\u306a\u3044\u306e\u3067\u81ea\u5df1\u7533\u544a\u306b\u306a\u308b"
       }
     ],
     "requirements": [
@@ -71738,15 +71733,15 @@
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 2,
+        "covered_cells": 7,
         "excluded_cells": 0,
         "id": "display/edge-kind/one_way",
         "required_cells": 7,
         "scope": "display",
-        "status": "incomplete",
+        "status": "complete",
         "strength": "one_way",
-        "unmet_cells": 5,
-        "unmet_from_unmeasured_axes": 5,
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
         "unmet_real_cells": []
       },
       {

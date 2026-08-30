@@ -198,6 +198,19 @@ DISPLAY_EDGES = (
 )
 
 #: 優先順位の文法クラス。**§14.2 が「優先順位関係 × 括弧有無」と言っている。**
+#:
+#: **★ この 4 つは私が起こした。** §14.2 は「優先順位関係」としか書いておらず、
+#: どの関係を数えるかを決めていない。**電卓が持つ優先順位の段
+#: （加減 < 乗除 < 冪 < 一価関数）から、隣り合う段の対と、同じ段の連鎖を
+#: 取った**——`docs/base-spec.md` の優先順位表が段を決めているので、
+#: **段そのものは仕様が持ち、対の取り方が私の選択**である。
+#:
+#: **【測定 2026-08-30】この軸は測っていない。** 木からは読める
+#: （`Bin("+", Bin("*", …), …)` は `mul_over_add` である）が、
+#: **このシャードのキー列は括弧を省いた形**なので、キー側に相手が居ない。
+#: **記録だけを載せると自己申告になる**——`recorded_levels` の docstring が
+#: 断っているとおりである。**「読めるが、読むと突合が消える」**という、
+#: `cancellation/shape` とは別の理由で測れない軸である。
 PRECEDENCE_CLASSES = (
     "mul_over_add",
     "power_over_mul",
@@ -402,6 +415,74 @@ def literal_arguments(keys: list[str]) -> list[tuple[str, float]]:
     return found
 
 
+#: **表示の有効数字**（`docs/numerical-policy.md`「有効数字 10 桁」）。
+DISPLAY_SIGNIFICANT_DIGITS = 10
+
+
+def display_edges(text: str) -> set[str]:
+    """**打った十進のリテラルが、どの表示境界に触れるか。**
+
+    **切れ目はすべて `docs/numerical-policy.md` が名指ししている:**
+
+    | 帯 | 仕様の記述 |
+    |---|---|
+    | `sub_unit` | ENG の仮数は **1 以上** 1000 未満。1 を割ると帯が変わる |
+    | `exponent_zero` | 指数 0。**指数表記にならない**側の代表 |
+    | `exponent_step` | ENG の**指数は常に 3 の倍数** |
+    | `long_mantissa` | **有効数字 10 桁** |
+    | `rounding_carry` | 10 桁に丸めた結果、**指数が 1 つ上がる** |
+
+    **1 件が複数の帯に触れてよい**——`0.001` は `sub_unit` かつ
+    `exponent_step` である。**排他にすると、後ろの 1 つで上書きして手前を
+    落とす**（`observed_levels` の docstring と同じ理由）。
+
+    **【測定 2026-08-30】`rounding_carry` を踏んでいるリテラルは 1 つも
+    無かった。** 生成器の `DISPLAY_EDGE_LITERALS` には
+    **「10 桁に丸めると 1000 に繰り上がり、指数が 1 つ上がる」**（`999.9999999`）
+    と**「10 桁ちょうど、繰り上がりで 1e9」**（`999999999.9`）という註が
+    付いていたが、**参照実装に通すとどちらも繰り上がらない**——
+    `999.9999999` は**既に有効数字 10 桁**なので丸めが恒等で、
+    `999999999.9` は `999,999,999.9` と表示される。**註が主張していた境界を、
+    コーパスは 1 度も踏んでいなかった。**
+    """
+    from decimal import ROUND_HALF_UP, Context, Decimal
+
+    size = abs(Decimal(text))
+    if size == 0:
+        return set()
+    found: set[str] = set()
+    exponent = size.adjusted()
+    if size < 1:
+        found.add("sub_unit")
+    if exponent == 0:
+        found.add("exponent_zero")
+    if exponent != 0 and exponent % 3 == 0:
+        found.add("exponent_step")
+    if len(size.normalize().as_tuple().digits) >= DISPLAY_SIGNIFICANT_DIGITS:
+        found.add("long_mantissa")
+    rounded = Context(prec=DISPLAY_SIGNIFICANT_DIGITS, rounding=ROUND_HALF_UP).plus(size)
+    if rounded.adjusted() != exponent:
+        found.add("rounding_carry")
+    return found
+
+
+def leading_literal(keys: list[str]) -> str | None:
+    """**キー列の先頭の数字列。** 表示のケースは `[数字…, "eq", "eng"|"dms"]`。
+
+    **先頭以外は読まない**——`literal_arguments` と同じ「窓」の考え方である。
+    式を打っているケースでは `None` を返し、**その分は「踏んでいない」ではなく
+    「読めない」**として扱う。
+    """
+    run: list[str] = []
+    for key in keys:
+        if key not in DIGIT_KEYS:
+            break
+        run.append(key)
+    if not run:
+        return None
+    return "".join("." if k == "dot" else k for k in run)
+
+
 def elementary_band(value: float) -> str:
     """**切れ目は `0` だけ**（`numerical-policy.md` の「関数の定義域」の表）。"""
     if value < 0:
@@ -472,7 +553,6 @@ UNOBSERVABLE_AXES: dict[str, tuple[str, ...]] = {
     # 「指数がちょうど 3」「丸めで繰り上がる」はそこからは読めない
     # （2026-08-30、宣言が漏れていて `display/edge` の 5 セルが
     # 「本当の穴」に混ざっていた）。
-    "display": ("edge",),
 }
 
 
@@ -561,6 +641,17 @@ def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
         put("display", "kind", "eng")
     if "dms" in keys:
         put("display", "kind", "dms")
+
+    if "eng" in keys or "dms" in keys:
+        # **表示境界は、打った十進のリテラルから読める**（`display_edges`）。
+        # **記録側には相手が居ない**——`keys` を持つ表示のケースは木を
+        # 経由せず、`levels` を持たない（実測 2026-08-30: 表示シャード
+        # 2,000 件のうち `levels` を持つ 493 件はすべて同値のケースで、
+        # `keys` ではなく `left`/`right` を持つ）。**だから観測専用である。**
+        text = leading_literal(case_keys(case))
+        if text is not None:
+            for edge in sorted(display_edges(text)):
+                put("display", "edge", edge)
 
     # **括弧の有無だけは観測できる。** 文法クラスは式の構造が要る。
     put("precedence", "parenthesis", "parenthesized" if "lparen" in keys else "bare")
@@ -781,7 +872,9 @@ OBSERVATION_ONLY_AXES: dict[str, tuple[str, ...]] = {
     # 期待値のエラー種別から出る。木を歩いても出ない
     "combinatorics": ("path",),
     # `eng` / `dms` は**木の外で押す**——`to_key_sequence(node)` の後ろに足される
-    "display": ("kind",),
+    # `eng` / `dms` は**木の外で押す**。`edge` は打った十進のリテラルから
+    # 読めるが、**表示のケースは木を経由しない**ので記録側に相手が居ない。
+    "display": ("kind", "edge"),
     # キー列は**括弧を省いた形**なので、木の括弧とは対応しない
     "precedence": ("parenthesis",),
     # `polar_toggle` は木の外。ゼロ成分は期待値から出る
@@ -886,8 +979,12 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
             "（実測: ln(リテラル) は elementary に 233 件、lit±lit は"
             " inverse-trig に 139 件ある）"
         ),
-        ("precedence", "grammar_class"): "文法クラスは式の構造で決まる",
-        ("display", "edge"): "表示境界はリテラルの値で決まる",
+        ("precedence", "grammar_class"): (
+            "文法クラスは式の構造で決まり、このシャードのキー列は括弧を"
+            "省いた形である——構造をキーから復元できるかどうかが、この"
+            "シャードが確かめている当のものである。木からは読めるが、"
+            "読めばキー側に相手が居ないので自己申告になる"
+        ),
     }
     payload["covered_outside_model"] = [
         {"cell_id": cell_id, "where": where}
