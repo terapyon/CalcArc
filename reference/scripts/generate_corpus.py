@@ -2005,28 +2005,38 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
 #: **丸めが一切関与しない。** **「桁が少しだけ落ちる引き算」の代表を置きたい
 #: なら、丸めが効く値を選ぶことになる**——**この 1 件はそれではない。**
 #: **帯が空だったことを埋める最小の 1 件**である。
-CANCELLATION_MILD_OPERANDS = ("1000.5", "1000.0")
+#: **2 件置く。片方は丸めが関与せず、片方は関与する。**
+#:
+#: - `(1000.5 - 1000.0)`: **両辺も差も二進で厳密**。**最も清潔な対照**で、
+#:   **桁落ちが起きていないことだけ**を言う
+#: - `(1000.1 - 1000.0)`: **`1000.1` は二進で厳密でない**。参照実装は
+#:   `0.1000000000000000000000000000000000000000000000000027` を返す
+#:   ——**丸めが値に出ている。「桁が少しだけ落ちる引き算」の代表**である
+#:
+#: **片方だけにしない。** 清潔な対照は「丸めが無いときの姿」を、
+#: もう 1 件は「丸めが在るときの姿」を言う——**どちらも確かめたい対象**である。
+CANCELLATION_MILD_OPERANDS = (("1000.5", "1000.0"), ("1000.1", "1000.0"))
 
 
 def _append_mild_cancellation(entries: list[dict]) -> None:
     """**乱択のループの後ろに足す。draw の列に触らない**（Task 8 と同じ形）。"""
-    left, right = CANCELLATION_MILD_OPERANDS
-    node = Bin("-", _typed(left), _typed(right))
-    value = evaluate(node)
-    case = {
-        "kind": "value",
-        "id": f"canc-{len(entries):06d}",
-        "mode": "Deg",
-        "keys": to_key_sequence(node),
-        "expr": to_expr_text(node),
-        "stratum": "near_subtraction",
-        "expect": {"re": float(value), "im": 0.0},
-    }
-    case["levels"] = corpus_science.levels_as_json(
-        corpus_science.recorded_levels(node, "Deg", "near_subtraction")
-    )
-    corpus_science.assert_record_matches_observation(case, node)
-    entries.append(case)
+    for left, right in CANCELLATION_MILD_OPERANDS:
+        node = Bin("-", _typed(left), _typed(right))
+        value = evaluate(node)
+        case = {
+            "kind": "value",
+            "id": f"canc-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": to_expr_text(node),
+            "stratum": "near_subtraction",
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(
+            corpus_science.recorded_levels(node, "Deg", "near_subtraction")
+        )
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
 
 
 def build_combinatorics_shard(seed: int, count: int) -> dict:
