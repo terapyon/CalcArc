@@ -185,10 +185,17 @@ def _selected_pair_cells(scope: str, factors: dict[str, tuple]) -> tuple[coverag
     """選んだ軸の組だけを直積にする。**全軸の直積は作らない**（§14.2）。"""
     cells: list[coverage.Cell] = []
     for left, right in SELECTED_PAIRS.get(scope, ()):
-        for a in factors[left]:
-            for b in factors[right]:
-                axes = sorted(((left, coverage.level_text(a)), (right, coverage.level_text(b))))
-                cells.append(coverage.Cell(scope, tuple(axes)))
+        # **軸の並びは因子表の順に揃える**（`all_combination_cells` と同じ）。
+        # 並びが違うと `Cell` の同一性が崩れ、**同じ意味のセルが別物になる。**
+        first, second = (name for name in factors if name in (left, right))
+        for a in factors[first]:
+            for b in factors[second]:
+                cells.append(
+                    coverage.Cell(
+                        scope,
+                        ((first, coverage.level_text(a)), (second, coverage.level_text(b))),
+                    )
+                )
     return tuple(cells)
 
 
@@ -207,3 +214,188 @@ SCIENCE_REQUIREMENTS: tuple[coverage.Requirement, ...] = tuple(
     )
     for scope, factors in SCIENCE_FACTORS.items()
 )
+
+
+# ---------------------------------------------------------------------------
+# 写す経路（Task 2）——**ケースから、観測できる水準だけを取り出す。**
+#
+# **観測と記録は別物である**（裁定 1 の (c)）。生成器は「この水準を狙って作った」
+# と知っており（記録）、ここは「このケースは何を踏んでいるか」を読む（観測）。
+# **両者の一致を assert するのが Task 3 の主番人**で、**この module は観測の側**
+# だけを持つ。
+# ---------------------------------------------------------------------------
+
+#: **キーの綴り → 関数の名前。** 盤面のトークンと因子表の名前は綴りが違う
+#: （`n_fact` と `fact`、`n_p_r` と `nPr`）。**変換表をここ 1 か所に置く。**
+KEY_TO_FUNCTION: dict[str, str] = {
+    "sin": "sin",
+    "cos": "cos",
+    "tan": "tan",
+    "asin": "asin",
+    "acos": "acos",
+    "atan": "atan",
+    "ln": "ln",
+    "log10": "log10",
+    "exp_e": "exp_e",
+    "recip": "recip",
+    "n_fact": "fact",
+    "n_p_r": "nPr",
+    "n_c_r": "nCr",
+}
+
+#: **演算子のキー → 演算子群**（`ASSOC_CHAINS` の分類に対応）。
+KEY_TO_OPERATOR_GROUP: dict[str, str] = {
+    "add": "additive",
+    "sub": "additive",
+    "mul": "multiplicative",
+    "div": "multiplicative",
+    "n_p_r": "combinatorial",
+    "n_c_r": "combinatorial",
+    "pow": "power",
+}
+
+#: **観測できない軸。** ここに挙げた軸は、**ケースを読んでも水準が出ない**
+#: ——引数の値や式の構造が要る。
+#:
+#: **書き出す理由**: 裁定 1 の (c) は「記録と観測の一致を assert する」だが、
+#: **観測できない軸は assert できない**。**どこまでが検算されているかを、
+#: 読む人が知れなければならない**——「全部突き合わせている」と読ませない。
+UNOBSERVABLE_AXES: dict[str, tuple[str, ...]] = {
+    # 帯は引数の値で決まる。キー列からは、どの数がどの関数に入ったか分からない
+    "elementary": ("band",),
+    "inverse_trig": ("band",),
+    "cancellation": ("shape", "band"),
+    # 文法クラスは式の構造で決まる（括弧の有無だけは観測できる）
+    "precedence": ("grammar_class",),
+    # 演算種別は式の構造で決まる
+    "complex": ("operation",),
+    # 表示の境界は**リテラルの値**で決まる。キー列には数字が並ぶだけで、
+    # 「指数がちょうど 3」「丸めで繰り上がる」はそこからは読めない
+    # （2026-08-30、宣言が漏れていて `display/edge` の 5 セルが
+    # 「本当の穴」に混ざっていた）。
+    "display": ("edge",),
+}
+
+
+def case_keys(case: dict) -> tuple[str, ...]:
+    """ケースのキー列。**等価ケースは 2 本持つ**ので連結する。
+
+    **`keys` を持たないケースが 1,292 件ある**（`display` 621 /
+    `complex-display` 671。2026-08-30 実測）——それらは `kind: "equivalence"` で、
+    `left` と `right` の 2 本を持つ。**片方だけ読むと、押したキーの半分を
+    見落とす。**
+    """
+    if "keys" in case:
+        return tuple(case["keys"])
+    return tuple(case.get("left", ())) + tuple(case.get("right", ()))
+
+
+def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
+    """1 ケースが踏んでいる水準を、**観測できる軸についてだけ**返す。
+
+    **キーを一次資料にする。`expr` は読まない。**
+
+    実測（2026-08-30）: `expr` とキーで数が食い違う関数が 3 つあった
+    （`nPr` 639/640・`nCr` 1711/1715・`recip` 902/903）。**食い違いは全部
+    `errors-000.json` で、そこは `expr` が人間向けの散文である**
+    （`P(5,6)`・`1/0 (逆数)`）。**キーは押した列そのもの**なので、こちらを正とする。
+
+    **軸ごとに集合を返す。** 1 件が同じ軸で複数の水準を踏むことがある
+    （`sin` と `cos` の両方を含む式）——**1 つしか持てない形にすると、
+    後ろの 1 つで上書きして手前を落とす。**
+
+    **1 件が複数の scope を踏むこともある**（設計書 §9.3）。三角関数を含む
+    `precedence` のケースは、`angle_mode` の水準も踏んでいる。
+    """
+    keys = set(case_keys(case))
+    mode = case.get("mode")
+    out: dict[str, dict[str, set[str]]] = {}
+
+    def put(scope: str, axis: str, level: object) -> None:
+        out.setdefault(scope, {}).setdefault(axis, set()).add(coverage.level_text(level))
+
+    functions = {KEY_TO_FUNCTION[k] for k in keys if k in KEY_TO_FUNCTION}
+
+    for fn in sorted(functions & set(TRIG_FNS)):
+        put("angle_mode", "function", fn)
+    for fn in sorted(functions & set(INVERSE_TRIG_FNS)):
+        put("inverse_trig", "function", fn)
+    for fn in sorted(functions & set(ELEMENTARY_FNS)):
+        put("elementary", "function", fn)
+    for fn in sorted(functions & set(COMBINATORICS_FNS + COMBINATORICS_BINS)):
+        put("combinatorics", "function", fn)
+
+    if mode in ANGLE_MODES:
+        if functions & set(TRIG_FNS):
+            put("angle_mode", "angle_mode", mode)
+        if functions & set(INVERSE_TRIG_FNS):
+            put("inverse_trig", "angle_mode", mode)
+
+    if functions & set(COMBINATORICS_FNS + COMBINATORICS_BINS):
+        # **経路はエラーの種類で決まる**（§14.2「正常/定義域/Overflow近傍」）。
+        error = case.get("expect", {}).get("error")
+        put(
+            "combinatorics",
+            "path",
+            "normal" if error is None else ("overflow_near" if error == "Overflow" else "domain"),
+        )
+
+    if "eng" in keys:
+        put("display", "kind", "eng")
+    if "dms" in keys:
+        put("display", "kind", "dms")
+
+    # **括弧の有無だけは観測できる。** 文法クラスは式の構造が要る。
+    put("precedence", "parenthesis", "parenthesized" if "lparen" in keys else "bare")
+
+    groups = {KEY_TO_OPERATOR_GROUP[k] for k in keys if k in KEY_TO_OPERATOR_GROUP}
+    for group in sorted(groups):
+        put("associativity", "operator_group", group)
+    if groups:
+        # 対照群の名前は生成器が層に書いている（`ASSOC_CONTROL_STRATUM`）。
+        put(
+            "associativity",
+            "shape",
+            "parenthesized" if case.get("stratum") == "parenthesized" else "flat",
+        )
+
+    if "j" in keys or "polar_toggle" in keys:
+        put("complex", "form", "polar" if "polar_toggle" in keys else "rectangular")
+        expect = case.get("expect", {})
+        re_zero, im_zero = expect.get("re") == 0, expect.get("im") == 0
+        put(
+            "complex",
+            "zero_part",
+            "both_zero"
+            if re_zero and im_zero
+            else ("real_zero" if re_zero else ("imag_zero" if im_zero else "none")),
+        )
+
+    return out
+
+
+def observed_cells(case: dict) -> set[coverage.Cell]:
+    """観測できた水準を、要求セルの単位へ写す。
+
+    **軸の並びは因子表の順に揃える。** アルファベット順で組むと
+    `all_combination_cells` が作る `(function, angle_mode)` と食い違い、
+    **同じ意味のセルが別物になって被覆が 0 になる**——2026-08-30 に実際に
+    そうなった（`angle_mode` が 6 中 0 被覆。`Rad` のケースは 2,000 件在るのに）。
+
+    `SCIENCE_REQUIREMENTS` に在るセルだけを返す——**モデルの外のセルを
+    被覆として数えない**（`build_payload` が同じことを検算する）。
+    """
+    known = {cell for req in SCIENCE_REQUIREMENTS for cell in req.cells}
+    found: set[coverage.Cell] = set()
+    for scope, axes in observed_levels(case).items():
+        for name, levels in axes.items():
+            for level in levels:
+                found.add(coverage.Cell(scope, ((name, level),)))
+        ordered = [name for name in SCIENCE_FACTORS[scope] if name in axes]
+        for i in range(len(ordered)):
+            for j in range(i + 1, len(ordered)):
+                left, right = ordered[i], ordered[j]
+                for a in axes[left]:
+                    for b in axes[right]:
+                        found.add(coverage.Cell(scope, ((left, a), (right, b))))
+    return found & known
