@@ -330,6 +330,58 @@ describe("LlmPanel（電卓）", () => {
     expect([...new Set(forLayers.map((c) => c.unitSet))]).toEqual(["none"]);
   });
 
+  /**
+   * **AC の 3 つの判断を固定する**（0.3.x triage C2）。
+   *
+   * **spec はこの 3 つについて沈黙している**——`2026-08-19-scale-llm-transfer-design.md`
+   * が `AC` に触れるのは盤面のセル数の話 1 か所だけで、**押したときに何が起きるかは
+   * 書いていない**。つまり仕様は**実装とそのコメント**にしか無く、**検査は 0 件**だった。
+   *
+   * **だから「正しさ」ではなく「いまこう決まっている」を留める。** 変えたくなった日に
+   * ここが赤くなり、**裁定が要ることに気づける**のが役目である。
+   */
+  describe("AC が項目ごとに何を戻すか（spec が沈黙している 3 件）", () => {
+    it("選択のみの項目は、既定の精度へ戻る（空にはならない）", async () => {
+      await renderPanel();
+      await press([FIELD_NAMES.weight, "INT4"]);
+      expect(echo()).toHaveTextContent("重みの精度 INT4");
+
+      await press(["この項目を消去"]);
+      // **既定値は「候補を選んだのと同じ状態」であって、AC が守る不変ではない**
+      // ——`LlmPanel.tsx` のコメントが言っているとおり、空ではなく既定へ戻る。
+      expect(echo()).toHaveTextContent("重みの精度 FP16");
+    });
+
+    it("候補面を出している項目は、空になる（既定へは戻らない）", async () => {
+      await renderPanel();
+      await press([FIELD_NAMES.context]);
+      expect(echo()).toHaveTextContent("文脈長 4096");
+
+      await press(["この項目を消去"]);
+      // **選択のみの項目と違う扱いである。** 候補面を出していても、
+      // 中身は打てる値なので空に戻る。
+      expect(echo()).not.toHaveTextContent("文脈長 4096");
+    });
+
+    it("「手入力」は値を捨て、「候補から選ぶ」は値を保つ", async () => {
+      await renderPanel();
+      await press([FIELD_NAMES.context]);
+      expect(echo()).toHaveTextContent("文脈長 4096");
+
+      // **手入力へ移るときは空から打ち始める**（実装のコメント）。
+      await press(["手入力"]);
+      expect(echo()).not.toHaveTextContent("文脈長 4096");
+
+      await type("2048");
+      expect(echo()).toHaveTextContent("文脈長 2048");
+
+      // **戻る側は消さない。** 「候補を選び直したいだけ」なので、
+      // 打った値はそのまま残る——**この非対称が C2 の 3 件目である。**
+      await press(["候補から選ぶ"]);
+      expect(echo()).toHaveTextContent("文脈長 2048");
+    });
+  });
+
   it("keeps every default among the candidates it says it matches", async () => {
     // `LlmPanel.tsx` の既定値は「対応する候補キーを押したのと同じ Entry」
     // だと名乗っているが、値はべた書きで `CANDIDATE_VALUES` を見ていない
