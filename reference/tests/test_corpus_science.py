@@ -380,7 +380,7 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
     # 17,823 → 17,826（Task 8 が Rad の逆三角を 3 件足した）
-    assert checked == 17832, f"突き合わせたのが {checked} 件しかない"
+    assert checked == 17833, f"突き合わせたのが {checked} 件しかない"
 
 
 # ---------------------------------------------------------------------------
@@ -428,9 +428,9 @@ def test_the_declaration_list_is_pinned() -> None:
         #   cancellation/shape                  生成器が名前で選んでいる
         #   cancellation/band                   近さの比がキーから取れる
         #
-        # **残る 1 軸だけが、読むと突合が消える**——`precedence` のキー列は
-        # 括弧を省いた形であり、**構造をキーから復元できるかどうかが、
-        # このシャードが確かめている当のもの**である。
+        # **残る 1 軸は「読めない」のではなく「parser を書いていない」**
+        # （2026-08-30 の 2 度目の訂正。実測: 演算子はキー列に在る）。
+        # **キー列は括弧を省いた形なので、優先順位で読み直す手が要る。**
         "precedence": ("grammar_class",),
     }
 
@@ -957,17 +957,18 @@ def test_the_cancellation_bands_are_pinned_against_the_real_shard() -> None:
     ここでしか見えない。**
 
     実測（2026-08-30、切れ目を次元の合うものへ引き直したあと）:
-    `severe` 571 / `near_tolerance` 1,429 / `mild` 1。
-    **`mild` の 1 件は、乱択が 1 件も作らなかったので手で足したもの**
-    （`_append_mild_cancellation`）——**この 1 が 0 になったら、対照が
-    また消えている。**
+    `severe` 571 / `near_tolerance` 1,429 / `mild` **2**。
+    **`mild` の 2 件は、乱択が 1 件も作らなかったので手で足したもの**
+    （`_append_mild_cancellation`）——**丸めが関与しないもの（`1000.5 - 1000.0`）
+    と、関与するもの（`1000.1 - 1000.0`）の 2 つ。** **この 2 が減ったら、
+    対照が片方でも消えている。**
     """
     counts: dict[str, int] = {}
     for case in json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))["cases"]:
         levels = case.get("levels", {}).get("cancellation", {})
         for band in levels.get("band", []):
             counts[band] = counts.get(band, 0) + 1
-    assert counts == {"severe": 571, "near_tolerance": 1429, "mild": 1}
+    assert counts == {"severe": 571, "near_tolerance": 1429, "mild": 2}
 
 
 def test_every_cancellation_case_declares_its_shape() -> None:
@@ -1015,9 +1016,16 @@ def test_the_block_carries_the_real_rejection_counts() -> None:
 def test_the_last_unmeasured_axis_says_something_the_data_backs() -> None:
     """**★ 残った 1 つの宣言に届く番人。**
 
-    `precedence/grammar_class` の理由はこう書いてある——**「このシャードの
-    キー列は括弧を省いた形であり、構造をキーから復元できるかどうかが、
-    このシャードが確かめている当のものである」。**
+    `precedence/grammar_class` の理由はこう書いてある——**「演算子はキー列に
+    在るが、構造はそこから直接は出ない。キー列は括弧を省いた形なので、
+    優先順位で読み直す parser が要る」。**
+
+    **【訂正 2026-08-30・2 度目】理由は「キー側に相手が居ない」だった。
+    言い過ぎである**——**演算子はキー列に在る**（素朴な読みで `mul_over_add`
+    2000/2000、`chained_same` 1545、`unary_over_binary` 1445。実測）。
+    **足りないのは演算子ではなく構造で、正しくは「parser を書いていない」**
+    である。**このテストが見るのは、その parser が要る理由**——
+    **キー列が括弧を省いていること**——**のほうである。**
 
     **他の 3 本の番人は、ここに届かない**（2026-08-30 のレビュー指摘）:
 
