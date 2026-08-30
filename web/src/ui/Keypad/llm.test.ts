@@ -91,30 +91,35 @@ describe("LLM のキー集合", () => {
     // 黙って飛ぶ**。綴りが `paramX:` になれば正規表現が外れ、そのキーは
     // 1 度も比べられないまま緑になる（実測）。**飛ばしてよいものを名指しし、
     // 比べた回数も数える。**
-    let compared = 0;
+    const compared = new Set<string>();
     for (const section of Object.values(CANDIDATE_SECTIONS)) {
       for (const key of section.keys) {
         const token = key.token;
         if (token === null) continue; // 5×5 を埋める空き
         if (!/^(param|heads|dim|ctx):/.test(token)) {
           // **候補面に居てよい「値でないキー」を名指しする。**
-          // `del`/`ac` は `buildCandidateFace` が 1 行目に足す（:242-244）、
+          // `del`/`ac` は `buildCandidateFace` の `row.push(DEL, AC)` が足す、
           // `entry:manual` は手入力へ移るキー、`precision:` は重み/KV の面。
           // **列挙が現物と食い違えば、ここが落ちる**——推測で書くと、
           // 知らないキーが増えた日に黙って飛ばす形へ戻る。
           expect(token).toMatch(/^(del$|ac$|entry:manual$|precision:)/);
           continue;
         }
-        compared += 1;
+        compared.add(token);
         expect(token.split(":")[1]).toBe(key.ariaLabel);
       }
     }
-    // **数えた回数が候補の総数と一致する。** 1 つでも飛ばされたら落ちる。
-    expect(compared).toBe(
-      CANDIDATE_VALUES.parameters.length +
-        CANDIDATE_VALUES.kvHeads.length +
-        CANDIDATE_VALUES.headDim.length +
-        CANDIDATE_VALUES.context.length,
+    // **回数ではなく集合で見る。** 回数の一致は集合の一致ではない——
+    // **同じ値のキーが 2 つ在って、別の値が 1 つ欠けても数は合う**。いまは
+    // `valueKey` の `map` が 1 対 1 なので起きえないが、**「今は起きえない」は
+    // 将来の保証ではない**（2026-08-30 のレビュー）。
+    expect(compared).toEqual(
+      new Set([
+        ...CANDIDATE_VALUES.parameters.map((v) => `param:${v}`),
+        ...CANDIDATE_VALUES.kvHeads.map((v) => `heads:${v}`),
+        ...CANDIDATE_VALUES.headDim.map((v) => `dim:${v}`),
+        ...CANDIDATE_VALUES.context.map((v) => `ctx:${v}`),
+      ]),
     );
   });
 
