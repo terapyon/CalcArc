@@ -78407,19 +78407,16 @@
         "scope": "complex"
       }
     ],
-    "generation_rejections": {},
+    "generation_rejections": {
+      "bare": 7894,
+      "division_by_zero": 6,
+      "domain": 6872,
+      "dup": 2251,
+      "out_of_range": 6378,
+      "overflow": 1764
+    },
     "model": "scientific-v1",
     "not_measured_axes": [
-      {
-        "axis": "shape",
-        "scope": "cancellation",
-        "why": "\u5f62\u306e\u9aa8\u683c\u306f\u30ad\u30fc\u5217\u304b\u3089\u8aad\u3081\u308b\u304c\u30014 \u3064\u3092\u5206\u3051\u3066\u3044\u308b\u306e\u306f\u300c\u8fd1\u3055\u300d\u3067\u3042\u308a\u3001\u8fd1\u3055\u306e\u5207\u308c\u76ee\u3092\u4ed5\u69d8\u304c\u6c7a\u3081\u3066\u3044\u306a\u3044\u3002\u9aa8\u683c\u3060\u3051\u3067\u5206\u3051\u308b\u3068\u53d6\u308a\u9055\u3048\u308b\uff08\u5b9f\u6e2c: ln(\u30ea\u30c6\u30e9\u30eb) \u306f elementary \u306b 233 \u4ef6\u3001lit\u00b1lit \u306f inverse-trig \u306b 139 \u4ef6\u3042\u308b\uff09"
-      },
-      {
-        "axis": "band",
-        "scope": "cancellation",
-        "why": "\u5f37\u5ea6\u306e\u5207\u308c\u76ee\u3092\u4ed5\u69d8\u304c\u6c7a\u3081\u3066\u3044\u306a\u3044\u3002\u751f\u6210\u5668\u306e CANCELLATION_TOLERANCE \u304b\u3089\u5f15\u3051\u308b\u898b\u8fbc\u307f\u3060\u304c\u3001\u76f8\u6bba\u306e\u4e21\u8fba\u306f\u5f0f\u306a\u306e\u3067\u30ea\u30c6\u30e9\u30eb\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
-      },
       {
         "axis": "grammar_class",
         "scope": "precedence",
@@ -78488,15 +78485,15 @@
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 0,
+        "covered_cells": 7,
         "excluded_cells": 0,
         "id": "cancellation/band-shape/one_way",
         "required_cells": 7,
         "scope": "cancellation",
-        "status": "incomplete",
+        "status": "complete",
         "strength": "one_way",
-        "unmet_cells": 7,
-        "unmet_from_unmeasured_axes": 7,
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
         "unmet_real_cells": []
       },
       {

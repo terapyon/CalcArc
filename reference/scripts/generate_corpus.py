@@ -1950,7 +1950,13 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
             raise RuntimeError(
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
-        node = CANCELLATION_SHAPES[rng.randrange(len(CANCELLATION_SHAPES))](rng)
+        # **形の名前を持ち歩く。** 索引で選んだあと捨てていた——
+        # **生成器は形を知っているのに、ケースに書いていなかった**
+        # （2026-08-30 のレビュー指摘）。`associativity` は同じものを
+        # `stratum` に書いており、**試験空間モデルはそれを読んでいる。**
+        chosen = rng.randrange(len(CANCELLATION_SHAPES))
+        shape = corpus_science.CANCELLATION_SHAPES[chosen]
+        node = CANCELLATION_SHAPES[chosen](rng)
         try:
             value = evaluate(node)
         except OutOfShard:
@@ -1965,18 +1971,56 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
             "mode": "Deg",
             "keys": to_key_sequence(node),
             "expr": expr,
+            "stratum": shape,
             "expect": {"re": float(value), "im": 0.0},
         }
         # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
-        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        case["levels"] = corpus_science.levels_as_json(
+            corpus_science.recorded_levels(node, "Deg", shape)
+        )
         corpus_science.assert_record_matches_observation(case, node)
         entries.append(case)
+    _append_mild_cancellation(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "tolerance": CANCELLATION_TOLERANCE,
         "cases": entries,
     }
+
+
+#: **桁がほとんど落ちない引き算**（試験空間モデルの Task 18）。
+#:
+#: **このシャードは対照を 1 件も持っていなかった。** 4 つの形はどれも
+#: 「近い 2 数」を作るので、**近さの比は 2,000 件すべてが `1e-6` 未満**
+#: （実測 2026-08-30: 最大 9.97e-7）。**§14.2 は「各帯に最低件数」と
+#: 要求している**が、`mild` の帯は空だった。
+#:
+#: `(1000.5 - 1000.0)` の比は **5.00e-4** で、シャードが宣言している
+#: 相対許容 `1e-6` の**上**にある——**桁落ちが起きていないことの証拠**として
+#: 置く。**乱択では出ない**（`_near_subtraction` は差を 1/1000 未満に作る）。
+CANCELLATION_MILD_OPERANDS = ("1000.5", "1000.0")
+
+
+def _append_mild_cancellation(entries: list[dict]) -> None:
+    """**乱択のループの後ろに足す。draw の列に触らない**（Task 8 と同じ形）。"""
+    left, right = CANCELLATION_MILD_OPERANDS
+    node = Bin("-", _typed(left), _typed(right))
+    value = evaluate(node)
+    case = {
+        "kind": "value",
+        "id": f"canc-{len(entries):06d}",
+        "mode": "Deg",
+        "keys": to_key_sequence(node),
+        "expr": to_expr_text(node),
+        "stratum": "near_subtraction",
+        "expect": {"re": float(value), "im": 0.0},
+    }
+    case["levels"] = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(node, "Deg", "near_subtraction")
+    )
+    corpus_science.assert_record_matches_observation(case, node)
+    entries.append(case)
 
 
 def build_combinatorics_shard(seed: int, count: int) -> dict:
@@ -2373,8 +2417,19 @@ def main() -> None:
     # 9 領域を跨ぐ被覆を数えられない（設計書 §14.2 の要求は
     # `angle-mode` の Rad と他 3 枚の Deg にまたがっている）。
     built = [(name, payload) for name, payload in _shards(count)]
+    # **棄却の数も渡す。** シャードごとに `rejections` を持っているものを
+    # 理由ごとに足し合わせる——**「候補を作って捨てた回数」であって、要求セルの
+    # 除外ではない**（設計書 §10.3）。**`{}` を載せると「棄却が無い」と読まれる**
+    # ——実物は 25,165 件ある（2026-08-30 のレビュー指摘）。
+    science_rejections: dict[str, int] = {}
+    for name, payload in built:
+        if name not in SCIENCE_SHARDS:
+            continue
+        for reason, count in (payload.get("rejections") or {}).items():
+            science_rejections[reason] = science_rejections.get(reason, 0) + count
     science = corpus_science.build_science_coverage(
-        {name: payload["cases"] for name, payload in built if name in SCIENCE_SHARDS}
+        {name: payload["cases"] for name, payload in built if name in SCIENCE_SHARDS},
+        science_rejections,
     )
     for name, payload in built:
         total_cases += len(payload["cases"])

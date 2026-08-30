@@ -19,12 +19,21 @@
 // **だから走行を挟む。** 言えるようになるのは
 // **「この走行のあいだ、入力は index と一致していた」**である。
 //
-// ## なぜ「手順を書く」ではなく道具にしたか
+// ## ★ この道具が「番人」でない範囲を、先に書いておく
 //
-// **規律を書いたら、同じコミットで番人を置く**（CLAUDE.md）。
-// **「走行の前後で照合すること」という文は、破っても赤くならない。**
-// この wrapper は**照合そのものを走行の一部にする**ので、
-// **忘れるという壊れ方が無い。**
+// **規律を書いたら、同じコミットで番人を置く**（CLAUDE.md）。**この wrapper は、
+// 番人の条件を半分しか満たしていない**——**呼べば照合が走行の一部になるが、
+// 呼ばないことは赤くならない。** **CI は素の `pnpm heavy` を回しており、
+// ここを通らない。**
+//
+// **通していないのは意図してである。** 化けが出ているのは**この作業台だけ**で
+// （2026-08-30 の 3 バイト。[known-flaky-tests.md] を見よ）、**CI の runner は
+// 走行ごとに作り直される。** **手元の症状のために、毎回の CI に段を増やさない。**
+//
+// **代わりに守るもの**: `heavy/package.json` の `heavy:verified` /
+// `heavy:ui:verified` / `verify`。**手元で長い走行を回すときは、そちらを打つ。**
+// **「照合を挟んだ」と報告に書くときは、この道具の印字を貼ること**
+// ——「挟んだ」という文は、印字が無ければ確かめられない。
 //
 // ## 使い方
 //
@@ -37,6 +46,22 @@
 // ——**その緑は信用できないからである。**
 
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+/**
+ * **リポジトリの根。** `git ls-files` が返す path は**根からの相対**なので、
+ * **どこから呼ばれても根を基準に解決する。**
+ *
+ * **これが無いと、サブディレクトリから呼んだときに別のファイルを見る**
+ * ——2026-08-30、`heavy/` から呼んで `.npmrc` が
+ * `web/.npmrc` ではなく `heavy/.npmrc` に解決され、`git hash-object` が
+ * 「そのようなファイルはありません」で落ちた。**落ちたのは運が良かった**
+ * ——**同名のファイルが両方に在れば、黙って違うものを照合していた。**
+ */
+const ROOT = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+  encoding: "utf8",
+}).stdout.trim();
 
 /** `git ls-files -s` の 1 行から `(sha, path)` を取る。 */
 export function parseIndexLine(line) {
@@ -84,6 +109,7 @@ function git(args, input) {
     input,
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
+    cwd: ROOT,
   });
   if (run.status !== 0) {
     throw new Error(`git ${args.join(" ")} が失敗した: ${run.stderr?.trim()}`);
@@ -152,7 +178,7 @@ export function verifyWorktree() {
 }
 
 function existsOnDisk(path) {
-  return spawnSync("test", ["-f", path]).status === 0;
+  return existsSync(resolve(ROOT, path));
 }
 
 function report(when) {

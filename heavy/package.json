@@ -8,6 +8,9 @@
   "scripts": {
     "heavy": "pnpm --dir ../web wasm && playwright test --config playwright.corpus.config.ts",
     "heavy:ui": "pnpm --dir ../web wasm && playwright test --config playwright.ui.config.ts",
+    "verify": "node ../tools/verified-run.mjs",
+    "heavy:verified": "node ../tools/verified-run.mjs -- pnpm heavy",
+    "heavy:ui:verified": "node ../tools/verified-run.mjs -- pnpm heavy:ui",
     "heavy:power": "node scripts/detection-power.mjs",
     "heavy:power:exact": "node scripts/exact-power.mjs",
     "test": "vitest run",

@@ -223,7 +223,13 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     Task 14 のあと 未達 17 = 測れない 16 + 本当の穴  1   （近傍の射影を直した）
     Task 14 ② のあと 未達 16 = 測れない 16 + 本当の穴 0   （誤入力の 1 枚を作った）
     Task 17  のあと 未達 11 = 測れない 11 + 本当の穴 0   （**表示境界も読めた**）
+    Task 18  のあと 未達  4 = 測れない  4 + 本当の穴 0   （**相殺の 2 軸も読めた**）
     ```
+
+    **★ 最後の 2 軸は、レビューが見つけた。** 「相殺の両辺は式なので
+    リテラルからは読めない」は偽で、**2,000 件すべてでキー列から近さの比が
+    取れる。** そして**同じ日に `overflow_near` では切れ目を引くことを
+    受け入れながら、ここでは拒んでいた——基準が非対称だった。**
 
     **「測れない」が 10 件減って、そこから本当の穴が 4 件出てきた。**
     **測れないと言えているあいだ、その 4 件は誰にも見えていなかった。**
@@ -249,7 +255,7 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
                 else real
             )
             target.append(cell.id)
-    assert len(declared) == 11
+    assert len(declared) == 4
     # **Task 13 で `complex` の 2 件が消えた**——`operation=power` は engine が
     # 拒むので理由付き除外、`zero_part=both_zero` は `(j5 - j5)` で埋めた。
     assert real == []
@@ -374,7 +380,7 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
     # 17,823 → 17,826（Task 8 が Rad の逆三角を 3 件足した）
-    assert checked == 17831, f"突き合わせたのが {checked} 件しかない"
+    assert checked == 17832, f"突き合わせたのが {checked} 件しかない"
 
 
 # ---------------------------------------------------------------------------
@@ -413,12 +419,18 @@ def test_the_declaration_list_is_pinned() -> None:
     狭めて点を稼ぐ手**かもしれない。**増えたら人が読む。**
     """
     assert corpus_science.UNOBSERVABLE_AXES == {
-        # **`elementary` と `inverse_trig` の `band` は 2026-08-30 に外した**
-        # ——宣言が実データと食い違っていた（下の
-        # `test_a_band_declared_unreadable_has_no_readable_argument` が番人）。
-        # **残っているのはこの 2 領域だけ**（2026-08-30）。`display/edge` は
-        # **打った十進のリテラルから読める**ので観測専用へ移した。
-        "cancellation": ("shape", "band"),
+        # **★ 着手時 6 軸 → いま 1 軸。** 外した 5 つは、どれも
+        # **「観測できない」ではなく「読み方を書いていない」**だった:
+        #
+        #   elementary/band・inverse_trig/band  リテラル引数から読める
+        #   complex/operation                   演算子キーから読める
+        #   display/edge                        打った十進から読める
+        #   cancellation/shape                  生成器が名前で選んでいる
+        #   cancellation/band                   近さの比がキーから取れる
+        #
+        # **残る 1 軸だけが、読むと突合が消える**——`precedence` のキー列は
+        # 括弧を省いた形であり、**構造をキーから復元できるかどうかが、
+        # このシャードが確かめている当のもの**である。
         "precedence": ("grammar_class",),
     }
 
@@ -445,10 +457,9 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     assert by_scope["complex"]["unmet_real_cells"] == []
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
     assert real == 0, "本当の穴は 0 件"
-    # **7 → 3。** `elementary/band`・`inverse_trig/band`・`complex/operation`・
-    # `display/edge` を外した。**残るのは `cancellation` の 2 軸と
-    # `precedence/grammar_class` だけ**である。
-    assert len(payload["not_measured_axes"]) == 3
+    # **7 → 1。** 6 つの宣言を外した。**残るのは `precedence/grammar_class`
+    # だけ**である。
+    assert len(payload["not_measured_axes"]) == 1
 
 
 def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> None:
@@ -462,11 +473,20 @@ def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> N
         json.loads((CORPUS / name).read_text(encoding="utf-8"))["coverage"] for name in NINE_SHARDS
     ]
     assert all(block == blocks[0] for block in blocks), "10 枚のブロックが揃っていない"
+    # **棄却も同じ手で数え直す**——生成器がやっているのと同じ足し合わせ。
+    # **ここを渡し忘れると「源と写しの一致」が空の棄却と比べられて落ちる**
+    # （2026-08-30、実際に落ちた。**それは正しい赤である**）。
+    fresh_rejections: dict[str, int] = {}
+    for name in NINE_SHARDS:
+        shard = json.loads((CORPUS / name).read_text(encoding="utf-8"))
+        for reason, count in (shard.get("rejections") or {}).items():
+            fresh_rejections[reason] = fresh_rejections.get(reason, 0) + count
     fresh = corpus_science.build_science_coverage(
         {
             name: json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]
             for name in NINE_SHARDS
-        }
+        },
+        fresh_rejections,
     )
     assert blocks[0] == json.loads(json.dumps(fresh)), (
         "載っているブロックが、いま数え直したものと違う"
@@ -751,7 +771,7 @@ def test_the_outside_citation_names_cases_that_exist() -> None:
 
 #: **測れないと宣言した「帯」の領域が、自分の因子表の関数へリテラル引数を
 #: 何件持っているか。** 下のテストが実データと突き合わせる。
-UNREADABLE_BAND_LITERALS = {"cancellation": 0}
+UNREADABLE_BAND_LITERALS: dict[str, int] = {}
 
 
 def test_a_band_declared_unreadable_has_no_readable_argument() -> None:
@@ -772,9 +792,12 @@ def test_a_band_declared_unreadable_has_no_readable_argument() -> None:
     **その領域の因子表が名指しする関数にリテラルが入っていたら落とす**
     ——それは「読める」ということだからである。
 
-    **`cancellation` が例外に見えないのは偶然ではない。** あの領域の
-    リテラル引数 365 件はすべて `ln` 宛て——**`elementary` の関数**であり、
-    `cancellation` の因子表は関数を 1 つも名指ししていない。**だから 0 である。**
+    **【2026-08-30・2 度目】この検査は、いま対象が 0 領域である。**
+    `cancellation/band` を測れる側へ移したので、**「帯を測れないと宣言した
+    領域」が 1 つも無くなった。** **それでも消さない**——次に誰かが帯の
+    宣言を足した日に、**その宣言をデータに当てるのはここだけ**である。
+    **空であること自体は主張になっていない**ので、下の判別テストが
+    「宣言すれば鳴る」ことを毎回確かめている。
     """
     measured: dict[str, int] = {}
     for scope, axes in corpus_science.UNOBSERVABLE_AXES.items():
@@ -851,3 +874,154 @@ def test_the_complex_unary_names_match_the_reference() -> None:
     from calcarc_reference.corpus_complex import COMPLEX_UNARY_FNS
 
     assert corpus_science.COMPLEX_UNARY_FN_NAMES == COMPLEX_UNARY_FNS
+
+
+def test_the_overflow_neighbourhood_is_covered_without_the_error_shard() -> None:
+    """**★ `OVERFLOW_NEAR_FLOOR` の番人。**
+
+    **これが無いあいだ、切れ目は何にも守られていなかった**——`1e307` を
+    `1e309`（＝射影を直す前と同じ、「溢れ**た**ケースだけ」）に戻しても、
+    `test_corpus_science.py` と `test_generate_corpus.py` が **153 passed の
+    まま**だった（2026-08-30、変異で実測）。
+
+    **なぜ鳴らなかったか。** 同じコミットで足した
+    `combinatorics-display-000.json` の `cmbe-000012`（`(171)!`、`Overflow`）が、
+    **旧射影でも `overflow_near` を踏む。** **「射影の誤りだった」と
+    「新しいシャードで埋めた」が、同じセルを同じコミットで閉じていた**
+    ——**2 つの道が重なっていて、片方だけを壊しても赤くならない。**
+
+    **だから誤りのシャードを外して数える。** 値のケースだけで
+    `overflow_near` が覆われることは、**切れ目が実データに届いていることの
+    直接の主張**である（実測: 10 枚で被覆 5、残る穴は `path=domain` のみ）。
+    """
+    without_errors = tuple(name for name in NINE_SHARDS if name != "combinatorics-display-000.json")
+    assert len(without_errors) == 10, "誤りのシャードだけを外すつもりが、別の枚数になっている"
+    payload = corpus_science.build_science_coverage(
+        {
+            name: json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]
+            for name in without_errors
+        }
+    )
+    combinatorics = next(r for r in payload["requirements"] if r["scope"] == "combinatorics")
+    assert "combinatorics/path=overflow_near" not in combinatorics["unmet_real_cells"], (
+        "値のシャードだけでは `overflow_near` に届いていない——"
+        "`OVERFLOW_NEAR_FLOOR` が実データの上に無いか、射影が壊れている"
+    )
+    # **この時点で `path=domain` は穴のままである。** それが正しい
+    # ——誤りのケースは誤りのシャードが持つ。**「10 枚で全部埋まる」に
+    # なっていたら、新しいシャードは何も足していないことになる。**
+    assert combinatorics["unmet_real_cells"] == ["combinatorics/path=domain"]
+
+
+def test_the_cancellation_cuts_are_the_shards_own_tolerance() -> None:
+    """**切れ目が私の作った数でないことを、実物で見る。**
+
+    `corpus_science` は生成器を import しないので、`CANCELLATION_TOLERANCE_*`
+    は**写し**である。**写しは片方だけ直した日にずれる**ので、
+    **シャードが `tolerance` として書き出している数と突き合わせる。**
+    """
+    declared = json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))[
+        "tolerance"
+    ]
+    assert declared["abs"] == corpus_science.CANCELLATION_TOLERANCE_ABS
+    assert declared["rel"] == corpus_science.CANCELLATION_TOLERANCE_REL
+
+
+def test_the_cancellation_bands_are_pinned_against_the_real_shard() -> None:
+    """**★ `cancellation` の切れ目の番人。**
+
+    **A-1（`OVERFLOW_NEAR_FLOOR`）と同じ形である**——切れ目は**それを動かした
+    ときに赤くなるもの**でしか守られない。**分布を実データで固定する。**
+
+    実測（2026-08-30）: `severe` 693 / `near_tolerance` 1,307 / `mild` 1。
+    **`mild` の 1 件は、乱択が 1 件も作らなかったので手で足したもの**
+    （`_append_mild_cancellation`）——**この 1 が 0 になったら、対照が
+    また消えている。**
+    """
+    counts: dict[str, int] = {}
+    for case in json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))["cases"]:
+        levels = case.get("levels", {}).get("cancellation", {})
+        for band in levels.get("band", []):
+            counts[band] = counts.get(band, 0) + 1
+    assert counts == {"severe": 693, "near_tolerance": 1307, "mild": 1}
+
+
+def test_every_cancellation_case_declares_its_shape() -> None:
+    """**生成器は形を知っている。書いていないだけだった。**
+
+    **`build_cancellation_shard` は `CANCELLATION_SHAPES[rng.randrange(...)]` で
+    形を選ぶ**のに、2026-08-30 まで `stratum` に書いていなかった——
+    そして軸は「測れない」と宣言されていた。**「観測できない」ではなく
+    「記録していない」だった。**
+
+    **4 つの形すべてが実物に在ることも見る**——1 つでも 0 件なら、
+    **その形は名前だけで、確かめられていない。**
+    """
+    cases = json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))["cases"]
+    strata = [case.get("stratum") for case in cases]
+    assert all(one in corpus_science.CANCELLATION_SHAPES for one in strata), (
+        "形を宣言していないケースがある"
+    )
+    assert set(strata) == set(corpus_science.CANCELLATION_SHAPES), "使われていない形がある"
+
+
+def test_the_block_carries_the_real_rejection_counts() -> None:
+    """**「無い」と「0」は別である**（設計書 §10.3、裁定 3）。
+
+    **2026-08-30 まで `generation_rejections: {}` を 10 枚に載せていた。**
+    実物のシャードは棄却を持っている——**`elementary` 11,564 /
+    `inverse-trig` 6,945 / `combinatorics` 6,656**。**裁定 3 が決めた
+    当のものを、ブロック側で潰していた。**
+
+    **合計をシャードから数え直して突き合わせる**——写した数を固定するのでは
+    なく、**源と写しの一致**を見る（裁定 5 と同じ形）。
+    """
+    payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    carried = payload["generation_rejections"]
+    assert carried, "棄却が 1 件も載っていない——`{}` は「棄却が無い」と読まれる"
+    fresh: dict[str, int] = {}
+    for name in NINE_SHARDS:
+        shard = json.loads((CORPUS / name).read_text(encoding="utf-8"))
+        for reason, count in (shard.get("rejections") or {}).items():
+            fresh[reason] = fresh.get(reason, 0) + count
+    assert carried == fresh, "載っている棄却が、シャードから数え直したものと違う"
+    assert sum(carried.values()) == 25165
+
+
+def test_the_last_unmeasured_axis_says_something_the_data_backs() -> None:
+    """**★ 残った 1 つの宣言に届く番人。**
+
+    `precedence/grammar_class` の理由はこう書いてある——**「このシャードの
+    キー列は括弧を省いた形であり、構造をキーから復元できるかどうかが、
+    このシャードが確かめている当のものである」。**
+
+    **他の 3 本の番人は、ここに届かない**（2026-08-30 のレビュー指摘）:
+
+    - `test_a_band_declared_unreadable_has_no_readable_argument` は
+      **帯の軸しか見ない**
+    - `test_the_band_guard_fires_when_the_wrong_axis_is_declared` は
+      **`elementary` で鳴ることを見るだけ**
+    - `test_a_declared_unmeasurable_axis_is_never_observed` は
+      **「射影を書かなかった」ことを緑にする**——**書かなければ、宣言が
+      正しいかどうかに関わらず通る**
+
+    **だからここでは、宣言文の主張そのものを実データに当てる**——
+    **すべてのケースで、キー列の括弧が式の括弧より少ない**こと。
+    **少なければ、キー列だけでは木が一意に決まらない**（省いた括弧を
+    優先順位で埋め直すしかない）。**この関係が崩れたら、宣言の根拠が消える。**
+
+    実測（2026-08-30）: 2,000 件すべてで少なく、**省かれた括弧は 2〜6 個**。
+    """
+    cases = json.loads((CORPUS / "precedence-000.json").read_text(encoding="utf-8"))["cases"]
+    assert cases, "シャードが空なら、このテストは何も主張していない"
+    kept = [case for case in cases if case["keys"].count("lparen") >= case["expr"].count("(")]
+    assert not kept, (
+        f"キー列が式と同じだけ括弧を持つケースが {len(kept)} 件ある——"
+        "「括弧を省いた形」という宣言の根拠が崩れている"
+    )
+    # **「1 個も省いていない」を許さない**のは生成器の側の規律でもある
+    # （`build_precedence_shard` が「省ける括弧が 1 つも無い木は捨てる」）。
+    # **ここは成果物の側から同じことを見る**——生成器を直した日に、
+    # **成果物が追随しているかは別の主張**である。
+    dropped = min(case["expr"].count("(") - case["keys"].count("lparen") for case in cases)
+    assert dropped >= 1

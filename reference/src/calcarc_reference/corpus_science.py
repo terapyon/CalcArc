@@ -111,33 +111,57 @@ INVERSE_TRIG_BANDS = ("inside", "boundary", "outside")
 #: 近すぎるケースを落とす基準であり、桁落ちとも相殺とも関係が無い。**
 #: **文書を指した理由が、その文書の別の話を指していた。**
 #:
-#: **切れ目を引けるとしたら生成器の `CANCELLATION_TOLERANCE`（`abs 5e-10` /
-#: `rel 1e-6`）だが、まだ引いていない**——強度は引数と結果の比で決まるので、
-#: **`ELEMENTARY_BANDS` のようにリテラルから読む手が使えない**（相殺の両辺は
-#: 式である）。**測れないまま残す。理由は下の `not_measured_axes` に書く。**
+#: **【訂正 2026-08-30・2 度目】ここには「相殺の両辺は式なのでリテラルから
+#: 読めない」と書いてあった。偽である。** 実測: `cancellation-000.json` の
+#: **2,000 件すべてで、キー列から近さの比が取れる**——両辺がリテラルの
+#: `lit ± lit` が 1,100 件、残る 900 件も葉はリテラルである
+#: （`sqrt(lit) - sqrt(lit)` 535 / `ln(lit)` 365）。
+#:
+#: **★ 同じ日に、`overflow_near` では切れ目を引くことを受け入れながら、
+#: ここでは「引けない」と書いていた。基準が非対称だった。**
+#:
+#: **切れ目はシャード自身が宣言している許容から引く**——下の
+#: `CANCELLATION_TOLERANCE_*`。**私が作った数ではない。**
 CANCELLATION_BANDS = ("mild", "near_tolerance", "severe")
+
+#: **相殺のシャードが `tolerance` として宣言している 2 つの数。**
+#:
+#: **写しである。** `corpus_science` は生成器を import しないので、
+#: ここに数を置く——**一致はテストが見る**
+#: （`test_the_cancellation_cuts_are_the_shard's_own_tolerance`）。
+#:
+#: **この 2 つを切れ目にすると、実データはこう分かれる**（2026-08-30 実測）:
+#:
+#: ```
+#: r < 5e-10            severe            693 件
+#: 5e-10 <= r < 1e-6    near_tolerance  1,307 件
+#: r >= 1e-6            mild                0 件  ← 穴
+#: ```
+#:
+#: **`mild` が 0 件なのは発見である**——**このシャードは「桁が少ししか
+#: 落ちない引き算」を 1 件も作っていない。** 対照が無い。
+CANCELLATION_TOLERANCE_ABS = 5e-10
+CANCELLATION_TOLERANCE_REL = 1e-6
+
+
+def cancellation_band(ratio: float) -> str:
+    """**近さの比 → 帯。** 切れ目はシャードが宣言している許容そのもの。"""
+    if ratio < CANCELLATION_TOLERANCE_ABS:
+        return "severe"
+    return "near_tolerance" if ratio < CANCELLATION_TOLERANCE_REL else "mild"
+
 
 #: 相殺の形。**生成器が名指ししている 4 つ**（`CANCELLATION_SHAPES`）。
 #:
-#: **【測定 2026-08-30】骨格はキー列から読める。しかしそれでは足りない。**
-#: 4 つの木の形は互いに違う——`Bin(-, lit, lit)` / `Bin(-, sqrt, sqrt)` /
-#: `Un(ln, lit)` / `Bin(+, lit, lit)`。**だが 9 領域を横断して数えると、
-#: 同じ骨格が相殺以外の領域にもある:**
+#: **【訂正 2026-08-30・2 度目】「測れない」と書いてあった。書いていなかっただけである。**
 #:
-#: ```
-#: ln(リテラル) : cancellation 365 / elementary   233
-#: lit - lit    : cancellation 527 / inverse-trig  66
-#: lit + lit    : cancellation 573 / inverse-trig  73
-#: sqrt - sqrt  : cancellation 535 / （他は 0）
-#: ```
+#: **生成器は形を名前で選んでいる**——`CANCELLATION_SHAPES[rng.randrange(...)]`
+#: （`generate_corpus.py`）。**`associativity` が `stratum` に層の名前を書いて
+#: いるのと同じ手が、そのまま使える。** 骨格が他領域と重なる（`ln(リテラル)` は
+#: `elementary` に 233 件ある）という測定は正しかったが、**それは「キーだけで
+#: 見分けられない」であって「生成器が知らない」ではない。**
 #:
-#: **4 つを分けているのは骨格ではなく「近さ」である**——生成器の docstring が
-#: 「近接する 2 数」「a と b が近い」「1 に近いところ」「大小の吸収」と書いている。
-#: **そして近さの切れ目を、仕様はどこにも決めていない。**
-#:
-#: **★ 生成器のパラメータ（`base`/`frac`/`tail` の範囲）を観測側へ写せば分けられる。
-#: 採らなかった。** 写した時点で、**観測は生成器の設定の複製**になる——
-#: 裁定 1 が「2 つの読み経路」を求めた意味が薄れる。**測れないまま残す。**
+#: **`stratum` に書く**（Task 18）。`associativity/shape` と同じ扱いである。
 CANCELLATION_SHAPES = (
     "near_subtraction",
     "sqrt_difference",
@@ -164,9 +188,18 @@ COMBINATORICS_PATHS = ("normal", "domain", "overflow_near")
 #: 「データに 1 件も入力が無いセル」として門に名指しされていたが、**直した
 #: 射影では 9 件が踏んでいる。** **穴が埋まったのではなく、穴ではなかった。**
 #:
-#: **★ 切れ目は私が選んだ。** `f64` が表せる最大の指数が 308 であることは
-#: **形式が決めている**が、**「その 1 つ下（指数 307 以上）までを近傍とする」の
-#: 部分は私の選択である。** 候補と実測（2026-08-30）:
+#: **★ 切れ目は私が選んだ。しかも、選び方はデータを見てである。** `f64` が
+#: 表せる最大の指数が 308 であることは**形式が決めている**が、
+#: **「その 1 つ下（指数 307 以上）までを近傍とする」の部分は私の選択**であり、
+#: **候補を実データの件数で比べて決めている。**
+#:
+#: **これはこの module 自身の規則 1（「水準を既存コーパスから起こさない」）に
+#: 反する。** 書いておく——**コーパスから起こした水準は、コーパスに無い穴を
+#: 見つけない。** ここでは**上限 308 という形式の事実が骨**で、
+#: **どこまでを「近傍」と呼ぶかだけがデータ由来**だが、**その区別は
+#: 読む人には見えない**ので、明示する。**（新しい定義は旧定義の上位集合なので、
+#: 緩めてはいない——旧定義で `overflow_near` だったケースは、すべて新定義でも
+#: そうである。）** 候補と実測（2026-08-30）:
 #:
 #: ```
 #: >= 1e308        2 件    薄い。種を変えると 0 になりうる
@@ -483,6 +516,70 @@ def leading_literal(keys: list[str]) -> str | None:
     return "".join("." if k == "dot" else k for k in run)
 
 
+#: **形ごとの、近さの測り方。** どれも「失われずに残る桁の割合」である。
+#:
+#: - `near_subtraction` / `sqrt_difference`: `|a-b| / max(|a|,|b|)`
+#: - `absorption`: `min(|a|,|b|) / max(|a|,|b|)`（小さいほうが丸めで消える）
+#: - `log_near_one`: `|x - 1|`（1 からの隔たりがそのまま答の大きさになる）
+#:
+#: **どれも 0 に近いほど激しく桁が落ちる**ので、1 つの帯の表で読める。
+def cancellation_ratio(shape: str, values: tuple[float, ...]) -> float | None:
+    """**葉の値から近さの比を出す。** 形が違えば測り方も違う。
+
+    **キー列からも木からも、同じこの関数を通す**——`ELEMENTARY_BANDS` で
+    「両側の窓を揃える」と決めたのと同じ理由である。**測り方が 2 つあると、
+    突合は 2 つの実装の差も拾ってしまう。**
+    """
+    if shape == "log_near_one":
+        return abs(values[0] - 1.0) if len(values) == 1 else None
+    if len(values) != 2:
+        return None
+    left, right = abs(values[0]), abs(values[1])
+    largest = max(left, right)
+    if largest == 0:
+        return None
+    if shape == "absorption":
+        return min(left, right) / largest
+    return abs(values[0] - values[1]) / largest
+
+
+def cancellation_leaves(keys: list[str], shape: str) -> tuple[float, ...] | None:
+    """**キー列から、その形の葉を取り出す。**
+
+    **形ごとに読む場所が違う**ので `shape` を渡す——`stratum` が持っている。
+    **形を推測しない**: 骨格だけでは他領域と見分けられない（`ln(リテラル)` は
+    `elementary` に 233 件ある。2026-08-30 実測）。
+    """
+    body = [key for key in keys if key != "eq"]
+    while len(body) >= 2 and body[0] == "lparen" and body[-1] == "rparen":
+        body = body[1:-1]
+
+    def literal(part: list[str]) -> float | None:
+        if not part or not all(key in DIGIT_KEYS for key in part):
+            return None
+        try:
+            return float("".join("." if key == "dot" else key for key in part))
+        except ValueError:
+            return None
+
+    if shape == "log_near_one":
+        if not body or body[-1] != "ln":
+            return None
+        value = literal(body[:-1])
+        return None if value is None else (value,)
+    operator = "add" if shape == "absorption" else "sub"
+    if body.count(operator) != 1:
+        return None
+    at = body.index(operator)
+    left, right = body[:at], body[at + 1 :]
+    if shape == "sqrt_difference":
+        if left[-1:] != ["sqrt"] or right[-1:] != ["sqrt"]:
+            return None
+        left, right = left[:-1], right[:-1]
+    a, b = literal(left), literal(right)
+    return None if a is None or b is None else (a, b)
+
+
 def elementary_band(value: float) -> str:
     """**切れ目は `0` だけ**（`numerical-policy.md` の「関数の定義域」の表）。"""
     if value < 0:
@@ -542,7 +639,9 @@ UNOBSERVABLE_AXES: dict[str, tuple[str, ...]] = {
     # **`elementary` と `inverse_trig` の `band` はここに在った（2026-08-30 に外した）。**
     # 理由は「キー列からは読めない」だったが、**関数適用の 53.3% は引数がリテラル**で、
     # そこはキー列に数字が並んでいる。**理由の文言が実データと食い違っていた。**
-    "cancellation": ("shape", "band"),
+    # **`cancellation` の 2 軸は 2026-08-30 に外した**——`shape` は生成器が
+    # `stratum` に書けばよいだけ（`associativity` と同じ）、`band` は
+    # **2,000 件すべてでキー列から近さの比が取れる**（「両辺は式」は偽だった）。
     # 文法クラスは式の構造で決まる（括弧の有無だけは観測できる）
     "precedence": ("grammar_class",),
     # 演算種別は式の構造で決まる
@@ -636,6 +735,17 @@ def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
             if (error is not None and error != "Overflow")
             else ("overflow_near" if near else "normal"),
         )
+
+    stratum = case.get("stratum")
+    if stratum in CANCELLATION_SHAPES:
+        # **相殺の形は生成器が名前で選んでいる**（`associativity` と同じ形）。
+        # **帯はキー列の葉から計算する**——`cancellation_leaves` が窓である。
+        put("cancellation", "shape", stratum)
+        leaves = cancellation_leaves(case_keys(case), str(stratum))
+        if leaves is not None:
+            ratio = cancellation_ratio(str(stratum), leaves)
+            if ratio is not None:
+                put("cancellation", "band", cancellation_band(ratio))
 
     if "eng" in keys:
         put("display", "kind", "eng")
@@ -753,6 +863,30 @@ def _literal_value(node: object) -> float | None:
     return float(value_) if isinstance(value_, int) else None
 
 
+def cancellation_leaves_from_tree(node: object, shape: str) -> tuple[float, ...] | None:
+    """**木から、その形の葉を取り出す。** `cancellation_leaves` のキー版と対になる。
+
+    **読む先が違う**——あちらは `to_key_sequence` が描いたキー列、こちらは木。
+    **測り方（`cancellation_ratio`）は 1 つを共有する。**
+    """
+    fn = getattr(node, "fn", None)
+    op = getattr(node, "op", None)
+    if shape == "log_near_one":
+        if fn != "ln":
+            return None
+        value = _literal_value(getattr(node, "arg", None))
+        return None if value is None else (value,)
+    if op != ("+" if shape == "absorption" else "-"):
+        return None
+    left, right = getattr(node, "left", None), getattr(node, "right", None)
+    if shape == "sqrt_difference":
+        if getattr(left, "fn", None) != "sqrt" or getattr(right, "fn", None) != "sqrt":
+            return None
+        left, right = getattr(left, "arg", None), getattr(right, "arg", None)
+    a, b = _literal_value(left), _literal_value(right)
+    return None if a is None or b is None else (a, b)
+
+
 def _walk(node: object) -> list[object]:
     """木の全ノードを平らに並べる。**キー列を経由しない。**"""
     out = [node]
@@ -788,6 +922,14 @@ def recorded_levels(
 
     def put(scope: str, axis: str, level: str) -> None:
         out.setdefault(scope, {}).setdefault(axis, set()).add(level)
+
+    if stratum in CANCELLATION_SHAPES:
+        put("cancellation", "shape", str(stratum))
+        leaves = cancellation_leaves_from_tree(node, str(stratum))
+        if leaves is not None:
+            ratio = cancellation_ratio(str(stratum), leaves)
+            if ratio is not None:
+                put("cancellation", "band", cancellation_band(ratio))
 
     # **複素の演算種別。** 門は `Imag` の有無——**キー側の `"j" in keys` と
     # 同じもの**である（`to_key_sequence` は `Imag` に必ず `j` を出す）。
@@ -931,7 +1073,10 @@ def assert_record_matches_observation(case: dict, node: object) -> None:
         )
 
 
-def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
+def build_science_coverage(
+    cases_by_shard: dict[str, list[dict]],
+    rejections: dict[str, int] | None = None,
+) -> dict:
     """9 領域を横断して数えた `coverage` ブロック（裁定 2 の B・裁定 5）。
 
     **10 枚すべてに同じものを載せる。** モデルがシャードをまたぐので、
@@ -941,13 +1086,19 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
     **`not_measured_axes` を持たせる**（裁定 4）。**「測れない軸に起因する未達」と
     「本当の穴」は別物**で、**読み手の門は後者だけで落とす**。宣言せずに
     落とさないと、**「測れない」が緩めれば緑になるパラメータになる。**
+
+    **【訂正 2026-08-30】`generation_rejections` に `{}` を載せていた。**
+    実物のシャードは棄却の数を持っている——**`elementary` 11,564 /
+    `inverse-trig` 6,945 / `combinatorics` 6,656、合計 25,165**。
+    **裁定 3 が「無い と 0 は別」と決めた当のものを、ブロック側で潰していた。**
+    **渡されなければ `{}`** だが、**生成器は渡す。**
     """
     covered: set[coverage.Cell] = set()
     for cases in cases_by_shard.values():
         for case in cases:
             covered |= observed_cells(case)
     payload = coverage.build_payload(
-        SCIENCE_MODEL, SCIENCE_REQUIREMENTS, covered, science_exclusions(), {}
+        SCIENCE_MODEL, SCIENCE_REQUIREMENTS, covered, science_exclusions(), rejections or {}
     )
     # **未達を種類で分けて載せる**（裁定 4）。**数だけでは読み手が分けられない**
     # ——`inverse_trig` は「測れない軸（帯）」と「本当の穴（Rad）」の両方を
@@ -969,16 +1120,6 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
         # 言えない——**穴を可視化するのがこのモデルの値打ちである。**
         summary["unmet_real_cells"] = sorted(c.id for c in unmet if c not in from_unmeasured)
     reasons = {
-        ("cancellation", "band"): (
-            "強度の切れ目を仕様が決めていない。生成器の CANCELLATION_TOLERANCE から"
-            "引ける見込みだが、相殺の両辺は式なのでリテラルからは読めない"
-        ),
-        ("cancellation", "shape"): (
-            "形の骨格はキー列から読めるが、4 つを分けているのは「近さ」であり、"
-            "近さの切れ目を仕様が決めていない。骨格だけで分けると取り違える"
-            "（実測: ln(リテラル) は elementary に 233 件、lit±lit は"
-            " inverse-trig に 139 件ある）"
-        ),
         ("precedence", "grammar_class"): (
             "文法クラスは式の構造で決まり、このシャードのキー列は括弧を"
             "省いた形である——構造をキーから復元できるかどうかが、この"
@@ -1067,7 +1208,7 @@ def unmet_is_only_from_unmeasured_axes(requirement_scope: str, cell: coverage.Ce
 COVERED_OUTSIDE_MODEL: dict[str, str] = {
     # **`combinatorics/path=domain` はここに在った（2026-08-30 に外した）。**
     # `combinatorics-display-000.json` を作って、**9 領域の内側で踏むようにした**
-    # ——`errors-000.json` の 5 件を複製したのではなく、**定義の破れ方を
+    # ——`errors-000.json` の 8 件（組合せ 5・階乗 3）を複製したのではなく、**定義の破れ方を
     # 尽くした格子 13 件**である（`corpus_combinatorics` を見よ）。
     # **`combinatorics/path=overflow_near` はここに在った（2026-08-30 に外した）。**
     # 「errors-000.json（定義域と溢れのシャード）」と書いてあったが、**外に在る

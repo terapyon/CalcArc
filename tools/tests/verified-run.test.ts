@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareShas, editedPaths, parseIndexLine } from "../verified-run.mjs";
 
@@ -74,5 +76,27 @@ describe("編集中のファイルを除く", () => {
 
   it("空行と短すぎる行を無視する", () => {
     expect(editedPaths("\n \n")).toEqual(new Set());
+  });
+});
+
+describe("どこから呼んでも同じものを見る", () => {
+  it("★ サブディレクトリから呼んでも件数が変わらない", () => {
+    // **2026-08-30 のバグ。** `git ls-files` の path は**根からの相対**なので、
+    // `heavy/` から呼ぶと `.npmrc` が `web/.npmrc` ではなく `heavy/.npmrc` に
+    // 解決された。**落ちたのは運が良かった**——**同名のファイルが両方に在れば、
+    // 黙って違うものを照合していた。**
+    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+    }).trim();
+    const script = join(root, "tools", "verified-run.mjs");
+    const run = (cwd: string) =>
+      execFileSync(process.execPath, [script], {
+        cwd,
+        encoding: "utf8",
+      }).trim();
+    const fromRoot = run(root);
+    const fromSubdirectory = run(join(root, "heavy"));
+    expect(fromSubdirectory).toBe(fromRoot);
+    expect(fromRoot).toMatch(/^\[照合\] \d+ \/ \d+ 一致/);
   });
 });
