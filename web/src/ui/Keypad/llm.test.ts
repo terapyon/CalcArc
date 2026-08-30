@@ -85,13 +85,37 @@ describe("LLM のキー集合", () => {
 
     // トークンにも展開済みの数が入る。ラベル・読み上げ・トークンの 3 つが
     // ずれたら、押した数と計算した数が食い違う。
+    // **飛ばす条件を、飛ばすだけにしない**（2026-08-30）。ここは
+    // `if (!/^(param|heads|dim|ctx):/.test(token)) continue;` と書いてあった
+    // ——**トークンの綴りを見ているはずの検査が、綴りが壊れているときだけ
+    // 黙って飛ぶ**。綴りが `paramX:` になれば正規表現が外れ、そのキーは
+    // 1 度も比べられないまま緑になる（実測）。**飛ばしてよいものを名指しし、
+    // 比べた回数も数える。**
+    let compared = 0;
     for (const section of Object.values(CANDIDATE_SECTIONS)) {
       for (const key of section.keys) {
         const token = key.token;
-        if (token === null || !/^(param|heads|dim|ctx):/.test(token)) continue;
+        if (token === null) continue; // 5×5 を埋める空き
+        if (!/^(param|heads|dim|ctx):/.test(token)) {
+          // **候補面に居てよい「値でないキー」を名指しする。**
+          // `del`/`ac` は `buildCandidateFace` が 1 行目に足す（:242-244）、
+          // `entry:manual` は手入力へ移るキー、`precision:` は重み/KV の面。
+          // **列挙が現物と食い違えば、ここが落ちる**——推測で書くと、
+          // 知らないキーが増えた日に黙って飛ばす形へ戻る。
+          expect(token).toMatch(/^(del$|ac$|entry:manual$|precision:)/);
+          continue;
+        }
+        compared += 1;
         expect(token.split(":")[1]).toBe(key.ariaLabel);
       }
     }
+    // **数えた回数が候補の総数と一致する。** 1 つでも飛ばされたら落ちる。
+    expect(compared).toBe(
+      CANDIDATE_VALUES.parameters.length +
+        CANDIDATE_VALUES.kvHeads.length +
+        CANDIDATE_VALUES.headDim.length +
+        CANDIDATE_VALUES.context.length,
+    );
   });
 
   it("offers int4 for the weights and not for the KV cache", () => {
