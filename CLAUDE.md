@@ -43,6 +43,13 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 `web` の型検査・lint・build は `web/src/wasm/` を必要とする。新しいクローンでは先に
 `cd web && pnpm wasm` を実行する。
 
+**`heavy` の型検査は `web/node_modules/` も必要とする。** `heavy/tests/ui/keys.ts` が
+`web/src/ui/Keypad/scientific` 経由で `web/src/ui/Key/Key.tsx`（型だけ）に触れるので、
+**react の型が無いと JSX で落ちる**（`TS7026` / `TS2875`。2026-08-29 に
+`web/node_modules` を退けて実測）。新しいクローンでは `cd web && pnpm install` が先に要る
+——**CI はステップの順で守られている**（`setup-web` が `web` の依存を入れてから
+`heavy` を触る）ので、赤くなるのは手元だけである。
+
 ## 守ること
 
 - **計算ロジックは `calcarc-core` に置く。** `calcarc-wasm` と `web` に計算を書かない。
@@ -84,6 +91,9 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ## 踏んだ罠
 
 - **コミット前に `cargo fmt` を実行する。** `--check` は直してくれない。
+- **`reference` は `ruff check` と `ruff format` の 2 つを回す。**
+  `check` が緑でも `format --check` は赤いことがある——**別物であり、
+  CI は 2 つとも見る**（`ci.yml:150,152`）。2026-08-30 に実際に落ちた。
 - **`uv` は `--no-config` を付ける。`lock` / `sync` だけでなく `run` もである。**
   付けないと手元の `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに
   書き込まれ、CI の `uv sync --locked` が落ちる。**`uv run pytest` でも起きる**

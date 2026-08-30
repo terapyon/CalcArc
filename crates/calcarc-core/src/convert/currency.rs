@@ -377,9 +377,15 @@ mod tests {
         // `convert_currency` が先に別の判断をしていても気づけない
         // (end-to-end-cases-need-the-whole-path)。
         //
-        // **この組は golden では言えない。** 参照実装の `Fraction` は多倍長で、
-        // `Overflow` という結果を持たない——だから `testdata/currency.json` に
-        // Overflow のケースは 1 件も無い。言語間で突き合わせられない主張である。
+        // **この組は golden では言えない。** 下の `Overflow` は `exchange` の
+        // **中間**(約分しても `i128` を超える積)で、**そこには公開契約が無い**
+        // ——参照実装に「約分してから `i128` を検査する」有理数ラッパを書くことに
+        // なり、Rust の `Rational` の再実装に近づく(`cases.py` の註が理由を持つ)。
+        //
+        // **「参照実装は Overflow を持たない」ではない。** リテラルの天井
+        // (`numerical-policy` の「分子・分母は `i128` で有界」)は**公開契約**なので、
+        // `currency_ref.literal_fits` が別手順で測っており、`currency.json` にも
+        // Overflow のケースが在る(2026-08-29)。**言えないのは中間のほうだけ。**
         let huge = "1000000000000000000000000000000";
         assert_eq!(
             convert_currency(huge, Currency::Usd, "0", huge),
@@ -389,6 +395,22 @@ mod tests {
             convert_currency(huge, Currency::Usd, huge, huge),
             Err(CalcError::Overflow)
         );
+    }
+
+    #[test]
+    fn the_display_step_overflows_before_it_prints() {
+        // **表示段の `Overflow` を見ているテストが 1 本も無かった**
+        // (2026-08-29 のレビュー指摘)。`cases.py` は「golden に載せないのは
+        // Rust 側の単体テストが見ているから」と書いているが、**この枝については
+        // 偽だった**——`format_amount` の `Overflow` を主張するテストが
+        // **1 本も無かった**。**理由のほうを真にする。**
+        //
+        // `i128::MAX` は分子として正当だが、2 桁通貨は `magnitude × 100` を作る
+        // ので **u128 を超える**(1.7e38 × 100 > 3.4e38)。**ここには公開契約が
+        // 無い**ので golden には載せない(`cases.py` の註)——だから、ここで見る。
+        assert_eq!(format_amount(r(i128::MAX, 1), 2), Err(CalcError::Overflow));
+        // **0 桁なら同じ値が通る。** 溢れているのは値ではなく、桁を作る掛け算である。
+        assert!(format_amount(r(i128::MAX, 1), 0).is_ok());
     }
 
     #[test]

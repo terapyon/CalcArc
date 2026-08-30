@@ -2607,3 +2607,179 @@ Running 181 tests using 16 workers
 **181 passed、0 failed、リトライも flaky も 0 件**（ログに `retry` / `flaky` /
 `✘` は 1 行も無い）。前節が推定した「1 度目の 179/181 は失敗ではなくクラッシュで
 打ち切られたもので、コードの回帰ではない」は、**静かな機械での 181/181 で裏が取れた。**
+
+---
+
+## 試験空間モデル `finance-v1` を入れて測り直した（2026-08-29 実測、coverage-model-finance Task 5〜12）
+
+金融のコーパスに**要求セルの地図**を持たせた。この節はその前後の実測である。
+**書いてあるのは道具が印字した数だけ**で、見込みや推定は 1 つも入っていない。
+
+### 8 対象の網羅（`corpus/generated/finance-000.json` の `coverage` から）
+
+| 対象 | 被覆規則 | 必須セル | 実行 | 理由付き除外 | 未達 |
+|---|---|---:|---:|---:|---:|
+| `loan_forward` | 全組合せ | 150 | 150 | 0 | 0 |
+| `loan_principal` | 全組合せ | 150 | 150 | 0 | 0 |
+| `loan_bonus_forward` | 全組合せ | 150 | 150 | 0 | 0 |
+| `loan_bonus_principal` | 全組合せ | 150 | 150 | 0 | 0 |
+| `loan_term` | 全組合せ | 150 | **126** | **24** | 0 |
+| `compound_grow` | 2 因子ペアワイズ | 266 | 266 | 0 | 0 |
+| `compound_deposit_for` | 2 因子ペアワイズ | 266 | **258** | **8** | 0 |
+| `compound_periods_for` | 2 因子ペアワイズ | 56 | 56 | 0 | 0 |
+
+**`loan_term` が 74 → 126 に動いた理由。** `n` は入力ではなく答なので、正算で
+作った月額を逆算へ戻すと円単位の丸めのぶんだけずれる。決定的な構成探索
+(元本 12 通り × 月額の増分 5 通り = 60 が試行上限)を入れ、**52 行が目標期間に
+乗るようになった**——決め手は**月額 +1 円が 50 行**、**別の元本での +0 が 2 行**。
+
+**除外 24 件の内訳**: `not_applicable` **10** / `inverse_target_unconstructible` **14**。
+
+**14 件の理由には、走った手順だけを書く**(2026-08-29 の厳格レビュー F1)。当初
+「決定的な候補(元本 12 通り × 月額の増分 5 通り)を**尽くしても**」と書いていたが、
+**この 14 行では構成探索が 1 度も走っていない**——`_pairwise_loan_term_strata` は
+正算が本物のエラーを返した時点で除外へ回すからで、`_pairwise_forward_result` も
+**最初の元本で即座に諦める**。**結論は真だが、根拠は走っていない手順だった。**
+いまの detail は「正算が `SyntaxError` を返すので、逆算の入力を作る元ネタが無い」で、
+**元本 12 通りを実際に尽くす主張のほうはテストが担保する**
+(`test_the_unconstructible_rows_really_have_no_principal_that_works`。
+実測 2026-08-29: 14 行とも 12 通りすべてで正算が通らない)。
+`not_applicable` を選んだのは `loan_ref.MAX_TERM_MONTHS = 1200` だからで、
+`target_n = 1201` のセルは**どう構成しても答になり得ない**。
+**10 であって 7 ではない**——計画は「探索が尽きた 7 行」を数えていたが、
+`target_n = 1201` の行は 10 ある(7 行は探索が尽き、3 行は正算が本物のエラー)。
+**後者も 1201 は答になり得ない**ので理由は同じである(根拠が症状に勝つ)。
+
+**`compound_deposit_for` が 247 → 258 に動いた理由。** ペアワイズ 1 行が運ぶのは
+**ペア 6 組**である。期間で正算が u64 を溢れたとき**行ごと捨てていた**ので、
+**期間を含まない 3 組まで一緒に落ちていた**——`(rate=100, ppy=12)` と
+`(rate=99.9999, ppy=12)` は**溢れていないのに未達**だった。周期を先に振り、
+期間は最後まで動かさない構成に変えた。
+
+**残る 8 は、どう構成しても正算が u64 を溢れる**(`rate` 99.9999/100 ×
+`periods` 599/600/1199/1200)。**これは生成器の都合ではなく u64 の都合である**
+——因子表の全通り(金利 × 期間 × 周期 × 税)を探索とは独立にあたって数えた。
+
+**仕様 §9.1 の「266 中 246 被覆・残り 20」との差は数え方の違いである**
+——あちらはペアワイズ層のケースだけを数えており、こちらは §9.3 に従って
+`compound_deposit_for` の全ケースから数えている。
+
+### コーパスが動いた範囲（`finance-000.json` の 1 枚だけ）
+
+| 見方 | 数 |
+|---|---:|
+| ケース単位の差分 | 2,917 / 3,500 |
+| **入力の実体の出入り** | **消えた 63 / 増えた 63** |
+| 名指し境界層 | **282 件すべて無傷** |
+| ケース総数 | **3,500 のまま** |
+| `rejections` | **バイト同値**（`dup` 0 / `near_yen_boundary` 7 / 他 0） |
+| `testdata/` と他 17 枚 | **1 バイトも動いていない** |
+
+**ケース単位の 2,917 は、ほとんどが振り直しである。** ペアワイズ層の件数が
+動いたので(`loan_term` 133 → 126、`compound_deposit_for` 122 → 133)層の名前が
+ずれ、**同じ入力が別の id に載った。** 意味のある変化は 63 件で、内訳は
+消えた側が `loan_term` 60・`compound_grow` 2・`loan_principal` 1、
+増えた側が `loan_term` 52・`compound_deposit_for` 11 である。
+
+**期待値の種別も動いた**: 正常 3139 → **3150**、`SyntaxError` 270 → **259**、
+`Overflow` 91 → 91。**エラー経路のケースが 11 件減っている。**
+
+**消えた 11 件は 1 件残らず `loan_term` で、エラーは逆算側である**
+(`loan_term` は月額から期間を求める操作なので、`expect.error` は逆算の結果)。
+新旧の golden を突き合わせた内訳:
+
+| 消えた 11 件 | 何が起きたか |
+|---|---|
+| **7 件**(`target_n = 1201`。月額 16652/16653/16661/16736/17500/32177/48424) | **正算は通っている**——月額が作れているのがその証拠である。逆算が 1201 を返せないだけで、置き換えは無く、そのまま除外(`not_applicable`)へ移った |
+| **4 件**(`target_n = 1200`。月額 16666/16667/17514/48432) | 逆算がエラーだった行が、**月額 +1 円の構成行に置き換わった**(構成探索が拾った) |
+
+**2026-08-29 訂正**: ここは当初「出た 7 行は正算が本物のエラーになる組だった」と
+書いていた。**数(7 ではなく 11)も、どちら側のエラーか(正算ではなく逆算)も
+外していた。** 消えた 11 件の入力は新旧の golden から数え直せる。
+
+層の数は 1187 → 1191。
+
+### 変異 10 種（`pnpm heavy:power:exact`、実測 4 分）
+
+**10/10 ok、件数は 1 件も動いていない。**
+
+```
+binary-base-is-decimal 2 / degf-offset-dropped 3 / micrometre-off-by-thousand 1 /
+half-even-becomes-half-up 2 / kv-counts-once-not-twice 5 / partial-byte-truncated 2 /
+cross-rate-inverted 5 / zero-check-after-multiply 2 /
+currency-half-even-becomes-half-up 2 / rounded-zero-keeps-its-sign 2
+```
+
+これらは金融のシャードを踏まないので、**動かないことが期待どおり**である。
+
+### 変異 18 種（`pnpm heavy:power`、実測 11 分）
+
+**18/18 ok。7 つの変異で検出件数が動き、7 つとも `finance-000.json (calls)` に
+閉じている**——**他のシャードは 1 件も動いていない。**
+
+| 変異 | 前 | 後 | 差 |
+|---|---:|---:|---:|
+| `loan-interest-round-not-floor` | 2707 | 2715 | +8 |
+| `loan-interest-as-f64` | 105 | 109 | +4 |
+| `compound-deposit-at-start` | 615 | 622 | +7 |
+| `compound-round-once-at-maturity` | 605 | 612 | +7 |
+| `rate-nominal-to-effective` | 2272 | 2276 | +4 |
+| `tax-combined-rate` | 406 | 405 | −1 |
+| `loan-final-row-no-adjustment` | 1624 | 1615 | −9 |
+
+**動いていない 11 種**: `display-digits` 8271 / `precedence-collapse` 1100 /
+`associativity-flip` 1000 / `ncr-multiply-first` 10 / `eng-exponent-toward-zero` 96 /
+`sexagesimal-no-carry` 10 / `complex-multiply-sign` 147 / `polar-angle-flipped` 661 /
+`bonus-half-year-becomes-monthly` 368 / `periods-for-binary-search` 1 /
+`compound-inverse-ignores-tax-flag` 272。
+
+**下限(`minRate`)には手を伸ばしていない。** 確かめ方は
+`git diff origin/main..HEAD -- heavy/scripts/` で、**差分は 0 行**である
+——**`minRate` を読む・書くコードは 1 行も動いていない。**
+
+> **「diff に `minRate` の綴りが現れない」では確かめないこと。**
+> 最初この節はそう書いていた。**書く前に測ったときは真で、書いた瞬間に偽に
+> なった**——その文自身が diff に入るからである。**測定と主張の順序が逆転して
+> いた。** 範囲を「触ったファイル」で言えば、その文を含めても真である。
+
+9 つの金融変異はいずれも下限の 2 倍前後を保っている:
+
+| 変異 | 実測率 | 下限 | 余裕 |
+|---|---:|---:|---:|
+| `loan-interest-round-not-floor` | 0.776 | 0.386 | +0.390 |
+| `rate-nominal-to-effective` | 0.650 | 0.324 | +0.326 |
+| `loan-final-row-no-adjustment` | 0.461 | 0.232 | +0.229 |
+| `compound-deposit-at-start` | 0.178 | 0.087 | +0.091 |
+| `compound-round-once-at-maturity` | 0.175 | 0.086 | +0.089 |
+| `tax-combined-rate` | 0.116 | 0.058 | +0.058 |
+| `bonus-half-year-becomes-monthly` | 0.105 | 0.052 | +0.053 |
+| `compound-inverse-ignores-tax-flag` | 0.078 | 0.038 | +0.040 |
+| `loan-interest-as-f64` | 0.031 | 0.015 | +0.016 |
+
+### フルスイープ（2026-08-29、すべて緑）
+
+```
+cargo fmt --check                緑
+cargo test --workspace           395 passed / 0 failed
+cargo clippy -D warnings         警告 0
+reference: pytest                428 passed
+reference: mypy                  14 source files, no issues
+reference: ruff check            All checks passed
+web: vitest                      375 passed
+web: typecheck / lint            緑
+web: check:version               0.6.0（5 箇所が一致。**版数は上げていない**）
+web: check:boundary / check:sw   OK
+web: e2e                         192 passed
+heavy: vitest                    183 passed
+heavy: typecheck / lint          緑
+heavy: pnpm heavy                235 passed
+heavy: pnpm heavy:ui             36 passed（押下 19,849 / 打鍵 1,266 / 指摘 0）
+```
+
+**盤面の押下台帳は 1 つも動いていない**（19,849 / 1,266 / 指摘 0 は前回と同一）。
+金融のコーパスを作り直しても、**盤面から打てるキーの集合は変わらない**
+——別の走行であり、別の問いだからである。
+
+`cargo` と `web/src/` はこの作業が 1 行も触っていない。**触っていないものが
+緑であることは、この節の主張ではない**（赤くなったら、触っていないという
+前提のほうが間違っている、という関係にある）。

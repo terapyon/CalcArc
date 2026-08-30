@@ -13,7 +13,7 @@ from fractions import Fraction
 import mpmath as mp
 import pytest
 
-from calcarc_reference import corpus_calls
+from calcarc_reference import corpus_calls, corpus_coverage, loan_ref
 from calcarc_reference.corpus_eval import evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_KEYS,
@@ -2088,14 +2088,21 @@ def test_loan_term_records_target_and_actual_separately() -> None:
     正算で作った月額を逆算へ戻すと、円単位の丸めのぶんだけ答がずれることがある。
     ずれた行は計算の照合には使えるが、**目標期間セルを被覆したことにはならない。**
 
-    実測(2026-08-25、この Task の時点): covered 74 / unmet 59 / excluded 17。
-    **この Task は挙動を変えない**——いまの構成のまま、何が起きているかを
-    記録するだけである。
+    実測(2026-08-25、Task 4 の時点): covered 74 / unmet 59 / excluded 17。
+    **その Task は挙動を変えず**、いまの構成のまま何が起きているかを記録した。
+
+    **2026-08-29(Task 5)に covered 126 / unmet 0 / excluded 24 へ動いた。**
+    決定的な構成探索(`_construct_loan_term_row`)が入り、**目標期間に乗る
+    `(元本, 月額)` を固定順で探すようになった**ため。**基準を緩めたのではなく、
+    ケースの作り方を変えた**——`unmet` が 0 になったのは、乗らなかった行を
+    除外へ逃がしたからではなく、**52 行が実際に目標へ乗るようになった**からである
+    (乗らない 7 行は `target_n = 1201` で、`MAX_TERM_MONTHS = 1200` である以上
+    答になり得ない)。
     """
     facts = corpus_calls.LOAN_TERM_FACTS
     assert len(facts) == 150, "要求セルと同じ数だけ記録が要る(構成できなかった行も含めて)"
     states = collections.Counter(fact.state for fact in facts)
-    assert states == {"covered": 74, "unmet": 59, "excluded": 17}
+    assert states == {"covered": 126, "excluded": 24}
     for fact in facts:
         if fact.state == "covered":
             assert fact.actual_n == fact.target_n
@@ -2108,7 +2115,9 @@ def test_loan_term_records_target_and_actual_separately() -> None:
 def test_loan_term_coverage_counts_only_the_matching_rows() -> None:
     """設計書 §15.1 の 8。**`actual_n == target_n` のときだけ目標期間セルを被覆する。**"""
     covered = corpus_calls.loan_term_covered_cells()
-    assert len(covered) == 74
+    # 74 → 126(2026-08-29、Task 5 の決定的構成探索)。**数え方は変えていない**
+    # ——`actual_n == target_n` の行だけを数えるのは同じで、その行が増えた。
+    assert len(covered) == 126
     facts = {(f.rate_level, str(f.target_n)): f for f in corpus_calls.LOAN_TERM_FACTS}
     for cell in covered:
         axes = dict(cell.axes)
@@ -2133,7 +2142,11 @@ def test_the_recorded_rows_are_the_ones_the_corpus_actually_has() -> None:
         if fact.state != "excluded"
     }
     assert built == in_corpus, "記録した行と、コーパスに在るペアワイズのケースが食い違う"
-    assert len(in_corpus) == 133
+    # 133 → 126(2026-08-29、Task 5)。**`unmet` が 0 になったので、
+    # 「除外でない行」＝「被覆した行」になった**——以前は 74 の被覆に 59 の
+    # 未達が混ざって 133 だった。**行が減ったのではなく、乗らない行が
+    # コーパスから出て理由付きの除外になった。**
+    assert len(in_corpus) == 126
 
 
 def test_the_recorded_answers_come_from_the_reference() -> None:
@@ -2158,4 +2171,371 @@ def test_the_recorded_answers_come_from_the_reference() -> None:
         else:
             assert fact.actual_n == int(result["n"])
         checked += 1
-    assert checked == 133, f"問い直した行が {checked} 行しかない"
+    # 133 → 126(2026-08-29、Task 5)。除外でない行がそのまま被覆した行になった。
+    assert checked == 126, f"問い直した行が {checked} 行しかない"
+
+
+def test_the_deterministic_search_moves_fifty_two_rows_into_coverage() -> None:
+    """設計書 §8.3。**乱数を使わない固定順の候補列で目標期間を狙う。**
+
+    空回しの実測(2026-08-29、コミット済みの生成器に対して): 150 行のうち
+    **126 行が構成でき、24 行が構成できない。** 決め手の内訳は
+    **月額 +0 円が 76 行・+1 円が 50 行**で、+0 の 76 は「もともと乗っていた
+    74 行」＋「**別の元本で乗るようになった 2 行**」である
+    ——**元本候補を最初の 1 つで打ち切らず、12 通り全部試すようになった**ため。
+
+    **`unmet` が 0 であることがこの Task の主張である。** 被覆数はそこから
+    導かれる量なので、両方を書く(片方だけだと、除外へ逃がして緑にできる)。
+    """
+    states = collections.Counter(fact.state for fact in corpus_calls.LOAN_TERM_FACTS)
+    assert states["unmet"] == 0, "構成できなかった行は、除外として理由を付ける"
+    assert states["covered"] == 126
+    assert states["excluded"] == 24  # 17(正算が本物のエラー) + 7(1201 は答になり得ない)
+    assert sum(states.values()) == 150
+
+
+def test_the_unreachable_term_is_excluded_as_not_applicable() -> None:
+    """`loan_ref.MAX_TERM_MONTHS` が 1200 なので、`loan_term` は 1201 を返せない。
+
+    **構成の失敗ではなく、その操作にその水準が無い**——理由コードを取り違えない。
+    `inverse_target_unconstructible` は「努力したが作れなかった」であり、
+    こちらは「**そもそも答の範囲に無い**」である。
+    """
+    exclusions = corpus_calls.loan_term_exclusions()
+    not_applicable = [
+        e for e in exclusions.values() if e.reason is corpus_coverage.Reason.NOT_APPLICABLE
+    ]
+    # **10 であって 7 ではない**(2026-08-29、計画の数を訂正した)。計画のテストは
+    # 7 を期待していたが、それは Task 4 の「探索が尽きた 7 行」を数えた値である。
+    # **`target_n = 1201` の行は 10 ある**——7 行は探索が尽き、3 行は正算が本物の
+    # エラーを返す。**後者も 1201 は答になり得ない**ので、理由は同じである。
+    # **根拠が症状に勝つ**: 入力を作れないことは結果であって、覆えない理由ではない。
+    assert len(not_applicable) == 10
+    assert all("target_n=1201" in e.cell.id for e in not_applicable)
+    assert all(str(loan_ref.MAX_TERM_MONTHS) in e.detail for e in not_applicable)
+    # 1201 のセルが**ほかの理由に紛れていない**ことも見る(取り違えの逆向き)。
+    assert not [
+        e
+        for e in exclusions.values()
+        if "target_n=1201" in e.cell.id and e.reason is not corpus_coverage.Reason.NOT_APPLICABLE
+    ]
+
+
+def test_the_unconstructible_rows_say_the_forward_calculation_failed() -> None:
+    """残り 17 は「正算が本物のエラー」である。**2 つの理由を混ぜない。**"""
+    exclusions = corpus_calls.loan_term_exclusions()
+    unconstructible = [
+        e
+        for e in exclusions.values()
+        if e.reason is corpus_coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE
+    ]
+    assert len(unconstructible) == 14
+    assert all("target_n=1201" not in e.cell.id for e in unconstructible)
+    assert len(exclusions) == 24
+    # **判断区分は動かない。** 両方 `reasonable` なので、10/14 と 7/17 のどちらに
+    # 分けても「安全」欄の数は同じである——**変わるのは理由の綴りだけ**である。
+    assert all(e.disposition is corpus_coverage.Disposition.REASONABLE for e in exclusions.values())
+
+
+def test_a_constructed_row_really_hits_its_target() -> None:
+    """設計書 §8.3 の「成功時は assert する」。
+
+    **構成不能を黙って別の期間のケースへ置き換えていないこと**を、参照実装に
+    聞いて確かめる。**探索が「見つけた」と言った行を、もう一度外から問い直す。**
+    """
+    checked = 0
+    for fact in corpus_calls.LOAN_TERM_FACTS:
+        if fact.state != "covered":
+            continue
+        result = loan_ref.compute(
+            "loan_term",
+            {
+                "principal": str(fact.principal),
+                "rate": fact.rate_level,
+                "payment": str(fact.payment),
+            },
+        )
+        assert "error" not in result, f"被覆と記録した行が逆算でエラーになる: {fact}"
+        assert int(result["n"]) == fact.target_n
+        checked += 1
+    assert checked == 126, f"問い直した行が {checked} 行しかない"
+
+
+def test_compound_deposit_for_coverage_uses_only_its_own_cases() -> None:
+    """設計書 §15.1 の 9。**`compound_grow` が同じペアを踏んでいても数えない。**
+
+    **258 であって 247 ではない**(2026-08-29、Task 6)。計画は 247 被覆 / 19 除外
+    を見込んでいたが、**19 のうち 11 は溢れていなかった**——ペアワイズ 1 行が
+    運ぶのはペア 6 組で、**期間で溢れて行ごと捨てると、期間を含まない組まで
+    一緒に落ちていた。** `_deposit_for_construction` が周期を先に振るように
+    なり、**溢れずに作れるものは作る**ようになった。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    mine = {cell for cell in covered if cell.scope == "compound_deposit_for"}
+    assert len(mine) == 258
+    grow_only = {
+        corpus_coverage.Cell("compound_deposit_for", cell.axes)
+        for cell in covered
+        if cell.scope == "compound_grow"
+    }
+    assert grow_only - mine, "compound_grow だけが踏んでいるペアが在るはず(混ぜていない証拠)"
+
+
+def test_the_overflowing_pairs_are_excluded_as_source_overflow() -> None:
+    """正算が u64 を溢れさせるので、逆算の目標値が作れない(設計書 §10.1)。
+
+    **積立額を最小の 1 円にしても溢れる**ことを、参照実装に聞いて確かめる。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    exclusions = corpus_calls.compound_deposit_for_exclusions(covered)
+    assert len(exclusions) == 8
+    assert all(e.reason is corpus_coverage.Reason.SOURCE_OVERFLOW for e in exclusions.values())
+    for cell in exclusions:
+        axes = dict(cell.axes)
+        assert (
+            corpus_calls._compound_reached(0, 1, axes["rate"], 1, int(axes["periods"]), False)
+            is None
+        )
+    # **整合式が閉じている。** 266 = 258 + 8 + 0。
+    mine = {cell for cell in covered if cell.scope == "compound_deposit_for"}
+    requirement = corpus_calls._REQUIREMENT_OF["compound_deposit_for"]
+    assert len(requirement.cells) == len(mine) + len(exclusions)
+
+
+def test_the_excluded_pairs_are_the_ones_no_construction_can_reach() -> None:
+    """**除外の下限を、探索とは独立に確かめる。**
+
+    除外の一覧は「いまの生成器が作れなかったもの」だが、それだけでは
+    **生成器を弱くすれば除外を増やせてしまう。** ここは因子表の全通り
+    (金利 × 期間 × 周期 × 税)を直接あたって、**どう構成しても正算が溢れる
+    セル**を数える——**この 8 は生成器の都合ではなく、u64 の都合である。**
+    """
+    factors = corpus_calls.PAIRWISE_COMPOUND_GROW_FACTORS
+    requirement = corpus_calls._REQUIREMENT_OF["compound_deposit_for"]
+    unreachable = set()
+    for cell in requirement.cells:
+        axes = dict(cell.axes)
+        rates = [axes["rate"]] if "rate" in axes else list(factors["rate"])
+        periods = [int(axes["periods"])] if "periods" in axes else list(factors["periods"])
+        per_years = (
+            [int(axes["periods_per_year"])]
+            if "periods_per_year" in axes
+            else list(factors["periods_per_year"])
+        )
+        taxes = [axes["tax"] == "True"] if "tax" in axes else list(factors["tax"])
+        if not any(
+            corpus_calls._compound_reached(0, 1, str(r), int(p), int(n), bool(t)) not in (None, 0)
+            for r in rates
+            for n in periods
+            for p in per_years
+            for t in taxes
+        ):
+            unreachable.add(cell)
+    assert len(unreachable) == 8
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    assert set(corpus_calls.compound_deposit_for_exclusions(covered)) == unreachable
+
+
+def test_an_unexplained_gap_is_not_given_a_reason() -> None:
+    """**説明できない未達に理由を貼らない**(設計書 §10、CLAUDE.md の「未分類理由」)。
+
+    被覆の集合から 1 つ抜くと、その分だけ「構成できるはずなのに未達」が生まれる
+    ——そこで `source_overflow` を貼れば表は綺麗になるが、**嘘になる。**
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    covered = corpus_calls.covered_cells_from_cases(shard["cases"])
+    reachable = next(
+        cell
+        for cell in covered
+        if cell.scope == "compound_deposit_for" and "periods" in dict(cell.axes)
+    )
+    with pytest.raises(RuntimeError, match="理由を説明できない"):
+        corpus_calls.compound_deposit_for_exclusions(covered - {reachable})
+
+
+def test_the_finance_shard_carries_its_coverage() -> None:
+    """設計書 §11.2・§18。**空間の地図を、覆ったケースの隣に置く。**"""
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    cov = shard["coverage"]
+    assert cov["schema"] == corpus_coverage.COVERAGE_SCHEMA
+    assert cov["model"] == "finance-v1"
+    assert [r["id"] for r in cov["requirements"]] == [
+        r.id for r in corpus_calls.FINANCE_REQUIREMENTS
+    ]
+    for r in cov["requirements"]:
+        assert r["required_cells"] == r["covered_cells"] + r["excluded_cells"] + r["unmet_cells"]
+        assert r["unmet_cells"] == 0, f"{r['id']} に未達が残っている"
+    assert cov["generation_rejections"]["oracle_search_limit"] == 0
+    assert list(shard) == ["schema", "generated_by", "rejections", "coverage", "cases"]
+
+
+def test_the_coverage_totals_are_the_ones_we_measured() -> None:
+    """**8 対象それぞれの数を固定する。**
+
+    合計だけを見ると、**片方が減って片方が増えた**走行を見逃す。実測
+    (2026-08-29、Task 5・6 のあと): `loan_term` は 126 + 24、
+    `compound_deposit_for` は 258 + 8、残る 6 対象は全被覆。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    got = {
+        r["scope"]: (r["covered_cells"], r["excluded_cells"], r["required_cells"])
+        for r in shard["coverage"]["requirements"]
+    }
+    assert got == {
+        "loan_forward": (150, 0, 150),
+        "loan_principal": (150, 0, 150),
+        "loan_bonus_forward": (150, 0, 150),
+        "loan_bonus_principal": (150, 0, 150),
+        "loan_term": (126, 24, 150),
+        "compound_grow": (266, 0, 266),
+        "compound_deposit_for": (258, 8, 266),
+        "compound_periods_for": (56, 0, 56),
+    }
+
+
+def test_the_rejections_are_copied_not_merged() -> None:
+    """設計書 §10.3。**乱択候補の棄却と、要求セルの除外を同じ入れ物に混ぜない。**
+
+    `rejections` の綴りは既存の読み手(`report.ts` の `renderGaveUp`)が使うので
+    変えない——`coverage.generation_rejections` はその**写し**である。
+    """
+    shard = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    rejections, cov = shard["rejections"], shard["coverage"]
+    assert cov["generation_rejections"]["candidate_duplicate"] == rejections["dup"]
+    assert (
+        cov["generation_rejections"]["oracle_near_yen_boundary"]
+        == rejections["reference_gave_up"]["near_yen_boundary"]
+    )
+    # **除外セルは棄却の合計に入らない。** 混ざっていれば、この 2 つは一致しない。
+    assert len(cov["excluded_cells"]) == 32
+    assert cov["generation_rejections"]["candidate_duplicate"] != len(cov["excluded_cells"])
+
+
+def test_generating_twice_is_byte_identical_including_coverage() -> None:
+    """設計書 §15.1 の 10。**順序が走行ごとに動くと、固定コーパスが一致しない。**"""
+    first = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    second = corpus_calls.build_finance_shard(seed=20260821, count=3500)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    # **並びそのものも固定する。** `sort_keys` を通すと順序の崩れが隠れる。
+    assert json.dumps(first) == json.dumps(second)
+
+
+def test_dropping_one_required_cell_shows_up_as_unmet() -> None:
+    """設計書 §15.1 の 5。**要求セルを 1 つ落とすと `unmet` になる。**
+
+    緑のまま通ってしまうなら、この集計は何も主張していない。
+    """
+    requirement = corpus_calls._REQUIREMENT_OF["compound_grow"]
+    covered = set(requirement.cells) - {requirement.cells[0]}
+    summary = corpus_coverage.summarize(requirement, covered, {})
+    assert summary["unmet_cells"] == 1
+    assert summary["status"] == "incomplete"
+
+
+def test_removing_one_exclusion_makes_the_generator_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """設計書 §15.1 の 6・§13.1。**除外を 1 つ消すと未達が残り、生成器が落ちる。**
+
+    **変異はファイルではなく `monkeypatch` で当てる**——同じワークツリーに別の
+    作業が居るので、書き換えて戻す手順は使わない。
+    """
+    monkeypatch.setattr(corpus_calls, "loan_term_exclusions", dict)
+    with pytest.raises(RuntimeError, match="未達"):
+        corpus_calls.build_finance_shard(seed=20260821, count=3500)
+
+
+def test_an_unknown_reason_code_is_refused() -> None:
+    """設計書 §13.1。**`other` は無い。** 文字列を理由として渡せない。"""
+    cell = corpus_calls._REQUIREMENT_OF["loan_term"].cells[0]
+    made_up = corpus_coverage.Exclusion(cell, "made_up_reason", "x")  # type: ignore[arg-type]
+    with pytest.raises((KeyError, ValueError)):
+        _ = made_up.disposition
+
+
+def test_the_unconstructible_rows_really_have_no_principal_that_works() -> None:
+    """**`inverse_target_unconstructible` の根拠を、実際に尽くして確かめる。**
+
+    生成器はこの行で**最初の元本**が `LoanError` を返した時点で諦める
+    ——`_pairwise_forward_result` がそう書いてある(元本を変えても消えない、
+    という 2026-08-20 の実測に依拠している)。**依拠したままにしない。**
+    ここで**元本 12 通りすべて**を試し、1 つも正算が通らないことを見る。
+
+    **通る元本が 1 つでも見つかったら、この除外は根拠を失う**
+    ——そのときは除外を消すのではなく、**その元本で行を作る**のが直しである。
+    """
+    unconstructible = [
+        cell
+        for cell, exclusion in corpus_calls.loan_term_exclusions().items()
+        if exclusion.reason is corpus_coverage.Reason.INVERSE_TARGET_UNCONSTRUCTIBLE
+    ]
+    assert len(unconstructible) == 14
+    for cell in unconstructible:
+        axes = dict(cell.axes)
+        rate, target = axes["rate"], int(axes["target_n"])
+        num, den = loan_ref.rate_fraction(rate)
+        for offset in corpus_calls._LOAN_PAIRWISE_PRINCIPAL_OFFSETS:
+            principal = corpus_calls._LOAN_PAIRWISE_PRINCIPAL_BASE + offset
+            try:
+                loan_ref.forward(principal, num, den, target, 0)
+            except loan_ref.LoanError, ValueError:
+                continue
+            raise AssertionError(
+                f"{cell.id}: 元本 {principal} なら正算が通る。"
+                "構成できないという除外の根拠が崩れている"
+            )
+
+
+def test_the_two_unconstructible_reasons_say_different_things(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**「正算が落ちた」と「探索が尽きた」を同じ文で書かない。**
+
+    実データでは前者しか出ない(後者に当たる行はすべて `target_n = 1201` で
+    `not_applicable` に吸われる)ので、**分岐を作り物で通す**——通らない枝は
+    書いた本人しか読まないまま腐る。
+    """
+    facts = (
+        corpus_calls.LoanTermFact("1.5", 12, 20_000_000, None, None, "Overflow", "excluded"),
+        corpus_calls.LoanTermFact(
+            "1.5", 13, 20_000_000, 100_000, None, "no-construction", "excluded"
+        ),
+    )
+    monkeypatch.setattr(corpus_calls, "LOAN_TERM_FACTS", facts)
+    details = {
+        int(dict(cell.axes)["target_n"]): exclusion.detail
+        for cell, exclusion in corpus_calls.loan_term_exclusions().items()
+    }
+    assert "正算が Overflow を返す" in details[12]
+    assert "尽くしても" not in details[12], "走っていない探索を根拠にしている"
+    assert "尽くしても" in details[13]
+    assert "逆算が目標期間に乗らない" in details[13]
+
+
+def test_every_covered_elsewhere_pointer_resolves_to_a_real_cell() -> None:
+    """**補足のポインタが、モデルの中の実在するセルを指していること。**
+
+    `covered_elsewhere` は「別の操作で同じ組を踏んでいる」という補足で、
+    **元のセルを被覆済みには変えない**。ただの文字列なので、**因子表や
+    `cell_id` の書式が変わると黙って腐る**——指す先が消えても誰も気づかない。
+
+    **自分自身は指さない。** 指したら「別のところで踏んでいる」は嘘になる。
+    """
+    known = {cell.id for req in corpus_calls.FINANCE_REQUIREMENTS for cell in req.cells}
+    exclusions = {
+        **corpus_calls.loan_term_exclusions(),
+        **corpus_calls.compound_deposit_for_exclusions(
+            corpus_calls.covered_cells_from_cases(
+                corpus_calls.build_finance_shard(seed=20260821, count=3500)["cases"]
+            )
+            | corpus_calls.loan_term_covered_cells()
+        ),
+    }
+    pointers = [(cell, p) for cell, e in exclusions.items() for p in e.covered_elsewhere]
+    assert len(pointers) == 32
+    for cell, pointer in pointers:
+        assert pointer in known, f"{cell.id} の covered_elsewhere が指す {pointer} が無い"
+        assert pointer != cell.id, f"{cell.id} が自分自身を指している"

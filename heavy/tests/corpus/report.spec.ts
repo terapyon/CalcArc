@@ -13,6 +13,10 @@ import type {
   ToleranceBand,
 } from "./corpus";
 import {
+  type CallBreakdown,
+  type Coverage,
+  type CoverageExclusion,
+  type CoverageRequirement,
   countSequencesWithoutEq,
   displaySequences,
   loadCallShards,
@@ -46,6 +50,7 @@ import {
   type Reproducibility,
   type ReproducibilitySignal,
   renderCallBreakdowns,
+  renderCoverage,
   renderDetectionPower,
   renderReport,
   renderReproducibility,
@@ -1936,15 +1941,27 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   expect(Object.keys(byOp).length, "op が 1 つも無い").toBeGreaterThan(0);
   expect(Object.keys(byStratum).length, "層が 1 つも無い").toBeGreaterThan(0);
 
-  // **実測を焼き付ける(2026-08-20)。** 3500 件の内訳が動いたら、報告書が
-  // 外の読み手にしている主張のほうを先に見直すこと。
+  // **実測を焼き付ける(2026-08-20、2026-08-29 に更新)。** 3500 件の内訳が
+  // 動いたら、報告書が外の読み手にしている主張のほうを先に見直すこと。
+  //
+  // **2026-08-29(空間モデル Task 5・6)で動いた。** `loan_term` の 7 行が
+  // 構成できずコーパスから出て、`compound_deposit_for` の 11 行が救われた
+  // ——**総数は 3500 のまま**で、乱択の尾が差を吸収している。
+  // **正常が 11 件増え、SyntaxError が 11 件減った。** 消えた 11 件は 1 件
+  // 残らず `loan_term` で、**エラーは逆算側**である(この op は月額から期間を
+  // 求めるので、`expect.error` は逆算の結果)。内訳は **7 件が `target_n=1201`**
+  // (**正算は通っている**——月額が作れているのがその証拠。逆算が 1201 を
+  // 返せないだけ)と、**4 件が `target_n=1200`**(逆算がエラーだった行が
+  // 月額 +1 円の構成行に置き換わった)。詳しくは `docs/corpus-measurements.md`。
+  // **エラー経路の件数が減った**ことは、`docs/corpus-measurements.md` に
+  // 記録する(検出力の測定とは別の量である)。
   const totals: Record<string, number> = {};
   for (const counts of Object.values(byOp)) {
     for (const [kind, n] of Object.entries(counts)) {
       totals[kind] = (totals[kind] ?? 0) + n;
     }
   }
-  expect(totals).toEqual({ ok: 3139, SyntaxError: 270, Overflow: 91 });
+  expect(totals).toEqual({ ok: 3150, SyntaxError: 259, Overflow: 91 });
   expect(
     Object.fromEntries(
       Object.entries(byOp).map(([op, counts]) => [
@@ -1955,10 +1972,10 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   ).toEqual({
     loan_forward: 599,
     loan_bonus_forward: 456,
-    compound_grow: 439,
-    loan_principal: 433,
-    loan_term: 426,
-    compound_deposit_for: 420,
+    compound_grow: 437,
+    loan_principal: 432,
+    compound_deposit_for: 431,
+    loan_term: 418,
     loan_bonus_principal: 412,
     compound_periods_for: 315,
   });
@@ -1976,16 +1993,19 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   // **行を 1 本だけ取り出して主張する(Task 7 の実測)。** 「どこかに 270 と
   // 書いてある」検査は、枠を畳んだ実装でも緑になる。
   expect(onlyLine(markdown, "3500 件のうち")).toContain(
-    "3139 件が正常で、361 件",
+    "3150 件が正常で、350 件",
   );
-  expect(onlyLine(markdown, "| `loan_bonus_forward` |")).toBe(
+  // **needle に件数を含める(2026-08-29)。** 空間モデルの網羅表が同じ op 名を
+  // 先頭列に持つので、`| \`loan_bonus_forward\` |` だけでは 2 本に当たる
+  // ——**主張は行の全体一致のままで、探す手がかりだけを狭めた。**
+  expect(onlyLine(markdown, "| `loan_bonus_forward` | 456 |")).toBe(
     "| `loan_bonus_forward` | 456 | 301 | 0 | 155 |",
   );
   expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
-    "| **合計** | **3500** | **3139** | **91** | **270** |",
+    "| **合計** | **3500** | **3150** | **91** | **259** |",
   );
   expect(onlyLine(markdown, "の層から引かれている")).toContain(
-    "3500 件は 1187 の層から引かれている",
+    "3500 件は 1191 の層から引かれている",
   );
   expect(onlyLine(markdown, "- `near_yen_boundary`:")).toBe(
     "- `near_yen_boundary`: 7",
@@ -2037,6 +2057,7 @@ test("an error kind the design did not name gets a column of its own", () => {
           byOp: { loan_forward: { ok: 2, DivisionByZero: 3 } },
           byStratum: {},
           gaveUp: null,
+          coverage: null,
         },
       }),
     ],
@@ -2583,6 +2604,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { loan_forward: { ok: 2000 } },
           byStratum: {},
           gaveUp: { dup: 2, reasons: { near_yen_boundary: 7, other: 0 } },
+          coverage: null,
         },
       }),
     ],
@@ -2602,6 +2624,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { loan_forward: { ok: 2000 } },
           byStratum: {},
           gaveUp: { dup: 0, reasons: { near_yen_boundary: 0, other: 0 } },
+          coverage: null,
         },
       }),
     ],
@@ -2618,6 +2641,7 @@ test("state 6: zero rejections, some rejections and no declaration are three dif
           byOp: { to_bytes: { ok: 2000 } },
           byStratum: {},
           gaveUp: null,
+          coverage: null,
         },
       }),
     ],
@@ -2887,4 +2911,252 @@ test("生成器の指紋は、信号が名指しした一式だけを数える",
   rmSync(join(dir, "two.py"));
   expect(generatorDigest(["one.py", "two.py"], dir)).toBe(null);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// **試験空間の表**(設計書 §12、計画 Task 11)。
+//
+// **数はシャードが宣言したものをそのまま出す。割合も率も足さない**
+// ——「網羅率」を作ると、**有限のモデルに対する被覆が、入力空間全体に
+// 対する被覆に見える。** 注意文を必ず添えるのはそのためである。
+// ---------------------------------------------------------------------------
+
+const coverageRequirement = (
+  over: Partial<CoverageRequirement> = {},
+): CoverageRequirement => ({
+  id: "op/a/all",
+  scope: "op",
+  strength: "all",
+  required_cells: 10,
+  covered_cells: 10,
+  excluded_cells: 0,
+  unmet_cells: 0,
+  status: "complete",
+  ...over,
+});
+
+const coverageExclusion = (
+  over: Partial<CoverageExclusion> = {},
+): CoverageExclusion => ({
+  cell_id: "op/a=1",
+  scope: "op",
+  reason: "duplicate_equivalent",
+  disposition: "safe",
+  detail: "x",
+  covered_elsewhere: [],
+  ...over,
+});
+
+const coverageOf = (
+  requirements: CoverageRequirement[],
+  excluded: CoverageExclusion[],
+  rejections: Record<string, number> = { candidate_duplicate: 0 },
+): Coverage => ({
+  schema: 1,
+  model: "finance-v1",
+  requirements,
+  excluded_cells: excluded,
+  generation_rejections: rejections,
+});
+
+const withCoverage = (coverage: Coverage | null): CallBreakdown => ({
+  byOp: { op: { ok: 1 } },
+  byStratum: {},
+  gaveUp: null,
+  coverage,
+});
+
+test("1. 全セル被覆・除外 0 は「完全網羅」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(coverageOf([coverageRequirement()], [])),
+  );
+  expect(lines.join("\n")).toContain("| 10 | 10 | 0 | 0 | 完全網羅 |");
+});
+
+test("2. 安全な重複除外は safe として並ぶ", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "duplicate_equivalent",
+            disposition: "safe",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("`duplicate_equivalent`");
+  expect(lines.join("\n")).toContain("safe");
+  // **注意文にも「未検証空間」という語が出る。** 見たいのは判断区分の欄なので
+  // 印そのもので見る——素の「未検証」だと注意文に当たって常に緑になる。
+  expect(lines.join("\n")).not.toContain("(**未検証**)");
+});
+
+test("3. reasonable の除外は「理由付き未実行あり」になる（完全網羅とは書かない）", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "source_overflow",
+            disposition: "reasonable",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("理由付き未実行あり");
+  // **注意文が「完全網羅は…を意味しない」と書いている。** 状態の欄を見る。
+  expect(lines.join("\n")).not.toContain("| 完全網羅 |");
+});
+
+test("4. accepted risk は「未検証」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [
+          coverageExclusion({
+            reason: "oracle_near_yen_boundary",
+            disposition: "accepted_risk",
+          }),
+        ],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("(**未検証**)");
+});
+
+test("5. 未達があれば「不足」と書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            unmet_cells: 1,
+            status: "incomplete",
+          }),
+        ],
+        [],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("不足");
+});
+
+test("6. coverage が無いシャードは「測定していない」と書き、表を出さない", () => {
+  const lines = renderCoverage(withCoverage(null)).join("\n");
+  expect(lines).toContain("測定していない");
+  expect(lines).not.toContain("| 対象 |");
+});
+
+test("7. 未知理由は行を落とさずそのまま出す", () => {
+  // **読み手(`assertCoverageIsSound`)が拒否済みでも、表示は落とさない。**
+  // 落とすと、表の合計と行の数が食い違ったまま読まれる。
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [
+          coverageRequirement({
+            covered_cells: 9,
+            excluded_cells: 1,
+            status: "accounted_with_exclusions",
+          }),
+        ],
+        [coverageExclusion({ reason: "made_up", disposition: "safe" })],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("`made_up`");
+});
+
+test("8. 合計が合わないときはその旨を書く", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf(
+        [coverageRequirement({ required_cells: 10, covered_cells: 9 })],
+        [],
+      ),
+    ),
+  );
+  expect(lines.join("\n")).toContain("合計が合わない");
+});
+
+test("9. 候補棄却 0 のときも節を出す", () => {
+  // **0 件は「無かった」であって「測っていない」ではない。** 節ごと消すと
+  // 区別が付かなくなる。
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf([coverageRequirement()], [], {
+        candidate_duplicate: 0,
+        oracle_near_yen_boundary: 0,
+        oracle_search_limit: 0,
+      }),
+    ),
+  );
+  expect(lines.join("\n")).toContain("生成候補の棄却");
+  expect(lines.join("\n")).toContain("`candidate_duplicate`: 0");
+});
+
+test("10. 候補棄却があるとき、単位が「生成候補」と書かれる", () => {
+  const lines = renderCoverage(
+    withCoverage(
+      coverageOf([coverageRequirement()], [], {
+        candidate_duplicate: 12,
+        oracle_near_yen_boundary: 7,
+        oracle_search_limit: 0,
+      }),
+    ),
+  );
+  // **「生成候補」だけを見ない**(2026-08-29 の厳格レビュー F5)。その語は
+  // 節見出し「生成候補の棄却」に常に含まれるので、**`coverage` が非 null なら
+  // 任意の入力で緑になる**——行の単位を落としても赤くならない。
+  // **見たいのは、数のとなりに単位が付いていること**である。
+  const text = lines.join("\n");
+  expect(text).toContain("- `candidate_duplicate`: 12 生成候補");
+  expect(text).toContain("- `oracle_near_yen_boundary`: 7 生成候補");
+  expect(text).toContain("未検証空間の大きさではない");
+});
+
+test("網羅率を書かない（有限のモデルへの被覆を、入力空間への被覆に見せない）", () => {
+  const lines = renderCoverage(
+    withCoverage(coverageOf([coverageRequirement()], [])),
+  ).join("\n");
+  expect(lines).not.toMatch(/\d+(\.\d+)?\s*%/);
+  expect(lines).toContain("金融入力全体を数学的に全列挙したことを意味しない");
+});
+
+test("実物の finance-000.json でも表が出る", () => {
+  const finance = loadCallShards().find((e) => e.name === "finance-000.json");
+  if (finance === undefined) {
+    throw new Error("finance-000.json is not among the call shards");
+  }
+  const lines = renderCoverage(summarizeCallShard(finance.shard)).join("\n");
+  expect(lines).toContain("`finance-v1`");
+  expect(lines).toContain("loan_term");
+  // **実物の数がそのまま出ている。**
+  expect(lines).toContain("| 150 | 126 | 24 | 0 | 理由付き未実行あり |");
+  expect(lines).toContain("`source_overflow`");
 });

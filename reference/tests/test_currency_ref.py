@@ -3,6 +3,7 @@
 **期待値は spec §3・§3.1 から手で計算して書いている**（Rust も golden も見ずに）。
 """
 
+from collections import Counter
 from fractions import Fraction
 
 from calcarc_reference.currency_ref import (
@@ -192,7 +193,14 @@ def test_the_golden_inputs_carry_no_surprises() -> None:
     ok = [r for r in results if "text" in r]
     errors = [r for r in results if "error" in r]
     assert len(ok) + len(errors) == len(results)
-    assert len(errors) == 5
+    # **内訳まで留める。** 合計だけを見ていると、**「SyntaxError が 1 減って
+    # Overflow が 1 増えた」を見逃す**（2026-08-29 のレビュー指摘）——
+    # エラーの種類が入れ替わるのは、まさに優先順位の変異が起きる形である。
+    assert Counter(r["error"] for r in errors) == {
+        "SyntaxError": 5,
+        "Overflow": 4,
+        "DivisionByZero": 1,
+    }
     # **0 桁の通貨の答には小数点が 1 つも無い。**
     for row, result in zip(cases.CURRENCY_INPUTS, results, strict=True):
         dst = row[2]

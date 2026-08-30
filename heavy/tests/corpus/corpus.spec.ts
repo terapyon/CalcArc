@@ -1,10 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 import { type ComplexValue, magnitude, parseComplexDisplay } from "./complex";
 import {
+  assertCoverageIsSound,
   assertNoCaseTolerance,
   assertShardIsSound,
   assertSupportedMode,
   assertToleranceIsSane,
+  type CallShard,
   type Classification,
   classify,
   classifyComplex,
@@ -874,3 +876,236 @@ for (const { name, shard, equivalences } of partitions) {
     ).toBe("");
   });
 }
+
+// ---------------------------------------------------------------------------
+// **試験空間の宣言を読む側**(設計書 §13.2、計画 Task 10)。
+//
+// **読み手は数え直さない。** 数え直せるのは生成の時点だけで、ここでできるのは
+// 「宣言が自分自身と矛盾していないか」の検算である。**矛盾していたら落とす**
+// ——`unmet` が残ったシャードや、知らない理由コードを載せたシャードは、
+// 「覆えないなら理由を書く」という約束を破っている。
+// ---------------------------------------------------------------------------
+
+const sound = (): CallShard => ({
+  schema: 1,
+  generated_by: "test",
+  cases: [],
+  coverage: {
+    schema: 1,
+    model: "finance-v1",
+    requirements: [
+      {
+        id: "r",
+        scope: "op",
+        strength: "all",
+        required_cells: 3,
+        covered_cells: 2,
+        excluded_cells: 1,
+        unmet_cells: 0,
+        status: "accounted_with_exclusions",
+      },
+    ],
+    excluded_cells: [
+      {
+        cell_id: "op/a=1",
+        scope: "op",
+        reason: "not_applicable",
+        disposition: "reasonable",
+        detail: "x",
+        covered_elsewhere: [],
+      },
+    ],
+    generation_rejections: { candidate_duplicate: 0 },
+  },
+});
+
+test("整った coverage は通る（下の拒否が、拒否そのものを見ている証拠）", () => {
+  expect(() =>
+    assertCoverageIsSound("finance-000.json", sound()),
+  ).not.toThrow();
+});
+
+test("未知の coverage.schema を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.schema = 2;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /schema/,
+  );
+});
+
+test("未知の model を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.model = "finance-v2";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /model/,
+  );
+});
+
+test("件数の整合が取れないシャードを拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.requirements[0]!.covered_cells = 3; // 3 + 1 + 0 ≠ 3
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /整合/,
+  );
+});
+
+test("未知の除外理由を拒む（`other` は無い）", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.reason = "other";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /理由/,
+  );
+});
+
+test("未知の判断区分を拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.disposition = "probably_fine";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /判断区分/,
+  );
+});
+
+test("未達が残っているシャードを拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const requirement = shard.coverage!.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 1;
+  requirement.unmet_cells = 1;
+  requirement.status = "incomplete";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /未達/,
+  );
+});
+
+test("not_measured を拒む（測っていないことを、通ったことにしない）", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.requirements[0]!.status = "not_measured";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /測定/,
+  );
+});
+
+test("finance-000.json が coverage を持たないことを拒む", () => {
+  const shard = sound();
+  shard.coverage = undefined;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /coverage/,
+  );
+});
+
+test("coverage を要求しないシャードには何も言わない", () => {
+  const shard = sound();
+  shard.coverage = undefined;
+  expect(() =>
+    assertCoverageIsSound("data-scale-000.json", shard),
+  ).not.toThrow();
+});
+
+// --- F3(2026-08-29 の厳格レビュー): 宣言と一覧を突き合わせる ---
+//
+// **数の焼き付けは今日の数の pin にすぎない。** `calls.spec.ts` が実物の
+// 32 件を固定しているが、あれは**再生成や 2 枚目のシャードには効かない。**
+// 門の側が、**シャード自身の中で閉じているか**を見る。
+
+test("宣言した除外数と、除外の一覧の長さが合わないシャードを拒む", () => {
+  const shard = sound();
+  // 宣言は 1 件のまま、一覧を空にする
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells = [];
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /除外/,
+  );
+});
+
+test("対象ごとの除外数が合わないシャードを拒む", () => {
+  // 合計は合っているのに、**どの対象の除外かがずれている**形。合計だけを
+  // 見ると通ってしまう。
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  coverage.requirements = [
+    {
+      id: "a",
+      scope: "op",
+      strength: "all",
+      required_cells: 3,
+      covered_cells: 2,
+      excluded_cells: 1,
+      unmet_cells: 0,
+      status: "accounted_with_exclusions",
+    },
+    {
+      id: "b",
+      scope: "other",
+      strength: "all",
+      required_cells: 3,
+      covered_cells: 2,
+      excluded_cells: 1,
+      unmet_cells: 0,
+      status: "accounted_with_exclusions",
+    },
+  ];
+  // 合計 2 件だが、両方 `op` に寄っている
+  coverage.excluded_cells = [
+    { ...coverage.excluded_cells[0], cell_id: "op/a=1" },
+    { ...coverage.excluded_cells[0], cell_id: "op/a=2" },
+  ] as typeof coverage.excluded_cells;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /対象/,
+  );
+});
+
+test("同じセルを 2 度除外しているシャードを拒む", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  coverage.requirements[0] = {
+    ...coverage.requirements[0],
+    covered_cells: 1,
+    excluded_cells: 2,
+  } as (typeof coverage.requirements)[0];
+  coverage.excluded_cells = [
+    coverage.excluded_cells[0],
+    coverage.excluded_cells[0],
+  ] as typeof coverage.excluded_cells;
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /重複/,
+  );
+});
+
+test("どの対象にも属さない除外を拒む", () => {
+  const shard = sound();
+  // **`cell_id` の接頭辞も一緒に動かす。** 片方だけ変えると先に発火するのは
+  // 接頭辞の検査のほうで、**この検査を一度も通らないまま緑になる**
+  // (2026-08-29、接頭辞の検査を足したときに実際にそうなった)。
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const exclusion = shard.coverage!.excluded_cells[0]!;
+  exclusion.scope = "nowhere";
+  exclusion.cell_id = "nowhere/a=1";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /対象/,
+  );
+});
+
+test("cell_id の接頭辞が scope 欄と食い違うシャードを拒む", () => {
+  // **この門は「人が golden を触ったとき」に効く番人である。**
+  // 生成器は `cell_id` と `scope` を同じ `Cell` から導くので、生成の側では
+  // 食い違わない——**だが、生成器が正しいことを前提にできるなら門は要らない。**
+  //
+  // 実測(2026-08-29 の差分レビュー): `scope` 欄はそのままに `cell_id` の
+  // 接頭辞だけ別の対象に変えると、**門は緑だった**——数えているのが
+  // `scope` 欄だけだったため。
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  shard.coverage!.excluded_cells[0]!.cell_id = "elsewhere/a=1";
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /接頭辞/,
+  );
+});
