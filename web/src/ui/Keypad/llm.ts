@@ -164,12 +164,14 @@ export const LLM_FIELD_SECTION: KeypadSection<LlmKeyToken> = {
   columns: 4,
   height: "half",
   keys: [
-    ...LLM_FIELD_ORDER.map((field) => ({
-      token: `field:${field}` as LlmKeyToken,
-      label: LLM_FIELD_LABELS[field],
-      ariaLabel: FIELD_ARIA_LABELS[field],
-      variant: "function" as const,
-    })),
+    ...LLM_FIELD_ORDER.map(
+      (field): KeyDef<LlmKeyToken> => ({
+        token: `field:${field}`,
+        label: LLM_FIELD_LABELS[field],
+        ariaLabel: FIELD_ARIA_LABELS[field],
+        variant: "function" as const,
+      }),
+    ),
     RESERVED,
   ],
 };
@@ -191,12 +193,12 @@ function contextLabel(value: number): string {
 /** 候補値 1 つぶんのキー。**ラベルはここでしか組まない**——ariaLabel は
  * 常に展開済みの数そのもの(赤確認 1 の対象)。 */
 function valueKey(
-  prefix: string,
+  token: LlmKeyToken,
   value: number,
   label: string,
 ): KeyDef<LlmKeyToken> {
   return {
-    token: `${prefix}:${value}` as LlmKeyToken,
+    token,
     label,
     ariaLabel: String(value),
     variant: "function",
@@ -255,7 +257,7 @@ export const CANDIDATE_SECTIONS: Record<
 > = {
   parameters: buildCandidateFace("パラメータ数の候補キー", [
     ...CANDIDATE_VALUES.parameters.map((v) =>
-      valueKey("param", v, paramLabel(v)),
+      valueKey(`param:${v}`, v, paramLabel(v)),
     ),
     MANUAL_ENTRY,
   ]),
@@ -264,15 +266,19 @@ export const CANDIDATE_SECTIONS: Record<
     WEIGHT_PRECISION_CANDIDATES.map((t) => precisionKey(t)),
   ),
   kvHeads: buildCandidateFace("KVヘッド数の候補キー", [
-    ...CANDIDATE_VALUES.kvHeads.map((v) => valueKey("heads", v, String(v))),
+    ...CANDIDATE_VALUES.kvHeads.map((v) =>
+      valueKey(`heads:${v}`, v, String(v)),
+    ),
     MANUAL_ENTRY,
   ]),
   headDim: buildCandidateFace("ヘッド次元の候補キー", [
-    ...CANDIDATE_VALUES.headDim.map((v) => valueKey("dim", v, String(v))),
+    ...CANDIDATE_VALUES.headDim.map((v) => valueKey(`dim:${v}`, v, String(v))),
     MANUAL_ENTRY,
   ]),
   context: buildCandidateFace("文脈長の候補キー", [
-    ...CANDIDATE_VALUES.context.map((v) => valueKey("ctx", v, contextLabel(v))),
+    ...CANDIDATE_VALUES.context.map((v) =>
+      valueKey(`ctx:${v}`, v, contextLabel(v)),
+    ),
     MANUAL_ENTRY,
   ]),
   kvPrecision: buildCandidateFace(
