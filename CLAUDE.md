@@ -91,6 +91,9 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 ## 踏んだ罠
 
 - **コミット前に `cargo fmt` を実行する。** `--check` は直してくれない。
+- **`reference` は `ruff check` と `ruff format` の 2 つを回す。**
+  `check` が緑でも `format --check` は赤いことがある——**別物であり、
+  CI は 2 つとも見る**（`ci.yml:150,152`）。2026-08-30 に実際に落ちた。
 - **`uv` は `--no-config` を付ける。`lock` / `sync` だけでなく `run` もである。**
   付けないと手元の `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに
   書き込まれ、CI の `uv sync --locked` が落ちる。**`uv run pytest` でも起きる**
