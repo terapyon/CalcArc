@@ -2142,12 +2142,44 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     yield "errors-000.json", build_errors_shard()
 
 
+#: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。
+#: **裁定 2 の B**——9 領域を横断して数え、**外の 8 枚は数えない**。
+SCIENCE_SHARDS = (
+    "elementary-000.json",
+    "inverse-trig-000.json",
+    "angle-mode-000.json",
+    "precedence-000.json",
+    "associativity-000.json",
+    "cancellation-000.json",
+    "combinatorics-000.json",
+    "display-000.json",
+    "complex-000.json",
+    "complex-display-000.json",
+)
+
+
 def main() -> None:
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
     started = time.monotonic()
     total_cases = 0
-    for name, payload in _shards(count):
+    # **横断して数えるので、全部作ってから書く。** 1 枚ずつ書き出すと、
+    # 9 領域を跨ぐ被覆を数えられない（設計書 §14.2 の要求は
+    # `angle-mode` の Rad と他 3 枚の Deg にまたがっている）。
+    built = [(name, payload) for name, payload in _shards(count)]
+    science = corpus_science.build_science_coverage(
+        {name: payload["cases"] for name, payload in built if name in SCIENCE_SHARDS}
+    )
+    for name, payload in built:
         total_cases += len(payload["cases"])
+        if name in SCIENCE_SHARDS:
+            # **10 枚すべてに同じブロックを載せる**（裁定 5）。任意の 1 枚を
+            # 選ぶ恣意性を避け、**どれを開いても同じ会計が読める**。
+            # `cases` の前に置く（金融と同じ並び）。
+            payload = {
+                **{k: v for k, v in payload.items() if k != "cases"},
+                "coverage": science,
+                "cases": payload["cases"],
+            }
         write(name, payload)
     elapsed = time.monotonic() - started
     print(_summary_line(total_cases, elapsed))

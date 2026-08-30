@@ -484,6 +484,10 @@ export interface CoverageRequirement {
   excluded_cells: number;
   unmet_cells: number;
   status: string;
+  /** **未達のうち、測れない軸に起因するもの**（裁定 4）。無ければ 0 として読む。 */
+  unmet_from_unmeasured_axes?: number;
+  /** **本当の穴のセル id。** 数だけだと、報告書が「どこが空か」を言えない。 */
+  unmet_real_cells?: string[];
 }
 
 export interface CoverageExclusion {
@@ -495,12 +499,28 @@ export interface CoverageExclusion {
   covered_elsewhere: string[];
 }
 
+/** **測れない軸の宣言**（設計書 §14 の第 2 段階、裁定 4）。 */
+export interface NotMeasuredAxis {
+  scope: string;
+  axis: string;
+  why: string;
+}
+
 export interface Coverage {
   schema: number;
   model: string;
   requirements: CoverageRequirement[];
   excluded_cells: CoverageExclusion[];
   generation_rejections: Record<string, number>;
+  /**
+   * **この経路では読めない軸。** 宣言した軸に起因する未達では**落とさない**
+   * ——**「測れない」と「無い」は別**だからである。
+   *
+   * **持たないシャードは、未達 1 件で落ちる**（金融がそれ）。`undefined` は
+   * 「宣言していない」であって「全部測れる」ではない、という区別は要らない
+   * ——**宣言が無ければ、未達はすべて本当の穴として扱う**のが厳しい側である。
+   */
+  not_measured_axes?: NotMeasuredAxis[];
 }
 
 /**
@@ -542,9 +562,32 @@ export function assertCoverageIsSound(name: string, shard: CallShard): void {
           `${requirement.excluded_cells}+${requirement.unmet_cells}≠${requirement.required_cells})`,
       );
     }
-    if (requirement.unmet_cells > 0 || status === "incomplete") {
+    // **未達を種類で分ける**（2026-08-30 の裁定 4）。**「測れない軸に起因する
+    // 未達」では落とさず、「本当の穴」では落とす**——**「測れない」と「無い」は
+    // 別である。**
+    //
+    // **宣言が無ければ、未達はすべて本当の穴として扱う**（金融がそれ）。
+    // 宣言の側に番人が要る——**「測れない」と言えば門を通るなら、宣言が
+    // 緩めれば緑になるパラメータになる**（生成器側のテストが見張る）。
+    // **軸の宣言だけで領域ごと見逃さない。** `inverse_trig` は「測れない軸
+    // （帯）」と「本当の穴（Rad）」の両方を持つ——**領域単位で外すと、穴が
+    // 緑で通る**（2026-08-30、最初の実装が実際にそうなっていた）。
+    // **数はシャードが宣言する**（読み手は数え直さない）。
+    const fromUnmeasured = requirement.unmet_from_unmeasured_axes ?? 0;
+    const realHoles = requirement.unmet_cells - fromUnmeasured;
+    if (realHoles > 0) {
+      const named = (requirement.unmet_real_cells ?? [])
+        .slice(0, 3)
+        .join(" / ");
       throw new Error(
-        `${name}/${id}: 未達セルが ${requirement.unmet_cells} 件ある`,
+        `${name}/${id}: 本当の穴が ${realHoles} 件ある` +
+          (named === "" ? "" : `: ${named}`),
+      );
+    }
+    if (fromUnmeasured > requirement.unmet_cells) {
+      throw new Error(
+        `${name}/${id}: 測れない軸に起因する未達 ${fromUnmeasured} が、` +
+          `未達の総数 ${requirement.unmet_cells} を超えている`,
       );
     }
     if (status === "not_measured") {

@@ -558,3 +558,60 @@ def assert_record_matches_observation(case: dict, node: object) -> None:
             f"木={recorded} / キー={observed}。"
             "**木が事実、キーからの読みが解釈である**——射影を直すこと"
         )
+
+
+def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
+    """9 領域を横断して数えた `coverage` ブロック（裁定 2 の B・裁定 5）。
+
+    **10 枚すべてに同じものを載せる。** モデルがシャードをまたぐので、
+    金融の「1 枚 = 1 モデル」と同じ形にならない——**任意の 1 枚を選ぶ恣意性を
+    避け、どれを開いても同じ会計が読めるようにする。**
+
+    **`not_measured_axes` を持たせる**（裁定 4）。**「測れない軸に起因する未達」と
+    「本当の穴」は別物**で、**読み手の門は後者だけで落とす**。宣言せずに
+    落とさないと、**「測れない」が緩めれば緑になるパラメータになる。**
+    """
+    covered: set[coverage.Cell] = set()
+    for cases in cases_by_shard.values():
+        for case in cases:
+            covered |= observed_cells(case)
+    payload = coverage.build_payload(SCIENCE_MODEL, SCIENCE_REQUIREMENTS, covered, {}, {})
+    # **未達を種類で分けて載せる**（裁定 4）。**数だけでは読み手が分けられない**
+    # ——`inverse_trig` は「測れない軸（帯）」と「本当の穴（Rad）」の両方を
+    # 持つので、**軸の宣言だけで領域ごと見逃すと、穴が緑で通る。**
+    by_scope = {r.scope: r for r in SCIENCE_REQUIREMENTS}
+    for summary in payload["requirements"]:  # type: ignore[attr-defined]
+        requirement = by_scope[summary["scope"]]
+        unmet = [c for c in requirement.cells if c not in covered]
+        from_unmeasured = [
+            c for c in unmet if unmet_is_only_from_unmeasured_axes(requirement.scope, c)
+        ]
+        summary["unmet_from_unmeasured_axes"] = len(from_unmeasured)
+        # **本当の穴は id を載せる。** 数だけだと、報告書が「どこが空か」を
+        # 言えない——**穴を可視化するのがこのモデルの値打ちである。**
+        summary["unmet_real_cells"] = sorted(c.id for c in unmet if c not in from_unmeasured)
+    reasons = {
+        ("elementary", "band"): "帯は引数の値で決まる。キー列からは読めない",
+        ("inverse_trig", "band"): "帯は引数の値で決まる。キー列からは読めない",
+        ("cancellation", "band"): "帯は桁落ちの強度で決まる。生成器の意図が要る",
+        ("cancellation", "shape"): "相殺の形は生成器の意図で決まる",
+        ("precedence", "grammar_class"): "文法クラスは式の構造で決まる",
+        ("complex", "operation"): "演算種別は式の構造で決まる",
+        ("display", "edge"): "表示境界はリテラルの値で決まる",
+    }
+    payload["not_measured_axes"] = [
+        {"scope": scope, "axis": axis, "why": reasons[(scope, axis)]}
+        for scope, axes in sorted(UNOBSERVABLE_AXES.items())
+        for axis in axes
+    ]
+    return payload
+
+
+def unmet_is_only_from_unmeasured_axes(requirement_scope: str, cell: coverage.Cell) -> bool:
+    """この未達セルは、**測れない軸に起因する**か。
+
+    **読み手の門はこれで種類を分ける**（裁定 4）——**測れない軸では落とさず、
+    本当の穴では落とす。**
+    """
+    unmeasured = {(scope, axis) for scope, axes in UNOBSERVABLE_AXES.items() for axis in axes}
+    return any((requirement_scope, name) in unmeasured for name, _ in cell.axes)

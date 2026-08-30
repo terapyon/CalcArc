@@ -345,3 +345,87 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
     assert checked == 17823, f"突き合わせたのが {checked} 件しかない"
+
+
+# ---------------------------------------------------------------------------
+# `coverage` を載せる（Task 4）
+# ---------------------------------------------------------------------------
+
+
+def test_a_declared_unmeasurable_axis_is_never_observed() -> None:
+    """**★ 裁定 4 の番人。** 「測れない」と宣言した軸が、**本当に観測経路から
+    出ない**ことを見る。
+
+    **これが無いと、宣言が「緩めれば緑になるパラメータ」になる**——測れる軸を
+    「測れない」と宣言すれば、その未達では門が落ちなくなる。このプロジェクトが
+    何度も踏んでいる型である。
+
+    **観測できるのに宣言した軸が 1 つでもあれば落ちる。**
+    """
+    declared = {
+        (scope, axis) for scope, axes in corpus_science.UNOBSERVABLE_AXES.items() for axis in axes
+    }
+    seen: set[tuple[str, str]] = set()
+    for case in _nine_domain_cases():
+        for scope, axes in corpus_science.observed_levels(case).items():
+            seen |= {(scope, axis) for axis in axes}
+    wrongly = sorted(declared & seen)
+    assert not wrongly, (
+        f"観測できるのに「測れない」と宣言している軸がある: {wrongly}——宣言を外すか、射影を直すこと"
+    )
+
+
+def test_the_declaration_list_is_pinned() -> None:
+    """**(ii) 宣言が黙って増えることを防ぐ**（(i) の保険）。
+
+    (i) は「観測できるのに宣言した」を捕まえるが、**観測できない軸を新しく
+    宣言することは捕まえない**——それは正しい宣言かもしれないし、**モデルを
+    狭めて点を稼ぐ手**かもしれない。**増えたら人が読む。**
+    """
+    assert corpus_science.UNOBSERVABLE_AXES == {
+        "elementary": ("band",),
+        "inverse_trig": ("band",),
+        "cancellation": ("shape", "band"),
+        "precedence": ("grammar_class",),
+        "complex": ("operation",),
+        "display": ("edge",),
+    }
+
+
+def test_the_coverage_block_splits_unmet_by_kind() -> None:
+    """**未達を種類で分けて載せる**（裁定 4）。
+
+    **数だけでは読み手が分けられない**——`inverse_trig` は「測れない軸（帯）」と
+    「本当の穴（Rad）」の**両方**を持つので、**軸の宣言だけで領域ごと見逃すと、
+    穴が緑で通る。**
+    """
+    payload = json.loads((CORPUS / "elementary-000.json").read_text(encoding="utf-8"))["coverage"]
+    by_scope = {r["scope"]: r for r in payload["requirements"]}
+    assert by_scope["inverse_trig"]["unmet_cells"] == 9
+    assert by_scope["inverse_trig"]["unmet_from_unmeasured_axes"] == 5
+    assert len(by_scope["inverse_trig"]["unmet_real_cells"]) == 4
+    real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
+    assert real == 7, "本当の穴は 7 件"
+    assert len(payload["not_measured_axes"]) == 7
+
+
+def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> None:
+    """**写しが一致することだけを見ない**（裁定 5）。
+
+    **10 個の写しが一致することだけを見るテストは、10 個とも同じように
+    間違っていれば緑**である。**源と写しの一致**を見る——ここで数え直した
+    ものと、載っているものが同じであること。
+    """
+    blocks = [
+        json.loads((CORPUS / name).read_text(encoding="utf-8"))["coverage"] for name in NINE_SHARDS
+    ]
+    assert all(block == blocks[0] for block in blocks), "10 枚のブロックが揃っていない"
+    fresh = corpus_science.build_science_coverage(
+        {
+            name: json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]
+            for name in NINE_SHARDS
+        }
+    )
+    assert blocks[0] == json.loads(json.dumps(fresh)), (
+        "載っているブロックが、いま数え直したものと違う"
+    )

@@ -94477,6 +94477,169 @@
       "mode": "Deg"
     }
   ],
+  "coverage": {
+    "excluded_cells": [],
+    "generation_rejections": {},
+    "model": "scientific-v1",
+    "not_measured_axes": [
+      {
+        "axis": "shape",
+        "scope": "cancellation",
+        "why": "\u76f8\u6bba\u306e\u5f62\u306f\u751f\u6210\u5668\u306e\u610f\u56f3\u3067\u6c7a\u307e\u308b"
+      },
+      {
+        "axis": "band",
+        "scope": "cancellation",
+        "why": "\u5e2f\u306f\u6841\u843d\u3061\u306e\u5f37\u5ea6\u3067\u6c7a\u307e\u308b\u3002\u751f\u6210\u5668\u306e\u610f\u56f3\u304c\u8981\u308b"
+      },
+      {
+        "axis": "operation",
+        "scope": "complex",
+        "why": "\u6f14\u7b97\u7a2e\u5225\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308b"
+      },
+      {
+        "axis": "edge",
+        "scope": "display",
+        "why": "\u8868\u793a\u5883\u754c\u306f\u30ea\u30c6\u30e9\u30eb\u306e\u5024\u3067\u6c7a\u307e\u308b"
+      },
+      {
+        "axis": "band",
+        "scope": "elementary",
+        "why": "\u5e2f\u306f\u5f15\u6570\u306e\u5024\u3067\u6c7a\u307e\u308b\u3002\u30ad\u30fc\u5217\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
+      },
+      {
+        "axis": "band",
+        "scope": "inverse_trig",
+        "why": "\u5e2f\u306f\u5f15\u6570\u306e\u5024\u3067\u6c7a\u307e\u308b\u3002\u30ad\u30fc\u5217\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
+      },
+      {
+        "axis": "grammar_class",
+        "scope": "precedence",
+        "why": "\u6587\u6cd5\u30af\u30e9\u30b9\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308b"
+      }
+    ],
+    "requirements": [
+      {
+        "covered_cells": 4,
+        "excluded_cells": 0,
+        "id": "elementary/band-function/one_way",
+        "required_cells": 9,
+        "scope": "elementary",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 5,
+        "unmet_from_unmeasured_axes": 5,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 7,
+        "excluded_cells": 0,
+        "id": "inverse_trig/angle_mode-band-function/one_way+pairs",
+        "required_cells": 16,
+        "scope": "inverse_trig",
+        "status": "incomplete",
+        "strength": "one_way+pairs",
+        "unmet_cells": 9,
+        "unmet_from_unmeasured_axes": 5,
+        "unmet_real_cells": [
+          "inverse_trig/angle_mode=Rad",
+          "inverse_trig/function=acos,angle_mode=Rad",
+          "inverse_trig/function=asin,angle_mode=Rad",
+          "inverse_trig/function=atan,angle_mode=Rad"
+        ]
+      },
+      {
+        "covered_cells": 6,
+        "excluded_cells": 0,
+        "id": "angle_mode/angle_mode-function/all",
+        "required_cells": 6,
+        "scope": "angle_mode",
+        "status": "complete",
+        "strength": "all",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 2,
+        "excluded_cells": 0,
+        "id": "precedence/grammar_class-parenthesis/one_way",
+        "required_cells": 6,
+        "scope": "precedence",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 4,
+        "unmet_from_unmeasured_axes": 4,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 6,
+        "excluded_cells": 0,
+        "id": "associativity/operator_group-shape/one_way",
+        "required_cells": 6,
+        "scope": "associativity",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 0,
+        "excluded_cells": 0,
+        "id": "cancellation/band-shape/one_way",
+        "required_cells": 7,
+        "scope": "cancellation",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 7,
+        "unmet_from_unmeasured_axes": 7,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 4,
+        "excluded_cells": 0,
+        "id": "combinatorics/function-path/one_way",
+        "required_cells": 6,
+        "scope": "combinatorics",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 2,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": [
+          "combinatorics/path=domain",
+          "combinatorics/path=overflow_near"
+        ]
+      },
+      {
+        "covered_cells": 2,
+        "excluded_cells": 0,
+        "id": "display/edge-kind/one_way",
+        "required_cells": 7,
+        "scope": "display",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 5,
+        "unmet_from_unmeasured_axes": 5,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 5,
+        "excluded_cells": 0,
+        "id": "complex/form-operation-zero_part/one_way",
+        "required_cells": 10,
+        "scope": "complex",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 5,
+        "unmet_from_unmeasured_axes": 4,
+        "unmet_real_cells": [
+          "complex/zero_part=both_zero"
+        ]
+      }
+    ],
+    "schema": 1
+  },
   "generated_by": "mpmath 1.3.0 (50 dps), Python 3.14",
   "schema": 1,
   "tolerance": {

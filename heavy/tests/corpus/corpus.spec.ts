@@ -978,9 +978,53 @@ test("未達が残っているシャードを拒む", () => {
   requirement.covered_cells = 1;
   requirement.unmet_cells = 1;
   requirement.status = "incomplete";
+  // **文言は「本当の穴」になった**（2026-08-30 の裁定 4）——未達を種類で
+  // 分けたので、**測れない軸の宣言が無いシャードでは、未達はすべて本当の穴**
+  // として扱う（金融がそれ）。
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
-    /未達/,
+    /本当の穴/,
   );
+});
+
+test("測れない軸を宣言しても、本当の穴では落ちる", () => {
+  // **裁定 4 の危険はここである**——「測れない」と宣言すれば門を通るなら、
+  // **宣言が緩めれば緑になるパラメータになる。** 領域ごと見逃さないことを見る
+  // （`inverse_trig` は「測れない軸」と「本当の穴」の両方を持つ）。
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  const requirement = coverage.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 0;
+  requirement.excluded_cells = 0;
+  requirement.unmet_cells = 3;
+  requirement.unmet_from_unmeasured_axes = 2; // 3 のうち 2 は測れない軸
+  requirement.unmet_real_cells = ["op/a=9"];
+  requirement.required_cells = 3;
+  requirement.status = "incomplete";
+  coverage.excluded_cells = []; // 宣言と一覧を揃える
+  coverage.not_measured_axes = [{ scope: "op", axis: "band", why: "測れない" }];
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /本当の穴が 1 件/,
+  );
+});
+
+test("測れない軸だけの未達なら、門は落とさない", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  const requirement = coverage.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 0;
+  requirement.excluded_cells = 0;
+  requirement.unmet_cells = 3;
+  requirement.unmet_from_unmeasured_axes = 3;
+  requirement.unmet_real_cells = [];
+  requirement.required_cells = 3;
+  requirement.status = "incomplete";
+  coverage.excluded_cells = []; // 宣言と一覧を揃える
+  coverage.not_measured_axes = [{ scope: "op", axis: "band", why: "測れない" }];
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).not.toThrow();
 });
 
 test("not_measured を拒む（測っていないことを、通ったことにしない）", () => {
