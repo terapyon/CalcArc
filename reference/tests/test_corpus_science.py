@@ -429,3 +429,101 @@ def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> N
     assert blocks[0] == json.loads(json.dumps(fresh)), (
         "載っているブロックが、いま数え直したものと違う"
     )
+
+
+# ---------------------------------------------------------------------------
+# モデルが穴を指せることの実証（Task 6）
+# ---------------------------------------------------------------------------
+
+
+def _unmet_ids(cases_by_shard: dict[str, list[dict]]) -> set[str]:
+    """与えた入力に対する、**本当の穴**のセル id。"""
+    payload = corpus_science.build_science_coverage(cases_by_shard)
+    return {
+        cell_id
+        for requirement in payload["requirements"]
+        for cell_id in requirement["unmet_real_cells"]
+    }
+
+
+RAD_INVERSE_TRIG_CELLS = {
+    "inverse_trig/angle_mode=Rad",
+    "inverse_trig/function=asin,angle_mode=Rad",
+    "inverse_trig/function=acos,angle_mode=Rad",
+    "inverse_trig/function=atan,angle_mode=Rad",
+}
+
+
+def test_the_model_tells_the_two_inputs_apart() -> None:
+    """**★ この段の成果物。** モデルが**入力の有無で答を変える**ことを固定する。
+
+    **「未達に出る」だけを見るテストでは足りない**——射影が壊れて**何でも
+    未達と言う**ようになっても、それは緑のままである。**検出ではなく判別**を
+    主張する:
+
+    - **Rad の逆三角を含まない入力**（いまの実物）→ その 4 セルが**未達に出る**
+    - **Rad の逆三角を 1 件足した入力** → 同じ 4 セルが**未達に出ない**
+
+    **後者は合成の入力で書ける**ので、実データが埋まるのを待たない。
+    **Task 8 が穴を埋めたあとも、このテストは生きる**——主張しているのは
+    「埋まったこと」ではなく「**入力の有無で答が変わること**」だからである。
+    """
+    real = {
+        name: json.loads((CORPUS / name).read_text(encoding="utf-8"))["cases"]
+        for name in NINE_SHARDS
+    }
+
+    # ① Rad の逆三角が無い入力（いまの実物）
+    without = _unmet_ids(real)
+    assert without >= RAD_INVERSE_TRIG_CELLS, (
+        "Rad の逆三角が 1 件も無いのに、未達として出ていない——モデルか射影が壊れている"
+    )
+
+    # ② Rad の逆三角を 3 件足した入力（合成）
+    added = {
+        **real,
+        "inverse-trig-000.json": [
+            *real["inverse-trig-000.json"],
+            *(
+                {
+                    "id": f"synthetic-{fn}",
+                    "kind": "value",
+                    "mode": "Rad",
+                    "keys": ["angle_toggle", "0", "dot", "5", fn, "eq"],
+                    "expr": f"{fn}(0.5) を Rad で",
+                    "expect": {"re": 0.0, "im": 0.0},
+                }
+                for fn in ("asin", "acos", "atan")
+            ),
+        ],
+    }
+    with_rad = _unmet_ids(added)
+    assert not (RAD_INVERSE_TRIG_CELLS & with_rad), (
+        "Rad の逆三角を足したのに、まだ未達として出ている"
+        f"——残っているのは {sorted(RAD_INVERSE_TRIG_CELLS & with_rad)}"
+    )
+
+    # **他のセルは動かない。** 足したのは Rad の逆三角だけなので、
+    # **それ以外の穴が消えたなら、数え方が入力に対して鈍い。**
+    assert without - RAD_INVERSE_TRIG_CELLS == with_rad, (
+        "Rad の逆三角を足しただけなのに、他の穴まで動いた"
+    )
+
+
+def test_the_real_holes_match_what_the_gate_reports() -> None:
+    """**測った結果が、いまの赤の文面と一致すること。**
+
+    実測（2026-08-30）: 本当の穴は 7 件で、**そのうち 4 件が `inverse_trig`**
+    ——受け入れ門が `angle-mode-000.json` を読んで落ちるときに名指しするのが、
+    ちょうどこの 4 件である。
+    """
+    payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
+    by_scope = {r["scope"]: r for r in payload["requirements"]}
+    assert set(by_scope["inverse_trig"]["unmet_real_cells"]) == RAD_INVERSE_TRIG_CELLS
+    assert set(by_scope["combinatorics"]["unmet_real_cells"]) == {
+        "combinatorics/path=domain",
+        "combinatorics/path=overflow_near",
+    }
+    assert set(by_scope["complex"]["unmet_real_cells"]) == {"complex/zero_part=both_zero"}
+    total = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
+    assert total == 7
