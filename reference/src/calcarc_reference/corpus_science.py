@@ -388,6 +388,29 @@ def inverse_trig_band(value: float) -> str:
     return "boundary" if size == 1 else "outside"
 
 
+#: **演算子 → 複素の演算種別**（`COMPLEX_OPS`）。**キーと木で同じ表を使う**
+#: ——`KEY_TO_COMPLEX_OPERATION` がキー側、`SYMBOL_TO_COMPLEX_OPERATION` が木側で、
+#: **どちらも下の 1 つの対応から作る**。写しを 2 つ置くと、片方だけ直した日にずれる。
+COMPLEX_OPERATION_OF: dict[str, str] = {
+    "+": "add_sub",
+    "-": "add_sub",
+    "*": "mul_div",
+    "/": "mul_div",
+    "^": "power",
+}
+KEY_TO_COMPLEX_OPERATION: dict[str, str] = {
+    "add": "add_sub",
+    "sub": "add_sub",
+    "mul": "mul_div",
+    "div": "mul_div",
+    "pow": "power",
+}
+
+#: **複素数を通す一価関数**（`corpus_complex.COMPLEX_UNARY_FNS` と同じ 5 つ）。
+#: **写しである**——`corpus_complex` を import すると SymPy を引き込むので、
+#: **ここでは名前だけを持ち、下のテストが 2 つの一致を見る。**
+COMPLEX_UNARY_FN_NAMES = ("neg", "sqr", "sin", "cos", "tan")
+
 #: **演算子のキー → 演算子群**（`ASSOC_CHAINS` の分類に対応）。
 KEY_TO_OPERATOR_GROUP: dict[str, str] = {
     "add": "additive",
@@ -413,7 +436,9 @@ UNOBSERVABLE_AXES: dict[str, tuple[str, ...]] = {
     # 文法クラスは式の構造で決まる（括弧の有無だけは観測できる）
     "precedence": ("grammar_class",),
     # 演算種別は式の構造で決まる
-    "complex": ("operation",),
+    # **`complex/operation` は 2026-08-30 に外した。** 演算子はキー列にも木にも
+    # 在り、**両側から読める**（門は `j` / `Imag`）。**理由は「式の構造で決まる」
+    # だったが、構造はキー列にも出ている。**
     # 表示の境界は**リテラルの値**で決まる。キー列には数字が並ぶだけで、
     # 「指数がちょうど 3」「丸めで繰り上がる」はそこからは読めない
     # （2026-08-30、宣言が漏れていて `display/edge` の 5 セルが
@@ -512,6 +537,16 @@ def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
             "shape",
             "parenthesized" if case.get("stratum") == "parenthesized" else "flat",
         )
+
+    if "j" in keys:
+        # **`j` だけで門を作る**（`polar_toggle` を入れない）。**木の側の門は
+        # `Imag` の有無**であり、`polar_toggle` は木の外で押されるので、
+        # **入れると観測だけが鳴って突合が落ちる。**
+        for key in sorted(keys):
+            if key in KEY_TO_COMPLEX_OPERATION:
+                put("complex", "operation", KEY_TO_COMPLEX_OPERATION[key])
+        if any(k in COMPLEX_UNARY_FN_NAMES for k in keys):
+            put("complex", "operation", "unary_fn")
 
     if "j" in keys or "polar_toggle" in keys:
         put("complex", "form", "polar" if "polar_toggle" in keys else "rectangular")
@@ -624,6 +659,15 @@ def recorded_levels(
 
     def put(scope: str, axis: str, level: str) -> None:
         out.setdefault(scope, {}).setdefault(axis, set()).add(level)
+
+    # **複素の演算種別。** 門は `Imag` の有無——**キー側の `"j" in keys` と
+    # 同じもの**である（`to_key_sequence` は `Imag` に必ず `j` を出す）。
+    if any(type(n).__name__ == "Imag" for n in nodes):
+        for op in sorted(ops):
+            if op in COMPLEX_OPERATION_OF:
+                put("complex", "operation", COMPLEX_OPERATION_OF[str(op)])
+        if fns & set(COMPLEX_UNARY_FN_NAMES):
+            put("complex", "operation", "unary_fn")
 
     # **キー側と同じ窓**——引数がリテラルの一価関数だけ（`literal_arguments`）。
     for node_ in nodes:
@@ -771,14 +815,21 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
     for cases in cases_by_shard.values():
         for case in cases:
             covered |= observed_cells(case)
-    payload = coverage.build_payload(SCIENCE_MODEL, SCIENCE_REQUIREMENTS, covered, {}, {})
+    payload = coverage.build_payload(
+        SCIENCE_MODEL, SCIENCE_REQUIREMENTS, covered, science_exclusions(), {}
+    )
     # **未達を種類で分けて載せる**（裁定 4）。**数だけでは読み手が分けられない**
     # ——`inverse_trig` は「測れない軸（帯）」と「本当の穴（Rad）」の両方を
     # 持つので、**軸の宣言だけで領域ごと見逃すと、穴が緑で通る。**
     by_scope = {r.scope: r for r in SCIENCE_REQUIREMENTS}
+    excluded = set(science_exclusions())
     for summary in payload["requirements"]:  # type: ignore[attr-defined]
         requirement = by_scope[summary["scope"]]
-        unmet = [c for c in requirement.cells if c not in covered]
+        # **除外したセルを未達に数えない。** 2026-08-30、ここが除外を引いて
+        # おらず、**理由を貼ったセルが「本当の穴」として名指しされ続けた**
+        # ——`required = covered + excluded + unmet` の会計と、門が読む一覧が
+        # 食い違っていた。**数は正しく、名前だけが嘘**という壊れ方である。
+        unmet = [c for c in requirement.cells if c not in covered and c not in excluded]
         from_unmeasured = [
             c for c in unmet if unmet_is_only_from_unmeasured_axes(requirement.scope, c)
         ]
@@ -798,7 +849,6 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
             " inverse-trig に 139 件ある）"
         ),
         ("precedence", "grammar_class"): "文法クラスは式の構造で決まる",
-        ("complex", "operation"): "演算種別は式の構造で決まる",
         ("display", "edge"): "表示境界はリテラルの値で決まる",
     }
     payload["covered_outside_model"] = [
@@ -822,6 +872,40 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
         for axis in axes
     ]
     return payload
+
+
+#: **理由付き除外。** **1 件だけである**（2026-08-30 時点）。
+#:
+#: **空でよい、が前提だった。** 第 1 段階（金融）で「一律 `source_overflow`」を
+#: 貼って表を綺麗にした失敗があるので、**理由が 1 つも貼れないことは
+#: 正しい成果物**として扱ってきた。**貼るのは、貼らないと嘘になるときだけ。**
+def science_exclusions() -> dict[coverage.Cell, coverage.Exclusion]:
+    """**`complex/operation=power` は、engine が受け付けない。**
+
+    **一次資料は engine 自身のテストである**——
+    `crates/calcarc-core/src/scientific/mod.rs` の `power_rejects_complex_operands`
+    が、**複素数を底にしても指数にしても `DomainError`** になることを固定して
+    いる。参照側の `COMPLEX_BINARY_OPS` に `^` が無いのはその帰結である。
+
+    **「生成器が作らない」ではなく「作っても engine が拒む」**——だから
+    `not_applicable` である。**生成器を強くすれば埋まる類ではない。**
+
+    **`covered_elsewhere` は付けない。** 実数の `^` は `elementary` と
+    `precedence` に山ほど在るが、**それは複素の冪を確かめたことにならない**
+    （設計書 §7.2）。
+    """
+    cell = coverage.Cell("complex", (("operation", "power"),))
+    return {
+        cell: coverage.Exclusion(
+            cell=cell,
+            reason=coverage.Reason.NOT_APPLICABLE,
+            detail=(
+                "engine が複素数の冪を受け付けない。底でも指数でも DomainError"
+                "（crates/calcarc-core/src/scientific/mod.rs の"
+                " power_rejects_complex_operands が固定している）"
+            ),
+        )
+    }
 
 
 def unmet_is_only_from_unmeasured_axes(requirement_scope: str, cell: coverage.Cell) -> bool:

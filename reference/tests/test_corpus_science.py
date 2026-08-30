@@ -240,11 +240,13 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
                 else real
             )
             target.append(cell.id)
-    assert len(declared) == 20
+    assert len(declared) == 16
+    # **Task 13 で `complex` の 2 件が消えた**——`operation=power` は engine が
+    # 拒むので理由付き除外、`zero_part=both_zero` は `(j5 - j5)` で埋めた。
     assert sorted(real) == [
         "combinatorics/path=domain",
         "combinatorics/path=overflow_near",
-        "complex/zero_part=both_zero",
+        "complex/operation=power",
     ]
 
 
@@ -363,7 +365,7 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
     # 17,823 → 17,826（Task 8 が Rad の逆三角を 3 件足した）
-    assert checked == 17830, f"突き合わせたのが {checked} 件しかない"
+    assert checked == 17831, f"突き合わせたのが {checked} 件しかない"
 
 
 # ---------------------------------------------------------------------------
@@ -407,7 +409,8 @@ def test_the_declaration_list_is_pinned() -> None:
         # `test_a_band_declared_unreadable_has_no_readable_argument` が番人）。
         "cancellation": ("shape", "band"),
         "precedence": ("grammar_class",),
-        "complex": ("operation",),
+        # **`complex/operation` は 2026-08-30 に外した**——演算子はキー列にも
+        # 木にも在り、両側から読める（門は `j` / `Imag`）。
         "display": ("edge",),
     }
 
@@ -430,10 +433,12 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     assert by_scope["inverse_trig"]["unmet_real_cells"] == []
     # **`elementary` も同じ形で満点になった**（`e^0` と `e^-5`）。
     assert by_scope["elementary"]["unmet_cells"] == 0
+    # **`complex` も満点ではないが、残りは理由付き除外である**（複素の冪）。
+    assert by_scope["complex"]["unmet_real_cells"] == []
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert real == 3, "本当の穴は 3 件（combinatorics 2 + complex 1）"
-    # **7 → 5。** `elementary/band` と `inverse_trig/band` を宣言から外した。
-    assert len(payload["not_measured_axes"]) == 5
+    assert real == 2, "本当の穴は combinatorics の 2 件だけ"
+    # **7 → 4。** `elementary/band`・`inverse_trig/band`・`complex/operation` を外した。
+    assert len(payload["not_measured_axes"]) == 4
 
 
 def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> None:
@@ -552,9 +557,15 @@ def test_the_model_tells_the_two_inputs_apart() -> None:
 def test_the_real_holes_match_what_the_gate_reports() -> None:
     """**測った結果が、いまの赤の文面と一致すること。**
 
-    実測（2026-08-30）: 本当の穴は 7 件で、**そのうち 4 件が `inverse_trig`**
-    ——受け入れ門が `angle-mode-000.json` を読んで落ちるときに名指しするのが、
-    ちょうどこの 4 件である。
+    **段 C を通しながら、この一覧は縮んできた**（すべて実測、2026-08-30）:
+
+    ```
+    Task 5  時点  7 件（inverse_trig 4 / combinatorics 2 / complex 1）
+    Task 8  のあと 3 件（Rad の逆三角を埋めた）
+    Task 11 の途中 7 件（帯を測れる側へ移し、隠れていた 4 件が出た）
+    Task 11 のあと 3 件（境界 4 件を埋めた）
+    Task 13 のあと 2 件（複素の冪は理由付き除外、both_zero は埋めた）
+    ```
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
     by_scope = {r["scope"]: r for r in payload["requirements"]}
@@ -564,9 +575,9 @@ def test_the_real_holes_match_what_the_gate_reports() -> None:
         "combinatorics/path=domain",
         "combinatorics/path=overflow_near",
     }
-    assert set(by_scope["complex"]["unmet_real_cells"]) == {"complex/zero_part=both_zero"}
+    assert by_scope["complex"]["unmet_real_cells"] == []
     total = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert total == 3
+    assert total == 2
 
 
 # ---------------------------------------------------------------------------
@@ -646,8 +657,8 @@ def test_a_reachable_hole_is_never_given_a_reason() -> None:
     **`Rad × 逆三角` は「構成できない」のではない——作れるのに作っていない。**
     理由を貼れば表は綺麗になるが、**嘘になる**（第 1 段階で 2 回踏んだ形）。
 
-    **いまの除外は 0 件である**——それがこの Task の正しい成果物である。
-    **空を「仕事をしていない」と読まない**: **空であることを測って示した。**
+    **段 B のあいだ、除外は 0 件だった**——それがあの Task の正しい成果物で、
+    **空であることを測って示した。** **Task 13 で 1 件だけ貼った**（下で名指し）。
     """
     payload = json.loads((CORPUS / "angle-mode-000.json").read_text(encoding="utf-8"))["coverage"]
     # **埋めたあとも、この門は生きる**——`CONSTRUCTIBLE_HOLES` は
@@ -655,7 +666,20 @@ def test_a_reachable_hole_is_never_given_a_reason() -> None:
     excluded = {entry["cell_id"] for entry in payload["excluded_cells"]}
     wrongly = sorted(excluded & CONSTRUCTIBLE_HOLES)
     assert not wrongly, f"作れるセルに理由を貼っている: {wrongly}——貼るのではなく、作ること"
-    assert excluded == set(), "この段では理由を 1 つも貼らない"
+    # **貼った理由は名指しで固定する。** 数の上限ではなく**名前**にするのは、
+    # **「1 件までなら貼ってよい」を作らない**ためである——増えたら人が読む。
+    assert excluded == {"complex/operation=power"}, (
+        "理由付き除外が増えた/減った。**表を綺麗にする方向に増えていないか、人が読むこと**"
+    )
+    # **理由の一次資料を、この言語の中でも当てる。** engine のテスト
+    # （`power_rejects_complex_operands`）は Rust に在って pytest からは
+    # 走らせられないが、**参照側の演算子集合は同じ事実を持っている。**
+    # **理由が腐ったら、ここが赤くなる。**
+    from calcarc_reference.corpus_complex import COMPLEX_BINARY_OPS
+
+    assert "^" not in COMPLEX_BINARY_OPS, (
+        "参照側が複素の冪を組むようになった——`not_applicable` の理由が嘘になっている"
+    )
 
 
 def test_what_the_outside_covers_is_recorded_but_not_counted() -> None:
@@ -739,3 +763,41 @@ def test_the_band_guard_fires_when_the_wrong_axis_is_declared() -> None:
         "`elementary/band` を「測れない」と宣言しても読めるリテラルが 0 件だった"
         "——番人が働かない。射影か窓が壊れている"
     )
+
+
+def test_an_excluded_cell_is_never_named_as_a_real_hole() -> None:
+    """**理由を貼ったセルが、門の一覧に残っていないこと。**
+
+    **2026-08-30 に実際にそうなっていた。** `complex/operation=power` に
+    `not_applicable` を貼ったあと、**会計（`required = covered + excluded +
+    unmet`）は正しく 78 に合っていたのに、`unmet_real_cells` はその
+    セルを名指ししたままだった**——`unmet` を作る内包表記が除外を
+    引いていなかった。
+
+    **数は正しく、名前だけが嘘**という壊れ方である。**門が読むのは名前のほう**
+    なので、**理由を貼っても赤が消えない。**
+    """
+    payload = json.loads((CORPUS / "complex-000.json").read_text(encoding="utf-8"))["coverage"]
+    excluded = {entry["cell_id"] for entry in payload["excluded_cells"]}
+    named = {cell for r in payload["requirements"] for cell in r["unmet_real_cells"]}
+    assert excluded, "除外が 1 件も無いなら、このテストは何も主張していない"
+    assert not (excluded & named), (
+        f"除外したセルが本当の穴として名指しされている: {excluded & named}"
+    )
+    total = sum(
+        r["covered_cells"] + r["excluded_cells"] + r["unmet_cells"] for r in payload["requirements"]
+    )
+    required = sum(r["required_cells"] for r in payload["requirements"])
+    assert total == required, "会計が合っていない"
+
+
+def test_the_complex_unary_names_match_the_reference() -> None:
+    """**写しであることを認めた上で、一致を機械で見る。**
+
+    `corpus_complex` を import すると SymPy を引き込むので、この module は
+    **名前だけを持っている**。**写しは片方だけ直した日にずれる**ので、
+    ここで突き合わせる。
+    """
+    from calcarc_reference.corpus_complex import COMPLEX_UNARY_FNS
+
+    assert corpus_science.COMPLEX_UNARY_FN_NAMES == COMPLEX_UNARY_FNS

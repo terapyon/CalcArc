@@ -3248,7 +3248,7 @@ test("科学: 読めなかった走行を「全部覆った」と書かない", 
   expect(text).not.toContain("| 対象 | 必須セル |");
 });
 
-test("科学: 実物の報告書に、9 領域の表と 3 件の名指しが出る", () => {
+test("科学: 実物の報告書に、9 領域の表と 2 件の名指しが出る", () => {
   const finance = loadCallShards().find((s) => s.name === "finance-000.json");
   const shards = loadShards();
   const science = shards.find((s) => s.name === "angle-mode-000.json");
@@ -3267,7 +3267,12 @@ test("科学: 実物の報告書に、9 領域の表と 3 件の名指しが出�
   );
   expect(markdown).toContain("## 科学計算の試験空間 `scientific-v1`");
   expect(markdown).toContain("- `combinatorics/path=domain`");
-  expect(markdown).toContain("- `complex/zero_part=both_zero`");
+  expect(markdown).toContain("- `combinatorics/path=overflow_near`");
+  // **`complex/zero_part=both_zero` は Task 13 で埋めた。**
+  // **消えたことを見る**——名指しの一覧が古いまま残ると、
+  // **報告書が「まだ空だ」と言い続ける。**
+  expect(markdown).not.toContain("- `complex/zero_part=both_zero`");
+  expect(markdown).not.toContain("- `complex/operation=power`");
   // **金融の表を壊していない。**
   expect(finance).toBeDefined();
   expect(markdown).toContain("## 期待値そのものは、生成器の出力なのか");

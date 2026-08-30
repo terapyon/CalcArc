@@ -1307,12 +1307,47 @@ def build_complex_shard(seed: int, count: int) -> dict:
         case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
         corpus_science.assert_record_matches_observation(case, node)
         entries.append(case)
+    _append_zero_complex(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance_sympy(),
         "tolerance": TOLERANCE,
         "cases": entries,
     }
+
+
+#: **実部も虚部も 0 になる複素の式**（試験空間モデルの Task 13）。
+#:
+#: **乱択では踏めない。** `0` に着くには 2 つの葉が**厳密に等しい**必要があり、
+#: 生成器は葉を独立に引く——**確率の問題ではなく、同じ値を 2 度引く仕掛けが
+#: 無い**（`expr` の重複除去もあるが、それは式の重複であって値ではない）。
+#:
+#: **`j` を 2 回打った差**にする。実部を混ぜると `real_zero` と区別が付かない。
+ZERO_COMPLEX_DIGITS = "5"
+
+
+def _append_zero_complex(entries: list[dict]) -> None:
+    """**`(j5 - j5)` を末尾に足す。** 乱択の draw に触らない（Task 8 と同じ形）。
+
+    **`zero_part=both_zero` は、この 1 件だけが踏む。** 実測（2026-08-30）:
+    複素の 2 シャード 4,000 件のゼロ成分は
+    `real_zero 1,327` / `imag_zero 202` / `none 1,799` で、**both_zero は 0 件**
+    だった。
+    """
+    leaf = Imag(tuple(ZERO_COMPLEX_DIGITS) + ("j",), ZERO_COMPLEX_DIGITS)
+    node = Bin("-", leaf, leaf)
+    re, im = corpus_complex.evaluate(node)
+    case = {
+        "kind": "value",
+        "id": f"cplx-{len(entries):06d}",
+        "mode": "Deg",
+        "keys": to_key_sequence(node),
+        "expr": to_expr_text(node),
+        "expect": {"re": re, "im": im},
+    }
+    case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+    corpus_science.assert_record_matches_observation(case, node)
+    entries.append(case)
 
 
 #: 極形式と直交形式の分岐を狙って手で選んだ複素数。**乱数では踏めない場所**である。
