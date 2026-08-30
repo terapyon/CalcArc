@@ -23,7 +23,14 @@ from collections.abc import Iterator
 import mpmath as mp
 import sympy as sp
 
-from calcarc_reference import corpus_complex, eng_ref, real_ref, sexagesimal_ref
+from calcarc_reference import (
+    corpus_combinatorics,
+    corpus_complex,
+    corpus_science,
+    eng_ref,
+    real_ref,
+    sexagesimal_ref,
+)
 from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
 from calcarc_reference.corpus_complex import (
     COMPLEX_BINARY_OPS,
@@ -350,16 +357,20 @@ def build_precedence_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"prec-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_minimal_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"prec-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_minimal_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        # ここのキー列は**括弧を省いた形**なので、`parenthesis` の観測は
+        # 木と食い違いうる——だからそれは観測のみの軸である。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -525,6 +536,14 @@ def _assoc_pair(
     documented, _ = _assoc_trees(terms, ops)
     expr = to_expr_text(documented)
     expect = {"re": float(value), "im": 0.0}
+    # **双子は同じ木から出る。** 層だけが違うので、記録も層ごとに取る
+    # （`shape` は `stratum` で決まる。裁定 1 の (c)）。
+    flat_levels = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(documented, "Deg", stratum)
+    )
+    paren_levels = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(documented, "Deg", ASSOC_CONTROL_STRATUM)
+    )
     return [
         {
             "kind": "value",
@@ -534,6 +553,7 @@ def _assoc_pair(
             "keys": _flat_key_sequence(terms, ops),
             "expr": expr,
             "expect": expect,
+            "levels": flat_levels,
         },
         {
             "kind": "value",
@@ -543,6 +563,7 @@ def _assoc_pair(
             "keys": to_key_sequence(documented),
             "expr": expr,
             "expect": expect,
+            "levels": paren_levels,
         },
     ]
 
@@ -731,16 +752,20 @@ def build_family_shard(
             rejections["dup"] += 1
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"{prefix}-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"{prefix}-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて水準を記録し、キーから読んだものと突き合わせる**
+        # (試験空間モデル `scientific-v1` の裁定 1 の (c))。
+        # **食い違ったら生成を止める**——警告で流さない。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -751,7 +776,9 @@ def build_family_shard(
 
 
 def build_elementary_shard(seed: int, count: int) -> dict:
-    return build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
+    shard = build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
+    _append_elementary_boundaries(shard["cases"])
+    return shard
 
 
 # 組合せ論の葉の上限。**`C(1022,511) ≈ 2.2e305` を含める必要がある**——engine の
@@ -1275,22 +1302,59 @@ def build_complex_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"cplx-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": re, "im": im},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"cplx-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": re, "im": im},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+    _append_zero_complex(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance_sympy(),
         "tolerance": TOLERANCE,
         "cases": entries,
     }
+
+
+#: **実部も虚部も 0 になる複素の式**（試験空間モデルの Task 13）。
+#:
+#: **乱択では踏めない。** `0` に着くには 2 つの葉が**厳密に等しい**必要があり、
+#: 生成器は葉を独立に引く——**確率の問題ではなく、同じ値を 2 度引く仕掛けが
+#: 無い**（`expr` の重複除去もあるが、それは式の重複であって値ではない）。
+#:
+#: **`j` を 2 回打った差**にする。実部を混ぜると `real_zero` と区別が付かない。
+ZERO_COMPLEX_DIGITS = "5"
+
+
+def _append_zero_complex(entries: list[dict]) -> None:
+    """**`(j5 - j5)` を末尾に足す。** 乱択の draw に触らない（Task 8 と同じ形）。
+
+    **`zero_part=both_zero` は、この 1 件だけが踏む。** 実測（2026-08-30）:
+    複素の 2 シャード 4,000 件のゼロ成分は
+    `real_zero 1,327` / `imag_zero 202` / `none 1,799` で、**both_zero は 0 件**
+    だった。
+    """
+    leaf = Imag(tuple(ZERO_COMPLEX_DIGITS) + ("j",), ZERO_COMPLEX_DIGITS)
+    node = Bin("-", leaf, leaf)
+    re, im = corpus_complex.evaluate(node)
+    case = {
+        "kind": "value",
+        "id": f"cplx-{len(entries):06d}",
+        "mode": "Deg",
+        "keys": to_key_sequence(node),
+        "expr": to_expr_text(node),
+        "expect": {"re": re, "im": im},
+    }
+    case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+    corpus_science.assert_record_matches_observation(case, node)
+    entries.append(case)
 
 
 #: 極形式と直交形式の分岐を狙って手で選んだ複素数。**乱数では踏めない場所**である。
@@ -1356,6 +1420,9 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
         re, im = corpus_complex.evaluate(node)
         keys = to_key_sequence(node)
         expr = to_expr_text(node)
+        # **同じ木から 2 件出る。** 記録も同じ木から取る（裁定 1 の (c)）。
+        # `form` は `polar_toggle` を**木の外で押す**ので観測のみの軸である。
+        levels = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
         entries.append(
             {
                 "kind": "display",
@@ -1364,6 +1431,7 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
                 "keys": keys,
                 "expr": f"{expr} を直交形式で",
                 "expect": {"main": real_ref.format_rect(re, im)},
+                "levels": levels,
             }
         )
         r, theta = corpus_complex.to_polar(re, im)
@@ -1375,6 +1443,7 @@ def build_complex_display_shard(seed: int, count: int) -> dict:
                 "keys": [*keys, "polar_toggle"],
                 "expr": f"{expr} を極形式で",
                 "expect": {"main": real_ref.format_polar(r, theta)},
+                "levels": levels,
             }
         )
         # **`▸∠` を 2 回押すと元の表示に戻る。** 値の主張ではなく表示の主張
@@ -1489,8 +1558,15 @@ DISPLAY_EDGE_LITERALS = (
     "10",  # 指数 1。仮数 10
     "100",  # 指数 2。仮数 100
     "1000",  # 指数 3 ちょうど。`1e3`
-    "999.9999999",  # 10 桁に丸めると 1000 に繰り上がり、指数が 1 つ上がる
-    "999999999.9",  # 10 桁ちょうど、繰り上がりで 1e9
+    # **【訂正 2026-08-30】この 2 つに「繰り上がる」と書いてあったが、繰り上がらない。**
+    # `999.9999999` は**既に有効数字 10 桁**なので 10 桁への丸めが恒等であり、
+    # 参照実装に通すと `999.9999999` のまま。`999999999.9` も `999,999,999.9`
+    # と表示される（`real_ref.format_real` で実測）。**註が主張していた境界を、
+    # コーパスは 1 度も踏んでいなかった**——試験空間モデルが `display/edge`
+    # を読めるようにして初めて出た（`corpus_science.display_edges`）。
+    # **本物の繰り上がりは末尾の `DISPLAY_ROUNDING_CARRY_LITERAL` が踏む。**
+    "999.9999999",  # 有効数字 10 桁。仮数が 9 で埋まる側の代表
+    "999999999.9",  # 10 桁ちょうど。カンマを要する最大の桁数
     "0.5",  # 1 未満。`500e-3`。60 進では 0°30'00"
     "0.001",  # 指数 -3 ちょうど
     "0.0001234",  # 指数 -4。3 の倍数へ**下向き**に丸める側
@@ -1610,38 +1686,7 @@ def build_display_shard(seed: int, count: int) -> dict:
     # 並びを先頭に固定し、**1 つの値につき eng と dms を両方**作る。
     # 種を変えても、木の作り方を変えても、この 2n 件は動かない。
     for text in DISPLAY_EDGE_LITERALS:
-        landed = float(text)
-        keys = to_key_sequence(Typed(_literal_keys(text), text))
-        entries.append(
-            {
-                "kind": "display",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": [*keys, "eng"],
-                "expr": f"{text} を工学表記で",
-                "expect": {"main": eng_ref.format_real_eng(landed)},
-            }
-        )
-        shown = sexagesimal_ref.format_sexagesimal(landed)
-        entries.append(
-            {
-                "kind": "display",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": [*keys, "dms"],
-                "expr": f"{text} を 60 進で",
-                "expect": {"main": shown},
-            }
-            if shown is not None
-            else {
-                "kind": "equivalence",
-                "id": f"disp-{len(entries):06d}",
-                "mode": "Deg",
-                "left": keys,
-                "right": [*keys, "dms"],
-                "expr": f"{text} は 60 進にできないので表示が変わらない",
-            }
-        )
+        _append_display_pair(entries, text)
         seen.add(text)
 
     attempts = 0
@@ -1719,8 +1764,16 @@ def build_display_shard(seed: int, count: int) -> dict:
                 "left": keys,
                 "right": [*keys, toggle, toggle],
                 "expr": f"{expr} で {toggle} を 2 回押すと元の表示に戻る",
+                # **木が在るケースだけ記録する**（裁定 1 の (c)）。リテラルを
+                # 直に打つケース（A 群）は木を経由しないので、`levels` を持たない
+                # ——**「無い」は「空」ではない**。表示の種別(`eng`/`dms`)は
+                # **木の外で押す**ので観測のみの軸である。
+                "levels": corpus_science.levels_as_json(
+                    corpus_science.recorded_levels(node, "Deg")
+                ),
             }
         )
+    _append_rounding_carry(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -1805,17 +1858,18 @@ def build_angle_mode_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"rad-{len(entries):06d}",
-                "mode": "Rad",
-                # **先頭で押す。** これが無いと engine は Deg で評価する。
-                "keys": ["angle_toggle", *to_key_sequence(node)],
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"rad-{len(entries):06d}",
+            "mode": "Rad",
+            "keys": ["angle_toggle", *to_key_sequence(node)],
+            "expr": expr,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Rad"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -1896,7 +1950,13 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
             raise RuntimeError(
                 f"gave up after {attempts} attempts with {len(entries)}/{count} cases"
             )
-        node = CANCELLATION_SHAPES[rng.randrange(len(CANCELLATION_SHAPES))](rng)
+        # **形の名前を持ち歩く。** 索引で選んだあと捨てていた——
+        # **生成器は形を知っているのに、ケースに書いていなかった**
+        # （2026-08-30 のレビュー指摘）。`associativity` は同じものを
+        # `stratum` に書いており、**試験空間モデルはそれを読んでいる。**
+        chosen = rng.randrange(len(CANCELLATION_SHAPES))
+        shape = corpus_science.CANCELLATION_SHAPES[chosen]
+        node = CANCELLATION_SHAPES[chosen](rng)
         try:
             value = evaluate(node)
         except OutOfShard:
@@ -1905,22 +1965,68 @@ def build_cancellation_shard(seed: int, count: int) -> dict:
         if expr in seen:
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"canc-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": float(value), "im": 0.0},
-            }
+        case = {
+            "kind": "value",
+            "id": f"canc-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "stratum": shape,
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(
+            corpus_science.recorded_levels(node, "Deg", shape)
         )
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+    _append_mild_cancellation(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
         "tolerance": CANCELLATION_TOLERANCE,
         "cases": entries,
     }
+
+
+#: **桁がほとんど落ちない引き算**（試験空間モデルの Task 18）。
+#:
+#: **このシャードは対照を 1 件も持っていなかった。** 4 つの形はどれも
+#: 「近い 2 数」を作るので、**近さの比は 2,000 件すべてが `1e-6` 未満**
+#: （実測 2026-08-30: 最大 9.97e-7）。**§14.2 は「各帯に最低件数」と
+#: 要求している**が、`mild` の帯は空だった。
+#:
+#: `(1000.5 - 1000.0)` の比は **5.00e-4** で、シャードが宣言している
+#: 相対許容 `1e-6` の**上**にある——**桁落ちが起きていないことの証拠**として
+#: 置く。**乱択では出ない**（`_near_subtraction` は差を 1/1000 未満に作る）。
+#:
+#: **★ これは「最も清潔な対照」であって「代表」ではない。**
+#: `1000.5` も `1000.0` も**二進で厳密に表せ、差 `0.5` も厳密**なので、
+#: **丸めが一切関与しない。** **「桁が少しだけ落ちる引き算」の代表を置きたい
+#: なら、丸めが効く値を選ぶことになる**——**この 1 件はそれではない。**
+#: **帯が空だったことを埋める最小の 1 件**である。
+CANCELLATION_MILD_OPERANDS = ("1000.5", "1000.0")
+
+
+def _append_mild_cancellation(entries: list[dict]) -> None:
+    """**乱択のループの後ろに足す。draw の列に触らない**（Task 8 と同じ形）。"""
+    left, right = CANCELLATION_MILD_OPERANDS
+    node = Bin("-", _typed(left), _typed(right))
+    value = evaluate(node)
+    case = {
+        "kind": "value",
+        "id": f"canc-{len(entries):06d}",
+        "mode": "Deg",
+        "keys": to_key_sequence(node),
+        "expr": to_expr_text(node),
+        "stratum": "near_subtraction",
+        "expect": {"re": float(value), "im": 0.0},
+    }
+    case["levels"] = corpus_science.levels_as_json(
+        corpus_science.recorded_levels(node, "Deg", "near_subtraction")
+    )
+    corpus_science.assert_record_matches_observation(case, node)
+    entries.append(case)
 
 
 def build_combinatorics_shard(seed: int, count: int) -> dict:
@@ -1983,16 +2089,18 @@ def build_combinatorics_shard(seed: int, count: int) -> dict:
             rejections["dup"] += 1
             continue
         seen.add(expr)
-        entries.append(
-            {
-                "kind": "value",
-                "id": f"comb-{len(entries):06d}",
-                "mode": "Deg",
-                "keys": to_key_sequence(node),
-                "expr": expr,
-                "expect": {"re": landed, "im": 0.0},
-            }
-        )
+        case = {
+            "kind": "value",
+            "id": f"comb-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": expr,
+            "expect": {"re": landed, "im": 0.0},
+        }
+        # **木を歩いて記録し、キーから読んだものと突き合わせる**（裁定 1 の (c)）。
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
@@ -2012,7 +2120,187 @@ def build_inverse_trig_shard(seed: int, count: int) -> dict:
     `BINARY_OPS` は**引数として渡すだけ**でタプルには触っていない。生成器は
     独自の `random.Random(seed)` を持つので、既存シャードの乱数に影響しない。
     """
-    return build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
+    shard = build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
+    _append_rad_boundaries(shard["cases"])
+    _append_domain_boundaries(shard["cases"])
+    return shard
+
+
+#: **Rad の逆三角の名指し境界**（試験空間モデル `scientific-v1` の Task 8）。
+#:
+#: **§14.2 は「関数種別 × 角度モード × 境界帯」を要求している**が、
+#: **`Rad × 逆三角` はコーパス 18 枚のどこにも 1 件も無かった**（2026-08-30 実測）
+#: ——`angle-mode` の生成器は `("sin","cos","tan")` しか通さず、この系統は
+#: `build_family_shard` が `Deg` を焼き付けている。**構造的な穴だった。**
+#:
+#: **引数は 0 にする。** `asin` / `acos` は `[-1, 1]` の外で `DomainError` に
+#: なる（`docs/numerical-policy.md` の「関数の定義域」）ので、**3 つとも
+#: 定義域の中に在る値**を選ぶ。答は `asin(0)=0` / `acos(0)=π/2` / `atan(0)=0`。
+RAD_INVERSE_TRIG_ARGUMENT = 0
+
+
+def _append_rad_boundaries(entries: list[dict]) -> None:
+    """**乱択のループが終わったあとに足す。draw の列に触らない。**
+
+    **これが道の選択そのものである**（計画の Task 8 Step 1）。ループの中で
+    分岐すると**乱数の並びが動き、2000 件の中身が全部変わる**——挙動は
+    変わらないのに**差分が 2000 件になり、次に読む人が何が変わったか追えない。**
+    このプロジェクトは**golden の差分を人が読んで判断している。**
+
+    `DISPLAY_EDGE_LITERALS` が「並びを先頭に固定し、種を変えても動かない」と
+    しているのと**同型**で、こちらは末尾に置く。
+    """
+    for fn in INVERSE_TRIG_FNS:
+        node = Un(fn, Num(RAD_INVERSE_TRIG_ARGUMENT))
+        value = evaluate(node, "Rad")
+        case = {
+            "kind": "value",
+            "id": f"itrig-{len(entries):06d}",
+            "mode": "Rad",
+            # **先頭で押す。** 押さなければ engine は既定の Deg で評価する。
+            "keys": ["angle_toggle", *to_key_sequence(node)],
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Rad"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+
+
+#: **`asin` / `acos` の定義域の境目**（`docs/numerical-policy.md` の
+#: 「関数の定義域」の表が `−1 ≤ x ≤ 1` と書いている）。
+#:
+#: **`atan(1)` は在ったが、`asin(1)` も `acos(1)` も 1 件も無かった**
+#: （2026-08-30 実測）。**1-way では帯が `atan` 1 つで埋まるので、
+#: 表が名指しする境目を誰も踏んでいないことが見えなかった**——
+#: **だから `band × function` を選択ペアに入れた**（`SELECTED_PAIRS`）。
+INVERSE_TRIG_BOUNDARY_FNS = ("asin", "acos")
+INVERSE_TRIG_BOUNDARY_ARGUMENT = 1
+
+
+def _append_domain_boundaries(entries: list[dict]) -> None:
+    """**`asin(1)` と `acos(1)`。** `_append_rad_boundaries` と同じく末尾に足す。
+
+    **`atan` は足さない。** `atan(1)` は既にコーパスに在り、**足せば
+    「境界を踏んだ件数」が増えるだけで、空だったセルは 1 つも埋まらない。**
+    """
+    for fn in INVERSE_TRIG_BOUNDARY_FNS:
+        node = Un(fn, Num(INVERSE_TRIG_BOUNDARY_ARGUMENT))
+        value = evaluate(node)
+        case = {
+            "kind": "value",
+            "id": f"itrig-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+
+
+#: **`ln` / `log10` / `1/x` の定義域の境目は `0` である**（同じ表）。
+#:
+#: **`eˣ` を使うのは、そこだけが `0` と負を通せるから**である——
+#: `ln(0)` は `DomainError`、`1/0` は `DivisionByZero` で、**どちらも値を
+#: 返さないので値シャードには入らない**（`errors-000.json` が持っている）。
+#: **`eˣ` は全実数が定義域**なので、`e^0 = 1` と `e^-5 ≈ 0.0067` が値になる。
+#:
+#: **負のリテラルは `neg` を後ろに付けて打つ。** `Num` は非負整数なので
+#: （`corpus_expr.Num`）、**それ以外に負の葉を書く方法が無い。**
+ELEMENTARY_BOUNDARY_ARGUMENTS = (0, -5)
+
+
+def _append_elementary_boundaries(entries: list[dict]) -> None:
+    """**`e^0` と `e^-5`。** 定義域の帯の `zero` と `negative` を埋める。
+
+    **乱択では出ない。** `ELEMENTARY_FNS` と `ELEMENTARY_BINS`（`^` だけ）には
+    **負を作れる演算子が 1 つも無く**、`Num` は非負整数である。
+    **`0` は作れるが、`ln(0)` も `1/0` もエラーで捨てられる**——実測の棄却は
+    `domain 36` / `division_by_zero 4`（2026-08-30 の走行）。
+    """
+    for argument in ELEMENTARY_BOUNDARY_ARGUMENTS:
+        leaf = Num(argument) if argument >= 0 else Un("neg", Num(-argument))
+        node = Un("exp_e", leaf)
+        value = evaluate(node)
+        case = {
+            "kind": "value",
+            "id": f"elem-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+
+
+#: **10 桁に丸めると指数が 1 つ上がる値**（試験空間モデルの Task 17）。
+#:
+#: `9999999999.5` は有効数字 11 桁。10 桁に丸めると `1e10` になり、
+#: **指数が 9 から 10 へ上がる**——`docs/numerical-policy.md` が
+#: 「`|x| >= 1e10` で指数表記」と書いている閾値をまたぐ。
+#: 実測（`real_ref.format_real`）: `"1e10"`。
+#:
+#: **`DISPLAY_EDGE_LITERALS` の末尾ではなく、シャードの末尾に足す。**
+#: あの一覧は**先頭に固定**されており、そこへ 1 つ足すと**後続 1,900 件余りの
+#: `id` がずれる**——**このプロジェクトは golden の差分を人が読んで判断して
+#: いる**（Task 8 で選んだ道と同じ理由）。
+DISPLAY_ROUNDING_CARRY_LITERAL = "9999999999.5"
+
+
+def _append_display_pair(entries: list[dict], text: str) -> None:
+    """**1 つの十進リテラルを、`eng` と `dms` の 2 件にする。**
+
+    **60 進にできない値がある**——度の桁数が多いと「10 桁 − 度 − 4」が
+    負になり、`format_sexagesimal` は `None` を返す（S-4 設計書 §3、裁定 6）。
+    そのときは**同値のケース**にする——「表示が変わらない」という主張である。
+
+    **【2026-08-30】この関数はループの中身を括り出したものである。**
+    Task 17 で末尾に 1 件足すとき、**私はこのループを写した。写しは
+    `None` の分岐を落としていて、`expect.main` が `null` のケースを
+    書き出した**——**分岐が 1 つ足りない写しは、動くように見えて嘘を書く。**
+    **括り出せば、写しは 1 つも要らなかった。**
+    """
+    landed = float(text)
+    keys = to_key_sequence(Typed(_literal_keys(text), text))
+    entries.append(
+        {
+            "kind": "display",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": [*keys, "eng"],
+            "expr": f"{text} を工学表記で",
+            "expect": {"main": eng_ref.format_real_eng(landed)},
+        }
+    )
+    shown = sexagesimal_ref.format_sexagesimal(landed)
+    entries.append(
+        {
+            "kind": "display",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": [*keys, "dms"],
+            "expr": f"{text} を 60 進で",
+            "expect": {"main": shown},
+        }
+        if shown is not None
+        else {
+            "kind": "equivalence",
+            "id": f"disp-{len(entries):06d}",
+            "mode": "Deg",
+            "left": keys,
+            "right": [*keys, "dms"],
+            "expr": f"{text} は 60 進にできないので表示が変わらない",
+        }
+    )
+
+
+def _append_rounding_carry(entries: list[dict]) -> None:
+    """**丸めで指数が上がる 1 件を、一覧の他の値と同じ手で足す。**"""
+    _append_display_pair(entries, DISPLAY_ROUNDING_CARRY_LITERAL)
 
 
 def write(name: str, payload: dict) -> None:
@@ -2103,14 +2391,63 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # エラー種別。**乱択も `count` も持たない**——設計書 §5.1 の 9 経路を
     # 数学の定義域・値域から 1 つずつ書き写した固定の列挙(計画 Task 2)。
     yield "errors-000.json", build_errors_shard()
+    # **組合せの誤入力を体系的に確かめる 1 枚**（2026-08-30 のユーザー裁定）。
+    # **表を埋めるためではない**——理由は `corpus_combinatorics` の docstring。
+    yield "combinatorics-display-000.json", corpus_combinatorics.build_shard()
+
+
+#: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。
+#: **裁定 2 の B**——9 領域を横断して数え、**外の 8 枚は数えない**。
+SCIENCE_SHARDS = (
+    "elementary-000.json",
+    "inverse-trig-000.json",
+    "angle-mode-000.json",
+    "precedence-000.json",
+    "associativity-000.json",
+    "cancellation-000.json",
+    "combinatorics-000.json",
+    "display-000.json",
+    "complex-000.json",
+    "complex-display-000.json",
+    # **9 領域の 11 枚目。** `combinatorics` 領域は `complex` と同じく 2 枚組で、
+    # **値のシャードと表示（誤入力）のシャード**を持つ。
+    "combinatorics-display-000.json",
+)
 
 
 def main() -> None:
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
     started = time.monotonic()
     total_cases = 0
-    for name, payload in _shards(count):
+    # **横断して数えるので、全部作ってから書く。** 1 枚ずつ書き出すと、
+    # 9 領域を跨ぐ被覆を数えられない（設計書 §14.2 の要求は
+    # `angle-mode` の Rad と他 3 枚の Deg にまたがっている）。
+    built = [(name, payload) for name, payload in _shards(count)]
+    # **棄却の数も渡す。** シャードごとに `rejections` を持っているものを
+    # 理由ごとに足し合わせる——**「候補を作って捨てた回数」であって、要求セルの
+    # 除外ではない**（設計書 §10.3）。**`{}` を載せると「棄却が無い」と読まれる**
+    # ——実物は 25,165 件ある（2026-08-30 のレビュー指摘）。
+    science_rejections: dict[str, int] = {}
+    for name, payload in built:
+        if name not in SCIENCE_SHARDS:
+            continue
+        for reason, count in (payload.get("rejections") or {}).items():
+            science_rejections[reason] = science_rejections.get(reason, 0) + count
+    science = corpus_science.build_science_coverage(
+        {name: payload["cases"] for name, payload in built if name in SCIENCE_SHARDS},
+        science_rejections,
+    )
+    for name, payload in built:
         total_cases += len(payload["cases"])
+        if name in SCIENCE_SHARDS:
+            # **11 枚すべてに同じブロックを載せる**（裁定 5）。任意の 1 枚を
+            # 選ぶ恣意性を避け、**どれを開いても同じ会計が読める**。
+            # `cases` の前に置く（金融と同じ並び）。
+            payload = {
+                **{k: v for k, v in payload.items() if k != "cases"},
+                "coverage": science,
+                "cases": payload["cases"],
+            }
         write(name, payload)
     elapsed = time.monotonic() - started
     print(_summary_line(total_cases, elapsed))

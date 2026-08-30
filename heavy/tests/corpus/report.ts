@@ -14,6 +14,7 @@ import type { HeavyUiRun } from "../ui/presses";
 import { CERTIFICATES } from "./certificates";
 import type {
   CallBreakdown,
+  Coverage,
   CoverageExclusion,
   Quantiles,
   ShapeSummary,
@@ -984,6 +985,23 @@ export function parseReproducibility(
   return signal as ReproducibilitySignal;
 }
 
+/**
+ * 科学計算の `coverage` を読む。**10 枚が同じブロックを持つ**ので 1 枚で足りる。
+ *
+ * **読めなければ `null`。** 「全部覆った」ではない——`renderScienceCoverage` が
+ * `null` でもその旨の節を出す。
+ */
+function readScienceCoverage(): Coverage | null {
+  try {
+    const shard = JSON.parse(
+      readFileSync(join(CORPUS_DIR, "angle-mode-000.json"), "utf-8"),
+    ) as { coverage?: Coverage };
+    return shard.coverage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function readReproducibility(): ReproducibilitySignal | null {
   try {
     return parseReproducibility(
@@ -1416,6 +1434,103 @@ export function renderCoverage(breakdown: CallBreakdown): string[] {
     ...rejections.map(([reason, n]) => `- \`${reason}\`: ${n} 生成候補`),
     "",
   );
+  return lines;
+}
+
+/**
+ * **科学計算の試験空間**（`scientific-v1`、2026-08-30）。
+ *
+ * **金融の表とは別に出す。** モデルがシャードをまたぐので、
+ * 「関数呼び出しの内訳」の中には収まらない——**10 枚が同じブロックを持ち、
+ * 1 回だけ描く。**
+ *
+ * **未達を 1 つの数に畳まない。** 3 つが区別して読めること:
+ *
+ * 1. **本当の穴**——データに 1 件も入力が無い。**門が落とすのはこれだけ**
+ * 2. **測れない軸に起因する未達**——踏んでいるか分からないだけ。落とさない
+ * 3. **9 領域の外が踏んでいるもの**——**被覆として数えないが、在ることは見せる**
+ *
+ * **畳むと、埋める判断を誤る。**
+ */
+export function renderScienceCoverage(coverage: Coverage | null): string[] {
+  if (coverage === null) {
+    return [
+      "",
+      "## 科学計算の試験空間",
+      "",
+      "**この走行は科学計算のモデルを読んでいない。** `corpus/generated/` の",
+      "9 領域のシャードが `coverage` を持たないか、読めなかった。",
+      "**「全部覆った」ではない。**",
+      "",
+    ];
+  }
+  const lines = [
+    "",
+    `## 科学計算の試験空間 \`${coverage.model}\``,
+    "",
+    "**9 領域を横断して数えている。** モデルの要求は 1 枚の中で閉じない",
+    "——たとえば「角度モード × 三角関数」は、Rad を 1 枚が、Deg を 3 枚が運ぶ。",
+    "**10 枚すべてが同じ会計を持つので、どれを開いても同じものが読める。**",
+    "",
+    "| 対象 | 必須セル | 実行 | 未達 | うち測れない軸 | **データに無い** |",
+    "|---|---:|---:|---:|---:|---:|",
+  ];
+  let realTotal = 0;
+  let unmeasuredTotal = 0;
+  for (const requirement of coverage.requirements) {
+    const unmeasured = requirement.unmet_from_unmeasured_axes ?? 0;
+    const real = requirement.unmet_cells - unmeasured;
+    realTotal += real;
+    unmeasuredTotal += unmeasured;
+    lines.push(
+      `| \`${requirement.scope}\` | ${requirement.required_cells} | ` +
+        `${requirement.covered_cells} | ${requirement.unmet_cells} | ` +
+        `${unmeasured} | ${real === 0 ? "0" : `**${real}**`} |`,
+    );
+  }
+  lines.push("");
+  if (realTotal === 0) {
+    lines.push("**データに無いセルは 1 つも無い。**", "");
+  } else {
+    lines.push(
+      `**データに 1 件も入力が無いセルが ${realTotal} 件ある。**`,
+      "**この検査を落とすのはこれだけである**——下の「測れない軸」では落とさない。",
+      "",
+    );
+    for (const requirement of coverage.requirements) {
+      for (const cellId of requirement.unmet_real_cells ?? []) {
+        lines.push(`- \`${cellId}\``);
+      }
+    }
+    lines.push("");
+  }
+  lines.push(
+    `**この経路では読めない軸に起因する未達が ${unmeasuredTotal} 件ある。**`,
+    "**「踏んでいない」ではなく「読めない」である**——ケースの中身から水準を",
+    "出せない軸で、**帯は引数の値が、文法クラスと演算種別は式の構造が要る。**",
+    "",
+    "| 対象 | 軸 | 読めない理由 |",
+    "|---|---|---|",
+    ...(coverage.not_measured_axes ?? []).map(
+      (entry) => `| \`${entry.scope}\` | \`${entry.axis}\` | ${entry.why} |`,
+    ),
+    "",
+  );
+  const outside = coverage.covered_outside_model ?? [];
+  if (outside.length > 0) {
+    lines.push(
+      "### モデルの外が踏んでいるもの",
+      "",
+      "**被覆としては数えていない。** このモデルは 9 領域を横断して数えると",
+      "決めたので、**外のシャードが踏んでいることを理由に数えると、範囲の",
+      "決め方が骨抜きになる。** 埋めるかどうかの材料として置く。",
+      "",
+      "| セル | どこが踏んでいるか |",
+      "|---|---|",
+      ...outside.map((entry) => `| \`${entry.cell_id}\` | ${entry.where} |`),
+      "",
+    );
+  }
   return lines;
 }
 
@@ -1868,6 +1983,14 @@ export function renderReport(
    * 正しい**: 何も渡されていない呼び出しは、土台について何も知らない。
    */
   reproducibility: Reproducibility = { state: "not-run" },
+  /**
+   * **科学計算の試験空間**（`scientific-v1`）。呼び出し側が渡す。
+   *
+   * 既定が `null` なのは `power` / `run` / `uiRun` と同じ理由——ここで
+   * ディスクを読むと、`renderReport` の出力が引数に無いファイルに依存する。
+   * **`null` は「読んでいない」であって「全部覆った」ではない。**
+   */
+  science: Coverage | null = null,
 ): string {
   if (entries.length === 0) {
     // 「総ケース数 0 / 不一致 0」は**緑に見える成果物**である。一件も回って
@@ -2137,6 +2260,9 @@ export function renderReport(
   // **シャードの 1 行を開く。** 直前の表は関数呼び出しのシャードを総数 1 つに
   // 畳むので、その数が「全部が正常な計算」に見える。
   lines.push(...renderCallBreakdowns(entries));
+  // **科学計算の試験空間は、金融の内訳とは別に出す**——モデルが 9 領域を
+  // またぐので、「関数呼び出しの内訳」の中には収まらない。
+  lines.push(...renderScienceCoverage(science));
 
   lines.push(
     ...renderEffectiveTolerance(entries, {
@@ -2490,6 +2616,9 @@ export function errorCaseCount(entry: ShardSummary): number {
 /** 定義域外・極・ゼロ除算を**わざと**期待値として持つシャード。 */
 export const ERRORS_SHARD = "errors-000.json";
 
+/** 組合せの誤入力のシャード（2026-08-30）。**エラー経路は `errors` と同じ枠。** */
+export const COMBINATORICS_ERRORS_SHARD = "combinatorics-display-000.json";
+
 /** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
 export const ENTRY_SHARD = "entry-000.json";
 
@@ -2549,9 +2678,18 @@ export interface ErrorPaths {
  */
 function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
   const stem = shardStem(shardName);
-  if (stem === shardStem(ERRORS_SHARD)) {
+  if (
+    stem === shardStem(ERRORS_SHARD) ||
+    stem === shardStem(COMBINATORICS_ERRORS_SHARD)
+  ) {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
+    //
+    // **`combinatorics-display` も同じ枠である**（2026-08-30 に増えた）。
+    // **枠はエラー経路の軸**であって、シャードの軸ではない——組合せの
+    // 誤入力は科学計算の定義域エラーそのものである。**別の枠を作ると、
+    // 「同じ経路が 2 か所で数えられている」という読みにくさだけが増える。**
+    // どのシャードが数を出したかは、枠の `shards` に名前で残る。
     return "scientific-domain";
   }
   if (stem === shardStem(ENTRY_SHARD)) {
@@ -3385,6 +3523,9 @@ export function writeReport(): void {
         signal === null ? null : generatorDigest(signal.generatorFiles),
       );
     })(),
+    // **科学計算の会計もここで初めて読む**（`power` / `uiRun` と同じ作法）。
+    // **10 枚が同じブロックを持つ**ので、1 枚読めば足りる。
+    readScienceCoverage(),
   );
   writeFileSync(REPORT_PATH, markdown, "utf-8");
   console.log(`wrote ${REPORT_PATH}`);

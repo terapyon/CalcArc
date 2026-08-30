@@ -52,6 +52,7 @@ export const ALL_SHARDS = [
   "equivalence-000.json (equivalences)",
   "data-scale-000.json (calls)",
   "finance-000.json (calls)",
+  "combinatorics-display-000.json (displays)",
   "complex-display-000.json (displays)",
   "display-000.json (displays)",
   "entry-000.json (displays)",

@@ -8,12 +8,14 @@ import {
   assertToleranceIsSane,
   type CallShard,
   type Classification,
+  type Coverage,
   classify,
   classifyComplex,
   countInjectedTokens,
   countSequencesWithoutEq,
   type EquivalenceCase,
   equivalenceNeedsPrecedence,
+  loadDisplayShards,
   loadShards,
   needsPrecedence,
   partitionCases,
@@ -978,9 +980,53 @@ test("未達が残っているシャードを拒む", () => {
   requirement.covered_cells = 1;
   requirement.unmet_cells = 1;
   requirement.status = "incomplete";
+  // **文言は「本当の穴」になった**（2026-08-30 の裁定 4）——未達を種類で
+  // 分けたので、**測れない軸の宣言が無いシャードでは、未達はすべて本当の穴**
+  // として扱う（金融がそれ）。
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
-    /未達/,
+    /データに無いセル/,
   );
+});
+
+test("測れない軸を宣言しても、本当の穴では落ちる", () => {
+  // **裁定 4 の危険はここである**——「測れない」と宣言すれば門を通るなら、
+  // **宣言が緩めれば緑になるパラメータになる。** 領域ごと見逃さないことを見る
+  // （`inverse_trig` は「測れない軸」と「本当の穴」の両方を持つ）。
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  const requirement = coverage.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 0;
+  requirement.excluded_cells = 0;
+  requirement.unmet_cells = 3;
+  requirement.unmet_from_unmeasured_axes = 2; // 3 のうち 2 は測れない軸
+  requirement.unmet_real_cells = ["op/a=9"];
+  requirement.required_cells = 3;
+  requirement.status = "incomplete";
+  coverage.excluded_cells = []; // 宣言と一覧を揃える
+  coverage.not_measured_axes = [{ scope: "op", axis: "band", why: "測れない" }];
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
+    /データに無いセルを 1 件/,
+  );
+});
+
+test("測れない軸だけの未達なら、門は落とさない", () => {
+  const shard = sound();
+  // biome-ignore lint/style/noNonNullAssertion: 直前に組んだ形なので在る
+  const coverage = shard.coverage!;
+  const requirement = coverage.requirements[0];
+  if (requirement === undefined) throw new Error("作り物が壊れている");
+  requirement.covered_cells = 0;
+  requirement.excluded_cells = 0;
+  requirement.unmet_cells = 3;
+  requirement.unmet_from_unmeasured_axes = 3;
+  requirement.unmet_real_cells = [];
+  requirement.required_cells = 3;
+  requirement.status = "incomplete";
+  coverage.excluded_cells = []; // 宣言と一覧を揃える
+  coverage.not_measured_axes = [{ scope: "op", axis: "band", why: "測れない" }];
+  expect(() => assertCoverageIsSound("finance-000.json", shard)).not.toThrow();
 });
 
 test("not_measured を拒む（測っていないことを、通ったことにしない）", () => {
@@ -1108,4 +1154,20 @@ test("cell_id の接頭辞が scope 欄と食い違うシャードを拒む", ()
   expect(() => assertCoverageIsSound("finance-000.json", shard)).toThrow(
     /接頭辞/,
   );
+});
+
+test("値シャードと表示シャードにも、試験空間の門を掛ける", () => {
+  // **2026-08-30 まで、門は呼び出しシャードにしか掛かっていなかった**
+  // （`calls.spec.ts` が `loadCallShards()` を回すだけ）。科学計算の 9 領域は
+  // **値シャードと表示シャード**なので、**1 度も通っていなかった。**
+  //
+  // **ここが赤くなるのは意図した赤である**——モデルが「データに無いセル」を
+  // 指しているあいだ、`pnpm heavy` は落ちる。経緯は
+  // `docs/superpowers/sdd/heavy-INTENDED-RED.md`。
+  for (const { name, shard } of loadShards()) {
+    assertCoverageIsSound(name, shard as unknown as { coverage?: Coverage });
+  }
+  for (const { name, shard } of loadDisplayShards()) {
+    assertCoverageIsSound(name, shard as unknown as { coverage?: Coverage });
+  }
 });

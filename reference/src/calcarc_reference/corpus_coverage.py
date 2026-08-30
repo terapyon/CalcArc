@@ -157,6 +157,25 @@ def all_combination_cells(scope: str, factors: Mapping[str, Sequence[object]]) -
     )
 
 
+def one_way_cells(scope: str, factors: Mapping[str, Sequence[object]]) -> tuple[Cell, ...]:
+    """**各因子の各水準を 1 つずつ**(設計書 §14.2 の「各水準 1 件以上」)。
+
+    金融は全組合せとペアワイズしか使わなかったが、**科学計算の 9 領域のうち
+    8 つは 1-way である**——§14.2 の被覆規則が「各水準 1 件以上」「各帯に最低
+    件数」「各経路に最低件数」と書いている。**直積を作るのは `angle-mode`
+    (「各組合せ 1 件以上」)だけ**である。
+
+    **セルの軸は 1 本になる。** `Cell` は軸の並びで同一性が決まるので、
+    1-way のセルと全組合せのセルは**同じ scope でも混ざらない**——
+    `("rate", "0")` と `(("rate", "0"), ("n", "12"))` は別のセルである。
+    """
+    return tuple(
+        Cell(scope, ((name, level_text(level)),))
+        for name in sorted(factors)
+        for level in factors[name]
+    )
+
+
 def pairwise_cells(scope: str, factors: Mapping[str, Sequence[object]]) -> tuple[Cell, ...]:
     """2 因子間ペアワイズの**要求セル**(設計書 §12.4 の注意——構成行ではない)。
 

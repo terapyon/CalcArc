@@ -1228,6 +1228,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -1264,6 +1274,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1325,6 +1345,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1499,6 +1530,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1567,6 +1608,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1613,6 +1664,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1665,6 +1734,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1852,6 +1931,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -1941,6 +2030,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -2018,6 +2118,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -2125,6 +2235,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -2209,6 +2337,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -2302,6 +2448,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "7",
@@ -2364,6 +2511,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -2578,6 +2735,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "8",
@@ -2767,6 +2925,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3008,6 +3177,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3067,6 +3246,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3146,6 +3336,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3204,6 +3404,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "2",
@@ -3322,6 +3523,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3418,6 +3630,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3475,6 +3698,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -3500,6 +3733,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -3537,6 +3780,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3837,6 +4091,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -3895,6 +4167,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -4067,6 +4349,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4157,6 +4450,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4202,6 +4506,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4400,6 +4714,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4485,6 +4809,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4614,6 +4949,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4716,6 +5062,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "9",
@@ -4781,6 +5128,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4873,6 +5231,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -4995,6 +5364,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5060,6 +5439,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5130,6 +5520,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5197,6 +5597,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5270,6 +5681,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -5335,6 +5756,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5414,6 +5845,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5543,6 +5984,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5724,6 +6183,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -5865,6 +6334,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6019,6 +6498,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6116,6 +6606,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6212,6 +6712,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6299,6 +6809,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6336,6 +6856,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6375,6 +6913,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6416,6 +6972,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6470,6 +7044,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -6587,6 +7171,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6785,6 +7388,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6923,6 +7536,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -6972,6 +7603,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7139,6 +7780,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7228,6 +7887,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7267,6 +7936,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7387,6 +8074,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7517,6 +8214,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7832,6 +8540,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -7984,6 +8702,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8074,6 +8802,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "2",
@@ -8099,6 +8828,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -8233,6 +8972,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8302,6 +9051,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8398,6 +9158,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "6",
@@ -8439,6 +9209,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8650,6 +9438,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8916,6 +9714,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -8988,6 +9796,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "6",
@@ -9065,6 +9874,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -9155,6 +9974,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "1",
@@ -9256,6 +10076,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -9368,6 +10198,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -9437,6 +10277,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -9514,6 +10373,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "7",
@@ -9657,6 +10517,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10105,6 +10976,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -10162,6 +11043,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10282,6 +11173,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10316,6 +11217,17 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -10451,6 +11363,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10540,6 +11462,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10750,6 +11682,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10882,6 +11825,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -10977,6 +11930,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11140,6 +12103,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11331,6 +12312,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "6",
@@ -11366,6 +12357,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11500,6 +12501,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11595,6 +12607,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11634,6 +12656,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11719,6 +12751,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -11783,6 +12833,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "5",
@@ -11932,6 +12983,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12009,6 +13071,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12082,6 +13154,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12120,6 +13210,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12164,6 +13264,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12289,6 +13400,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12419,6 +13548,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12645,6 +13784,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12726,6 +13875,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -12931,6 +14090,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13001,6 +14170,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13146,6 +14333,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13188,6 +14385,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13288,6 +14495,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13408,6 +14626,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13447,6 +14675,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13554,6 +14792,17 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -13606,6 +14855,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13670,6 +14937,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -13894,6 +15179,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14035,6 +15338,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14087,6 +15400,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14200,6 +15523,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14302,6 +15635,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14341,6 +15684,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14374,6 +15735,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "1",
@@ -14463,6 +15825,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14556,6 +15928,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14696,6 +16086,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14777,6 +16178,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14831,6 +16251,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -14893,6 +16323,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15073,6 +16521,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15173,6 +16631,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15420,6 +16888,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15555,6 +17041,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15614,6 +17111,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15676,6 +17191,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15727,6 +17253,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "2",
@@ -15836,6 +17363,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -15951,6 +17488,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16032,6 +17580,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16169,6 +17727,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16277,6 +17845,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16312,6 +17890,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16571,6 +18159,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16747,6 +18346,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -16818,6 +18435,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "1",
@@ -16888,6 +18506,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17032,6 +18660,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17092,6 +18731,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17395,6 +19044,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17433,6 +19092,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17467,6 +19144,17 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin",
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "1",
@@ -17504,6 +19192,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17640,6 +19338,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17695,6 +19404,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17750,6 +19469,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -17919,6 +19649,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18082,6 +19823,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18247,6 +19999,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18524,6 +20287,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18575,6 +20348,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -18637,6 +20420,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18690,6 +20484,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -18760,6 +20572,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19192,6 +21022,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19256,6 +21096,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19387,6 +21245,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19460,6 +21329,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19637,6 +21516,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "7",
@@ -19783,6 +21663,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -19946,6 +21836,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20004,6 +21912,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20121,6 +22039,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "6",
@@ -20153,6 +22081,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20280,6 +22218,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20375,6 +22331,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20424,6 +22390,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "5",
@@ -20479,6 +22446,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20543,6 +22528,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20583,6 +22578,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20714,6 +22719,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20881,6 +22904,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -20923,6 +22956,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -20969,6 +23012,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21280,6 +23333,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21376,6 +23439,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21437,6 +23511,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21611,6 +23696,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21711,6 +23807,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21783,6 +23890,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -21892,6 +24017,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22137,6 +24272,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22360,6 +24505,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22473,6 +24629,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22580,6 +24754,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22628,6 +24821,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22684,6 +24888,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -22740,6 +24945,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22774,6 +24997,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -22837,6 +25070,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23016,6 +25259,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23137,6 +25391,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23298,6 +25562,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23402,6 +25677,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -23430,6 +25715,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23470,6 +25773,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23727,6 +26048,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23851,6 +26182,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23927,6 +26268,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -23992,6 +26351,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "5",
@@ -24174,6 +26534,16 @@
         "sqr",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -24330,6 +26700,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -24402,6 +26783,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -24458,6 +26857,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -24572,6 +26981,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -24897,6 +27316,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25029,6 +27459,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25094,6 +27535,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "1",
@@ -25392,6 +27834,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25568,6 +28020,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25638,6 +28100,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25767,6 +28239,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "6",
@@ -25882,6 +28364,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -25968,6 +28460,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26066,6 +28568,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26232,6 +28752,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26308,6 +28839,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26451,6 +29001,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26522,6 +29091,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26628,6 +29215,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -26682,6 +29270,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -26959,6 +29557,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -27221,6 +29829,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -27546,6 +30165,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -27697,6 +30327,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -27778,6 +30419,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -27831,6 +30483,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -28196,6 +30858,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "1",
@@ -28319,6 +30991,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -28372,6 +31054,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -28726,6 +31426,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -28778,6 +31488,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -28900,6 +31620,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -28986,6 +31717,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29042,6 +31791,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29166,6 +31925,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29230,6 +31999,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29328,6 +32107,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29381,6 +32170,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -29431,6 +32221,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -29605,6 +32405,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29652,6 +32462,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29719,6 +32539,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29817,6 +32647,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -29861,6 +32701,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -30016,6 +32857,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30071,6 +32930,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30177,6 +33054,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30376,6 +33264,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30448,6 +33346,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30495,6 +33404,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30662,6 +33581,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30844,6 +33773,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -30892,6 +33831,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -30979,6 +33928,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31022,6 +33981,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31068,6 +34037,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31176,6 +34163,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31230,6 +34227,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "7",
@@ -31338,6 +34336,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31385,6 +34401,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31432,6 +34458,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31479,6 +34515,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31622,6 +34669,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31678,6 +34735,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31718,6 +34785,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31756,6 +34833,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -31945,6 +35032,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "9",
@@ -31978,6 +35066,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32055,6 +35153,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "8",
@@ -32080,6 +35179,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "1",
@@ -32138,6 +35247,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32222,6 +35341,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32446,6 +35583,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32484,6 +35632,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -32543,6 +35701,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32684,6 +35853,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32738,6 +35925,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32781,6 +35987,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "8",
@@ -32897,6 +36104,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -32969,6 +36187,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33058,6 +36286,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33205,6 +36444,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33285,6 +36535,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33466,6 +36726,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "8",
@@ -33593,6 +36863,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33690,6 +36971,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -33921,6 +37212,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "3",
@@ -34084,6 +37376,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34188,6 +37498,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34260,6 +37580,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34395,6 +37726,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -34436,6 +37777,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34493,6 +37844,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34557,6 +37919,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34621,6 +37993,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34773,6 +38155,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34824,6 +38217,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34915,6 +38326,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -34988,6 +38410,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35046,6 +38478,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35095,6 +38538,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35149,6 +38611,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35240,6 +38712,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35354,6 +38836,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35550,6 +39042,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35591,6 +39101,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35635,6 +39155,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35704,6 +39234,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35793,6 +39333,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -35900,6 +39451,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36036,6 +39597,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36210,6 +39782,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36287,6 +39869,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36360,6 +39952,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36431,6 +40033,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36506,6 +40118,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36593,6 +40215,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36663,6 +40295,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36712,6 +40355,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36857,6 +40519,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -36933,6 +40613,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -37008,6 +40698,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -37056,6 +40757,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -37095,6 +40814,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -37526,6 +41255,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "8",
@@ -37622,6 +41361,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -37740,6 +41490,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "6",
@@ -38011,6 +41762,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38049,6 +41818,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -38081,6 +41860,7 @@
         "sqr",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -38188,6 +41968,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38238,6 +42028,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38500,6 +42300,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38589,6 +42399,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38628,6 +42448,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38699,6 +42529,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "1",
@@ -38757,6 +42588,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38870,6 +42711,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -38947,6 +42798,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39030,6 +42899,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -39121,6 +43000,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39212,6 +43102,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39338,6 +43246,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39459,6 +43377,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39505,6 +43441,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39617,6 +43571,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "4",
@@ -39756,6 +43711,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -39851,6 +43817,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40037,6 +44014,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40171,6 +44158,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40217,6 +44214,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40263,6 +44270,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40389,6 +44407,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40734,6 +44762,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40821,6 +44860,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -40907,6 +44965,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41201,6 +45270,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41342,6 +45421,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41389,6 +45487,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41424,6 +45532,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "4",
@@ -41618,6 +45736,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41751,6 +45887,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41845,6 +45999,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -41916,6 +46088,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42014,6 +46204,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -42050,6 +46250,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42122,6 +46340,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42171,6 +46399,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42351,6 +46589,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42420,6 +46669,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42475,6 +46734,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -42815,6 +47085,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43132,6 +47420,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43276,6 +47574,24 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43340,6 +47656,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43469,6 +47795,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43538,6 +47874,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43647,6 +47993,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -43826,6 +48183,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -44062,6 +48429,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "8",
@@ -44277,6 +48645,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44372,6 +48751,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44425,6 +48814,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44556,6 +48956,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44644,6 +49062,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44706,6 +49134,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44789,6 +49227,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44845,6 +49293,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -44962,6 +49421,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45056,6 +49525,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -45089,6 +49568,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45136,6 +49625,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45252,6 +49751,24 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45353,6 +49870,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -45447,6 +49974,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45480,6 +50017,16 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "4",
@@ -45532,6 +50079,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -45600,6 +50165,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46119,6 +50694,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46304,6 +50889,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46388,6 +50983,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46470,6 +51075,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46575,6 +51190,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46638,6 +51263,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -46680,6 +51315,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46765,6 +51410,16 @@
         "neg",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46838,6 +51493,17 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -46915,6 +51581,24 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -46991,6 +51675,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47064,6 +51758,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -47121,6 +51825,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47226,6 +51941,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47273,6 +52006,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47327,6 +52070,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47515,6 +52268,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47577,6 +52341,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47718,6 +52492,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47812,6 +52597,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47860,6 +52663,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47943,6 +52756,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos",
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -47978,6 +52810,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "6",
@@ -48035,6 +52868,16 @@
         "sqr",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -48125,6 +52968,16 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "9",
@@ -48203,6 +53056,7 @@
         "sqrt",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "8",
@@ -48389,6 +53243,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48537,6 +53401,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48616,6 +53490,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48685,6 +53570,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "8",
@@ -48750,6 +53645,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48865,6 +53770,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48915,6 +53830,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -48963,6 +53888,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49111,6 +54046,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49159,6 +54112,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49218,6 +54182,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49300,6 +54274,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49371,6 +54355,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "5",
@@ -49448,6 +54442,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49514,6 +54518,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49586,6 +54601,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49716,6 +54742,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49802,6 +54838,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "3",
@@ -49846,6 +54883,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -49971,6 +55019,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50044,6 +55103,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50101,6 +55178,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50198,6 +55285,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50285,6 +55383,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50370,6 +55479,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50508,6 +55635,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -50606,6 +55743,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "4",
@@ -50866,6 +56013,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51105,6 +56262,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51261,6 +56428,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51347,6 +56533,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51404,6 +56600,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51498,6 +56705,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51600,6 +56817,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -51798,6 +57033,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52070,6 +57315,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52348,6 +57611,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52433,6 +57707,25 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52655,6 +57948,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52726,6 +58029,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52786,6 +58100,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52907,6 +58231,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "tan"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -52994,6 +58336,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53046,6 +58398,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53108,6 +58470,7 @@
         "neg",
         "eq"
       ],
+      "levels": {},
       "mode": "Deg",
       "right": [
         "7",
@@ -53237,6 +58600,17 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive",
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53434,6 +58808,16 @@
         "sqr",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "2",
@@ -53485,6 +58869,17 @@
         "sin",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin",
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "8",
@@ -53518,6 +58913,16 @@
         "cos",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "cos"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "7",
@@ -53590,6 +58995,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53630,6 +59053,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53679,6 +59112,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53746,6 +59189,24 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin"
+          ]
+        },
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53793,6 +59254,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "additive"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53838,6 +59309,16 @@
         "sqrt",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -53974,6 +59455,17 @@
         "tan",
         "eq"
       ],
+      "levels": {
+        "angle_mode": {
+          "angle_mode": [
+            "Deg"
+          ],
+          "function": [
+            "sin",
+            "tan"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "3",
@@ -54003,6 +59495,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -54042,6 +59544,16 @@
         "rparen",
         "eq"
       ],
+      "levels": {
+        "associativity": {
+          "operator_group": [
+            "multiplicative"
+          ],
+          "shape": [
+            "flat"
+          ]
+        }
+      },
       "mode": "Deg",
       "right": [
         "lparen",
@@ -54098,8 +59610,210 @@
       ],
       "kind": "display",
       "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "10e9"
+      },
+      "expr": "9999999999.5 \u3092\u5de5\u5b66\u8868\u8a18\u3067",
+      "id": "disp-002000",
+      "keys": [
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "dot",
+        "5",
+        "eq",
+        "eng"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expr": "9999999999.5 \u306f 60 \u9032\u306b\u3067\u304d\u306a\u3044\u306e\u3067\u8868\u793a\u304c\u5909\u308f\u3089\u306a\u3044",
+      "id": "disp-002001",
+      "kind": "equivalence",
+      "left": [
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "dot",
+        "5",
+        "eq"
+      ],
+      "mode": "Deg",
+      "right": [
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "dot",
+        "5",
+        "eq",
+        "dms"
+      ]
     }
   ],
+  "coverage": {
+    "covered_outside_model": [],
+    "excluded_cells": [
+      {
+        "cell_id": "complex/operation=power",
+        "covered_elsewhere": [],
+        "detail": "engine \u304c\u8907\u7d20\u6570\u306e\u51aa\u3092\u53d7\u3051\u4ed8\u3051\u306a\u3044\u3002\u5e95\u3067\u3082\u6307\u6570\u3067\u3082 DomainError\uff08crates/calcarc-core/src/scientific/mod.rs \u306e power_rejects_complex_operands \u304c\u56fa\u5b9a\u3057\u3066\u3044\u308b\uff09",
+        "disposition": "reasonable",
+        "reason": "not_applicable",
+        "scope": "complex"
+      }
+    ],
+    "generation_rejections": {
+      "bare": 7894,
+      "division_by_zero": 6,
+      "domain": 6872,
+      "dup": 2251,
+      "out_of_range": 6378,
+      "overflow": 1764
+    },
+    "model": "scientific-v1",
+    "not_measured_axes": [
+      {
+        "axis": "grammar_class",
+        "scope": "precedence",
+        "why": "\u6587\u6cd5\u30af\u30e9\u30b9\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308a\u3001\u3053\u306e\u30b7\u30e3\u30fc\u30c9\u306e\u30ad\u30fc\u5217\u306f\u62ec\u5f27\u3092\u7701\u3044\u305f\u5f62\u3067\u3042\u308b\u2014\u2014\u69cb\u9020\u3092\u30ad\u30fc\u304b\u3089\u5fa9\u5143\u3067\u304d\u308b\u304b\u3069\u3046\u304b\u304c\u3001\u3053\u306e\u30b7\u30e3\u30fc\u30c9\u304c\u78ba\u304b\u3081\u3066\u3044\u308b\u5f53\u306e\u3082\u306e\u3067\u3042\u308b\u3002\u6728\u304b\u3089\u306f\u8aad\u3081\u308b\u304c\u3001\u8aad\u3081\u3070\u30ad\u30fc\u5074\u306b\u76f8\u624b\u304c\u5c45\u306a\u3044\u306e\u3067\u81ea\u5df1\u7533\u544a\u306b\u306a\u308b"
+      }
+    ],
+    "requirements": [
+      {
+        "covered_cells": 7,
+        "excluded_cells": 0,
+        "id": "elementary/band-function/one_way",
+        "required_cells": 7,
+        "scope": "elementary",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 23,
+        "excluded_cells": 0,
+        "id": "inverse_trig/angle_mode-band-function/one_way+pairs",
+        "required_cells": 23,
+        "scope": "inverse_trig",
+        "status": "complete",
+        "strength": "one_way+pairs",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 6,
+        "excluded_cells": 0,
+        "id": "angle_mode/angle_mode-function/all",
+        "required_cells": 6,
+        "scope": "angle_mode",
+        "status": "complete",
+        "strength": "all",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 2,
+        "excluded_cells": 0,
+        "id": "precedence/grammar_class-parenthesis/one_way",
+        "required_cells": 6,
+        "scope": "precedence",
+        "status": "incomplete",
+        "strength": "one_way",
+        "unmet_cells": 4,
+        "unmet_from_unmeasured_axes": 4,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 6,
+        "excluded_cells": 0,
+        "id": "associativity/operator_group-shape/one_way",
+        "required_cells": 6,
+        "scope": "associativity",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 7,
+        "excluded_cells": 0,
+        "id": "cancellation/band-shape/one_way",
+        "required_cells": 7,
+        "scope": "cancellation",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 6,
+        "excluded_cells": 0,
+        "id": "combinatorics/function-path/one_way",
+        "required_cells": 6,
+        "scope": "combinatorics",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 7,
+        "excluded_cells": 0,
+        "id": "display/edge-kind/one_way",
+        "required_cells": 7,
+        "scope": "display",
+        "status": "complete",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      },
+      {
+        "covered_cells": 9,
+        "excluded_cells": 1,
+        "id": "complex/form-operation-zero_part/one_way",
+        "required_cells": 10,
+        "scope": "complex",
+        "status": "accounted_with_exclusions",
+        "strength": "one_way",
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
+        "unmet_real_cells": []
+      }
+    ],
+    "schema": 1
+  },
   "generated_by": "mpmath 1.3.0 (50 dps), Python 3.14",
   "schema": 1
 }
