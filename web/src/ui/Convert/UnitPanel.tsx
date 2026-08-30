@@ -420,8 +420,9 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
           `display-entries-done` に `値 -40` `変換元 °C` と**別々の項目**として並ぶ。
 
           **温度の不動点がその実例。** `-40 °C = -40 °F` は「両辺が同じ数である」
-          ことが主張であり、**離して置くと読めない**（`convert.spec.ts:410` が
-          この 1 行に対して主張している）。
+          ことが主張であり、**離して置くと読めない**——e2e の
+          `types the fixed point of the two temperature scales` が、
+          **この 1 行に対して**主張している。
 
           **結果ブロックを持つ 4 盤面は、どれも「主表示に出せないもの」を出す**
           ——Data Scale と転送は 10 進/2 進の内訳、LLM は 3 組の内訳、
