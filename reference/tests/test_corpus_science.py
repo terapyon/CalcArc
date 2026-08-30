@@ -67,12 +67,21 @@ def test_the_selected_pair_is_the_one_the_measurement_named() -> None:
     1 件も無い**（2026-08-30 実測）。**1-way だけだと「`angle_mode=Rad` が未達」の
     1 セルに畳まれ、どの関数が欠けているかが出ない。**
     """
-    assert corpus_science.SELECTED_PAIRS["inverse_trig"] == (("angle_mode", "function"),)
+    assert corpus_science.SELECTED_PAIRS["inverse_trig"] == (
+        ("angle_mode", "function"),
+        ("band", "function"),
+    )
     cells = next(r for r in corpus_science.SCIENCE_REQUIREMENTS if r.scope == "inverse_trig").cells
     pairs = [c for c in cells if len(c.axes) == 2]
-    assert len(pairs) == 6, "2 モード × 3 関数"
+    assert len(pairs) == 15, "2 モード × 3 関数 + 3 帯 × 3 関数"
     rad = [c for c in pairs if ("angle_mode", "Rad") in c.axes]
     assert len(rad) == 3, "Rad 側の 3 セルが、実測した穴に対応する"
+    # **`band × function` を足した理由**（2026-08-30）: 1-way だと 3 帯すべてを
+    # `atan` が 1 人で埋める。**表が `±1` を境目と名指ししているのは `asin`/`acos`
+    # のほう**で、その 2 つは境界を 1 度も踏んでいない——**軸としては満点、
+    # 確かめたい所は空**という 1-way の死角である。
+    boundary = [c for c in pairs if ("band", "boundary") in c.axes]
+    assert len(boundary) == 3, "境界 × 3 関数。asin/acos の境界がここで見える"
 
 
 def test_the_function_sets_are_not_copies() -> None:
@@ -198,8 +207,20 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
     「データに無い」ではなく「**この経路では読めない**」である
     ——Task 3 が記録を足せば埋まる。**本当の穴と混ぜると、埋める判断を誤る。**
 
-    実測（2026-08-30、**Task 8 で Rad の逆三角 4 件を埋めたあと**）:
-    未達 33 = 観測できない 30 + 本当の穴 3。**埋める前は 37 = 30 + 7 だった。**
+    実測（2026-08-30、**Task 11 のあと**）: 未達 **23 = 観測できない 20 +
+    本当の穴 3**。
+
+    **数の動きが、このモデルの値打ちそのものである:**
+
+    ```
+    Task 5  時点   未達 37 = 測れない 30 + 本当の穴  7
+    Task 8  のあと 未達 33 = 測れない 30 + 本当の穴  3   （Rad の逆三角を埋めた）
+    Task 11 の途中 未達 27 = 測れない 20 + 本当の穴  7   （帯を測れる側へ移した）
+    Task 11 のあと 未達 23 = 測れない 20 + 本当の穴  3   （境界 4 件を埋めた）
+    ```
+
+    **「測れない」が 10 件減って、そこから本当の穴が 4 件出てきた。**
+    **測れないと言えているあいだ、その 4 件は誰にも見えていなかった。**
     """
     covered: set = set()
     for case in _nine_domain_cases():
@@ -219,7 +240,7 @@ def test_unmet_splits_into_unobservable_and_real_holes() -> None:
                 else real
             )
             target.append(cell.id)
-    assert len(declared) == 30
+    assert len(declared) == 20
     assert sorted(real) == [
         "combinatorics/path=domain",
         "combinatorics/path=overflow_near",
@@ -342,7 +363,7 @@ def test_every_recorded_case_agrees_with_its_keys() -> None:
             assert case["levels"] == observed, f"{case['id']}: 記録と観測が食い違う"
             checked += 1
     # 17,823 → 17,826（Task 8 が Rad の逆三角を 3 件足した）
-    assert checked == 17826, f"突き合わせたのが {checked} 件しかない"
+    assert checked == 17830, f"突き合わせたのが {checked} 件しかない"
 
 
 # ---------------------------------------------------------------------------
@@ -381,8 +402,9 @@ def test_the_declaration_list_is_pinned() -> None:
     狭めて点を稼ぐ手**かもしれない。**増えたら人が読む。**
     """
     assert corpus_science.UNOBSERVABLE_AXES == {
-        "elementary": ("band",),
-        "inverse_trig": ("band",),
+        # **`elementary` と `inverse_trig` の `band` は 2026-08-30 に外した**
+        # ——宣言が実データと食い違っていた（下の
+        # `test_a_band_declared_unreadable_has_no_readable_argument` が番人）。
         "cancellation": ("shape", "band"),
         "precedence": ("grammar_class",),
         "complex": ("operation",),
@@ -399,14 +421,19 @@ def test_the_coverage_block_splits_unmet_by_kind() -> None:
     """
     payload = json.loads((CORPUS / "elementary-000.json").read_text(encoding="utf-8"))["coverage"]
     by_scope = {r["scope"]: r for r in payload["requirements"]}
-    # **Task 8 で `inverse_trig` の本当の穴 4 件が消えた**——残るのは
-    # 「測れない軸（帯）」に起因する 5 件だけである。
-    assert by_scope["inverse_trig"]["unmet_cells"] == 5
-    assert by_scope["inverse_trig"]["unmet_from_unmeasured_axes"] == 5
+    # **Task 11 で `inverse_trig` は満点になった。** 帯が「測れない軸」から
+    # 「測れる軸」へ移り（リテラル引数の窓）、**そこで空だと分かった
+    # `asin(1)` / `acos(1)` を埋めた**からである。
+    # **「測れない」が 5 件あった場所に、本当は 2 件の穴があった。**
+    assert by_scope["inverse_trig"]["unmet_cells"] == 0
+    assert by_scope["inverse_trig"]["unmet_from_unmeasured_axes"] == 0
     assert by_scope["inverse_trig"]["unmet_real_cells"] == []
+    # **`elementary` も同じ形で満点になった**（`e^0` と `e^-5`）。
+    assert by_scope["elementary"]["unmet_cells"] == 0
     real = sum(len(r["unmet_real_cells"]) for r in payload["requirements"])
-    assert real == 3, "本当の穴は 3 件（Task 8 のあと。前は 7 件）"
-    assert len(payload["not_measured_axes"]) == 7
+    assert real == 3, "本当の穴は 3 件（combinatorics 2 + complex 1）"
+    # **7 → 5。** `elementary/band` と `inverse_trig/band` を宣言から外した。
+    assert len(payload["not_measured_axes"]) == 5
 
 
 def test_all_ten_shards_carry_the_same_block_and_it_matches_a_fresh_count() -> None:
@@ -646,3 +673,69 @@ def test_what_the_outside_covers_is_recorded_but_not_counted() -> None:
     }
     by_scope = {r["scope"]: r for r in payload["requirements"]}
     assert set(by_scope["combinatorics"]["unmet_real_cells"]) == outside
+
+
+#: **測れないと宣言した「帯」の領域が、自分の因子表の関数へリテラル引数を
+#: 何件持っているか。** 下のテストが実データと突き合わせる。
+UNREADABLE_BAND_LITERALS = {"cancellation": 0}
+
+
+def test_a_band_declared_unreadable_has_no_readable_argument() -> None:
+    """**★ 「読めない」という宣言を、実データで裏を取る番人。**
+
+    **これが無かったせいで、宣言が 3 日間まちがったまま緑だった**
+    ——`elementary/band` と `inverse_trig/band` に
+    **「帯は引数の値で決まる。キー列からは読めない」**と書いてあったが、
+    **`elementary` の関数適用 3,345 回のうち 1,784 回は引数がリテラル**で、
+    **キー列に数字がそのまま並んでいた**（2026-08-30 実測）。
+
+    **既存の `test_a_declared_unmeasurable_axis_is_never_observed` では捕まらない。**
+    あれは「射影が実際に読んでいるか」を見る——**射影を書かなければ、
+    宣言が正しいかどうかに関わらず緑になる。** **書かなかったことが、
+    宣言の正しさの証拠になってしまっていた。**
+
+    **ここが見るのはデータのほうである。** 帯を「測れない」と宣言した領域で、
+    **その領域の因子表が名指しする関数にリテラルが入っていたら落とす**
+    ——それは「読める」ということだからである。
+
+    **`cancellation` が例外に見えないのは偶然ではない。** あの領域の
+    リテラル引数 365 件はすべて `ln` 宛て——**`elementary` の関数**であり、
+    `cancellation` の因子表は関数を 1 つも名指ししていない。**だから 0 である。**
+    """
+    measured: dict[str, int] = {}
+    for scope, axes in corpus_science.UNOBSERVABLE_AXES.items():
+        if "band" not in axes:
+            continue
+        own = set(corpus_science.SCIENCE_FACTORS[scope].get("function", ()))
+        count = 0
+        for case in _nine_domain_cases():
+            keys = corpus_science.case_keys(case)
+            count += sum(1 for fn, _ in corpus_science.literal_arguments(keys) if fn in own)
+        measured[scope] = count
+
+    assert measured == UNREADABLE_BAND_LITERALS, (
+        f"「帯は読めない」と宣言した領域に、読めるリテラル引数がある: {measured}"
+        "——宣言を外して射影を書くか、宣言の理由を書き直すこと"
+    )
+
+
+def test_the_band_guard_fires_when_the_wrong_axis_is_declared() -> None:
+    """**上の番人が、素通りしていないことを見る。**
+
+    `cancellation` の関数集合は空なので、**上のテストは「0 == 0」で
+    自明に緑になりうる**——**それは何も主張していない。**
+
+    **ここでは `elementary/band` をもう一度「測れない」と宣言してみせる**
+    ——3 日前の私が書いていたとおりに。**赤くならなければ、番人は居ない。**
+    """
+    declared = dict(corpus_science.UNOBSERVABLE_AXES)
+    declared["elementary"] = ("band",)
+    own = set(corpus_science.SCIENCE_FACTORS["elementary"]["function"])
+    count = 0
+    for case in _nine_domain_cases():
+        keys = corpus_science.case_keys(case)
+        count += sum(1 for fn, _ in corpus_science.literal_arguments(keys) if fn in own)
+    assert count > 0, (
+        "`elementary/band` を「測れない」と宣言しても読めるリテラルが 0 件だった"
+        "——番人が働かない。射影か窓が壊れている"
+    )

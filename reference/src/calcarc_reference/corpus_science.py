@@ -71,18 +71,50 @@ SPEC_AXES: dict[str, tuple[str, str]] = {
 #: 角度モード。**§14.2 が `angle_mode` と `inverse_trig` の両方で名指ししている。**
 ANGLE_MODES = ("Deg", "Rad")
 
-#: 定義域の帯。**`docs/numerical-policy.md` の「関数の定義域」の表から起こす。**
+#: 定義域の帯（`elementary`）。**切れ目は `0` だけである。**
 #:
-#: 帯の切れ目は仕様が決めている——`ln`/`log10` は `x > 0` が境目、
-#: `asin`/`acos` は `−1` と `1`、`1/x` は `0`。**「負・ゼロ・単位区間・小さい正・
-#: 大きい正」で切るのは恣意ではなく、その表がそこでエラーの種類を変えているから
-#: である。**
-DOMAIN_BANDS = ("negative", "zero", "unit_interval", "positive_small", "positive_large")
+#: **`docs/numerical-policy.md` の「関数の定義域」の表が名指しする切れ目を、
+#: そのまま水準にする**——`sqrt` は `x ≥ 0`、`ln`/`log10` は `x > 0`、
+#: `1/x` は `x ≠ 0`。**4 つとも `0` で振る舞いが変わり、表はそれ以外の切れ目を
+#: 持たない。**
+#:
+#: **【訂正 2026-08-30】ここには 5 水準あった**——`negative` / `zero` /
+#: `unit_interval` / `positive_small` / `positive_large`。そして docstring に
+#: **「帯の切れ目は仕様が決めている」と書いてあった。表を当たったら、
+#: `positive_small` と `positive_large` を分ける境目はどこにも無かった。**
+#: **5 水準のうち 2 つは私が作ったもので、理由の文言はその事実を隠していた。**
+#: `unit_interval`（`±1`）は表に在るが、**それは `asin`/`acos` の境目**であり、
+#: この領域の関数（`ln` `log10` `eˣ` `1/x`）とは関係がない——
+#: **下の `INVERSE_TRIG_BANDS` へ移した。**
+ELEMENTARY_BANDS = ("negative", "zero", "positive")
 
-#: 桁落ちの強度帯。**§14.2 は「各帯に最低件数」と言うだけで帯を定義していない**
-#: ので、**ここで決めた**——`docs/numerical-policy.md` が桁落ちの許容として
-#: 相対誤差 `1e-6` を名指ししており、**その手前・近傍・越えたところ**で 3 段に切る。
-#: **これは許容誤差ではない**（合否には使わない。帯の名前である）。
+#: 境界帯（`inverse_trig`）。**切れ目は `±1` である。**
+#:
+#: 表は `asin`/`acos` に `−1 ≤ x ≤ 1` と書いている。**境目そのもの（`|x| = 1`）を
+#: 独立の水準にする**のは、§14.2 が `elementary` に「境界近傍は名指し」と
+#: 求めているのと同じ理由である——**境界は、内と外の間ではなく、内でも外でもない
+#: 1 点で壊れる。**
+#:
+#: **`atan` は全実数が定義域なので 3 帯すべてが正常に返る。** それは
+#: **1-way ではこの軸が `atan` だけで埋まる**ことを意味する（実測: `boundary` を
+#: 踏んでいるのは `atan(1)` の 1 件だけで、`asin(1)` も `acos(1)` も 0 件）。
+#: **だから `(band, function)` を選択ペアに入れる**——下の `SELECTED_PAIRS`。
+INVERSE_TRIG_BANDS = ("inside", "boundary", "outside")
+
+#: 桁落ちの強度帯。**§14.2 は「各帯に最低件数」と言うだけで帯を定義していない。**
+#:
+#: **★ この 3 水準は私が作ったものである（実測前）。** 表に切れ目が無い。
+#:
+#: **【訂正 2026-08-30】ここには「`docs/numerical-policy.md` が桁落ちの許容として
+#: 相対誤差 `1e-6` を名指ししており」と書いてあった。当たったら、その `1e-6` は
+#: `numerical-policy.md:123` の「max(1e-6 円, 値 × 1e-9)」——Loan の月額が円境界に
+#: 近すぎるケースを落とす基準であり、桁落ちとも相殺とも関係が無い。**
+#: **文書を指した理由が、その文書の別の話を指していた。**
+#:
+#: **切れ目を引けるとしたら生成器の `CANCELLATION_TOLERANCE`（`abs 5e-10` /
+#: `rel 1e-6`）だが、まだ引いていない**——強度は引数と結果の比で決まるので、
+#: **`ELEMENTARY_BANDS` のようにリテラルから読む手が使えない**（相殺の両辺は
+#: 式である）。**測れないまま残す。理由は下の `not_measured_axes` に書く。**
 CANCELLATION_BANDS = ("mild", "near_tolerance", "severe")
 
 #: 相殺の形。**生成器が名指ししている 4 つ**（`CANCELLATION_SHAPES`）。
@@ -137,11 +169,11 @@ COMPLEX_ZERO_PARTS = ("none", "real_zero", "imag_zero", "both_zero")
 TRIG_FNS = tuple(fn for fn in UNARY_FNS if fn in ("sin", "cos", "tan"))
 
 SCIENCE_FACTORS: dict[str, dict[str, tuple]] = {
-    "elementary": {"function": ELEMENTARY_FNS, "band": DOMAIN_BANDS},
+    "elementary": {"function": ELEMENTARY_FNS, "band": ELEMENTARY_BANDS},
     "inverse_trig": {
         "function": INVERSE_TRIG_FNS,
         "angle_mode": ANGLE_MODES,
-        "band": DOMAIN_BANDS,
+        "band": INVERSE_TRIG_BANDS,
     },
     "angle_mode": {"function": TRIG_FNS, "angle_mode": ANGLE_MODES},
     "precedence": {
@@ -173,11 +205,24 @@ ALL_COMBINATION_SCOPES = ("angle_mode",)
 #: （2026-08-30、着手前）。**1-way だと「`angle_mode=Rad` が未達」という 1 セルに
 #: 畳まれ、どの関数が欠けているかが出ない。** ペアにすると 3 セルとして出る。
 #:
-#: **`band` を含むペアは選ばない。** §14.2 が「1-way 必須」と言っているのは
-#: 全軸であり、**ペアは「リスクのある軸に限定」**（§14.2 の末尾）——
-#: 帯と関数の相互作用は、**まだ測っていないので名指しできない**。
+#: **`band × function` も選ぶ（2026-08-30 追加）。**
+#:
+#: **ここには「帯と関数の相互作用は、まだ測っていないので名指しできない」と
+#: 書いてあった。測ったので、その理由は期限切れである**——リテラル引数の
+#: 実測（2026-08-30）:
+#:
+#: ```
+#: asin: inside 2（すべて asin(0)）      boundary 0   outside 0
+#: acos: inside 4（すべて acos(0)）      boundary 0   outside 0
+#: atan: inside 3   boundary 1（atan(1)）  outside 624
+#: ```
+#:
+#: **1-way だと 3 帯すべて緑になる**——`atan` が 1 人で 3 帯を埋めるからである。
+#: **しかし表が `±1` を境目と名指ししているのは `asin`/`acos` のほうで、
+#: その 2 つは境界を 1 度も踏んでいない。** **軸としては満点、確かめたい所は
+#: 空**という、1-way の教科書どおりの死角である。
 SELECTED_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
-    "inverse_trig": (("angle_mode", "function"),),
+    "inverse_trig": (("angle_mode", "function"), ("band", "function")),
 }
 
 
@@ -243,6 +288,86 @@ KEY_TO_FUNCTION: dict[str, str] = {
     "n_c_r": "nCr",
 }
 
+#: **リテラルを打つキー。** 数字と小数点だけ。**指数入力（`exp`）は入れない**
+#: ——`Typed` の指数は「同じ値への別の打ち方」であり、**記録側（木）は値を持つが
+#: 観測側（キー）は打ち方を持つ**ので、ここを広げると両側がずれる。
+DIGIT_KEYS: frozenset[str] = frozenset("0123456789") | {"dot"}
+
+#: **一価関数のキー。** `n_p_r` / `n_c_r` は 2 項なので**入れない**——
+#: あれの直前の数字列は「引数」ではなく**左の被演算子**である。
+UNARY_FUNCTION_KEYS: tuple[str, ...] = (
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "ln",
+    "log10",
+    "exp_e",
+    "recip",
+    "n_fact",
+)
+
+
+def literal_arguments(keys: list[str]) -> list[tuple[str, float]]:
+    """**キー列から「リテラルを引数に取った一価関数」を拾う。**
+
+    **帯（`band`）を観測する唯一の窓である。** 一価関数のキーの直前が数字列なら、
+    その数字列がまるごと引数である——`['3','7','1','ln']` は `ln(371)`。
+    直前が `rparen` や別の関数キーなら、引数は式なので**読まない**。
+
+    **`expr` を読まない。** この module は「キーを一次資料にする」と決めており
+    （`observed_levels` の docstring に実測つきで書いてある）、
+    **`errors-000.json` の `expr` は人間向けの散文**である。
+
+    **窓は狭い。** 実測（2026-08-30）: `elementary` の関数適用 3,345 回のうち
+    **リテラル引数は 1,784 回（53.3%）**。残りは入れ子の式で、**そこは読めない。**
+    **読めない分を「踏んでいない」と読ませてはいけない**ので、この窓で測った
+    帯は「踏んだことが分かる帯」であって、「踏んだ帯の全部」ではない。
+    """
+    found: list[tuple[str, float]] = []
+    for index, key in enumerate(keys):
+        if key not in UNARY_FUNCTION_KEYS:
+            continue
+        end = index
+        # **`neg` は数字列の後ろに付く**（`5` を打ってから符号を反転する）。
+        # **ここを読まないと「負の帯」が窓に映らない**——`Num` は非負整数なので、
+        # **負のリテラルは必ずこの形になる。**
+        negative = end > 0 and keys[end - 1] == "neg"
+        if negative:
+            end -= 1
+        start = end
+        while start > 0 and keys[start - 1] in DIGIT_KEYS:
+            start -= 1
+        if start == end:
+            continue
+        text = "".join("." if k == "dot" else k for k in keys[start:end])
+        if negative:
+            text = "-" + text
+        try:
+            value = float(text)
+        except ValueError:
+            continue
+        found.append((KEY_TO_FUNCTION[key], value))
+    return found
+
+
+def elementary_band(value: float) -> str:
+    """**切れ目は `0` だけ**（`numerical-policy.md` の「関数の定義域」の表）。"""
+    if value < 0:
+        return "negative"
+    return "zero" if value == 0 else "positive"
+
+
+def inverse_trig_band(value: float) -> str:
+    """**切れ目は `±1`**。**境目そのものを独立の水準にする**（`INVERSE_TRIG_BANDS`）。"""
+    size = abs(value)
+    if size < 1:
+        return "inside"
+    return "boundary" if size == 1 else "outside"
+
+
 #: **演算子のキー → 演算子群**（`ASSOC_CHAINS` の分類に対応）。
 KEY_TO_OPERATOR_GROUP: dict[str, str] = {
     "add": "additive",
@@ -261,9 +386,9 @@ KEY_TO_OPERATOR_GROUP: dict[str, str] = {
 #: **観測できない軸は assert できない**。**どこまでが検算されているかを、
 #: 読む人が知れなければならない**——「全部突き合わせている」と読ませない。
 UNOBSERVABLE_AXES: dict[str, tuple[str, ...]] = {
-    # 帯は引数の値で決まる。キー列からは、どの数がどの関数に入ったか分からない
-    "elementary": ("band",),
-    "inverse_trig": ("band",),
+    # **`elementary` と `inverse_trig` の `band` はここに在った（2026-08-30 に外した）。**
+    # 理由は「キー列からは読めない」だったが、**関数適用の 53.3% は引数がリテラル**で、
+    # そこはキー列に数字が並んでいる。**理由の文言が実データと食い違っていた。**
     "cancellation": ("shape", "band"),
     # 文法クラスは式の構造で決まる（括弧の有無だけは観測できる）
     "precedence": ("grammar_class",),
@@ -315,6 +440,15 @@ def observed_levels(case: dict) -> dict[str, dict[str, set[str]]]:
         out.setdefault(scope, {}).setdefault(axis, set()).add(coverage.level_text(level))
 
     functions = {KEY_TO_FUNCTION[k] for k in keys if k in KEY_TO_FUNCTION}
+
+    # **帯は、引数がリテラルのときだけ読める**（`literal_arguments` の docstring）。
+    # **記録側も同じ窓に絞ってある**——広いほうが多くを見るのではなく、
+    # **両側の窓が違えば突合が片側検査になる。**
+    for fn, value in literal_arguments(case_keys(case)):
+        if fn in ELEMENTARY_FNS:
+            put("elementary", "band", elementary_band(value))
+        if fn in INVERSE_TRIG_FNS:
+            put("inverse_trig", "band", inverse_trig_band(value))
 
     for fn in sorted(functions & set(TRIG_FNS)):
         put("angle_mode", "function", fn)
@@ -411,6 +545,30 @@ def observed_cells(case: dict) -> set[coverage.Cell]:
 # ---------------------------------------------------------------------------
 
 
+def _literal_value(node: object) -> float | None:
+    """**葉がリテラルなら値を返す。式なら `None`。**
+
+    **キー側の窓と一致させるための関数である**（`literal_arguments`）。
+    `Num` は非負整数（`corpus_expr.Num`）、`Typed` は打鍵の列——
+    **数字と小数点だけで打たれたものに限る**。指数入力（`exp`）を含む `Typed` は
+    **キー側が読めない**ので、こちらも読まない。
+    """
+    # **`neg` を被せた葉も literal である**（キー側と同じ窓——`literal_arguments`）。
+    if getattr(node, "fn", None) == "neg":
+        inner = _literal_value(getattr(node, "arg", None))
+        return None if inner is None else -inner
+    keys_ = getattr(node, "keys", None)
+    if keys_ is not None and getattr(node, "text", None) is not None:
+        if not all(k in DIGIT_KEYS for k in keys_):
+            return None
+        try:
+            return float(node.text)  # type: ignore[attr-defined]
+        except ValueError:
+            return None
+    value_ = getattr(node, "value", None)
+    return float(value_) if isinstance(value_, int) else None
+
+
 def _walk(node: object) -> list[object]:
     """木の全ノードを平らに並べる。**キー列を経由しない。**"""
     out = [node]
@@ -433,6 +591,11 @@ def recorded_levels(
     **観測できない軸（`UNOBSERVABLE_AXES`）はここでも読まない。** 木からは
     帯や文法クラスを出せる余地があるが、**出すと突合の相手が居なくなる**
     ——自己申告になり、(b) と同じになる。**この関数は突合できる軸だけを持つ。**
+
+    **【2026-08-30】`elementary` と `inverse_trig` の `band` は、突合できる側へ
+    移した。** 木は引数の値を持ち、**キー列も、引数がリテラルなら値を持つ**
+    ——`literal_arguments` がその窓である。**だから両側から読めて、突合できる。**
+    **窓を木の側で広げない**（入れ子の式まで読むと、キー側に相手が居なくなる）。
     """
     nodes = _walk(node)
     fns = {getattr(n, "fn", None) for n in nodes} - {None}
@@ -441,6 +604,19 @@ def recorded_levels(
 
     def put(scope: str, axis: str, level: str) -> None:
         out.setdefault(scope, {}).setdefault(axis, set()).add(level)
+
+    # **キー側と同じ窓**——引数がリテラルの一価関数だけ（`literal_arguments`）。
+    for node_ in nodes:
+        fn_ = getattr(node_, "fn", None)
+        if fn_ is None:
+            continue
+        value_ = _literal_value(getattr(node_, "arg", None))
+        if value_ is None:
+            continue
+        if fn_ in ELEMENTARY_FNS:
+            put("elementary", "band", elementary_band(value_))
+        if fn_ in INVERSE_TRIG_FNS:
+            put("inverse_trig", "band", inverse_trig_band(value_))
 
     for fn in sorted(fns & set(TRIG_FNS)):
         put("angle_mode", "function", str(fn))
@@ -591,9 +767,10 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
         # 言えない——**穴を可視化するのがこのモデルの値打ちである。**
         summary["unmet_real_cells"] = sorted(c.id for c in unmet if c not in from_unmeasured)
     reasons = {
-        ("elementary", "band"): "帯は引数の値で決まる。キー列からは読めない",
-        ("inverse_trig", "band"): "帯は引数の値で決まる。キー列からは読めない",
-        ("cancellation", "band"): "帯は桁落ちの強度で決まる。生成器の意図が要る",
+        ("cancellation", "band"): (
+            "強度の切れ目を仕様が決めていない。生成器の CANCELLATION_TOLERANCE から"
+            "引ける見込みだが、相殺の両辺は式なのでリテラルからは読めない"
+        ),
         ("cancellation", "shape"): "相殺の形は生成器の意図で決まる",
         ("precedence", "grammar_class"): "文法クラスは式の構造で決まる",
         ("complex", "operation"): "演算種別は式の構造で決まる",
@@ -603,6 +780,17 @@ def build_science_coverage(cases_by_shard: dict[str, list[dict]]) -> dict:
         {"cell_id": cell_id, "where": where}
         for cell_id, where in sorted(COVERED_OUTSIDE_MODEL.items())
     ]
+    # **理由の写しが本体より長生きしないようにする。** 軸を「測れる」側へ移した日に
+    # 理由だけ残ると、**参照されない説明が正しいふりをして残る**——2026-08-30 に
+    # `elementary/band` と `inverse_trig/band` で実際にそうなった。
+    # **足りない側は `reasons[...]` が KeyError で落ちる。余る側をここで落とす。**
+    declared = {(scope, axis) for scope, axes in UNOBSERVABLE_AXES.items() for axis in axes}
+    orphans = sorted(set(reasons) - declared)
+    if orphans:
+        raise LevelsDisagree(
+            "測れない軸として宣言されていないのに理由が書いてある: "
+            + " / ".join(f"{scope}/{axis}" for scope, axis in orphans)
+        )
     payload["not_measured_axes"] = [
         {"scope": scope, "axis": axis, "why": reasons[(scope, axis)]}
         for scope, axes in sorted(UNOBSERVABLE_AXES.items())

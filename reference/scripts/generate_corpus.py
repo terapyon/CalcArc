@@ -769,7 +769,9 @@ def build_family_shard(
 
 
 def build_elementary_shard(seed: int, count: int) -> dict:
-    return build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
+    shard = build_family_shard(seed, count, "elem", ELEMENTARY_FNS, ELEMENTARY_BINS)
+    _append_elementary_boundaries(shard["cases"])
+    return shard
 
 
 # 組合せ論の葉の上限。**`C(1022,511) ≈ 2.2e305` を含める必要がある**——engine の
@@ -2051,6 +2053,7 @@ def build_inverse_trig_shard(seed: int, count: int) -> dict:
     """
     shard = build_family_shard(seed, count, "itrig", INVERSE_TRIG_FNS, BINARY_OPS)
     _append_rad_boundaries(shard["cases"])
+    _append_domain_boundaries(shard["cases"])
     return shard
 
 
@@ -2091,6 +2094,76 @@ def _append_rad_boundaries(entries: list[dict]) -> None:
             "expect": {"re": float(value), "im": 0.0},
         }
         case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Rad"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+
+
+#: **`asin` / `acos` の定義域の境目**（`docs/numerical-policy.md` の
+#: 「関数の定義域」の表が `−1 ≤ x ≤ 1` と書いている）。
+#:
+#: **`atan(1)` は在ったが、`asin(1)` も `acos(1)` も 1 件も無かった**
+#: （2026-08-30 実測）。**1-way では帯が `atan` 1 つで埋まるので、
+#: 表が名指しする境目を誰も踏んでいないことが見えなかった**——
+#: **だから `band × function` を選択ペアに入れた**（`SELECTED_PAIRS`）。
+INVERSE_TRIG_BOUNDARY_FNS = ("asin", "acos")
+INVERSE_TRIG_BOUNDARY_ARGUMENT = 1
+
+
+def _append_domain_boundaries(entries: list[dict]) -> None:
+    """**`asin(1)` と `acos(1)`。** `_append_rad_boundaries` と同じく末尾に足す。
+
+    **`atan` は足さない。** `atan(1)` は既にコーパスに在り、**足せば
+    「境界を踏んだ件数」が増えるだけで、空だったセルは 1 つも埋まらない。**
+    """
+    for fn in INVERSE_TRIG_BOUNDARY_FNS:
+        node = Un(fn, Num(INVERSE_TRIG_BOUNDARY_ARGUMENT))
+        value = evaluate(node)
+        case = {
+            "kind": "value",
+            "id": f"itrig-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
+        corpus_science.assert_record_matches_observation(case, node)
+        entries.append(case)
+
+
+#: **`ln` / `log10` / `1/x` の定義域の境目は `0` である**（同じ表）。
+#:
+#: **`eˣ` を使うのは、そこだけが `0` と負を通せるから**である——
+#: `ln(0)` は `DomainError`、`1/0` は `DivisionByZero` で、**どちらも値を
+#: 返さないので値シャードには入らない**（`errors-000.json` が持っている）。
+#: **`eˣ` は全実数が定義域**なので、`e^0 = 1` と `e^-5 ≈ 0.0067` が値になる。
+#:
+#: **負のリテラルは `neg` を後ろに付けて打つ。** `Num` は非負整数なので
+#: （`corpus_expr.Num`）、**それ以外に負の葉を書く方法が無い。**
+ELEMENTARY_BOUNDARY_ARGUMENTS = (0, -5)
+
+
+def _append_elementary_boundaries(entries: list[dict]) -> None:
+    """**`e^0` と `e^-5`。** 定義域の帯の `zero` と `negative` を埋める。
+
+    **乱択では出ない。** `ELEMENTARY_FNS` と `ELEMENTARY_BINS`（`^` だけ）には
+    **負を作れる演算子が 1 つも無く**、`Num` は非負整数である。
+    **`0` は作れるが、`ln(0)` も `1/0` もエラーで捨てられる**——実測の棄却は
+    `domain 36` / `division_by_zero 4`（2026-08-30 の走行）。
+    """
+    for argument in ELEMENTARY_BOUNDARY_ARGUMENTS:
+        leaf = Num(argument) if argument >= 0 else Un("neg", Num(-argument))
+        node = Un("exp_e", leaf)
+        value = evaluate(node)
+        case = {
+            "kind": "value",
+            "id": f"elem-{len(entries):06d}",
+            "mode": "Deg",
+            "keys": to_key_sequence(node),
+            "expr": to_expr_text(node),
+            "expect": {"re": float(value), "im": 0.0},
+        }
+        case["levels"] = corpus_science.levels_as_json(corpus_science.recorded_levels(node, "Deg"))
         corpus_science.assert_record_matches_observation(case, node)
         entries.append(case)
 

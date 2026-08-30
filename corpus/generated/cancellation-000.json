@@ -68,6 +68,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -100,6 +103,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -132,6 +138,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -534,6 +543,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -614,6 +626,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -646,6 +661,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -949,6 +967,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -1071,6 +1092,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -1285,6 +1309,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -1551,6 +1578,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -1906,6 +1936,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -1938,6 +1971,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -2383,6 +2419,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -2773,6 +2812,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -3037,6 +3079,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -3159,6 +3204,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -3614,6 +3662,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -3834,6 +3885,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4010,6 +4064,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4042,6 +4099,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4120,6 +4180,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4468,6 +4531,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4543,6 +4609,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4618,6 +4687,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -4696,6 +4768,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -5169,6 +5244,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -5292,6 +5370,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -5603,6 +5684,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -5773,6 +5857,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -5990,6 +6077,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6022,6 +6112,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6054,6 +6147,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6086,6 +6182,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6160,6 +6259,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6192,6 +6294,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6494,6 +6599,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6712,6 +6820,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6880,6 +6991,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -6958,6 +7072,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7124,6 +7241,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7250,6 +7370,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7282,6 +7405,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7404,6 +7530,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7576,6 +7705,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7844,6 +7976,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -7924,6 +8059,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -8002,6 +8140,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -8220,6 +8361,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -8479,6 +8623,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -8653,6 +8800,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -8771,6 +8921,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -9605,6 +9758,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -9956,6 +10112,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -10260,6 +10419,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -10475,6 +10637,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -10638,6 +10803,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -10807,6 +10975,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -11434,6 +11605,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -11739,6 +11913,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -11907,6 +12084,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -11982,6 +12162,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -12102,6 +12285,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -12273,6 +12459,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -12305,6 +12494,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -12611,6 +12803,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -12729,6 +12924,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -13071,6 +13269,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -13511,6 +13712,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -13543,6 +13747,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -13859,6 +14066,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -13937,6 +14147,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14323,6 +14536,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14355,6 +14571,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14663,6 +14882,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14695,6 +14917,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14821,6 +15046,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -14901,6 +15129,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15202,6 +15433,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15282,6 +15516,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15405,6 +15642,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15526,6 +15766,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15604,6 +15847,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15682,6 +15928,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -15900,6 +16149,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -16115,6 +16367,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -16374,6 +16629,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -16406,6 +16664,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -16665,6 +16926,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -16962,6 +17226,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -17084,6 +17351,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -17427,6 +17697,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -17459,6 +17732,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -17537,6 +17813,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -17704,6 +17983,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18012,6 +18294,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18044,6 +18329,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18168,6 +18456,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18429,6 +18720,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18461,6 +18755,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18719,6 +19016,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18845,6 +19145,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18877,6 +19180,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -18909,6 +19215,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -19076,6 +19385,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -19154,6 +19466,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -19324,6 +19639,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -19769,6 +20087,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -19801,6 +20122,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -20244,6 +20568,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -20276,6 +20603,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -20498,6 +20828,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -20803,6 +21136,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -21509,6 +21845,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -21679,6 +22018,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -21759,6 +22101,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -22201,6 +22546,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -22233,6 +22581,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -22313,6 +22664,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -22482,6 +22836,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -22556,6 +22913,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -23139,6 +23499,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -23350,6 +23713,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -23382,6 +23748,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -23414,6 +23783,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24258,6 +24630,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24332,6 +24707,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24585,6 +24963,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24752,6 +25133,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24873,6 +25257,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -24997,6 +25384,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -25805,6 +26195,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -26375,6 +26768,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -26542,6 +26938,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -26808,6 +27207,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -27251,6 +27653,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -27747,6 +28152,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -27908,6 +28316,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -27988,6 +28399,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28020,6 +28434,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28052,6 +28469,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28262,6 +28682,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28294,6 +28717,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28691,6 +29117,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28766,6 +29195,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -28841,6 +29273,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -29236,6 +29671,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -29268,6 +29706,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -29300,6 +29741,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -29565,6 +30009,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -29874,6 +30321,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -30403,6 +30853,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -31117,6 +31570,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -31284,6 +31740,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -31362,6 +31821,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -31932,6 +32394,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32106,6 +32571,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32186,6 +32654,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32218,6 +32689,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32293,6 +32767,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32551,6 +33028,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32674,6 +33154,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32800,6 +33283,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -32832,6 +33318,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -33081,6 +33570,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -33962,6 +34454,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -34463,6 +34958,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -34495,6 +34993,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -35155,6 +35656,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -35187,6 +35691,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -36032,6 +36539,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -36237,6 +36747,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -36544,6 +37057,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -36845,6 +37361,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -36925,6 +37444,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37087,6 +37609,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37302,6 +37827,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37469,6 +37997,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37592,6 +38123,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37670,6 +38204,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37839,6 +38376,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -37960,6 +38500,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -38221,6 +38764,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -39150,6 +39696,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -39182,6 +39731,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -39847,6 +40399,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -40104,6 +40659,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -40635,6 +41193,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -41175,6 +41736,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -41207,6 +41771,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -41239,6 +41806,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -41356,6 +41926,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -42251,6 +42824,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -42331,6 +42907,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -42592,6 +43171,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -42937,6 +43519,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -43012,6 +43597,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -43354,6 +43942,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -43386,6 +43977,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -43916,6 +44510,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -44124,6 +44721,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -44252,6 +44852,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45139,6 +45742,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45171,6 +45777,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45203,6 +45812,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45413,6 +46025,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45722,6 +46337,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -45848,6 +46466,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -46058,6 +46679,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -46179,6 +46803,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -46693,6 +47320,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -46950,6 +47580,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -46982,6 +47615,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -47242,6 +47878,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -47412,6 +48051,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -47625,6 +48267,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -47932,6 +48577,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48007,6 +48655,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48039,6 +48690,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48346,6 +49000,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48515,6 +49172,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48638,6 +49298,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48670,6 +49333,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -48702,6 +49368,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49244,6 +49913,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49362,6 +50034,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49394,6 +50069,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49522,6 +50200,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49554,6 +50235,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49629,6 +50313,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49709,6 +50396,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49741,6 +50431,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -49773,6 +50466,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -50440,6 +51136,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -50601,6 +51300,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -50912,6 +51614,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -51126,6 +51831,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -51158,6 +51866,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -51733,6 +52444,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -51811,6 +52525,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -51843,6 +52560,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -52148,6 +52868,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -52688,6 +53411,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -52812,6 +53538,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -53022,6 +53751,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -53146,6 +53878,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -53588,6 +54323,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -54343,6 +55081,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -54732,6 +55473,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -54852,6 +55596,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -55064,6 +55811,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -55372,6 +56122,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -55768,6 +56521,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -55843,6 +56599,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -55918,6 +56677,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -56318,6 +57080,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -56530,6 +57295,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57064,6 +57832,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57138,6 +57909,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57218,6 +57992,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57532,6 +58309,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57612,6 +58392,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57692,6 +58475,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -57772,6 +58558,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -58081,6 +58870,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -58204,6 +58996,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -58369,6 +59164,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -58730,6 +59528,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -58762,6 +59563,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -59252,6 +60056,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -59602,6 +60409,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -59953,6 +60763,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -59985,6 +60798,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -60017,6 +60833,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -61124,6 +61943,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -61298,6 +62120,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -61330,6 +62155,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -61586,6 +62414,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62111,6 +62942,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62143,6 +62977,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62218,6 +63055,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62293,6 +63133,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62412,6 +63255,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -62583,6 +63429,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -63100,6 +63949,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -63402,6 +64254,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -63567,6 +64422,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -63736,6 +64594,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -64042,6 +64903,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -64254,6 +65118,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -64421,6 +65288,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -64453,6 +65323,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -65031,6 +65904,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -65647,6 +66523,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -65679,6 +66558,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -65757,6 +66639,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66022,6 +66907,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66150,6 +67038,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66182,6 +67073,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66397,6 +67291,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66429,6 +67326,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66461,6 +67361,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -66802,6 +67705,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67380,6 +68286,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67412,6 +68321,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67533,6 +68445,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67565,6 +68480,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67824,6 +68742,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -67950,6 +68871,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -68348,6 +69272,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -68474,6 +69401,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -68552,6 +69482,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -68770,6 +69703,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -68850,6 +69786,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -69015,6 +69954,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -69991,6 +70933,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -70162,6 +71107,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -71121,6 +72069,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -71153,6 +72104,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -71416,6 +72370,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -71494,6 +72451,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -72313,6 +73273,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -72436,6 +73399,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -72843,6 +73809,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -74097,6 +75066,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -74446,6 +75418,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -74622,6 +75597,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -74748,6 +75726,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -74963,6 +75944,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -75587,6 +76571,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -76122,6 +77109,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -76380,6 +77370,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -76767,6 +77760,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -76799,6 +77795,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -77111,6 +78110,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -77279,6 +78281,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -77809,6 +78814,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -78011,6 +79019,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -78135,6 +79146,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -78585,6 +79599,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -78755,6 +79772,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -78920,6 +79940,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -79405,6 +80428,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -79483,6 +80509,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -79735,6 +80764,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -80488,6 +81520,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -80520,6 +81555,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -80969,6 +82007,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81043,6 +82084,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81399,6 +82443,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81520,6 +82567,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81552,6 +82602,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81584,6 +82637,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -81793,6 +82849,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82142,6 +83201,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82222,6 +83284,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82254,6 +83319,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82286,6 +83354,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82318,6 +83389,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82350,6 +83424,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -82382,6 +83459,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -83364,6 +84444,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -85118,6 +86201,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -85194,6 +86280,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -85859,6 +86948,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -85891,6 +86983,9 @@
       "kind": "value",
       "levels": {
         "elementary": {
+          "band": [
+            "positive"
+          ],
           "function": [
             "ln"
           ]
@@ -85965,7 +87060,7 @@
       {
         "axis": "band",
         "scope": "cancellation",
-        "why": "\u5e2f\u306f\u6841\u843d\u3061\u306e\u5f37\u5ea6\u3067\u6c7a\u307e\u308b\u3002\u751f\u6210\u5668\u306e\u610f\u56f3\u304c\u8981\u308b"
+        "why": "\u5f37\u5ea6\u306e\u5207\u308c\u76ee\u3092\u4ed5\u69d8\u304c\u6c7a\u3081\u3066\u3044\u306a\u3044\u3002\u751f\u6210\u5668\u306e CANCELLATION_TOLERANCE \u304b\u3089\u5f15\u3051\u308b\u898b\u8fbc\u307f\u3060\u304c\u3001\u76f8\u6bba\u306e\u4e21\u8fba\u306f\u5f0f\u306a\u306e\u3067\u30ea\u30c6\u30e9\u30eb\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
       },
       {
         "axis": "operation",
@@ -85978,16 +87073,6 @@
         "why": "\u8868\u793a\u5883\u754c\u306f\u30ea\u30c6\u30e9\u30eb\u306e\u5024\u3067\u6c7a\u307e\u308b"
       },
       {
-        "axis": "band",
-        "scope": "elementary",
-        "why": "\u5e2f\u306f\u5f15\u6570\u306e\u5024\u3067\u6c7a\u307e\u308b\u3002\u30ad\u30fc\u5217\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
-      },
-      {
-        "axis": "band",
-        "scope": "inverse_trig",
-        "why": "\u5e2f\u306f\u5f15\u6570\u306e\u5024\u3067\u6c7a\u307e\u308b\u3002\u30ad\u30fc\u5217\u304b\u3089\u306f\u8aad\u3081\u306a\u3044"
-      },
-      {
         "axis": "grammar_class",
         "scope": "precedence",
         "why": "\u6587\u6cd5\u30af\u30e9\u30b9\u306f\u5f0f\u306e\u69cb\u9020\u3067\u6c7a\u307e\u308b"
@@ -85995,27 +87080,27 @@
     ],
     "requirements": [
       {
-        "covered_cells": 4,
+        "covered_cells": 7,
         "excluded_cells": 0,
         "id": "elementary/band-function/one_way",
-        "required_cells": 9,
+        "required_cells": 7,
         "scope": "elementary",
-        "status": "incomplete",
+        "status": "complete",
         "strength": "one_way",
-        "unmet_cells": 5,
-        "unmet_from_unmeasured_axes": 5,
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
         "unmet_real_cells": []
       },
       {
-        "covered_cells": 11,
+        "covered_cells": 23,
         "excluded_cells": 0,
         "id": "inverse_trig/angle_mode-band-function/one_way+pairs",
-        "required_cells": 16,
+        "required_cells": 23,
         "scope": "inverse_trig",
-        "status": "incomplete",
+        "status": "complete",
         "strength": "one_way+pairs",
-        "unmet_cells": 5,
-        "unmet_from_unmeasured_axes": 5,
+        "unmet_cells": 0,
+        "unmet_from_unmeasured_axes": 0,
         "unmet_real_cells": []
       },
       {
