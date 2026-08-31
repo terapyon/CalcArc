@@ -30,7 +30,8 @@
 
 1. **予約スロット**（`—`）——**何も無い。永久に。** `token === null`
 2. **この盤面では永久に使えない**——`÷ × − + =`（DataScale・Transfer・LLM）
-3. **いまだけ使えない**——`÷ × − + =`（Convert・Finance）／`G M K`／`DEL`／`月額`
+3. **いまだけ使えない**——`÷ × − + =`（Convert・Finance）／`G M K`／`DEL`／`月額`／`.`／
+   `( )`（Convert・Finance）
 
 **★ 同じ `÷ × − + =` が、盤面によって 2 と 3 に分かれる。** Transfer では永久に死んで
 いて、Convert では数字を打てば生き返る。**利用者から見ると、まったく同じ淡さである。**
@@ -41,7 +42,7 @@
 `5011975 Dim the seven operator keys the three panels cannot use` が意味 2 を足し、
 **意味 3 と同じ見た目にした。**
 
-### ★ 型は既に 2 つを区別していた。A1 がその区別を壊した
+### ★ 契約は 2 つを分けていた。ただし散文でだけ——A1 はそれを破った
 
 `web/src/ui/Key/Key.tsx` は **`reserved` と `disabled` を別々に受けている**:
 
@@ -56,10 +57,19 @@ const off = reserved || disabled === true;
 > 「ここに何か来る」永続的な空きで、**こちらは条件が変われば押せる**（L 設計書 §4）
 
 **この註は、いま偽である。** `isDeadOperator(token)` は**永続的な判定**なのに、
-**`disabled`（＝条件が変われば押せる、の口）に入っている**。**設計の型は 2 つを
-分けていたのに、A1 が片方へ押し込んだ**——だから見た目も 1 つになった。
+**`disabled`（＝条件が変われば押せる、の口）に入っている**。
 
-**つまりこれは「淡色に意味を足す」話ではなく、「壊れた区別を戻す」話である。**
+**ただし「型が分けていた」は言い過ぎである**（2026-08-31 のレビューで訂正）。
+**型が分けていたのは `reserved`（`token === null` から導出）と `disabled` の 2 つ**で、
+**「永続」と「一時」を分けていたのは docstring の散文だけ**である——
+**`disabled?: boolean` は、永続的な判定を入れても型では止まらない。**
+**A1 が破ったのは型ではなく、散文の契約である。**
+
+**そしてこの訂正は、§1.3 の推奨をむしろ強くする**——**散文で守れなかったのだから、
+型に上げるのが正しい帰結である。**
+
+**つまりこれは「淡色に意味を足す」話ではなく、「散文でしか守っていなかった区別を、
+型と見た目に上げる」話である。**
 
 ---
 
@@ -93,7 +103,7 @@ const off = reserved || disabled === true;
 | **(a) `opacity` の 2 値** | `0.4` と `0.25` など | **単独では採らない**——**濃さの差だけ**なので、コントラストの低い環境・色覚・屋外で消える |
 | **(b) 形を足す**（破線の枠・斜線） | 「永久」に破線の縁を付ける | **採る候補**。**濃さ以外の手がかり**になる |
 | **(c) 読み上げで分ける** | 「永久」は `disabled`、「いまだけ」は `aria-disabled` のみ | **採らない**——`aria-disabled` だけだと**押せてしまう**（`onClick` が走る）。いまは両方付けている |
-| **(d) 読み上げ名に足す** | `aria-label` に「この電卓では使えません」 | **採る候補**。**読み上げの利用者に届く唯一の手** |
+| **(d) 読み上げに足す** | **`aria-describedby`（または `title`）**に「この電卓では使えません」 | **採る候補**。**読み上げの利用者に届く唯一の手**。**★ `aria-label` に足してはいけない**——このリポジトリのテストは `getByRole("button", { name })` でキーを拾い、`vertical-slice.spec.ts:99` が「全キーに accessible name」を主張している。**名前そのものに文を足すと、名前で選ぶテストが広範に壊れ、名前の安定性も失う**（2026-08-31 のレビュー） |
 | **(e) 何もしない** | 1 段のまま | **裁定で否定済み** |
 
 **推奨（実測前）: (b) ＋ (d)。** **見える手がかりと、読み上げの手がかりを両方**置く。
@@ -101,6 +111,11 @@ const off = reserved || disabled === true;
 
 **★ 実測が要る**: **(b) の破線が 390px・67px のキーで見えるか**は、**撮って確かめる**まで
 分からない。**spec では「見えること」を条件として書き、値は plan で決める。**
+
+**★ 破線を採るなら、検査の `looks` 文字列に `border-style`（と必要なら `border-color`）を
+足すこと。** **いまの前例は `opacity` と `cursor` しか読んでいない**ので、
+**濃さを変えずに形だけで分けた場合、3 群が computed style で分かれない**——
+**「見た目で分けた」と書いてある検査が、見た目の差を見ていない**ことになる。
 
 ### §1.3 状態の型
 
@@ -110,6 +125,16 @@ const off = reserved || disabled === true;
 web/src/ui/Convert/UnitPanel.tsx:207     web/src/ui/DataScale/DataScalePanel.tsx:122
 web/src/ui/Transfer/TransferPanel.tsx:138  web/src/ui/Llm/LlmPanel.tsx:215
 web/src/ui/Finance/FinancePanel.tsx:406
+```
+
+**★ 漏斗は 3 段ある。** 盤面 → `Keypad` → `Key` で、**真ん中を忘れると boolean が
+生き残る**:
+
+```
+盤面           keyDisabled(token): boolean            5 盤面
+Keypad.tsx:20  disabled?: (token: T) => boolean       ← ここを変えないと口が塞がらない
+Keypad.tsx:77  disabled={token === null ? undefined : disabled?.(token)}
+Key.tsx:29     disabled?: boolean
 ```
 
 | 案 | 形 | 評価 |
@@ -125,27 +150,40 @@ web/src/ui/Finance/FinancePanel.tsx:406
 **`Key` の中で `reserved` として導出されている**。**§1.1 で A を採るなら、
 `reserved` と `"permanent"` が同じ見た目になるだけで、型は増えない。**
 
-### §1.4 どのキーがどちらか（実測の表）
+### §1.4 どのキーがどちらか —— **コードから導出する。打鍵は検算**
 
-**2026-08-31 の実測。plan はこの表を検査に写す。**
+**★ 「永久」の定義**: **この盤面のいかなる操作でも生き返らない。**
 
-| 盤面 | **永久に使えない** | **いまだけ使えない** |
+**この性質は測る必要がない。コードが静的に決めている**（2026-08-31 のレビューで
+訂正。**私の最初の表は 1 手プローブから起こしており、3 件を取り違えていた**）:
+
+```
+永久 = token === null（予約スロット）
+     ∪ isDeadOperator(token) を呼ぶ盤面での 7 トークン
+       DEAD_OPERATOR_TOKENS = lparen rparen div mul sub add eq（静的な表）
+       呼ぶのは DataScalePanel:123 / TransferPanel:139 / LlmPanel:216 の 3 盤面
+一時 = それ以外の keyDisabled の true（全部、状態かモードに依存する）
+```
+
+**導出した表:**
+
+| 盤面 | **永久に使えない** | **いまだけ使えない**（根拠） |
 |---|---|---|
-| Scientific | なし（25/25 が生きている） | なし |
-| Convert | `( )`※ | `÷ × − + =` |
-| Finance | `月額` `( )`※ `.`※ | `÷ 万 × 億 − + =` |
-| DataScale | `( ) ÷ × − + =` | `G M K` |
-| Transfer | `( ) ÷ × − + =` | なし |
-| LLM | （未測定※※） | `DEL` |
+| Scientific | なし（`keyDisabled` を持たない。25/25 が生きている） | なし |
+| Convert | なし | `÷ × − + = ( )`（`canPushOpenParen` / `canPushCloseParen` ほか） |
+| Finance | なし | `÷ 万 × 億 − + = ( )` ／ `月額`（`fieldEnabledIn(field, mode)`）／ `.`（`active !== "rate"`） |
+| DataScale | **`( ) ÷ × − + =`**（`isDeadOperator`） | `G M K` |
+| Transfer | **`( ) ÷ × − + =`**（`isDeadOperator`） | なし |
+| LLM | **`( ) ÷ × − + =`**（`isDeadOperator`） | `DEL` ほか |
+| 全盤面 | **`—`（`token === null`）** | —— |
 
-※ `(` は数字を打つと**新たに淡くなる**（`(` の後に `)` は打てない、等）。**つまり
-`( )` は「いまだけ」側の可能性がある**——**plan で打鍵の順を変えて測り直すこと。**
-**この表は「7 を 1 つ押した」1 手の観測**であって、全状態を覆っていない。
+**★ 1 手プローブは、この表の導出には使えない。** 「7 を 1 つ押して生き返るか」は
+**一時側を過小に数えることしかできない**——**1 手で生き返らない一時は、全部
+「永久」に化ける。** 実際に **`月額`（モード依存）・`.`（項目依存）・Convert と
+Finance の `( )`（entry 依存）の 3 件が化けていた。**
 
-※※ LLM は既定が候補面なので、数字面を出してから測り直す。
-
-**★ この不確かさは spec の欠陥ではなく、測定の範囲である。** **plan の最初の Task を
-「表を確定させる」にすること。**
+**打鍵は検算に回す**——**導出が「一時」と言ったキーが、実際に生き返る操作を
+1 つ見つける**。**見つからなければ導出が疑わしい**（あるいは到達不能な一時である）。
 
 ### §1.5 検査
 
@@ -164,9 +202,12 @@ new Set(["opacity=0.4 cursor=default"])  // 押せない
 1. **E2E で、3 つの群が互いに区別できることを主張する**——「永久」「いまだけ」
    「生きている」の 3 集合が、**計算済みスタイルで 3 つの異なる値になる**
 2. **件数を主張する**（§1.4 の表の数）。**ループが 0 周でも緑にならないように**
-3. **既存の `vertical-slice.spec.ts` の「押せないキーが押せないように見える」が
-   意味を保つか**——**2 段になっても「押せない側」は全部 `opacity < 1` なので、
-   既存の主張は成立し続けるはず**（**実測前。plan で確かめる**）
+3. **既存の「押せないように見える」の検査は 1 本だけである**——
+   `convert.spec.ts:721 shows unpressable currency keys as unpressable`。
+   **`vertical-slice.spec.ts` にその主張は 1 行も無い**（`opacity` / `disabled` /
+   「押せない」の grep が 0 件。**私が最初に書いた引用先は誤りだった**——
+   2026-08-31 のレビューで訂正）。**2 段になっても「押せない側」は全部
+   `opacity < 1` なので、この 1 本は成立し続けるはず**（**実測前。plan で確かめる**）
 4. **jsdom では見ない。** **CLAUDE.md の規律**——ロールの意味論と見た目は
    **E2E で実ブラウザに確かめさせる**
 
@@ -181,6 +222,19 @@ new Set(["opacity=0.4 cursor=default"])  // 押せない
 
 **撮ったらプレビューを落とす**（`ss -lptn 'sport = :4179'` で pid を特定して kill。
 **`pkill -f "vite preview"` では落ちなかった**——2026-08-31 に実測）。
+
+**★ before は `/tmp` に在る。この機械は 2026-08-30〜31 に 2 回不正常停止しており、
+再起動で消える。** **plan の最初に「before を撮り直せる手順」を置くこと**——
+**画そのものを repo に置くかどうかは別の判断**（**リポジトリに PNG を入れる前例が
+無い**）だが、**「同じ画角で撮り直せる手順」は文書に要る**:
+
+```
+cd web && pnpm exec vite build && pnpm preview &      # 4179
+390×844、6 route（#scientific #convert/length #scale/data-scale
+                  #scale/llm #scale/transfer #finance）
+display-main が出るまで待ってから撮る
+ss -lptn 'sport = :4179' の pid を kill
+```
 
 ---
 
@@ -218,6 +272,7 @@ new Set(["opacity=0.4 cursor=default"])  // 押せない
 |---|---|
 | CSS（`Key.module.css`） | **小**——段を 1 つ足す |
 | `Key.tsx` の props | **小**——`disabled?: boolean` → `off?: "permanent" \| "transient"` |
+| **`Keypad.tsx` の受け渡し** | **小**——`disabled?: (token: T) => boolean` も同じ形に。**ここを忘れると boolean が生き残る** |
 | 5 盤面の `keyDisabled` | **中**——署名が変わり、`isDeadOperator` の呼び先が `"permanent"` に移る |
 | 検査 | **中**——E2E を 2 段に広げ、盤面ごとの表を写す |
 | 撮影 | **小**——before は撮ってある |
