@@ -23,61 +23,59 @@
 迷ったらユーザーに聞く。代理承認者は居ない。
 
 
-## 1. いまの状態（2026-08-30 深夜、PR #96 マージ後）
+## 1. いまの状態（2026-08-31）
 
 | | |
 |---|---|
-| `origin/main` | **`186d4d1`**（PR #96。**第 2 段階 `scientific-v1` が入った**） |
-| タグ | **`v0.6.0` まで**。**#96 は未リリース** |
-| 私の枝 | **`fix/scientific-followups`（`b4b10f8`、3 コミット、未 push）**。#96 の後始末と、レビューで出た文言・材料の直し |
-| 作業台 | **きれい**（追跡下の未コミット 0） |
+| `origin/main` | **`6b39dff`**（PR #105 まで。**タグは `v0.6.0` まで**——#96 以降は未リリース） |
+| 私の枝 | **`docs/heavy-ui-confirmed`**（`origin/main` から。未 push） |
+| 作業台 | **きれい**（`git update-index --really-refresh` 済み・全ファイル照合一致） |
 
-**★ `main` へは降りられない。** **この 2 つのディレクトリは同じリポジトリの
-worktree** であり（`git worktree list` が両方から同じ 2 行を出す）、
-**`main` は `/home/terapyon/dev/CalcArc`（実装側）がチェックアウトしている。**
-**私が `git checkout main` を打てば git が拒む。**
+**★ この作業台は、走行が落ち、ファイルが化ける。** 2026-08-30 に
+**Segmentation fault 9 回**（`pnpm heavy` 5・`heavy:ui` 3・`vitest` 1〈伝聞〉）、
+**ファイルのビット化け 3 バイト**（すべて単一ビット反転。`git status` は
+「変更なし」と言い続けた）、**`cargo clippy` の ICE 1 件**〈伝聞〉。
 
-**降りる必要も無い**——`origin/main` は `186d4d1` で、**そこから 3 本積んだ
-`fix/scientific-followups` に居る**（`docs/coverage-model-scientific-plan` は
-#96 でマージ済みなので、**同じ名前に 2 本目を積まない**ために改名した。
-**remote の古い枝は触っていない**——ユーザーがまとめて消す分である）。
+**判定は付いている**——**同じ `heavy:ui` が GitHub の runner では
+37 passed / 11.9 分で完走した**（走行 `33317021920`）。**コードでもテストでもない。**
 
-**★ 手元の `backup/*` 2 本は削除しない。** `merge-base --is-ancestor` で
-確かめたところ、**どちらも未マージ**である
-（`backup/publish-local-20260817` は 17 件、`backup/settings-before-rebase` は
-16 件が `origin/main` に無い）。**「入り済みの枝を削除」の対象ではない。**
+**手当て:**
 
-**★ この作業台は、作業ツリーのファイルが化ける。** 2026-08-30 に
-**3 バイト、すべて単一ビットの反転**（`git status` も `json.load()` も
-見落とした）。**ユーザーの判断でメモリ検査は行っていない**——
-**「このマシンではまれに起きる。memtest では出ない」**とのこと。
-**手当ては `tools/verified-run.mjs`**（走行の前後で全ファイルを index と
-照合する）で、**長い走行は `heavy:verified` / `heavy:ui:verified` で打つ。**
+- **長い走行は GitHub へ逃がす**（`Heavy corpus` を手動起動。**この作業台で
+  `heavy:ui` を回さない**）
+- **`git status` を健全性の根拠にしない**——**`node tools/verified-run.mjs`**
+  で全ファイルを index と照合する（走行の前後に挟むなら
+  `pnpm heavy:verified` / `heavy:ui:verified`）
+- **メモリ検査はユーザーの判断で行っていない**（「まれに起きる。memtest では
+  出ない」）。**EDAC にメモリコントローラが 1 つも登録されていない**ので、
+  **「ログに何も出ていない」は安心材料にならない**
+
 詳細は [known-flaky-tests.md](known-flaky-tests.md)。
 
 ## 2. 次にやること
 
-**★ `heavy:ui` の予測が未確認のまま残っている。** **次のリリース走行
-（`release.yml:84` → `heavy-corpus.yml:191`）が回すので、そのとき突き合わせる**
-——**テスト 37 / 打鍵 1,279 / 指摘 0 がそのままで、総押下だけが動いているはず**
-である。導出と数は `docs/corpus-measurements.md` の「#96 のあとの直し」に在る。
-**PR の CI は `heavy:ui` を回さない**（`ci.yml` の heavy ジョブは install /
-typecheck / lint / vitest だけ。実測）。
+**割り当てられた仕事は無い。**
 
-**材料 3 つのうち 2 つは片付いた**（`mild` の代表を足した／仕様に
-「1 点では名指しできない」理由を書いた）。**残るのは 1 つ:**
+**閉じた宿題:**
 
-**`precedence/grammar_class` にキー列の parser を書くか**（ユーザー裁定
-2026-08-30: **いまは書かない。文言の訂正だけ**）。**書く判断をする人が最初に
-読む事実が 2 つある:**
+- **`heavy:ui` の予測は突き合わせ済み**（2026-08-31）——**4 項目すべて的中**
+  （テスト 37 / 打鍵 1,279 / 指摘 0 / 押下は 19,965 → 19,960 で**動いた**）
+- **`convert` の `Overflow`** は **2026-08-31 に「記録のみ」と裁定**された
+  ——**製品も golden も参照も変えない。** **意図した仕様ではなく、未修整の
+  既知の限界である。** 記録は 3 か所（`numerical-policy.md` /
+  `cases.py` の `CONVERT_INPUTS` の直前 / `corpus-measurements.md`）
+- **`convert` の丸めの半端**は「作れるが足す価値は低い」で閉じた
 
-- **`cancellation/shape` より強い突合になりえる**——あちらは観測側も記録側も
-  同じ `stratum` を読むので**定義上一致する**が、こちらは**木から導くのと
-  キー列を優先順位で読み直すのが本当に別経路**である
-- **`power_over_mul` は構造的に作れない**——`corpus_expr.BINARY_OPS` に `^` が
-  無く、precedence の 2,000 件に `pow` は 1 件も無い（実測）。**測れるように
-  した瞬間、本当の穴になる**。埋めるには `^` を足すことになり、**乱択の draw が
-  動いて 2,000 件が総入れ替え**である
+**次に誰かが触るなら、材料はこれだけ残っている:**
+
+1. **`precedence/grammar_class` にキー列の parser を書くか**（裁定 2026-08-30:
+   **いまは書かない**）。**書く人が最初に読む事実 2 つ**——**`cancellation/shape`
+   より強い突合になりえる**／**`power_over_mul` は `BINARY_OPS` に `^` が無く
+   構造的に作れない**（2,000 件に `pow` 0 件）
+2. **`convert` の `Overflow` を直すか**（上の裁定は「いまは直さない」）。
+   **探索は `reference/scripts/find_convert_overflow.py` に上限つきで在る**
+3. **第 3 段階の試験空間モデルをどこへ置くか**——**`convert` は候補から
+   外してよい**（軸が 2 本、単位はすでに満点。産物が当てる前に分かっている）
 
 ## 3. これまで（1 行ずつ）
 

@@ -320,6 +320,27 @@ CPU                            → AMD Ryzen 9 5950X 16-Core
 厳密には空ではない**——sysfs の定型ファイル 3 つが在る。**`mcN` が
 無い、が正確な言い方である。** 結論は変わらない。）
 
+### ★ 判定が付いた（2026-08-31）——**コードでもテストでもない。この機械である**
+
+**同じ `pnpm heavy:ui` が、GitHub の runner で完走した:**
+
+```
+走行 33317021920（workflow_dispatch、main の 87502d1、2026-08-30 14:30 UTC）
+  Version numbers agree   success
+  Corpus vs reference     success（35 分 19 秒）
+    pnpm heavy       250 passed
+    pnpm heavy:power 21 分
+    ★ pnpm heavy:ui  37 passed（11.9 分）
+```
+
+**この作業台では 3 回とも Segmentation fault だった**（12 分 × 3 を捨てた）。
+**同じコミット・同じコーパスで、健全な runner は 1 回で通る。**
+
+**だから、この節に並べた 9 回の segfault は、この機械の問題である。**
+**次に赤を見た人へ: コードを疑う前に、まず走行を GitHub へ逃がしてください**
+——`Heavy corpus` を手動起動すれば、`heavy` / `heavy:power` / `heavy:ui` が
+健全な runner で回ります。
+
 ### 次に踏んだ人へ
 
 **まずメモリ検査（`memtest86+` など）を通してください。** それまで、
