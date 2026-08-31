@@ -117,7 +117,8 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
   `.github/actions/setup-web/action.yml` の `node-version`。
   **系列（`22`）で書かない**——「そのときの最新の 22.x」が入るので、走行ごとに
   違う node で回りうる。**4 か所とも同じ綴りにしてある**ので
-  `git grep 22.23.2` で照合できる（`.nvmrc` に `v` を付けないのはそのため）。
+  `git grep 24.19.0` で照合できる（**この綴りも版を上げるときに直す**。
+  `.nvmrc` に `v` を付けないのはそのため）。
   **`engines` だけでは止まらない**——版が違っても `pnpm install` は警告して
   exit 0 になる（実測）。止めるのは `web/.npmrc` と `heavy/.npmrc` の
   `engine-strict=true` で、これがあると `ERR_PNPM_UNSUPPORTED_ENGINE` で落ちる。

@@ -4,7 +4,7 @@
   "type": "module",
   "version": "0.0.0",
   "packageManager": "pnpm@10.32.1",
-  "engines": { "node": "22.23.2" },
+  "engines": { "node": "24.19.0" },
   "scripts": {
     "heavy": "pnpm --dir ../web wasm && playwright test --config playwright.corpus.config.ts",
     "heavy:ui": "pnpm --dir ../web wasm && playwright test --config playwright.ui.config.ts",
