@@ -1,7 +1,7 @@
 import { type CSSProperties, useState } from "react";
 import { Key } from "../Key/Key";
 import styles from "./Keypad.module.css";
-import type { KeypadSection } from "./types";
+import type { KeypadSection, Offness } from "./types";
 
 export interface KeypadProps<T> {
   /** 区画ごとのキー集合。列数と行の高さは区画が持つ(S1 設計書 §6)。 */
@@ -14,18 +14,17 @@ export interface KeypadProps<T> {
    */
   pressed?: (token: T) => boolean | undefined;
   /**
-   * 今は押せない(状態依存)。省略時はすべて押せる。**予約スロットとは
-   * 由来が違う**——あちらは「ここに何か来る」永続的な空きである。
+   * 押せない理由。**押せるなら `null` を返す。** 省略時はすべて押せる。
+   *
+   * **`boolean` ではない**——「この盤面では永久に押せない」と「いまだけ
+   * 押せない」を利用者に別の絵で見せるため（設計書
+   * `2026-08-31-two-shades-of-off.md`）。**予約スロットは `Key` の中で
+   * `"permanent"` に合流する**ので、ここでは扱わない。
    */
-  disabled?: (token: T) => boolean;
+  off?: (token: T) => Offness | null;
 }
 
-export function Keypad<T>({
-  sections,
-  onPress,
-  pressed,
-  disabled,
-}: KeypadProps<T>) {
+export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
   // Shift は UI 層の状態である。engine には面の概念を持ち込まない
   // (S1 設計書 §3)。engine から見れば従来どおり単一トークンの列である。
   const [shifted, setShifted] = useState(false);
@@ -74,7 +73,7 @@ export function Keypad<T>({
                 ariaLabel={face.ariaLabel}
                 variant={face.variant}
                 pressed={token === null ? undefined : pressed?.(token)}
-                disabled={token === null ? undefined : disabled?.(token)}
+                off={token === null ? undefined : (off?.(token) ?? undefined)}
                 onPress={(sent) => {
                   onPress(sent);
                   // ワンショット(S1 設計書 §3): 1 キーで第 1 面へ戻る。

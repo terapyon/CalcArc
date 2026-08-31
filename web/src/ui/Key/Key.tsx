@@ -1,3 +1,4 @@
+import type { Offness } from "../Keypad/types";
 import styles from "./Key.module.css";
 
 export type KeyVariant = "digit" | "operator" | "function" | "danger";
@@ -22,11 +23,18 @@ export interface KeyProps<T> {
    */
   pressed?: boolean;
   /**
-   * 今は押せない(状態依存)。**予約スロットとは由来が違う**——あちらは
-   * 「ここに何か来る」永続的な空きで、こちらは条件が変われば押せる
-   * (L 設計書 §4)。
+   * 押せない理由。**押せるなら渡さない（`undefined`）。**
+   *
+   * **`boolean` ではない。** 0.5.0 で「この盤面では永久に押せない」を
+   * `disabled?: boolean` へ入れたために、**散文でしか守っていなかった
+   * 「条件が変われば押せる」という契約が黙って破れた**（設計書
+   * `2026-08-31-two-shades-of-off.md` §0）。**型で塞いである。**
+   *
+   * **予約スロット（`token === null`）は `"permanent"` に合流する**
+   * ——利用者にとって、予約スロットと死んだ演算子の違いは意味を持たない
+   * （ユーザー裁定 2026-08-31）。
    */
-  disabled?: boolean;
+  off?: Offness;
   onPress: (token: T) => void;
   /**
    * トークンを送らない特別なキー(Shift)。渡されたらこちらが優先され、
@@ -41,13 +49,15 @@ export function Key<T>({
   ariaLabel,
   variant = "digit",
   pressed,
-  disabled,
+  off: offReason,
   onPress,
   onActivate,
 }: KeyProps<T>) {
   // 面を切り替えるキーは token を持たないが、押せる。
   const reserved = token === null && !onActivate;
-  const off = reserved || disabled === true;
+  // **予約スロットは永久側**（設計書 §1.1 の裁定）。
+  const offness: Offness | undefined = reserved ? "permanent" : offReason;
+  const off = offness !== undefined;
   return (
     <button
       type="button"

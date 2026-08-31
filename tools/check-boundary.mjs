@@ -102,6 +102,45 @@ export function findUiLeakIntoCalc(files) {
 }
 
 /**
+ * **`disabled` という prop 名が `Key` / `Keypad` に無いこと。**
+ *
+ * 0.5.0 で「この盤面では永久に押せない」を `disabled?: boolean`
+ * （＝**条件が変われば押せる**、の口）へ入れたために、
+ * **散文でしか守っていなかった契約が黙って破れた**（設計書
+ * `2026-08-31-two-shades-of-off.md` §0）。**口そのものを塞いである**ので、
+ * **戻ってきたら赤くする。**
+ *
+ * **見るのは prop の宣言と受け渡しだけ**である——`<button disabled={off}>` は
+ * DOM の属性なので残る。**`disabled?: boolean | undefined` のような綴り替えで
+ * 素通りしないよう、型ではなく名前を見る。**
+ *
+ * @param {SourceFile[]} files
+ * @returns {Violation[]}
+ */
+export function findDisabledPropComingBack(files) {
+  /** @type {Violation[]} */
+  const found = [];
+  for (const file of files) {
+    if (
+      file.path !== "web/src/ui/Key/Key.tsx" &&
+      file.path !== "web/src/ui/Keypad/Keypad.tsx"
+    ) {
+      continue;
+    }
+    file.text.split("\n").forEach((text, index) => {
+      // **見るのは prop の宣言だけ**——`disabled?:` / `disabled:`。
+      // **`<button disabled={...}>` は DOM の属性なので対象外**である
+      // （`aria-disabled` も同じ）。**JSX は複数行に割れるので、
+      // 「`<button` を含む行を除く」では足りない**（実測 2026-08-31）。
+      if (/^\s*disabled\s*\??\s*:/.test(text)) {
+        found.push({ path: file.path, line: index + 1, text: text.trim() });
+      }
+    });
+  }
+  return found;
+}
+
+/**
  * 追跡されている `web/` のファイルを読む。**`git ls-files` を使う**
  * ——生成物(`web/src/wasm/`・`node_modules`・`dist`)を歩かないため。
  *
@@ -147,15 +186,17 @@ function main() {
   const files = readWebFiles();
   const heavy = findBoundaryViolations(files);
   const ui = findUiLeakIntoCalc(files);
+  const back = findDisabledPropComingBack(files);
   // **両方を印字してから落ちる。** 片方で `exit` すると、2 つ壊れている日に
   // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
   if (heavy.length > 0) report("web が重量級を知っている", heavy);
   if (ui.length > 0) report("web/src/calc が UI Framework を知っている", ui);
-  if (heavy.length > 0 || ui.length > 0) {
+  if (back.length > 0) report("Key / Keypad に disabled の口が戻っている", back);
+  if (heavy.length > 0 || ui.length > 0 || back.length > 0) {
     process.exit(1);
   }
   console.log(
-    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件",
+    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件",
   );
 }
 

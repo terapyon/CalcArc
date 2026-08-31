@@ -35,7 +35,7 @@ import {
   type TransferKeyToken,
   type TransferValueField,
 } from "../Keypad/transfer";
-import type { KeypadSection } from "../Keypad/types";
+import type { KeypadSection, Offness } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
 import styles from "./TransferPanel.module.css";
@@ -135,9 +135,10 @@ export function TransferPanel() {
    * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
    * 無く、**何をしても押せるようにならない**。DEL の「いまは押せない」とは
    * 意味が違う(`Keypad/operators.ts` に理由がある)。 */
-  function keyDisabled(token: TransferKeyToken): boolean {
-    if (isDeadOperator(token)) return true;
-    return token === "del" && !numberField;
+  function keyOff(token: TransferKeyToken): Offness | null {
+    // **この盤面は式を組まない**ので、演算子はいかなる操作でも生き返らない。
+    if (isDeadOperator(token)) return "permanent";
+    return token === "del" && !numberField ? "transient" : null;
   }
 
   /** トグルとして押されているキー。数字は undefined(トグルではない)。 */
@@ -292,7 +293,7 @@ export function TransferPanel() {
         sections={sectionsFor()}
         onPress={press}
         pressed={keyPressed}
-        disabled={keyDisabled}
+        off={keyOff}
       />
       {ok && (
         <div className={styles.result} data-testid="transfer-result">
