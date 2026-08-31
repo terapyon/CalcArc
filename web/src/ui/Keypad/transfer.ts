@@ -128,12 +128,14 @@ export const TRANSFER_FIELD_SECTION: KeypadSection<TransferKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 4,
   height: "half",
-  keys: TRANSFER_FIELD_ORDER.map((field) => ({
-    token: `field:${field}` as TransferKeyToken,
-    label: TRANSFER_FIELD_LABELS[field],
-    ariaLabel: FIELD_ARIA_LABELS[field],
-    variant: "function" as const,
-  })),
+  keys: TRANSFER_FIELD_ORDER.map(
+    (field): KeyDef<TransferKeyToken> => ({
+      token: `field:${field}`,
+      label: TRANSFER_FIELD_LABELS[field],
+      ariaLabel: FIELD_ARIA_LABELS[field],
+      variant: "function" as const,
+    }),
+  ),
 };
 
 /**
@@ -177,23 +179,27 @@ function buildUnitFace(
 export const BANDWIDTH_UNIT_SECTION: KeypadSection<TransferKeyToken> =
   buildUnitFace(
     "帯域幅の単位のキー",
-    BANDWIDTH_UNIT_TOKENS.map((token) => ({
-      token: `bandwidth:${token}` as TransferKeyToken,
-      label: BANDWIDTH_UNIT_LABELS[token],
-      ariaLabel: BANDWIDTH_UNIT_LABELS[token],
-      variant: "function" as const,
-    })),
+    BANDWIDTH_UNIT_TOKENS.map(
+      (token): KeyDef<TransferKeyToken> => ({
+        token: `bandwidth:${token}`,
+        label: BANDWIDTH_UNIT_LABELS[token],
+        ariaLabel: BANDWIDTH_UNIT_LABELS[token],
+        variant: "function" as const,
+      }),
+    ),
   );
 
 export const DURATION_UNIT_SECTION: KeypadSection<TransferKeyToken> =
   buildUnitFace(
     "時間の単位のキー",
-    DURATION_UNIT_TOKENS.map((token) => ({
-      token: `duration:${token}` as TransferKeyToken,
-      label: DURATION_UNIT_LABELS[token],
-      ariaLabel: DURATION_UNIT_LABELS[token],
-      variant: "function" as const,
-    })),
+    DURATION_UNIT_TOKENS.map(
+      (token): KeyDef<TransferKeyToken> => ({
+        token: `duration:${token}`,
+        label: DURATION_UNIT_LABELS[token],
+        ariaLabel: DURATION_UNIT_LABELS[token],
+        variant: "function" as const,
+      }),
+    ),
   );
 
 /**
