@@ -14,7 +14,7 @@ runs:
         # 最新の 22.x」が入るので、走行ごとに違う node で回りうる。
         # **`web/package.json` と `heavy/package.json` の `engines` と同じ版**
         # にすること——片方だけ動かすと `pnpm install` がここで落ちる。
-        node-version: 22.23.2
+        node-version: 24.19.0
         cache: pnpm
         cache-dependency-path: web/pnpm-lock.yaml
     - run: pnpm install --frozen-lockfile
