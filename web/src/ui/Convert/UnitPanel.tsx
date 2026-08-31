@@ -414,6 +414,20 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         pressed={keyPressed}
         disabled={keyDisabled}
       />
+      {/* **この行は Readout の再掲ではない**（0.3.x triage C9、2026-08-30 に測って
+          閉じた）。同じ数は Readout にも出るが、**両辺が `=` を挟んで隣り合うのは
+          ここだけ**である——主表示は着地の側（`-40 °F`）しか持たず、打った側は
+          `display-entries-done` に `値 -40` `変換元 °C` と**別々の項目**として並ぶ。
+
+          **温度の不動点がその実例。** `-40 °C = -40 °F` は「両辺が同じ数である」
+          ことが主張であり、**離して置くと読めない**——e2e の
+          `types the fixed point of the two temperature scales` が、
+          **この 1 行に対して**主張している。
+
+          **結果ブロックを持つ 4 盤面は、どれも「主表示に出せないもの」を出す**
+          ——Data Scale と転送は 10 進/2 進の内訳、LLM は 3 組の内訳、
+          ここは式である。**Convert に内訳は無いので、消すとこの盤面だけ
+          結果ブロックが無くなる。** */}
       {ok !== null && (
         <p className={styles.result} data-testid="convert-result">
           {`${typed} ${FACE_LABELS[from]} = ${ok.text} ${FACE_LABELS[to]}`}
