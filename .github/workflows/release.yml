@@ -56,7 +56,7 @@ jobs:
             exit 1
           fi
           echo "tag $GITHUB_REF_NAME is on main"
-      - name: The five places must agree, and match the tag
+      - name: The six places must agree, and match the tag
         # タグから走ったときだけタグ名と照合する。`workflow_dispatch` は
         # ブランチからも走せるので、渡すと無意味な赤になる。
         env:

@@ -122,10 +122,11 @@ cd reference && uv run python scripts/generate.py
 `crates/calcarc-core` の数値を変更したときは期待値の再生成が必要になる。
 **再生成せずに `testdata/` を手で書き換えないこと。**
 
-版数を上げるときは **5 箇所**を同じ値にする。`Cargo.toml`、`web/package.json`、
+版数を上げるときは **6 箇所**を同じ値にする。`Cargo.toml`、`Cargo.lock`
+（`calcarc-core` と `calcarc-wasm` の 2 つ）、`web/package.json`、
 `README.md` の「現在の版」、`README.en.md` の「Current version」、
-`CHANGELOG.md` の見出し。`pnpm check:version` が 5 箇所すべてを検査する。
-**タグを打つときはさらに、4 つの版数がタグ名と一致し、CHANGELOG の見出しに
+`CHANGELOG.md` の見出し。`pnpm check:version` が 6 箇所すべてを検査する。
+**タグを打つときはさらに、版数がタグ名と一致し、CHANGELOG の見出しに
 日付が入っていることを CI が確かめる。**
 
 詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) と
