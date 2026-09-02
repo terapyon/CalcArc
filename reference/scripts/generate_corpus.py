@@ -839,7 +839,67 @@ def _typed_exponent(rng: random.Random) -> Typed:
     return Typed(keys, text)
 
 
+#: **乱択が引く葉の形。** **2026-09-02 に足した 2 つはここに入れない**
+#: ——`rng.randrange(len(TYPED_FORMS))` の値が変わり、**2000 件すべてが
+#: 入れ替わる**。**このプロジェクトは golden の差分を人が読んで判断している**
+#: ので、**新しい形はシャードの末尾に足す**（Task 8 で採ったのと同じ道）。
 TYPED_FORMS = (_typed_integer, _typed_decimal, _typed_zeros3, _typed_exponent)
+
+#: **末尾に足す打ち方**（2026-09-02）。**どちらも「盤面は打てるのに
+#: コーパスに 1 件も無い」形だった**（実測）。
+#:
+#: **① 整数の仮数 + 指数**（`15 exp 3`）——`_typed_exponent` は**必ず `dot` を
+#: 打つ**ので、この形は 1 件も無かった（指数を含む 924 件すべてが小数点つきの
+#: 仮数）。**盤面は打てる**——`engine/state.rs` の `push_exponent` は
+#: **60 進の段が途中のときしか拒まず、小数点を要求しない**。
+#:
+#: **② 指数入力の直後の `+/-`**（`84.9 exp 1 neg` → `84.9e-1` = 8.49）
+#: ——**`neg` の意味が変わる場所**である（値ではなく**指数の符号**を反転。
+#: 実際の電卓の慣行で、engine が正しい）。**`_typed_node` が
+#: `Un("neg", <指数の葉>)` を避けていた**ため 1 件も無かった。
+#:
+#: **★ 葉として作れば、避ける必要が無い。** `Un("neg", …)` で包むと参照側が
+#: 「値の符号を反転」と読むが、**打鍵の列そのものを持つ `Typed` なら、
+#: text が最初から `84.9e-1` である。**
+#:
+#: **独立: 別手順。** 値は `mp.mpf` が十進の文字列から読む。engine は
+#: **仮数と指数を別の欄に持って組み直す**（`engine/state.rs` の `Exponent`）
+#: ——**経路が違う。** **符号の意味を決めているのは text の綴り**であって、
+#: engine の状態機械を写してはいない。
+#:
+#: **1 形につき 3 件。** 1 件では「たまたま通った」と区別が付かず、
+#: 多すぎると乱択の 2000 件に埋もれる。**乱数を使わない**——
+#: **末尾に足すものは固定にする**（`DISPLAY_EDGE_LITERALS` と同じ流儀）。
+TYPED_APPENDED = (
+    # 整数の仮数 + 指数（`15 exp 3`）。**小数点を打たない指数入力。**
+    (("1", "5", "exp", "3"), "15e3"),
+    (("7", "exp", "1"), "7e1"),
+    (("9", "9", "9", "exp", "6"), "999e6"),
+    # 指数の直後の `+/-`。**値ではなく指数の符号が変わる。**
+    (("8", "4", "dot", "9", "exp", "1", "neg"), "84.9e-1"),
+    (("1", "dot", "0", "exp", "6", "neg"), "1.0e-6"),
+    (("2", "5", "dot", "5", "exp", "3", "neg"), "25.5e-3"),
+)
+
+
+def _append_typed_forms(entries: list[dict]) -> None:
+    """**乱択のループの後ろに足す。draw の列に触らない。**
+
+    **`TYPED_FORMS` に入れると 2000 件が総入れ替えになる**ので、ここに置く。
+    """
+    for keys, text in TYPED_APPENDED:
+        node = Typed(keys, text)
+        value = evaluate(node)
+        entries.append(
+            {
+                "kind": "value",
+                "id": f"typed-{len(entries):06d}",
+                "mode": "Deg",
+                "keys": to_key_sequence(node),
+                "expr": to_expr_text(node),
+                "expect": {"re": float(value), "im": 0.0},
+            }
+        )
 
 
 def _typed_leaf(rng: random.Random) -> Typed:
@@ -864,8 +924,18 @@ def _typed_node(rng: random.Random, depth: int) -> Node:
         # (2026-08-17、68/2000 が不一致になって発覚。壊れていたのは生成器)。
         #
         # ここで避けるのは**生成器が間違った期待値を作らないため**であって、
-        # engine の挙動を隠すためではない。**指数の符号を変える打ち方そのものは
-        # まだ検証していない**——レポートがそう書く。
+        # engine の挙動を隠すためではない。
+        #
+        # **【訂正 2026-09-02】ここには「指数の符号を変える打ち方そのものは
+        # まだ検証していない——レポートがそう書く」と書いてあった。もう偽である。**
+        # `_typed_negative_exponent` が**葉として**その打鍵を作るようになった
+        # （`84.9 exp 1 neg` → `84.9e-1`）——**包むのではなく葉にすれば、
+        # 参照側は text をそのまま読むので誤った期待値にならない。**
+        #
+        # **それでもここの回避は残す。** 避けているのは**葉の上にさらに `neg` を
+        # 重ねる形**で、そちらは指数の符号を**もう一度**反転する
+        # （`84.9e-1` に `neg` で `84.9e+1`）——**包む形では依然として
+        # 参照側が「値の符号」と読む。**
         if fn == "neg" and _is_exponent_entry(arg):
             arg = _typed_decimal(rng)
         return Un(fn, arg)
@@ -946,6 +1016,7 @@ def build_typed_shard(seed: int, count: int) -> dict:
                 "expect": {"re": float(value), "im": 0.0},
             }
         )
+    _append_typed_forms(entries)
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),

@@ -508,6 +508,369 @@
         "weight_precision": "fp16"
       },
       "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "64.0 MiB",
+          "bytes": "67108864",
+          "bytes_grouped": "67,108,864",
+          "decimal": "67.1 MB"
+        },
+        "total": {
+          "binary": "3.8 GiB",
+          "bytes": "4067108864",
+          "bytes_grouped": "4,067,108,864",
+          "decimal": "4.1 GB"
+        },
+        "weight": {
+          "binary": "3.7 GiB",
+          "bytes": "4000000000",
+          "bytes_grouped": "4,000,000,000",
+          "decimal": "4.0 GB"
+        }
+      },
+      "id": "llm/1000000000xfp32/32x2x64x2048xfp32",
+      "input": {
+        "context_length": "2048",
+        "head_dim": "64",
+        "kv_heads": "2",
+        "kv_precision": "fp32",
+        "layers": "32",
+        "parameters": "1000000000",
+        "weight_precision": "fp32"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "640.0 MiB",
+          "bytes": "671088640",
+          "bytes_grouped": "671,088,640",
+          "decimal": "671.1 MB"
+        },
+        "total": {
+          "binary": "11.8 GiB",
+          "bytes": "12671088640",
+          "bytes_grouped": "12,671,088,640",
+          "decimal": "12.7 GB"
+        },
+        "weight": {
+          "binary": "11.2 GiB",
+          "bytes": "12000000000",
+          "bytes_grouped": "12,000,000,000",
+          "decimal": "12.0 GB"
+        }
+      },
+      "id": "llm/3000000000xfp32/32x4x80x16384xbf16",
+      "input": {
+        "context_length": "16384",
+        "head_dim": "80",
+        "kv_heads": "4",
+        "kv_precision": "bf16",
+        "layers": "32",
+        "parameters": "3000000000",
+        "weight_precision": "fp32"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "6.0 GiB",
+          "bytes": "6442450944",
+          "bytes_grouped": "6,442,450,944",
+          "decimal": "6.4 GB"
+        },
+        "total": {
+          "binary": "32.1 GiB",
+          "bytes": "34442450944",
+          "bytes_grouped": "34,442,450,944",
+          "decimal": "34.4 GB"
+        },
+        "weight": {
+          "binary": "26.1 GiB",
+          "bytes": "28000000000",
+          "bytes_grouped": "28,000,000,000",
+          "decimal": "28.0 GB"
+        }
+      },
+      "id": "llm/7000000000xfp32/32x32x96x32768xint8",
+      "input": {
+        "context_length": "32768",
+        "head_dim": "96",
+        "kv_heads": "32",
+        "kv_precision": "int8",
+        "layers": "32",
+        "parameters": "7000000000",
+        "weight_precision": "fp32"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "64.0 GiB",
+          "bytes": "68719476736",
+          "bytes_grouped": "68,719,476,736",
+          "decimal": "68.7 GB"
+        },
+        "total": {
+          "binary": "90.1 GiB",
+          "bytes": "96719476736",
+          "bytes_grouped": "96,719,476,736",
+          "decimal": "96.7 GB"
+        },
+        "weight": {
+          "binary": "26.1 GiB",
+          "bytes": "28000000000",
+          "bytes_grouped": "28,000,000,000",
+          "decimal": "28.0 GB"
+        }
+      },
+      "id": "llm/14000000000xfp16/32x8x256x131072xfp32",
+      "input": {
+        "context_length": "131072",
+        "head_dim": "256",
+        "kv_heads": "8",
+        "kv_precision": "fp32",
+        "layers": "32",
+        "parameters": "14000000000",
+        "weight_precision": "fp16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "256.0 GiB",
+          "bytes": "274877906944",
+          "bytes_grouped": "274,877,906,944",
+          "decimal": "274.9 GB"
+        },
+        "total": {
+          "binary": "315.6 GiB",
+          "bytes": "338877906944",
+          "bytes_grouped": "338,877,906,944",
+          "decimal": "338.9 GB"
+        },
+        "weight": {
+          "binary": "59.6 GiB",
+          "bytes": "64000000000",
+          "bytes_grouped": "64,000,000,000",
+          "decimal": "64.0 GB"
+        }
+      },
+      "id": "llm/32000000000xfp16/32x16x128x1048576xbf16",
+      "input": {
+        "context_length": "1048576",
+        "head_dim": "128",
+        "kv_heads": "16",
+        "kv_precision": "bf16",
+        "layers": "32",
+        "parameters": "32000000000",
+        "weight_precision": "fp16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "8.0 MiB",
+          "bytes": "8388608",
+          "bytes_grouped": "8,388,608",
+          "decimal": "8.4 MB"
+        },
+        "total": {
+          "binary": "130.4 GiB",
+          "bytes": "140008388608",
+          "bytes_grouped": "140,008,388,608",
+          "decimal": "140.0 GB"
+        },
+        "weight": {
+          "binary": "130.4 GiB",
+          "bytes": "140000000000",
+          "bytes_grouped": "140,000,000,000",
+          "decimal": "140.0 GB"
+        }
+      },
+      "id": "llm/70000000000xfp16/32x1x64x2048xint8",
+      "input": {
+        "context_length": "2048",
+        "head_dim": "64",
+        "kv_heads": "1",
+        "kv_precision": "int8",
+        "layers": "32",
+        "parameters": "70000000000",
+        "weight_precision": "fp16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "160.0 MiB",
+          "bytes": "167772160",
+          "bytes_grouped": "167,772,160",
+          "decimal": "167.8 MB"
+        },
+        "total": {
+          "binary": "2.0 GiB",
+          "bytes": "2167772160",
+          "bytes_grouped": "2,167,772,160",
+          "decimal": "2.2 GB"
+        },
+        "weight": {
+          "binary": "1.9 GiB",
+          "bytes": "2000000000",
+          "bytes_grouped": "2,000,000,000",
+          "decimal": "2.0 GB"
+        }
+      },
+      "id": "llm/1000000000xbf16/32x2x80x4096xfp32",
+      "input": {
+        "context_length": "4096",
+        "head_dim": "80",
+        "kv_heads": "2",
+        "kv_precision": "fp32",
+        "layers": "32",
+        "parameters": "1000000000",
+        "weight_precision": "bf16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "384.0 MiB",
+          "bytes": "402653184",
+          "bytes_grouped": "402,653,184",
+          "decimal": "402.7 MB"
+        },
+        "total": {
+          "binary": "6.0 GiB",
+          "bytes": "6402653184",
+          "bytes_grouped": "6,402,653,184",
+          "decimal": "6.4 GB"
+        },
+        "weight": {
+          "binary": "5.6 GiB",
+          "bytes": "6000000000",
+          "bytes_grouped": "6,000,000,000",
+          "decimal": "6.0 GB"
+        }
+      },
+      "id": "llm/3000000000xbf16/32x4x96x8192xbf16",
+      "input": {
+        "context_length": "8192",
+        "head_dim": "96",
+        "kv_heads": "4",
+        "kv_precision": "bf16",
+        "layers": "32",
+        "parameters": "3000000000",
+        "weight_precision": "bf16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "2.0 GiB",
+          "bytes": "2147483648",
+          "bytes_grouped": "2,147,483,648",
+          "decimal": "2.1 GB"
+        },
+        "total": {
+          "binary": "15.0 GiB",
+          "bytes": "16147483648",
+          "bytes_grouped": "16,147,483,648",
+          "decimal": "16.1 GB"
+        },
+        "weight": {
+          "binary": "13.0 GiB",
+          "bytes": "14000000000",
+          "bytes_grouped": "14,000,000,000",
+          "decimal": "14.0 GB"
+        }
+      },
+      "id": "llm/7000000000xbf16/32x8x256x16384xint8",
+      "input": {
+        "context_length": "16384",
+        "head_dim": "256",
+        "kv_heads": "8",
+        "kv_precision": "int8",
+        "layers": "32",
+        "parameters": "7000000000",
+        "weight_precision": "bf16"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "8.0 GiB",
+          "bytes": "8589934592",
+          "bytes_grouped": "8,589,934,592",
+          "decimal": "8.6 GB"
+        },
+        "total": {
+          "binary": "14.5 GiB",
+          "bytes": "15589934592",
+          "bytes_grouped": "15,589,934,592",
+          "decimal": "15.6 GB"
+        },
+        "weight": {
+          "binary": "6.5 GiB",
+          "bytes": "7000000000",
+          "bytes_grouped": "7,000,000,000",
+          "decimal": "7.0 GB"
+        }
+      },
+      "id": "llm/14000000000xint4/32x16x64x32768xfp32",
+      "input": {
+        "context_length": "32768",
+        "head_dim": "64",
+        "kv_heads": "16",
+        "kv_precision": "fp32",
+        "layers": "32",
+        "parameters": "14000000000",
+        "weight_precision": "int4"
+      },
+      "op": "llm"
+    },
+    {
+      "expect": {
+        "kv": {
+          "binary": "40.0 GiB",
+          "bytes": "42949672960",
+          "bytes_grouped": "42,949,672,960",
+          "decimal": "42.9 GB"
+        },
+        "total": {
+          "binary": "54.9 GiB",
+          "bytes": "58949672960",
+          "bytes_grouped": "58,949,672,960",
+          "decimal": "58.9 GB"
+        },
+        "weight": {
+          "binary": "14.9 GiB",
+          "bytes": "16000000000",
+          "bytes_grouped": "16,000,000,000",
+          "decimal": "16.0 GB"
+        }
+      },
+      "id": "llm/32000000000xint4/32x32x80x131072xbf16",
+      "input": {
+        "context_length": "131072",
+        "head_dim": "80",
+        "kv_heads": "32",
+        "kv_precision": "bf16",
+        "layers": "32",
+        "parameters": "32000000000",
+        "weight_precision": "int4"
+      },
+      "op": "llm"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
