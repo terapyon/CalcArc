@@ -197,3 +197,114 @@ test("shows an empty slot as a box that no key would be mistaken for", async ({
     expect(paint.borderStyle, `an empty slot grew a border`).toBe("none");
   }
 });
+
+/**
+ * **「永久に押せない」と「いまだけ押せない」が、同じ見た目であること。**
+ *
+ * **これが 0.7.0 の主張そのものである**（ユーザー裁定 2026-09-02）。
+ * **一度は破線で分けた。撮って、やめた**——「逆に目立って押せそうに思う」。
+ * **分けないと決めた以上、分かれていないことを主張する側の検査が要る。**
+ *
+ * **★ 盤面をまたいで見る。** **1 つの盤面には両方が揃わない**からである
+ * ——**Finance は式を組むので永久のキーが 1 つも無く**（項目もモードも
+ * 変われば戻る）、**Scale の 3 盤面は逆に、初期状態で一時のキーが出ない**。
+ * **最初 Finance だけで書いて「永久が 0 件」で落ちた**（実測 2026-09-02）。
+ * **主張は「この盤面で」ではなく「どの盤面でも」**なので、これで正しい。
+ *
+ * **jsdom では見えない**（CSS を組み立てない）。**実ブラウザの computed style。**
+ */
+test("shows both kinds of unpressable key as the same kind of unpressable", async ({
+  page,
+}) => {
+  type Seen = {
+    route: string;
+    name: string;
+    off: boolean;
+    permanent: boolean;
+    looks: string;
+  };
+  const seen: Seen[] = [];
+
+  for (const route of [
+    "#scale/data-scale",
+    "#scale/transfer",
+    "#scale/llm",
+    "#convert/length",
+    "#finance",
+  ]) {
+    await page.goto(`/${route}`);
+    await expect(page.getByTestId("display-main")).toBeVisible();
+    seen.push(
+      ...(await page
+        // **盤面まるごと**を見る。**最初の `<fieldset>` だけだと項目行しか
+        // 入らない**（実測）。
+        .locator(".keypad, [class*='keypad']")
+        .first()
+        .locator("button")
+        .evaluateAll(
+          (els, from) =>
+            els
+              // **文字を持つキーだけ。** 空きセルは別の検査が持っている
+              // ——**あちらは「箱が見えるか」、こちらは「2 群が分かれて
+              // いないか」**である。
+              .filter((el) => (el.textContent ?? "").trim() !== "")
+              .map((el) => ({
+                route: from,
+                name: el.getAttribute("aria-label") ?? "",
+                off: (el as HTMLButtonElement).disabled,
+                // **永久側だけが説明を指す。** 見た目で分けないので、
+                // **ここが唯一の区別**である。
+                permanent: el.getAttribute("aria-describedby") !== null,
+                looks: (() => {
+                  const style = getComputedStyle(el);
+                  return `opacity=${style.opacity} cursor=${style.cursor}`;
+                })(),
+              })),
+          route,
+        )),
+    );
+  }
+
+  // **数えたことを主張する。** 5 盤面を回って 0 件でも緑、を作らない。
+  expect(seen.length, "no key was seen on any board").toBeGreaterThan(100);
+
+  const off = seen.filter((key) => key.off);
+  const on = seen.filter((key) => !key.off);
+  const permanent = off.filter((key) => key.permanent);
+  const transient = off.filter((key) => !key.permanent);
+
+  // **★ 両側が空でないことを先に言う。** **片方が 0 件なら、下の「1 通り」は
+  // 自明に成り立つ**——**主張が空になったことに気づけるように、先に数える。**
+  expect(
+    permanent.length,
+    "no permanently-off key with a glyph — the claim below would be vacuous",
+  ).toBeGreaterThan(0);
+  expect(
+    transient.length,
+    "no transiently-off key — the claim below would be vacuous",
+  ).toBeGreaterThan(0);
+  expect(on.length, "no live key").toBeGreaterThan(0);
+
+  // **★ 主張の本体: 押せない側の見た目は 1 通り。** 永久も一時も同じ。
+  expect(
+    [...new Set(off.map((key) => key.looks))],
+    `the two kinds of off look different: ${JSON.stringify(
+      off
+        .filter(
+          (key, i, all) => all.findIndex((o) => o.looks === key.looks) === i,
+        )
+        .map((key) => ({
+          route: key.route,
+          name: key.name,
+          permanent: key.permanent,
+          looks: key.looks,
+        })),
+    )}`,
+  ).toEqual(["opacity=0.4 cursor=default"]);
+
+  // **生きている側とは分かれている。** 1 通りに揃えた結果、押せるキーと
+  // 見分けが付かなくなっては元も子もない。
+  expect([...new Set(on.map((key) => key.looks))]).toEqual([
+    "opacity=1 cursor=pointer",
+  ]);
+});
