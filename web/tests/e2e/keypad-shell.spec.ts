@@ -189,7 +189,10 @@ test("shows an empty slot as a box that no key would be mistaken for", async ({
     );
     // **2. どのキーよりも弱い。** 空きがキターと同じ重さで出ると、
     // **押せそうに見える**——0.7.0 で 1 度そうなって撮り直した。
-    expect(slotApart, `an empty slot is as heavy as a live key`).toBeLessThan(
+    // **語の選び方に注意。** `check:boundary` は `web/` に重量級の綴りが
+    // 出たら「web が重量級を知っている」として落とす。**最初この文言で
+    // 落ちた**（2026-09-02 実測）。**番人は正しく、私の言い回しが悪かった。**
+    expect(slotApart, `an empty slot stands out like a live key`).toBeLessThan(
       liveApart,
     );
     // **3. 枠線で出していない。** 枠線はこのリポジトリでは「押せる」の
