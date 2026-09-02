@@ -71,7 +71,9 @@ export function Key<T>({
   return (
     <button
       type="button"
-      className={`${styles.key} ${styles[variant]}`}
+      className={`${styles.key} ${styles[variant]}${
+        reserved ? ` ${styles.empty}` : ""
+      }`}
       aria-label={ariaLabel ?? label}
       aria-pressed={pressed}
       data-token={token === null ? undefined : String(token)}
