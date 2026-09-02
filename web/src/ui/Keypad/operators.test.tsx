@@ -173,6 +173,15 @@ describe("計算しないパネルの演算子キー", () => {
       )) {
         counted += 1;
         if (!slot.disabled) live.push(`${panel.name}: 予約スロットが押せる`);
+        // **文字を出さない**（ユーザー裁定 2026-09-02）。`—` を置くと
+        // 「そういうキーがある」に見えて、**押せそうに見える**。
+        // **読み上げ名は残る**——`aria-label="空き"` が別に在る。
+        if (slot.textContent !== "") {
+          live.push(`${panel.name}: 予約スロットに「${slot.textContent}」`);
+        }
+        if (slot.getAttribute("aria-label") === null) {
+          live.push(`${panel.name}: 予約スロットに読み上げ名が無い`);
+        }
       }
 
       unmount();

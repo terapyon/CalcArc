@@ -71,9 +71,7 @@ export function Key<T>({
   return (
     <button
       type="button"
-      className={`${styles.key} ${styles[variant]}${
-        offness === "permanent" ? ` ${styles.permanent}` : ""
-      }`}
+      className={`${styles.key} ${styles[variant]}`}
       aria-label={ariaLabel ?? label}
       aria-pressed={pressed}
       data-token={token === null ? undefined : String(token)}
@@ -90,7 +88,17 @@ export function Key<T>({
         if (token !== null) onPress(token);
       }}
     >
-      {label}
+      {/* **予約スロットには何も書かない**（ユーザー裁定 2026-09-02）。
+          記号を持つキー(`÷ × − + =`・`( )`)は**記号を残したまま**押せない
+          見た目にするが、**まだ何も入っていないセルに `—` を置くと、
+          「そういうキーがある」に見える**。**枠(セル)は残す**——5×5 の
+          格子は面をまたいで同じ位置にあり、そこは変えない。
+
+          **面のデータ(`dataScale.ts` ほか)は `—` を持ったままである**
+          ——格子のどこが空きかを読める形で残すため。**画に出すかはここが
+          決める**ので、**データの `—` を書き換えても画は変わらない**
+          （番人は `operators.test.tsx` の「予約枠に文字が無い」）。 */}
+      {reserved ? null : label}
     </button>
   );
 }
