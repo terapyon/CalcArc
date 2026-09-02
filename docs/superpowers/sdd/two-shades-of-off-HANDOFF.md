@@ -151,3 +151,66 @@ before/after が揃う**——**ユーザーが見てから段 C へ。**
 
 **「予測が外れた」ではなく「導出のどこが間違っていたか」を書く。**
 **上の 3 段は検算できる形にしてある**ので、**どの段で外したかが分かる。**
+
+---
+
+## 段 C: 対比（**3 世代ある**）
+
+**画は `/tmp/calcarc-shots-0902/`**（**`/tmp` である。再起動で消える**）。
+390×844、fullPage、6 route ＋ 暗いテーマ 2 枚。
+
+| 綴り | 何 | 意味 |
+|---|---|---|
+| `<route>-before.png` | 0.6.0 の見た目 | **押せないキーは全部 `opacity: 0.4`。予約スロットは `—`** |
+| `<route>-after.png` | **破線を入れた版** | **一度採って、撮って、取り下げた証拠**。「逆に目立って押せそう」 |
+| `<route>-after3.png` | **結論** | 破線なし・濃さ 1 段・**予約スロットは薄い箱で空欄** |
+| `llm-dark.png` / `transfer-dark.png` | 暗いテーマ | **向き（キーより暗い）が保たれていること** |
+
+**`after2` は残していない**（**空欄にして箱が消えた版**）——**`after3` との差は
+`--key-empty-bg` の有無だけ**で、**その差は spec の表（差 7 と 4）が数で持っている**。
+
+**Scientific は before と after3 が同じバイト数**（35381）。**押せないキーが
+0 個**という当てが、そこで取れている。
+
+---
+
+## 段 C: フルスイープ（**2026-09-02、`78b2f21`**）
+
+```
+cargo fmt --check          緑
+cargo test --workspace     396
+cargo clippy -D warnings   0
+wasm-bindgen-test          57   ★ 下記
+reference pytest           473
+reference mypy             14 files / ruff check / ruff format
+web typecheck 0 / biome 139 / vitest 381 / e2e 194
+web check:version 5 箇所一致 / check:sw / check:boundary
+heavy typecheck / biome 45 / pnpm heavy 250（29.4 秒）
+```
+
+**`heavy:ui` は回していない**——**この作業台では 3 回とも segfault**。
+**GitHub で回す**（予測は上の「押下台帳の予測」）。
+
+### ★ `wasm-pack test` は、そのままでは通らない（**コードの赤ではない**）
+
+```
+Error: failed to create a Chrome session: session not created:
+This version of ChromeDriver only supports Chrome version 152
+Current browser version is 135.0.7049.52
+```
+
+**`wasm-pack` が入れた driver は 152、この機械の Chrome は 135** である。
+**キャッシュに 135 用の driver が在った**ので、**`cargo` を直に叩いて通した**:
+
+```bash
+cd crates/calcarc-wasm
+CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=~/.cache/.wasm-pack/wasm-bindgen-*/wasm-bindgen-test-runner \
+CHROMEDRIVER=~/.cache/.wasm-pack/chromedriver-d65213741bcf1a26/chromedriver \
+WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown
+```
+
+**`CHROMEDRIVER` を export しても `wasm-pack` は自分の driver を使う**
+（実測——自分でコマンド行に立てるので、環境変数は効かない）。
+
+**★ これは環境の問題であって、直してはいない。** **CI は自前で入れる**ので
+向こうでは出ない。**次にここで赤を見た人へ: 版のずれを先に疑う。**
