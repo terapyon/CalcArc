@@ -130,17 +130,32 @@ test("shows an empty slot as a box that no key would be mistaken for", async ({
     (color.match(/\d+/g) ?? []).slice(0, 3).map(Number);
 
   /**
+   * **`rgba(...)` の 4 つ目。** 書かれていなければ 1（`rgb(...)`）。
+   *
+   * **これを落とすと `transparent` が素通りする**——`rgba(0,0,0,0)` の
+   * 数だけ読むと `[0,0,0]` で、**「黒に向かって合成した」と誤って計算**し、
+   * **実際は完全に透けているのに地から遠い**という答が出る
+   * （2026-09-02 のレビュー指摘）。
+   */
+  const alphaOf = (color: string) => {
+    const parts = color.match(/[\d.]+/g) ?? [];
+    return parts.length >= 4 ? Number(parts[3]) : 1;
+  };
+
+  /**
    * **地の上に置いたときの実際の色。** `background-color` は `opacity` を
    * 含まないので、**薄くして消す**変更を色の比較だけでは捕まえられない
-   * ——**掛けてから比べる。**
+   * ——**掛けてから比べる。** `opacity` と alpha の**両方**を掛ける。
    */
   const overSurface = (
     paint: { bg: string; opacity: string },
     base: number[],
-  ) =>
-    channels(paint.bg).map(
-      (v, i) => (base[i] ?? 0) + (v - (base[i] ?? 0)) * Number(paint.opacity),
+  ) => {
+    const weight = Number(paint.opacity) * alphaOf(paint.bg);
+    return channels(paint.bg).map(
+      (v, i) => (base[i] ?? 0) + (v - (base[i] ?? 0)) * weight,
     );
+  };
 
   /** 3 つの channel のうち、いちばん離れている分。 */
   const apart = (a: number[], b: number[]) =>
