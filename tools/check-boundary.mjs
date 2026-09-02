@@ -191,7 +191,8 @@ function main() {
   // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
   if (heavy.length > 0) report("web が重量級を知っている", heavy);
   if (ui.length > 0) report("web/src/calc が UI Framework を知っている", ui);
-  if (back.length > 0) report("Key / Keypad に disabled の口が戻っている", back);
+  if (back.length > 0)
+    report("Key / Keypad に disabled の口が戻っている", back);
   if (heavy.length > 0 || ui.length > 0 || back.length > 0) {
     process.exit(1);
   }

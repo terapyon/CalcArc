@@ -94,6 +94,12 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 - **`reference` は `ruff check` と `ruff format` の 2 つを回す。**
   `check` が緑でも `format --check` は赤いことがある——**別物であり、
   CI は 2 つとも見る**（`ci.yml:150,152`）。2026-08-30 に実際に落ちた。
+- **`heavy` の `pnpm lint` は 2 つの場所を見る。** `heavy/package.json` の
+  `lint` が `biome check . && cd ../tools && biome check .` である。
+  **`tools/` を触ったら `cd heavy && pnpm lint`**——**`heavy/` だけ緑でも
+  CI は赤い**。2026-09-02 に実際に落ちた（`tools/check-boundary.mjs` の
+  1 行が長すぎ、**CI だけが見つけた**）。**上の `reference` と同じ形**
+  ——**1 つのコマンドが 2 つの場所を見る。**
 - **`uv` は `--no-config` を付ける。`lock` / `sync` だけでなく `run` もである。**
   付けないと手元の `~/.config/uv/uv.toml` の `exclude-newer` がロックファイルに
   書き込まれ、CI の `uv sync --locked` が落ちる。**`uv run pytest` でも起きる**
