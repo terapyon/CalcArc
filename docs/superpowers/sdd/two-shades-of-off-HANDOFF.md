@@ -227,11 +227,18 @@ WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown
   何を失うかを見ること。**（実証: Transfer の `"permanent"` を `"transient"` に
   1 語変えると、e2e は緑のまま jsdom が
   `no permanent key was described: expected 27 to be 34` で落ちる）
-- **★ known gap: `--key-empty-bg` の 3 テーマのうち、検査が見ているのは
-  明テーマだけである。** **暗テーマと高コントラストは画で見ただけ**
-  （`llm-dark.png` / `transfer-dark.png`。高コントラストは**画も撮っていない**）。
-  **Playwright は既定で明テーマ**なので、`colorScheme` / `forcedColors` を
-  指定した走行を足さない限り、**あの 2 つのトークンは誰も見張っていない。**
+- **★ known gap だった `--key-empty-bg` の 3 テーマ**——**高コントラストは
+  塞いだ。撮ったら壊れていたからである**（下記）。**暗テーマは今も画だけ**
+  （`llm-dark.png` / `transfer-dark.png`）で、**検査は無い。**
+- **★ 高コントラストで、空きが `.key` の枠線を継いでいた**（2026-09-02）。
+  `--key-border` は**高コントラストでのみ** `2px solid currentColor` になる
+  ので、**空きが生きたキーと同じ形**になり、**押せない `DEL` より濃く
+  見えていた**——**ユーザーが破線を退けた理由そのもの**である。
+  `.empty:disabled { border: none }` で外し、**その面の検査を 1 本置いた**
+  （`emulateMedia({ contrast: "more" })`）。**`test.use({ contrast })` は
+  この Playwright の型に無く `tsc` が落ちる。**
+  **★ 明テーマの検査では絶対に見つからない**——あちらの `--key-border` は
+  `none` なので、**枠を継いでも何も起きない。**
 - **`transparent` は数だけ読むと逆に出る。** `rgba(0,0,0,0)` を `[0,0,0]` と
   読むと「黒に向かって合成した」ことになり、**完全に透けているのに地から
   遠い**という答が出る。**`alphaOf` で掛けて塞いだ**（2026-09-02）。

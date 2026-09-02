@@ -326,3 +326,94 @@ test("shows both kinds of unpressable key as the same kind of unpressable", asyn
     "opacity=1 cursor=pointer",
   ]);
 });
+
+/**
+ * **高コントラストでも、空きセルが「押せる形」を借りないこと。**
+ *
+ * **ここは 2026-09-02 まで、検査も無く、目でも見ていない唯一の面だった。**
+ * **撮ったら壊れていた**——`.key` の枠線は高コントラストでのみ
+ * `2px solid currentColor` になり、**空きがそれを継いで、生きたキーと
+ * 同じ形**になっていた（**押せない `DEL` より濃く見えていた**）。
+ *
+ * **★ 明テーマの検査では絶対に見つからない。** あちらの `--key-border` は
+ * `none` なので、**枠を継いでも何も起きない。** **「枠線で出していない」を
+ * 明テーマで主張しても、高コントラストのこの壊れ方は素通りする。**
+ *
+ * **★ 生きたキーの見分け方が、テーマによって違う。** 明テーマではキーが
+ * 地より明るい（色）が、**高コントラストではキーも地も白**（差 0）で、
+ * **枠線だけが「押せる」を運ぶ**。だから**この検査は色ではなく枠で見る。**
+ */
+test("an empty slot does not borrow the border that means pressable", async ({
+  page,
+}) => {
+  // 高コントラストの段は `@media (prefers-contrast: more)`（`tokens.css`）。
+  // **`test.use({ contrast })` は使えない**——この Playwright の
+  // `PlaywrightTestOptions` に `contrast` が無く、`tsc` が TS2353 で落ちる
+  // （実測 2026-09-02）。`emulateMedia` は型が在る。
+  //
+  // **★ この 1 行が消えると、検査は明テーマで走る。** そのとき下の
+  // 「生きたキーには枠が在る」が先に落ちるようにしてある——**黙って
+  // 明テーマで緑になるのが、この検査のいちばん悪い壊れ方**である。
+  await page.emulateMedia({ contrast: "more" });
+
+  await page.goto("/#scale/transfer");
+  await expect(page.getByTestId("display-main")).toBeVisible();
+
+  const paintOf = (el: Element) => {
+    const style = getComputedStyle(el);
+    return {
+      bg: style.backgroundColor,
+      border: style.borderTopStyle,
+      opacity: style.opacity,
+    };
+  };
+  const channels = (color: string) =>
+    (color.match(/\d+/g) ?? []).slice(0, 3).map(Number);
+  const apart = (a: number[], b: number[]) =>
+    Math.max(...a.map((v, i) => Math.abs(v - (b[i] ?? 0))));
+
+  const surface = channels(
+    await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
+  );
+
+  // **1. この面では、枠線が「押せる」を運んでいる。**
+  // **これが崩れたら、下の主張は別のことを言っている。**
+  const live = await page
+    .getByRole("group", { name: "数字と演算のキー" })
+    .getByRole("button", { name: "7", exact: true })
+    .evaluate(paintOf);
+  expect(
+    live.border,
+    "a live key has no border here — this test assumed the wrong signal",
+  ).toBe("solid");
+
+  const slots = await page
+    .locator(".keypad, [class*='keypad']")
+    .first()
+    .locator("button:not([data-token])")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const style = getComputedStyle(el);
+        return {
+          bg: style.backgroundColor,
+          border: style.borderTopStyle,
+          opacity: style.opacity,
+        };
+      }),
+    );
+  // 実測 2026-09-02: データ転送の数字面に 5 つ。
+  expect(slots, "no reserved slot was found").toHaveLength(5);
+
+  for (const slot of slots) {
+    // **2. 空きは枠を継がない。** 継ぐと生きたキーと同じ形になる。
+    expect(
+      slot.border,
+      "an empty slot took the border that live keys use",
+    ).toBe("none");
+    // **3. それでも箱は見える。** 枠を外した代わりに、塗りが残っている。
+    expect(
+      apart(channels(slot.bg), surface) * Number(slot.opacity),
+      "an empty slot melted into the surface",
+    ).toBeGreaterThan(5);
+  }
+});

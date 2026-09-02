@@ -109,8 +109,9 @@
     --key-accent-bg: #000000;
     --key-accent-fg: #ffffff;
     --key-function-bg: #ffffff;
-    /* 高コントラストではキーが白＋実線の枠なので、**空きは塗りで出す**
-       ——**枠を付けるとキーと同じ形になり、押せそうに見える**。 */
+    /* 高コントラストではキーが白＋実線の枠なので、**空きは塗りだけで出す**
+       ——**枠を継ぐとキーと同じ形になり、押せそうに見える**(実際そうなって
+       いた。`Key.module.css` の `.empty:disabled` が `border: none` で外す)。 */
     --key-empty-bg: #e6e6e6;
     --key-function-fg: #000000;
     --key-danger-bg: #ffffff;
