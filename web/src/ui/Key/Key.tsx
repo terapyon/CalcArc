@@ -35,6 +35,15 @@ export interface KeyProps<T> {
    * （ユーザー裁定 2026-08-31）。
    */
   off?: Offness;
+  /**
+   * 「この盤面では永久に押せない」ことを説明する要素の id。
+   * **永久のキーだけがこれを指す**（`Keypad` が 1 つ置き、全部で共有する）。
+   *
+   * **`aria-label` に文を足さない**——キーは読み上げ名で選ばれており
+   * （`getByRole("button", { name })`）、名前に説明を混ぜると**名前で選ぶ検査が
+   * 広範に壊れ、名前の安定性も失う**（設計書 §1.2）。**説明は説明の欄へ。**
+   */
+  permanentDescriptionId?: string;
   onPress: (token: T) => void;
   /**
    * トークンを送らない特別なキー(Shift)。渡されたらこちらが優先され、
@@ -50,6 +59,7 @@ export function Key<T>({
   variant = "digit",
   pressed,
   off: offReason,
+  permanentDescriptionId,
   onPress,
   onActivate,
 }: KeyProps<T>) {
@@ -61,12 +71,17 @@ export function Key<T>({
   return (
     <button
       type="button"
-      className={`${styles.key} ${styles[variant]}`}
+      className={`${styles.key} ${styles[variant]}${
+        offness === "permanent" ? ` ${styles.permanent}` : ""
+      }`}
       aria-label={ariaLabel ?? label}
       aria-pressed={pressed}
       data-token={token === null ? undefined : String(token)}
       disabled={off}
       aria-disabled={off || undefined}
+      aria-describedby={
+        offness === "permanent" ? permanentDescriptionId : undefined
+      }
       onClick={() => {
         if (onActivate) {
           onActivate();

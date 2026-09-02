@@ -182,4 +182,62 @@ describe("計算しないパネルの演算子キー", () => {
     expect(counted, "no reserved slot was ever found").toBe(RESERVED_COUNT);
     expect(live).toEqual([]);
   });
+
+  /**
+   * **読み上げの側の区別**（設計書 §1.2 の (d)、ユーザー裁定 2026-08-31）。
+   *
+   * **形（破線）が見えなかった場合、これが唯一の区別になる**——裁定は
+   * 「67px で形が見えなければ濃さ ＋ 読み上げに落とす」という条件つきなので、
+   * **落ちた瞬間、意味の差を運ぶのはここだけ**である。
+   *
+   * **見た目ではなく属性の話**なので jsdom で足りる（CLAUDE.md の
+   * 「jsdom はアクセシビリティツリーを組み立てない」とは別の層）。
+   */
+  it("describes the permanent ones, and only those, to a screen reader", async () => {
+    const user = userEvent.setup();
+    const wrong: string[] = [];
+    let described = 0;
+    let plain = 0;
+
+    for (const panel of PANELS) {
+      const { container, unmount } = render(panel.element);
+      await panel.reach(user, container);
+
+      const keypad = container.querySelector(`.${keypadStyles.keypad}`);
+      if (keypad === null) throw new Error(`${panel.name}: 盤面が見つからない`);
+
+      for (const key of keypad.querySelectorAll<HTMLButtonElement>("button")) {
+        const id = key.getAttribute("aria-describedby");
+        const token = key.getAttribute("data-token");
+        // **永久 = 予約スロット（token 無し）と、死んだ演算子。**
+        const permanent =
+          token === null ||
+          (OPERATOR_TOKENS as readonly string[]).includes(token);
+
+        if (permanent) {
+          if (id === null) {
+            wrong.push(`${panel.name}: ${token ?? "空き"} に説明が無い`);
+            continue;
+          }
+          // **宙に浮いた id は読み上げに何も届けない。**
+          if (container.querySelector(`#${CSS.escape(id)}`) === null) {
+            wrong.push(`${panel.name}: ${token ?? "空き"} の説明先が無い`);
+            continue;
+          }
+          described += 1;
+        } else {
+          if (id !== null) wrong.push(`${panel.name}: ${token} に説明が付いた`);
+          plain += 1;
+        }
+      }
+      unmount();
+    }
+
+    // **両側の数を主張する。** 片方が 0 でも緑、を起こさない。
+    expect(described, "no permanent key was described").toBe(
+      OPERATOR_TOKENS.length * PANELS.length + RESERVED_COUNT,
+    );
+    expect(plain, "no ordinary key was seen").toBeGreaterThan(0);
+    expect(wrong).toEqual([]);
+  });
 });

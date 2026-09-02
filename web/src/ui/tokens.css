@@ -54,6 +54,10 @@
   /* 通常テーマでは枠線を使わない。高コントラストでのみ意味を持つ。 */
   --key-border: none;
   --key-danger-border: none;
+  /* **「この盤面では永久に押せない」キーの枠線**(設計書
+     `2026-08-31-two-shades-of-off.md`)。**ここだけは通常テーマでも出す**
+     ——濃さだけで分けると、コントラストの低い環境・色覚・屋外で消える。 */
+  --key-permanent-border: 2px dashed currentColor;
 
   /* フォーカス(base-spec §43) */
   --focus-ring: 3px solid #0b57d0;
@@ -107,6 +111,9 @@
     --focus-ring: 4px solid #000000;
     --key-border: 2px solid currentColor;
     --key-danger-border: 4px double currentColor;
+    /* 高コントラストでは他の枠線が太くなるので、こちらも太くして
+       「実線＝押せる／破線＝永久に押せない」の差を保つ。 */
+    --key-permanent-border: 3px dashed currentColor;
   }
 }
 

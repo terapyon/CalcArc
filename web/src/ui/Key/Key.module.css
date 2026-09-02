@@ -49,10 +49,20 @@
   border: var(--key-danger-border);
 }
 
-/* 予約スロット(設計書 §5)。押せないことを色でも示す。S2 が埋める。 */
+/* 押せないキー。**濃さは 2 段の区別には使わない**——ここは「押せない」の
+   共通の合図である(設計書 `2026-08-31-two-shades-of-off.md`)。 */
 .key:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+/* **この盤面では永久に押せない**キー(予約スロットと、計算しない盤面の演算子)。
+   **形で分ける**——濃さだけだと、コントラストの低い環境・色覚・屋外で消える
+   (ユーザー裁定 2026-08-31)。**破線は濃さと独立した手がかり**である。
+   読み上げ側は `aria-describedby` が持つ(`Keypad.tsx`)。 */
+.permanent:disabled {
+  border: var(--key-permanent-border);
+  opacity: 0.3;
 }
 
 /* 面が立っている Shift。aria-pressed だけでは見えない(base-spec §43)。 */

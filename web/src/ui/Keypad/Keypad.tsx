@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, useId, useState } from "react";
 import { Key } from "../Key/Key";
 import styles from "./Keypad.module.css";
 import type { KeypadSection, Offness } from "./types";
@@ -25,12 +25,26 @@ export interface KeypadProps<T> {
 }
 
 export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
+  // **「永久に押せない」の説明は 1 つだけ置き、全部のキーが指す**
+  // （設計書 `2026-08-31-two-shades-of-off.md` §1.2）。キーごとに置くと
+  // **同じ文が盤面に 20 個並ぶ**——読み上げの利用者には同じ説明であり、
+  // 増やす理由が無い。**`useId` で衝突しない綴りを取る**（同じページに
+  // 盤面が 2 つ出ても混ざらない）。
+  const permanentDescriptionId = useId();
+
   // Shift は UI 層の状態である。engine には面の概念を持ち込まない
   // (S1 設計書 §3)。engine から見れば従来どおり単一トークンの列である。
   const [shifted, setShifted] = useState(false);
 
   return (
     <div className={styles.keypad}>
+      {/* **読み上げにだけ届く説明。** 画面には出さない——形（破線）が
+          見える側の手がかりで、こちらは見えない側の手がかりである。
+          **`hidden` を使わない**——`hidden` な要素を指す `aria-describedby` は
+          読み上げに届かない。 */}
+      <p id={permanentDescriptionId} className={styles.offDescription}>
+        この電卓では使えません
+      </p>
       {sections.map((section) => (
         <fieldset
           key={section.ariaLabel}
@@ -74,6 +88,7 @@ export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
                 variant={face.variant}
                 pressed={token === null ? undefined : pressed?.(token)}
                 off={token === null ? undefined : (off?.(token) ?? undefined)}
+                permanentDescriptionId={permanentDescriptionId}
                 onPress={(sent) => {
                   onPress(sent);
                   // ワンショット(S1 設計書 §3): 1 キーで第 1 面へ戻る。
