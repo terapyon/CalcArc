@@ -67645,6 +67645,116 @@
       ],
       "kind": "value",
       "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 15000.0
+      },
+      "expr": "15e3",
+      "id": "typed-002000",
+      "keys": [
+        "1",
+        "5",
+        "exp",
+        "3",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 70.0
+      },
+      "expr": "7e1",
+      "id": "typed-002001",
+      "keys": [
+        "7",
+        "exp",
+        "1",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 999000000.0
+      },
+      "expr": "999e6",
+      "id": "typed-002002",
+      "keys": [
+        "9",
+        "9",
+        "9",
+        "exp",
+        "6",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 8.49
+      },
+      "expr": "84.9e-1",
+      "id": "typed-002003",
+      "keys": [
+        "8",
+        "4",
+        "dot",
+        "9",
+        "exp",
+        "1",
+        "neg",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 1e-06
+      },
+      "expr": "1.0e-6",
+      "id": "typed-002004",
+      "keys": [
+        "1",
+        "dot",
+        "0",
+        "exp",
+        "6",
+        "neg",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "im": 0.0,
+        "re": 0.0255
+      },
+      "expr": "25.5e-3",
+      "id": "typed-002005",
+      "keys": [
+        "2",
+        "5",
+        "dot",
+        "5",
+        "exp",
+        "3",
+        "neg",
+        "eq"
+      ],
+      "kind": "value",
+      "mode": "Deg"
     }
   ],
   "generated_by": "mpmath 1.3.0 (50 dps), Python 3.14",
