@@ -364,3 +364,66 @@ CPU                            → AMD Ryzen 9 5950X 16-Core
 
 **次に踏んだ人へ**: **`ulimit -c unlimited` を先に打ってから走らせ、core を
 残してください。** 位置だけの標本を足しても、原因には近づきません。
+
+---
+
+## `pwa.spec.ts` — an image path opened directly is not swallowed by the navigation fallback
+
+| | |
+|---|---|
+| ファイル | `web/tests/e2e/pwa.spec.ts:88` |
+| テスト名 | `an image path opened directly is not swallowed by the navigation fallback` |
+| 走行 | `pnpm e2e`（**`pnpm wasm` のビルド込み**、Playwright の `[mobile]`） |
+| 初出 | 2026-09-02 |
+
+### ★ エラーの原文が無い
+
+**控えていない。** 残っているのは走行末尾の要約 1 行だけである:
+
+```
+  [mobile] › tests/e2e/pwa.spec.ts:88:1 › an image path opened directly is not swallowed by the navigation fallback
+189 passed (2.1m)
+ELIFECYCLE  Command failed with exit code 1.
+```
+
+**`test-results/` はそのあとの緑の走行が消した**（確認したときには空だった）。
+**この一覧は「同じエラー原文が載っていないか」で照合する道具**なので、
+**この項は照合の役に立たない。** **次にここを見る人へ: 原文が要る。**
+**赤を見たら、次の走行を始める前に貼ってください。**
+
+### 条件別の実測（2026-09-02）
+
+| 走らせ方 | 結果 |
+|---|---|
+| `pnpm e2e`（1 回目） | **189 passed / 1 failed** |
+| `pnpm exec playwright test`（直後、全部） | **193 passed** |
+| `pnpm exec playwright test tests/e2e/pwa.spec.ts` | **5 passed**（3 回とも） |
+
+**赤は 1 回、緑は 4 回**である。**再現していない。**
+
+### 落ちた変更とは無関係である根拠
+
+**枝が触ったファイルに、service worker の経路が 1 つも無い**
+（`git diff --name-only main...HEAD` を `sw|worker|workbox|vite.config|manifest`
+で絞って **0 件**）。触ったのは `web/src/ui/` の Key・Keypad・トークンと、
+`web/tests/e2e/keypad-shell.spec.ts` と `tools/check-boundary.mjs` と docs である。
+
+**このテストが見ているのは `navigateFallbackDenylist`**——SW が active に
+なったあと `/ogp.png` へ直接 goto して、PNG がそのまま返るか。**キーの
+見た目とは経路が交わらない。**
+
+### ★ ここから先は読みであって、実測ではない
+
+**「ゆらぎだろう」は私の読みである。** **原因は測っていない。**
+上の「無関係である根拠」は**触っていないことの実測**であって、
+**落ちた原因の実測ではない**——**触っていなくても落ちる理由は在りうる**
+（この機械については、この一覧の `pnpm heavy` の項を見よ）。
+
+### ★ 何が分かっていないか
+
+- **原文が無い。** どの assert で落ちたのかも分からない
+- **標本は 1 回**である。再現するかどうかも言えない
+- **`pnpm e2e` は `wasm-pack` のビルドを先に回す**。**赤が出たのはその 1 回だけ**で、
+  **直後の `playwright test` 単体（ビルド無し）は緑**である——**ビルドと同居した
+  ことが効いたのかは、標本 1 では言えない**
+- **上の 3 件と同じ原因かは分からない**
