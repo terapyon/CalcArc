@@ -33,6 +33,7 @@ import {
 import { Keypad } from "../Keypad/Keypad";
 import { isDeadOperator } from "../Keypad/operators";
 import { parsePrefixed } from "../Keypad/parse";
+import type { Offness } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./DataScalePanel.module.css";
@@ -119,13 +120,16 @@ export function DataScalePanel() {
    * **演算子の 7 個だけは条件が付かない**——この面には式を組み立てる入口が
    * 無く、**何をしても押せるようにならない**。下の 4 つの「いまは押せない」
    * とは意味が違う(`Keypad/operators.ts` に理由がある)。 */
-  function keyDisabled(token: DataScaleKeyToken): boolean {
-    if (isDeadOperator(token)) return true;
-    if (token === "del") return !numberField;
-    if (token === "k") return !numberField || !canPushUnit(entry, K);
-    if (token === "m") return !numberField || !canPushUnit(entry, M);
-    if (token === "g") return !numberField || !canPushUnit(entry, G);
-    return false;
+  function keyOff(token: DataScaleKeyToken): Offness | null {
+    if (isDeadOperator(token)) return "permanent";
+    if (token === "del") return numberField ? null : "transient";
+    if (token === "k")
+      return !numberField || !canPushUnit(entry, K) ? "transient" : null;
+    if (token === "m")
+      return !numberField || !canPushUnit(entry, M) ? "transient" : null;
+    if (token === "g")
+      return !numberField || !canPushUnit(entry, G) ? "transient" : null;
+    return null;
   }
 
   /** トグルとして押されているキー。数字は undefined(トグルではない)。 */
@@ -309,7 +313,7 @@ export function DataScalePanel() {
         }
         onPress={press}
         pressed={keyPressed}
-        disabled={keyDisabled}
+        off={keyOff}
       />
       {/* Keypad の区画と同じ流儀で <fieldset>——role=group な <div> は
           WAI-ARIA の推奨要素チェックに引っかかる。見た目だけ打ち消す。 */}

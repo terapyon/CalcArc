@@ -24,6 +24,12 @@
   --key-accent-bg: #d8e6ff;
   --key-accent-fg: #0b3d91;
   --key-function-bg: #e8e8ed;
+  /* **空きセルの地**(設計書 `2026-08-31-two-shades-of-off.md`、
+     **ユーザー裁定 2026-09-02**「薄い箱は残してください」)。**キーより暗く、
+     面より暗い**——**キーは地より明るく浮き、空きは地より暗く沈む**。
+     **枠線では出さない**: このリポジトリでは枠線は「押せる」の合図なので、
+     空きに枠を付けると**押せそうに見える**(破線を退けたのがその実例)。 */
+  --key-empty-bg: #ebebf0;
   --key-function-fg: #1c1c1e;
   --key-danger-bg: #ffd8d8;
   --key-danger-fg: #8b1a1a;
@@ -71,6 +77,9 @@
     --key-accent-bg: #143a75;
     --key-accent-fg: #cfe0ff;
     --key-function-bg: #3a3a3c;
+    /* 暗いテーマでは向きが同じでも値が逆になる——**面(#000)より明るく、
+       キー(#2c2c2e)より暗い**。「沈んでいる」の向きは保つ。 */
+    --key-empty-bg: #141416;
     --key-function-fg: #f2f2f7;
     --key-danger-bg: #5c1a1a;
     --key-danger-fg: #ffd8d8;
@@ -100,6 +109,10 @@
     --key-accent-bg: #000000;
     --key-accent-fg: #ffffff;
     --key-function-bg: #ffffff;
+    /* 高コントラストではキーが白＋実線の枠なので、**空きは塗りだけで出す**
+       ——**枠を継ぐとキーと同じ形になり、押せそうに見える**(実際そうなって
+       いた。`Key.module.css` の `.empty:disabled` が `border: none` で外す)。 */
+    --key-empty-bg: #e6e6e6;
     --key-function-fg: #000000;
     --key-danger-bg: #ffffff;
     --key-danger-fg: #000000;

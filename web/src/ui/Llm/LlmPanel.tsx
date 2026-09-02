@@ -32,7 +32,7 @@ import {
 } from "../Keypad/llm";
 import { isDeadOperator } from "../Keypad/operators";
 import { parsePrefixed } from "../Keypad/parse";
-import type { KeypadSection } from "../Keypad/types";
+import type { KeypadSection, Offness } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings } from "../useSetting";
 import styles from "./LlmPanel.module.css";
@@ -212,14 +212,18 @@ export function LlmPanel() {
    * ——面を 1 つ足した日に、ここが黙って別の項目を見ることになる。
    * `numberField` が false のときは短絡するので、`Entry` を持たない
    * `weight`/`kvPrecision` が `entryOf` に届くことはない。 */
-  function keyDisabled(token: LlmKeyToken): boolean {
-    if (isDeadOperator(token)) return true;
-    if (token === "del") return !numberField;
+  function keyOff(token: LlmKeyToken): Offness | null {
+    if (isDeadOperator(token)) return "permanent";
+    if (token === "del") return numberField ? null : "transient";
     if (token === "unit:b")
-      return !numberField || !canPushUnit(entryOf(active as EntryField), B);
+      return !numberField || !canPushUnit(entryOf(active as EntryField), B)
+        ? "transient"
+        : null;
     if (token === "unit:m")
-      return !numberField || !canPushUnit(entryOf(active as EntryField), M);
-    return false;
+      return !numberField || !canPushUnit(entryOf(active as EntryField), M)
+        ? "transient"
+        : null;
+    return null;
   }
 
   /** トグルとして押されているキー。数字・候補値は undefined(トグルではない)。 */
@@ -438,7 +442,7 @@ export function LlmPanel() {
         sections={sectionsFor()}
         onPress={press}
         pressed={keyPressed}
-        disabled={keyDisabled}
+        off={keyOff}
       />
       {ok && (
         <div className={styles.result} data-testid="llm-result">

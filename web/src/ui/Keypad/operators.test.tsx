@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DataScaleCalc } from "../../datascale";
 import type { ExprCalc } from "../../expr";
+import keypadStyles from "./Keypad.module.css";
 
 // jsdom では WASM を読み込めないので、ラッパー層ごと差し替える
 // (DataScalePanel.test.tsx / LlmPanel.test.tsx と同じ流儀)。**ここは
@@ -103,6 +104,12 @@ const PANELS = [
   },
 ] as const;
 
+/**
+ * 3 盤面の数字面に在る予約スロットの総数。**実測で置く**——盤面の格子が
+ * 変わったらここが落ちる（それは「枠を触った」ということなので、落ちてよい）。
+ */
+const RESERVED_COUNT = 13; // 実測 2026-08-31: Data Scale 2 / LLM 6 / Transfer 5
+
 describe("計算しないパネルの演算子キー", () => {
   it("renders all seven of them disabled, on all three panels", async () => {
     const user = userEvent.setup();
@@ -134,5 +141,112 @@ describe("計算しないパネルの演算子キー", () => {
       OPERATOR_TOKENS.length * PANELS.length,
     );
     expect(live).toEqual([]);
+  });
+
+  /**
+   * **予約スロットも「永久に使えない」側である**（設計書
+   * `2026-08-31-two-shades-of-off.md` §1.1、ユーザー裁定 2026-08-31）。
+   *
+   * **上の 7 個と同じ段に置く**——利用者にとって、予約スロットと死んだ
+   * 演算子の違いは意味を持たない。どちらも押せず、これからも押せない。
+   *
+   * **`data-token` を持たない `<button>` が予約スロットである**
+   * （`Key.tsx` が `token === null` のとき属性を出さない）。
+   */
+  it("keeps every reserved slot unpressable too", async () => {
+    const user = userEvent.setup();
+    const live: string[] = [];
+    let counted = 0;
+
+    for (const panel of PANELS) {
+      const { container, unmount } = render(panel.element);
+      await panel.reach(user, container);
+
+      // **盤面の中だけを見る。** `fieldset button` で拾うと、Data Scale の
+      // 単位系トグル（盤面の外の `<fieldset>`）まで入る——**最初それで
+      // 落ちて気づいた**。`Keypad` が包む `div` の中に絞る。
+      const keypad = container.querySelector(`.${keypadStyles.keypad}`);
+      if (keypad === null) throw new Error(`${panel.name}: 盤面が見つからない`);
+
+      for (const slot of keypad.querySelectorAll<HTMLButtonElement>(
+        "button:not([data-token])",
+      )) {
+        counted += 1;
+        if (!slot.disabled) live.push(`${panel.name}: 予約スロットが押せる`);
+        // **文字を出さない**（ユーザー裁定 2026-09-02）。`—` を置くと
+        // 「そういうキーがある」に見えて、**押せそうに見える**。
+        // **読み上げ名は残る**——`aria-label="空き"` が別に在る。
+        if (slot.textContent !== "") {
+          live.push(`${panel.name}: 予約スロットに「${slot.textContent}」`);
+        }
+        if (slot.getAttribute("aria-label") === null) {
+          live.push(`${panel.name}: 予約スロットに読み上げ名が無い`);
+        }
+      }
+
+      unmount();
+    }
+
+    // **数えた数を主張する。** 面に着けずに 0 個でも緑、を起こさない。
+    expect(counted, "no reserved slot was ever found").toBe(RESERVED_COUNT);
+    expect(live).toEqual([]);
+  });
+
+  /**
+   * **読み上げの側の区別**（設計書 §1.2 の (d)、ユーザー裁定 2026-08-31）。
+   *
+   * **形（破線）が見えなかった場合、これが唯一の区別になる**——裁定は
+   * 「67px で形が見えなければ濃さ ＋ 読み上げに落とす」という条件つきなので、
+   * **落ちた瞬間、意味の差を運ぶのはここだけ**である。
+   *
+   * **見た目ではなく属性の話**なので jsdom で足りる（CLAUDE.md の
+   * 「jsdom はアクセシビリティツリーを組み立てない」とは別の層）。
+   */
+  it("describes the permanent ones, and only those, to a screen reader", async () => {
+    const user = userEvent.setup();
+    const wrong: string[] = [];
+    let described = 0;
+    let plain = 0;
+
+    for (const panel of PANELS) {
+      const { container, unmount } = render(panel.element);
+      await panel.reach(user, container);
+
+      const keypad = container.querySelector(`.${keypadStyles.keypad}`);
+      if (keypad === null) throw new Error(`${panel.name}: 盤面が見つからない`);
+
+      for (const key of keypad.querySelectorAll<HTMLButtonElement>("button")) {
+        const id = key.getAttribute("aria-describedby");
+        const token = key.getAttribute("data-token");
+        // **永久 = 予約スロット（token 無し）と、死んだ演算子。**
+        const permanent =
+          token === null ||
+          (OPERATOR_TOKENS as readonly string[]).includes(token);
+
+        if (permanent) {
+          if (id === null) {
+            wrong.push(`${panel.name}: ${token ?? "空き"} に説明が無い`);
+            continue;
+          }
+          // **宙に浮いた id は読み上げに何も届けない。**
+          if (container.querySelector(`#${CSS.escape(id)}`) === null) {
+            wrong.push(`${panel.name}: ${token ?? "空き"} の説明先が無い`);
+            continue;
+          }
+          described += 1;
+        } else {
+          if (id !== null) wrong.push(`${panel.name}: ${token} に説明が付いた`);
+          plain += 1;
+        }
+      }
+      unmount();
+    }
+
+    // **両側の数を主張する。** 片方が 0 でも緑、を起こさない。
+    expect(described, "no permanent key was described").toBe(
+      OPERATOR_TOKENS.length * PANELS.length + RESERVED_COUNT,
+    );
+    expect(plain, "no ordinary key was seen").toBeGreaterThan(0);
+    expect(wrong).toEqual([]);
   });
 });

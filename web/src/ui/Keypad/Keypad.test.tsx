@@ -72,7 +72,7 @@ describe("Keypad（汎用）", () => {
       <Keypad
         sections={SECTIONS}
         onPress={onPress}
-        disabled={(token) => token === "a"}
+        off={(token) => (token === "a" ? "transient" : null)}
       />,
     );
     const a = screen.getByRole("button", { name: "エー" });

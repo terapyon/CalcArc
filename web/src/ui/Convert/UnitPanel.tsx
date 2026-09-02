@@ -41,6 +41,7 @@ import {
 } from "../Keypad/convert";
 import { Keypad } from "../Keypad/Keypad";
 import { parsePrefixed } from "../Keypad/parse";
+import type { Offness } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import styles from "./UnitPanel.module.css";
 import { useCurrencyRates } from "./useCurrencyRates";
@@ -204,34 +205,37 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   }
 
   /** いま押せないキー。**DEL はどの面にも居る**ので、単位面では消すものが無い。 */
-  function keyDisabled(token: ConvertKeyToken): boolean {
+  function keyOff(token: ConvertKeyToken): Offness | null {
     // **レート表に無い通貨は押せない**(spec §7)。`Key` が `:disabled` で
     // 薄くするので、**押せないキーは押せないように見える**——0.2.0 の
     // 予約スロットの穴(有効なキーと同じ見た目で無反応)を繰り返さない。
     if (currency) {
       const unit = parsePrefixed(token, "unit:", faceUnitsOf(category));
       if (unit !== null) {
-        return rateOf(unit) === null;
+        // **レート表というデータを待っている**——盤面の操作では戻らないが、
+        // レートが届けば押せるようになる。**「いつか生き返る」側である**
+        // (ユーザー裁定 2026-08-31。設計書 §1.4)。
+        return rateOf(unit) === null ? "transient" : null;
       }
     }
     switch (token) {
       case "del":
-        return !valueField;
+        return valueField ? null : "transient";
       // 畳んだ結果が取れなければ `=` は押せない(FinancePanel の `settle` と
       // 同じ述語——`hasOperator` ではなく「評価できるか」で判定する)。
       case "eq":
-        return settled() === null;
+        return settled() === null ? "transient" : null;
       case "add":
       case "sub":
       case "mul":
       case "div":
-        return !canPushOperator(entry);
+        return canPushOperator(entry) ? null : "transient";
       case "lparen":
-        return !canPushOpenParen(entry);
+        return canPushOpenParen(entry) ? null : "transient";
       case "rparen":
-        return !canPushCloseParen(entry);
+        return canPushCloseParen(entry) ? null : "transient";
       default:
-        return false;
+        return null;
     }
   }
 
@@ -412,7 +416,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         sections={valueField ? CONVERT_SECTIONS : unitSections(category)}
         onPress={press}
         pressed={keyPressed}
-        disabled={keyDisabled}
+        off={keyOff}
       />
       {/* **この行は Readout の再掲ではない**（0.3.x triage C9、2026-08-30 に測って
           閉じた）。同じ数は Readout にも出るが、**両辺が `=` を挟んで隣り合うのは

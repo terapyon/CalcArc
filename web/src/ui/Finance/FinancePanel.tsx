@@ -45,7 +45,7 @@ import {
 } from "../Keypad/finance";
 import { Keypad } from "../Keypad/Keypad";
 import { parsePrefixed } from "../Keypad/parse";
-import type { KeypadSection } from "../Keypad/types";
+import type { KeypadSection, Offness } from "../Keypad/types";
 import { Readout } from "../Readout/Readout";
 import { loadSettings, updateSettings } from "../useSetting";
 import styles from "./FinancePanel.module.css";
@@ -403,39 +403,43 @@ export function FinancePanel() {
   }
 
   /** いま押せないキー(設計書 §6 の可否表 + 単位の文法)。 */
-  function keyDisabled(token: FinanceKeyToken): boolean {
+  function keyOff(token: FinanceKeyToken): Offness | null {
     const field = parsePrefixed(token, "field:", FINANCE_FIELDS);
     if (field !== null) {
-      return !fieldEnabled(field);
+      // **この盤面は式を組む**ので、永久に押せないキーは無い——
+      // どれもモードか項目が変われば戻る（設計書 §1.4）。
+      return fieldEnabled(field) ? null : "transient";
     }
-    if (token.startsWith("mode:")) return false;
+    if (token.startsWith("mode:")) return null;
     switch (token) {
       // 小数点は年利だけ(parse_yen は小数点を拒否し、期間は整数月)。
       case "dot":
-        return active !== "rate";
+        return active !== "rate" ? "transient" : null;
       // 000 は年利で無効(0.000 の誤入力を誘うだけ)。
       case "zeros3":
-        return active === "rate";
+        return active === "rate" ? "transient" : null;
       // **単位キーは項目に従う**(設計書 §5)。金額は 万/億、期間は 年/月、
       // 年利は単位を持たないので空きになる。
       case "unit:high":
       case "unit:low": {
         const unit = unitFor(active, token);
-        return unit === null || !canPushUnit(entryOf(active), unit);
+        return unit === null || !canPushUnit(entryOf(active), unit)
+          ? "transient"
+          : null;
       }
       case "add":
       case "sub":
       case "mul":
       case "div":
-        return !canPushOperator(entryOf(active));
+        return canPushOperator(entryOf(active)) ? null : "transient";
       case "lparen":
-        return !canPushOpenParen(entryOf(active));
+        return canPushOpenParen(entryOf(active)) ? null : "transient";
       case "rparen":
-        return !canPushCloseParen(entryOf(active));
+        return canPushCloseParen(entryOf(active)) ? null : "transient";
       case "eq":
-        return settle(active) === null;
+        return settle(active) === null ? "transient" : null;
       default:
-        return false; // 数字・DEL・AC はいつでも押せる
+        return null; // 数字・DEL・AC はいつでも押せる
     }
   }
 
@@ -882,7 +886,7 @@ export function FinancePanel() {
         sections={sectionsFor(mode, active)}
         onPress={press}
         pressed={keyPressed}
-        disabled={keyDisabled}
+        off={keyOff}
       />
       {breakdown.length > 0 && (
         <div className={styles.breakdown} data-testid="finance-breakdown">
