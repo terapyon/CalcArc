@@ -71,52 +71,59 @@ fn glyph(key: Key) -> Option<&'static str> {
     })
 }
 
+/// 部分(空白で区切られる 1 単位)が、数字を打っている最中の綴りか。
+///
+/// 数字・小数点だけでできていれば真。`del` はここを見て、1 文字だけ
+/// 落とすか、部分をまるごと落とすかを決める。
+fn is_digit_run(part: &str) -> bool {
+    !part.is_empty() && part.chars().all(|c| c.is_ascii_digit() || c == '.')
+}
+
 /// キー列を式の文字列に綴る。
 ///
-/// **`del` は直前の 1 打鍵ぶんを落とし、`ac` は列を空にする。**
-/// どちらも空の列に来ても何も起きない(**panic しない**)。
+/// **`ac` は列を空にする。**
 ///
-/// 各「部分」(空白で区切られる単位)は、それを作った打鍵ごとの断片
-/// (`chunk`)の列として持つ。`3` `0` は 1 つの部分 `["3", "0"]`(表示は
-/// `30`)で、`del` はその部分の最後の断片だけを取り除く——`zeros3` の
-/// ように 1 打鍵で複数文字(`000`)を入れるキーでも、`del` は 1 打鍵ぶんを
-/// まるごと戻す。断片が尽きて部分が空になったら、部分そのものを消す。
-/// atomic な部分(`sin` など)は断片が 1 つしか無いので、`del` はその
-/// 部分をまるごと消す——それが 1 打鍵の効果と一致する。
+/// **`del` は最後の部分が数字の綴りなら 1 文字だけ落とし、
+/// そうでなければ部分をまるごと落とす。** 電卓本体の DEL が
+/// `engine_table.rs:168`(`main_of(&["1","zeros3","del"]) == "100"`)
+/// で「数字は 1 文字ずつ」と決めているので、`zeros3` の `000` を
+/// 打鍵単位でまるごと戻すと綴りが `1` になってしまい、その式が
+/// 自分の答(`100`)と食い違う。**綴りは表示の DEL と同じ粒度でなければ
+/// ならない。** 一方 `sin` のような数でない綴りは 1 打鍵で 1 語が
+/// 入るので、`del` もその語をまるごと戻す——1 打鍵の効果と一致する。
+///
+/// どちらも空の列に来ても何も起きない(**panic しない**)。
 pub fn spell(keys: &[Key]) -> String {
-    let mut parts: Vec<Vec<&'static str>> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
     for &key in keys {
         match key {
             Key::Ac => parts.clear(),
             Key::Del => {
                 if let Some(last) = parts.last_mut() {
-                    last.pop();
-                    if last.is_empty() {
+                    if is_digit_run(last) {
+                        last.pop();
+                        if last.is_empty() {
+                            parts.pop();
+                        }
+                    } else {
                         parts.pop();
                     }
                 }
             }
             _ => {
                 let Some(text) = glyph(key) else { continue };
-                let joins = joins_to_previous(key)
-                    && parts.last().is_some_and(|last| {
-                        last.iter()
-                            .all(|chunk| chunk.chars().all(|c| c.is_ascii_digit() || c == '.'))
-                    });
+                let joins =
+                    joins_to_previous(key) && parts.last().is_some_and(|last| is_digit_run(last));
                 if joins {
                     // **数は前にくっつく。** `3` `0` は `30` になる。
                     if let Some(last) = parts.last_mut() {
-                        last.push(text);
+                        last.push_str(text);
                     }
                 } else {
-                    parts.push(vec![text]);
+                    parts.push(text.to_string());
                 }
             }
         }
     }
-    parts
-        .iter()
-        .map(|chunks| chunks.concat())
-        .collect::<Vec<String>>()
-        .join(" ")
+    parts.join(" ")
 }

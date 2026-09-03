@@ -57,7 +57,7 @@ fn seven_keys_do_not_spell() {
 }
 
 #[test]
-fn del_drops_the_last_spelling_and_ac_empties_the_line() {
+fn del_is_one_character_on_a_digit_run_and_ac_empties_the_line() {
     // engine_table.rs:178 が `["3","add","j","4","del","5","eq"]` を
     // `3+5j` にしている。**綴りも同じ数の打鍵を落とす。**
     assert_eq!(spell_of(&["3", "add", "j", "4", "del", "5"]), "3 + j 5");
@@ -66,6 +66,14 @@ fn del_drops_the_last_spelling_and_ac_empties_the_line() {
     // 空の列に `del` を打っても壊れない。**core は panic しない。**
     assert_eq!(spell_of(&["del"]), "");
     assert_eq!(spell_of(&["1", "add", "2", "ac", "9"]), "9");
+    // **`del` は 1 文字である。** engine_table.rs:168 が
+    // `main_of(&["1","zeros3","del"]) == "100"` を固定しているので、
+    // 綴りがここでずれると**式が自分の答を生まない 1 件**ができる。
+    assert_eq!(spell_of(&["1", "zeros3", "del"]), "100");
+    assert_eq!(spell_of(&["1", "zeros3", "del", "del", "del"]), "1");
+    assert_eq!(spell_of(&["1", "dot", "5", "del"]), "1.");
+    // 数でない綴りは打鍵ごと落ちる(1 文字ずつではない)。
+    assert_eq!(spell_of(&["4", "sqrt", "del"]), "4");
 }
 
 #[test]
