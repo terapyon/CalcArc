@@ -126,7 +126,37 @@ E2E 1 本／`base-spec.md:1035` と README／重量級の確認。
 ——**あちらはクローンごとのローカル除外**なので、§13-8 の結論だけはここに写す
 (このファイルが「他のセッションからも読める唯一の記録」という §1 の原則に従う)。
 
-### §13-8(呼び戻しは手打ちと同じ状態になるか)—— **狭めた。閉じてはいない**
+### §13-8(呼び戻しは手打ちと同じ状態になるか)—— **2026-09-03、Task 11 で閉じた**
+
+**追記(Task 11)**: 下の節(vitest・偽 `Calc`)が「狭めたが閉じていない」と
+書いていた**実 WASM での確認**を、Task 11(E2E)で行った。
+
+- **走らせたもの**: `web/tests/e2e/history.spec.ts` の
+  `a recalled negative decimal behaves like the same digits typed by hand,
+  on the real WASM core`。`cd web && pnpm wasm` のあと
+  `pnpm exec playwright test tests/e2e/history.spec.ts`(実 WASM・実ブラウザ)。
+- **やったこと**: `3 − 3.5 = -0.5`(負・小数を含む、非自明な値)を計算して
+  記録し、履歴から呼び戻したあとに `3` をもう 1 打鍵した結果の
+  `display-main` と、`ac` のあと `0`・`.`・`5`・`+/−`・`3` を手で打った結果の
+  `display-main` を比較した。両者は `press` に送る打鍵列がトークン単位で
+  一致する(`recall` は `ac, 0, dot, 5, neg` を送り、手打ちも同じ 4 トークン
+  になる)ので、これは実 WASM の `dispatch` が同じキー列に対して決定的で
+  あることの確認になる。
+- **結果**: **一致した(緑)**。`pnpm exec playwright test`(全 198 本、
+  history の 3 本を含む)・`pnpm lint`・`pnpm typecheck` もすべて緑
+  (2026-09-03 実測)。
+- **赤確認も別途行った**: `scientific.ts` の `j` の `shift` を一時的に外すと、
+  この 3 本(history.spec.ts 全体)が失敗することを確認し、再編集で戻した
+  (`git diff` で無変化を確認)。これは §13-8 とは別の主張(`hist` の到達性)
+  の番人だが、同じコミットで両方を確認した。
+
+**閉じた理由**: 「呼び戻しは手打ちと同じ `press` コールバックを通る」という
+コードの構造上の性質(下記)に加え、**実 WASM の計算コアがその打鍵列に対して
+手打ちと同じ表示に決定的に落ち着くこと**を実機で確認した。これで
+「コードの経路としては一致するが実機は未確認」という保留が外れる。
+
+以下は Fix round 1・2(vitest・偽 `Calc` に対する検証)の記録——**狭めた、
+閉じてはいない**という結論は Task 11 以前の時点のものとして、そのまま残す。
 
 **確かめたこと**: `web/src/ui/ScientificPanel.tsx` の `recall` は、答の文字列を
 キー列へ写したあと、手打ちと**同じ `press` コールバック**を `ac` → 各キーの順で
@@ -211,6 +241,6 @@ History/History.tsx` と `History.module.css` に触った)。
   足すなら `mapAnswerToKeys` を広げるだけでよい——`canRecall` はそれを
   そのまま使っているので、`HistoryEntry` 側の設計をやり直す必要は無い
   (Fix round 2 で `error` の借用をやめたため)。
-- **§13-8 を本当に閉じるには、Task 11(E2E)で実 WASM に対して同じ比較を
-  すること。** `heavy:ui` は手元で回さない規約なので、Playwright の軽い方
-  (`pnpm e2e`)で足りるはずだが未確認。
+- **§13-8 は Task 11(E2E)で閉じた(2026-09-03)。** `pnpm e2e` の軽い方
+  (`playwright test`)で足りた——`heavy:ui` を回す必要は無かった。詳細は
+  この節の先頭「2026-09-03、Task 11 で閉じた」を見ること。
