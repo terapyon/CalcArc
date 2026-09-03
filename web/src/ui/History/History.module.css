@@ -49,13 +49,26 @@
   text-align: center;
 }
 
+/* 一覧の下、全消しの置き場(Fix round Finding B)。中央寄せにして
+   `戻る` の縦の並びから外す——押し間違いの経路を作らないため。 */
+.clearAllRow {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+/* **見た目は控えめに**(Fix round Finding B)。ヘッダの危険色ボタン
+   (地を塗る `--key-danger-bg`)はやめ、地に溶ける文字ボタンにする
+   ——取り消せない操作だと分かる程度の色(`--error-fg`)だけ残す。
+   一覧の下という位置そのものが「普段は押さない」意味を持つので、
+   面まで塗って一番目立たせる必要はない。 */
 .clearAll {
   min-height: var(--touch-target-min);
-  padding: 8px 12px;
-  border: var(--key-danger-border);
+  padding: 8px 16px;
+  border: none;
   border-radius: var(--radius);
-  background: var(--key-danger-bg);
-  color: var(--key-danger-fg);
+  background: transparent;
+  color: var(--error-fg);
   font-family: inherit;
   font-size: var(--nav-font-size);
   cursor: pointer;
@@ -86,15 +99,16 @@
 /* 呼び出しボタン(またはエラー行)。表示専用の要素と押せる要素で
    見た目を変えない——押せないのは中身(エラー)の理由であって、
    デザイン上「押せなさそう」に沈めると、押せる行まで沈んで見える
-   (`Key.module.css` の空きセルと同じ考え方)。 */
+   (`Key.module.css` の空きセルと同じ考え方)。
+   **式と答は別の行に積む**(Fix round Finding A)。同じ行・同じ書体・
+   同じ大きさで並べると、隙間だけでは境目が読めない(実機で実測)。 */
 .entry {
   flex: 1;
   min-width: 0;
   min-height: var(--touch-target-min);
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 12px;
   border: var(--key-border);
   border-radius: var(--radius);
@@ -122,22 +136,36 @@
 }
 
 .expression {
-  flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: var(--key-font-size);
 }
 
-/* 答。未確定(ブリーフ参照): 長い答は折り返して次の行に流す。
-   削除ボタンは行の外(`.row` の兄弟)に置いてあるので、ここが伸びても
-   削除ボタンを押しつぶすことはない——実物のスクリーンショットで
-   窮屈だと分かれば、ここを縮め方向(省略・スクロール)に変える。 */
+/* 答の行。式の行の下、右寄せ(設計書 §5「式と答が両方見える」)。
+   `=` を手前に置くのが境目の主な合図で、太字はその補強——
+   色は変えない(エラー色は行全体の `.entry[data-error]` が持つ)。 */
+.result {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  column-gap: 8px;
+}
+
+.equals {
+  color: var(--display-status-fg);
+  font-size: var(--key-font-size);
+}
+
+/* 答。長ければ折り返す(削除ボタンは `.row` の兄弟なので押しつぶさない)
+   ——省略やスクロールは選ばない(Fix round Finding A: 読めなくなる側の
+   解決は禁じられている)。太字にして式より視覚の重みを持たせる。 */
 .answer {
-  flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
   text-align: right;
   font-size: var(--key-font-size);
+  font-weight: var(--key-font-weight-emphasis);
 }
 
 .angle {
