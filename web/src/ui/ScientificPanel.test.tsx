@@ -334,6 +334,83 @@ describe("履歴", () => {
     ).toBeInTheDocument();
   });
 
+  it("turns recording off from the history screen without erasing what's already there", async () => {
+    // Task 14: `Settings.history.enabled` は既にこのパネルの下(line ~219)
+    // が読んでいたが、誰も書いていなかった——利用者が切る手段が無かった。
+    // ここでは、既定が入であること・トグルを押すと設定に書かれること・
+    // **切っても既存の 1 件が消えないこと**・以後の計算が積まれなくなる
+    // ことをまとめて見る。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    expect(spellCallCount).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+
+    const toggle = screen.getByRole("checkbox", {
+      name: "今後の計算を記録する",
+    });
+    // 既定は入(設計書 §7)。
+    expect(toggle).toBeChecked();
+
+    await userEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+
+    // 切っても既存の 1 件は残る——「切る」と「消す」は別の操作である。
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+    ).toBeInTheDocument();
+
+    // 設定にも書かれている。
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.settings") as string,
+    );
+    expect(saved.history.enabled).toBe(false);
+
+    // 戻って、切った後の計算は記録されない。
+    // **`< 戻る` で Keypad が作り直される**ので shift は解けている
+    // ——`履歴` を再び出すには「第2面に切り替え」をもう一度押す。
+    await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
+    await userEvent.click(screen.getByRole("button", { name: "9" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("keeps the recording toggle off across a reload", async () => {
+    // **持続する**(ブリーフ「turn it off, reload, still off」)。
+    // 実物のリロードは試せないので、パネルを作り直して同じ形にする
+    // ——localStorage はテスト間だけクリアされ、この中では残る。
+    const { unmount } = render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    );
+    unmount();
+
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    ).not.toBeChecked();
+  });
+
   it("keeps the history across AC", async () => {
     // **`AC` では消えない**(設計書 §6)。
     render(<ScientificPanel />);

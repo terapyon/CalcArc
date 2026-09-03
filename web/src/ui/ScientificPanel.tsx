@@ -120,6 +120,13 @@ export function ScientificPanel() {
   const [step, setStep] = useState<Step | null>(null);
   const [failed, setFailed] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
+  // **`Settings.history.enabled` を書く唯一の場所(Task 14)。** 読む側
+  // (`recordHistory` の effect、下)は毎回 `loadSettings()` を直接読むので、
+  // この state は画面表示専用——`History` にいまの値を渡し、チェックボックス
+  // が現在の設定を映す。既定は入(設計書 §7 / `defaultSettings()`)。
+  const [recordingEnabled, setRecordingEnabledState] = useState(
+    () => loadSettings().history.enabled,
+  );
   // **初期値は localStorage から読む。** WASM の読み込みとは無関係
   // ——履歴は計算エンジンの状態を含まない(設計書 §3)。
   const [entries, setEntries] = useState<HistoryEntry[]>(() => loadHistory());
@@ -274,6 +281,17 @@ export function ScientificPanel() {
     saveHistory(cleared);
   }, []);
 
+  // **切る/入れる。消すとは別の操作**(設計書 §7)——`entries` には
+  // 一切触らない。書き込みは `updateSettings` 経由(P-1 設計書 §6 の
+  // 通り、`web/src/ui/storage.ts` だけが Storage を掴む形を保つ)。
+  const setRecordingEnabled = useCallback((enabled: boolean) => {
+    setRecordingEnabledState(enabled);
+    updateSettings((current) => ({
+      ...current,
+      history: { ...current.history, enabled },
+    }));
+  }, []);
+
   // **書き戻しは effect に置く。** setStep の更新関数の中に副作用を書くと、
   // StrictMode(main.tsx で有効)が更新関数を 2 度呼ぶので書き込みも 2 度
   // 走る。値が同じなので実害は出ないが、副作用の置き場所として正しくない
@@ -333,6 +351,8 @@ export function ScientificPanel() {
           // 返すのでここでも押せなくなるが、それは結果が一致しているだけで、
           // `History` 側は 2 つの理由を区別しない(区別するのは色だけ)。
           canRecall={(entry) => mapAnswerToKeys(entry.answer) !== null}
+          recordingEnabled={recordingEnabled}
+          onRecordingEnabledChange={setRecordingEnabled}
         />
       ) : (
         <>

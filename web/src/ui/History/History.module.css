@@ -49,12 +49,64 @@
   text-align: center;
 }
 
+/* 一覧の下(空でも描く。Task 14)。すべて消す(あれば)と記録トグルを
+   束ねるだけの器——`entries.length === 0` の早期リターンの後でも、
+   ここは常に描かれる。 */
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* 一覧の下、全消しの置き場(Fix round Finding B)。中央寄せにして
    `戻る` の縦の並びから外す——押し間違いの経路を作らないため。 */
 .clearAllRow {
   display: flex;
   justify-content: center;
   padding-top: 4px;
+}
+
+/* 記録トグル(Task 14)。**すべて消すの隣に置き、動詞を変えて区別する**
+   ——「記録する」(オン/オフ)と「消す」は別の操作である(設計書 §7)。
+   `.clearAllRow` と同じ中央寄せで、フッタの中で並びを揃える。 */
+.recordingRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px 8px;
+}
+
+.recordingLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-target-min);
+  color: var(--display-fg);
+  font-size: var(--nav-font-size);
+  cursor: pointer;
+}
+
+.recordingCheckbox {
+  /* タッチ操作でも押しやすい大きさに揃える(base-spec §43 のタッチ最小)。 */
+  width: 20px;
+  height: 20px;
+  accent-color: var(--key-accent-fg);
+}
+
+.recordingCheckbox:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* **「消えません」を言葉で見せる**(ブリーフ「obvious that turning it off
+   is not erasing」)。トグルのすぐ下、すべて消すのすぐ隣という位置関係
+   そのものも、2 つが別操作であることの手がかりになる。 */
+.recordingNote {
+  margin: 0;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+  text-align: center;
 }
 
 /* **見た目は控えめに**(Fix round Finding B)。ヘッダの危険色ボタン

@@ -24,6 +24,8 @@ describe("History", () => {
         onRemove={() => {}}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     expect(screen.getByText("30 sin")).toBeInTheDocument();
@@ -42,6 +44,8 @@ describe("History", () => {
         onRemove={() => {}}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     // **2 件目を押す。** 添字を固定しないと「いつも先頭」でも緑になる。
@@ -63,6 +67,8 @@ describe("History", () => {
         onRemove={onRemove}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     // 添字ではなく、削除したい行の aria-label をそのまま名前に使う。
@@ -94,6 +100,8 @@ describe("History", () => {
         onRemove={() => {}}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     // 行は在る。
@@ -121,6 +129,8 @@ describe("History", () => {
         onRemove={onRemove}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     await userEvent.click(
@@ -138,11 +148,97 @@ describe("History", () => {
         onRemove={() => {}}
         onClearAll={() => {}}
         canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
     // **空のときに全消しを出さない。** 押せる物が何も無い。
     expect(screen.queryByRole("button", { name: "すべて消す" })).toBeNull();
+  });
+
+  it("shows whether recording is on, even with nothing recorded yet", () => {
+    // Task 14: `Settings.history.enabled` は既に `ScientificPanel` に
+    // 読まれているが、書く手段が無い(誰も `updateSettings` を呼ばない)。
+    // **空のときこそ見せる価値がある**——記録を切ってから 1 度も計算して
+    // いない利用者は、この画面が空のまま状態を確かめに来る。
+    render(
+      <History
+        entries={[]}
+        onBack={() => {}}
+        onRecall={() => {}}
+        onRemove={() => {}}
+        onClearAll={() => {}}
+        canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("checkbox", {
+      name: "今後の計算を記録する",
+    });
+    expect(toggle).toBeChecked();
+    // すべて消すは(既存どおり)空のときは出ない——このトグルとは別物。
+    expect(screen.queryByRole("button", { name: "すべて消す" })).toBeNull();
+  });
+
+  it("reflects that recording is off", () => {
+    render(
+      <History
+        entries={ENTRIES}
+        onBack={() => {}}
+        onRecall={() => {}}
+        onRemove={() => {}}
+        onClearAll={() => {}}
+        canRecall={canRecallUnlessError}
+        recordingEnabled={false}
+        onRecordingEnabledChange={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    ).not.toBeChecked();
+  });
+
+  it("reports the toggle without erasing anything", async () => {
+    // **切る≠消す**(設計書 §7)。トグルを押しても `onClearAll` は呼ばれない。
+    const onRecordingEnabledChange = vi.fn();
+    const onClearAll = vi.fn();
+    render(
+      <History
+        entries={ENTRIES}
+        onBack={() => {}}
+        onRecall={() => {}}
+        onRemove={() => {}}
+        onClearAll={onClearAll}
+        canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={onRecordingEnabledChange}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    );
+    expect(onRecordingEnabledChange).toHaveBeenCalledWith(false);
+    expect(onClearAll).not.toHaveBeenCalled();
+    // 既に貯まった行はそのまま見える。
+    expect(screen.getByText("30 sin")).toBeInTheDocument();
+  });
+
+  it("says in words that turning it off does not erase what is stored", () => {
+    render(
+      <History
+        entries={[]}
+        onBack={() => {}}
+        onRecall={() => {}}
+        onRemove={() => {}}
+        onClearAll={() => {}}
+        canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
+      />,
+    );
+    expect(screen.getByText(/消えません/)).toBeInTheDocument();
   });
 
   it("does not treat an unmappable-but-valid answer as an error", async () => {
@@ -163,6 +259,8 @@ describe("History", () => {
         onRemove={onRemove}
         onClearAll={() => {}}
         canRecall={() => false}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
       />,
     );
     // 見える。
