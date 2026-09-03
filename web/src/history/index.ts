@@ -1,7 +1,7 @@
 /**
  * 履歴の貯め方・読み書き。
  *
- * **Storage を引数で受ける**——ブラウザの Storage を直接掴まない(settings と
+ * **Storage を引数で受ける**——localStorage を直接掴まない(settings と
  * 同じ考え方)。壊れた JSON・知らない値・例外を投げる Storage の分岐が、
  * すべて React の外で試せる。
  */
