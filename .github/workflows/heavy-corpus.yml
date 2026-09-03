@@ -33,7 +33,7 @@ jobs:
       # 片方だけ更新される**ので、依存を入れる分だけ遅くてもこちらに乗せる。
       - uses: ./.github/actions/setup-web
 
-      - name: The five places must agree, and match the tag
+      - name: The six places must agree, and match the tag
         # **タグから走ったときだけタグと照合する。** workflow_dispatch は
         # ブランチから走るので `github.ref_name` がタグ名ではない——渡すと
         # 「ブランチ名と版数が違う」という無意味な赤になる。

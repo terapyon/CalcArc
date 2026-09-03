@@ -1,13 +1,18 @@
-// 版数が書かれている 5 箇所が食い違っていないことを検査する。
+// 版数が書かれている 6 箇所が食い違っていないことを検査する。
 //
 // **版数の出所は package.json**(0.2.0 設計書 §4)——フッタはシェルが持ち、
 // シェルは WASM を読まないので、core_version() の非同期な経路は使えない。
 // ただし手で書き換える運用なので、一部だけ上げる事故が起きる。それを機械で
 // 捕まえるのがこのスクリプトである。
 //
-// **見るのは 5 箇所**: `Cargo.toml` / `web/package.json` /
+// **見るのは 6 箇所**: `Cargo.toml` / `Cargo.lock` / `web/package.json` /
 // `README.md` の「現在の版」/ `README.en.md` の「Current version」/
 // `CHANGELOG.md` の見出し。
+//
+// **`Cargo.lock` は 6 番目として後から足した**(2026-09-02)。**`cargo` は
+// 黙って lock を書き換えて通る**ので、**上げ忘れても手元は緑**になり、
+// リポジトリには古い lock が残る。**`--locked` で回る所が在れば、そこで
+// 初めて落ちる**——0.7.0 のときは手で気づいて直した。**次は忘れる。**
 //
 // **タグを渡すと検査が 1 段厳しくなる**(`--tag v0.5.0`)。普段は CHANGELOG の
 // 「未リリース」を通すが、タグを打つときは通さない——**日付を入れ忘れたまま
@@ -20,6 +25,15 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+/**
+ * `Cargo.lock` の中で版数を持つ、このリポジトリの crate。
+ *
+ * **2 つとも見る。** 片方だけだと、もう片方が黙って古いまま残る穴になる。
+ * **crate を足したり改名したりしたら、ここも足す**——**見つからなければ
+ * 落ちる**ので、忘れたまま緑にはならない。
+ */
+const CRATES_IN_LOCK = ["calcarc-core", "calcarc-wasm"];
 
 /** `0.4.0` の形。前後は問わない——自由文の中から拾うため。 */
 const SEMVER = /\d+\.\d+\.\d+/;
@@ -45,6 +59,26 @@ const versionInCargo = (text) => {
   const section = afterHeading.split(/^\[/m)[0];
   const matched = section.match(/^version\s*=\s*"([^"]+)"/m);
   return matched === null ? null : matched[1];
+};
+
+/**
+ * `Cargo.lock` の中の 1 つの package の版数。見つからなければ null。
+ *
+ * **`[[package]]` が並ぶだけの形**なので、節に割ってから `name` で選ぶ。
+ * **`^\[` で切ってから読む**のは、`[metadata]` のような後続の節を
+ * またいで読まないためである。
+ */
+const versionInCargoLock = (text, name) => {
+  for (const chunk of text.split(/^\[\[package\]\]\s*$/m).slice(1)) {
+    const section = chunk.split(/^\[/m)[0];
+    const named = section.match(
+      new RegExp(`^name\\s*=\\s*"${forRegExp(name)}"\\s*$`, "m"),
+    );
+    if (named === null) continue;
+    const matched = section.match(/^version\s*=\s*"([^"]+)"/m);
+    return matched === null ? null : matched[1];
+  }
+  return null;
 };
 
 const versionInPackageJson = (text) => {
@@ -77,17 +111,19 @@ const changelogEntry = (text, version) => {
 };
 
 /**
- * 5 箇所を突き合わせ、食い違いを配列で返す。空配列なら揃っている。
+ * 6 箇所を突き合わせ、食い違いを配列で返す。空配列なら揃っている。
  *
  * `tag` を渡すと、**揃っていることに加えてタグ名と一致すること**を見る。
  * `v` から始まっていてもいなくても同じ判定になる。
  *
- * @param {{cargoToml: string, pkgJson: string, readme: string,
- *          readmeEn: string, changelog: string, tag?: string}} sources
+ * @param {{cargoToml: string, cargoLock: string, pkgJson: string,
+ *          readme: string, readmeEn: string, changelog: string,
+ *          tag?: string}} sources
  * @returns {{where: string, message: string}[]}
  */
 export function checkVersions({
   cargoToml,
+  cargoLock,
   pkgJson,
   readme,
   readmeEn,
@@ -104,7 +140,7 @@ export function checkVersions({
   if (tag === undefined && pkg === null) {
     add(
       "web/package.json",
-      "version を読めなかった。ここが版数の出所なので、ほかの 4 箇所も判定できない",
+      "version を読めなかった。ここが版数の出所なので、ほかの 5 箇所も判定できない",
     );
     return problems;
   }
@@ -123,6 +159,11 @@ export function checkVersions({
   };
 
   compare("Cargo.toml", versionInCargo(cargoToml));
+  // **2 つとも見る。** 節が見つからなければ `null` が返り、`compare` が
+  // 「版数を読めなかった」で落とす——**知らない形を黙って通さない。**
+  for (const crate of CRATES_IN_LOCK) {
+    compare(`Cargo.lock (${crate})`, versionInCargoLock(cargoLock, crate));
+  }
   compare("web/package.json", pkg);
   compare("README.md", versionUnderHeading(readme, "## 現在の版"));
   compare("README.en.md", versionUnderHeading(readmeEn, "## Current version"));
@@ -170,6 +211,7 @@ function main() {
 
   const problems = checkVersions({
     cargoToml: read(root, "Cargo.toml"),
+    cargoLock: read(root, "Cargo.lock"),
     pkgJson,
     readme: read(root, "README.md"),
     readmeEn: read(root, "README.en.md"),
@@ -188,8 +230,8 @@ function main() {
   const version = versionInPackageJson(pkgJson);
   console.log(
     tag === undefined
-      ? `version ${version} (5 箇所が一致)`
-      : `version ${version} (5 箇所が一致し、タグ ${tag} とも一致)`,
+      ? `version ${version} (6 箇所が一致)`
+      : `version ${version} (6 箇所が一致し、タグ ${tag} とも一致)`,
   );
 }
 

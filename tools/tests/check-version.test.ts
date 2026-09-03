@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkVersions } from "../check-version.mjs";
 
-// 版数が書かれている 5 箇所を、実物と同じ形の最小限で組み立てる。
+// 版数が書かれている 6 箇所を、実物と同じ形の最小限で組み立てる。
 // **実物と形が違えば検査は何も守らない**ので、綴りは現物から写している。
 const cargoToml = (version: string) =>
   [
@@ -11,6 +11,37 @@ const cargoToml = (version: string) =>
     "[workspace.package]",
     `version = "${version}"`,
     'edition = "2024"',
+    "",
+  ].join("\n");
+
+// **`Cargo.lock` は 2 つの crate が版数を持つ。** 前後に他の package が
+// 並ぶ形まで写している——**節の切り出しを間違えると、隣の package の
+// 版数を読んで黙って緑になる**からである。
+const cargoLock = (core: string, wasm = core) =>
+  [
+    "version = 4",
+    "",
+    "[[package]]",
+    'name = "autocfg"',
+    'version = "1.5.0"',
+    'source = "registry+https://github.com/rust-lang/crates.io-index"',
+    "",
+    "[[package]]",
+    'name = "calcarc-core"',
+    `version = "${core}"`,
+    "dependencies = [",
+    ' "proptest",',
+    "]",
+    "",
+    "[[package]]",
+    'name = "calcarc-wasm"',
+    `version = "${wasm}"`,
+    "dependencies = [",
+    ' "calcarc-core",',
+    "]",
+    "",
+    "[metadata]",
+    'something = "else"',
     "",
   ].join("\n");
 
@@ -53,9 +84,10 @@ const changelog = (...entries: [string, string][]) =>
     ]),
   ].join("\n");
 
-/** 5 箇所すべてが version で揃っている入力。1 つだけ崩して使う。 */
+/** 6 箇所すべてが version で揃っている入力。1 つだけ崩して使う。 */
 const consistent = (version: string, when = "未リリース") => ({
   cargoToml: cargoToml(version),
+  cargoLock: cargoLock(version),
   pkgJson: pkgJson(version),
   readme: readme(version),
   readmeEn: readmeEn(version),
@@ -65,7 +97,7 @@ const consistent = (version: string, when = "未リリース") => ({
 const where = (problems: { where: string }[]) => problems.map((p) => p.where);
 
 describe("普段の検査（タグを渡さないとき）", () => {
-  it("5 箇所が揃っていれば何も言わない", () => {
+  it("6 箇所が揃っていれば何も言わない", () => {
     expect(checkVersions(consistent("0.4.0"))).toEqual([]);
   });
 
@@ -101,6 +133,40 @@ describe("普段の検査（タグを渡さないとき）", () => {
     expect(where(checkVersions(input))).toEqual(["Cargo.toml"]);
   });
 
+  it("Cargo.lock の calcarc-core だけ古いと、その crate を指す", () => {
+    const input = { ...consistent("0.4.0"), cargoLock: cargoLock("0.3.1") };
+    // **両方古い**ので 2 件出る。`cargoLock(core)` は wasm も同じ版にする。
+    expect(where(checkVersions(input))).toEqual([
+      "Cargo.lock (calcarc-core)",
+      "Cargo.lock (calcarc-wasm)",
+    ]);
+  });
+
+  it("Cargo.lock の片方だけ古いと、その片方だけを指す", () => {
+    // **2 つとも見ていることの検査。** 片方しか見ていなければ、
+    // ここが 0 件（＝緑）になるか、間違った crate を指す。
+    const input = {
+      ...consistent("0.4.0"),
+      cargoLock: cargoLock("0.4.0", "0.3.1"),
+    };
+    expect(where(checkVersions(input))).toEqual(["Cargo.lock (calcarc-wasm)"]);
+  });
+
+  it("Cargo.lock に crate が見つからなければ、黙って通さない", () => {
+    // **改名や crate の追加で形が変わったとき、緑のまま素通りさせない。**
+    const input = { ...consistent("0.4.0"), cargoLock: "version = 4\n" };
+    expect(where(checkVersions(input))).toEqual([
+      "Cargo.lock (calcarc-core)",
+      "Cargo.lock (calcarc-wasm)",
+    ]);
+  });
+
+  it("Cargo.lock の隣の package の版数を読まない", () => {
+    // **節の切り出しが甘いと、`autocfg` の 1.5.0 を拾って落ちる**——
+    // 揃っているのに赤くなる形。ここが緑であることが、その否定である。
+    expect(checkVersions(consistent("0.4.0"))).toEqual([]);
+  });
+
   it("package.json から version を読めなければ、黙って通さない", () => {
     const input = { ...consistent("0.4.0"), pkgJson: "{}" };
     // 出所が読めないので、それを基準にしていた 3 箇所は判定できない。
@@ -110,7 +176,7 @@ describe("普段の検査（タグを渡さないとき）", () => {
 });
 
 describe("タグを打ったときの検査", () => {
-  it("タグと 4 箇所が一致し、CHANGELOG に日付が入っていれば通す", () => {
+  it("タグと 6 箇所が一致し、CHANGELOG に日付が入っていれば通す", () => {
     const input = { ...consistent("0.4.0", "2026-08-25"), tag: "v0.4.0" };
     expect(checkVersions(input)).toEqual([]);
   });
@@ -125,10 +191,12 @@ describe("タグを打ったときの検査", () => {
     expect(where(checkVersions(input))).toEqual(["CHANGELOG.md"]);
   });
 
-  it("タグだけ先に進んでいると、揃っている 4 箇所すべてを指す", () => {
+  it("タグだけ先に進んでいると、揃っている 6 箇所すべてを指す", () => {
     const input = { ...consistent("0.4.0", "2026-08-25"), tag: "v0.5.0" };
     expect(where(checkVersions(input))).toEqual([
       "Cargo.toml",
+      "Cargo.lock (calcarc-core)",
+      "Cargo.lock (calcarc-wasm)",
       "web/package.json",
       "README.md",
       "README.en.md",
@@ -149,6 +217,7 @@ describe("CHANGELOG の日付（2026-08-26、B-6）", () => {
   const withEntry = (entry: string) =>
     checkVersions({
       cargoToml: cargoToml("0.5.0"),
+      cargoLock: cargoLock("0.5.0"),
       pkgJson: pkgJson("0.5.0"),
       readme: readme("0.5.0"),
       readmeEn: readmeEn("0.5.0"),
