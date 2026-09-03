@@ -1,9 +1,11 @@
 pub mod display;
 pub mod key;
+pub mod spell;
 pub mod state;
 
 pub use display::{DisplayState, render};
 pub use key::Key;
+pub use spell::spell;
 pub use state::EngineState;
 
 use crate::scientific;
