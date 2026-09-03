@@ -68,6 +68,47 @@ test("what is recorded survives AC, and can be removed one at a time or all at o
 });
 
 /**
+ * Task 14 の記録トグル。**`Settings.history.enabled` を書く経路が実際に
+ * 効くこと**を実 WASM で確かめる——vitest 側(`ScientificPanel.test.tsx`)は
+ * 偽 `Calc` に対して同じ形の主張を持つが、`heavy/tests/ui/
+ * reachability.spec.ts` の 4 本と同じ理由で、盤面からこのチェックボックス
+ * まで実際に到達できるかは E2E でしか見られない(`hist` の裏なので)。
+ */
+test("turning the recording toggle off stops new entries but keeps what was already recorded", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // 切る前に 1 件記録しておく。
+  await press(page, ["2", "掛ける", "3", "計算する"]);
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByText("2 × 3")).toBeVisible();
+
+  const toggle = page.getByRole("checkbox", {
+    name: "今後の計算を記録する",
+  });
+  // 既定は入(設計書 §7)。
+  await expect(toggle).toBeChecked();
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+
+  // 盤面へ戻り、切った後にもう 1 回計算する。
+  await page.getByRole("button", { name: "戻る" }).click();
+  await press(page, ["7", "計算する"]);
+
+  // もう一度履歴を開く。**Shift は面が作り直されるたびに解ける**
+  // ——「the history key is reachable behind Shift」と同じ形。
+  await press(page, ["第2面に切り替え", "履歴"]);
+
+  // 切る前の 1 件だけが残る。切った後の 1 件は積まれていない。
+  await expect(page.getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByText("2 × 3")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "7 = 7 を入力に入れる" }),
+  ).toHaveCount(0);
+});
+
+/**
  * §13-8(呼び戻しは手打ちと同じ状態になるか)を実 WASM で閉じる。
  *
  * `web/src/ui/ScientificPanel.test.tsx` の同名の検査(vitest)は、digit・

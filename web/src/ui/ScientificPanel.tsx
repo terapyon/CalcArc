@@ -284,12 +284,20 @@ export function ScientificPanel() {
   // **切る/入れる。消すとは別の操作**(設計書 §7)——`entries` には
   // 一切触らない。書き込みは `updateSettings` 経由(P-1 設計書 §6 の
   // 通り、`web/src/ui/storage.ts` だけが Storage を掴む形を保つ)。
+  //
+  // **ミラーは書こうとした値ではなく、書いた後に実際に読める値から作る**
+  // (Fix round finding)。`browserStorage()` は、Storage への参照そのもの
+  // が投げるとき(Safari のプライベートモード等)`null` を
+  // 返し、`saveSettings` は静かに何もしない——ここで `enabled` を
+  // そのまま state に入れると、記録は続いているのにチェックボックスだけ
+  // 「切れた」と嘘をつく。書いた直後に `loadSettings()` を読み直せば、
+  // 書けなかった場合は既定(`enabled: true`)へ跳ね返る。
   const setRecordingEnabled = useCallback((enabled: boolean) => {
-    setRecordingEnabledState(enabled);
     updateSettings((current) => ({
       ...current,
       history: { ...current.history, enabled },
     }));
+    setRecordingEnabledState(loadSettings().history.enabled);
   }, []);
 
   // **書き戻しは effect に置く。** setStep の更新関数の中に副作用を書くと、

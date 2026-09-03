@@ -411,6 +411,43 @@ describe("履歴", () => {
     ).not.toBeChecked();
   });
 
+  it("snaps the toggle back to on when storage refuses the write", async () => {
+    // **Fix round finding.** `browserStorage()`(`web/src/ui/storage.ts`)は
+    // `window.localStorage` への参照そのものが投げる場合(Safari の
+    // プライベートモードなど、そこの docstring が名指す場合)に `null` を
+    // 返す——`saveSettings` は静かに何もしない。**楽観的にミラーを
+    // 更新すると、チェックボックスは「切った」と見せるのに実際は
+    // 記録され続ける**(記録する effect は毎回 `loadSettings()` を
+    // 直接読み、`defaultSettings()` の `enabled: true` が返り続けるため)。
+    // **ミラーは、書こうとした値ではなく、実際に読める値から作る。**
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+
+    const toggle = screen.getByRole("checkbox", {
+      name: "今後の計算を記録する",
+    });
+    expect(toggle).toBeChecked();
+
+    // `storage.ts` が捕まえる形をそのまま作る——参照そのものが投げる。
+    const spy = vi
+      .spyOn(window, "localStorage", "get")
+      .mockImplementation(() => {
+        throw new Error("storage is not available");
+      });
+    try {
+      await userEvent.click(toggle);
+      // 書けなかった。実際に読める値(既定=入)へ跳ね返る——
+      // 「切れたふり」をしない。
+      expect(toggle).toBeChecked();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("keeps the history across AC", async () => {
     // **`AC` では消えない**(設計書 §6)。
     render(<ScientificPanel />);
