@@ -105,10 +105,19 @@
   cursor: pointer;
 }
 
-/* エラーで終わった行。**ボタンではない**(`History.tsx` の分岐参照)ので
-   `cursor` を通常に戻し、擬似クラスで押せそうに見せない。 */
-.entry[data-error] {
+/* 押せない行(`canRecall` が false)。**ボタンではない**
+   (`History.tsx` の分岐参照)ので、擬似クラスで押せそうに見せない
+   ——ここは色とは無関係。押せない理由は 2 つある(エラーで終わった
+   計算/成功したが入力に戻せない答)が、カーソルはどちらも同じ。 */
+.entry:not(button) {
   cursor: default;
+}
+
+/* エラーで終わった行の色。**`entry.error` だけを見る**——押せるかどうか
+   (`canRecall`)とは別の軸である(Fix round 2 finding)。成功したが
+   入力に戻せない答(虚数・極形式・60 進)は、押せなくてもこの色には
+   ならない——計算は失敗していないので、失敗の色で見せると嘘になる。 */
+.entry[data-error] {
   color: var(--error-fg);
 }
 

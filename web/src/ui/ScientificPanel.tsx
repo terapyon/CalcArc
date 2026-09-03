@@ -52,15 +52,15 @@ function digitToken(ch: string): KeyToken | null {
  * 60 進(`°′″`)のように、そもそも数字キーの列で表せない綴りがそれに
  * 当たる。呼び出し側(`recall`)はこれを「触らない」で応じる。
  *
- * **さらに、記録する側(下の `useEffect`)もこの関数の結果を見る**——
- * 写せない答は記録した瞬間に `error: true` として積み、`History` の
- * 既存のエラー行の枝(押せない・でも見える)で描く。`web/src/ui/History/`
- * と `web/src/history/` は Task 10 の対象外で新しい欄を足せないため、
- * 「エラーで終わった計算は入力へ戻す意味が無い」という既存の理由を
- * 「(この実装では)入力へ戻せない」に広げて借りている——本来の
- * `CalcErrorCode` による意味とは別物だと承知の上での選択である
- * (Fix round 1 finding 1 の「見つけたら、それを見える形にする」に応じた
- * もの。詳細は task-10-report.md の Fix round 1 節)。
+ * **記録する側(下の `useEffect`)は、この関数の結果を `History` の
+ * `canRecall` prop へそのまま渡す。** `error: true` は積まない
+ * ——「計算が失敗した」(`step.display.error !== null`、`history/
+ * types.ts` の本来の意味のまま)と「この答は入力へ戻せない」は別の事実
+ * であり、同じ欄に混ぜると、成功した計算(例: `3+4j`)がエラーの色
+ * (`--error-fg`)で表示される嘘になる(Fix round 2 finding。以前の
+ * Fix round 1 はこの 2 つを混ぜており、それ自体が指摘された)。
+ * `History`(`web/src/ui/History/`)は押せるかどうかを `canRecall` から、
+ * 色を `entry.error` から、独立に決める。
  */
 function mapAnswerToKeys(answer: string): KeyToken[] | null {
   const stripped = answer.replace(/,/g, "");
@@ -217,17 +217,15 @@ export function ScientificPanel() {
     // ここで止まるのは「これから」記録する分だけで、既に貯まった `entries`
     // には触らない。
     if (!loadSettings().history.enabled) return;
-    // **写せない答は、記録した時点で「押せないが見える」行にする。**
-    // `mapAnswerToKeys` が `null` を返す形(虚数・極形式・60 進)を
-    // そのまま積むと、一覧では成功した行と同じ `<button>` になり、押しても
-    // 静かに何も起きない(Fix round 1 finding 1)。`History` 側の分岐は
-    // `error` しか見ないので、ここでその枝を借りる。
-    const recallable = mapAnswerToKeys(step.display.main) !== null;
+    // **`error` は `history/types.ts` が言う意味のまま**——計算が
+    // `CalcErrorCode` で終わったかどうかだけ。「この答は入力へ戻せる
+    // か」は別の欄では持たず、`History` へ `canRecall` として渡す
+    // (下の `<History>`。Fix round 2)。
     const entry: HistoryEntry = {
       expression,
       answer: step.display.main,
       angle: step.display.angle,
-      error: step.display.error !== null || !recallable,
+      error: step.display.error !== null,
     };
     setEntries((previous) => {
       const updated = pushEntry(previous, entry);
@@ -246,11 +244,11 @@ export function ScientificPanel() {
   //
   // **写せない形は触らない。** 虚数・極形式・60 進のように、そもそも
   // 数字キーの列で表せない形は `mapAnswerToKeys` が `null` を返す——
-  // 回避する仕掛けは作らず、何もしない(ブリーフ)。**そうした答は
-  // 記録した時点で `error: true` として積んであるので、実際には
-  // `History` がボタンにせず、ここへは来ない**(上の `useEffect` 参照)。
-  // ここが `null` を受け取るのは、記録より前に貯まった古い履歴
-  // (`localStorage` に残っている旧データ)が読み込まれた場合の備え。
+  // 回避する仕掛けは作らず、何もしない(ブリーフ)。**通常はここへ
+  // 来ない**——`<History>` の `canRecall` に同じ関数を渡してあるので、
+  // そうした答は `History` 側でボタンにならない(Fix round 2)。ここが
+  // `null` を受け取るとしたら、それより前の版で貯まった古い履歴
+  // (`localStorage` に残っている旧データ)が読み込まれた場合などの備え。
   const recall = useCallback(
     (entry: HistoryEntry) => {
       const keys = mapAnswerToKeys(entry.answer);
@@ -329,6 +327,12 @@ export function ScientificPanel() {
           onRecall={recall}
           onRemove={removeEntry}
           onClearAll={clearHistory}
+          // **押せるかどうかは綴りを知っている側(ここ)が決める**
+          // (Fix round 2)。`entry.error` とは独立——エラーで終わった
+          // 計算(`Math ERROR`)は `mapAnswerToKeys` がどのみち `null` を
+          // 返すのでここでも押せなくなるが、それは結果が一致しているだけで、
+          // `History` 側は 2 つの理由を区別しない(区別するのは色だけ)。
+          canRecall={(entry) => mapAnswerToKeys(entry.answer) !== null}
         />
       ) : (
         <>

@@ -522,19 +522,28 @@ describe("履歴", () => {
     expect(screen.getByTestId("display-main")).toHaveTextContent("-3628800");
   });
 
-  it("marks a shape it cannot map as not recallable, instead of leaving a silently broken button", async () => {
-    // **写せない形は今度も残る**(虚数・極形式・60 進)——ここでは偽物の
-    // `j` を見本に使う。回避する仕掛けは作らない代わりに、記録した時点で
-    // `error: true` として積み、`History` の「押せないが見える」枝
-    // (`web/src/ui/History/History.tsx`、Task 10 の対象外)を借りる
-    // ——一覧が成功した行と同じ見た目のボタンのまま、押しても何も
-    // 起きないことを避ける(Fix round 1 finding 1)。
+  it("marks a shape it cannot map as not recallable, without pretending it failed", async () => {
+    // **写せない形は残る**(虚数・極形式・60 進)——ここでは偽物の `j` を
+    // 見本に使う。回避する仕掛けは作らない代わりに、`History` へ渡す
+    // `canRecall` がその答を弾き、ボタンにしない。**`error` は
+    // 借りない**(Fix round 2 finding)——「計算が失敗した」と「この答は
+    // 入力へ戻せない」は別の事実で、後者を前者の色(`--error-fg`)で
+    // 見せると、成功した計算(`3j` は虚数として正しい答)が失敗したかの
+    // ように嘘をつくことになる。
     render(<ScientificPanel />);
     await screen.findByText("DEG");
     await userEvent.click(screen.getByRole("button", { name: "3" }));
     await userEvent.click(screen.getByRole("button", { name: "虚数単位" }));
     await userEvent.click(screen.getByRole("button", { name: "計算する" }));
     expect(spellCallCount).toBeGreaterThan(0);
+
+    // 記録された 1 件は `error: false` のまま——計算は失敗していない。
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.history") as string,
+    );
+    expect(saved).toHaveLength(1);
+    expect(saved[0].answer).toBe("3j");
+    expect(saved[0].error).toBe(false);
 
     await userEvent.click(
       screen.getByRole("button", { name: "第2面に切り替え" }),
@@ -546,7 +555,10 @@ describe("履歴", () => {
     expect(
       screen.queryByRole("button", { name: /を入力に入れる/ }),
     ).not.toBeInTheDocument();
-    // 削除は普段どおり効く(エラー行と同じ扱い。History.tsx 既存の分岐)。
+    // エラーの色も付かない(行の要素に `data-error` が無い)。
+    const row = screen.getByText("3j").parentElement;
+    expect(row).not.toHaveAttribute("data-error");
+    // 削除は普段どおり効く(押せないことと消せないことは別)。
     expect(
       screen.getByRole("button", { name: "3 を削除" }),
     ).toBeInTheDocument();

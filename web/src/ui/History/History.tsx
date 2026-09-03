@@ -7,6 +7,17 @@ export interface HistoryProps {
   onRecall: (entry: HistoryEntry) => void;
   onRemove: (index: number) => void;
   onClearAll: () => void;
+  /**
+   * その 1 件を入力に戻せるか。**判定は綴りを知っている側が持つ。**
+   *
+   * **`entry.error` とは別の軸**(Fix round 2 finding)。エラーで終わった
+   * 計算(`Math ERROR`)も、成功したが答の綴りをキー列に写せない計算
+   * (虚数・極形式・60 進)も、ここでは「押せない」の 1 点で同じに
+   * 扱ってよい——しかし前者だけが `.entry[data-error]` の色を持つ。
+   * 2 つの事実(「計算が失敗した」/「この答は入力に戻せない」)は別々の
+   * 入力から決まり、混ぜない。
+   */
+  canRecall: (entry: HistoryEntry) => boolean;
 }
 
 /**
@@ -23,6 +34,7 @@ export function History({
   onRecall,
   onRemove,
   onClearAll,
+  canRecall,
 }: HistoryProps) {
   return (
     <div className={styles.screen}>
@@ -53,22 +65,13 @@ export function History({
             // 式を key にすると React が別の行を同一視しかねない。
             // biome-ignore lint/suspicious/noArrayIndexKey: 上のとおり
             <li key={index} className={styles.row}>
-              {entry.error ? (
-                // **§D-1 の例外(ユーザー裁定)。** エラーで終わった計算は
-                // 入力へ戻す意味が無い(`Math ERROR` を再生しても計算に
-                // ならない)ので、ここだけ <button> にしない。一覧には
-                // 出すが、押しても何も起きない要素にする。
-                <div className={styles.entry} data-error>
-                  <span className={styles.expression}>{entry.expression}</span>
-                  <span className={styles.answer}>{entry.answer}</span>
-                  <span className={styles.angle}>{entry.angle}</span>
-                </div>
-              ) : (
+              {canRecall(entry) ? (
                 <button
                   type="button"
                   className={styles.entry}
                   aria-label={`${entry.expression} = ${entry.answer} を入力に入れる`}
                   onClick={() => onRecall(entry)}
+                  data-error={entry.error ? true : undefined}
                 >
                   <span className={styles.expression}>{entry.expression}</span>
                   {/*
@@ -81,6 +84,23 @@ export function History({
                   <span className={styles.answer}>{entry.answer}</span>
                   <span className={styles.angle}>{entry.angle}</span>
                 </button>
+              ) : (
+                // **`<button>` にしないのは「押せないから」だけ**——
+                // `canRecall` が false な理由は 2 通りある: エラーで
+                // 終わった計算(`Math ERROR` を再生しても計算にならない、
+                // §D-1)と、成功したが答の綴りをキー列に写せない計算
+                // (虚数・極形式・60 進)。**色が付くのは前者だけ**
+                // (`data-error` は `entry.error` だけを見る。Fix round 2
+                // finding——「計算が失敗した」と「入力に戻せない」は
+                // 別の事実で、後者を前者の色で見せると嘘になる)。
+                <div
+                  className={styles.entry}
+                  data-error={entry.error ? true : undefined}
+                >
+                  <span className={styles.expression}>{entry.expression}</span>
+                  <span className={styles.answer}>{entry.answer}</span>
+                  <span className={styles.angle}>{entry.angle}</span>
+                </div>
               )}
               <button
                 type="button"

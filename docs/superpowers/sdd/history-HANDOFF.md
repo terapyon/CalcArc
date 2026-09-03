@@ -118,11 +118,11 @@ E2E 1 本／`base-spec.md:1035` と README／重量級の確認。
   **撮ったら preview を落とす**（`ss -lptn 'sport = :4179'` で pid を特定）
 - **長い Playwright（`heavy:ui`）は手元で回さない**
 
-## 8. Task 10・§13-8 の現在地 — 2026-09-03、Fix round 1 で追記
+## 8. Task 10・§13-8 の現在地 — 2026-09-03、Fix round 1・2 で追記
 
-**Task 10(`ScientificPanel` の配線)は完了・レビュー1 巡目の直しまで済み。**
-コミットは `docs/history-plan` に積んである（`76570a4` 本体 + Fix round 1 の
-直しコミット）。台帳は `.superpowers/sdd/2026-09-03-history/task-10-report.md`
+**Task 10(`ScientificPanel` の配線)は完了・レビュー2 巡目の直しまで済み。**
+コミットは `docs/history-plan` に積んである（`76570a4` 本体 + Fix round 1・2
+の直しコミット）。台帳は `.superpowers/sdd/2026-09-03-history/task-10-report.md`
 ——**あちらはクローンごとのローカル除外**なので、§13-8 の結論だけはここに写す
 (このファイルが「他のセッションからも読める唯一の記録」という §1 の原則に従う)。
 
@@ -162,16 +162,11 @@ E2E 1 本／`base-spec.md:1035` と README／重量級の確認。
      送った後)。`-1.5e-3` / `1.5e-3` / `-3,628,800` を含むテストを追加。
    - **それでも写せない形は残る**(虚数 `j`・極形式 `∠`・60 進 `°′″` の
      ような、数字キーの列そのものでは表せない綴り)。**回避する仕掛けは
-     作らず**、**記録した時点で** `mapAnswerToKeys` の結果を見て
-     `HistoryEntry.error = true` として積む選択をした——`web/src/ui/
-     History/History.tsx` と `web/src/history/types.ts` は Task 10 の対象外
-     ファイルで新しい欄を足せないため、既存の「エラーで終わった計算は
-     押せない・でも見える」枝を「(この実装では)入力へ戻せない」に意味を
-     広げて借りている。**`error` フィールドの本来の意味
-     (`CalcErrorCode` が出たかどうか)とは別物であり、これは意図的な
-     借用であって仕様の変更ではない**——`web/src/history/types.ts` の
-     doc comment はそのまま(対象外)なので、次にあの型へ触る人はこの
-     借用を知っておく必要がある。
+     作らない**という判断は変わっていないが、**どう見せるかは Fix
+     round 2 で直った**——下の「Fix round 2」節を見ること。当初は
+     `HistoryEntry.error = true` を借りて表したが、それは**指摘の通り
+     誤りだった**(このファイルの直前の版に残っていた記述もその誤りを
+     含んでいたので、ここで訂正する)。
 2. **測定結果の置き場所**——本節がその対応(この節自体が §2 で指摘された
    「引き継ぎに書く」の実行)。
 3. **報告の見出しと minor のテスト**——`task-10-report.md` の見出しを
@@ -180,11 +175,42 @@ E2E 1 本／`base-spec.md:1035` と README／重量級の確認。
    あいだは記録しない」テストは、**切る前に 1 件記録してから切る**形に
    直し、`pushEntry` ごと壊れていても緑になる形を潰した。
 
+### Fix round 2(1 件、Important)への対応
+
+**指摘**: Fix round 1 で選んだ「写せない答は `HistoryEntry.error = true`
+として積む」は、**指摘の通り誤りだった**。`History.module.css` の
+`.entry[data-error]` は `--error-fg`(失敗の色)を塗るので、`3+4j` のような
+**成功した**複素数の答が、失敗したかのような色で一覧に出てしまっていた。
+「計算が失敗した」と「この答は入力へ戻せない」は別の事実であり、同じ欄に
+混ぜてはいけない。
+
+**直した形**: `HistoryEntry` は触らず(`web/src/history/types.ts` は今回も
+対象外)、`History` に新しい prop `canRecall: (entry: HistoryEntry) =>
+boolean` を足した(コーディネーターの許可でこの回だけ `web/src/ui/
+History/History.tsx` と `History.module.css` に触った)。
+
+- **行が `<button>` になるかどうかは `canRecall(entry)` だけで決まる**
+  ——エラーで終わった行(`Math ERROR`)も、成功したが写せない行も、
+  ここでは同じに扱ってよい(どちらも `mapAnswerToKeys` が `null` を返す)。
+- **エラーの色(`data-error`)が付くかどうかは `entry.error` だけで決まる**
+  ——`canRecall` とは完全に独立。
+- `ScientificPanel` は `canRecall={(entry) => mapAnswerToKeys(entry.answer)
+  !== null}` を渡し、記録する `HistoryEntry.error` は
+  `step.display.error !== null` のまま(`history/types.ts` の本来の意味に
+  戻した)。
+
+テストを追加: `History.test.tsx` に「`error: false` だが `canRecall` が
+`false` を返す答は、ボタンにならず・エラー色も付かず・それでも削除できる」
+を確認する 1 本。`ScientificPanel.test.tsx` の複素数(`3j`)テストは、
+記録された `HistoryEntry.error` が `false` のままであること・一覧の行に
+`data-error` が付かないことを確認する形に直した。
+
 ### 次に触る人へ
 
 - **`mapAnswerToKeys` に虚数・極形式・60 進の変換を足す判断はしていない。**
-  足すなら、まず `HistoryEntry` に「押せない理由」を持たせるかどうかから
-  設計し直す必要がある(`error` の借用をやめられる)。
+  足すなら `mapAnswerToKeys` を広げるだけでよい——`canRecall` はそれを
+  そのまま使っているので、`HistoryEntry` 側の設計をやり直す必要は無い
+  (Fix round 2 で `error` の借用をやめたため)。
 - **§13-8 を本当に閉じるには、Task 11(E2E)で実 WASM に対して同じ比較を
   すること。** `heavy:ui` は手元で回さない規約なので、Playwright の軽い方
   (`pnpm e2e`)で足りるはずだが未確認。
