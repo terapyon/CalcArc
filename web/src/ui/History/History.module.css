@@ -1,0 +1,151 @@
+/* 履歴の画面。**盤面を丸ごと置き換える**ので、Readout と同じ表示色
+   (`--display-bg` / `--display-fg`)を器の地色に使う——数字を映す面の
+   続きとして見えるようにする(Task 9 ブリーフ)。 */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  font-family: var(--display-font);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+  font-family: inherit;
+  font-size: var(--nav-font-size);
+  cursor: pointer;
+}
+
+.back:focus-visible,
+.clearAll:focus-visible,
+.entry:focus-visible,
+.remove:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.heading {
+  flex: 1;
+  margin: 0;
+  font-size: var(--nav-font-size);
+  font-weight: var(--key-font-weight-emphasis);
+  text-align: center;
+}
+
+.clearAll {
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: var(--key-danger-border);
+  border-radius: var(--radius);
+  background: var(--key-danger-bg);
+  color: var(--key-danger-fg);
+  font-family: inherit;
+  font-size: var(--nav-font-size);
+  cursor: pointer;
+}
+
+.empty {
+  padding: 24px 8px;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+  text-align: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--key-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* 呼び出しボタン(またはエラー行)。表示専用の要素と押せる要素で
+   見た目を変えない——押せないのは中身(エラー)の理由であって、
+   デザイン上「押せなさそう」に沈めると、押せる行まで沈んで見える
+   (`Key.module.css` の空きセルと同じ考え方)。 */
+.entry {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch-target-min);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  padding: 8px 12px;
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--key-fg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* エラーで終わった行。**ボタンではない**(`History.tsx` の分岐参照)ので
+   `cursor` を通常に戻し、擬似クラスで押せそうに見せない。 */
+.entry[data-error] {
+  cursor: default;
+  color: var(--error-fg);
+}
+
+.expression {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--key-font-size);
+}
+
+/* 答。未確定(ブリーフ参照): 長い答は折り返して次の行に流す。
+   削除ボタンは行の外(`.row` の兄弟)に置いてあるので、ここが伸びても
+   削除ボタンを押しつぶすことはない——実物のスクリーンショットで
+   窮屈だと分かれば、ここを縮め方向(省略・スクロール)に変える。 */
+.answer {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: var(--key-font-size);
+}
+
+.angle {
+  flex: 0 0 auto;
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.remove {
+  flex: 0 0 auto;
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  border: var(--key-border);
+  border-radius: var(--radius);
+  background: var(--key-function-bg);
+  color: var(--key-function-fg);
+  font-family: inherit;
+  font-size: var(--key-font-size);
+  cursor: pointer;
+}
