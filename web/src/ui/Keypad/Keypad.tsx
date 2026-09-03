@@ -1,7 +1,7 @@
 import { type CSSProperties, useId, useState } from "react";
 import { Key } from "../Key/Key";
 import styles from "./Keypad.module.css";
-import type { KeypadSection, Offness } from "./types";
+import type { KeyAction, KeypadSection, Offness } from "./types";
 
 export interface KeypadProps<T> {
   /** 区画ごとのキー集合。列数と行の高さは区画が持つ(S1 設計書 §6)。 */
@@ -22,9 +22,20 @@ export interface KeypadProps<T> {
    * `"permanent"` に合流する**ので、ここでは扱わない。
    */
   off?: (token: T) => Offness | null;
+  /**
+   * `action` を持つキーが押されたとき。**`onPress` は呼ばれない。**
+   * 省略すると、その面は押しても何も起きない(予約スロットにはならない)。
+   */
+  onAction?: (action: KeyAction) => void;
 }
 
-export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
+export function Keypad<T>({
+  sections,
+  onPress,
+  pressed,
+  off,
+  onAction,
+}: KeypadProps<T>) {
   // **「永久に押せない」の説明は 1 つだけ置き、全部のキーが指す**
   // （設計書 `2026-08-31-two-shades-of-off.md` §1.2）。キーごとに置くと
   // **同じ文が盤面に 20 個並ぶ**——読み上げの利用者には同じ説明であり、
@@ -73,6 +84,10 @@ export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
             // 何も起きないほうが読める(S1 レビューでの申し送りの裁定)。
             const face = shifted && key.shift ? key.shift : key;
             const token = face.token;
+            // **トークンを送らない操作キー。** `Shift` と違い**ワンショット**
+            // ——押すと第 1 面へ戻る(計画 §A-2)。`Shift` 自身がトグルなのは
+            // 正しいので、上の `kind === "shift"` の枝は変えない。
+            const action = face.action;
             return (
               // React の key はトークンと位置で固定する。面で変えると別要素と
               // みなされフォーカスが落ちる。**予約スロットはトークンもラベルも
@@ -94,6 +109,14 @@ export function Keypad<T>({ sections, onPress, pressed, off }: KeypadProps<T>) {
                   // ワンショット(S1 設計書 §3): 1 キーで第 1 面へ戻る。
                   setShifted(false);
                 }}
+                onActivate={
+                  action === undefined
+                    ? undefined
+                    : () => {
+                        onAction?.(action);
+                        setShifted(false);
+                      }
+                }
               />
             );
           })}
