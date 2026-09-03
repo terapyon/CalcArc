@@ -65,6 +65,10 @@ a deterministic approximation (the screen also carries a standing disclaimer).
 
 - **Completes entirely on-device.** Entered numbers are never sent externally for calculation
   purposes
+- **Calculation history stays on the device.** The Scientific calculator saves up to 50
+  completed calculations (expression, answer, and angle mode) to `localStorage`. Recording
+  can be turned off in settings (on by default; turning it off keeps what's already saved).
+  Delete entries from the history screen — one at a time, or all at once
 - **PWA.** Can be added to the home screen and works offline
 - **The calculation core is Rust, and runs as WebAssembly in the browser**
 - **Verified with an independent Python implementation.** Rather than relying only on Rust's
