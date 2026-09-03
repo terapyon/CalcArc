@@ -115,6 +115,16 @@ pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// キー列を式の文字列に綴る。
+///
+/// **失敗しない**ので `Outcome` を使わない——知らないトークンは飛ばす。
+/// 計算は `calcarc-core` の `engine::spell` が持つ(ここには置かない)。
+#[wasm_bindgen]
+pub fn spell_keys(tokens: Vec<String>) -> String {
+    let keys: Vec<Key> = tokens.iter().filter_map(|t| Key::from_token(t)).collect();
+    calcarc_core::engine::spell(&keys)
+}
+
 /// count × dimensions × dtype を計算する。純関数で、状態を持たない。
 ///
 /// Scientific の reduce と違いキーストローク状態機械ではないので、

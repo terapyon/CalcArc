@@ -78,6 +78,9 @@ function fakeCalc(): Calc {
       return stepOf(from);
     },
     version: () => "test",
+    // このスイートは ScientificPanel の分岐を確かめるためのもので、
+    // 履歴の綴りはまだどこからも呼ばれていない(Task 4 時点)。
+    spell: () => "",
   };
 }
 

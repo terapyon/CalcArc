@@ -9,6 +9,7 @@ import init, {
   core_version,
   initial_state,
   reduce,
+  spell_keys,
 } from "../wasm/calcarc_wasm.js";
 import type { EngineState, KeyToken, Step } from "./types";
 
@@ -31,6 +32,8 @@ export interface Calc {
   dispatch(state: EngineState, key: KeyToken): Step;
   /** 計算コアのバージョン。 */
   version(): string;
+  /** キー列を式の文字列に綴る。**失敗しない。** */
+  spell(keys: KeyToken[]): string;
 }
 
 let ready: Promise<Calc> | null = null;
@@ -46,6 +49,7 @@ export function initCalc(): Promise<Calc> {
         dispatch: (state: EngineState, key: KeyToken) =>
           asStep(reduce(state, key)),
         version: () => core_version(),
+        spell: (keys: KeyToken[]) => spell_keys(keys as string[]),
       }),
     )
     .catch((cause: unknown) => {
