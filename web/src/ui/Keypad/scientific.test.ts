@@ -124,14 +124,27 @@ describe("Scientific のキー集合", () => {
     // トークンを持つ。次に機能を足す人は**置き場を作るところから**になる。
     const reserved = allKeys.filter((k) => k.token === null && !k.kind);
     expect(reserved).toEqual([]);
-    // 第 2 面にも「準備中」は残っていない——ただし `action` を持つ面は
-    // 「準備中」ではない。トークンを送らずに UI 操作を起こすのが本来の
-    // 姿である(`hist` は Task 8 で追加。設計書 `2026-09-03-history-design.md` §9.1)。
-    const faces = allKeys.filter((k) => k.shift).map((k) => k.shift);
-    const preparing = faces.filter(
-      (f) => f?.token === null && f.action === undefined,
-    );
-    expect(preparing).toEqual([]);
+  });
+
+  it("names the history key as the board's only tokenless second face", () => {
+    // `token: null` の第 2 面は本来「準備中」の印——`hist` だけが例外
+    // (Task 8。トークンを送らず UI 操作を起こす。設計書
+    // `2026-09-03-history-design.md` §9.1)。`action` の有無で判定すると、
+    // 将来のスタブが `action` だけ真似て通り抜けられる。**集合を丸ごと
+    // 名指しする**——`hist` 以外に `token: null` の第 2 面が増えたら、
+    // それが `action` を持っていても、このテストは落ちる。
+    const nullFaces = allKeys
+      .filter((k) => k.shift?.token === null)
+      .map((k) => k.shift);
+    expect(nullFaces).toEqual([
+      {
+        token: null,
+        label: "hist",
+        ariaLabel: "履歴",
+        variant: "function",
+        action: "history",
+      },
+    ]);
   });
 
   it("does not move the main grid", () => {
@@ -187,15 +200,5 @@ describe("Scientific のキー集合", () => {
       variant: "function",
       action: "history",
     });
-  });
-
-  it("still lays out exactly the tokens the core accepts", () => {
-    // **`hist` は `token: null` なので `laidOut` に入らない。**
-    // ここが落ちるなら、`hist` を KeyToken にしてしまっている。
-    const laidOut = allKeys
-      .flatMap((k) => [k.token, k.shift?.token ?? null])
-      .filter((t): t is NonNullable<typeof t> => t !== null)
-      .sort();
-    expect(laidOut).toEqual([...KEY_TOKENS].sort());
   });
 });
