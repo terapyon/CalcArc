@@ -12,17 +12,21 @@ function filesUnder(dir: string): string[] {
 
 /**
  * `localStorage` への**プロパティアクセス**だけを見る——語の言及ではない。
- * `window.localStorage` と `localStorage.foo` / `localStorage["foo"]` の
- * 形を拾う。
+ * `window.localStorage` / `globalThis.localStorage` と、
+ * `localStorage.foo` / `localStorage["foo"]` の形を拾う。
  *
- * **この正規表現がすり抜ける穴**: 綴りを分割・計算した参照
- * (`window["local" + "Storage"]`、`globalThis[SOME_VAR]` など)は
- * 字面に `localStorage` という連続した綴りが現れないので拾えない。
+ * **この正規表現がすり抜ける穴**(実測で確認したもの):
+ * - 綴りを分割・計算した参照(`window["local" + "Storage"]`、
+ *   `globalThis[SOME_VAR]` など)——字面に `localStorage` という
+ *   連続した綴りが現れないので拾えない。
+ * - `.` も `[` も続かない**裸の識別子参照**(例: 変数へ代入する
+ *   `const s = localStorage;`)——プロパティアクセスの形をしていない。
+ *
  * この検査は「字面が掴み手の形をしているか」だけを見る——意図して隠した
- * 掴み手までは検査できない、という前提に立つ。
+ * 掴み手や、上の 2 通りの形まではここでは検査できない、という前提に立つ。
  */
 const REACHES_FOR_LOCAL_STORAGE =
-  /\bwindow\s*\.\s*localStorage\b|\blocalStorage\s*[.[]/;
+  /\b(?:window|globalThis)\s*\.\s*localStorage\b|\blocalStorage\s*[.[]/;
 
 it("the guard matches a property access, not a mention", () => {
   // ただ語が出てくるだけでは光らない。
@@ -30,8 +34,12 @@ it("the guard matches a property access, not a mention", () => {
   expect(REACHES_FOR_LOCAL_STORAGE.test("`localStorage` を掴む")).toBe(false);
   // 実際に掴む形なら光る。
   expect(REACHES_FOR_LOCAL_STORAGE.test("window.localStorage")).toBe(true);
+  expect(REACHES_FOR_LOCAL_STORAGE.test("globalThis.localStorage")).toBe(true);
   expect(REACHES_FOR_LOCAL_STORAGE.test("localStorage.getItem(k)")).toBe(true);
   expect(REACHES_FOR_LOCAL_STORAGE.test('localStorage["x"]')).toBe(true);
+  // 既知の穴: 裸の識別子参照は、プロパティアクセスの形をしていないので
+  // 光らない。バグではなく、上の doc comment が名指している穴そのもの。
+  expect(REACHES_FOR_LOCAL_STORAGE.test("const s = localStorage;")).toBe(false);
 });
 
 it("only one file reaches for localStorage", () => {
