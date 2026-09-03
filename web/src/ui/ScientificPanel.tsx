@@ -32,27 +32,58 @@ function digitToken(ch: string): KeyToken | null {
  * 履歴の答(表示文字列)を、呼び戻すためのキー列に写す。
  *
  * **答は表示文字列であって、打鍵の記録ではない。** 桁区切りのカンマ・
- * 小数点・先頭の符号・指数(`e`)のいずれも持ちうる(設計書 §5 ★)。
- * ここは 4 つの形——整数・小数・負・指数——だけを扱う。
+ * 小数点・仮数部と指数部それぞれの符号・指数(`e`)のいずれも持ちうる
+ * (設計書 §5 ★)。**仮数の符号と指数の符号は独立に付き、送る位置が違う**
+ * ——`crates/calcarc-core/tests/engine_table.rs:125`
+ * (`the_sign_key_follows_the_exponent_while_one_is_open`、設計書コメント
+ * 「指数入力中は指数の符号、それ以外は確定値の符号」)の通り、`neg` は
+ * 「指数入力中かどうか」で宛先が変わる。**仮数の符号は `exp` を送る前に、
+ * 指数の符号は指数の桁を送った後に**送る(`exp` を送った時点で「指数
+ * 入力中」に入るため)。
  *
- * **写せない形は `null` を返す**——指数部に符号が付く等、先頭以外に `-` が
- * 現れる形は今回のスコープ外(Task 10 ブリーフ「見つけたら、それを回避する
- * 仕掛けを作らない」)。呼び出し側は「触らない」で応じる。
+ * **これは「4 形のうちの負」を仮数だけの話に限らない。**
+ * `crates/calcarc-core/src/numeric/format.rs` の `EXP_LOW_EXPONENT = -9`
+ * により、絶対値が 1e-9 未満の答は指数が負のまま普通に出る(大きい数で
+ * 割るだけで届く)——一覧の見た目は成功した行と同じ `<button>` なので、
+ * ここを写せないままにすると押しても静かに何も起きない行ができる
+ * (Fix round 1 finding 1)。
+ *
+ * **それでも写せない形は `null` を返す**——虚数(`j`)・極形式(`∠`)・
+ * 60 進(`°′″`)のように、そもそも数字キーの列で表せない綴りがそれに
+ * 当たる。呼び出し側(`recall`)はこれを「触らない」で応じる。
+ *
+ * **さらに、記録する側(下の `useEffect`)もこの関数の結果を見る**——
+ * 写せない答は記録した瞬間に `error: true` として積み、`History` の
+ * 既存のエラー行の枝(押せない・でも見える)で描く。`web/src/ui/History/`
+ * と `web/src/history/` は Task 10 の対象外で新しい欄を足せないため、
+ * 「エラーで終わった計算は入力へ戻す意味が無い」という既存の理由を
+ * 「(この実装では)入力へ戻せない」に広げて借りている——本来の
+ * `CalcErrorCode` による意味とは別物だと承知の上での選択である
+ * (Fix round 1 finding 1 の「見つけたら、それを見える形にする」に応じた
+ * もの。詳細は task-10-report.md の Fix round 1 節)。
  */
 function mapAnswerToKeys(answer: string): KeyToken[] | null {
   const stripped = answer.replace(/,/g, "");
-  let negative = false;
   let body = stripped;
+  let mantissaNegative = false;
   if (body.startsWith("-")) {
-    negative = true;
+    mantissaNegative = true;
     body = body.slice(1);
   }
-  // 先頭以外に符号が残っているのは、指数部が負である等、今回の対象外の形。
-  if (body.includes("-")) return null;
 
   const eIndex = body.indexOf("e");
   const mantissa = eIndex === -1 ? body : body.slice(0, eIndex);
-  const exponent = eIndex === -1 ? null : body.slice(eIndex + 1);
+  let exponent = eIndex === -1 ? null : body.slice(eIndex + 1);
+  let exponentNegative = false;
+  if (exponent?.startsWith("-")) {
+    exponentNegative = true;
+    exponent = exponent.slice(1);
+  }
+
+  // 仮数・指数それぞれの符号を取り除いたあとにまだ `-` が残っているのは、
+  // 二重符号など今回の対象外の形。
+  if (mantissa.includes("-")) return null;
+  if (exponent?.includes("-")) return null;
   if (!/^[0-9]+(\.[0-9]+)?$/.test(mantissa)) return null;
   if (exponent !== null && !/^[0-9]+$/.test(exponent)) return null;
 
@@ -66,10 +97,9 @@ function mapAnswerToKeys(answer: string): KeyToken[] | null {
     if (token === null) return null;
     keys.push(token);
   }
-  // **符号はここで送る**——指数を開く前。`neg` は「いま入力中の欄」に
-  // 効く(`crates/calcarc-core/tests/engine_table.rs:125`)ので、指数を
-  // 開いたあとに送ると仮数ではなく指数の符号になってしまう。
-  if (negative) keys.push("neg");
+  // **仮数の符号は指数を開く前に送る。** `exp` のあとは「指数入力中」に
+  // 移り、`neg` の宛先が指数へ変わる。
+  if (mantissaNegative) keys.push("neg");
   if (exponent !== null) {
     keys.push("exp");
     for (const ch of exponent) {
@@ -77,6 +107,10 @@ function mapAnswerToKeys(answer: string): KeyToken[] | null {
       if (token === null) return null;
       keys.push(token);
     }
+    // **指数の符号は指数の桁を送った後。** `engine_table.rs` の同テストは
+    // `exp, neg, 桁` の順でも同じ値になることを確かめているが、ここでは
+    // 桁の後に統一する(どちらでも良いので実装を単純な方に倒した)。
+    if (exponentNegative) keys.push("neg");
   }
   return keys;
 }
@@ -183,11 +217,17 @@ export function ScientificPanel() {
     // ここで止まるのは「これから」記録する分だけで、既に貯まった `entries`
     // には触らない。
     if (!loadSettings().history.enabled) return;
+    // **写せない答は、記録した時点で「押せないが見える」行にする。**
+    // `mapAnswerToKeys` が `null` を返す形(虚数・極形式・60 進)を
+    // そのまま積むと、一覧では成功した行と同じ `<button>` になり、押しても
+    // 静かに何も起きない(Fix round 1 finding 1)。`History` 側の分岐は
+    // `error` しか見ないので、ここでその枝を借りる。
+    const recallable = mapAnswerToKeys(step.display.main) !== null;
     const entry: HistoryEntry = {
       expression,
       answer: step.display.main,
       angle: step.display.angle,
-      error: step.display.error !== null,
+      error: step.display.error !== null || !recallable,
     };
     setEntries((previous) => {
       const updated = pushEntry(previous, entry);
@@ -198,13 +238,19 @@ export function ScientificPanel() {
 
   // **呼び戻し。** 答の文字列をキー列に写し、`ac` のあとその列を送る——
   // つまり `press` をそのまま再利用する。**これは意図的である**:
-  // 呼び戻しが本当に「手で打ったのと同じ」になるかどうか(設計書 §5 ★、
-  // §13-8)は、実装をここで分けないことで測れる——`press` を経由する限り、
-  // 呼び戻しも手打ちも同じ `dispatch` の列になる。
+  // 実装をここで分けないことで、呼び戻しは(この `press` の列を送る限り)
+  // 手打ちと同じ `dispatch` の列になる。**これは「同じ経路を通る」という
+  // コードの性質であって、実機の計算コアで両者が同じ状態に落ち着くことを
+  // 確かめたわけではない**(設計書 §5 ★、§13-8。狭めたが閉じていない
+  // ——`docs/superpowers/sdd/history-HANDOFF.md` 参照)。
   //
-  // **写せない形は触らない。** 指数部に符号がある等、今回のスコープ外の
-  // 形は `mapAnswerToKeys` が `null` を返す——回避する仕掛けは作らず、
-  // 何もしない(ブリーフ)。
+  // **写せない形は触らない。** 虚数・極形式・60 進のように、そもそも
+  // 数字キーの列で表せない形は `mapAnswerToKeys` が `null` を返す——
+  // 回避する仕掛けは作らず、何もしない(ブリーフ)。**そうした答は
+  // 記録した時点で `error: true` として積んであるので、実際には
+  // `History` がボタンにせず、ここへは来ない**(上の `useEffect` 参照)。
+  // ここが `null` を受け取るのは、記録より前に貯まった古い履歴
+  // (`localStorage` に残っている旧データ)が読み込まれた場合の備え。
   const recall = useCallback(
     (entry: HistoryEntry) => {
       const keys = mapAnswerToKeys(entry.answer);

@@ -87,7 +87,8 @@ function fakeCalc(): Calc {
           main: from.main === "0" ? key : `${from.main}${key}`,
         });
       }
-      // 小数点・符号・指数は「呼び戻しの等価性」(Task 10 Step 5)を測るのに
+      // 小数点・符号・指数は「呼び戻しの等価性」(Task 10 Step 5)と
+      // 「仮数・指数の符号を送り分ける」(Fix round 1 finding 1)を測るのに
       // 要る。本物の綴り規則とは無関係で、状態を見分けられれば足りる。
       if (key === "dot") {
         return stepOf({
@@ -96,15 +97,33 @@ function fakeCalc(): Calc {
         });
       }
       if (key === "neg") {
-        return stepOf({
-          ...from,
-          main: from.main.startsWith("-")
-            ? from.main.slice(1)
-            : `-${from.main}`,
-        });
+        // **`e` が既に出ていれば指数入力中——指数側の符号を切り替える。**
+        // 本物と同じ順序で符号を送り分けられているかを、この偽物でも
+        // 見分けられるようにする(`engine_table.rs:125` と同じ規則)。
+        const eIndex = from.main.indexOf("e");
+        if (eIndex === -1) {
+          return stepOf({
+            ...from,
+            main: from.main.startsWith("-")
+              ? from.main.slice(1)
+              : `-${from.main}`,
+          });
+        }
+        const head = from.main.slice(0, eIndex + 1);
+        const exponent = from.main.slice(eIndex + 1);
+        const toggled = exponent.startsWith("-")
+          ? exponent.slice(1)
+          : `-${exponent}`;
+        return stepOf({ ...from, main: `${head}${toggled}` });
       }
       if (key === "exp") {
         return stepOf({ ...from, main: `${from.main}e` });
+      }
+      // **`j` は写せない答の見本(Fix round 1 finding 1)。** 虚数・極形式・
+      // 60 進の代わりに、この偽物では一番軽い「数字キーの列で表せない形」
+      // として使う。
+      if (key === "j") {
+        return stepOf({ ...from, main: `${from.main}j` });
       }
       return stepOf(from);
     },
@@ -256,13 +275,20 @@ describe("履歴", () => {
   });
 
   it("does not record when history is switched off", async () => {
+    // **「切ってから最初の 1 回」だけでは何も主張しない**(Fix round 1
+    // finding 3 の minor 指摘)——`pushEntry` ごと消えていても、何も
+    // 積まれていなければこの形は緑のままになる。**切る前に 1 件記録して
+    // おき、切ったあとにもう 1 回計算しても件数が増えないこと**を見る。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
     window.localStorage.setItem(
       "calcarc.settings",
       JSON.stringify({ v: 1, history: { enabled: false } }),
     );
-    render(<ScientificPanel />);
-    await screen.findByText("DEG");
-    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "9" }));
     await userEvent.click(screen.getByRole("button", { name: "計算する" }));
     // 記録しない設定でも、綴りは呼ばれている——判断は綴った後に効く。
     expect(spellCallCount).toBeGreaterThan(0);
@@ -271,7 +297,14 @@ describe("履歴", () => {
       screen.getByRole("button", { name: "第2面に切り替え" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "履歴" }));
-    expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
+    // 切る前の 1 件だけが残る。件数は増えていない。
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "9 = 29 を入力に入れる" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps what was already recorded when history is switched off", async () => {
@@ -424,11 +457,13 @@ describe("履歴", () => {
     );
   });
 
-  it("leaves the input untouched for a shape it cannot map (a negative exponent)", async () => {
-    // **マップできない形を見つけたら、それを回避する仕掛けを作らない**
-    // ——触らずに残し、その挙動をテストで留める(Task 10 ブリーフ)。
-    // 桁の途中(指数部)に符号があるので、先頭の 1 個だけを `neg` に写す
-    // いまの実装では扱えない。
+  it("recalls a negative exponent", async () => {
+    // **Fix round 1 finding 1.** `EXP_LOW_EXPONENT = -9`
+    // (`crates/calcarc-core/src/numeric/format.rs`)があるので、絶対値が
+    // 1e-9 未満の答は指数が負のまま普通に出る——大きい数で割るだけで
+    // 届く、ありふれた形である。`engine_table.rs:125` の
+    // `the_sign_key_follows_the_exponent_while_one_is_open` が言う通り、
+    // `exp` の後の `neg` は指数の符号を切り替える。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
@@ -444,16 +479,88 @@ describe("履歴", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "x = 1.5e-3 を入力に入れる" }),
     );
-    // 押しても盤面へは戻らない(何もしていない)ので、明示的に戻ってから
-    // 表示が触られていないことを確かめる。
-    await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
-    expect(screen.getByTestId("display-main")).toHaveTextContent("0");
+    expect(screen.getByTestId("display-main")).toHaveTextContent("1.5e-3");
   });
 
-  it("a recalled answer behaves like the same digits typed by hand", async () => {
-    // **§13-8 を閉じる。** `0.5` を呼び戻した状態と、`0` `.` `5` と打った
-    // 状態で、次の 1 打鍵の結果が同じかを測る。違うなら特別な状態を
-    // 作っていることになる。
+  it("recalls a negative mantissa together with a negative exponent", async () => {
+    // 仮数の符号は `exp` を送る前、指数の符号はその後——2 つの `neg` が
+    // 別の宛先に届くことを確かめる(Fix round 1 finding 1)。
+    window.localStorage.setItem(
+      "calcarc.history",
+      JSON.stringify([
+        { expression: "x", answer: "-1.5e-3", angle: "Deg", error: false },
+      ]),
+    );
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "x = -1.5e-3 を入力に入れる" }),
+    );
+    expect(screen.getByTestId("display-main")).toHaveTextContent("-1.5e-3");
+  });
+
+  it("recalls a negative number with thousands separators", async () => {
+    window.localStorage.setItem(
+      "calcarc.history",
+      JSON.stringify([
+        { expression: "x", answer: "-3,628,800", angle: "Deg", error: false },
+      ]),
+    );
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "x = -3,628,800 を入力に入れる" }),
+    );
+    expect(screen.getByTestId("display-main")).toHaveTextContent("-3628800");
+  });
+
+  it("marks a shape it cannot map as not recallable, instead of leaving a silently broken button", async () => {
+    // **写せない形は今度も残る**(虚数・極形式・60 進)——ここでは偽物の
+    // `j` を見本に使う。回避する仕掛けは作らない代わりに、記録した時点で
+    // `error: true` として積み、`History` の「押せないが見える」枝
+    // (`web/src/ui/History/History.tsx`、Task 10 の対象外)を借りる
+    // ——一覧が成功した行と同じ見た目のボタンのまま、押しても何も
+    // 起きないことを避ける(Fix round 1 finding 1)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "虚数単位" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    expect(spellCallCount).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // 見える。
+    expect(screen.getByText("3j")).toBeInTheDocument();
+    // でも押せない——「呼び戻す」ボタンとしては存在しない。
+    expect(
+      screen.queryByRole("button", { name: /を入力に入れる/ }),
+    ).not.toBeInTheDocument();
+    // 削除は普段どおり効く(エラー行と同じ扱い。History.tsx 既存の分岐)。
+    expect(
+      screen.getByRole("button", { name: "3 を削除" }),
+    ).toBeInTheDocument();
+  });
+
+  it("narrows whether a recalled answer behaves like the same digits typed by hand (does not close it)", async () => {
+    // **§13-8 を狭める、閉じない**(Fix round 1 finding 3)。ここで確かめて
+    // いるのは「呼び戻しも手打ちも同じ `press` を通る」という**コードの
+    // 性質**であり、それを**この偽 `Calc`(digit/dot/neg/exp/ac だけの
+    // 最小実装)に対して**確かめているだけ——実機の計算コアで両者が
+    // 同じ状態に落ち着くことは確認していない(`docs/superpowers/sdd/
+    // history-HANDOFF.md` に追記した「§13-8 の現在地」を参照)。
+    // `0.5` を呼び戻した状態と、`0` `.` `5` と打った状態で、次の 1 打鍵の
+    // 結果が同じかを測る。違うなら特別な状態を作っていることになる。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
