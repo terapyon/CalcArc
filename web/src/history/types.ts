@@ -1,8 +1,8 @@
 /**
  * 保存する履歴の型と、取り得る値の列挙。
  *
- * **React を import しない**(CLAUDE.md の境界)。localStorage も掴まない
- * ——掴むのは呼び出し側(後続タスクが用意する Storage)だけである。
+ * **React を import しない**(CLAUDE.md の境界)。ブラウザの Storage も掴まない
+ * ——掴むのは呼び出し側(`web/src/ui/storage.ts`)だけである。
  */
 
 import { ANGLE_MODES, type AngleMode } from "../calc";
@@ -30,7 +30,7 @@ export const HISTORY_KEY = "calcarc.history";
 /** 貯める上限。溢れたら末尾(古いもの)から捨てる。 */
 export const HISTORY_LIMIT = 50;
 
-/** localStorage と同じ形。テストから素のオブジェクトを渡せるようにする。 */
+/** ブラウザの Storage と同じ形。テストから素のオブジェクトを渡せるようにする。 */
 export interface HistoryStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

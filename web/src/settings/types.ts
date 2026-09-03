@@ -1,8 +1,8 @@
 /**
  * 保存する設定の型と、取り得る値の列挙。
  *
- * **React を import しない**(CLAUDE.md の境界)。localStorage も掴まない
- * ——掴むのは web/src/ui/useSetting.ts だけである。
+ * **React を import しない**(CLAUDE.md の境界)。ブラウザの Storage も掴まない
+ * ——掴むのは `web/src/ui/storage.ts` だけである。
  */
 
 import {

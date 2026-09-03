@@ -1,7 +1,7 @@
 /**
  * 設定の読み書き。
  *
- * **Storage を引数で受ける**——localStorage を直接掴まない(P-1 設計書 §6)。
+ * **Storage を引数で受ける**——ブラウザの Storage を直接掴まない(P-1 設計書 §6)。
  * 壊れた JSON・知らない値・例外を投げる Storage の分岐が、すべて React の
  * 外で試せる。
  */
@@ -37,7 +37,7 @@ export const SETTINGS_KEY = "calcarc.settings";
  */
 export const SETTINGS_VERSION = 1;
 
-/** localStorage と同じ形。テストから素のオブジェクトを渡せるようにする。 */
+/** ブラウザの Storage と同じ形。テストから素のオブジェクトを渡せるようにする。 */
 export interface SettingsStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
