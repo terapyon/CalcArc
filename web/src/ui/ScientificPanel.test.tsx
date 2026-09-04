@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -136,6 +136,10 @@ function fakeCalc(): Calc {
       spellCallCount += 1;
       return keys.filter((key) => /^[0-9]$/.test(key)).join(" ");
     },
+    // **本物の `MAX_ENTRY_LEN`(12)と同じ値。** Fix round 3 finding の
+    // テスト(13 文字は呼び戻せない・12 文字は呼び戻せる)が実物の境界と
+    // 一致した状態で走るように、偽物でも実物と同じ数を返す。
+    maxEntryLen: () => 12,
   };
 }
 
@@ -274,6 +278,46 @@ describe("履歴", () => {
     expect(screen.getByText("23")).toBeInTheDocument();
   });
 
+  it("does not fold a key typed before the engine has loaded into the next recorded expression", async () => {
+    // **Fix round 3 finding.** `useKeyboard(press)` はこのコンポーネントの
+    // 早期リターン(`if (!calc || !step) return <p>Loading…</p>`)より前で
+    // 呼ばれているので、`Loading…` が出ているあいだもグローバルな
+    // キーリスナは既に貼られている。`press` が `ready`(=calcRef.current)
+    // を見ずに `keysRef` へ積んでいた版では、読み込み前に打った物理キーが
+    // 一度も `dispatch` されないまま握り潰され、次に押した式の先頭に
+    // 紛れ込んでいた。
+    let resolveCalc!: (calc: Calc) => void;
+    vi.mocked(initCalc).mockImplementationOnce(
+      () =>
+        new Promise<Calc>((resolve) => {
+          resolveCalc = resolve;
+        }),
+    );
+    render(<ScientificPanel />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+
+    // 読み込みが終わる前に、物理キーボードで "5" を打つ。
+    fireEvent.keyDown(window, { key: "5" });
+
+    resolveCalc(fakeCalc());
+    await screen.findByText("DEG");
+
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    expect(spellCallCount).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // 読み込み前の "5" が紛れていれば式は "5 3" になる。紛れていない
+    // ことを、記録された式が "3" だけであることで見る。
+    const saved = JSON.parse(
+      window.localStorage.getItem("calcarc.history") as string,
+    );
+    expect(saved[0].expression).toBe("3");
+  });
+
   it("does not record when history is switched off", async () => {
     // **「切ってから最初の 1 回」だけでは何も主張しない**(Fix round 1
     // finding 3 の minor 指摘)——`pushEntry` ごと消えていても、何も
@@ -385,6 +429,38 @@ describe("履歴", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
   });
 
+  it("clears every entry when すべて消す is pressed, and the clear survives a remount", async () => {
+    // **全消しは押されたことが 1 度も無かった(Fix round 3 finding)。**
+    // ここでは 2 つを確かめる: 押すと画面から消えること、そして
+    // それが React の state から消えただけでなく `localStorage` にも
+    // 書かれたこと(=作り直しても戻ってこないこと)。後者を見ないと、
+    // `setEntries` だけ空にして `saveHistory` を呼ばない実装でも
+    // このテストは緑になってしまう。
+    const { unmount } = render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    expect(spellCallCount).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "すべて消す" }));
+    expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
+    unmount();
+
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
+  });
+
   it("keeps the recording toggle off across a reload", async () => {
     // **持続する**(ブリーフ「turn it off, reload, still off」)。
     // 実物のリロードは試せないので、パネルを作り直して同じ形にする
@@ -486,6 +562,152 @@ describe("履歴", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
   });
 
+  it("prefixes a chained = with the carried answer, so the row explains itself", async () => {
+    // **Fix round 3 finding 11.** `3 + j4 = × 2 =` は engine の `current`
+    // を積み増して `6+8j` を計算する
+    // (`crates/calcarc-core/tests/engine_table.rs`
+    // `multiplies_a_complex_number_by_a_real`)が、2 度目の `=` の綴りは
+    // 「× 2」だけ——それだけでは自分の答を説明できない。左辺(直前の答)
+    // を補って記録する。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    // **偽 `dispatch` は演算子を no-op として扱う**(このファイル冒頭)ので
+    // 答自体は本物の掛け算ではなく、数字を連結しただけの「32」になる——
+    // ここで確かめたいのは連鎖の**綴り側の組み立て**(左辺を補うこと)で
+    // あって、計算そのものではない。
+    expect(screen.getByText("3 2")).toBeInTheDocument();
+    expect(screen.getByText("32")).toBeInTheDocument();
+  });
+
+  it("still carries the right answer into a chain after the previous entry was deleted from the list", async () => {
+    // **Fix round 3 finding 11 の核心。** 連鎖の左辺を一覧の先頭行から
+    // 借りると、その行を消したあとに engine 側とずれる——ここでは
+    // まさにその順で操作し、消したあとも正しい値が続くことを見る
+    // (一覧から読んでいたら、消えた後は借りる先が無くなり、間違った値
+    // ——あるいは前の版の実装なら別の行——を借りてしまう)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(screen.getByRole("button", { name: "3 を削除" }));
+    expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // 一覧はいまこの 1 件だけ(前の行は消した)。それでも左辺は "3"
+    // ——engine 側(このコンポーネントが直前の `=` で見た答)から来ている
+    // ことの証拠。
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("3 2")).toBeInTheDocument();
+  });
+
+  it("carries the answer through a recording-off gap, recording it once switched back on", async () => {
+    // **Fix round 3 finding 11.** 記録を切っているあいだも連鎖の左辺は
+    // 更新され続ける——一覧に積まれるかどうかとは無関係(engine 側の値
+    // だから)。切っている区間の計算は記録されないが、その答は次に記録
+    // される計算の左辺として正しく現れるはずである。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
+
+    // 記録が切れている間の連鎖(3 → 32相当)。積まれない。
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // 切る前の 1 件("3"="3")だけが残る——切っている間の計算は積まれない。
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "3 = 3 を入力に入れる" }),
+    ).toBeInTheDocument();
+
+    // 記録を戻す。
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "今後の計算を記録する" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
+
+    // ここでの連鎖が「32」を左辺として使えば、記録が切れていたあいだも
+    // 連鎖の左辺(carriedAnswerRef)が正しく更新され続けていた証拠になる。
+    await userEvent.click(screen.getByRole("button", { name: "足す" }));
+    await userEvent.click(screen.getByRole("button", { name: "5" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // 切る前の 1 件("3"="3")+ いまの 1 件("32 5"="325") の 2 件。
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("32 5")).toBeInTheDocument();
+    expect(screen.getByText("325")).toBeInTheDocument();
+  });
+
+  it("does not prefix a chain-shaped = right after AC", async () => {
+    // **`AC` は連鎖を終える**(Fix round 3 finding 11)。`AC` のあとに
+    // 来る二項演算子は、`3=` の続きではない——0 に対する操作であって、
+    // 前回の答を左辺として補ってはいけない。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "全消去" }));
+    await screen.findByText("DEG");
+
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    // 左辺の補いが無い、綴っただけの "2"(数字だけをつなぐ偽 `spell`)。
+    // "3" が式にも答にも混ざっていれば、この aria-label は存在しない。
+    expect(
+      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+    ).toBeInTheDocument();
+  });
+
   it("recalls a plain integer, stripping thousands separators", async () => {
     window.localStorage.setItem(
       "calcarc.history",
@@ -522,6 +744,57 @@ describe("履歴", () => {
       screen.getByRole("button", { name: "x = 12.5 を入力に入れる" }),
     );
     expect(screen.getByTestId("display-main")).toHaveTextContent("12.5");
+  });
+
+  it("recalls a decimal at exactly the engine's entry-length limit", async () => {
+    // **12 文字はちょうど `MAX_ENTRY_LEN`(engine/state.rs)。** 送った桁と
+    // 同じ数が入力欄に残ることを、境界そのもので確かめる(Fix round 3
+    // finding のもう半分——13 文字が拒否される側は次のテスト)。
+    const answer = "0.0333333333"; // 12 characters
+    expect(answer).toHaveLength(12);
+    window.localStorage.setItem(
+      "calcarc.history",
+      JSON.stringify([
+        { expression: "1 ÷ 30", answer, angle: "Deg", error: false },
+      ]),
+    );
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: `1 ÷ 30 = ${answer} を入力に入れる`,
+      }),
+    );
+    expect(screen.getByTestId("display-main")).toHaveTextContent(answer);
+  });
+
+  it("does not offer to recall an answer longer than the engine's entry-length limit", async () => {
+    // **13 文字は `MAX_ENTRY_LEN`(12)を 1 文字超える。** 送っても engine
+    // 側で黙って切り詰められ、`0.03333333333` を送ったつもりが
+    // `0.0333333333` という別の数が入力欄に残る——それを避けるため、
+    // この長さでは行を押せる形にしない(Fix round 3 finding)。
+    const answer = "0.03333333333"; // 13 characters
+    expect(answer).toHaveLength(13);
+    window.localStorage.setItem(
+      "calcarc.history",
+      JSON.stringify([
+        { expression: "1 ÷ 30", answer, angle: "Deg", error: false },
+      ]),
+    );
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getByText(answer)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /を入力に入れる/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("recalls a negative number", async () => {
@@ -597,8 +870,9 @@ describe("履歴", () => {
   });
 
   it("recalls a negative mantissa together with a negative exponent", async () => {
-    // 仮数の符号は `exp` を送る前、指数の符号はその後——2 つの `neg` が
-    // 別の宛先に届くことを確かめる(Fix round 1 finding 1)。
+    // 送り分けの規則は `mapAnswerToKeys`(このファイル冒頭)の docstring
+    // が持つ——ここでは繰り返さず、2 つの `neg` が別の宛先に届くことだけ
+    // 確かめる(Fix round 1 finding 1)。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
@@ -669,8 +943,12 @@ describe("履歴", () => {
     expect(
       screen.queryByRole("button", { name: /を入力に入れる/ }),
     ).not.toBeInTheDocument();
-    // エラーの色も付かない(行の要素に `data-error` が無い)。
-    const row = screen.getByText("3j").parentElement;
+    // エラーの色も付かない。`data-testid="history-entry"` で `.entry`
+    // 要素そのものを取る——答の span の `parentElement` は `.result`
+    // span であって `.entry` ではないので、`parentElement` だけでは
+    // `data-error` を無条件で付けても落ちない検査になる(Fix round 3
+    // finding)。
+    const row = screen.getByTestId("history-entry");
     expect(row).not.toHaveAttribute("data-error");
     // 削除は普段どおり効く(押せないことと消せないことは別)。
     expect(

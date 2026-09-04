@@ -29,6 +29,23 @@ function digitToken(ch: string): KeyToken | null {
 }
 
 /**
+ * 二項演算子のトークン。**列の先頭がこれなら、その計算は前回の答の続き**
+ * (連鎖)である——値のキーで始まれば新しい計算(設計書 §0 の「診断」の
+ * ためには、`× 2 → 6+8j` のような自分だけでは説明できない行を作らない)。
+ * 判定は綴った文字列を見ずに、**この列の先頭キーそのもの**で行う
+ * (Fix round 3 finding 11)。
+ */
+const BINARY_OPERATOR_TOKENS: ReadonlySet<KeyToken> = new Set([
+  "add",
+  "sub",
+  "mul",
+  "div",
+  "pow",
+  "n_p_r",
+  "n_c_r",
+]);
+
+/**
  * 履歴の答(表示文字列)を、呼び戻すためのキー列に写す。
  *
  * **答は表示文字列であって、打鍵の記録ではない。** 桁区切りのカンマ・
@@ -52,6 +69,14 @@ function digitToken(ch: string): KeyToken | null {
  * 60 進(`°′″`)のように、そもそも数字キーの列で表せない綴りがそれに
  * 当たる。呼び出し側(`recall`)はこれを「触らない」で応じる。
  *
+ * **`maxEntryLen` を超える仮数も `null` を返す**(Fix round 3 finding)。
+ * `crates/calcarc-core/src/engine/state.rs` の `MAX_ENTRY_LEN` は
+ * 入力欄の桁数に上限を掛けており、それを超える桁は engine 側で黙って
+ * 捨てられる——`0.03333333333`(13 文字)を打ち直すと `0.0333333333`
+ * (12 文字)という**別の数**が入力欄に残ってしまう。上限は
+ * `calc.maxEntryLen()` 経由で境界の向こうから受け取る(TypeScript に
+ * 数をハードコードしない)。
+ *
  * **記録する側(下の `useEffect`)は、この関数の結果を `History` の
  * `canRecall` prop へそのまま渡す。** `error: true` は積まない
  * ——「計算が失敗した」(`step.display.error !== null`、`history/
@@ -62,7 +87,10 @@ function digitToken(ch: string): KeyToken | null {
  * `History`(`web/src/ui/History/`)は押せるかどうかを `canRecall` から、
  * 色を `entry.error` から、独立に決める。
  */
-function mapAnswerToKeys(answer: string): KeyToken[] | null {
+function mapAnswerToKeys(
+  answer: string,
+  maxEntryLen: number,
+): KeyToken[] | null {
   const stripped = answer.replace(/,/g, "");
   let body = stripped;
   let mantissaNegative = false;
@@ -86,6 +114,11 @@ function mapAnswerToKeys(answer: string): KeyToken[] | null {
   if (exponent?.includes("-")) return null;
   if (!/^[0-9]+(\.[0-9]+)?$/.test(mantissa)) return null;
   if (exponent !== null && !/^[0-9]+$/.test(exponent)) return null;
+  // **仮数の桁(小数点を含む)が engine の上限を超えるなら送らない。**
+  // `MAX_ENTRY_LEN` は `state.digits`(小数点も 1 文字に数える)の長さに
+  // 掛かる上限で、上限を超えて送っても engine 側が黙って切り詰めるので、
+  // 送った桁と違う数が入力欄に残る(Fix round 3 finding)。
+  if (mantissa.length > maxEntryLen) return null;
 
   const keys: KeyToken[] = [];
   for (const ch of mantissa) {
@@ -130,6 +163,15 @@ export function ScientificPanel() {
   // **初期値は localStorage から読む。** WASM の読み込みとは無関係
   // ——履歴は計算エンジンの状態を含まない(設計書 §3)。
   const [entries, setEntries] = useState<HistoryEntry[]>(() => loadHistory());
+  // **`saveHistory` を呼ぶ 3 箇所(積む・消す・全消し)が最新の一覧を
+  // 読むための ref。** `setEntries` の更新関数の中で `previous` から
+  // 次を作り、その中で `saveHistory`(副作用)を呼んでいた版があった
+  // (Fix round 3 finding)——StrictMode は更新関数を 2 度呼ぶので、
+  // その中に置いた副作用も 2 度走る。下の 60 行ほど先のコメント(設定の
+  // 書き戻し)と同じ理由で、副作用は effect かイベントハンドラの本体に
+  // 置き、更新関数は純粋なままにする。`clearHistory` は元々そうなって
+  // いた——他の 2 箇所をそれに合わせる。
+  const entriesRef = useRef<HistoryEntry[]>(entries);
 
   // press が calc の state を読むと、読み込み完了で press が作り直され、
   // useKeyboard がリスナを貼り直すことになる。貼り直しは描画の後に走るので、
@@ -185,21 +227,60 @@ export function ScientificPanel() {
   // キー列」を一時的に置き、下の effect が `step` の確定を待って処理する。
   const pendingSpellRef = useRef<KeyToken[] | null>(null);
 
+  // **連鎖(chained `=`)の左辺として使う、直前の `=` の答。**(Fix round 3
+  // finding 11)`3 + j4 = × 2 =` は engine の `current` を積み増して
+  // `6+8j` を計算する(`crates/calcarc-core/tests/engine_table.rs` の
+  // `multiplies_a_complex_number_by_a_real`)が、2 度目の `=` の綴りは
+  // 「× 2」だけ——自分だけでは何も説明しない行になる(設計書 §0 が守り
+  // たいものそのもの)。
+  //
+  // **一覧の先頭行から借りない。** 借りると、その行が消されたとき
+  // (`removeEntry`)や全消しのあと(`clearHistory`)、記録が切られている
+  // とき(そもそも積まれていない)に engine 側とずれる——engine は
+  // 借りる先が無くなっても値を持ち続けているのに、一覧からは読めなく
+  // なる。**engine 側(=このコンポーネントが最後の `=` で見た答)を
+  // 直接持つ。** 記録の on/off に関わらず更新する(下の effect)——
+  // 連鎖の継ぎ目は engine の値であって、記録するかどうかとは無関係。
+  //
+  // **`ac` で空にする**(`press` の `ac` 分岐)。`AC` は次の計算を
+  // 始める操作であり、そのあとに来る二項演算子は前回の続きではない
+  // ——空にしないと、`AC` のあと `× 2 =`(0 に 2 を掛けるだけの、
+  // 前回とは無関係な計算)が古い答を左辺として誤って記録する。
+  const carriedAnswerRef = useRef<string | null>(null);
+
   // 依存を空にして同一性を固定する。ここが変わると useKeyboard が
   // リスナを貼り直し、その隙間の打鍵が落ちる。
   const press = useCallback((token: KeyToken) => {
     const ready = calcRef.current;
-    keysRef.current.push(token);
-    if (token === "eq") {
-      // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
-      // これが `=` の 2 度押しを止める——2 度目は積む前が空の列なので、
-      // 綴りも `""` になり `pushEntry` が積まない(ブリーフ「組み立て方」2)。
-      pendingSpellRef.current = keysRef.current;
-      keysRef.current = [];
-    } else if (token === "ac") {
-      // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
-      // キー列だけ——次の計算を「打った通り」に綴るためである。
-      keysRef.current = [];
+    // **`ready` が無いあいだは列に積まない**(Fix round 3 finding)。
+    // `useKeyboard(press)` は WASM の読み込み中(`Loading…` 表示中)にも
+    // グローバルなキーリスナを貼る。ここを `ready` で守らずに積んでいた
+    // 版では、読み込み前に打ったキーが `keysRef`/`pendingSpellRef` に
+    // 残ったまま `dispatch` されずに捨てられ、次に積む列の頭に紛れ込む
+    // ——engine が一度も見ていないキーが式に混ざる余地ができていた。
+    if (ready) {
+      keysRef.current.push(token);
+      if (token === "eq") {
+        // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
+        // これが `=` の 2 度押しを止める——2 度目は積む前が空の列なので、
+        // 綴りも `""` になり `pushEntry` が積まない(ブリーフ「組み立て方」2)。
+        pendingSpellRef.current = keysRef.current;
+        keysRef.current = [];
+      } else if (token === "ac") {
+        // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
+        // キー列だけ——次の計算を「打った通り」に綴るためである。
+        keysRef.current = [];
+        // **`pendingSpellRef` も一緒に捨てる**(Fix round 3 finding)。
+        // ここを空にしないと、`eq` の直後・下の effect が `step` の
+        // 確定を待っているあいだに `ac` を押した場合、まだ消費されて
+        // いない古い保留列が残ったままになり、その後の無関係な `step`
+        // 変化(次の計算の完了)にこの古い列が消費されて、`ac` で捨てた
+        // はずの計算が履歴に積まれてしまう。
+        pendingSpellRef.current = null;
+        // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
+        // あとに来る二項演算子は前回の続きではない。
+        carriedAnswerRef.current = null;
+      }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。
     setStep((previous) =>
@@ -219,7 +300,21 @@ export function ScientificPanel() {
     // **綴るのは設定に関わらず毎回**——「呼ばれていないから記録しなかった」
     // と「呼ばれた結果を記録しなかった」を区別できる形にする
     // (Task 10 ブリーフ ★ Step 0)。判断は綴った後に効く。
-    const expression = ready.spell(pendingKeys);
+    const spelled = ready.spell(pendingKeys);
+    // **連鎖なら直前の答を左辺として前に足す**(Fix round 3 finding 11)。
+    // 「列の先頭が二項演算子か」で決める——綴った文字列を見て推測しない
+    // (`spelled` の頭が `×` のような記号になっているかを見るのではなく、
+    // `pendingKeys[0]` そのものを見る)。
+    const first = pendingKeys[0];
+    const isContinuation =
+      first !== undefined && BINARY_OPERATOR_TOKENS.has(first);
+    const carried = carriedAnswerRef.current;
+    const expression =
+      isContinuation && carried !== null ? `${carried} ${spelled}` : spelled;
+    // **次の連鎖のために、いま確定した答を持っておく。** 記録の on/off に
+    // 関わらず更新する——連鎖の継ぎ目は engine 側の値であって、記録するか
+    // どうかとは無関係(このあとの `enabled` チェックより前に置く理由)。
+    carriedAnswerRef.current = step.display.main;
     // **`enabled` が false なら記録しない。消さない**(設計書 §7)——
     // ここで止まるのは「これから」記録する分だけで、既に貯まった `entries`
     // には触らない。
@@ -234,11 +329,10 @@ export function ScientificPanel() {
       angle: step.display.angle,
       error: step.display.error !== null,
     };
-    setEntries((previous) => {
-      const updated = pushEntry(previous, entry);
-      saveHistory(updated);
-      return updated;
-    });
+    const updated = pushEntry(entriesRef.current, entry);
+    entriesRef.current = updated;
+    setEntries(updated);
+    saveHistory(updated);
   }, [step]);
 
   // **呼び戻し。** 答の文字列をキー列に写し、`ac` のあとその列を送る——
@@ -258,7 +352,13 @@ export function ScientificPanel() {
   // (`localStorage` に残っている旧データ)が読み込まれた場合などの備え。
   const recall = useCallback(
     (entry: HistoryEntry) => {
-      const keys = mapAnswerToKeys(entry.answer);
+      // calcRef を読むのは、`recall` の依存を `[press]` に固定したまま
+      // 上限を最新の値で読むため——`calc` state をここで直接読むと、
+      // このクロージャが最初に作られた描画(WASM 未読込で `calc` が
+      // `null` だった描画)の値に固定されてしまう。
+      const ready = calcRef.current;
+      if (!ready) return;
+      const keys = mapAnswerToKeys(entry.answer, ready.maxEntryLen());
       if (keys === null) return;
       press("ac");
       for (const key of keys) press(key);
@@ -268,15 +368,15 @@ export function ScientificPanel() {
   );
 
   const removeEntry = useCallback((index: number) => {
-    setEntries((previous) => {
-      const updated = removeAt(previous, index);
-      saveHistory(updated);
-      return updated;
-    });
+    const updated = removeAt(entriesRef.current, index);
+    entriesRef.current = updated;
+    setEntries(updated);
+    saveHistory(updated);
   }, []);
 
   const clearHistory = useCallback(() => {
     const cleared = clearAll();
+    entriesRef.current = cleared;
     setEntries(cleared);
     saveHistory(cleared);
   }, []);
@@ -358,7 +458,9 @@ export function ScientificPanel() {
           // 計算(`Math ERROR`)は `mapAnswerToKeys` がどのみち `null` を
           // 返すのでここでも押せなくなるが、それは結果が一致しているだけで、
           // `History` 側は 2 つの理由を区別しない(区別するのは色だけ)。
-          canRecall={(entry) => mapAnswerToKeys(entry.answer) !== null}
+          canRecall={(entry) =>
+            mapAnswerToKeys(entry.answer, calc.maxEntryLen()) !== null
+          }
           recordingEnabled={recordingEnabled}
           onRecordingEnabledChange={setRecordingEnabled}
         />
