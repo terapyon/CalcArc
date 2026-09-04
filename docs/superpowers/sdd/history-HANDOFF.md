@@ -1,9 +1,13 @@
 # 履歴の実装 — 引き継ぎ（2026-09-03、マシン再起動のため中断）
 
-## 0. 状態（2026-09-05 更新）——**完了。全ゲート緑**
+## 0. 状態（2026-09-05 更新、再レビューの H-5 を直した）——**全ゲート緑**
 
-**枝 `docs/history-plan`、先端 `1a3af77`、`origin/main`（`a7bd0f9`）から 47 コミット。**
-作業木は汚れ 0 行。**push も PR もしていない。**
+**枝 `docs/history-plan`、`origin/main`（`a7bd0f9`）から積んでいる。作業木は汚れ 0 行。
+push も PR もしていない。**
+
+**最後のコード変更は `9e98d15`**——この節を更新したコミットはその後ろに積まれるので、
+**枝の先端はここに書いた SHA より新しい**。先端は `git log --oneline -1` で取ること
+（前の版はここに 1 つ古い SHA が残っていた。**自分自身の SHA を書ける文書は無い**）。
 
 **私が回したゲート**（印字から）:
 
@@ -11,12 +15,12 @@
 cargo test --workspace   "test result: ok" 20 本 / FAILED 0
 cargo clippy --workspace --all-targets -- -D warnings   警告なし
 cargo fmt --all -- --check                              差分なし
-cd web && pnpm test      Test Files 38 (38) / Tests 452 passed
+cd web && pnpm test      Test Files 38 (38) / Tests 453 passed
 pnpm typecheck           error 0 件
 pnpm lint                Checked 149 files, No fixes applied
 pnpm check:boundary      OK（web→重量級 0 / calc→UI 0）
 pnpm check:version       0.7.0（6 箇所が一致）
-pnpm e2e                 202 passed
+pnpm e2e                 203 passed
 engine_table.rs の差分   0 行（電卓の挙動は不変）
 ```
 
@@ -41,6 +45,31 @@ engine_table.rs の差分   0 行（電卓の挙動は不変）
 
 **直す前、表の 13 行のうち 11 行が実際にずれていた。**
 
+### ★ 7 口目は `spell` ではなく web に居た（H-5、再レビューで発見）
+
+**上の構造変更は `spell` の口を閉じたが、族そのものはもう 1 口あった。** 場所は
+`web/src/ui/ScientificPanel.tsx` の `press` の門番である。
+
+門番は「いまエラーか」を **effect で `step` から写した ref**（`errorRef`）から読んでいた。
+その写しは**同じイベントハンドラの中では更新されない**——passive effect が流れるのは次の
+離散イベント（クリック・keydown）の前だからである。**「1 打鍵 = 1 つの離散イベント」が
+成り立つ限りは正しく**、盤面の打鍵はすべてそうなっている。**例外は `recall` ただ 1 つ**で、
+あれは 1 つのハンドラの中で `ac` と答のキーを同期に連打する。そこで写しは古い `true` の
+まま読まれ、**`ac` は通るのに続く呼び戻しのキーが `keysRef` に積まれなかった**。`dispatch`
+は門の外なので engine には全キーが届く——**表示だけが進む**。
+
+エラー表示のまま `2` を呼び戻して `3 =` と打つと、**式「3」・答「23」**。**式が自分の答を
+作れない**——族の定義そのものである。
+
+**直し方も同じ教訓に従った。**「AC はエラーを晴らす」を `ac` の分岐に同期で書き足せば
+この 1 経路は直るが、それは**engine の振る舞いを手で写す作業をもう 1 回やること**である。
+**写しをやめて、engine が返した `Step` を直接持つ**（`stepRef`、`99d0310`）。門は毎回
+`display.error` を読むので**写しの鮮度という概念が無くなり**、反対向きのずれ（ハンドラの
+途中でエラーに**入った**のに古い `false` を読む）も同時に消えた。
+
+**教訓の形は 6 回と同じ**——「engine の状態を別の場所に持つと、そのコピーはいつか腐る」。
+違うのは腐り方が**時間差**（effect の流れる瞬間）だったことだけである。
+
 ### 帰結（利用者に示して承認済み）
 
 - **指数の符号は `1.5e-3` と綴る**（以前は無音で、`1.5 Exp 3 = 0.0015` という 1000 倍嘘の行ができた）
@@ -56,6 +85,7 @@ engine_table.rs の差分   0 行（電卓の挙動は不変）
 | 綴りと盤面のラベル（固定字形のキーだけ） | `crates/calcarc-wasm/tests/label_parity.rs`。値のキー 13 個は**理由つきで除外**、比較下限 `46−7−13=26` をコードから導出 |
 | **持ち越しを読むキーの集合**が engine とずれない | `crates/calcarc-wasm/tests/carried_value_parity.rs`。**振る舞いから導出**して TS の一覧と突き合わせる。**穴も docstring に明記** |
 | `hist` が Shift の裏から届く | `web/tests/e2e/history.spec.ts`（重量級の到達性検査は `token: null` のキーを見ない） |
+| **エラー中の呼び戻しが式に入る**（H-5） | `web/src/ui/ScientificPanel.test.tsx`「records the keys a recall sent while the display was in an error state」（偽 Calc、機構だけ）と `web/tests/e2e/history.spec.ts`「a recall made while the display was in an error state…」（実 WASM）。**両方とも `errorRef` + effect の形に戻して赤を実測** |
 | `localStorage` を掴むのは 1 ファイル | `web/src/ui/storage.test.ts` |
 
 ### 残した論点 1 件（裁定済み・受け入れ）
@@ -75,6 +105,11 @@ engine_table.rs の差分   0 行（電卓の挙動は不変）
 6 回とも、**私のゲートは全部緑だった**。捕まえたのは**レビュー役が書いた探針テスト**
 （`spell` と engine を直接突き合わせる）である。**「ゲートが全部緑」と「出して大丈夫」は別。**
 `carried_value_parity.rs` は、その探針の手法を**常設の番人にしたもの**である。
+
+**7 回目（H-5）も同じだった。** 全ゲート緑・E2E 203 本緑のまま、レビュー役の jsdom 探針
+だけが捕まえた。**E2E にその経路の検査が無かったから**である——「エラー表示のまま履歴を
+開いて呼び戻す」という列を誰も書いていなかった。**緑は「そこを見た」ではなく「見た範囲で
+赤が無かった」**にすぎない。
 
 ---
 
