@@ -35,7 +35,7 @@ jobs:
       contents: read
     steps:
       - name: Guard — deploy runs only from a v* tag
-        # 版数ゲートはタグ名と 5 箇所の版数の一致を見る。ここで見るのは
+        # 版数ゲートはタグ名と 6 箇所の版数の一致を見る。ここで見るのは
         # **そもそもタグから走っているか**だけである——ブランチの先頭を
         # 配ると、Release に添える証拠がどのリリースのものか言えなくなる。
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

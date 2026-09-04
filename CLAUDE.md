@@ -67,12 +67,16 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
   代わりに何が守るのかを書く。**
 - **電卓の挙動は `crates/calcarc-core/tests/engine_table.rs` が仕様書。** キー列と表示の
   対応を先に変えてから実装を直す。
-- **版数を上げるときは 5 箇所を揃える。** `Cargo.toml`（workspace）、
+- **版数を上げるときは 6 箇所を揃える。** `Cargo.toml`（workspace）、
+  **`Cargo.lock`**（`calcarc-core` と `calcarc-wasm` の 2 つ）、
   `web/package.json`、`README.md` の「現在の版」、`README.en.md` の
   「Current version」、`CHANGELOG.md` の見出し。**`pnpm check:version` が
-  5 箇所すべてを見る**（毎回の CI が回している）。
+  6 箇所すべてを見る**（毎回の CI が回している）。
+  **`Cargo.lock` は 2026-09-02 に足した**——**`cargo` は黙って lock を
+  書き換えて通る**ので、**上げ忘れても手元は緑になり**、リポジトリには
+  古い lock が残る。
   **タグを打つときは 1 段厳しくなる**——`node tools/check-version.mjs --tag v0.5.0`
-  は、4 つの版数がタグ名と一致し、CHANGELOG の見出しに**日付が入っている
+  は、版数がタグ名と一致し、CHANGELOG の見出しに**日付が入っている
   （「未リリース」でない）**ことまで見る。これは Release のワークフローが
   タグから走ったときに最初のジョブとして自動で回すので、**リリース前に手で
   打つ必要はない**。画面に出る版数は `web/package.json` からビルド時に埋まる。
