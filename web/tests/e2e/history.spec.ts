@@ -10,9 +10,11 @@ const press = async (page: Page, names: string[]) => {
  * `hist` の到達性と、履歴の面の一続きの経路(開く→出る→戻る)を 1 本で見る
  * (spec §11.2「なぜ 1 本か」)。**なぜ E2E でしか見られないか**は
  * `.superpowers/sdd/2026-09-03-history/task-11-brief.md` の通り: `hist` は
- * `token: null` なので `heavy/tests/ui/reachability.spec.ts` の 4 本のどれも
- * このキーを見ない。`Shift` 自体には `web/src/ui/Keypad/scientific.test.ts:88`
- * という間接の番人があるが、`hist` にはそれが無い。**この 1 本が唯一の番人。**
+ * `token: null` なので重量級側の到達性検査の 4 本のどれもこのキーを見ない。
+ * `Shift` 自体には間接の番人がある——重量級側の到達性検査にある
+ * `the keys behind Shift appear only after Shift is pressed` という名前の
+ * テストが、実際に `Shift` を押して裏のキーが出ることを見る。`hist` には
+ * それが無い。**この 1 本が唯一の番人。**
  */
 test("the history key is reachable behind Shift and leads to the history screen", async ({
   page,
@@ -55,6 +57,9 @@ test("what is recorded survives AC, and can be removed one at a time or all at o
   for (const name of ["2", "掛ける", "3", "計算する"]) {
     await page.getByRole("button", { name, exact: true }).click();
   }
+  for (const name of ["5", "足す", "6", "計算する"]) {
+    await page.getByRole("button", { name, exact: true }).click();
+  }
   // **AC では消えない**(設計書 §6)。
   await page.getByRole("button", { name: "全消去", exact: true }).click();
   await page
@@ -62,17 +67,24 @@ test("what is recorded survives AC, and can be removed one at a time or all at o
     .click();
   await page.getByRole("button", { name: "履歴", exact: true }).click();
   await expect(page.getByText("2 × 3")).toBeVisible();
+  await expect(page.getByText("5 + 6")).toBeVisible();
 
+  // 1 件ずつ——2 件のうち片方だけが消える。
   await page.getByRole("button", { name: "2 × 3 を削除" }).click();
+  await expect(page.getByText("2 × 3")).not.toBeVisible();
+  await expect(page.getByText("5 + 6")).toBeVisible();
+
+  // 全消し——残りも消える。
+  await page.getByRole("button", { name: "すべて消す" }).click();
   await expect(page.getByText("まだ履歴はありません")).toBeVisible();
 });
 
 /**
  * Task 14 の記録トグル。**`Settings.history.enabled` を書く経路が実際に
  * 効くこと**を実 WASM で確かめる——vitest 側(`ScientificPanel.test.tsx`)は
- * 偽 `Calc` に対して同じ形の主張を持つが、`heavy/tests/ui/
- * reachability.spec.ts` の 4 本と同じ理由で、盤面からこのチェックボックス
- * まで実際に到達できるかは E2E でしか見られない(`hist` の裏なので)。
+ * 偽 `Calc` に対して同じ形の主張を持つが、重量級側の到達性検査の 4 本と
+ * 同じ理由で、盤面からこのチェックボックスまで実際に到達できるかは
+ * E2E でしか見られない(`hist` の裏なので)。
  */
 test("turning the recording toggle off stops new entries but keeps what was already recorded", async ({
   page,
