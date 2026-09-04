@@ -83,10 +83,19 @@ describe("History", () => {
 
   it("does not recall an entry that ended in an error", async () => {
     // **§D-1 の例外。** 一覧には出るが、押しても何も入らない。
+    //
+    // **見本は本物の綴りである。** `1` `Exp` `3` `0` `9` を打つと
+    // `spell`(`crates/calcarc-core/src/engine/spell.rs`)は `Buffer::text()`
+    // をそのまま流し込むので `"1e309"` になる——`crates/calcarc-core/tests/
+    // spell_table.rs:124` の `["1","exp","1","2","3","4"] == "1e123"` が
+    // その形を engine の表示と 1 文字ずつ突き合わせている。以前ここは
+    // `"1 Exp 309"` という、**どの打鍵からも生まれない字面**だった。この
+    // ファイルは表示と削除ボタンの名前しか見ないので赤くはならなかったが、
+    // 見本が本物でないと、読んだ人が綴りの規則をそこから覚えてしまう。
     const onRecall = vi.fn();
     const withError: HistoryEntry[] = [
       {
-        expression: "1 Exp 309",
+        expression: "1e309",
         answer: "Math ERROR",
         angle: "Deg",
         error: true,
@@ -105,8 +114,8 @@ describe("History", () => {
       />,
     );
     // 行は在る。
-    expect(screen.getByText("1 Exp 309")).toBeInTheDocument();
-    await userEvent.click(screen.getByText("1 Exp 309"));
+    expect(screen.getByText("1e309")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("1e309"));
     expect(onRecall).not.toHaveBeenCalled();
   });
 
@@ -115,7 +124,7 @@ describe("History", () => {
     const onRemove = vi.fn();
     const withError: HistoryEntry[] = [
       {
-        expression: "1 Exp 309",
+        expression: "1e309",
         answer: "Math ERROR",
         angle: "Deg",
         error: true,
@@ -133,9 +142,7 @@ describe("History", () => {
         onRecordingEnabledChange={() => {}}
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "1 Exp 309 を削除" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "1e309 を削除" }));
     expect(onRemove).toHaveBeenCalledWith(0);
   });
 
