@@ -2,7 +2,7 @@
  * 保存する設定の型と、取り得る値の列挙。
  *
  * **React を import しない**(CLAUDE.md の境界)。localStorage も掴まない
- * ——掴むのは web/src/ui/useSetting.ts だけである。
+ * ——掴むのは `web/src/ui/storage.ts` だけである。
  */
 
 import {
@@ -66,6 +66,11 @@ export interface FinanceSettings {
   withholding: boolean;
 }
 
+/** 計算履歴を貯めるかどうか。既定は入(設計書 §7)。 */
+export interface HistorySettings {
+  enabled: boolean;
+}
+
 /**
  * 保存する設定。**打鍵中の値は 1 つも含まない**(P-1 設計書 §3)。
  * 式・途中の数字・答・active・sexagesimal_view・error・履歴は保存しない。
@@ -74,6 +79,7 @@ export interface Settings {
   scientific: ScientificSettings;
   dataScale: DataScaleSettings;
   finance: FinanceSettings;
+  history: HistorySettings;
 }
 
 /**
@@ -88,6 +94,7 @@ export function defaultSettings(): Settings {
     scientific: { angle: "Deg", form: "Rect" },
     dataScale: { dtype: "float32", primary: "decimal" },
     finance: { mode: "payment", periodsPerYear: 12, withholding: false },
+    history: { enabled: true },
   };
 }
 

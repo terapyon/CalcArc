@@ -1,11 +1,23 @@
 import type { KeyVariant } from "../Key/Key";
 
+/**
+ * トークンを送らず、UI の操作を起こす面。
+ *
+ * **`kind` に相乗りさせない**——`kind` は「面を切り替えるキー自身」の意味で
+ * 使っている。**データは「何を」だけを言い、「どう」は `Keypad` が持つ**
+ * (`kind: "shift"` と同じ形。設計書 `2026-09-03-history-design.md` §9.3、
+ * 計画 §A-1)。
+ */
+export type KeyAction = "history";
+
 /** Shift の第 2 面で差し替わる内容。 */
 export interface ShiftFace<T> {
   token: T | null;
   label: string;
   ariaLabel: string;
   variant: KeyVariant;
+  /** 押すとトークンではなく操作が起きる。**`token` は null になる。** */
+  action?: KeyAction;
 }
 
 export interface KeyDef<T> {
@@ -20,6 +32,8 @@ export interface KeyDef<T> {
   shift?: ShiftFace<T>;
   /** 面を切り替えるキー自身。 */
   kind?: "shift";
+  /** 押すとトークンではなく操作が起きる。**`token` は null になる。** */
+  action?: KeyAction;
 }
 
 /**

@@ -146,3 +146,75 @@ describe("Keypad の Shift（Scientific の盤面で）", () => {
     expect(shift).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+describe("トークンを送らない操作キー", () => {
+  const SECTIONS: KeypadSection<"a">[] = [
+    {
+      ariaLabel: "試験用",
+      columns: 2,
+      height: "half",
+      keys: [
+        {
+          token: null,
+          label: "Shift",
+          ariaLabel: "第2面に切り替え",
+          variant: "function",
+          kind: "shift",
+        },
+        {
+          token: "a",
+          label: "a",
+          ariaLabel: "え",
+          variant: "digit",
+          shift: {
+            token: null,
+            label: "hist",
+            ariaLabel: "履歴",
+            variant: "function",
+            action: "history",
+          },
+        },
+      ],
+    },
+  ];
+
+  it("shows a label instead of an empty slot", async () => {
+    render(
+      <Keypad sections={SECTIONS} onPress={() => {}} onAction={() => {}} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    const key = screen.getByRole("button", { name: "履歴" });
+    // **予約スロットは文字を持たない**(Key.tsx)。ここで落ちるなら
+    // action が Key へ届いておらず、空きマスとして描かれている。
+    expect(key).toHaveTextContent("hist");
+    expect(key).toBeEnabled();
+  });
+
+  it("calls onAction and does not call onPress", async () => {
+    const onPress = vi.fn();
+    const onAction = vi.fn();
+    render(
+      <Keypad sections={SECTIONS} onPress={onPress} onAction={onAction} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(onAction).toHaveBeenCalledWith("history");
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("drops back to the first face after the action key", async () => {
+    render(
+      <Keypad sections={SECTIONS} onPress={() => {}} onAction={() => {}} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    // **ワンショット**(Keypad.tsx の註)。第 1 面のラベルが戻っている。
+    expect(screen.getByRole("button", { name: "え" })).toBeInTheDocument();
+  });
+});

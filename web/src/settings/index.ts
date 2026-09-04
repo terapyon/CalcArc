@@ -11,6 +11,7 @@ import { ALLOWED, defaultSettings, type Settings } from "./types";
 export type {
   DataScaleSettings,
   FinanceSettings,
+  HistorySettings,
   PanelMode,
   PeriodsPerYear,
   Primary,
@@ -71,6 +72,7 @@ function parse(raw: string): Settings {
   const sci = section(root.scientific);
   const ds = section(root.dataScale);
   const fin = section(root.finance);
+  const hist = section(root.history);
 
   return {
     scientific: {
@@ -92,6 +94,12 @@ function parse(raw: string): Settings {
         typeof fin.withholding === "boolean"
           ? fin.withholding
           : fallback.finance.withholding,
+    },
+    history: {
+      enabled:
+        typeof hist.enabled === "boolean"
+          ? hist.enabled
+          : fallback.history.enabled,
     },
   };
 }
@@ -126,9 +134,11 @@ export function writeSettings(storage: SettingsStorage, next: Settings): void {
   const scientific = pruned(next.scientific, fallback.scientific);
   const dataScale = pruned(next.dataScale, fallback.dataScale);
   const finance = pruned(next.finance, fallback.finance);
+  const history = pruned(next.history, fallback.history);
   if (scientific) body.scientific = scientific;
   if (dataScale) body.dataScale = dataScale;
   if (finance) body.finance = finance;
+  if (history) body.history = history;
 
   try {
     storage.setItem(SETTINGS_KEY, JSON.stringify(body));
