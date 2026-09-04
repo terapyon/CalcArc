@@ -29,11 +29,11 @@ function digitToken(ch: string): KeyToken | null {
 }
 
 /**
- * 二項演算子のトークン。**列の先頭がこれなら、その計算は前回の答の続き**
- * (連鎖)である——値のキーで始まれば新しい計算(設計書 §0 の「診断」の
- * ためには、`× 2 → 6+8j` のような自分だけでは説明できない行を作らない)。
- * 判定は綴った文字列を見ずに、**この列の先頭キーそのもの**で行う
- * (Fix round 3 finding 11)。
+ * 二項演算子のトークン。**この列の中で最初に見つかる非無音キーがこれなら、
+ * その計算は前回の答の続き**(連鎖)である——値のキーで始まれば新しい計算
+ * (設計書 §0 の「診断」のためには、`× 2 → 6+8j` のような自分だけでは
+ * 説明できない行を作らない)。判定は綴った文字列を見ずに、**キーそのもの**
+ * で行う(Fix round 3 finding 11)。
  */
 const BINARY_OPERATOR_TOKENS: ReadonlySet<KeyToken> = new Set([
   "add",
@@ -43,6 +43,28 @@ const BINARY_OPERATOR_TOKENS: ReadonlySet<KeyToken> = new Set([
   "pow",
   "n_p_r",
   "n_c_r",
+]);
+
+/**
+ * **連鎖の判定で読み飛ばすキー。** `spell()` の「七つの無音キー」から
+ * `eq`・`ac` を除いたもの——この 2 つは `press` の設計上、この列の先頭に
+ * 来ることが無い(`eq` は必ず列を終えて `pendingSpellRef` に渡り、`ac` は
+ * 積んだ直後に列を空にする)。
+ *
+ * **Fix round 4 finding B。** 答を ENG や極形式で確認してから続きを打つ
+ * のは、ごく普通の操作である——極形式は設計書自身が動機として挙げている
+ * 例そのもの。`del`(押しても何も消えない——直前の `=` の直後は buffer が
+ * 無いので、`delete_one` は何もしない)も同様に、続きの判定を壊してはい
+ * けない。**「列の先頭キー」だけを見ていた版は、これらのキーが 1 つでも
+ * 挟まると連鎖を見失い、`3 = ENG × 2 =` や `3 = ▸∠ × 2 =` を「新しい計算」
+ * として `× 2` のまま記録していた。**
+ */
+const SILENT_CONTINUATION_KEYS: ReadonlySet<KeyToken> = new Set([
+  "del",
+  "angle_toggle",
+  "eng",
+  "polar_toggle",
+  "dms",
 ]);
 
 /**
@@ -302,10 +324,14 @@ export function ScientificPanel() {
     // (Task 10 ブリーフ ★ Step 0)。判断は綴った後に効く。
     const spelled = ready.spell(pendingKeys);
     // **連鎖なら直前の答を左辺として前に足す**(Fix round 3 finding 11)。
-    // 「列の先頭が二項演算子か」で決める——綴った文字列を見て推測しない
-    // (`spelled` の頭が `×` のような記号になっているかを見るのではなく、
-    // `pendingKeys[0]` そのものを見る)。
-    const first = pendingKeys[0];
+    // 「無音キーを読み飛ばした先頭が二項演算子か」で決める——綴った文字列
+    // を見て推測しない(`spelled` の頭が `×` のような記号になっているかを
+    // 見るのではなく、キーそのものを見る)。**無音キーを読み飛ばすのが
+    // 重要**(Fix round 4 finding B)——答を ENG や極形式・角度モードで
+    // 確認してから続きを打つのは普通の操作で、`del`(直前の `=` の直後は
+    // 何も消さない)もこの判定を壊してはいけない。先頭キーだけを見ると
+    // `3 = ENG × 2 =` のような列で連鎖を見失う。
+    const first = pendingKeys.find((key) => !SILENT_CONTINUATION_KEYS.has(key));
     const isContinuation =
       first !== undefined && BINARY_OPERATOR_TOKENS.has(first);
     const carried = carriedAnswerRef.current;

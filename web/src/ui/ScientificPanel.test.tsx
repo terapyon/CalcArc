@@ -708,6 +708,52 @@ describe("履歴", () => {
     ).toBeInTheDocument();
   });
 
+  it("still prefixes a chain when the answer was checked in ENG notation first", async () => {
+    // **Fix round 4 finding B.** 答を ENG で確認してから続きを打つのは
+    // 普通の操作である。列の先頭キーだけを見ていた版は、`eng` が挟まると
+    // 連鎖を見失い、`× 2` のまま記録していた。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "工学表記に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("3 2")).toBeInTheDocument();
+  });
+
+  it("still prefixes a chain when the answer was checked in polar form first", async () => {
+    // **Fix round 4 finding B.** 極形式で答を確認してから続きを打つのは
+    // 設計書 §0 自身が挙げている動機の例そのもの——`▸∠` が先頭に来ても
+    // 連鎖は壊れない。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "極形式と直交形式を切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "掛ける" }));
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+    await userEvent.click(screen.getByRole("button", { name: "計算する" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "第2面に切り替え" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "履歴" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("3 2")).toBeInTheDocument();
+  });
+
   it("recalls a plain integer, stripping thousands separators", async () => {
     window.localStorage.setItem(
       "calcarc.history",
@@ -870,9 +916,9 @@ describe("履歴", () => {
   });
 
   it("recalls a negative mantissa together with a negative exponent", async () => {
-    // 送り分けの規則は `mapAnswerToKeys`(このファイル冒頭)の docstring
-    // が持つ——ここでは繰り返さず、2 つの `neg` が別の宛先に届くことだけ
-    // 確かめる(Fix round 1 finding 1)。
+    // 送り分けの規則は `mapAnswerToKeys`(`ScientificPanel.tsx` の冒頭)の
+    // docstring が持つ——ここでは繰り返さず、2 つの `neg` が別の宛先に
+    // 届くことだけ確かめる(Fix round 1 finding 1)。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
