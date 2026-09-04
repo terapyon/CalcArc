@@ -270,6 +270,23 @@ export function ScientificPanel() {
   // 前回とは無関係な計算)が古い答を左辺として誤って記録する。
   const carriedAnswerRef = useRef<string | null>(null);
 
+  // **いま表示がエラー状態か。**(H-3)`crates/calcarc-core/src/engine/
+  // mod.rs:29` の「エラー中は AC 以外を受け付けない。」——engine は `AC`
+  // 以外のキーを**一切状態に反映せずに捨てる**。`press` はそれを知らずに
+  // `keysRef` へ積み続けていたので、**engine が一度も見ていない打鍵が
+  // そのまま式になっていた**: `1 ÷ 0 =` のあと `7 + 8 =` と打つと、
+  // 式「7 + 8」・答「Math ERROR」という、**自分の答を作れない行**が
+  // 残っていた(設計書 §0 が守りたいものそのもの)。
+  //
+  // **`step` ではなく ref で持つ理由は `calcRef` と同じ**——`press` の
+  // 依存を空にしたまま最新の値を読むためである。**書き込みは effect**
+  // (下)で、React は次の離散イベント(クリック・keydown)を処理する前に
+  // 保留中の passive effect を流すので、次の打鍵はこの値を見る。
+  const errorRef = useRef(false);
+  useEffect(() => {
+    errorRef.current = step !== null && step.display.error !== null;
+  }, [step]);
+
   // 依存を空にして同一性を固定する。ここが変わると useKeyboard が
   // リスナを貼り直し、その隙間の打鍵が落ちる。
   const press = useCallback((token: KeyToken) => {
@@ -280,7 +297,25 @@ export function ScientificPanel() {
     // 版では、読み込み前に打ったキーが `keysRef`/`pendingSpellRef` に
     // 残ったまま `dispatch` されずに捨てられ、次に積む列の頭に紛れ込む
     // ——engine が一度も見ていないキーが式に混ざる余地ができていた。
-    if (ready) {
+    // **エラー中は `AC` 以外を積まない**(H-3)。engine の分岐
+    // (`reduce` の `key == Key::Ac` / `next.error.is_some()`)をそのまま
+    // 写したもので、**「engine が状態に反映したキーだけが式になる」**と
+    // いう不変条件を、この 1 行が保つ。
+    //
+    // **エラーを起こしたキー自身は積む。** ここで見ているのは打鍵**前**の
+    // 状態だからで、これは意図である——`1 ÷ 0 =` は式「1 ÷ 0」・答
+    // 「Math ERROR」として記録されるべき 1 件であり、その式は自分の答を
+    // ちゃんと説明している(`error: true` の行はそのために在る)。
+    //
+    // **エラーの時点で積まれていた列はそのまま残す。** 中断された入力
+    // (`1 . 5 .` の `1` `.` `5`)を捨てるかどうかは**外から見分けられない**
+    // ——エラーから抜ける道は `AC` だけであり(engine/mod.rs:29)、その
+    // `AC` がここで列を空にするからである。見分けられない以上、**規則を
+    // 1 つ増やさない**ほうを選んだ。番人は
+    // `ScientificPanel.test.tsx` の
+    // 「leaves no fragment of the entry that the error interrupted」——
+    // 残した列が次の式に漏れないこと(=外から見える約束)を見張る。
+    if (ready && !(errorRef.current && token !== "ac")) {
       keysRef.current.push(token);
       if (token === "eq") {
         // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
@@ -340,7 +375,20 @@ export function ScientificPanel() {
     // **次の連鎖のために、いま確定した答を持っておく。** 記録の on/off に
     // 関わらず更新する——連鎖の継ぎ目は engine 側の値であって、記録するか
     // どうかとは無関係(このあとの `enabled` チェックより前に置く理由)。
-    carriedAnswerRef.current = step.display.main;
+    //
+    // **エラーで終わった答は左辺にしない**(H-3)。`"Math ERROR"` は数では
+    // ないので、`Math ERROR × 2` のような行を作ってしまう。エラーは連鎖を
+    // 終わらせる——`AC` と同じ扱いで空にする。
+    //
+    // **これに番人は置けない。** 上の `press` の門番があるかぎり、エラーの
+    // あとに来る二項演算子は engine にも `keysRef` にも届かず、`AC`(唯一の
+    // 出口)は `carriedAnswerRef` を自分で空にするので、**この行の有無は
+    // 外から観測できない**。代わりに守っているのは `press` の門番のほうで、
+    // その番人は上の 2 つの検査(「does not record keys the engine threw
+    // away…」「records nothing at all when the error was raised…」)である。
+    // ここはその門番が将来狭められた日のための二重化として置く。
+    carriedAnswerRef.current =
+      step.display.error === null ? step.display.main : null;
     // **`enabled` が false なら記録しない。消さない**(設計書 §7)——
     // ここで止まるのは「これから」記録する分だけで、既に貯まった `entries`
     // には触らない。

@@ -162,3 +162,62 @@ test("a recalled negative decimal behaves like the same digits typed by hand, on
   await press(page, ["0", "小数点", "5", "符号を反転", "3"]);
   await expect(display).toHaveText(recalledThenTyped ?? "");
 });
+
+/**
+ * **H-3 を実 WASM で閉じる。** `crates/calcarc-core/src/engine/mod.rs:29`
+ * 「エラー中は AC 以外を受け付けない。」——engine が状態に反映しなかった
+ * 打鍵を式として記録すると、**その行は自分の答を作れない**(設計書 §0)。
+ *
+ * vitest 側(`web/src/ui/ScientificPanel.test.tsx`)は偽 `Calc` にこの規則を
+ * 写して同じ形の主張を持つが、**その規則を写したのは私自身**である。実物の
+ * `1 ÷ 0` が本当にエラーになり、実物の `spell` が本当に「1 ÷ 0」と綴ることは
+ * ここでしか確かめられない。
+ */
+test("keys the engine threw away after an error do not become a recorded expression", async ({
+  page,
+}) => {
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  // エラーは `=` の瞬間に起きる。この計算自体は 1 件として記録されてよい
+  // ——式「1 ÷ 0」は答「Math ERROR」を説明している。
+  await press(page, ["1", "割る", "0", "計算する"]);
+  await expect(display).toHaveText("Math ERROR");
+
+  // ここから先は engine が 1 打鍵も受け取らない。
+  await press(page, ["7", "足す", "8", "計算する"]);
+  await expect(display).toHaveText("Math ERROR");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByText("1 ÷ 0")).toBeVisible();
+  // 直す前はここに「7 + 8 = Math ERROR」の行が在った。
+  await expect(page.getByText("7 + 8")).toHaveCount(0);
+});
+
+/**
+ * **H-3 の「関連」を実 WASM で閉じる。** `Buffer::push_dot`
+ * (`crates/calcarc-core/src/engine/state.rs`)は入力に既に `.` があると
+ * `SyntaxError` を返すので、`1 . 5 .` は **`=` を待たずに**エラー状態へ入る。
+ * エラーが `=` 以外のキーで起きたこの経路では `=` 自身が捨てられるため、
+ * **1 件も積まれない**のが正しい。
+ */
+test("an error raised in the middle of an entry records nothing", async ({
+  page,
+}) => {
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  await press(page, ["1", "小数点", "5"]);
+  await expect(display).toHaveText("1.5");
+  await press(page, ["小数点"]);
+  await expect(display).toHaveText("Math ERROR");
+
+  await press(page, ["7", "足す", "8", "計算する"]);
+  await expect(display).toHaveText("Math ERROR");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByText("まだ履歴はありません")).toBeVisible();
+});

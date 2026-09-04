@@ -35,6 +35,23 @@ import { ScientificPanel } from "./ScientificPanel";
 // `fakeCalc()` はテストごとに作り直すので、数える側はここで毎回リセットする。
 let spellCallCount = 0;
 
+/**
+ * **偽 `spell` が字面を持つ非数字キー。**
+ *
+ * 二項演算子・`eq`・`ac` は**わざと持たない**——このファイルの既存の主張
+ * (`"3 2"` のような行)がその形に依存しており、`=` の 2 度押しが空文字列に
+ * なることもここから来る。一方 **`sqrt` と `neg` には字面を持たせる**:
+ * H-4 の検査は「連鎖の左辺が補われたか」を記録された式そのもので見るが、
+ * この 2 つが綴りに出ないと式が `""` になり、`pushEntry` が行ごと捨てて
+ * **直っていても壊れていても緑になる**(偽物が寛容すぎて何も測れない)。
+ * 字面は本物(`crates/calcarc-core/src/engine/spell.rs` の `commit_glyph`)に
+ * 合わせてある。
+ */
+const FAKE_GLYPHS: Partial<Record<KeyToken, string>> = {
+  sqrt: "\u221a",
+  neg: "+/\u2212",
+};
+
 function fakeCalc(): Calc {
   const displays = new WeakMap<EngineState, DisplayState>();
   const base: DisplayState = {
@@ -58,6 +75,14 @@ function fakeCalc(): Calc {
     dispatch: (state: EngineState, key: KeyToken) => {
       // 知らない state(この偽物が作った物ではない)は初期状態として扱う。
       const from = displays.get(state) ?? base;
+      // **エラー中は AC 以外を受け付けない**——`crates/calcarc-core/src/
+      // engine/mod.rs:29` の規則そのもの。**この偽物がこれを持っていな
+      // かったので H-3 はここで見えなかった**: engine が捨てるはずのキーを
+      // 偽物は普通に処理して表示を進めていた。**偽物のほうが本物より寛容
+      // だと、何を書いても緑になる**(このファイル冒頭の同じ指摘)。
+      if (from.error !== null && key !== "ac") {
+        return stepOf(from);
+      }
       if (key === "angle_toggle") {
         return stepOf({ ...from, angle: from.angle === "Deg" ? "Rad" : "Deg" });
       }
@@ -91,6 +116,12 @@ function fakeCalc(): Calc {
       // 「仮数・指数の符号を送り分ける」(Fix round 1 finding 1)を測るのに
       // 要る。本物の綴り規則とは無関係で、状態を見分けられれば足りる。
       if (key === "dot") {
+        // **2 つ目の `.` は SyntaxError**(`crates/calcarc-core/src/engine/
+        // state.rs` の `Buffer::push_dot`)。**`=` を待たずに、入力の途中で
+        // エラー状態へ入る経路**の見本である(H-3 の「関連」)。
+        if (from.main.includes(".")) {
+          return stepOf({ ...from, main: "Math ERROR", error: "SyntaxError" });
+        }
         return stepOf({
           ...from,
           main: from.main === "0" ? "0." : `${from.main}.`,
@@ -119,6 +150,15 @@ function fakeCalc(): Calc {
       if (key === "exp") {
         return stepOf({ ...from, main: `${from.main}e` });
       }
+      if (key === "eq") {
+        // **指数の付いた値は確定のときに初めて溢れる**(`engine/mod.rs` の
+        // `commit_entry`「打鍵の途中はエラーにしない」)。`1 Exp 309 =` が
+        // その最短の見本で、**エラーを起こしたキーが `=` そのもの**なので、
+        // この計算自体は 1 件として記録されてよい——式が答を説明している。
+        if (from.main.includes("e") && !Number.isFinite(Number(from.main))) {
+          return stepOf({ ...from, main: "Math ERROR", error: "Overflow" });
+        }
+      }
       // **`j` は写せない答の見本(Fix round 1 finding 1)。** 虚数・極形式・
       // 60 進の代わりに、この偽物では一番軽い「数字キーの列で表せない形」
       // として使う。
@@ -134,13 +174,34 @@ function fakeCalc(): Calc {
     // 「`=` の 2 度押しは何も綴らない」(空の列 → 空文字列)も再現できる。
     spell: (keys: KeyToken[]) => {
       spellCallCount += 1;
-      return keys.filter((key) => /^[0-9]$/.test(key)).join(" ");
+      return keys
+        .map((key) => (/^[0-9]$/.test(key) ? key : FAKE_GLYPHS[key]))
+        .filter((part): part is string => part !== undefined)
+        .join(" ");
     },
     // **本物の `MAX_ENTRY_LEN`(12)と同じ値。** Fix round 3 finding の
     // テスト(13 文字は呼び戻せない・12 文字は呼び戻せる)が実物の境界と
     // 一致した状態で走るように、偽物でも実物と同じ数を返す。
     maxEntryLen: () => 12,
   };
+}
+
+/**
+ * 盤面のキーを、アクセシブルネームの順に押す。
+ *
+ * `getByRole` の `name` に文字列を渡すと**完全一致**なので、「サイン」が
+ * 「アークサイン」に当たることはない(E2E 側が `exact: true` を要るのと
+ * 同じ事情を、こちらは既定で満たしている)。
+ */
+async function pressKeys(names: string[]): Promise<void> {
+  for (const name of names) {
+    await userEvent.click(screen.getByRole("button", { name }));
+  }
+}
+
+/** 履歴の面を開く。**Shift は面が作り直されるたびに解ける。** */
+async function openHistory(): Promise<void> {
+  await pressKeys(["第2面に切り替え", "履歴"]);
 }
 
 // **角度・極形式・記法は保存される(このファイルの「設定の永続化」参照)。**
@@ -560,6 +621,80 @@ describe("履歴", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "履歴" }));
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("does not record keys the engine threw away while the display was in an error state", async () => {
+    // **H-3。** `crates/calcarc-core/src/engine/mod.rs:29` が言う
+    // 「エラー中は AC 以外を受け付けない。」——engine が捨てたキーを式として
+    // 記録すると、**その行は自分の答を作れない**(設計書 §0 が守りたいもの
+    // そのもの)。実際、`7 + 8` という式に `Math ERROR` という答が並んでいた。
+    //
+    // ここでの入り口は `1 Exp 309 =`(溢れ)。**エラーを起こしたキーが `=`
+    // そのもの**なので、この計算自体は 1 件として記録されてよい——式が答を
+    // 説明している。捨てられるのは**その後の**打鍵である。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["1", "指数入力", "3", "0", "9", "計算する"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+
+    // ここから先は engine が 1 打鍵も受け取らない。
+    await pressKeys(["7", "足す", "8", "計算する"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+    // **綴りが呼ばれた回数で見る**(ブリーフ ★ Step 0 と同じ形)。1 なら
+    // 2 度目の `=` は列を渡していない。0 だったなら「そもそも打鍵が届いて
+    // いない」ことになり、この検査は何も主張していない。
+    expect(spellCallCount).toBe(1);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("1 3 0 9")).toBeInTheDocument();
+    expect(screen.getByText("Math ERROR")).toBeInTheDocument();
+    expect(screen.queryByText("7 8")).not.toBeInTheDocument();
+  });
+
+  it("records nothing at all when the error was raised in the middle of an entry", async () => {
+    // **H-3 の「関連」。** `Buffer::push_dot`
+    // (`crates/calcarc-core/src/engine/state.rs`)は、入力に既に `.` が
+    // あると `SyntaxError` を返す——`1 . 5 .` は **`=` を待たずに**エラー
+    // 状態へ入る。エラーが `=` 以外のキーで起きたこの経路では、`=` 自体が
+    // 捨てられるので **1 件も積まれない**(積めば `1 5 7 8` のような、
+    // 打っていない式が残る)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["1", "小数点", "5", "小数点"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+
+    await pressKeys(["7", "足す", "8", "計算する"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+    expect(spellCallCount).toBe(0);
+
+    await openHistory();
+    expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
+  });
+
+  it("leaves no fragment of the entry that the error interrupted", async () => {
+    // **中断された入力をどう扱うかの番人。** エラー中は列に積まないと決めた
+    // が、**エラーの時点で既に積まれていた分**(`1` `.` `5` `.`)はそのまま
+    // 残す——エラーから抜ける道は `AC` しかなく(engine/mod.rs:29)、その
+    // `AC` が列を空にするので、残す/捨てるのどちらを選んでも外からは
+    // 見分けられない。**見分けられないこと自体をここで見張る**: エラー →
+    // AC → 次の計算、と打って、次の式に `1` も `5` も混ざらないことを見る。
+    // (この検査は直す前も緑である。守っているのは「直し方」ではなく
+    // 「外から見える約束」のほうで、`AC` が列を空にするのをやめた日や、
+    // エラー中の打鍵を再び積むようにした日に赤くなる。)
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["1", "小数点", "5", "小数点"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+
+    await pressKeys(["全消去", "2", "計算する"]);
+    expect(spellCallCount).toBe(1);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+    ).toBeInTheDocument();
   });
 
   it("prefixes a chained = with the carried answer, so the row explains itself", async () => {
