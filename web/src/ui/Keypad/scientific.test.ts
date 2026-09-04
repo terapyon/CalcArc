@@ -124,9 +124,27 @@ describe("Scientific のキー集合", () => {
     // トークンを持つ。次に機能を足す人は**置き場を作るところから**になる。
     const reserved = allKeys.filter((k) => k.token === null && !k.kind);
     expect(reserved).toEqual([]);
-    // 第 2 面にも「準備中」は残っていない。
-    const faces = allKeys.filter((k) => k.shift).map((k) => k.shift?.token);
-    expect(faces.every((t) => t !== null)).toBe(true);
+  });
+
+  it("names the history key as the board's only tokenless second face", () => {
+    // `token: null` の第 2 面は本来「準備中」の印——`hist` だけが例外
+    // (Task 8。トークンを送らず UI 操作を起こす。設計書
+    // `2026-09-03-history-design.md` §9.1)。`action` の有無で判定すると、
+    // 将来のスタブが `action` だけ真似て通り抜けられる。**集合を丸ごと
+    // 名指しする**——`hist` 以外に `token: null` の第 2 面が増えたら、
+    // それが `action` を持っていても、このテストは落ちる。
+    const nullFaces = allKeys
+      .filter((k) => k.shift?.token === null)
+      .map((k) => k.shift);
+    expect(nullFaces).toEqual([
+      {
+        token: null,
+        label: "hist",
+        ariaLabel: "履歴",
+        variant: "function",
+        action: "history",
+      },
+    ]);
   });
 
   it("does not move the main grid", () => {
@@ -171,5 +189,16 @@ describe("Scientific のキー集合", () => {
     expect(behind("lparen")).toBe("n_fact");
     expect(behind("rparen")).toBe("n_p_r");
     expect(behind("neg")).toBe("n_c_r");
+  });
+
+  it("puts the history key behind j and sends no token", () => {
+    const j = allKeys.find((k) => k.token === "j");
+    expect(j?.shift).toEqual({
+      token: null,
+      label: "hist",
+      ariaLabel: "履歴",
+      variant: "function",
+      action: "history",
+    });
   });
 });

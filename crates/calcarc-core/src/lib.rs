@@ -19,7 +19,7 @@ pub use error::{CalcError, CalcResult};
 pub use numeric::angle::AngleMode;
 pub use value::Value;
 
-pub use engine::{DisplayState, EngineState, Key, reduce, render};
+pub use engine::{DisplayState, EngineState, Key, MAX_ENTRY_LEN, reduce, render};
 
 /// ユニットテストの既定許容誤差。
 ///

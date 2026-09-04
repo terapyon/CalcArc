@@ -184,7 +184,23 @@ const MAIN_GRID: KeypadSection<KeyToken> = {
     { token: "8", label: "8", ariaLabel: "8", variant: "digit" },
     { token: "9", label: "9", ariaLabel: "9", variant: "digit" },
     { token: "div", label: "÷", ariaLabel: "割る", variant: "operator" },
-    { token: "j", label: "j", ariaLabel: "虚数単位", variant: "function" },
+    {
+      token: "j",
+      label: "j",
+      ariaLabel: "虚数単位",
+      variant: "function",
+      // **j の裏は空いていた**——メイングリッドで第 2 面を持つのは
+      // `(` `)` `+/−` `Exp` の 4 つだけだった。**退けたキーは無い。**
+      // `token: null` なので `KEY_TOKENS` も `Key::ALL` も動かない
+      // （設計書 `2026-09-03-history-design.md` §9.1）。
+      shift: {
+        token: null,
+        label: "hist",
+        ariaLabel: "履歴",
+        variant: "function",
+        action: "history",
+      },
+    },
 
     { token: "4", label: "4", ariaLabel: "4", variant: "digit" },
     { token: "5", label: "5", ariaLabel: "5", variant: "digit" },
