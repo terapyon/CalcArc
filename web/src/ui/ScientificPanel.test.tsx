@@ -889,6 +889,55 @@ describe("履歴", () => {
     expect(screen.getByText("3 2")).toBeInTheDocument();
   });
 
+  it("prefixes a chain that a postfix function continued", async () => {
+    // **H-4。** `√` は `apply_unary`
+    // (`crates/calcarc-core/src/engine/mod.rs:269` の
+    // `state.current = f(state.current)?`)で**直前の答を読む**——つまり
+    // これも連鎖である。二項演算子だけを見ていた版は、`3 + 1 = √ =` の
+    // 2 度目の `=` を式「√」・答「2」として記録していた: 式が答を作れない。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["3", "足す", "1", "計算する"]);
+    await pressKeys(["平方根", "計算する"]);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    // 偽 `dispatch` は `add`/`eq`/`sqrt` を no-op として扱うので答は
+    // 「31」のまま——ここで見たいのは綴り側、左辺が補われたかである。
+    expect(screen.getByText("31 √")).toBeInTheDocument();
+    expect(screen.queryByText("√")).not.toBeInTheDocument();
+  });
+
+  it("prefixes a chain that the sign key continued", async () => {
+    // **H-4。** `+/−` も `apply_unary` を通る(`engine/mod.rs` の `Key::Neg`
+    // ——指数入力中でなければ確定値の符号を反転する)。`3 + 4 =` のあと
+    // `+/− =` は式「+/−」・答「-7」として記録されていた。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["3", "足す", "4", "計算する"]);
+    await pressKeys(["符号を反転", "計算する"]);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("34 +/−")).toBeInTheDocument();
+    expect(screen.queryByText("+/−")).not.toBeInTheDocument();
+  });
+
+  it("does not prefix a new calculation that merely ends with a postfix key", async () => {
+    // **判定は「列の先頭の非無音キー」を見る**ので、後置関数を集合に足しても
+    // `4 +/− =` のような**新しい**計算は連鎖にならない——先頭は `4` である。
+    // 集合を広げたことで誤爆しないことの対照ケース(レビューの註)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["3", "計算する"]);
+    await pressKeys(["4", "符号を反転", "計算する"]);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("4 +/−")).toBeInTheDocument();
+    expect(screen.queryByText("3 4 +/−")).not.toBeInTheDocument();
+  });
+
   it("recalls a plain integer, stripping thousands separators", async () => {
     window.localStorage.setItem(
       "calcarc.history",

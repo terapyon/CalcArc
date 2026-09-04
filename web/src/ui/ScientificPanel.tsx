@@ -29,13 +29,73 @@ function digitToken(ch: string): KeyToken | null {
 }
 
 /**
- * 二項演算子のトークン。**この列の中で最初に見つかる非無音キーがこれなら、
- * その計算は前回の答の続き**(連鎖)である——値のキーで始まれば新しい計算
- * (設計書 §0 の「診断」のためには、`× 2 → 6+8j` のような自分だけでは
- * 説明できない行を作らない)。判定は綴った文字列を見ずに、**キーそのもの**
- * で行う(Fix round 3 finding 11)。
+ * **前回の答を左辺として引き継ぐキー。この列の中で最初に見つかる非無音キーが
+ * これなら、その計算は前回の答の続き**(連鎖)である——値のキーで始まれば
+ * 新しい計算(設計書 §0 の「診断」のためには、`× 2 → 6+8j` のような自分
+ * だけでは説明できない行を作らない)。判定は綴った文字列を見ずに、**キー
+ * そのもの**で行う(Fix round 3 finding 11)。
+ *
+ * # engine から導く。手で並べない(H-4)
+ *
+ * 以前ここは「二項演算子」だけを手で並べた集合で、**後置関数と符号キーが
+ * 漏れていた**——`3 + 1 = √ =` は式「√」・答「2」、`3 + 4 = +/− =` は
+ * 式「+/−」・答「-7」として記録されていた。どちらも式が自分の答を作れない。
+ * **手で並べたことが漏れの原因**なので、集合は engine の分岐から機械的に
+ * 導く。導き直し方:
+ *
+ * ```
+ * git grep -n 'state\.current' crates/calcarc-core/src/engine/mod.rs
+ * ```
+ *
+ * 引き継ぐ値は `EngineState::current` である。出てきた行を**読む**(引き継ぐ)
+ * と**上書きする**(新しく始める)に分ける。2026-09-04 現在:
+ *
+ * **読む(この集合に入る):**
+ * - `:173` `push_binop` の `state.operands.push(state.current)`
+ *   → `add` `sub` `mul` `div` `pow` `n_p_r` `n_c_r`
+ * - `:195` `finish` の `state.operands.push(state.current)` → `eq`
+ * - `:245` `close_paren` の `state.operands.push(state.current)` → `rparen`
+ * - `:269` `apply_unary` の `state.current = f(state.current)?`
+ *   → `n_fact` `sqrt` `sqr` `neg` `sin` `cos` `tan` `ln` `log10` `exp_e`
+ *     `recip` `asin` `acos` `atan`(`apply()` で `apply_unary` を呼ぶ腕の全部)
+ *
+ * **上書きする(入らない):**
+ * - `:238` `open_paren` の `state.current = Value::ZERO` → `lparen`
+ * - `:371` `:376` `state.current = Value::real(...)` → `pi` `e`
+ * - `:135` `commit_entry` が `buffer.value()?` で置き換える
+ *   → `Buffer` に入るキー(数字・`dot`・`zeros3`・`exp`・`j`・`dms`)
+ * - `:188` `:206` `:257` は上の腕が読んだ**あと**に自分で置き直す行なので、
+ *   新しいキーは足さない。
+ *
+ * **`current` に触れないキー:** `del`(`delete_one`)・`ac`・`angle_toggle`・
+ * `polar_toggle`・`eng`。前 4 つのうち `del` と 3 つのトグルは
+ * `SILENT_CONTINUATION_KEYS` が先に読み飛ばす。
+ *
+ * **註 1: `neg`。** `apply()` の `Key::Neg` は、指数入力中なら `Buffer` 側
+ * (`toggle_exponent_sign`)へ行き `apply_unary` を呼ばない。しかし**この判定
+ * に掛かる `neg` は列の先頭**であり、直前が `=` である以上 `Buffer` は無い
+ * ので、必ず `apply_unary` に落ちる。
+ *
+ * **註 2: `eq` と `rparen` は集合に居るが、記録される行にはならない。**
+ * 先頭が `eq` の列(=`=` の 2 度押し)は `spell` が `""` を返し
+ * (`spell.rs` の `Key::Eq` は綴りに何も足さない)、`pushEntry` が式の空な行を
+ * 捨てる。**ただし左辺を足してからでは遅い**——`"2 "` は空ではない。だから
+ * 下の組み立てには「綴りが空なら左辺も付けない」条件が要る(そこのコメント)。
+ * 先頭が `rparen` の列は、
+ * 直前の `=`(`finish`)が演算子スタックを空にしているので `close_paren` が
+ * `SyntaxError` になり、エラー中の `=` は積まれない(`press` の門番、H-3)。
+ * **それでも手で外さない**——外した瞬間この集合は「engine から導いた物」から
+ * 「手で選んだ物」に戻る。H-4 はその手選びが生んだ欠陥である。
+ *
+ * **番人。** TypeScript から engine は呼べない(jsdom に WASM は無い)ので、
+ * この集合が上の列挙と一致していることを機械で見張るものは置けない。代わりに
+ * 置いたのは `web/tests/e2e/history.spec.ts` の
+ * 「a chain continued by a postfix function or the sign key…」——実 WASM に
+ * 対して `√` と `+/−` を通す 1 本である。**14 の後置関数は `apply_unary` の
+ * 同じ 1 行を共有する**ので、その行の性質が変われば、この 2 つの見本が赤くなる。
  */
-const BINARY_OPERATOR_TOKENS: ReadonlySet<KeyToken> = new Set([
+const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
+  // mod.rs:173 push_binop
   "add",
   "sub",
   "mul",
@@ -43,6 +103,25 @@ const BINARY_OPERATOR_TOKENS: ReadonlySet<KeyToken> = new Set([
   "pow",
   "n_p_r",
   "n_c_r",
+  // mod.rs:195 finish
+  "eq",
+  // mod.rs:245 close_paren
+  "rparen",
+  // mod.rs:269 apply_unary
+  "n_fact",
+  "sqrt",
+  "sqr",
+  "neg",
+  "sin",
+  "cos",
+  "tan",
+  "ln",
+  "log10",
+  "exp_e",
+  "recip",
+  "asin",
+  "acos",
+  "atan",
 ]);
 
 /**
@@ -359,7 +438,7 @@ export function ScientificPanel() {
     // (Task 10 ブリーフ ★ Step 0)。判断は綴った後に効く。
     const spelled = ready.spell(pendingKeys);
     // **連鎖なら直前の答を左辺として前に足す**(Fix round 3 finding 11)。
-    // 「無音キーを読み飛ばした先頭が二項演算子か」で決める——綴った文字列
+    // 「無音キーを読み飛ばした先頭が、前回の答を引き継ぐキーか」で決める——綴った文字列
     // を見て推測しない(`spelled` の頭が `×` のような記号になっているかを
     // 見るのではなく、キーそのものを見る)。**無音キーを読み飛ばすのが
     // 重要**(Fix round 4 finding B)——答を ENG や極形式・角度モードで
@@ -368,10 +447,19 @@ export function ScientificPanel() {
     // `3 = ENG × 2 =` のような列で連鎖を見失う。
     const first = pendingKeys.find((key) => !SILENT_CONTINUATION_KEYS.has(key));
     const isContinuation =
-      first !== undefined && BINARY_OPERATOR_TOKENS.has(first);
+      first !== undefined && CARRIED_VALUE_TOKENS.has(first);
     const carried = carriedAnswerRef.current;
+    // **綴りが空なら左辺も付けない。** `=` の 2 度押しは空の列を綴るので
+    // `spelled` が `""` になり、`pushEntry` がその行を捨てる——という約束
+    // (`web/src/history/index.ts`)に乗っている。ここで `${carried} ` を
+    // 前に足すと式が `"2 "`(末尾の空白 1 つ)になって空でなくなり、
+    // **2 度押しが行を作ってしまう**。`eq` は前回の答を読むキーなので
+    // `CARRIED_VALUE_TOKENS` に居り(`finish`、mod.rs:195)、この 1 条件が
+    // 無いと集合を engine から導いた途端にその行が生まれる。
     const expression =
-      isContinuation && carried !== null ? `${carried} ${spelled}` : spelled;
+      isContinuation && carried !== null && spelled !== ""
+        ? `${carried} ${spelled}`
+        : spelled;
     // **次の連鎖のために、いま確定した答を持っておく。** 記録の on/off に
     // 関わらず更新する——連鎖の継ぎ目は engine 側の値であって、記録するか
     // どうかとは無関係(このあとの `enabled` チェックより前に置く理由)。

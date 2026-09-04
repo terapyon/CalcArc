@@ -221,3 +221,46 @@ test("an error raised in the middle of an entry records nothing", async ({
   await press(page, ["第2面に切り替え", "履歴"]);
   await expect(page.getByText("まだ履歴はありません")).toBeVisible();
 });
+
+/**
+ * **H-4 を実 WASM で閉じる。** 前回の答を引き継ぐキーは二項演算子だけでは
+ * ない——`√` も `+/−` も `apply_unary`
+ * (`crates/calcarc-core/src/engine/mod.rs:269`)で `state.current` を読む。
+ * 引き継ぐ側を式の左辺に補わないと、式「√」・答「2」という**自分の答を
+ * 作れない行**が残る(設計書 §0)。
+ *
+ * **これが `ScientificPanel.tsx` の `CARRIED_VALUE_TOKENS` の唯一の番人**
+ * である。TypeScript から engine は呼べない(jsdom に WASM は無い)ので、
+ * あの集合が engine の腕の列挙と一致していることを機械で見張るものは無い。
+ * ここでは 14 の後置関数のうち 2 つ(`√`・`+/−`)を実物に通す——**14 は
+ * `apply_unary` の同じ 1 行を共有する**ので、その行の性質が変わればこの
+ * 2 つが赤くなる。
+ */
+test("a chain continued by a postfix function or the sign key records the carried answer", async ({
+  page,
+}) => {
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  // 3 + 1 = 4、そのあと √ が 4 を引き継いで 2 になる。
+  await press(page, ["3", "足す", "1", "計算する"]);
+  await expect(display).toHaveText("4");
+  await press(page, ["平方根"]);
+  await expect(display).toHaveText("2");
+  await press(page, ["計算する"]);
+
+  // AC で連鎖を切ってから、符号キーの側を作る。
+  await press(page, ["全消去", "3", "足す", "4", "計算する"]);
+  await expect(display).toHaveText("7");
+  await press(page, ["符号を反転"]);
+  await expect(display).toHaveText("-7");
+  await press(page, ["計算する"]);
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByText("4 √")).toBeVisible();
+  await expect(page.getByText("7 +/−")).toBeVisible();
+  // 直す前はこの 2 行の式が「√」と「+/−」だけだった。
+  await expect(page.getByText("√", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("+/−", { exact: true })).toHaveCount(0);
+});
