@@ -6,8 +6,13 @@
 
 use calcarc_core::{Key, engine::spell::spell};
 
-/// 綴らない 7 キー。**盤面には在るが式には出ない**
-/// (`calcarc_core::engine::spell::glyph` が `None` を返す集合と同じ)。
+/// 綴らない 7 キー。**盤面には在るが式には出ない。**
+///
+/// `spell` の中でそれぞれ別の理由で無音になる: `eq` は列を閉じるだけ、
+/// `ac` は列を空にする、`del` は打ったものを戻す、`angle_toggle` /
+/// `eng` / `polar_toggle` は表示だけを変える、`dms` は入力中でなければ
+/// 表示の一時トグルである(入力中は 60 進の区切りとして
+/// `Buffer::text()` の中に入るので、やはり固定の字面を持たない)。
 const SEVEN_SILENT: [&str; 7] = [
     "eq",
     "ac",
@@ -16,6 +21,32 @@ const SEVEN_SILENT: [&str; 7] = [
     "eng",
     "polar_toggle",
     "dms",
+];
+
+/// **数そのものを作るキー。ここでは比較しない。**
+///
+/// `spell` は `engine/state.rs` の `Buffer` を実際に歩かせ、値の部分を
+/// `Buffer::text()` で綴る(`engine/spell.rs` の冒頭を見ること)。だから
+/// これらのキーの綴りは**そのときのバッファの中身で決まり、固定の字面を
+/// 持たない**——盤面のラベルと突き合わせる対象が存在しない。
+///
+/// 単独で押した場合ですら一致しない実例が 2 つある:
+/// - `dot`: `Buffer::push_dot` が空のバッファに先頭の `0` を補うので
+///   `text()` は `"0."`。盤面のラベルは `"."` である。
+/// - `zeros3`: `Buffer::push_zeros` は `push_digit(0)` を 3 回呼び、
+///   先頭ゼロの規則が畳むので `text()` は `"0"`。ラベルは `"000"`。
+///
+/// `exp` も同じ形である(仮数なしの `Exp` は仮数 1 として `"1e"` と
+/// 見える。ラベルは `"Exp"`)。**どれも綴りの欠陥ではなく、engine が
+/// 実際に見せている姿である**——ここで一致を求めると `spell` を
+/// engine から引き離すことになる(以前それをやって、この番人を
+/// 壊した側が差し戻された)。
+///
+/// **`j` はここに入らない。** `j` は数字ではなく印で、`Buffer::text()` は
+/// それを末尾の固定の 1 文字(`tail`)として付ける——バッファの中身が
+/// 何であれ `j` は `"j"` なので、ラベルと突き合わせる意味がある。
+const VALUE_KEYS: [&str; 13] = [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "dot", "zeros3", "exp",
 ];
 
 /// `scientific.ts` から `token` と `label` の対を抜く。
@@ -73,29 +104,36 @@ fn every_board_label_matches_what_core_spells() {
     let mut compared = 0usize;
     let mut wrong = Vec::new();
     for (token, label) in pairs {
+        // **綴らない 7 つは飛ばす。** 盤面には在るが式には出ない。
         if SEVEN_SILENT.contains(&token.as_str()) {
+            continue;
+        }
+        // **数を作るキーも飛ばす。** 綴りは `Buffer::text()` が持っていて
+        // 固定の字面が無い(上の `VALUE_KEYS` の註)。
+        if VALUE_KEYS.contains(&token.as_str()) {
             continue;
         }
         let Some(key) = Key::from_token(&token) else {
             continue;
         };
-        let spelled = spell(&[key]);
-        // **綴らない 7 つは飛ばす。** 盤面には在るが式には出ない。
-        if spelled.is_empty() {
-            continue;
-        }
         compared += 1;
+        // **空でも飛ばさない。** 残ったキーはどれも `commit_glyph` か
+        // `spell` 本体の固定の字面を持つはずなので、空になったのなら
+        // それは食い違いとして報告する対象である。
+        let spelled = spell(&[key]);
         if spelled != label {
             wrong.push(format!("{token}: 盤面は {label:?}、core は {spelled:?}"));
         }
     }
 
-    // **比較件数そのものの下限。** SEVEN_SILENT を数え間違えても
-    // (あるいはループの条件が壊れて何も比較しなくなっても)、この下限が
-    // 無ければ `wrong` が空のまま緑になり続ける。`Key::ALL.len() -
-    // SEVEN_SILENT.len()` は実際のコード量から出た数(46 - 7 = 39)で
-    // あって、決め打ちの定数ではない。
-    let expected_compared_min = calcarc_core::Key::ALL.len() - SEVEN_SILENT.len();
+    // **比較件数そのものの下限。** 除外の一覧を数え間違えても(あるいは
+    // ループの条件が壊れて何も比較しなくなっても)、この下限が無ければ
+    // `wrong` が空のまま緑になり続ける。**コード上の数から導く**——
+    // `Key::ALL`(46)から無音の 7 つと数を作る 13 を引いた 26 であって、
+    // 書き下ろした定数ではない。**除外を 1 つ増やせばここも下がる**ので、
+    // 「通らないから除外する」をやると下限が一緒に下がることが差分に出る。
+    let expected_compared_min =
+        calcarc_core::Key::ALL.len() - SEVEN_SILENT.len() - VALUE_KEYS.len();
     assert!(
         compared >= expected_compared_min,
         "比較した token/label の対が少なすぎる: {compared} 組(期待は少なくとも {expected_compared_min} 組)"
