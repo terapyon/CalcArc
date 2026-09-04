@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  citesBaseSpec,
   findCitations,
   readSpecSections,
   readSpecText,
@@ -88,6 +89,46 @@ describe("findCitations", () => {
     expect(dangling).toEqual([]);
   });
 
+  it("逆順でも、近いほうの名乗りを採る", () => {
+    // **上のテストは片方の順しか見ていなかった。** base-spec が後ろに在れば
+    // 窓で切れるが、**前に在ると窓に残る**。実物にある形である
+    // ——`crates/calcarc-core/tests/finance_golden.rs:1` の
+    // `(base-spec ${S}35、設計書 ${S}7)`。
+    //
+    // **これは黙って緑だった**——base-spec に ${S}7 は実在するので、誤って
+    // 数えても宙には浮かない。浮くのは base-spec の ${S}7 が改番された日で、
+    // そのとき設計書を指した行が赤くなる。
+    const { total, dangling } = findCitations(
+      [
+        {
+          path: "crates/x.rs",
+          text: `//! 突き合わせる(base-spec ${S}35、設計書 ${S}7)。`,
+        },
+      ],
+      new Set(["35"]),
+    );
+    expect(total).toBe(1);
+    expect(dangling).toEqual([]);
+  });
+
+  it(`\`spec ${S}N\` は base-spec のものにしない`, () => {
+    // 2026-09-05 の誤警報そのもの
+    // (`docs/superpowers/plans/2026-09-03-history.md:1389`)。
+    // **`base-spec.md` はここでは引用元ではなく、書き換えの対象である。**
+    // `${S}10.2` は `2026-09-03-history-design.md` の節。
+    const { total, dangling } = findCitations(
+      [
+        {
+          path: "docs/p.md",
+          text: `- [x] **Step 1: \`base-spec.md\` を spec ${S}10.2 の案で置き換える**`,
+        },
+      ],
+      new Set(["43"]),
+    );
+    expect(total).toBe(0);
+    expect(dangling).toEqual([]);
+  });
+
   it("base-spec を名乗らない節は数えない", () => {
     expect(
       findCitations([{ path: "a.md", text: `設計書 ${S}7.1 の実測` }], sections)
@@ -113,6 +154,28 @@ describe("findCitations", () => {
   });
 });
 
+describe("citesBaseSpec", () => {
+  it("`base-spec` の中の `spec` に当たらない", () => {
+    // **ここを取り違えると覆いが全部消える**——`base-spec` は `spec` を
+    // 含むので、名乗りの一覧から `base-spec` を落として素朴に `spec` だけを
+    // 除外すると、正当な引用まで全部落ちる。**落として確かめた**
+    // (2026-09-05、17 本中 8 本が赤くなった)。
+    expect(citesBaseSpec("読み上げ名(base-spec ")).toBe(true);
+    expect(citesBaseSpec("`docs/base-spec.md` の ")).toBe(true);
+  });
+
+  it("いちばん近い名乗りだけを見る", () => {
+    expect(citesBaseSpec(`(base-spec ${S}35、設計書 `)).toBe(false);
+    expect(citesBaseSpec(`(設計書 ${S}3、base-spec `)).toBe(true);
+    expect(citesBaseSpec("`base-spec.md` を spec ")).toBe(false);
+  });
+
+  it("名乗りが 1 つも無ければ数えない", () => {
+    expect(citesBaseSpec("この節の ")).toBe(false);
+    expect(citesBaseSpec("")).toBe(false);
+  });
+});
+
 describe("実物のリポジトリ", () => {
   const sections = readSpecSections(readSpecText());
   const { total, dangling } = findCitations(readTrackedFiles(), sections);
@@ -126,8 +189,10 @@ describe("実物のリポジトリ", () => {
 
   it("何件見たかを主張する（0 件で緑を返さない）", () => {
     // **これが本題である。** 綴りが変わって 1 件も拾えなくなった日から、
-    // 上の「0 件」は何も意味しなくなる。足した日の実測は 126 本のファイル
-    // から 324 件、42 節。
+    // 上の「0 件」は何も意味しなくなる。**下限だけを主張する**——実数は
+    // main が進むたびに動くので、書けばその日のうちに腐る
+    // (2026-09-04 に足した日は 324 件 / 42 節、`main` を取り込んで
+    // 数え方を直した 2026-09-05 は 325 件 / 63 節だった)。
     expect(total, "base-spec への引用を 1 件も拾えなかった").toBeGreaterThan(
       200,
     );
