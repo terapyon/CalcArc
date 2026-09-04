@@ -228,6 +228,10 @@
 
 .remove {
   flex: 0 0 auto;
+  /* `.row` は `align-items: stretch`。式と答が 2 行になる行では、
+     それに合わせて `×` の高さも丸ごと引き伸ばされていた
+     (Fix round 3 finding)。ここだけ自分の高さで縦中央に置く。 */
+  align-self: center;
   min-width: var(--touch-target-min);
   min-height: var(--touch-target-min);
   border: var(--key-border);

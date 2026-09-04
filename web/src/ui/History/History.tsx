@@ -76,6 +76,7 @@ export function History({
                 <button
                   type="button"
                   className={styles.entry}
+                  data-testid="history-entry"
                   aria-label={`${entry.expression} = ${entry.answer} を入力に入れる`}
                   onClick={() => onRecall(entry)}
                   data-error={entry.error ? true : undefined}
@@ -111,6 +112,7 @@ export function History({
                 // 別の事実で、後者を前者の色で見せると嘘になる)。
                 <div
                   className={styles.entry}
+                  data-testid="history-entry"
                   data-error={entry.error ? true : undefined}
                 >
                   <span className={styles.expression}>{entry.expression}</span>

@@ -225,6 +225,28 @@ describe("History", () => {
     expect(screen.getByText("30 sin")).toBeInTheDocument();
   });
 
+  it("clears everything when すべて消す is pressed", async () => {
+    // **全消しは押されたことが 1 度も無かった(Fix round 3 finding)。**
+    // 「出ない」ことしか確かめていなかった——押した効果そのものは、
+    // `ScientificPanel` 側の削除実装がバグっていても jsdom 側は緑のまま
+    // だった。ここで初めて `onClearAll` が呼ばれることを見る。
+    const onClearAll = vi.fn();
+    render(
+      <History
+        entries={ENTRIES}
+        onBack={() => {}}
+        onRecall={() => {}}
+        onRemove={() => {}}
+        onClearAll={onClearAll}
+        canRecall={canRecallUnlessError}
+        recordingEnabled={true}
+        onRecordingEnabledChange={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "すべて消す" }));
+    expect(onClearAll).toHaveBeenCalledTimes(1);
+  });
+
   it("says in words that turning it off does not erase what is stored", () => {
     render(
       <History
@@ -269,10 +291,12 @@ describe("History", () => {
     expect(
       screen.queryByRole("button", { name: /を入力に入れる/ }),
     ).not.toBeInTheDocument();
-    // **エラーの色は付かない。** 行の要素(答の span の親)に
-    // `data-error` が無いことを見る——`entry.error` が false だから。
-    const row = screen.getByText("3+4j").parentElement;
-    expect(row).not.toBeNull();
+    // **エラーの色は付かない。** `data-testid="history-entry"` で
+    // `.entry` 要素そのものを取る——答の span の `parentElement` は
+    // `.result` span であって `.entry` ではないので、`parentElement`
+    // だけを見ると `data-error` がどこにも現れず、無条件で付けても
+    // 落ちない検査になる(Fix round 3 finding)。
+    const row = screen.getByTestId("history-entry");
     expect(row).not.toHaveAttribute("data-error");
     // 削除は普段どおり効く(押せないことと消せないことは別)。
     await userEvent.click(screen.getByRole("button", { name: "3 を削除" }));
