@@ -24,6 +24,16 @@ function filesUnder(dir: string): string[] {
  *
  * この検査は「字面が掴み手の形をしているか」だけを見る——意図して隠した
  * 掴み手や、上の 2 通りの形まではここでは検査できない、という前提に立つ。
+ *
+ * **逆向きの穴もある**(Fix round 3 finding。実際に踏んだ)。この検査は
+ * コードとコメントを区別しない——**コメントの中で `localStorage.foo` の
+ * 形を字面どおり綴っただけでも光る**。「語の言及ではない」は「裸の単語の
+ * 言及ではない」という意味であって、「掴み手の形をした文章」まで除外して
+ * いるわけではない。実際に本ファイルの上の doc comment
+ * (`window.localStorage` / `localStorage.foo` 等)がこの正規表現に
+ * マッチする——`.test.ts` は「1 ファイルだけ」の検査(下)から除外して
+ * いるので実害は出ていないが、`.test.ts` でない場所に同じ形の説明的な
+ * コメントを書けば、掴んでもいないファイルが「掴み手」として引っかかる。
  */
 const REACHES_FOR_LOCAL_STORAGE =
   /\b(?:window|globalThis)\s*\.\s*localStorage\b|\blocalStorage\s*[.[]/;

@@ -82,6 +82,18 @@ describe("履歴の貯め方", () => {
     const after = pushEntry([entry(2), entry(1)], entry(1));
     expect(after).toHaveLength(3);
   });
+
+  it("does not stack an entry that differs only in error", () => {
+    // **`error` は隣接重複の判定に入らない**(設計書の「先頭と式・答・
+    // 角度モードが 3 つとも一致しても積まない」——`error` は数えられて
+    // いない)。ここまでは平文の主張だけで、番人が無かった(Fix round 3
+    // finding)。式・答・角度が同じで `error` だけ違う 2 件は、
+    // どちらも積まれず 1 件のままになるはずである。
+    const before = [entry(1)];
+    const after = pushEntry(before, { ...entry(1), error: true });
+    expect(after).toBe(before);
+    expect(after).toHaveLength(1);
+  });
 });
 
 describe("履歴の読み書き", () => {
