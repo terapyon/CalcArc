@@ -115,6 +115,16 @@ pub fn core_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// 入力欄に打ち込める最大文字数(`calcarc_core::MAX_ENTRY_LEN`)。
+///
+/// **`core_version` と同じ形で渡す。** `web` 側がこの数をハードコードすると、
+/// 履歴の呼び戻し(答をキー列に写して打ち直す)がこの上限を跨ぐ答を
+/// 黙って切り詰めて、別の数を入力欄に残す(Fix round 3 finding)。
+#[wasm_bindgen]
+pub fn max_entry_len() -> u32 {
+    calcarc_core::MAX_ENTRY_LEN as u32
+}
+
 /// キー列を式の文字列に綴る。
 ///
 /// **失敗しない**ので `Outcome` を使わない——知らないトークンは飛ばす。

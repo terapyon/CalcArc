@@ -8,6 +8,7 @@
 import init, {
   core_version,
   initial_state,
+  max_entry_len,
   reduce,
   spell_keys,
 } from "../wasm/calcarc_wasm.js";
@@ -34,6 +35,15 @@ export interface Calc {
   version(): string;
   /** キー列を式の文字列に綴る。**失敗しない。** */
   spell(keys: KeyToken[]): string;
+  /**
+   * 入力欄に打ち込める最大文字数(`calcarc_core::MAX_ENTRY_LEN`)。
+   *
+   * **TypeScript にこの数をハードコードしない。** 履歴の呼び戻し
+   * (`ScientificPanel.tsx` の `mapAnswerToKeys`)がこの上限を跨ぐ答を
+   * 打ち直そうとすると engine 側で黙って切り詰められるので、web 側も
+   * 同じ数を知らなければならない(Fix round 3 finding)。
+   */
+  maxEntryLen(): number;
 }
 
 let ready: Promise<Calc> | null = null;
@@ -50,6 +60,7 @@ export function initCalc(): Promise<Calc> {
           asStep(reduce(state, key)),
         version: () => core_version(),
         spell: (keys: KeyToken[]) => spell_keys(keys as string[]),
+        maxEntryLen: () => max_entry_len(),
       }),
     )
     .catch((cause: unknown) => {

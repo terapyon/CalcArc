@@ -6,7 +6,7 @@ pub mod state;
 pub use display::{DisplayState, render};
 pub use key::Key;
 pub use spell::spell;
-pub use state::EngineState;
+pub use state::{EngineState, MAX_ENTRY_LEN};
 
 use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
