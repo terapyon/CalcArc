@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -731,6 +737,105 @@ test("the report tells the reader how to check it themselves", () => {
   expect(markdown).toContain("自分で確かめるには");
   expect(markdown).toContain("corpus/generated/*.json");
   expect(markdown).toContain("pnpm heavy");
+});
+
+test("the report only names paths that exist in this repository", () => {
+  // **再現手順が古いと、外の人はそこで止まる。** 重量級が `web/` から
+  // `heavy/` へ移ったあと、`cd web && pnpm heavy` / `web/heavy-report.md` /
+  // `web/tests/heavy/` / `web/heavy-run.json` / `web/vite.heavy.config.ts`
+  // の 5 綴りが本文に残っていた。**どれも緑のまま**である
+  // ——本文の綴りを見張るものが無かった。
+  //
+  // **書き出した本文ではなく、書き出す側の文字列を見る。** 走行の失敗を
+  // 報告する枝は、緑の走行では 1 行も出ない。
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const source = readFileSync(
+    join(root, "heavy/tests/corpus/report.ts"),
+    "utf-8",
+  );
+  const generated = new Set(
+    readFileSync(join(root, ".gitignore"), "utf-8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#")),
+  );
+  const pattern =
+    /`((?:web|heavy|crates|reference|corpus|docs|tools|testdata)\/[^`]*)`/g;
+  const named = new Set<string>();
+  for (const line of source.split("\n")) {
+    const trimmed = line.trim();
+    if (
+      trimmed.startsWith("//") ||
+      trimmed.startsWith("*") ||
+      trimmed.startsWith("/*")
+    ) {
+      continue;
+    }
+    for (const match of line.matchAll(pattern)) {
+      const named_path = match[1];
+      if (
+        named_path === undefined ||
+        named_path.includes("*") ||
+        named_path.includes("${")
+      ) {
+        continue;
+      }
+      named.add(named_path);
+    }
+  }
+  expect(
+    named.size,
+    "no path was read, so this test asserted nothing",
+  ).toBeGreaterThan(5);
+  for (const named_path of named) {
+    // **走行が作るものは、まだディスクに無くてよい**(`.gitignore` に在る)。
+    const tracked = existsSync(join(root, named_path));
+    const written =
+      generated.has(named_path) || generated.has(`${named_path}/`);
+    expect(
+      tracked || written,
+      `the report names ${named_path}, which is neither in the repository nor written by a run`,
+    ).toBe(true);
+  }
+});
+
+test("the report grades its own independence where the reference cannot be independent", () => {
+  // **参照実装が `独立: 不可能` と宣言している領域がある**(金融の丸めは
+  // 取り決めそのものが公開契約なので、手順を共有するほかにない)。
+  // **本文の冒頭が「別の道具・別の手順」だけを言うと、その領域まで
+  // 強く見える。** 宣言が在るあいだは、本文もそう書いていること。
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const declarations =
+    ["loan_ref.py", "compound_ref.py"]
+      .map((name) =>
+        readFileSync(
+          join(root, "reference/src/calcarc_reference", name),
+          "utf-8",
+        ),
+      )
+      .join("\n")
+      .split("独立: 不可能").length - 1;
+  expect(
+    declarations,
+    "no `独立: 不可能` was read, so this test asserted nothing",
+  ).toBeGreaterThan(0);
+
+  const markdown = renderReport([summary()], PROVENANCE);
+  expect(markdown).toContain("**ただし、独立の度合いは領域で違う。**");
+  expect(markdown).toContain("`独立:` の 1 行で宣言している");
+});
+
+test("the finance shard says on its own line that it shares the rounding contract", () => {
+  // 冒頭の但し書きと同じことを、シャードごとの出どころにも書く
+  // ——読み手が「期待値を作ったもの」だけを見に来ることがある。
+  const finance = loadCallShards().find((e) => e.name === "finance-000.json");
+  if (finance === undefined) {
+    throw new Error("finance-000.json is not among the call shards");
+  }
+  const generatedBy = (finance.shard as unknown as { generated_by: string })
+    .generated_by;
+  expect(generatedBy).toContain("独立: 不可能");
+  expect(generatedBy).toContain("取り決めそのものの妥当性は見ていない");
 });
 
 test("an empty run refuses to render as a green-looking report", () => {
@@ -3246,6 +3351,107 @@ test("科学: 読めなかった走行を「全部覆った」と書かない", 
   expect(text).toContain("この走行は科学計算のモデルを読んでいない");
   expect(text).toContain("**「全部覆った」ではない。**");
   expect(text).not.toContain("| 対象 | 必須セル |");
+});
+
+// ---------------------------------------------------------------------------
+// **理由付き除外は、科学計算の表にも出る**。
+//
+// 出さないと「必須 10 / 実行 9 / 未達 0」で 1 セルが行方不明になる
+// ——**読み手はそれを穴とも除外とも区別できない。**
+// ---------------------------------------------------------------------------
+
+const EXCLUDED_POWER: CoverageExclusion = {
+  scope: "complex",
+  cell_id: "complex/operation=power",
+  reason: "not_applicable",
+  disposition: "reasonable",
+  detail: "engine が複素数の冪を受け付けない",
+  covered_elsewhere: [],
+};
+
+const withExclusion = (): Coverage =>
+  scienceCoverage({
+    requirements: [
+      {
+        id: "complex/operation/one_way",
+        scope: "complex",
+        strength: "one_way",
+        required_cells: 10,
+        covered_cells: 9,
+        excluded_cells: 1,
+        unmet_cells: 0,
+        status: "accounted_with_exclusions",
+        unmet_from_unmeasured_axes: 0,
+        unmet_real_cells: [],
+      },
+    ],
+    excluded_cells: [EXCLUDED_POWER],
+    covered_outside_model: [],
+  });
+
+test("科学: 除外したセルは、表の列と理由の表の両方に出る", () => {
+  const text = renderScienceCoverage(withExclusion()).join("\n");
+  // **行の全体で当てる。** 数字だけを見ると、他の列の一致で誤って通る。
+  expect(text).toContain("| `complex` | 10 | 9 | 1 | 0 | 0 | 0 |");
+  expect(text).toContain("### 理由付き除外——数えないと決めたセル");
+  expect(text).toContain(
+    "| `not_applicable` | reasonable | 1 | 要求セル | " +
+      "engine が複素数の冪を受け付けない | `complex/operation=power` |",
+  );
+});
+
+test("科学: 足し算が必須に届かない行には印が付く", () => {
+  // **除外の列を出す以上、合わない足し算も読めなければならない。**
+  // 10 ≠ 9 + 0 + 0。
+  const broken = withExclusion();
+  const requirement = broken.requirements[0];
+  if (requirement === undefined) {
+    throw new Error("the fixture lost its requirement");
+  }
+  const text = renderScienceCoverage({
+    ...broken,
+    requirements: [{ ...requirement, excluded_cells: 0 }],
+  }).join("\n");
+  expect(text).toContain("(**合計が合わない**)");
+});
+
+test("科学: 除外が 1 件も無い走行では、理由の表を出さない", () => {
+  // **列の見出しは常に出る**(会計の形を見せるため)。出ないのは節のほうで、
+  // 空の表を出すと「除外を測っていない」と「除外が無い」が同じ顔になる。
+  const text = renderScienceCoverage(scienceCoverage()).join("\n");
+  expect(text).toContain("| 対象 | 必須セル | 実行 | 理由付き除外 |");
+  expect(text).not.toContain("### 理由付き除外——数えないと決めたセル");
+});
+
+test("実物の科学計算の会計が、表の上で閉じている", () => {
+  // **見本ではなく実物で見る。** `complex` の 10 − 9 − 0 が読者を迷わせた。
+  const coverage = JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../corpus/generated/angle-mode-000.json",
+          import.meta.url,
+        ),
+      ),
+      "utf-8",
+    ),
+  ).coverage as Coverage;
+  expect(coverage.model).toBe("scientific-v1");
+  expect(
+    coverage.requirements.length,
+    "no requirement was read, so this test asserted nothing",
+  ).toBeGreaterThan(0);
+  for (const requirement of coverage.requirements) {
+    expect(
+      requirement.covered_cells +
+        requirement.excluded_cells +
+        requirement.unmet_cells,
+      `${requirement.id} の会計`,
+    ).toBe(requirement.required_cells);
+  }
+  const text = renderScienceCoverage(coverage).join("\n");
+  expect(text).toContain("| `complex` | 10 | 9 | 1 | 0 | 0 | 0 |");
+  expect(text).not.toContain("(**合計が合わない**)");
 });
 
 test("科学: 実物の報告書に、9 領域の表が出て、名指しは 0 件になる", () => {
