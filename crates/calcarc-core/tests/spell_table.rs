@@ -123,6 +123,91 @@ fn del_is_one_character_on_a_digit_run_and_ac_empties_the_line() {
 }
 
 #[test]
+fn del_walks_the_exact_stages_the_real_engine_walks() {
+    // **Fix round 4 finding A.** それまでの `del` は「最後の部分が数字の
+    // 形をしているか」で決めていた——これは `engine/state.rs` の
+    // `Buffer` が実際に持つ段とは別の情報で、**4 回、同じ形で壊れた**
+    // (`zeros3`、演算子、`dms`、そしてここの `j`/`Exp`)。ここでは
+    // `crates/calcarc-core/tests/engine_table.rs` が固定している DEL の
+    // 行のうち、値へ続くものを直接なぞる。
+
+    // engine_table.rs:177,180
+    // (`j` は数字が尽きても残り、もう 1 回の del で消える)。
+    assert_eq!(spell_of(&["3", "add", "j", "4", "del"]), "3 + j");
+    assert_eq!(spell_of(&["3", "add", "j", "4", "del", "del"]), "3 +");
+
+    // engine_table.rs:139-142
+    // (指数の段: 桁 → `Exp` マーカー → 仮数の文字、の順)。
+    assert_eq!(spell_of(&["1", "dot", "5", "exp", "3", "del"]), "1.5 Exp");
+    assert_eq!(
+        spell_of(&["1", "dot", "5", "exp", "3", "del", "del"]),
+        "1.5"
+    );
+    assert_eq!(
+        spell_of(&["1", "dot", "5", "exp", "3", "del", "del", "del"]),
+        "1."
+    );
+
+    // engine_table.rs:892
+    // (`del` が j 入力をまるごと消したあと、次の `mul` は差し替えでは
+    // なく確定した 3 に対する新しい演算になる。答は 15)。
+    assert_eq!(
+        spell_of(&["3", "mul", "j", "del", "mul", "5", "eq"]),
+        "3 × × 5"
+    );
+
+    // engine_table.rs:870,875
+    // (del の三段——数字 → j マーカー → 開き括弧——のうち、最初の 2 回
+    // では括弧はまだ残り、3 回目で消える)。
+    assert_eq!(
+        spell_of(&["3", "add", "lparen", "j", "4", "del", "del"]),
+        "3 + ("
+    );
+    assert_eq!(
+        spell_of(&["3", "add", "lparen", "j", "4", "del", "del", "del"]),
+        "3 +"
+    );
+
+    // engine_table.rs:806
+    // (del は演算子を消さない。2 度目の `+` は打ち直しとして、押した
+    // 通りにもう 1 つ現れる。答は 7)。
+    assert_eq!(spell_of(&["3", "add", "del", "add", "4", "eq"]), "3 + + 4");
+}
+
+#[test]
+fn lparen_pi_and_e_discard_the_entry_being_typed_instead_of_committing_it() {
+    // **`(`・`π`・`e` は `commit_entry` を経由しない**——`open_paren`・
+    // `Key::Pi`・`Key::E`(engine/mod.rs)がそれぞれ `state.buffer = None`
+    // を直接代入する。押しかけの数字は式に残らない——残すと、その式が
+    // 答を説明しなくなる(engine_table.rs:858 の
+    // `main_of(&["3","lparen","del"]) == "0"` が、"3" を確定させて
+    // いない証拠——確定させていたら del は "3" を残すはずである)。
+    assert_eq!(spell_of(&["3", "lparen", "del"]), "");
+    assert_eq!(spell_of(&["3", "pi"]), "π");
+    assert_eq!(spell_of(&["3", "e"]), "e");
+}
+
+#[test]
+fn del_after_lparen_cannot_recover_the_zero_it_silently_substituted() {
+    // **既知の穴。Fix round 4 finding A の見直しで見つけたが、直して
+    // いない。** `(` は入力途中の値を捨てて `current` を 0 にする
+    // (`open_paren` の註)。その `(` を del で消しても、この 0 への
+    // 差し替えは戻らない——engine_table.rs の
+    // `del_does_not_restore_the_value_a_paren_discarded`(:906-909)の
+    // 名前のとおり。**その 0 は一度も打鍵されていない**ので、綴りには
+    // 足す文字が無い——「打った通りに並べる」(§4a)だけでは説明できない、
+    // いまのところ唯一の形である。
+    //
+    // engine_table.rs:908 は `["3","mul","lparen","del","eq"]` を "0" に
+    // 固定しているが、綴りは "3 ×" のまま(暗黙の 0 を語らない)。
+    assert_eq!(spell_of(&["3", "mul", "lparen", "del"]), "3 ×");
+    // engine_table.rs:909 は加算版を "3" に固定している(+ の単位元が 0
+    // なので値としては偶然合って見えるが、綴りが 0 を語っていない点は
+    // 同じ穴である)。
+    assert_eq!(spell_of(&["3", "add", "lparen", "del"]), "3 +");
+}
+
+#[test]
 fn every_key_spells_or_is_one_of_the_seven() {
     // **一覧から漏れたキーは黙って空文字になる。** ここが数える。
     let silent = [
