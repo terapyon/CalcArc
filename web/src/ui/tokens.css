@@ -8,7 +8,11 @@
 :root {
   color-scheme: light dark;
 
-  /* タッチターゲットとレイアウト(base-spec §43) */
+  /* タッチターゲットとレイアウト(base-spec §43)。
+     **44px を CSS の値として書いてよいのはこの 1 行だけ**である
+     ——`tools/check-boundary.mjs` が見張る。**§43 はこの数字を定めて
+     いない**(求めているのは "Touch target size" までで、44 を選んだのは
+     このプロジェクトである)。経緯は base-spec §43 の 2026-09-04 の追記。 */
   --touch-target-min: 44px;
   --key-gap: 8px;
   --shell-max-width: 480px;

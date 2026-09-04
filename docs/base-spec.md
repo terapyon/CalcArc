@@ -1146,6 +1146,32 @@ Analyticsを導入する場合でも、入力した数値そのものを収集�
 - High contrast
 - Touch target size
 
+## 追記（2026-09-04）——タッチ標的の 44px は、この節では決めていない
+
+**上の一覧に数字は無い。** 「Touch target size を考慮する」までが要求であり、
+**44px はこのプロジェクトが選んだ値である。**
+
+- **値は `web/src/ui/tokens.css` の `--touch-target-min` が 1 か所で持つ。**
+  CSS の宣言として `44px` を書いてよいのはそこだけで、`tools/check-boundary.mjs`
+  が毎回の CI で見張る。
+- **守っているのは E2E** である（各盤面の検査と `web/tests/e2e/viewport-budget.spec.ts`）。
+  jsdom はレイアウトを組まないので、vitest では測れない。
+- **例外が 2 つある**（関数列の高さ 34px、フッタのリンク）。どちらも理由つきで
+  `docs/definition-of-done.md` に在る。
+
+**44 という数字の出どころは、リポジトリのどこにも書かれていない**——2026-09-04 に
+追跡下の全ファイルを検索して確認した。参照実装の `独立:` の言い方に倣えば
+**未確認**である。44 は WCAG 2.5.5 Target Size (Enhanced) の 44×44 CSS px と、
+Apple の Human Interface Guidelines の 44pt が共通して挙げる値だが、
+**どちらを見て決めたのかという記録は無い。**
+
+**この節を指す註が 51 件ある。** そのうち**この節が数字を定めているように
+読めるもの**だけを、ここを指す形に直した（`docs/definition-of-done.md`、
+`web/src/ui/UpdateToast/UpdateToast.module.css`、
+`docs/superpowers/specs/2026-08-16-eng-notation-design.md` §7.1）。
+残りは「§43 が求めるタッチ標的に対して採った 44px」と読めるので触っていない
+——**51 件の機械的な書き換えは、それ自体が新しい誤りの入り口である。**
+
 ---
 
 # 44. OSS Policy
