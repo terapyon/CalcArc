@@ -303,6 +303,9 @@ export function ScientificPanel() {
         if (restored.display.form !== wanted.form) {
           restored = loaded.dispatch(restored.state, "polar_toggle");
         }
+        // **`stepRef` にも同じ値を入れる**——`press` の門番と `dispatch`
+        // はこちらを読む(H-5)。
+        stepRef.current = restored;
         setStep(restored);
       },
       () => {
@@ -349,22 +352,44 @@ export function ScientificPanel() {
   // 前回とは無関係な計算)が古い答を左辺として誤って記録する。
   const carriedAnswerRef = useRef<string | null>(null);
 
-  // **いま表示がエラー状態か。**(H-3)`crates/calcarc-core/src/engine/
-  // mod.rs:29` の「エラー中は AC 以外を受け付けない。」——engine は `AC`
-  // 以外のキーを**一切状態に反映せずに捨てる**。`press` はそれを知らずに
-  // `keysRef` へ積み続けていたので、**engine が一度も見ていない打鍵が
-  // そのまま式になっていた**: `1 ÷ 0 =` のあと `7 + 8 =` と打つと、
-  // 式「7 + 8」・答「Math ERROR」という、**自分の答を作れない行**が
-  // 残っていた(設計書 §0 が守りたいものそのもの)。
+  // **engine の状態そのもの。`press` の門番はここから読む。**(H-3 / H-5)
+  //
+  // 門番が要る理由は `crates/calcarc-core/src/engine/mod.rs:29` の
+  // 「エラー中は AC 以外を受け付けない。」——engine は `AC` 以外のキーを
+  // **一切状態に反映せずに捨てる**。`press` はそれを知らずに `keysRef` へ
+  // 積み続けていたので、**engine が一度も見ていない打鍵がそのまま式に
+  // なっていた**: `1 ÷ 0 =` のあと `7 + 8 =` と打つと、式「7 + 8」・答
+  // 「Math ERROR」という、**自分の答を作れない行**が残っていた(設計書 §0
+  // が守りたいものそのもの)。
+  //
+  // # **なぜ「エラーかどうか」ではなく `Step` を持つのか(H-5)**
+  //
+  // 最初の版は `errorRef`——「いまエラーか」という真偽値を **effect で
+  // `step` から写した ref** ——で門を守っていた。**その写しは、同じ
+  // イベントハンドラの中では更新されない**: passive effect が流れるのは
+  // 次の離散イベント(クリック・keydown)の前だからである。**「1 打鍵 =
+  // 1 つの離散イベント」が成り立つ限りは正しく**、盤面の打鍵はすべて
+  // そうなっている——**例外は `recall` ただ 1 つ**で、あれは 1 つの
+  // ハンドラの中で `ac` と答のキーを同期に連打する。そこで写しは古い
+  // `true` のまま読まれ、**`ac` は通るのに続く呼び戻しのキーが積まれず**、
+  // engine には `dispatch` 経由で全部届くので表示だけが進んだ。結果、
+  // エラー表示のまま `2` を呼び戻して `3 =` と打つと、**式「3」・答
+  // 「23」**という行が残っていた——**H-3 が殺した族の 7 口目**である。
+  //
+  // **写しを増やして直さない。**「AC はエラーを晴らす」を `ac` の分岐に
+  // 同期で書き足せばこの 1 経路は直るが、それは engine の振る舞いを手で
+  // 写す作業をもう 1 回やることであり、**この枝が 6 回繰り返して学んだ
+  // 形そのもの**である(`docs/superpowers/sdd/history-HANDOFF.md` §0)。
+  // **写しをやめて、engine が返した `Step` を直接持つ**——門は毎回
+  // `display.error` を読むので、写しの鮮度という概念自体が無くなり、
+  // 反対向きのずれ(ハンドラの途中で**エラーに入った**のに古い `false` を
+  // 読む)も同時に消える。
   //
   // **`step` ではなく ref で持つ理由は `calcRef` と同じ**——`press` の
-  // 依存を空にしたまま最新の値を読むためである。**書き込みは effect**
-  // (下)で、React は次の離散イベント(クリック・keydown)を処理する前に
-  // 保留中の passive effect を流すので、次の打鍵はこの値を見る。
-  const errorRef = useRef(false);
-  useEffect(() => {
-    errorRef.current = step !== null && step.display.error !== null;
-  }, [step]);
+  // 依存を空にしたまま最新の値を読むためである。**書き込みは `press` と、
+  // 復元(上の effect)の 2 箇所だけ**で、どちらも `setStep` と同じ値を
+  // 同じ場所で入れる。
+  const stepRef = useRef<Step | null>(null);
 
   // 依存を空にして同一性を固定する。ここが変わると useKeyboard が
   // リスナを貼り直し、その隙間の打鍵が落ちる。
@@ -379,7 +404,13 @@ export function ScientificPanel() {
     // **エラー中は `AC` 以外を積まない**(H-3)。engine の分岐
     // (`reduce` の `key == Key::Ac` / `next.error.is_some()`)をそのまま
     // 写したもので、**「engine が状態に反映したキーだけが式になる」**と
-    // いう不変条件を、この 1 行が保つ。
+    // いう不変条件を、この 1 行が保つ。**判定は `stepRef`(engine が
+    // 最後に返した状態)から毎回読む**——写しではないので、`recall` の
+    // ように 1 つのハンドラが `press` を連打しても古い値を見ない(H-5)。
+    //
+    // **`previous` が無いあいだも積まない。** engine に送る先が無いので、
+    // ここで積めば「engine が一度も見ていないキー」になる(上と同じ
+    // 不変条件)。
     //
     // **エラーを起こしたキー自身は積む。** ここで見ているのは打鍵**前**の
     // 状態だからで、これは意図である——`1 ÷ 0 =` は式「1 ÷ 0」・答
@@ -394,7 +425,9 @@ export function ScientificPanel() {
     // `ScientificPanel.test.tsx` の
     // 「leaves no fragment of the entry that the error interrupted」——
     // 残した列が次の式に漏れないこと(=外から見える約束)を見張る。
-    if (ready && !(errorRef.current && token !== "ac")) {
+    const previous = stepRef.current;
+    const inError = previous !== null && previous.display.error !== null;
+    if (ready && previous && !(inError && token !== "ac")) {
       keysRef.current.push(token);
       if (token === "eq") {
         // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
@@ -418,10 +451,15 @@ export function ScientificPanel() {
         carriedAnswerRef.current = null;
       }
     }
-    // 状態は不変値なので、直前の状態から次を作るだけでよい。
-    setStep((previous) =>
-      ready && previous ? ready.dispatch(previous.state, token) : previous,
-    );
+    // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
+    // 使わず、`stepRef` から作って両方へ入れる**——門番と `dispatch` が
+    // 同じ 1 つの値を見るためである(片方を state、片方を ref から読むと、
+    // その 2 つがずれた瞬間が H-5 だった)。StrictMode が更新関数を 2 度
+    // 呼ぶ問題もここでは起きない(`dispatch` を呼ぶのは 1 度きり)。
+    const next =
+      ready && previous ? ready.dispatch(previous.state, token) : previous;
+    stepRef.current = next;
+    setStep(next);
   }, []);
 
   // **1 件を積む。** `step` が確定してから(=`eq` の結果の表示が出てから)

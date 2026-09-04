@@ -697,6 +697,47 @@ describe("履歴", () => {
     ).toBeInTheDocument();
   });
 
+  it("records the keys a recall sent while the display was in an error state", async () => {
+    // **H-5。** 呼び戻しは 1 つのハンドラの中で `ac` と答のキーを**同期に**
+    // 連打する(`recall`)——「1 打鍵 = 1 つの離散イベント」という、この
+    // ファイルの他の検査が満たしている前提の**唯一の例外**である。
+    //
+    // 門番が engine の状態を**effect で写した ref** から読んでいた版では、
+    // その写しは同じハンドラの中では更新されない(passive effect が流れる
+    // のは次の離散イベントの前)。**`ac` は通るのに、続く呼び戻しのキーが
+    // `keysRef` に積まれなかった**——engine には `setStep` 経由で全部届く
+    // ので、表示だけが進む。結果、`2` を呼び戻して `3 =` と打つと
+    // **式「3」・答「23」**という、**自分の答を作れない行**が残っていた
+    // (設計書 §0 が守りたいものそのもの。この枝が 6 回潰した族の 7 口目)。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    // 1 件記録してから、**エラー表示のまま**履歴を開く。
+    await pressKeys(["2", "計算する"]);
+    await pressKeys(["1", "小数点", "5", "小数点"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
+
+    await openHistory();
+    await userEvent.click(
+      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+    );
+    // 呼び戻し自体は前から効いていた——engine には届くからである。
+    expect(screen.getByTestId("display-main")).toHaveTextContent("2");
+
+    await pressKeys(["3", "計算する"]);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("23");
+    expect(spellCallCount).toBe(2);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    // 呼び戻した `2` が式に入っていること。**答は式から作れる。**
+    expect(
+      screen.getByRole("button", { name: "2 3 = 23 を入力に入れる" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "3 = 23 を入力に入れる" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("prefixes a chained = with the carried answer, so the row explains itself", async () => {
     // **Fix round 3 finding 11.** `3 + j4 = × 2 =` は engine の `current`
     // を積み増して `6+8j` を計算する

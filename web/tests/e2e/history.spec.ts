@@ -264,3 +264,47 @@ test("a chain continued by a postfix function or the sign key records the carrie
   await expect(page.getByText("√", { exact: true })).toHaveCount(0);
   await expect(page.getByText("+/−", { exact: true })).toHaveCount(0);
 });
+
+/**
+ * **H-5 を実 WASM で閉じる。** 呼び戻し(`recall`)は、盤面の他の操作と違って
+ * **1 つのハンドラの中で `ac` と答のキーを同期に連打する**——「1 打鍵 = 1 つの
+ * 離散イベント」という前提の唯一の例外である。門番が engine の状態を effect で
+ * 写した ref から読んでいた版では、その写しはハンドラの途中で更新されないので、
+ * **`ac` は通るのに続く呼び戻しのキーが式に積まれなかった**(engine には
+ * `dispatch` で全部届くため、表示だけが進む)。
+ *
+ * ここで見るのは**エラー表示のまま呼び戻して続きを打つ**という 1 経路。直す前は
+ * 式「+ 3」・答「5」という、**自分の答を作れない行**が残っていた(設計書 §0)。
+ * jsdom 側の同じ検査は `web/src/ui/ScientificPanel.test.tsx` の
+ * 「records the keys a recall sent while the display was in an error state」。
+ * **こちらは実 WASM を通す**ので、`1 . 5 .` が本当にエラーで終わること・
+ * 呼び戻した `2` が本当に engine の入力に入ることまで込みで見る。
+ */
+test("a recall made while the display was in an error state still becomes part of the expression", async ({
+  page,
+}) => {
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  // 1 件記録してから、入力の途中でエラーへ入る。
+  await press(page, ["2", "計算する"]);
+  await expect(display).toHaveText("2");
+  await press(page, ["1", "小数点", "5", "小数点"]);
+  await expect(display).toHaveText("Math ERROR");
+
+  // **エラー表示のまま**履歴を開いて呼び戻す。
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await page.getByRole("button", { name: "2 = 2 を入力に入れる" }).click();
+  // 呼び戻し自体は直す前も効いていた——engine には届くからである。
+  await expect(display).toHaveText("2");
+
+  await press(page, ["足す", "3", "計算する"]);
+  await expect(display).toHaveText("5");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByText("2 + 3")).toBeVisible();
+  // 直す前はここに「+ 3 = 5」の行が在った。
+  await expect(page.getByText("+ 3", { exact: true })).toHaveCount(0);
+});
