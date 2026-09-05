@@ -13,7 +13,7 @@
 
 ## 現在の版
 
-**0.7.0（ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
+**0.8.0（ベータ）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
 リリースごとの記録は [Releases](https://github.com/terapyon/CalcArc/releases) にある。
 
 **ベータである。** 使っている人はまだ少ない。計算結果は無保証で、重要な
