@@ -11,7 +11,16 @@ runs:
         # SHA 固定により ref からのツールチェーン選択が効かないため明示する。
         toolchain: stable
         targets: wasm32-unknown-unknown
+    # **これは既に node24 で、既に最新である**(v2.9.2 = 2026-08-06。
+    # 2026-09-05 に確かめた)。Node 24 への移行で触るものが無かった。
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+    # **これは node16 である。上げる先が無い**(2026-09-05 に確かめた)。
+    # v0.4.0 が最新で、公開は **2022-11-23**——それ以降リリースが無い。
+    # `v0.8.0` の走行の注意書きは**この action も挙げていた**(WASM boundary /
+    # Corpus vs reference / Deploy の 3 ジョブ)。**GitHub は言っている。
+    # 言っていないのは私たちの検査のほうである**——node16 のまま残ることを
+    # 赤くするものは、このリポジトリに 1 つも無い。**上げられない以上、
+    # ここに書いておくのが唯一できることである。**
     - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # v0.4.0
       with:
         # バージョンを指定しないと実行ごとに入るものが変わる。
