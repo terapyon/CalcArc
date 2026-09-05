@@ -186,7 +186,9 @@ export function screenName(route: Route): string;
 | `<h1>` を `<div>` に変える | 同上 |
 
 **受け入れ**: `pnpm e2e`（**全部**）が緑。**とくに `viewport-budget.spec.ts` の
-13 route × 2 幅**が緑であること——設計書 §4.1 の「縦の予算は動かない」は
+11 route × 2 幅**が緑であること（**巡回は 11 である。全 13 route のうち
+`#scale/llm` と `#convert/currency` は理由つきで外れている**——同ファイル冒頭の註）
+——設計書 §4.1 の「縦の予算は動かない」は
 **390×844 の Finance 1 route でしか測っていない見立て**であり、**ここが本番の測定**である。
 
 ---
@@ -245,7 +247,7 @@ export function screenName(route: Route): string;
 
 **受け入れ**: `cd web && pnpm test` 緑、`pnpm e2e update-toast.spec.ts` 緑
 （**`update-toast.spec.ts` は変えない**）、
-**`pnpm e2e viewport-budget.spec.ts` が 13 route × 2 幅で緑**
+**`pnpm e2e viewport-budget.spec.ts` が 11 route × 2 幅で緑**
 ——設計書 §6 の「空の領域は通常フローで高さ 0」は**見立てであって実測ではない**。
 **ここが実測である。**
 
@@ -270,7 +272,8 @@ git diff origin/main --stat -- crates/     # **0 行であること**（Rust に
 
 **当て直す見立て 2 件**（設計書 §13 が「測っていない」と書いたもの）:
 
-1. 隠した `<h1>` の縦の予算 —— **13 route × 2 幅**（`viewport-budget.spec.ts` が持つ）
+1. 隠した `<h1>` の縦の予算 —— **11 route × 2 幅**（`viewport-budget.spec.ts` が持つ。
+   **13 ではない**——`#scale/llm` と `#convert/currency` は同ファイルに理由つきで外してある）
 2. `UpdateToast` の空の領域が高さ 0 —— 同上
 
 **設計書の §13 と §12-4 を更新する**:

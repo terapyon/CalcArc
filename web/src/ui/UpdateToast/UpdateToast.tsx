@@ -72,7 +72,9 @@ export function UpdateToast() {
       **空のときの高さは 0 である。** `.toast` は `position: fixed` なので
       (`UpdateToast.module.css:2`)中身は通常フローから抜けており、外側の
       この `<div>` は縦を 1px も食わない。**見立てではなく実測である**
-      ——`viewport-budget.spec.ts` の 13 route × 2 幅が緑であることで確かめた
+      ——`viewport-budget.spec.ts` の 11 route × 2 幅が緑であることで確かめた
+      (**13 ではない**。`#scale/llm` と `#convert/currency` は同ファイルに
+      理由つきで巡回の外に置かれている)
       (Finance の余白は常設化の前後どちらも 16.3125px)。
     */
     <div

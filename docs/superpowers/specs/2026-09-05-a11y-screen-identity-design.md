@@ -213,7 +213,9 @@ document のはみ出し        0
 ```
 
 **縦の予算は動かない。** ただし**測ったのは 390×844 の Finance 1 route だけ**
-である——**実装の段で 13 route × 2 幅の既存検査を通すこと**（それが本番の測定である）。
+である——**実装の段で 11 route × 2 幅の既存検査を通すこと**（それが本番の測定である）。
+**11 であって 13 ではない**——`#scale/llm` と `#convert/currency` は
+`viewport-budget.spec.ts` の冒頭に理由つきで巡回の外に置かれている。
 
 ### §4.1a 採らなかった案 — **見える見出し `CalcArc v0.8.0`**（2026-09-05）
 
@@ -330,7 +332,7 @@ UpdateToast.tsx:59-65 <div role="status" aria-label="更新のお知らせ" aria
 - **`.toast` は `position: fixed` なので**（`UpdateToast.module.css:2`）、
   外側の空の `<div>` は**通常フローで高さ 0** になる見込みである。
   **これは見立てであって実測ではない**——**実装の段で
-  `viewport-budget.spec.ts` の 13 route × 2 幅を通すこと。**
+  `viewport-budget.spec.ts` の 11 route × 2 幅を通すこと。**
 - **手本に合わせる。新しい流儀を作らない。** `Readout.tsx:69-90` は
   条件付き return を持たず、空のまま領域を置く。番人も在る
   （`eng-notation.spec.ts:34,58,88` の
@@ -485,7 +487,7 @@ await userEvent.keyboard("{Escape}");
 | 13 | `UpdateToast` の領域が**更新前から在る** | vitest | `UpdateToast.test.tsx`（§9-2 で書き換える 1 本） | `if (!waiting) return null` を戻す |
 | 14 | `UpdateToast` が出たときの形 | E2E | 既存 `update-toast.spec.ts:12`（**変えない**） | — |
 | 15 | `Escape` が capture で止まる | vitest | 既存 `UpdateToast.test.tsx`「swallows the Escape…」（**変異で赤を実測済み**） | `addEventListener` の `true` を外す |
-| 16 | `<h1>` が縦の予算を食わない | E2E | 既存 `viewport-budget.spec.ts` 13 route × 2 幅（**§9-1 の直しが前提**） | `.visually-hidden` の `position: absolute` を外す |
+| 16 | `<h1>` が縦の予算を食わない | E2E | 既存 `viewport-budget.spec.ts` **11** route × 2 幅（**§9-1 の直しが前提**。13 のうち `#scale/llm` と `#convert/currency` は理由つきで巡回の外） | `.visually-hidden` の `position: absolute` を外す |
 | 17 | 余白の検査が**本当にパネルを測っている** | E2E | `viewport-budget.spec.ts` に足す下限（§9-1 の 2） | パネルの取り方を `firstElementChild` に戻す |
 
 ### §10.1 **番人を置けないもの**（置けない理由と、代わりに何が守るか）
@@ -528,7 +530,8 @@ await userEvent.keyboard("{Escape}");
 - **読み上げソフトで踏んでいない。** 上の実測はすべて **DOM と
   アクセシビリティツリーの話**であり、**音を聞いていない**。
 - **`§4.1` の縦の予算は 1 route（Finance、390×844）でしか測っていない。**
-  13 route × 2 幅は既存の E2E が持つので、**実装の段が本番**である。
+  11 route × 2 幅は既存の E2E が持つので、**実装の段が本番**である
+  （**13 ではない**——2 route は理由つきで巡回の外）。
 - **`§6` の「空の領域は高さ 0」は見立てである。** `.toast` が
   `position: fixed` であることから推したもので、**測っていない**。
 - **W3C の Page Titled をこちらで読んでいない**（預かりの §5 と同じ。**未確認**）。

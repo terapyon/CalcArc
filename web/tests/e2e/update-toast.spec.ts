@@ -102,4 +102,12 @@ test("without the preview parameter there is no toast", async ({ page }) => {
   // テスト用の入口が本番の挙動を変えていないこと。
   await page.goto("/");
   await expect(toast(page)).toHaveCount(0);
+  // **箱が無いことと、領域が在ることの両方を言う**(設計書 §6)。上の 1 行
+  // だけだと「トーストが出ていない」しか主張しておらず、**領域ごと消えても
+  // 緑になる**——それは常設化する前の姿そのものである。手本は
+  // `eng-notation.spec.ts:34,58,88` の
+  // `expect(getByRole("status", { name: "数の表記" })).toBeEmpty()`。
+  const region = page.getByRole("status", { name: "更新のお知らせ" });
+  await expect(region).toHaveCount(1);
+  await expect(region).toBeEmpty();
 });
