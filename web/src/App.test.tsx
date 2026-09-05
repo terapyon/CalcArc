@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // App が確かめたいのはハッシュから module を導いて出し分けることであって、
@@ -101,5 +101,51 @@ describe("App", () => {
     window.location.hash = "#nope";
     render(<App />);
     expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
+  });
+
+  // **切替の通知(設計書 §5)。ここだけは jsdom で足りる。**
+  // このファイルの他の a11y の主張と違って E2E に置かないのは、**見るものが
+  // DOM の話だから**である——領域が在るか・空か・文面・`aria-live` の綴りは
+  // どれもマークアップの検査であって、アクセシビリティツリーの組み立てを
+  // 必要としない(jsdom はそれを組まない)。**「本当に鳴るか」は DOM では
+  // 決められない**が、それは実ブラウザでも CI では確かめられない
+  // ——読み上げソフトを走らせていない(設計書 §13)。
+  //
+  // **期待値はこのテストが自分で持つ**(`screenName` や `switchAnnouncement`
+  // から組み立てない)。同じ定数から作ると、アプリとテストが同時に間違っても
+  // 緑になる。
+  const liveRegion = () =>
+    screen.getByRole("status", { name: "画面の切り替え" });
+
+  it("carries an empty live region from the very first render", () => {
+    // **常設であること。** 領域と中身を同時に挿入すると読み上げは鳴らない
+    // ので、空の領域が先に居ることそのものが仕様である。
+    render(<App />);
+    expect(liveRegion()).toBeInTheDocument();
+    expect(liveRegion()).toBeEmptyDOMElement();
+  });
+
+  it("announces politely, so it does not cut off what is being read", () => {
+    render(<App />);
+    expect(liveRegion()).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("says which screen the switch landed on", () => {
+    render(<App />);
+    window.location.hash = "#finance";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    expect(screen.getByTestId("finance-panel")).toBeInTheDocument();
+    expect(liveRegion().textContent).toBe("金融計算に切り替えました");
+  });
+
+  it("stays silent on the first render, even when the hash already names a screen", () => {
+    // **初回は鳴らさない。** 読み込んだだけで「切り替えました」は嘘になる。
+    // 既定の #scientific ではなく #finance で確かめるのは、**effect の
+    // 1 回目を飛ばしているのか、たまたま既定と同じで黙っているだけなのかを
+    // 見分けるため**である。
+    window.location.hash = "#finance";
+    render(<App />);
+    expect(screen.getByTestId("finance-panel")).toBeInTheDocument();
+    expect(liveRegion()).toBeEmptyDOMElement();
   });
 });

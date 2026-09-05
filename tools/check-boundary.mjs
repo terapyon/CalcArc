@@ -17,6 +17,14 @@
 // **他所が CSS の値として `44px` を書き直したら、そこだけ独立に動く**。
 // **足した時点で違反は 0 件**である(実測 2026-09-04)。
 //
+// **5 本目(2026-09-05)**: **「視覚的に隠す」の綴りは 1 か所にだけ在る**。
+// 読み上げにだけ届かせる要素は `display: none` / `visibility: hidden` に
+// できない(**アクセシビリティツリーからも消える**)ので、`clip-path: inset(50%)`
+// を含む決まった一式で「在るまま画面から外す」。その一式は
+// `web/src/ui/tokens.css` の `.visually-hidden` が持ち、**他所が書き直したら
+// そこだけ独立に動く**——直す日に片方だけが直る。**足した時点で違反は
+// 0 件**である(実測 2026-09-05)。
+//
 // **2 本目(2026-08-28)**: `web/src/calc/` は UI Framework を知らない
 // (CLAUDE.md「`web/src/calc/` に React を import しない」)。こちらも
 // **宣言ではなく実行で見張る**——それまでは `src/calc/index.ts` の
@@ -181,6 +189,72 @@ export function findTouchTargetOutsideTokens(files) {
   return found;
 }
 
+/** 「視覚的に隠す」の綴りを書いてよい唯一の場所。**4 本目と同じファイルだが、
+    守っている規律は別なので別に名づける。** */
+const VISUALLY_HIDDEN_HOME = "web/src/ui/tokens.css";
+
+/**
+ * `inset(50%)` を CSS の**値**として書いている行を、`tokens.css` の外から拾う。
+ *
+ * **読み上げにだけ届かせる隠し方は 1 つしかない。** `display: none` も
+ * `visibility: hidden` も**アクセシビリティツリーから要素を消す**ので、
+ * 使えるのは「在るまま画面の外へ出す」一式だけである。その一式の目印が
+ * `clip-path: inset(50%)` で、**綴りが 2 か所に散ると、直す日に片方だけが
+ * 直る**。置き場は `tokens.css` の `.visually-hidden` で、**他所は
+ * `composes: visually-hidden from global` でそこから引く**。
+ *
+ * **宣言だけを見る。** コメントの中の `clip-path: inset(50%)` は違反にしない
+ * ——**理由を書いた行が規則違反になる**のは検査の側の誤りである(2 本目・
+ * 4 本目と同じ罠)。
+ *
+ * **`.css` だけを見る。** 設計書や CLAUDE.md はこの綴りを散文で引用するし、
+ * E2E が `clip-path` の効きを実測するのも正しい——**規律を説明する文と、
+ * 規律を破る宣言は別物**である。
+ *
+ * **プロパティ名を固定しない。** 値のほうを見るので、`-webkit-clip-path` の
+ * ような綴り替えでも素通りしない(4 本目が `44px` を値として見るのと同じ形)。
+ *
+ * # これが見逃すもの
+ *
+ * **見張っているのは「この一式の目印」であって「隠すという行為」ではない。**
+ * `clip: rect(0 0 0 0)`(古い綴り)や、`clip-path` を書かずに
+ * `width:1px; height:1px; overflow:hidden` だけで隠す書き方は、**同じ結果を
+ * 別の綴りで達成するので、この規則に掛からない**。塞ぐには「隠している」を
+ * CSS から判定することになり、宣言 1 行を見る流儀では届かない。
+ * **守れるのは「いま在る綴りが 2 か所に散らないこと」までである。**
+ *
+ * **1 行書きも素通りする。** `.x { clip-path: inset(50%); }` は行頭が `.` で
+ * 始まるので `^\s*[-a-zA-Z]+\s*:` に当たらない(2026-09-05 のレビューが実測。
+ * 追跡下に置いて回して緑を確認した)。**捕まるほうも実測してある**——整形済み
+ * の独立行・`-webkit-clip-path`・空白入りの `inset( 50% )` は 3 つとも NG になる。
+ *
+ * **この穴は `biome` が塞いでいる。番人ではない。** `biome check`(2.5.8、
+ * `web` の設定)は 1 行書きを整形エラー 1 件で止めるので、**その形は main に
+ * 届かない**。`heavy` の `pnpm lint` が 2 か所を見るのと同じで、**1 つの規律を
+ * 2 つの道具が分担している**形である。**ただし書いただけでは番人にならない**
+ * ——`biome` の版が変われば前提が動くし、`biome` はこの規律を知らずに整形の
+ * 都合で止めているだけである。**この規則が自力で見ているのは、整形済みの
+ * 宣言行だけ**だと読むこと。
+ *
+ * @param {SourceFile[]} files
+ * @returns {Violation[]}
+ */
+export function findVisuallyHiddenOutsideTokens(files) {
+  /** @type {Violation[]} */
+  const found = [];
+  for (const file of files) {
+    if (!file.path.endsWith(".css") || file.path === VISUALLY_HIDDEN_HOME) {
+      continue;
+    }
+    file.text.split("\n").forEach((text, index) => {
+      if (/^\s*[-a-zA-Z]+\s*:\s*[^;{]*inset\(\s*50%\s*\)/.test(text)) {
+        found.push({ path: file.path, line: index + 1, text: text.trim() });
+      }
+    });
+  }
+  return found;
+}
+
 /**
  * 追跡されている `web/` のファイルを読む。**`git ls-files` を使う**
  * ——生成物(`web/src/wasm/`・`node_modules`・`dist`)を歩かないため。
@@ -229,6 +303,7 @@ function main() {
   const ui = findUiLeakIntoCalc(files);
   const back = findDisabledPropComingBack(files);
   const touch = findTouchTargetOutsideTokens(files);
+  const hidden = findVisuallyHiddenOutsideTokens(files);
   // **全部を印字してから落ちる。** 1 つ目で `exit` すると、2 つ壊れている日に
   // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
   if (heavy.length > 0) report("web が重量級を知っている", heavy);
@@ -237,16 +312,22 @@ function main() {
     report("Key / Keypad に disabled の口が戻っている", back);
   if (touch.length > 0)
     report(`44px が ${TOUCH_TARGET_HOME} の外に書かれている`, touch);
+  if (hidden.length > 0)
+    report(
+      `視覚的に隠す綴りが ${VISUALLY_HIDDEN_HOME} の外に書かれている`,
+      hidden,
+    );
   if (
     heavy.length > 0 ||
     ui.length > 0 ||
     back.length > 0 ||
-    touch.length > 0
+    touch.length > 0 ||
+    hidden.length > 0
   ) {
     process.exit(1);
   }
   console.log(
-    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件 / tokens.css の外の 44px 0 件",
+    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件 / tokens.css の外の 44px 0 件 / tokens.css の外の visually-hidden 0 件",
   );
 }
 

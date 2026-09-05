@@ -141,3 +141,28 @@ body {
   /* スマートフォンでのダブルタップ拡大を抑える。 */
   touch-action: manipulation;
 }
+
+/* **読み上げにだけ届かせる。** 画面からは外すが、アクセシビリティツリー
+ * には残す綴りである。
+ *
+ * **`display: none` と `visibility: hidden` は使えない**——どちらも
+ * **アクセシビリティツリーからも要素を消す**ので、読み上げに届かなくなる
+ * (`aria-describedby` の参照先なら、参照そのものが空になる)。だから
+ * **在るまま画面の外へ出す**。`Keypad.module.css` の `.offDescription` が
+ * 先にこの綴りを持っていた註を引き継いでいる。
+ *
+ * **置き場がここである理由**: `tokens.css` は `web/src/main.tsx` が 1 度だけ
+ * import する**唯一のグローバル CSS** で、既に `*` と `body` のグローバル
+ * 規則を持っている。**`--touch-target-min` と同じ形**——綴りを 1 か所に
+ * 置き、`tools/check-boundary.mjs` が外での重複を見張る。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
