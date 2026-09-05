@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # node の版はこの複合アクションが一本で持っている。**写しで持つと
       # 片方だけ更新される**ので、依存を入れる分だけ遅くてもこちらに乗せる。
       - uses: ./.github/actions/setup-web
@@ -86,7 +86,7 @@ jobs:
     # 回し直しにまた 40 分かかる。**非対称なので緩い側へ倒す。**
     timeout-minutes: 85
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-web
 
       # Rust(wasm32) + rust-cache + wasm-pack。**版の固定はこの複合アクションに
@@ -140,7 +140,7 @@ jobs:
         # ——v0.4.1 の走行では実際にそうなり、期待値が生成器の出力かどうかを
         # 一度も見ないまま走行が終わった。
         if: '!cancelled()'
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 

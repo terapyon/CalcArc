@@ -85,7 +85,7 @@ jobs:
             echo ""
             echo "**Release に何を配ったかを書き足すこと**(docs/deploy.md)。"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-wasm-pack
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       - uses: ./.github/actions/setup-web

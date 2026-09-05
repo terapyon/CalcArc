@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "Release は v* タグからのみ。個別に確かめるなら Deploy / Heavy corpus を直接起動する" >&2
           exit 1
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # **タグが main の子孫かを見るのに全履歴が要る**(B-8)。
           fetch-depth: 0
@@ -107,7 +107,7 @@ jobs:
       # **private 化した日に黙って証拠が書けなくなる**のを防ぐ(B-5)。
       actions: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # 重量級の報告書と、実際に配った物。**どちらもこの走行が作ったもの**で、
       # 別の走行から拾ってこない(別の走行の結果を添えたら、証拠にならない)。
