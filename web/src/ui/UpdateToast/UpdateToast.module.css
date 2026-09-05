@@ -30,7 +30,9 @@
 }
 
 .actions button {
-  /* 44px は base-spec §43。トーストのボタンは例外にしない。 */
+  /* 44px は base-spec §43 が求めるタッチ標的に対してこのプロジェクトが
+     採った値(§43 自身は数字を持たない。同節の 2026-09-04 の追記)。
+     トーストのボタンは例外にしない。 */
   min-width: var(--touch-target-min);
   min-height: var(--touch-target-min);
   flex: 1;

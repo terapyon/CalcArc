@@ -10,6 +10,13 @@
 //
 // 逆向き（`heavy` や `tools` が `web` を読む）は正常なので見ない。
 //
+// **4 本目(2026-09-04)**: **タッチ標的の 44px は 1 か所にだけ在る**。
+// base-spec §43 が求めているのは "Touch target size" までで、**44 という
+// 数字を定めているのはこのプロジェクトのほう**である(同節の 2026-09-04 の
+// 追記)。値は `web/src/ui/tokens.css` の `--touch-target-min` が持ち、
+// **他所が CSS の値として `44px` を書き直したら、そこだけ独立に動く**。
+// **足した時点で違反は 0 件**である(実測 2026-09-04)。
+//
 // **2 本目(2026-08-28)**: `web/src/calc/` は UI Framework を知らない
 // (CLAUDE.md「`web/src/calc/` に React を import しない」)。こちらも
 // **宣言ではなく実行で見張る**——それまでは `src/calc/index.ts` の
@@ -140,6 +147,40 @@ export function findDisabledPropComingBack(files) {
   return found;
 }
 
+/** 値としての `44px` を書いてよい唯一の場所。 */
+const TOUCH_TARGET_HOME = "web/src/ui/tokens.css";
+
+/**
+ * `44px` を CSS の**値**として書いている行を、`tokens.css` の外から拾う。
+ *
+ * **宣言だけを見る。** `min-width: 44px` は違反だが、コメントの中の `44px`
+ * は違反にしない——**理由を書いた行が規則違反になる**のは検査の側の誤りで
+ * ある(2 本目と同じ罠)。実物には「44px を守る」「7 列 × 44px」のような註が
+ * 11 行あり(実測 2026-09-04)、そのどれも宣言の形をしていない。
+ *
+ * **`.css` だけを見る。** E2E は `toBeGreaterThanOrEqual(44)` と数字を
+ * 直に書いているが、**テストが期待値を自分で持つのは正しい**——トークンを
+ * 読んで突き合わせたら、両方が同時に間違っても緑になる。
+ *
+ * @param {SourceFile[]} files
+ * @returns {Violation[]}
+ */
+export function findTouchTargetOutsideTokens(files) {
+  /** @type {Violation[]} */
+  const found = [];
+  for (const file of files) {
+    if (!file.path.endsWith(".css") || file.path === TOUCH_TARGET_HOME) {
+      continue;
+    }
+    file.text.split("\n").forEach((text, index) => {
+      if (/^\s*[-a-zA-Z]+\s*:\s*[^;{]*\b44px\b/.test(text)) {
+        found.push({ path: file.path, line: index + 1, text: text.trim() });
+      }
+    });
+  }
+  return found;
+}
+
 /**
  * 追跡されている `web/` のファイルを読む。**`git ls-files` を使う**
  * ——生成物(`web/src/wasm/`・`node_modules`・`dist`)を歩かないため。
@@ -187,17 +228,25 @@ function main() {
   const heavy = findBoundaryViolations(files);
   const ui = findUiLeakIntoCalc(files);
   const back = findDisabledPropComingBack(files);
-  // **両方を印字してから落ちる。** 片方で `exit` すると、2 つ壊れている日に
+  const touch = findTouchTargetOutsideTokens(files);
+  // **全部を印字してから落ちる。** 1 つ目で `exit` すると、2 つ壊れている日に
   // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
   if (heavy.length > 0) report("web が重量級を知っている", heavy);
   if (ui.length > 0) report("web/src/calc が UI Framework を知っている", ui);
   if (back.length > 0)
     report("Key / Keypad に disabled の口が戻っている", back);
-  if (heavy.length > 0 || ui.length > 0 || back.length > 0) {
+  if (touch.length > 0)
+    report(`44px が ${TOUCH_TARGET_HOME} の外に書かれている`, touch);
+  if (
+    heavy.length > 0 ||
+    ui.length > 0 ||
+    back.length > 0 ||
+    touch.length > 0
+  ) {
     process.exit(1);
   }
   console.log(
-    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件",
+    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件 / tokens.css の外の 44px 0 件",
   );
 }
 

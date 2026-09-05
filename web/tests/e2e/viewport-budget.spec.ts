@@ -211,3 +211,45 @@ test("the keys still hold 44px across at 360px", async ({ page }) => {
     [],
   );
 });
+
+test("no key row is wider than the board that holds it, at 360px", async ({
+  page,
+}) => {
+  // **44px を測るだけでは、関数列を 8 列に戻す変更が止まらない。**
+  // `column-gap` が余りを列間から吸うので、8 列にしてもキーは 44px を
+  // 割らず、上の 2 本は緑のまま通る。実測(2026-09-04、第 2 関数列を
+  // 8 列 × 8 キーに変えて測った):
+  //
+  //   390px: キー 44.00px / 列間 2px  — 区画 366px、親 366px（収まる）
+  //   360px: キー 44.00px / 列間 0px  — **区画 352px、親 336px**
+  //
+  // **溢れの検査も止められない。** 盤面は左右に 12px の余白を持つので、
+  // 区画が 16px はみ出しても**文書の幅は 4px しか増えず**、8px の許容
+  // (2026-08-20 のユーザー裁定)に収まってしまう。
+  //
+  // だから**区画そのものを親と突き合わせる**。ここが「8 列は取れない」を
+  // 実際に守っている 1 本である(S-2 設計書 §7.1 の追記)。
+  await page.setViewportSize(NARROW);
+  await page.goto("/#scientific");
+  await expect(page.getByTestId("display-main")).toBeVisible();
+
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll("fieldset")].map((el) => ({
+      name: el.getAttribute("aria-label") ?? "(名前なし)",
+      width: el.getBoundingClientRect().width,
+      parent: el.parentElement?.getBoundingClientRect().width ?? 0,
+    })),
+  );
+
+  // **何件見たかを主張する。** <fieldset> の綴りが変わって 0 件になった日
+  // から、この検査は何も測らないまま緑を返し続ける。Scientific は
+  // 関数列 2 つ + メイングリッドの 3 区画である。
+  expect(rows.length, "measured no key rows at all").toBeGreaterThanOrEqual(3);
+
+  // 小数の丸めで 0.5px ほど揺れるので、はみ出しは 1px から数える。
+  const over = rows.filter((r) => r.width > r.parent + 1);
+  expect(
+    over,
+    `key rows wider than their board: ${JSON.stringify(over)}`,
+  ).toEqual([]);
+});

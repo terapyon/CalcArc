@@ -19,7 +19,8 @@
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
     "check:version": "node ../tools/check-version.mjs",
-    "check:boundary": "node ../tools/check-boundary.mjs"
+    "check:boundary": "node ../tools/check-boundary.mjs",
+    "check:citations": "node ../tools/check-citations.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
