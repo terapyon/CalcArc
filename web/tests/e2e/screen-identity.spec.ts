@@ -203,3 +203,46 @@ test("the history screen keeps the <h1> and nests its own <h2> under it", async 
   // **意図であることを、検査で固定する**——気づかず変えた日に赤くなる。
   await expect(page).toHaveTitle("関数電卓 | CalcArc");
 });
+
+test("the history screen keeps the two live regions that live outside the panel", async ({
+  page,
+}) => {
+  // **履歴の面には live 領域が 1 つも無かった**(設計書 §1.1、実装前の実測)。
+  // `Display` ごと置き換わるので、**パネルが持つ領域は 5 つとも消える**
+  // ——角度の単位・数の表記・計算の途中経過・表示形式・`display-main`。
+  //
+  // **消えないのはパネルの外に在る 2 つだけ**である。どちらもこの計画で
+  // 常設にした——§5 の「画面の切り替え」(`App` が `<main>` の外に持つ)と、
+  // §6 の「更新のお知らせ」(`UpdateToast`。Task 7 で `return null` を外した)。
+  // **設計書 §8 は「§5 の領域だけは在る」と書いていたが、実測は 2 つである**
+  // ——§6 が途中で範囲に入ったぶん、1 つ増えた。
+  //
+  // **これを E2E が持つ理由。** 「領域が在る」は `App.test.tsx` が初期描画で
+  // 見ているが、**履歴の面まで生き延びる**という主張は別である
+  // ——パネルの中へ移した日に、初期描画の検査は緑のまま通る。
+  await page.goto("/#scientific");
+  await expect(page.getByTestId("display-main")).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "第2面に切り替え", exact: true })
+    .click();
+  await page.getByRole("button", { name: "履歴", exact: true }).click();
+
+  const live = await page.evaluate(() =>
+    [...document.querySelectorAll("[aria-live]")].map((el) => ({
+      live: el.getAttribute("aria-live"),
+      name: el.getAttribute("aria-label"),
+      inMain: document.querySelector("main")?.contains(el) === true,
+    })),
+  );
+
+  // **件数と綴りを同時に主張する。** 片方だけだと、領域が 1 つ消えた日にも
+  // 別の領域が 1 つ増えた日にも緑になりうる。
+  expect(
+    live,
+    `live regions on the history screen: ${JSON.stringify(live)}`,
+  ).toEqual([
+    { live: "polite", name: "画面の切り替え", inMain: false },
+    { live: "polite", name: "更新のお知らせ", inMain: false },
+  ]);
+});
