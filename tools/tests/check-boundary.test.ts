@@ -3,6 +3,7 @@ import {
   findBoundaryViolations,
   findTouchTargetOutsideTokens,
   findUiLeakIntoCalc,
+  findVisuallyHiddenOutsideTokens,
   readWebFiles,
 } from "../check-boundary.mjs";
 
@@ -190,5 +191,65 @@ describe("findTouchTargetOutsideTokens", () => {
       "read no css files at all",
     ).toBeGreaterThan(5);
     expect(findTouchTargetOutsideTokens(files)).toEqual([]);
+  });
+});
+
+describe("findVisuallyHiddenOutsideTokens", () => {
+  // **読み上げにだけ届かせる隠し方は 1 つしかない。** `display: none` も
+  // `visibility: hidden` もアクセシビリティツリーから要素を消すので、
+  // 使えるのは「在るまま画面の外へ出す」一式だけである。**その一式は
+  // 1 か所にだけ置く**——散ると、直す日に片方だけが直る。
+
+  it("tokens.css の外で値として書いていたら見つける", () => {
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        {
+          path: "web/src/ui/Keypad/Keypad.module.css",
+          text: "  clip-path: inset(50%);\n",
+        },
+      ]),
+    ).toEqual([
+      {
+        path: "web/src/ui/Keypad/Keypad.module.css",
+        line: 1,
+        text: "clip-path: inset(50%);",
+      },
+    ]);
+  });
+
+  it("tokens.css 自身は通す（そこが置き場である）", () => {
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        { path: "web/src/ui/tokens.css", text: "  clip-path: inset(50%);" },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("註の中の綴りは違反にしない（理由を書いた行を赤くしない）", () => {
+    // 実物にある形。`Keypad.module.css` の `.offDescription` は、なぜ
+    // `display: none` ではないのかを註で説明している。
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        {
+          path: "web/src/ui/Keypad/Keypad.module.css",
+          text: [
+            "/* **読み上げにだけ届く説明**。clip-path: inset(50%) の一式は",
+            "   tokens.css の .visually-hidden が持つ。ここでは書かない。 */",
+            "/* display: none にすると clip-path: inset(50%) の意味が消える。 */",
+          ].join("\n"),
+        },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("いまの web は 1 件も無い（実物で確かめる）", () => {
+    const files = readWebFiles();
+    // **何件見たかを主張する。** `git ls-files` が空を返した日に、
+    // 「0 件」は何も意味しなくなる（4 本目と同じ形）。
+    expect(
+      files.filter((file) => file.path.endsWith(".css")).length,
+      "read no css files at all",
+    ).toBeGreaterThan(5);
+    expect(findVisuallyHiddenOutsideTokens(files)).toEqual([]);
   });
 });
