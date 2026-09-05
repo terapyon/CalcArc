@@ -8,8 +8,22 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/?sw-toast=preview");
 });
 
+// **この巡回が指すのは「出てきた箱」であって、live 領域そのものではない。**
+// 領域(`role="status"` の `<div>`)は 2026-09-05 に**常設**になった
+// (設計書 §6)——領域と中身を同時に挿入すると読み上げが鳴らないからで、
+// 空のときも DOM に在り、通常フローで高さ 0 である。**assertion は 1 つも
+// 変えていない**。変えたのはこの 1 行、「何を指すか」だけである:
+//
+//   - `toBeVisible()` は箱に対して意味を持つ(空の領域は高さ 0 で hidden)。
+//   - `toHaveCount(0)` は「トーストが出ていない」を意味しつづける
+//     (領域はいつでも 1 件なので、領域を指したままだとこの 3 本は
+//     「いまと逆のこと」を言うようになる)。
+//
+// **役割と名前はここでも見ている**——箱は `role="status"` かつ
+// `name="更新のお知らせ"` の子としてしか取れない。**領域が常設であること**
+// 自体は vitest(`src/ui/UpdateToast/UpdateToast.test.tsx`)が持つ。
 const toast = (page: import("./fixtures").Page) =>
-  page.getByRole("status", { name: "更新のお知らせ" });
+  page.getByRole("status", { name: "更新のお知らせ" }).locator(":scope > div");
 
 test("the toast announces itself as a status, not an alert", async ({
   page,
