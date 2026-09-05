@@ -134,14 +134,37 @@ test("the tallest tab still has slack inside the screen", async ({ page }) => {
   await expect(page.getByTestId("display-main")).toBeVisible();
   await expect(page.getByTestId("footer-disclaimer")).toBeVisible();
 
-  const slack = await page.evaluate(() => {
+  // **パネルは「見出しではない子」で取る。`firstElementChild` では取らない。**
+  // この計画の Task 5 で `<h1>` を `<main>` の中に置くので、
+  // `firstElementChild` のままだと**その `<h1>` を測り始める**。実測:
+  // `<h1>` を先に足すと余白は **16.3125px から 742**(`main` の高さそのもの)
+  // になる。**赤くならない壊れ方である**——要求は「8 以上」なので、
+  // 何も測っていない 742 は緑を返す。
+  const { mainHeight, panelHeight, panelTag } = await page.evaluate(() => {
     const main = document.querySelector("main");
-    const panel = main?.firstElementChild;
-    if (!main || !panel) return -1;
-    return (
-      main.getBoundingClientRect().height - panel.getBoundingClientRect().height
-    );
+    const panel = main?.querySelector(":scope > :not(h1)");
+    if (!main || !panel) {
+      return { mainHeight: -1, panelHeight: -1, panelTag: "(見つからない)" };
+    }
+    return {
+      mainHeight: main.getBoundingClientRect().height,
+      panelHeight: panel.getBoundingClientRect().height,
+      panelTag: panel.tagName,
+    };
   });
+
+  // **測った物がパネルであることを先に主張する。** 下の差が「パネルより下に
+  // 何も無い縦」を意味するのはパネルを測ったときだけで、**別の物を測った
+  // 瞬間にこの検査は無意味になる**——しかも差は大きくなる、つまり緑になる。
+  // 下限は `main` の半分。**「1×1 の要素を測って緑になった」を二度と
+  // 起こさないための下限**である(視覚的に隠した要素は 1px しか持たない)。
+  // 実測(390×844、`#finance`): `main` 743 / パネル 726.6875 → 余白 16.3125。
+  expect(
+    panelHeight,
+    `measured <${panelTag}> at ${panelHeight}px inside a ${mainHeight}px <main> — that is not the panel`,
+  ).toBeGreaterThanOrEqual(mainHeight / 2);
+
+  const slack = mainHeight - panelHeight;
 
   expect(
     slack,
