@@ -565,8 +565,8 @@ const jobsOf = (yaml: string) => {
   return jobs;
 };
 
-/** 時間制限を要求するワークフロー。 */
-const TIMED = ["ci.yml", "heavy-corpus.yml", "release.yml"];
+/** 時間制限を要求するワークフロー。**いまは全部である。** */
+const TIMED = ["ci.yml", "deploy.yml", "heavy-corpus.yml", "release.yml"];
 
 /**
  * 要求しないもの——**理由つきで名指しする**。
@@ -574,11 +574,7 @@ const TIMED = ["ci.yml", "heavy-corpus.yml", "release.yml"];
  * **黙って外さない。** 一覧から漏れたのか、外すと決めたのかが、
  * ここを読めば分かるようにしておく。
  */
-const UNTIMED: Record<string, string> = {
-  "deploy.yml":
-    "本番へ配る唯一のジョブ。**途中で殺すと配信が半端に終わりうる**ので、" +
-    "値には裁定が要る(2026-09-05 時点で未決。穴が在ることは分かっている)",
-};
+const UNTIMED: Record<string, string> = {};
 
 describe("すべてのジョブに時間制限が在る（2026-09-05）", () => {
   // **書かないと既定は 360 分である。** 2026-09-05 の `v0.8.0` の Release
@@ -626,6 +622,18 @@ describe("すべてのジョブに時間制限が在る（2026-09-05）", () => 
     const callers = jobsOf(read("release.yml")).filter((job) => !job.runsOn);
     expect(callers.map((job) => job.id)).toEqual(["ci", "heavy", "deploy"]);
     expect(callers.every((job) => job.timeout === null)).toBe(true);
+  });
+
+  it("免除は 0 件である", () => {
+    // **`deploy.yml` はここに居た**(2026-09-05 まで)。「途中で殺すと配信が
+    // 半端に終わりうる」という留保で外していたが、**調べたら区間で分かれた**
+    // ——`wrangler` より前で殺しても本番は変わらず、後で殺すと**出たまま
+    // 未検査**になる。後者を減らすには**制限を置いたうえで緩くする**のが
+    // 正しく、外しておくことではなかった。理由は `deploy.yml` に在る。
+    //
+    // **0 件を主張しておく。** 免除は `UNTIMED` に足すだけで静かに増える。
+    // ここが在ると、**外すときにこの行も直すことになる**——差分に出る。
+    expect(Object.keys(UNTIMED)).toEqual([]);
   });
 
   it("ワークフローが増えたら、どちらかの一覧に載る", () => {

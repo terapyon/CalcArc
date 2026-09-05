@@ -17,8 +17,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# **どのジョブにも時間制限を置く。** 書かないと GitHub の既定は **360 分**で、
-# 固まったジョブが 6 時間走りうる。2026-09-05 の `v0.8.0` の Release 走行で
+# **どのジョブにも時間制限を置く。** 書かないと GitHub の既定は
+# **6 時間(360 分)**で、固まったジョブがそこまで走る(2026-09-05 に一次資料で
+# 確認—— docs.github.com/en/actions/reference/limits の「Each job in a workflow
+# can run for up to 6 hours of execution time.」。**`heavy-corpus.yml` には
+# 「既定の 6 分」と書かれていた**——時間/分 の取り違えで、あちらの 45 分は
+# その前提で選ばれていた。同じコミットで直してある)。2026-09-05 の `v0.8.0` の Release 走行で
 # `Rust core` が **45m0s** で死んだ(`The hosted runner lost communication with
 # the server.`、走行 33942305098 の 1 回目)——**普段 1 分のジョブ**である。
 # あのときは GitHub 側が見切ったが、**それは私たちが決めた値ではない。**
@@ -45,9 +49,15 @@ concurrency:
 # ——**緩すぎれば意味が無いが、きつすぎれば健全な走行を殺す**ので、
 # 迷ったら緩い側へ倒してある(それでも既定より 1 桁以上小さい)。
 #
-# **`heavy-corpus.yml` の値をここへ写さない。逆も同じ。** あちらは
-# 41 分走る(実測)。番人は `tools/tests/release-workflow.test.ts` の
-# 「すべてのジョブに時間制限が在る」。
+# **他のワークフローの値をここへ写さない。逆も同じ。** 同じ規則を当てても、
+# 実績が違えば値は違う——`heavy-corpus.yml` の corpus は 41 分走るので 85 分、
+# `deploy.yml` は最大 87 秒だが**内側に 6 分の再試行予算がある**ので 20 分。
+# **どちらも規則の当て方をそのファイルに書いてある**(値だけ写すと、次に
+# 見直す人が根拠のない数字を受け取る)。
+#
+# 番人は `tools/tests/release-workflow.test.ts` の
+# 「すべてのジョブに時間制限が在る」。**4 つのワークフロー全部**を見ており、
+# **免除は 0 件**である。
 jobs:
   rust:
     name: Rust core
