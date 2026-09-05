@@ -45,6 +45,28 @@ export function App() {
       <div className={styles.shell}>
         <Nav current={route.module} />
         <main className={styles.main}>
+          {/*
+            **画面の見出しは `App` が持つ。パネル側に置かない**(設計書 §4)。
+            置き場所そのものが「`<h1>` はちょうど 1 つ」を保証する
+            ——パネル側に置くと、パネルが 2 つ同時に出た日に 2 つになる。
+
+            **文字列は `document.title` の前半と同じ `screenName(route)`**。
+            2 つが食い違うと、見出しで確認した名前とタブの名前が違うことになる。
+
+            **視覚的には 0**(設計書 §4.1・§4.1a)。見える見出しは採らなかった
+            ——`CalcArc v0.8.0` は全画面で同じ文字列なので現在地を言わないし、
+            見える 1 行はだいたい 16px を使い、Finance に残っている縦の余白
+            (390×844 で 16.31px)がそれで消える。`visually-hidden` は
+            `tokens.css` のグローバルなクラスなので、**CSS Modules の
+            `styles.…` ではなく文字列で当てる**(設計書 §4.2)。
+            **`display:none` / `visibility:hidden` に取り違えると、
+            `screen-identity.spec.ts` の役割クエリが要素を見つけられずに
+            赤くなる**(設計書 §4.3 の実測)。
+
+            **`History` の `<h2>履歴` はそのまま。** `<h1>`(画面)→
+            `<h2>`(その中の面)という階層になり、いま飛んでいる段が埋まる。
+          */}
+          <h1 className="visually-hidden">{screenName(route)}</h1>
           {route.module === "scientific" && <ScientificPanel />}
           {route.module === "convert" && (
             <ConvertPanel category={route.category} />
