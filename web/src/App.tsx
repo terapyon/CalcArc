@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Route, routeFromHash } from "./route";
 import styles from "./ui/App.module.css";
 import { ConvertPanel } from "./ui/Convert/ConvertPanel";
@@ -9,6 +9,19 @@ import { ScalePanel } from "./ui/Scale/ScalePanel";
 import { ScientificPanel } from "./ui/ScientificPanel";
 import { screenName } from "./ui/screenName";
 import { UpdateToast } from "./ui/UpdateToast/UpdateToast";
+
+/**
+ * 切替を知らせる文面。**綴りはここ 1 か所にしか無い**(設計書 §12-2)。
+ *
+ * **この文面は利用者の裁定ではなく、監視役が選んだ既定である**
+ * ——「〜に切り替えました」は §12 の表で「利用者の別案が出たら差し替える」と
+ * されている。2 か所に散っていると、差し替えの日に片方だけが古いまま残る。
+ * **テストは期待値を自分で持つ**(この関数から組み立てると、両方が同時に
+ * 間違っても緑になる)。
+ */
+function switchAnnouncement(name: string): string {
+  return `${name}に切り替えました`;
+}
 
 export function App() {
   const [route, setRoute] = useState<Route>(() =>
@@ -23,6 +36,27 @@ export function App() {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
+
+  const [announcement, setAnnouncement] = useState("");
+  // **初回は鳴らさない。** 読み込んだだけで「切り替えました」は嘘になるし、
+  // 読み込み直後の読み上げ(見出し・最初の表示)に重なる。**effect の 1 回目を
+  // 飛ばす**ために、直前に知らせた画面名を ref に持つ——`null` の 1 回目は
+  // 記録するだけで書かない。`ScientificPanel` の `savedScientific` が
+  // 同じ形である(あちらは「復元直後の 1 回目を保存しない」)。
+  //
+  // **比べるのは route ではなく画面名。** 同じ画面のまま別の理由で route の
+  // 参照だけが変わっても鳴らない。
+  const announcedScreen = useRef<string | null>(null);
+  useEffect(() => {
+    const name = screenName(route);
+    if (announcedScreen.current === null) {
+      announcedScreen.current = name;
+      return;
+    }
+    if (announcedScreen.current === name) return;
+    announcedScreen.current = name;
+    setAnnouncement(switchAnnouncement(name));
+  }, [route]);
 
   useEffect(() => {
     // **タブの名前に、いまの画面を出す**(設計書 §3)。書式は
@@ -44,6 +78,38 @@ export function App() {
     <>
       <div className={styles.shell}>
         <Nav current={route.module} />
+        {/*
+          **画面が変わったことを読み上げに伝える**(設計書 §5)。
+
+          **常設である。** `route` が何であっても在り、空のまま置いておく
+          ——**領域と中身を同時に挿入すると読み上げは鳴らない**。
+          `UpdateToast` がいままさにその形で(`if (!waiting) return null`)、
+          Task 7 で直す。手本は `Readout.tsx:69-90`——条件付き return を
+          持たず、空のまま領域を置く。
+          **履歴の面を含め、これがこのアプリで唯一いつでも在る live 領域**
+          になる(設計書 §1.1: 履歴の面は live 領域が 0 件)。
+
+          **`polite` である。** 画面の切替は**利用者自身が起こした**ことで、
+          事故ではない。`assertive` は読み上げ中の発話を割り込んで捨てるので、
+          いま読んでいる結果を消してしまう。`UpdateToast.tsx:63` が同じ理由で
+          `polite` を選んでいる。
+
+          **`aria-label` を付けて名前で引けるようにする**(既存の `Readout` の
+          status と `UpdateToast` がそう)。空の領域は中身から名前が付かない
+          ので、名前が無いと役割クエリで一意に取れない。
+
+          **`visually-hidden` は `tokens.css` のグローバルなクラス**なので
+          CSS Modules の `styles.…` ではなく文字列で当てる(設計書 §4.2)。
+          `position: absolute` なので画面には 1 文字も、1px も増えない。
+        */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="画面の切り替え"
+          className="visually-hidden"
+        >
+          {announcement}
+        </div>
         <main className={styles.main}>
           {/*
             **画面の見出しは `App` が持つ。パネル側に置かない**(設計書 §4)。
