@@ -21,9 +21,19 @@ test("the main grid keeps 44px touch targets", async ({ page }) => {
 test("the function row is half height but still 44px wide", async ({
   page,
 }) => {
-  // 44px は 8 列案を却下した唯一の測定(390px で 38.75px)。2 段化は
-  // それを守るためだけに存在するので、2 段目も同じ検査に含める
-  // ——含めないと将来 8 列に戻す変更が入っても緑のまま通ってしまう。
+  // 8 列案を却下したのは 44px である。2 段化はそれを守るためだけに存在する
+  // ので、2 段目も同じ検査に含める——含めないと将来 8 列に戻す変更が入っても
+  // 緑のまま通ってしまう。
+  //
+  // **ただし、この 1 本では止まらない。** ここが測るのは既定の 390px だけで
+  // (`playwright.config.ts`)、`column-gap` が余りを列間から吸うように
+  // なった 0.2.1 以降、**8 列に戻してもキーは 44.00px ちょうどで、この検査は
+  // 緑のまま通る**(2026-09-04 に 8 列 × 8 キーへ変えて実測)。
+  // 止めているのは `viewport-budget.spec.ts` の
+  // `no key row is wider than the board that holds it, at 360px` である。
+  // **溢れを測る検査でも止まらない**——区画が親より 16px はみ出しても、
+  // 盤面の左右の余白のぶん文書の幅は 4px しか増えないので、8px の許容に
+  // 収まってしまう。
   const functions = page.getByRole("group", { name: /関数キー|第 2 関数列/ });
   for (const button of await functions.getByRole("button").all()) {
     const box = await button.boundingBox();

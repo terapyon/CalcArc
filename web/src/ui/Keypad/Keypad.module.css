@@ -61,15 +61,9 @@
 
 /* **読み上げにだけ届く説明**（`Keypad.tsx` の `offDescription`）。
    `display: none` や `hidden` にすると **`aria-describedby` が届かない**ので、
-   **在るまま画面から外す**。 */
+   **在るまま画面から外す**。
+   **綴りは持たず `tokens.css` の `.visually-hidden` から引く**——同じ隠し方が
+   2 か所に散ると、片方だけが直る日が来る。 */
 .offDescription {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
+  composes: visually-hidden from global;
 }

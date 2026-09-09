@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   findBoundaryViolations,
+  findTouchTargetOutsideTokens,
   findUiLeakIntoCalc,
+  findVisuallyHiddenOutsideTokens,
   readWebFiles,
 } from "../check-boundary.mjs";
 
@@ -120,5 +122,134 @@ describe("findUiLeakIntoCalc", () => {
   it("いまの calc は 1 件も無い（実物で確かめる）", () => {
     const found = findUiLeakIntoCalc(readWebFiles());
     expect(found).toEqual([]);
+  });
+});
+
+describe("findTouchTargetOutsideTokens", () => {
+  // **44px を定めているのは base-spec §43 ではない。** §43 が求めるのは
+  // "Touch target size" までで、44 を選んだのはこのプロジェクトである
+  // (同節の 2026-09-04 の追記)。**選んだ値は 1 か所にだけ置く。**
+
+  it("tokens.css の外で値として書いていたら見つける", () => {
+    expect(
+      findTouchTargetOutsideTokens([
+        { path: "web/src/ui/Key/Key.module.css", text: "  min-width: 44px;\n" },
+      ]),
+    ).toEqual([
+      {
+        path: "web/src/ui/Key/Key.module.css",
+        line: 1,
+        text: "min-width: 44px;",
+      },
+    ]);
+  });
+
+  it("tokens.css 自身は通す（そこが置き場である）", () => {
+    expect(
+      findTouchTargetOutsideTokens([
+        { path: "web/src/ui/tokens.css", text: "  --touch-target-min: 44px;" },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("註の中の 44px は違反にしない（理由を書いた行を赤くしない）", () => {
+    // 実物にある形。`Keypad.module.css` は「キーには min-width: 44px が
+    // 効いており」と、規則そのものを註で説明している。
+    expect(
+      findTouchTargetOutsideTokens([
+        {
+          path: "web/src/ui/Keypad/Keypad.module.css",
+          text: [
+            "  /* キーには min-width: 44px が効いており(Key.module.css)、",
+            "     列は 44px より細くならない。7 列 x 44px = 308px。 */",
+            "/* 正方のキー。44px はここで守る。 */",
+          ].join("\n"),
+        },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("css 以外は見ない（E2E が 44 を直に書くのは正しい）", () => {
+    // テストが期待値を自分で持たず、トークンを読んで突き合わせたら、
+    // **両方が同時に間違っても緑になる**。
+    expect(
+      findTouchTargetOutsideTokens([
+        {
+          path: "web/tests/e2e/keypad-shell.spec.ts",
+          text: "  const min: string = '44px';",
+        },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("いまの web は 1 件も無い（実物で確かめる）", () => {
+    const files = readWebFiles();
+    // **何件見たかを主張する。** `git ls-files` が空を返した日に、
+    // 「0 件」は何も意味しなくなる。
+    expect(
+      files.filter((file) => file.path.endsWith(".css")).length,
+      "read no css files at all",
+    ).toBeGreaterThan(5);
+    expect(findTouchTargetOutsideTokens(files)).toEqual([]);
+  });
+});
+
+describe("findVisuallyHiddenOutsideTokens", () => {
+  // **読み上げにだけ届かせる隠し方は 1 つしかない。** `display: none` も
+  // `visibility: hidden` もアクセシビリティツリーから要素を消すので、
+  // 使えるのは「在るまま画面の外へ出す」一式だけである。**その一式は
+  // 1 か所にだけ置く**——散ると、直す日に片方だけが直る。
+
+  it("tokens.css の外で値として書いていたら見つける", () => {
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        {
+          path: "web/src/ui/Keypad/Keypad.module.css",
+          text: "  clip-path: inset(50%);\n",
+        },
+      ]),
+    ).toEqual([
+      {
+        path: "web/src/ui/Keypad/Keypad.module.css",
+        line: 1,
+        text: "clip-path: inset(50%);",
+      },
+    ]);
+  });
+
+  it("tokens.css 自身は通す（そこが置き場である）", () => {
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        { path: "web/src/ui/tokens.css", text: "  clip-path: inset(50%);" },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("註の中の綴りは違反にしない（理由を書いた行を赤くしない）", () => {
+    // 実物にある形。`Keypad.module.css` の `.offDescription` は、なぜ
+    // `display: none` ではないのかを註で説明している。
+    expect(
+      findVisuallyHiddenOutsideTokens([
+        {
+          path: "web/src/ui/Keypad/Keypad.module.css",
+          text: [
+            "/* **読み上げにだけ届く説明**。clip-path: inset(50%) の一式は",
+            "   tokens.css の .visually-hidden が持つ。ここでは書かない。 */",
+            "/* display: none にすると clip-path: inset(50%) の意味が消える。 */",
+          ].join("\n"),
+        },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("いまの web は 1 件も無い（実物で確かめる）", () => {
+    const files = readWebFiles();
+    // **何件見たかを主張する。** `git ls-files` が空を返した日に、
+    // 「0 件」は何も意味しなくなる（4 本目と同じ形）。
+    expect(
+      files.filter((file) => file.path.endsWith(".css")).length,
+      "read no css files at all",
+    ).toBeGreaterThan(5);
+    expect(findVisuallyHiddenOutsideTokens(files)).toEqual([]);
   });
 });

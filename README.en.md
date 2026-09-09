@@ -13,7 +13,7 @@ No installation needed. Add it to your home screen to launch it like an app — 
 
 ## Current version
 
-**0.7.0 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
+**0.8.0 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
 each release is in [Releases](https://github.com/terapyon/CalcArc/releases).
 
 **It is a beta.** Very few people are using it yet. Calculation results come with no
@@ -65,6 +65,11 @@ a deterministic approximation (the screen also carries a standing disclaimer).
 
 - **Completes entirely on-device.** Entered numbers are never sent externally for calculation
   purposes
+- **Calculation history stays on the device.** The Scientific calculator saves up to 50
+  completed calculations (expression, answer, and angle mode) to `localStorage`. Recording
+  can be turned off from the history screen (`Shift` then `hist`; on by default, and turning
+  it off keeps what's already saved). Delete entries from the same screen — one at a time,
+  or all at once
 - **PWA.** Can be added to the home screen and works offline
 - **The calculation core is Rust, and runs as WebAssembly in the browser**
 - **Verified with an independent Python implementation.** Rather than relying only on Rust's

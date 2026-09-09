@@ -18,7 +18,7 @@ import styles from "./ScalePanel.module.css";
  * **`データ量` は Convert の `data-size` と同じ文字列である**(あちらは
  * 単位どうしの換算、こちらは規模の計算。U-2 §2)。**英語のほうが両者を
  * 分ける**——`データ量 Data Scale` と `データ量 Data Size`。 */
-const LABELS: Record<ScaleCategory, { ja: string; en: string }> = {
+export const LABELS: Record<ScaleCategory, { ja: string; en: string }> = {
   "data-scale": { ja: "データ量", en: "Data Scale" },
   llm: { ja: "LLM のメモリ", en: "LLM Memory" },
   transfer: { ja: "データ転送", en: "Data Transfer" },

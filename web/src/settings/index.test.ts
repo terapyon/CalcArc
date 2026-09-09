@@ -98,6 +98,30 @@ describe("readSettings", () => {
     );
     expect(readSettings(storage).finance.withholding).toBe(false);
   });
+
+  it("defaults history to on", () => {
+    expect(defaultSettings().history.enabled).toBe(true);
+  });
+
+  it("keeps history on when the stored section is missing", () => {
+    // **古い保存には history が無い。** 既定は入(設計書 §7)。
+    const storage = fakeStorage(JSON.stringify({ v: 1, scientific: {} }));
+    expect(readSettings(storage).history.enabled).toBe(true);
+  });
+
+  it("takes a stored false", () => {
+    const storage = fakeStorage(
+      JSON.stringify({ v: 1, history: { enabled: false } }),
+    );
+    expect(readSettings(storage).history.enabled).toBe(false);
+  });
+
+  it("falls back to on when the stored value is not a boolean", () => {
+    const storage = fakeStorage(
+      JSON.stringify({ v: 1, history: { enabled: "no" } }),
+    );
+    expect(readSettings(storage).history.enabled).toBe(true);
+  });
 });
 
 describe("writeSettings", () => {
@@ -132,6 +156,7 @@ describe("writeSettings", () => {
       scientific: { angle: "Rad", form: "Polar" },
       dataScale: { dtype: "int8", primary: "binary" },
       finance: { mode: "compound", periodsPerYear: 1, withholding: true },
+      history: { enabled: false },
     };
     writeSettings(storage, next);
     expect(readSettings(storage)).toEqual(next);

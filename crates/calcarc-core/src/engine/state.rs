@@ -14,7 +14,14 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 pub const STATE_SCHEMA: u32 = 6;
 
 /// 入力欄に打ち込める最大文字数。
-const MAX_ENTRY_LEN: usize = 12;
+///
+/// `pub` なのは `calcarc-wasm` の `max_entry_len()` がこれをそのまま
+/// 境界の向こうへ渡すため——履歴の呼び戻し(`web/src/ui/
+/// ScientificPanel.tsx` の `mapAnswerToKeys`)がこの上限を跨ぐ答を
+/// 打ち直そうとすると、engine 側で黙って切り詰められて別の数になる
+/// (Fix round 3 finding)。TypeScript にこの数をハードコードすると、
+/// ここを上げたときに web だけ古い値のまま取り残される。
+pub const MAX_ENTRY_LEN: usize = 12;
 
 /// 指数部に打てる桁数。f64 の定義域(約 1e±308)を打鍵で覆える 3 桁にする
 /// (設計書 §2)。2 桁だと golden の境界ケースを手で再現できない。

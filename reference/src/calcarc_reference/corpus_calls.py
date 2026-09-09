@@ -3369,7 +3369,7 @@ def build_finance_shard(seed: int, count: int) -> dict:
             )
     return {
         "schema": SCHEMA,
-        "generated_by": _provenance(),
+        "generated_by": _finance_provenance(),
         "rejections": rejections,
         "coverage": coverage_payload,
         "cases": entries,
@@ -3425,6 +3425,21 @@ def build_data_scale_shard(seed: int, count: int) -> dict:
 # `generate_corpus` と同じ値を使う。ここで別に定義すると、片方だけ動いたときに
 # シャードの schema が食い違う。
 SCHEMA = 1
+
+
+def _finance_provenance() -> str:
+    """金融のシャードを作ったもの。**「独立実装」だけでは強すぎる**——
+    `loan_ref` と `compound_ref` の公開関数は `独立: 不可能` を宣言しており、
+    丸めの手順そのものを Rust と共有している。`corpus_errors` が公開契約の
+    共有を書いているのと同じ形で、ここにも書く。"""
+    return (
+        f"{_provenance()}。"
+        "ただし丸めの取り決め——毎期の利息を切り捨てること、積立を期末に"
+        "置くこと、税を国税と地方税で別々に掛けること——は Rust と共有して"
+        "いる(loan_ref / compound_ref の docstring が関数ごとに"
+        "「独立: 不可能」と宣言している)。**共有した取り決めの上での"
+        "書き間違いは捕まえるが、取り決めそのものの妥当性は見ていない。**"
+    )
 
 
 def _provenance() -> str:

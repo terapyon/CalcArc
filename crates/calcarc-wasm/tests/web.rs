@@ -796,3 +796,16 @@ fn the_conversion_family_answers_in_two_shapes() {
         assert_eq!(json, r#"{"kind":"error","code":"SyntaxError"}"#);
     }
 }
+
+#[wasm_bindgen_test]
+fn spell_keys_joins_the_way_the_table_says() {
+    let out = calcarc_wasm::spell_keys(vec!["3".into(), "0".into(), "sin".into()]);
+    assert_eq!(out, "30 sin");
+}
+
+#[wasm_bindgen_test]
+fn spell_keys_ignores_tokens_it_does_not_know() {
+    // **境界は例外を投げない。** 知らないトークンは黙って飛ばす。
+    let out = calcarc_wasm::spell_keys(vec!["3".into(), "nonsense".into(), "sin".into()]);
+    assert_eq!(out, "3 sin");
+}

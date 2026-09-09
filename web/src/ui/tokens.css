@@ -8,7 +8,11 @@
 :root {
   color-scheme: light dark;
 
-  /* タッチターゲットとレイアウト(base-spec §43) */
+  /* タッチターゲットとレイアウト(base-spec §43)。
+     **44px を CSS の値として書いてよいのはこの 1 行だけ**である
+     ——`tools/check-boundary.mjs` が見張る。**§43 はこの数字を定めて
+     いない**(求めているのは "Touch target size" までで、44 を選んだのは
+     このプロジェクトである)。経緯は base-spec §43 の 2026-09-04 の追記。 */
   --touch-target-min: 44px;
   --key-gap: 8px;
   --shell-max-width: 480px;
@@ -136,4 +140,29 @@ body {
   font-family: system-ui, sans-serif;
   /* スマートフォンでのダブルタップ拡大を抑える。 */
   touch-action: manipulation;
+}
+
+/* **読み上げにだけ届かせる。** 画面からは外すが、アクセシビリティツリー
+ * には残す綴りである。
+ *
+ * **`display: none` と `visibility: hidden` は使えない**——どちらも
+ * **アクセシビリティツリーからも要素を消す**ので、読み上げに届かなくなる
+ * (`aria-describedby` の参照先なら、参照そのものが空になる)。だから
+ * **在るまま画面の外へ出す**。`Keypad.module.css` の `.offDescription` が
+ * 先にこの綴りを持っていた註を引き継いでいる。
+ *
+ * **置き場がここである理由**: `tokens.css` は `web/src/main.tsx` が 1 度だけ
+ * import する**唯一のグローバル CSS** で、既に `*` と `body` のグローバル
+ * 規則を持っている。**`--touch-target-min` と同じ形**——綴りを 1 か所に
+ * 置き、`tools/check-boundary.mjs` が外での重複を見張る。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

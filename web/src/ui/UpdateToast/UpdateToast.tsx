@@ -53,31 +53,55 @@ export function UpdateToast() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [waiting]);
 
-  if (!waiting) return null;
-
   return (
+    /*
+      **領域は常設である。中身だけが出入りする**(設計書 §6)。
+
+      以前は `if (!waiting) return null` で、更新が来た瞬間に**領域と中身を
+      同時に**挿入していた。**「在る」と「鳴る」は別**である——多くの読み上げは
+      live 領域そのものが挿入された瞬間には鳴らず、**すでに在る領域の中身が
+      変わったとき**に鳴る。鳴らせるには、先に在る必要がある。
+
+      **手本は `Readout.tsx:69-90`**——条件付き return を持たず、空のまま
+      領域を置く(番人は `eng-notation.spec.ts:34,58,88` の `toBeEmpty()`)。
+      **新しい流儀を作らない。**
+
+      **常設にするのは領域だけ。** メッセージとボタンは `waiting` のときだけ
+      描く——**空のときにボタンが在ると、見えないものにフォーカスが入る。**
+
+      **空のときの高さは 0 である。** `.toast` は `position: fixed` なので
+      (`UpdateToast.module.css:2`)中身は通常フローから抜けており、外側の
+      この `<div>` は縦を 1px も食わない。**見立てではなく実測である**
+      ——`viewport-budget.spec.ts` の 11 route × 2 幅が緑であることで確かめた
+      (**13 ではない**。`#scale/llm` と `#convert/currency` は同ファイルに
+      理由つきで巡回の外に置かれている)
+      (Finance の余白は常設化の前後どちらも 16.3125px)。
+    */
     <div
-      className={styles.toast}
       role="status"
       aria-label="更新のお知らせ"
       // 更新は事故ではない。読み上げを割り込ませない(設計書 §2)。
       aria-live="polite"
     >
-      <p className={styles.message}>
-        新しいバージョンがあります。再読み込みすると入力中の内容は消えます。
-      </p>
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.primary}
-          onClick={() => apply?.()}
-        >
-          再読み込み
-        </button>
-        <button type="button" onClick={() => setWaiting(false)}>
-          閉じる
-        </button>
-      </div>
+      {waiting && (
+        <div className={styles.toast}>
+          <p className={styles.message}>
+            新しいバージョンがあります。再読み込みすると入力中の内容は消えます。
+          </p>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={() => apply?.()}
+            >
+              再読み込み
+            </button>
+            <button type="button" onClick={() => setWaiting(false)}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

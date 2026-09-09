@@ -1336,6 +1336,60 @@ const COVERAGE_STATUS_LABELS: Record<string, string> = {
 };
 
 /**
+ * **理由付き除外の表。金融と科学計算が同じものを出す。**
+ *
+ * **写しを作らない。** 片方だけ直したときに、**同じ名前の節が二つの会計を
+ * 持つ**——読み手はどちらを読んでいるのか分からない。見出しの深さだけを
+ * 呼び出し側から受け取る。
+ *
+ * **知らない綴りの判断も行を落とさない**(`(不明)` として出す)。落とすと
+ * 合計と行数が食い違ったまま読まれる。
+ */
+export function renderExclusionTable(
+  exclusions: CoverageExclusion[],
+  heading: string,
+): string[] {
+  if (exclusions.length === 0) {
+    return [];
+  }
+  const byReason = new Map<string, CoverageExclusion[]>();
+  for (const exclusion of exclusions) {
+    byReason.set(exclusion.reason, [
+      ...(byReason.get(exclusion.reason) ?? []),
+      exclusion,
+    ]);
+  }
+  const lines = [
+    heading,
+    "",
+    "| 理由 | 判断 | 対象数 | 単位 | 説明 | 例 |",
+    "|---|---|---:|---|---|---|",
+  ];
+  for (const [reason, list] of [...byReason].sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
+    const disposition = list[0]?.disposition ?? "(不明)";
+    const risky = disposition === "accepted_risk";
+    const examples = list
+      .slice(0, 3)
+      .map((exclusion) => `\`${exclusion.cell_id}\``)
+      .join(" / ");
+    // **理由の綴りだけでは、読み手は何も分からない**——`not_applicable` は
+    // 分類であって説明ではない。**同じ綴りの中に違う説明が入っていたら
+    // 全部出す**(1 つを代表にすると、残りが黙って消える)。
+    const detail = [...new Set(list.map((exclusion) => exclusion.detail))]
+      .map((text) => text.replaceAll("|", "\\|"))
+      .join(" / ");
+    lines.push(
+      `| \`${reason}\` | ${disposition}${risky ? "(**未検証**)" : ""} | ` +
+        `${list.length} | 要求セル | ${detail} | ${examples} |`,
+    );
+  }
+  lines.push("");
+  return lines;
+}
+
+/**
  * 試験空間の網羅(設計書 §12.2・§12.4・§12.5)。
  *
  * **数はシャードが宣言したものをそのまま出す。割合も率も足さない**
@@ -1390,36 +1444,9 @@ export function renderCoverage(breakdown: CallBreakdown): string[] {
     "金融入力全体を数学的に全列挙したことを意味しない。**",
     "",
   );
-  if (coverage.excluded_cells.length > 0) {
-    const byReason = new Map<string, CoverageExclusion[]>();
-    for (const exclusion of coverage.excluded_cells) {
-      byReason.set(exclusion.reason, [
-        ...(byReason.get(exclusion.reason) ?? []),
-        exclusion,
-      ]);
-    }
-    lines.push(
-      "#### 理由付き除外",
-      "",
-      "| 理由 | 判断 | 対象数 | 単位 | 例 |",
-      "|---|---|---:|---|---|",
-    );
-    for (const [reason, list] of [...byReason].sort(([a], [b]) =>
-      a.localeCompare(b),
-    )) {
-      const disposition = list[0]?.disposition ?? "(不明)";
-      const risky = disposition === "accepted_risk";
-      const examples = list
-        .slice(0, 3)
-        .map((exclusion) => `\`${exclusion.cell_id}\``)
-        .join(" / ");
-      lines.push(
-        `| \`${reason}\` | ${disposition}${risky ? "(**未検証**)" : ""} | ` +
-          `${list.length} | 要求セル | ${examples} |`,
-      );
-    }
-    lines.push("");
-  }
+  lines.push(
+    ...renderExclusionTable(coverage.excluded_cells, "#### 理由付き除外"),
+  );
   // **生成候補の棄却は、要求セルの除外とは別の単位である**(設計書 §10.3)。
   // 0 件でも節を出す——**0 は「無かった」であって「測っていない」ではない。**
   const rejections = Object.entries(coverage.generation_rejections).sort(
@@ -1472,8 +1499,12 @@ export function renderScienceCoverage(coverage: Coverage | null): string[] {
     "——たとえば「角度モード × 三角関数」は、Rad を 1 枚が、Deg を 3 枚が運ぶ。",
     "**10 枚すべてが同じ会計を持つので、どれを開いても同じものが読める。**",
     "",
-    "| 対象 | 必須セル | 実行 | 未達 | うち測れない軸 | **データに無い** |",
-    "|---|---:|---:|---:|---:|---:|",
+    "**必須セル = 実行 + 理由付き除外 + 未達。** 3 つを足して必須に届かない行",
+    "には印が付く。",
+    "",
+    "| 対象 | 必須セル | 実行 | 理由付き除外 | 未達 | うち測れない軸 | " +
+      "**データに無い** |",
+    "|---|---:|---:|---:|---:|---:|---:|",
   ];
   let realTotal = 0;
   let unmeasuredTotal = 0;
@@ -1482,10 +1513,20 @@ export function renderScienceCoverage(coverage: Coverage | null): string[] {
     const real = requirement.unmet_cells - unmeasured;
     realTotal += real;
     unmeasuredTotal += unmeasured;
+    // **会計が合わない行に印を付ける**——金融の表と同じ番人である
+    // (`renderCoverage` の `consistent`)。除外の列を出す以上、足し算が
+    // 合わないことも読めなければならない。
+    const consistent =
+      requirement.covered_cells +
+        requirement.excluded_cells +
+        requirement.unmet_cells ===
+      requirement.required_cells;
     lines.push(
       `| \`${requirement.scope}\` | ${requirement.required_cells} | ` +
-        `${requirement.covered_cells} | ${requirement.unmet_cells} | ` +
-        `${unmeasured} | ${real === 0 ? "0" : `**${real}**`} |`,
+        `${requirement.covered_cells} | ${requirement.excluded_cells} | ` +
+        `${requirement.unmet_cells} | ` +
+        `${unmeasured} | ${real === 0 ? "0" : `**${real}**`}` +
+        `${consistent ? "" : "(**合計が合わない**)"} |`,
     );
   }
   lines.push("");
@@ -1504,6 +1545,14 @@ export function renderScienceCoverage(coverage: Coverage | null): string[] {
     }
     lines.push("");
   }
+  // **除外は未達ではない。** 表の「必須 10 / 実行 9 / 未達 0」だけを見た
+  // 読み手は、残る 1 セルの行方を追えない。**理由と判断をここで見せる。**
+  lines.push(
+    ...renderExclusionTable(
+      coverage.excluded_cells,
+      "### 理由付き除外——数えないと決めたセル",
+    ),
+  );
   lines.push(
     `**この経路では読めない軸に起因する未達が ${unmeasuredTotal} 件ある。**`,
     "**「踏んでいない」ではなく「読めない」である**——ケースの中身から水準を",
@@ -2076,6 +2125,18 @@ export function renderReport(
     "独立実装が作っており、**Rust のコードを移植したものではない**。同じ間違いが",
     "両方に入って一致してしまうことがないよう、別の道具・別の手順で計算している。",
     "",
+    // **独立は一様ではない。** 金融の参照実装は、丸めの手順そのものを
+    // Rust と共有していると自分で宣言している(`独立: 不可能`)。上の 3 行
+    // だけを読むと、その領域まで「別の手順」に見える。**弱いところを、
+    // 強いところと同じ顔で出さない。**
+    "**ただし、独立の度合いは領域で違う。** 数学が答を決める領域(三角関数・",
+    "指数・複素数・組合せ)は、手順ごと別にできる。**答が数学ではなく取り決めで",
+    "決まる領域——金融の丸め——では、その取り決めを両方が共有するほかにない。**",
+    "毎期の利息を切り捨てること、積立を期末に置くこと、税を国税と地方税で",
+    "別々に掛けること。**そこで消えるのは書き間違いであって、取り決めそのものが",
+    "妥当かどうかではない。** 参照実装は関数ごとに、自分がどちらの側かを",
+    "`独立:` の 1 行で宣言している(`reference/src/calcarc_reference/`)。",
+    "",
     "読む順は上から: **判定**(結論)→ **期待値そのものは、生成器の出力なのか**",
     "(結論の土台)→ **この検査は壊れたものを見つけられるのか**(結論の裏付け)→",
     "**この結果が主張していないこと**(結論が届かない範囲)。",
@@ -2194,15 +2255,15 @@ export function renderReport(
     "- **コーパスの実物:** リポジトリ直下の `corpus/generated/*.json`。",
     "  コミットされている。1 件ずつが `id` / `mode` / キー列 / 数式 / 期待値を",
     "  平文で持つので、任意の 1 件を取り出して手で電卓に打ち込める。",
-    "- **再現:** `cd web && pnpm heavy`(内部で wasm をビルドし、ハーネスを",
+    "- **再現:** `cd heavy && pnpm heavy`(内部で wasm をビルドし、ハーネスを",
     "  ポート 4180 で立て、実ブラウザで全件を回す)。この報告書",
-    "  `web/heavy-report.md` はその実行が書き出したものである。",
+    "  `heavy/heavy-report.md` はその実行が書き出したものである。",
     // **generate.py ではない。** あちらは testdata/ を作り直す別のスクリプトで、
     // これを回してもコーパスは 1 バイトも変わらない。外から確かめる人が最初に
     // 打つ行なので、ここを間違えると「再現できない」という結論になる。
     "- **期待値の作り直し:** `cd reference && UV_NO_CONFIG=1 uv run python scripts/generate_corpus.py`。",
     "  期待値は Python が独立に計算したもので、Rust の移植ではない。",
-    "- **読む側のコード:** `web/tests/heavy/`。シャードの検証(`corpus.ts`)、",
+    "- **読む側のコード:** `heavy/tests/corpus/`。シャードの検証(`corpus.ts`)、",
     "  比較(`withinTolerance` / `classify`)、この報告書の生成(`report.ts`)。",
   );
 
@@ -2946,7 +3007,7 @@ function renderRunHealth(health: RunHealth): string[] {
   if (health.state === "unreadable") {
     return [
       "  - **走行そのものの失敗——読めていない。**",
-      "    走行の要約(`web/heavy-run.json`)がこの報告書からは読めない。",
+      "    走行の要約(`heavy/heavy-run.json`)がこの報告書からは読めない。",
       "    **この走行が自分の失敗を報告できたかどうかを、この報告書は言えない**",
       "    ——「失敗が無かった」ではない。",
     ];
@@ -2954,7 +3015,7 @@ function renderRunHealth(health: RunHealth): string[] {
   if (health.state === "clean") {
     return [
       "  - **走行そのものの失敗——0 件。**",
-      "    走行の要約(`web/heavy-run.json`)は、集計が 1 枚も書かれなかった",
+      "    走行の要約(`heavy/heavy-run.json`)は、集計が 1 枚も書かれなかった",
       "    走行でも、期待した集計がディスクに届かなかった走行でもない、と",
       "    言っている。**失敗したときにこの報告書が何を書くかは、この走行では",
       "    示されていない。**",
@@ -2962,7 +3023,7 @@ function renderRunHealth(health: RunHealth): string[] {
   }
   return [
     `  - **走行そのものの失敗——${health.failures.length} 件。**`,
-    "    走行の要約(`web/heavy-run.json`)が、この走行自身の失敗を報告して",
+    "    走行の要約(`heavy/heavy-run.json`)が、この走行自身の失敗を報告して",
     "    いる。**上の判定と不一致の件数は、この走行が実際に見た範囲についての",
     "    ものでしかない。**",
     ...health.failures.map((line) => `    - ${line}`),
@@ -3356,7 +3417,7 @@ function renderCaveats(
     ...notationItem,
     "- **UI(この走行では)。** ここが呼ぶのは計算コアの `dispatch` と wasm の",
     "  関数だけで、ボタンもキーボードも通らない。**この走行のブラウザには",
-    "  アプリの画面が存在しない**——`web/vite.heavy.config.ts` は React を",
+    "  アプリの画面が存在しない**——`heavy/vite.harness.config.ts` は React を",
     "  含まず、入口も `heavy-harness.html` の 1 つだけである。",
     "",
     "  **盤面を通る走行は別にある。** `pnpm heavy:ui` が本物のアプリを開き、",
