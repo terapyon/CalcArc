@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIELD_LABELS } from "../Finance/FinancePanel";
+import { DISCLAIMER, FIELD_LABELS } from "../Finance/FinancePanel";
 import {
   COMPOUND_FIELD_SECTION,
   DEPOSIT_FOR_FIELD_SECTION,
@@ -211,8 +211,8 @@ describe("Finance のキー集合", () => {
     // 1 日入っていても、誰も言わなかった。**
     //
     // **1 つだけ守らない。** 1 つだけ名指しすると、名指ししていない残りが
-    // 「守られている」と読まれる。**承認済みは 11 個(キー 10・chip の見出し 1)
-    // で、11 個ともここに置く。**
+    // 「守られている」と読まれる。**承認済みは 12 個(キー 10・chip の見出し 1・
+    // 複利の常設の説明 1)で、12 個ともここに置く。**
     //
     // **期待値はこのテストが自分で持つ**——`finance.ts` から組み立てると、
     // 両方が同時に変わっても緑になる。
@@ -234,6 +234,10 @@ describe("Finance のキー集合", () => {
       // 入力済みの chip の見出し(#13 の裁定、2026-09-10)。**キーではない**が、
       // 「押したキー(方式)と同じ語にする」が裁定の中身なので、同じ表に置く。
       "chip:periods": "方式",
+      // 複利の画面に常に出る 2 行(利用者の裁定「このままで確定」、2026-09-10)。
+      // ローンの 1 文は今回の裁定の対象ではないので入れない。
+      "note:compound":
+        "各期の利息を 1 円未満切り捨て、積立は選んだ位置（期末／期首）に行います。税は国税と地方税を別々に切り捨てます。",
     };
 
     const everyKey = [
@@ -244,9 +248,10 @@ describe("Finance のキー集合", () => {
       PERIODS_SECTION,
       TAX_SECTION,
     ].flatMap((sec) => sec.keys);
-    // chip の見出しは盤面のキーに無いので、`FinancePanel.tsx` の表から引く。
+    // chip の見出しと常設の説明は盤面のキーに無いので、`FinancePanel.tsx` から引く。
     const chips: Record<string, string> = {
       "chip:periods": FIELD_LABELS.periods,
+      "note:compound": DISCLAIMER.compound,
     };
 
     const seen: string[] = [];
@@ -264,6 +269,6 @@ describe("Finance のキー集合", () => {
       seen.push(token);
     }
     // **何件見たかを主張する**——表を 1 行消しても緑にならないように。
-    expect(seen.length).toBe(11);
+    expect(seen.length).toBe(12);
   });
 });
