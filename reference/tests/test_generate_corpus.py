@@ -2569,10 +2569,15 @@ def test_the_start_shard_is_all_compound_and_all_start() -> None:
     assert all(c["id"].startswith("fin-start-") for c in cases)
 
 
-def test_every_start_case_can_tell_start_from_end() -> None:
-    """**積立 0 の期首は期末と同じ答を返す**(`cases.py:754`)——期首の腕を
-    1 度も見ないケースを入れても検出力にならない。正算と必要期間は積立 > 0。
-    必要積立額は積立が答なので、正常ケースの答が 1 円以上であることを見る。"""
+def test_every_start_case_has_a_deposit_for_the_start_arm_to_move() -> None:
+    """**積立 0 の期首は期末と同じ答を返す**(`cases.py:754`)ので、積立を必ず
+    持たせる。正算と必要期間は積立 > 0。必要積立額は積立が答なので、正常
+    ケースの答が 1 円以上であることを見る。
+
+    **これは「全件が期首と期末を区別できる」ではない。** 積立があっても、
+    金利 0 の 39 件・金利 > 0 のペアワイズ行 100 件・`Overflow` の 92 件、
+    計 231 件は期末で解いても同じ答になる(設計書 2026-09-10 §4.3、実測)。
+    区別できる件数は `test_most_start_answers_differ_from_the_end_answer` が数える。"""
     for c in _start_shard()["cases"]:
         if c["op"] in ("compound_grow", "compound_periods_for"):
             assert int(c["input"]["deposit"]) > 0, c["id"]
@@ -2631,3 +2636,10 @@ def test_most_start_answers_differ_from_the_end_answer() -> None:
             differ += 1
     assert normal > 0
     assert differ >= 969
+
+
+def test_the_start_arm_has_no_valley_with_a_one_yen_deposit() -> None:
+    """期首のシャードに谷の層が無い理由(設計書 §4.3 の実測)を、赤くなる形で見張る。"""
+    num, den = compound_ref.rate_fraction("0.0001", 1)
+    with pytest.raises(RuntimeError, match="谷が見つからない"):
+        corpus_calls._find_non_monotone_net_valley(1_000_000, 1, num, den, 200, compound_ref.START)

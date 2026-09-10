@@ -3623,15 +3623,26 @@ def _compound_start_params(rng: random.Random, op: str) -> dict:
 
 
 def _finance_start_provenance() -> str:
-    """期首のシャードを作ったもの。**期首の取り決めも Rust と共有している。**"""
+    """期首のシャードを作ったもの。**期首の取り決めも Rust と共有している。**
+
+    **「全部が同じ手順」とは書かない**(2026-09-11 の見直し)。同じ手順なのは
+    積立を期首に置く 1 期ごとのループ(`grow` / `reached`)と、その上の
+    `periods_for` の前進走査までで、`deposit_for` の探索は別手順である
+    (`compound_ref` の docstring の `独立:` の宣言どおり)。"""
     return (
         f"{_provenance()}。"
         "ただし丸めの取り決め——毎期の利息を切り捨てること、積立を期首に"
-        "置くときはその期の利息を積立額にも付けること、税を国税と地方税で別々に"
-        "掛けること——は Rust と共有している(compound_ref の docstring が関数ごとに"
-        "「独立: 不可能」と宣言している)。**このシャードが確かめるのは、Rust と"
-        "Python の期首の腕が同じ手順で同じ答を出すことである。** 別手順の検算は"
-        "`compound_ref.closed_form`(独立: 別手順、期首を持つ)が参照側のテストで持つ。"
+        "置くときはその期の利息を積立額にも付けること、税を国税と地方税で"
+        "別々に掛けること——は Rust と共有している。"
+        "**積立を期首に置く 1 期ごとのループは Rust と同じ手順である**"
+        "(compound_ref の `grow` / `reached`、独立: 不可能)。"
+        "したがって compound_grow と compound_periods_for は、同じ手順の"
+        "実装どうしを比べている(`periods_for` も Rust と同じ前進走査で、"
+        "独立: 不可能)。compound_deposit_for の探索は別手順である"
+        "(`deposit_for`、独立: 別手順——Rust は二分探索で挟み、Python は"
+        "閉形式の Decimal の種から歩く)。ループそのものを別手順で検算するのは "
+        "`compound_ref.closed_form`(独立: 別手順、期首を持つ)で、参照側の"
+        "テストが持つ。"
     )
 
 

@@ -403,15 +403,35 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
 - **試験空間モデルは `finance-start-v1` を新しく名乗る。** 因子表は
   `PAIRWISE_COMPOUND_*_FACTORS` を**参照し、写さない**（`corpus_calls.py:3015` の
   「ここに水準を書き写さない」）。`finance-v1` の意味は変えない。
-- **件数（実測前）。** まず `finance-000.json` の複利の比率（437 / 431 / 315＝1,183）に
-  揃え、**被覆の門が要求するセル数で下限を決める。**
+- **件数（実測 2026-09-11、Task 8）。** compound_grow 443 / compound_deposit_for 421 /
+  compound_periods_for 336 ＝ **1,200**。出発点は `finance-000.json` の複利の件数
+  （437 / 431 / 315＝1,183）に揃えた 1,200 で、**被覆の門はこの 1,200 で通った**
+  （未達 0。compound_deposit_for の 8 セルは `source_overflow` の理由付き除外）。
+  **門が通る最小の件数（下限）は探していない**——1,200 は下限ではない。
 - **公開する参照関数は増えない。** 期待値は既存の `compound_ref.grow` /
   `deposit_for` / `periods_for`（`timing` 引数あり）から取る。CONTRIBUTING の
   「独立」の宣言は既存のものがそのまま効く——**`grow` は `独立: 不可能`（Rust と
-  同じ 1 期ごとの floor のループ）**である。したがって**このシャードが確かめるのは
-  「Rust の期首の腕と Python の期首の腕が同じ手順で同じ答を出すか」**であり、
-  **別手順の検算は `closed_form`（`独立: 別手順`、期首を持つ）が参照側の
-  テストで持つ。** そう読めるように、シャードの `generated_by` の説明に書く。
+  同じ 1 期ごとの floor のループ）**である。
+  【訂正 2026-09-11、Task 8 の見直し】ここは以前「このシャードが確かめるのは、
+  Rust の期首の腕と Python の期首の腕が同じ手順で同じ答を出すか」と書いていたが、
+  **compound_deposit_for（1,200 件のうち 421 件）については偽だった。** 正しくは:
+  **積立を期首に置く 1 期ごとのループは同じ手順**（`grow` / `reached`、`独立: 不可能`）
+  なので、**compound_grow と compound_periods_for は同じ手順の実装どうしを比べている**
+  （`periods_for` も Rust と同じ前進走査で `独立: 不可能`）。**compound_deposit_for の
+  探索は別手順である**（`deposit_for` は `独立: 別手順`——Rust は二分探索で挟み、
+  Python は閉形式の Decimal の種から歩く）。**ループそのものの別手順の検算は
+  `closed_form`（`独立: 別手順`、期首を持つ）が参照側のテストで持つ。** そう読める
+  ように、シャードの `generated_by` の説明に書く。
+- **期末で解き直しても答が動かないケース（実測 2026-09-11、Task 8 の見直し）。**
+  コミットした 1,200 件を `timing: "end"` にして `compound_ref.compute` で解き直すと、
+  **正常 1,108 件のうち 969 件は答が変わる**（`differ >= 969` を参照側のテストが固定）。
+  **変わらないのは 231 件**: 正常のうち金利 0 が 39 件（grow 16・deposit_for 19・
+  periods_for 4）、金利 > 0 が 100 件（**すべて `start_pairwise` の行**。deposit_for 76・
+  grow 15・periods_for 9）、それに `Overflow` の 92 件（すべて compound_grow）。
+  **この 231 件は残す**——ペアワイズと金利 0 のケースは被覆のセルを埋め、エラーの
+  ケースは期首の経路でも Rust と Python が `Overflow` で一致することを確かめる。
+  **期首の腕の検出力を持つのは 969 件のほうである。** 積立 > 0 を見るテストの名前も、
+  「全件が期首と期末を区別できる」とは言わない形に直した。
 
 ### §4.4 harness と境界証明書
 
@@ -484,6 +504,10 @@ compound_grow 437 / compound_deposit_for 431 / compound_periods_for 315 / loan_*
 finance-start-000.json (calls)   すべて複利・すべて期首・積立 > 0
   compound_grow / compound_deposit_for / compound_periods_for   （loan_* は 0 件）
 ```
+
+**率の分母に注意（実測 2026-09-11）。** このシャードの分母 1,200 には、期首の腕を
+期末の腕にする変異（§4.5 の `compound-start-deposit-at-end`）では**答が動かない 231 件**
+（正常 139 件＋`Overflow` 92 件、§4.3）が入っている。
 
 報告書の検出の表では、**変異ごとの「赤くなったシャード」欄に新しいシャードが
 並ぶ**。読むときの注意は 09-10 と同じ——**太字の「件数」は捕まえた数の合計で、
