@@ -11,7 +11,7 @@
 
 import { execFileSync } from "node:child_process";
 
-/** 終わっていて、成功ではない結論。**1 つでもあれば証拠を書かない。** */
+/** 終わっていて、成功ではない結論。**1 つでもあれば証拠を書かない**(例外は下の 1 つ)。 */
 const BAD_CONCLUSIONS = new Set([
   "failure",
   "cancelled",
@@ -32,6 +32,35 @@ export const HEAVY_BODY_JOB = "Heavy corpus / Corpus vs reference";
 
 /** 重量級が走ったなら在るはずの添付(B-2)。 */
 export const HEAVY_REPORT = "heavy-report.md";
+
+/**
+ * **本番展開のあとでマニュアルの PDF を作るジョブ**(マニュアルの設計書
+ * `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、裁定 §9 #3)。
+ *
+ * **`release.yml` 自身のジョブなので、名前は `name:` そのままで出る。**
+ * `HEAVY_BODY_JOB` のような「呼び出し元 / 呼ばれた側」の綴りにはならない
+ * ——呼ばれたワークフローのジョブだけがその形になる(同じ走行で `ci.yml` の
+ * 同名のジョブは `CI / Manuals` と出る。**それは例外に入らない**)。
+ * `release.yml` の `name:` との一致は `tools/tests/release-workflow.test.ts` が固定する。
+ */
+export const MANUALS_JOB = "Manuals";
+
+/**
+ * **落ちていても証拠を書いてよいジョブ。ちょうど 1 つである。**
+ *
+ * 裁定は「マニュアルの失敗で本番を止めない」で、`Manuals` は `Deploy` の
+ * **あと**で走る。落ちたときに証拠ごと落とすと、**本番へ出たのに証拠 3 点が
+ * 付かない**——止めなかった意味が裏返る。代わりに「作れなかった」と書く。
+ *
+ * **ここに名前を足さない。** 足すたびに「緑でない走行から証拠は作れない」が
+ * 狭くなり、検査の赤が証拠の上で黙る。1 つであることは
+ * `tools/tests/release-workflow.test.ts` が固定する——足すなら、その行も直す
+ * ことになる(差分に出る)。
+ */
+export const MAY_FAIL = Object.freeze([MANUALS_JOB]);
+
+/** マニュアルの PDF の添付(`calcarc-<版>-<冊>.pdf`、`web/scripts/manual/markdown.ts` の `pdfName`)。 */
+const MANUAL_PDF = /\.pdf$/;
 
 /** 終わっていて成功でもない結論。**成功にも進行中にも数えない**(B-3)。 */
 const NOT_RUN_CONCLUSIONS = new Set(["skipped", "neutral"]);
@@ -121,9 +150,12 @@ export function renderEvidence({
     );
   }
   const bad = jobs.filter((job) => BAD_CONCLUSIONS.has(job.conclusion));
-  if (bad.length > 0) {
+  // **名前の完全一致で 1 つだけ外す。** `CI / Manuals` は普段の CI のジョブで、
+  // 本番の前に居る——あれが落ちたなら本番へは出ていないはずで、証拠は書かない。
+  const fatal = bad.filter((job) => !MAY_FAIL.includes(job.name));
+  if (fatal.length > 0) {
     throw new Error(
-      `緑でない走行から証拠は作れない: ${bad
+      `緑でない走行から証拠は作れない: ${fatal
         .map((job) => `${job.name} = ${job.conclusion}`)
         .join(", ")}`,
     );
@@ -131,10 +163,13 @@ export function renderEvidence({
   const finished = jobs.filter((job) => job.conclusion === "success");
   // **3 つに分ける**(B-3)。`skipped` と `neutral` は「走らなかった」ので、
   // 成功でも進行中でもない——「進行中」と書けば、そのうち終わるという嘘になる。
+  // **落ちたマニュアルも進行中に数えない**——終わっている。
   const notRun = jobs.filter((job) => NOT_RUN_CONCLUSIONS.has(job.conclusion));
   const running = jobs.filter(
     (job) =>
-      job.conclusion !== "success" && !NOT_RUN_CONCLUSIONS.has(job.conclusion),
+      job.conclusion !== "success" &&
+      !NOT_RUN_CONCLUSIONS.has(job.conclusion) &&
+      !BAD_CONCLUSIONS.has(job.conclusion),
   );
   const runUrl = `https://github.com/${repo}/actions/runs/${runId}`;
   const lines = [
@@ -157,7 +192,9 @@ export function renderEvidence({
         ? "成功"
         : NOT_RUN_CONCLUSIONS.has(job.conclusion)
           ? `飛ばした(\`${job.conclusion}\`)`
-          : "進行中";
+          : BAD_CONCLUSIONS.has(job.conclusion)
+            ? `落ちた(\`${job.conclusion}\`)`
+            : "進行中";
     lines.push(`| ${job.name} | ${verdict} | ${duration(job)} |`);
   }
   // **「自分自身である」と断定してよいのは、進行中が本当に自分だけのとき。**
@@ -201,6 +238,38 @@ export function renderEvidence({
       "走行そのものは通っているが、**この Release からは中身を読めない。**",
       "",
     );
+  }
+  // **マニュアルは 3 通りに言い分ける**(マニュアルの設計書 §5)。落ちたことを
+  // 黙って欠けさせない——**PDF が付いていない Release を、付け忘れと読ませない。**
+  const manuals = jobs.find((job) => job.name === MANUALS_JOB);
+  const pdfs = attachments.filter((name) => MANUAL_PDF.test(name));
+  if (manuals !== undefined && BAD_CONCLUSIONS.has(manuals.conclusion)) {
+    lines.push(
+      `**マニュアル（PDF）は作れなかった**(\`${MANUALS_JOB}\` = \`${manuals.conclusion}\`)。` +
+        "この Release に PDF は付いていない。",
+      `**本番へ配った物には影響しない**——\`${MANUALS_JOB}\` は本番展開のあとで走り、`,
+      "配信を止めない(マニュアルの設計書 §5、裁定 §9 #3)。",
+      "",
+    );
+  } else if (manuals?.conclusion === "success") {
+    if (pdfs.length === 0) {
+      // 重量級の報告書と同じ形(B-2)。作れたのに付いていないなら、
+      // 「マニュアルを作った」の裏づけがこの Release に残っていない。
+      lines.push(
+        "**マニュアル（PDF）は作ったが、添付されていない。**",
+        "走行そのものは通っているが、**この Release からは PDF を読めない。**",
+        "",
+      );
+    } else {
+      lines.push(
+        `**マニュアル（PDF）: ${pdfs.length} 冊**——${pdfs
+          .map((name) => `\`${name}\``)
+          .join("・")}`,
+        "",
+      );
+    }
+  } else {
+    lines.push("**マニュアル（PDF）はこの走行で作っていない。**", "");
   }
   if (attachments.length > 0) {
     lines.push("## 添付", "");

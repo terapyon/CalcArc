@@ -213,16 +213,86 @@ export interface RenderOptions {
   lang: "ja" | "en";
 }
 
-/** PDF のための頁の見た目。**書体は Noto Sans JP だけを名指しする**（設計書 §4）。 */
+/** 固定した書体 1 つ。`package` は `web` の `devDependencies` に厳密な版で在る。 */
+export interface PinnedFont {
+  package: string;
+  /** その包みの CSS が名乗る `font-family`。 */
+  family: string;
+}
+
+/**
+ * **PDF と写真の文字を描いてよい書体の全部**（設計書 §4）。並びが優先順で、
+ * **和文の書体を先頭に置き、それが持たない字だけを後ろが描く。**
+ *
+ * **Noto Sans JP だけでは足りなかった**（2026-09-11、3 冊の全 19,514 字を 1 字ずつ
+ * CDP の `CSS.getPlatformFontsForNode` で測った）。端末の書体が描いていたのは 4 字
+ * ——`ʸ`（U+02B8）・`ˣ`（U+02E3）・`π`（U+03C0）を `Arimo`、`▸`（U+25B8）を
+ * `DejaVu Sans`。どれも画面のキー名（`【xʸ】`・`【eˣ】`・`【π】`・`【▸∠】`）で、
+ * **綴りを変えられない。** 手元の端末の書体に落ちていただけで、runner に何が
+ * 在るかは分からない。
+ *
+ * - `Arimo` が `ʸ` `ˣ` `π` を描く（`Noto Sans` も描くが包みが 3 倍大きい。
+ *   `Noto Sans Symbols 2` は範囲を名乗るが字を持たず、端末の書体へ落ちた）
+ * - `Noto Sans Symbols 2` が `▸` を描く（`Arimo` は持たない）
+ *
+ * **ここに無い書体が 1 字でも描いたら、PDF を作らずに落ちる**（`build.mjs`）。
+ * 書体を足すなら、測ってから足す。
+ */
+export const PINNED_FONTS: readonly PinnedFont[] = [
+  { package: "@fontsource/noto-sans-jp", family: "Noto Sans JP" },
+  { package: "@fontsource/arimo", family: "Arimo" },
+  { package: "@fontsource/noto-sans-symbols-2", family: "Noto Sans Symbols 2" },
+];
+
+/** `font-family` に書く並び。 */
+const FAMILIES = PINNED_FONTS.map((font) => `"${font.family}"`).join(", ");
+
+/**
+ * CDP（`CSS.getPlatformFontsForNode`）が返す、要素の字を描いた書体 1 つ。
+ * 綴りは Chrome DevTools Protocol の `CSS.PlatformFontUsage` から写している。
+ */
+export interface PlatformFont {
+  familyName: string;
+  postScriptName?: string;
+  /** `@font-face` で読み込んだ書体なら true、端末の書体なら false。 */
+  isCustomFont: boolean;
+  glyphCount: number;
+}
+
+/**
+ * **端末の書体が描いた字数**。0 でなければ、その要素は固定した書体の外で描かれた。
+ *
+ * **`isCustomFont` だけで分けてよいのは、PDF を刷る頁が固定した書体しか
+ * 読めないからである**——`build.mjs` は `PINNED_FONTS` の包みのファイルだけを
+ * 配り、それ以外の通信はすべて塞ぐ。`@font-face` で読み込めた書体は、ここに
+ * 在るものだけである。
+ */
+export function unpinnedGlyphs(fonts: readonly PlatformFont[]): number {
+  return fonts
+    .filter((font) => !font.isCustomFont)
+    .reduce((sum, font) => sum + font.glyphCount, 0);
+}
+
+/** `Arimo(system)×1, Noto Sans JP(web)×3` の形。エラーの文言に使う。 */
+export function describeFonts(fonts: readonly PlatformFont[]): string {
+  return fonts
+    .map(
+      (font) =>
+        `${font.familyName}(${font.isCustomFont ? "web" : "system"})×${font.glyphCount}`,
+    )
+    .join(", ");
+}
+
+/** PDF のための頁の見た目。**書体は固定した書体だけを名指しする**（設計書 §4）。 */
 const PAGE_CSS = `
-html { font-family: "Noto Sans JP", sans-serif; font-size: 10.5pt; line-height: 1.7; color: #1c1c1e; }
+html { font-family: ${FAMILIES}, sans-serif; font-size: 10.5pt; line-height: 1.7; color: #1c1c1e; }
 body { margin: 0; }
 h1 { font-size: 20pt; margin: 0 0 12pt; }
 h2 { font-size: 14pt; margin: 18pt 0 6pt; border-bottom: 1px solid #c7c7cc; padding-bottom: 2pt; break-after: avoid; }
 h3 { font-size: 12pt; margin: 12pt 0 4pt; break-after: avoid; }
 table { border-collapse: collapse; margin: 6pt 0; }
 th, td { border: 1px solid #c7c7cc; padding: 3pt 6pt; text-align: left; vertical-align: top; }
-code { font-family: "Noto Sans JP", monospace; background: #f2f2f7; padding: 0 2pt; }
+code { font-family: ${FAMILIES}, monospace; background: #f2f2f7; padding: 0 2pt; }
 figure.shot { margin: 8pt 0; text-align: center; break-inside: avoid; }
 figure.shot img { max-width: 100%; max-height: 120mm; border: 1px solid #c7c7cc; }
 figure.shot figcaption { font-size: 9pt; color: #636366; }

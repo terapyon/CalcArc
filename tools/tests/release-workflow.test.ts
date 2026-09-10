@@ -1,6 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { HEAVY_BODY_JOB, HEAVY_REPORT } from "../release-evidence.mjs";
+import {
+  HEAVY_BODY_JOB,
+  HEAVY_REPORT,
+  MANUALS_JOB,
+  MAY_FAIL,
+} from "../release-evidence.mjs";
 
 // **`release.yml` を読むテストは 0 本だった**(2026-08-26 の指摘)。
 // 証拠の読み手が持つ定数は、**書き手（ワークフローのジョブ名・添付名）**と
@@ -651,5 +656,150 @@ describe("すべてのジョブに時間制限が在る（2026-09-05）", () => 
       new URL("../../.github/workflows", import.meta.url),
     ).sort();
     expect(found).toEqual([...TIMED, ...Object.keys(UNTIMED)].sort());
+  });
+
+  it("マニュアルの 2 つのジョブも、この番人に見られている", () => {
+    // **新しいジョブは上の番人が自動で拾う**(`runs-on` を持つジョブは全部見る)。
+    // ここは「拾っている」ことを名指しで確かめる——`jobsOf` の綴りが変わって
+    // 拾わなくなった日に、上の「[] と一致」は黙って緑になる。
+    for (const file of ["ci.yml", "release.yml"]) {
+      const manuals = jobsOf(read(file)).find((job) => job.id === "manuals");
+      expect(manuals, `${file} の manuals`).toBeDefined();
+      expect(manuals?.runsOn, `${file} の manuals`).toBe(true);
+      expect(manuals?.timeout, `${file} の manuals`).not.toBe(null);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// **マニュアルは本番のあとで作り、落ちても証拠を書く**(2026-09-11、
+// マニュアルの設計書 `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、
+// 裁定 §9 #3「本番は止めない」)。
+//
+//   … → Deploy ─┬→ Manuals ─┐
+//               └───────────┴→ Evidence and GitHub Release
+//
+// **この形は条件式と `needs` の組み合わせだけが持っている。** 1 つ外れても
+// ワークフローはそのまま動き、**壊れ方は Manuals が落ちた日にしか見えない**
+// ——既定の `success()` に戻れば証拠ごと付かず、`always()` にすれば止めた走行でも
+// 証拠を書き足す。ここで字面を固定する。
+// ---------------------------------------------------------------------------
+
+/** `jobs:` の下の 1 ジョブの行。**コメントと空行は落とす。** */
+const jobBlock = (yaml: string, id: string): string[] => {
+  const body = yaml.split(/^jobs:$/m)[1] ?? "";
+  const lines: string[] = [];
+  let inside = false;
+  for (const line of body.split("\n")) {
+    const head = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (head?.[1] !== undefined) {
+      inside = head[1] === id;
+      continue;
+    }
+    if (!inside || line.trim() === "" || /^\s*#/.test(line)) continue;
+    lines.push(line);
+  }
+  return lines;
+};
+
+/** ジョブの直下の鍵(`needs:` や `if:`)の値。 */
+const jobKey = (lines: string[], key: string) =>
+  lines
+    .map((line) => line.match(new RegExp(`^ {4}${key}:\\s*(.+?)\\s*$`))?.[1])
+    .find((value) => value !== undefined);
+
+/** `needs: a` と `needs: [a, b]` を、並べ替えた名前の配列にする。 */
+const needsOf = (lines: string[]) =>
+  (jobKey(lines, "needs") ?? "")
+    .replace(/^\[|\]$/g, "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "")
+    .sort();
+
+/** ジョブの段を、`- ` で始まる行ごとの塊にする。 */
+const stepChunks = (lines: string[]) =>
+  lines
+    .join("\n")
+    .split(/\n(?= {6}- )/)
+    .filter((chunk) => /^ {6}- /.test(chunk));
+
+describe("マニュアルは本番のあとで作り、落ちても証拠を書く（門 4）", () => {
+  const release = read("release.yml");
+  const manuals = jobBlock(release, "manuals");
+  const evidence = jobBlock(release, "evidence");
+
+  it("読み手の定数 MANUALS_JOB が、release.yml の manuals ジョブの名前である", () => {
+    // **release.yml 自身のジョブなので、名前はそのまま出る**(呼ばれた側の
+    // `A / B` の形ではない)。片方だけ改名すると、落ちたマニュアルが
+    // 例外に当たらず証拠ごと落ちる。
+    expect(jobKey(manuals, "name")).toBe(MANUALS_JOB);
+    expect(
+      jobNames(release).filter((name) => name === MANUALS_JOB),
+    ).toHaveLength(1);
+  });
+
+  it("証拠が許す落ちたジョブは、ちょうど Manuals の 1 つである", () => {
+    // **足すたびに「緑でない走行から証拠は作れない」が狭くなる。** 足すなら
+    // この行も直すことになる——差分に出る。
+    expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
+  });
+
+  it("Manuals は Deploy のあとで走る", () => {
+    // 本番の前に置けば、マニュアルの失敗で本番が止まる(裁定は「止めない」)。
+    expect(needsOf(manuals)).toEqual(["deploy"]);
+  });
+
+  it("Evidence は Deploy と Manuals の両方を待つ", () => {
+    // Manuals を待たないと、証拠は Manuals の結論を知らずに書かれる。
+    expect(needsOf(evidence)).toEqual(["deploy", "manuals"]);
+  });
+
+  it("Evidence の条件は、止められていないことと Deploy の成功だけである", () => {
+    // - 条件が無い(`success()`)と、Manuals が落ちた日に証拠ごと飛ぶ
+    // - `always()` だと、手で止めた走行でも証拠を書き足す
+    // - Deploy を名指さないと、本番へ出なかった走行でも証拠のジョブが走って赤くなる
+    expect(jobKey(evidence, "if")).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions の式の字面そのものと比べる
+      "${{ !cancelled() && needs.deploy.result == 'success' }}",
+    );
+  });
+
+  it("PDF は Manuals が成功したときだけ取り、取れなさを流さない", () => {
+    const fetch = stepChunks(evidence).filter((chunk) =>
+      /^ {10}name:\s*manuals\s*$/m.test(chunk),
+    );
+    expect(fetch).toHaveLength(1);
+    expect(fetch[0]).toContain("actions/download-artifact@");
+    expect(fetch[0]).toMatch(
+      /^ {8}if:\s*\$\{\{ needs\.manuals\.result == 'success' \}\}\s*$/m,
+    );
+    // **取った PDF は evidence/ に入り、`ls evidence` で添付と証拠の両方に載る。**
+    expect(fetch[0]).toMatch(/^ {10}path:\s*evidence\/\s*$/m);
+    // 既存の 2 つの取得にも、この取得にも付けない(B-2 と同じ理由)。
+    expect(evidence.join("\n")).not.toContain("continue-on-error");
+  });
+
+  it("Manuals が上げる名前と、Evidence が取る名前が一致する", () => {
+    const upload = stepChunks(manuals).find((chunk) =>
+      chunk.includes("actions/upload-artifact@"),
+    );
+    expect(upload).toBeDefined();
+    expect(upload).toMatch(/^ {10}name:\s*manuals\s*$/m);
+    expect(upload).toMatch(/^ {10}path:\s*web\/manual-dist\/\*\.pdf\s*$/m);
+    // 作れたのに PDF が無いことを警告で流さない(B-2 と同じ)。
+    expect(upload).toMatch(/^ {10}if-no-files-found:\s*error\s*$/m);
+  });
+
+  it("リリースの Manuals は、普段の CI の Manuals と同じ段で作る", () => {
+    // **普段の CI で作るのは、リリースで初めて壊れていると分かるのを避けるため**
+    // である。段がずれると、CI が緑でもリリースの手順は確かめていない。
+    // 違ってよいのは、あとに足した「上げる」1 段だけ。
+    const ci = stepsOf(read("ci.yml"), "manuals");
+    const rel = stepsOf(release, "manuals");
+    const keep = rel.indexOf("- name: Keep the manuals");
+    expect(keep).toBeGreaterThan(0);
+    expect(rel.slice(0, keep)).toEqual(ci);
+    expect(ci).toContain("- run: pnpm manuals");
   });
 });

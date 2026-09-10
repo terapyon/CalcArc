@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import config from "../../web/playwright.config.ts";
+import shotsConfig from "../../web/playwright.shots.config.ts";
 
 // **1.0 の門 1 —— WebKit を CI に足す**の番人(2026-09-10)。
 // 設計は `docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md`
@@ -193,6 +194,44 @@ describe("CI が WebKit を入れて回す（門 1）", () => {
     expect(chromium).toBeDefined();
     expect(webkit).toBeDefined();
     expect(webkit).not.toBe(chromium);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// **`Manuals` のジョブは `pnpm manuals` 越しに `playwright test` を回す**
+// (1.0 の門 4、マニュアルの設計書 §5)。
+//
+// 上の「`playwright test` はすべて `--project` を名指す」は **ci.yml の字面**
+// しか見ない。`Manuals` は `pnpm manuals` を呼び、その中の `pnpm shots` が
+// `playwright test -c playwright.shots.config.ts` を回す——**字面に出ないので、
+// 上の番人はこのジョブを見ない。** 名指しを求めた理由は「設定にある project が
+// 全部そのジョブで回る」ことで、**project を持たない設定にはそれが起きない。**
+// 番人の意図(Chromium しか入れないジョブで WebKit を回さない)を、
+// こちらは設定の側で固定する。
+// ---------------------------------------------------------------------------
+
+describe("`Manuals` が回す撮影は Chromium だけ（門 4）", () => {
+  it("撮影の設定は project を持たず、Chromium で撮る", () => {
+    expect(shotsConfig.projects).toBeUndefined();
+    expect(shotsConfig.use?.browserName).toBe("chromium");
+    expect(shotsConfig.testDir).toBe("./tests/shots");
+  });
+
+  it("`pnpm manuals` は撮影の設定を通って、マニュアルの写真だけを撮る", () => {
+    expect(webPackage.scripts.shots).toBe(
+      "playwright test -c playwright.shots.config.ts",
+    );
+    expect(webPackage.scripts.manuals).toBe(
+      "pnpm shots --grep @manual && pnpm manual --shots manual-shots",
+    );
+  });
+
+  it("`Manuals` は Chromium を入れて `pnpm manuals` を回す", () => {
+    const runs = runsOf(jobNamed("Manuals"));
+    expect(runs).toEqual([
+      "pnpm exec playwright install --with-deps chromium",
+      "pnpm manuals",
+    ]);
   });
 });
 

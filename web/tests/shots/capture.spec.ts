@@ -22,8 +22,12 @@ import { SHOTS } from "./shots";
  * **`fixtures` の `test` を使う**——レートの取得先を塞いだ既定に乗る。
  * マニュアルの写真で `#convert/currency` を撮る日に、本物へ出ない。
  */
+//
+// **`use` を札(`@readme` / `@manual`)にする。** CI とリリースの `pnpm manuals` は
+// `--grep @manual` でマニュアルの写真だけを撮る——README の写真は追跡する
+// ファイルに書くので、runner で撮り直しても捨てるだけである。
 for (const shot of SHOTS) {
-  test(shot.name, async ({ page }) => {
+  test(shot.name, { tag: `@${shot.use}` }, async ({ page }) => {
     await openShot(page, shot);
     await applyPinnedFont(page);
     await provePinnedFont(page);

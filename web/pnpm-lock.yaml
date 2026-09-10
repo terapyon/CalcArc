@@ -21,7 +21,13 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.8
         version: 2.5.8
+      '@fontsource/arimo':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/noto-sans-jp':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/noto-sans-symbols-2':
         specifier: 5.3.0
         version: 5.3.0
       '@playwright/test':
@@ -847,8 +853,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@fontsource/arimo@5.3.0':
+    resolution: {integrity: sha512-nhxZ2sTVZYX8DJBgLuyX360B5vE4mxqpmjlKTRfucIqfcWRVx9vOYzWBc1IgEX0ist48VMC10PRKbFyH+4QFvQ==}
+
   '@fontsource/noto-sans-jp@5.3.0':
     resolution: {integrity: sha512-OZbBzZ8LrFRs2RFT2Cc0HUV2C2ZeSfyEXhDJWR0EZuZaraJfRubpvrFmUnCljuBDEkw8Vn6CE/+nf9dj9b+0lg==}
+
+  '@fontsource/noto-sans-symbols-2@5.3.0':
+    resolution: {integrity: sha512-hFnEnIXOIgLLJ61SO9icRXKoS+LSWoq7ZqKJQ/NaQR7ptdC6+7yW4ci6EuXgsS1S9JmWpciX6w0AFZkU1DKn1A==}
 
   '@isaacs/cliui@9.0.0':
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
@@ -3383,7 +3395,11 @@ snapshots:
   '@esbuild/win32-x64@0.25.12':
     optional: true
 
+  '@fontsource/arimo@5.3.0': {}
+
   '@fontsource/noto-sans-jp@5.3.0': {}
+
+  '@fontsource/noto-sans-symbols-2@5.3.0': {}
 
   '@isaacs/cliui@9.0.0': {}
 

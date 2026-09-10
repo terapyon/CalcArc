@@ -28,19 +28,33 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { chromium } from "@playwright/test";
 import {
+  describeFonts,
   fontFaceCss,
   manualLang,
   manualTitle,
+  PINNED_FONTS,
   pdfName,
   renderManual,
+  unpinnedGlyphs,
 } from "./markdown.ts";
 
 const WEB = resolve(import.meta.dirname, "..", "..");
 const ROOT = resolve(WEB, "..");
 const ORIGIN = "https://calcarc-manual.invalid";
 
-/** 書体の太さ。本文は 400、`**強調**` と見出しは 700。 */
+/**
+ * 書体の太さ。本文は 400、`**強調**` と見出しは 700。**包みに無い太さは読まない**
+ * ——`Noto Sans Symbols 2` は 400 しか持たず、太字はブラウザが合成する
+ * （合成しても描くのはその書体である）。
+ */
 const WEIGHTS = ["400", "700"];
+
+/**
+ * 1 冊で書体を確かめた要素の数の下限。**何も数えずに「端末の書体 0 字」で
+ * 通さない。** 2026-09-11 の 3 冊で数えた実数は `detail.ja.md` 468・
+ * `quick.en.md` 124・`quick.ja.md` 90——最少の 90 より下に置く。
+ */
+const MIN_CHECKED = 50;
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -95,15 +109,41 @@ const shots = new Map(
         ]),
 );
 
-const fontDir = fileURLToPath(
-  new URL(".", import.meta.resolve("@fontsource/noto-sans-jp/400.css")),
-);
-const fontCss = WEIGHTS.map((weight) =>
-  fontFaceCss(
-    readFileSync(join(fontDir, `${weight}.css`), "utf8"),
-    `${ORIGIN}/fonts`,
-  ),
-).join("\n");
+/**
+ * 書体のファイル名 → 手元のパス。**固定した書体（`PINNED_FONTS`）の包みの
+ * ファイルだけを配る**——`markdown.ts` の `unpinnedGlyphs` が「読み込んだ
+ * 書体 = 固定した書体」と数えてよいのは、ここで配る物がそれだけだからである。
+ */
+const fontFiles = new Map();
+const fontCss = [];
+for (const font of PINNED_FONTS) {
+  const dir = fileURLToPath(
+    new URL(".", import.meta.resolve(`${font.package}/400.css`)),
+  );
+  for (const name of readdirSync(join(dir, "files"))) {
+    // **名前が重なったら落ちる。** 後から読んだ包みが前の書体を黙って差し替える。
+    if (fontFiles.has(name)) {
+      fail(`書体のファイル名が 2 つの包みで重なった: ${name}`);
+    }
+    fontFiles.set(name, join(dir, "files", name));
+  }
+  let read = 0;
+  for (const weight of WEIGHTS) {
+    const path = join(dir, `${weight}.css`);
+    if (!existsSync(path)) continue;
+    const css = readFileSync(path, "utf8");
+    if (!css.includes(`font-family: '${font.family}'`)) {
+      fail(
+        `${font.package}/${weight}.css が '${font.family}' を名乗っていない`,
+      );
+    }
+    fontCss.push(fontFaceCss(css, `${ORIGIN}/fonts`));
+    read += 1;
+  }
+  if (read === 0) {
+    fail(`${font.package} に ${WEIGHTS.join(" / ")} の CSS が 1 つも無い`);
+  }
+}
 
 const version = JSON.parse(
   readFileSync(join(WEB, "package.json"), "utf8"),
@@ -119,11 +159,64 @@ function localFile(pathname, html) {
   if (name.includes("/") || name.includes("\\")) return null;
   if (kind === "page" && name === "index.html")
     return { body: html, ext: ".html" };
-  if (kind === "fonts")
-    return { path: join(fontDir, "files", name), ext: extname(name) };
+  if (kind === "fonts") {
+    const path = fontFiles.get(name);
+    return path === undefined ? null : { path, ext: extname(name) };
+  }
   if (kind === "shots" && shotsDir !== null)
     return { path: join(shotsDir, name), ext: extname(name) };
   return null;
+}
+
+/** 和文と ASCII のほかの字。**どの字が端末の書体へ落ちたかの候補**として示す。 */
+const SUSPECT =
+  /[^\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\s!-~]/gu;
+
+/**
+ * **字を実際に描いた書体を、要素ごとに Chromium に尋ねる**（写真の
+ * `tests/shots/pinned-font.ts` の `provePinnedFont` と同じ道具）。
+ *
+ * **`document.fonts.check` と算出値の `font-family` は証拠にならない**——前者は
+ * 実在しない書体名にも `true` を返し、後者は名前を書いたことしか言わない
+ * （2026-09-10 の実測、`pinned-font.ts` の註）。**CDP の
+ * `CSS.getPlatformFontsForNode` は、要素の字を描いた書体と字数を返す。**
+ */
+async function fontProvenance(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+  const problems = [];
+  let checked = 0;
+  const visit = async (node) => {
+    if (node.nodeType === 1) {
+      const text = (node.children ?? [])
+        .filter((child) => child.nodeType === 3)
+        .map((child) => child.nodeValue)
+        .join("");
+      // 描かれない要素（`<title>`・`<style>`）は書体を返さないので数えない。
+      const { fonts } =
+        text.trim() === ""
+          ? { fonts: [] }
+          : await cdp.send("CSS.getPlatformFontsForNode", {
+              nodeId: node.nodeId,
+            });
+      if (fonts.length > 0) {
+        checked += 1;
+        if (unpinnedGlyphs(fonts) > 0) {
+          const suspects = [...new Set(text.match(SUSPECT) ?? [])].join(" ");
+          problems.push(
+            `<${node.localName}> ${JSON.stringify(text.trim())}` +
+              `（候補の字: ${suspects || "無し"}）: ${describeFonts(fonts)}`,
+          );
+        }
+      }
+    }
+    for (const child of node.children ?? []) await visit(child);
+  };
+  await visit(root);
+  await cdp.detach();
+  return { checked, problems };
 }
 
 mkdirSync(outDir, { recursive: true });
@@ -137,7 +230,7 @@ try {
     try {
       html = renderManual(markdown, {
         shots,
-        fontCss,
+        fontCss: fontCss.join("\n"),
         title: manualTitle(markdown, name),
         lang: manualLang(name),
       });
@@ -174,17 +267,30 @@ try {
     // `check()` は**どの `@font-face` にも当たらない文字列に true を返す**ので、
     // それだけでは「当たった」の証拠にならない。`load()` が本文の文字について
     // **実際に読み込んだ face の数**を返すので、そちらが 0 でないことを主張する。
-    const fonts = await page.evaluate(async () => {
-      const text = document.body.textContent ?? "";
-      const regular = await document.fonts.load('16px "Noto Sans JP"', text);
-      const bold = await document.fonts.load('bold 16px "Noto Sans JP"', text);
-      await document.fonts.ready;
-      return {
-        regular: regular.length,
-        bold: bold.length,
-        check: document.fonts.check('16px "Noto Sans JP"', text),
-      };
-    });
+    // **和文の書体のあとに並べた書体も読み込ませる**——読み込みの前に尋ねると、
+    // 仮に描いている端末の書体が答えに出る。
+    const fonts = await page.evaluate(
+      async (families) => {
+        const text = document.body.textContent ?? "";
+        const regular = await document.fonts.load('16px "Noto Sans JP"', text);
+        const bold = await document.fonts.load(
+          'bold 16px "Noto Sans JP"',
+          text,
+        );
+        for (const family of families) {
+          await document.fonts.load(`16px "${family}"`, text);
+          await document.fonts.load(`bold 16px "${family}"`, text);
+        }
+        await document.fonts.ready;
+        await new Promise((done) => requestAnimationFrame(done));
+        return {
+          regular: regular.length,
+          bold: bold.length,
+          check: document.fonts.check('16px "Noto Sans JP"', text),
+        };
+      },
+      PINNED_FONTS.map((font) => font.family).slice(1),
+    );
     if (fonts.regular === 0 || !fonts.check) {
       console.error(
         `manual NG — ${name}: 書体 Noto Sans JP が当たっていない（load ${fonts.regular} face、check ${fonts.check}）`,
@@ -196,6 +302,29 @@ try {
     if (blocked.length > 0) {
       console.error(
         `manual NG — ${name}: 読めなかったもの ${blocked.join(", ")}`,
+      );
+      exitCode = 1;
+      await page.close();
+      continue;
+    }
+
+    // **固定した書体の外で描かれた字が 1 つでもあれば刷らない**（設計書 §4）。
+    // 手元では端末の書体が黙って代わりに描き、PDF は正しく見える——**runner に
+    // その書体が在るかは分からない**ので、在ってもなくても同じ結果にする。
+    const provenance = await fontProvenance(page);
+    if (provenance.problems.length > 0) {
+      console.error(
+        `manual NG — ${name}: 固定した書体（${PINNED_FONTS.map((font) => font.family).join(" / ")}）の外で描かれた字がある。` +
+          "書体を足すなら測ってから足す（markdown.ts の PINNED_FONTS）:\n" +
+          provenance.problems.join("\n"),
+      );
+      exitCode = 1;
+      await page.close();
+      continue;
+    }
+    if (provenance.checked < MIN_CHECKED) {
+      console.error(
+        `manual NG — ${name}: 書体を確かめた要素が ${provenance.checked} 個しか無い（下限 ${MIN_CHECKED}）`,
       );
       exitCode = 1;
       await page.close();
@@ -222,7 +351,7 @@ try {
     writeFileSync(out, pdf);
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     console.log(
-      `manual: ${name} → ${out}（${pdf.length} バイト、${seconds} 秒、書体 ${fonts.regular}+${fonts.bold} face）`,
+      `manual: ${name} → ${out}（${pdf.length} バイト、${seconds} 秒、書体 ${fonts.regular}+${fonts.bold} face、書体を確かめた要素 ${provenance.checked}）`,
     );
   }
 } finally {

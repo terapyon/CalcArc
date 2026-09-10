@@ -46,6 +46,7 @@ concurrency:
 #     Python reference         最大 102 秒 (平均 97)  → 10 分
 #     End-to-end               最大 612 秒 (平均 120) → 25 分
 #     End-to-end (WebKit)      実績なし               → 25 分(借りた値。下を見よ)
+#     Manuals                  実績なし               → 25 分(借りた値。下を見よ)
 #
 # **2 倍にしたのは、いちばん遅い実績が 1 回きりの外れ値だから**である
 # ——End-to-end は 25 本中 1 本だけ 612 秒で、**次に遅いものは 113 秒**
@@ -65,6 +66,18 @@ concurrency:
 # **実績が溜まったら、この規則で決め直す。** そのとき表のこの行に
 # 「最初の値は `End-to-end` から借りた」と残す——**借りた値と実績から出した値を、
 # 次に見直す人が取り違えないため**である。
+#
+# **`Manuals` も実績から決めていない。** 足した時点(2026-09-11)で走行は 1 本も
+# 無い。手元の実測は `pnpm manuals` の 2 段で 11.0 秒(撮影 9.0 秒——`vite build`
+# と `preview` の起動を含む——と PDF 3 冊 1.9 秒。作業機、2026-09-11。依存の導入と
+# Chromium の導入は含まない)だが、**手元の秒数は runner の実績ではない**ので、
+# 上の規則には当てない(当てれば下限の 10 分になる)。
+# **10 分にしなかったのは、重い段が `End-to-end` と同じだから**である——Chromium を
+# `--with-deps` で入れ、`vite build` → `preview` を立てる(撮影の設定は E2E の
+# `webServer` をそのまま使う)。`End-to-end` の 612 秒の外れ値が**どの段で延びたかは
+# 追っていない**ので、同じ段を持つこのジョブが同じ日に 10 分を超えないとは言えない。
+# だから WebKit と同じく **`End-to-end` の 25 分を借りた。** 実績が溜まったら
+# この規則で決め直し、この行に「最初の値は `End-to-end` から借りた」と残す。
 #
 # **他のワークフローの値をここへ写さない。逆も同じ。** 同じ規則を当てても、
 # 実績が違えば値は違う——`heavy-corpus.yml` の corpus は 41 分走るので 85 分、
@@ -260,6 +273,50 @@ jobs:
           # 同名を上げたときの挙動は実測していない)。
           name: playwright-report-webkit
           path: web/playwright-report/
+
+  # **マニュアルの PDF を、リリースと同じ手順で毎回作る**(1.0 の門 4、設計書
+  # `docs/superpowers/specs/2026-09-10-manuals-design.md` §5)。**作るだけで、
+  # どこにも付けない**——Release に付けるのは `release.yml` の `Manuals` だけである。
+  #
+  # **ここに置く理由は、リリースで初めて壊れていると分かるのを避けるため**である。
+  # リリースの `Manuals` は本番展開のあとで走り、落ちても本番を止めない(裁定
+  # §9 #3)——**普段の CI で先に赤くしておかないと、壊れたことに気づく場所が
+  # Release の本文(「マニュアル(PDF)は作れなかった」)になる。**
+  #
+  # **手順は `pnpm manuals` の 1 行だけ**(マニュアルの写真を撮る
+  # `pnpm shots --grep @manual` → PDF を刷る `pnpm manual --shots manual-shots`)。
+  # リリースの `Manuals` も同じ 1 行を呼ぶ——**写しているのは呼び出しであって、
+  # 手順ではない。** 2 つのジョブの段が同じであることは
+  # `tools/tests/release-workflow.test.ts` が見る。
+  #
+  # **書体の外で描かれた字が 1 つでもあれば赤くなる**(`web/scripts/manual/build.mjs`)。
+  # 手元では端末の書体が黙って代わりに描くので、**runner に日本語や記号の書体が
+  # 在るかどうかに結果を預けない**ためである(設計書 §4)。
+  #
+  # **失敗しても何も上げない。** 何が落ちたかはログが言う——書体の外で描かれた字は
+  # `build.mjs` が要素と候補の字を印字し、撮影の失敗は Playwright が印字する。
+  # このジョブが作る物(写真と PDF)は、失敗したときには揃っていない。
+  #
+  # `playwright test` は `pnpm shots` の中で走り、この字面には出ない——`--project` を
+  # 名指さないのは、撮影の設定が project を持たず Chromium だけで撮るからである
+  # (`tools/tests/webkit-gate.test.ts` が固定する)。
+  manuals:
+    name: Manuals
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: wasm
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wasm-pkg
+          path: web/src/wasm/
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm manuals
 
   reference:
     name: Python reference

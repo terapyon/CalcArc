@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderEvidence } from "../release-evidence.mjs";
+import { MANUALS_JOB, MAY_FAIL, renderEvidence } from "../release-evidence.mjs";
 
 // 走行から返ってくる形の最小限。**実物と形が違えば証拠は何も示さない**ので、
 // 綴りは `gh api repos/{repo}/actions/runs/{id}/jobs` の応答から写している。
@@ -271,5 +271,125 @@ describe("renderEvidence — 在席と結論の継ぎ目", () => {
       attachments: ["heavy-report.md"],
     });
     expect(out).toContain("進行中");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// マニュアル（2026-09-11、マニュアルの設計書 §5、裁定 §9 #3「本番は止めない」）。
+// **落ちてよいのは `Manuals` の 1 つだけ。** それ以外の赤は今までどおり
+// 証拠を書かずに落ちる。
+// ---------------------------------------------------------------------------
+
+describe("renderEvidence — マニュアルだけは落ちても証拠を書く", () => {
+  const heavyBody = job("Heavy corpus / Corpus vs reference", "success");
+  const deploy = job(
+    "Deploy / Build and deploy to Cloudflare Pages",
+    "success",
+  );
+  const pdfs = [
+    "calcarc-0.5.0-detail-ja.pdf",
+    "calcarc-0.5.0-quick-en.pdf",
+    "calcarc-0.5.0-quick-ja.pdf",
+  ];
+  const withManuals = (conclusion: string) => [
+    heavyBody,
+    deploy,
+    job(MANUALS_JOB, conclusion),
+  ];
+
+  it("名前は release.yml のジョブの名前そのままである", () => {
+    // 呼ばれたワークフローのジョブではないので `A / B` の形にならない。
+    expect(MANUALS_JOB).toBe("Manuals");
+    expect(MANUALS_JOB).not.toContain(" / ");
+  });
+
+  it.each(["failure", "cancelled", "timed_out"])(
+    "Manuals が %s でも証拠を書き、作れなかったと言う",
+    (conclusion) => {
+      const out = renderEvidence({ ...base, jobs: withManuals(conclusion) });
+      expect(out).toContain("**マニュアル（PDF）は作れなかった**");
+      expect(out).toContain(`\`Manuals\` = \`${conclusion}\``);
+      expect(out).toContain("本番へ配った物には影響しない");
+      // 表は正直に書き、成功にも進行中にも数えない。
+      expect(out).toContain(`| Manuals | 落ちた(\`${conclusion}\`) |`);
+      expect(out).toMatch(/成功した検査: *2\*\*\n/);
+      expect(out).not.toMatch(/\| Manuals \| 進行中/);
+    },
+  );
+
+  it("Manuals 以外が落ちたら、今までどおり証拠を書かずに落ちる", () => {
+    expect(() =>
+      renderEvidence({
+        ...base,
+        jobs: [heavyBody, job("Deploy / Build and deploy", "failure")],
+      }),
+    ).toThrow(/Deploy \/ Build and deploy = failure/);
+    // **普段の CI の同名のジョブは例外に入らない**——本番の前に居るので、
+    // あれが落ちたなら本番へは出ていない。名前の完全一致だけが外れる。
+    expect(() =>
+      renderEvidence({
+        ...base,
+        jobs: [heavyBody, job(`CI / ${MANUALS_JOB}`, "failure")],
+      }),
+    ).toThrow(/CI \/ Manuals = failure/);
+  });
+
+  it("Manuals と別のジョブが両方落ちたら、落ちる（落ちた別のジョブを名指す）", () => {
+    let message = "";
+    try {
+      renderEvidence({
+        ...base,
+        jobs: [
+          heavyBody,
+          job(MANUALS_JOB, "failure"),
+          job("CI / Rust core", "failure"),
+        ],
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("緑でない走行から証拠は作れない");
+    expect(message).toContain("CI / Rust core = failure");
+    // 許したほうを落ちた理由として挙げない。
+    expect(message).not.toContain("Manuals = failure");
+  });
+
+  it("Manuals の未知の結論は、例外にならず断って落ちる（F-2）", () => {
+    expect(() =>
+      renderEvidence({ ...base, jobs: withManuals("startup_failure") }),
+    ).toThrow(/未知の結論/);
+  });
+
+  it("Manuals が成功したのに PDF が添付されていないなら、そう書く", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: withManuals("success"),
+      attachments: ["heavy-report.md", "calcarc-v0.5.0-dist.tar.gz"],
+    });
+    expect(out).toContain("マニュアル（PDF）は作ったが、添付されていない");
+    expect(out).not.toContain("作れなかった");
+  });
+
+  it("Manuals が成功して PDF が添付されているなら、冊数と名前を挙げる", () => {
+    const out = renderEvidence({
+      ...base,
+      jobs: withManuals("success"),
+      attachments: ["heavy-report.md", "calcarc-v0.5.0-dist.tar.gz", ...pdfs],
+    });
+    expect(out).toContain("**マニュアル（PDF）: 3 冊**");
+    for (const name of pdfs) {
+      expect(out).toContain(`\`${name}\``);
+    }
+    expect(out).not.toContain("添付されていない");
+    expect(out).not.toContain("作れなかった");
+  });
+
+  it("Manuals が居ない走行では、作っていないと書く", () => {
+    const out = renderEvidence({ ...base, jobs: [heavyBody, deploy] });
+    expect(out).toContain("マニュアル（PDF）はこの走行で作っていない");
+  });
+
+  it("例外はちょうど Manuals の 1 つである", () => {
+    expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
   });
 });
