@@ -25,5 +25,31 @@ export default defineConfig({
       // スマートフォン第一(base-spec §42)。既定の viewport を縦持ちにする。
       use: { viewport: { width: 390, height: 844 }, isMobile: false },
     },
+    {
+      name: "webkit",
+      // **Safari のエンジン（WebKit）で同じ E2E を回す**（1.0 の門 1、
+      // `docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md` §1.3）。
+      // iPhone では、どのブラウザも中身は WebKit である。
+      //
+      // **条件は `mobile` と 1 つも変えない**（390×844、`isMobile: false`）。
+      // **変える変数をエンジンの 1 つにするため**である——`devices["iPhone 13"]`
+      // のような端末定義にすると、エンジンと端末の振る舞い（`isMobile`・タッチ・
+      // 拡大率・UA）が同時に変わり、落ちたときに**どちらのせいか分からない**。
+      // 端末の振る舞いは、エンジンの差を片付けてから 1 つずつ足す。
+      //
+      // **CI では別のジョブ（`End-to-end (WebKit)`）が回す。** `pnpm e2e` は
+      // `--project mobile` だけを回す。**2026-09-10 の作業機では WebKit が
+      // 起動しなかった**（共有ライブラリ `libavif16` と
+      // `libgstreamer-plugins-bad1.0-0` が無い。設計書 §1.2）。回せる環境では
+      // `pnpm exec playwright test --project webkit`。
+      //
+      // 番人は `tools/tests/webkit-gate.test.ts`（この project が在ること、
+      // `browserName` のほかは `mobile` と同じであること）。
+      use: {
+        browserName: "webkit",
+        viewport: { width: 390, height: 844 },
+        isMobile: false,
+      },
+    },
   ],
 });

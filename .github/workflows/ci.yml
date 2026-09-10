@@ -45,6 +45,7 @@ concurrency:
 #     Heavy tooling            最大  32 秒 (平均 23)  → 10 分
 #     Python reference         最大 102 秒 (平均 97)  → 10 分
 #     End-to-end               最大 612 秒 (平均 120) → 25 分
+#     End-to-end (WebKit)      実績なし               → 25 分(借りた値。下を見よ)
 #
 # **2 倍にしたのは、いちばん遅い実績が 1 回きりの外れ値だから**である
 # ——End-to-end は 25 本中 1 本だけ 612 秒で、**次に遅いものは 113 秒**
@@ -56,6 +57,14 @@ concurrency:
 # 落ちる。**これは性能の予算ではなく、固まったことの検出器**である
 # ——**緩すぎれば意味が無いが、きつすぎれば健全な走行を殺す**ので、
 # 迷ったら緩い側へ倒してある(それでも既定より 1 桁以上小さい)。
+#
+# **`End-to-end (WebKit)` だけは実績から決めていない。** 足した時点(2026-09-10)で
+# WebKit の走行は 1 本も無く、**上の規則(観測の最大の 2 倍)を当てる数が無い。**
+# だから**いちばん近いジョブ(`End-to-end`)の 25 分を借りた**(設計書
+# `docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md` §1.3)。
+# **実績が溜まったら、この規則で決め直す。** そのとき表のこの行に
+# 「最初の値は `End-to-end` から借りた」と残す——**借りた値と実績から出した値を、
+# 次に見直す人が取り違えないため**である。
 #
 # **他のワークフローの値をここへ写さない。逆も同じ。** 同じ規則を当てても、
 # 実績が違えば値は違う——`heavy-corpus.yml` の corpus は 41 分走るので 85 分、
@@ -192,11 +201,64 @@ jobs:
           path: web/src/wasm/
       - run: pnpm exec playwright install --with-deps chromium
       # Layer 5
-      - run: pnpm exec playwright test
+      # **`--project` を外さない。** 外すと `webkit` の project もこのジョブで
+      # 回る——このジョブは chromium しか入れておらず、上の表の実績も
+      # Chromium だけの走行から取っている。WebKit は次のジョブが回す。
+      - run: pnpm exec playwright test --project mobile
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: playwright-report
+          path: web/playwright-report/
+
+  # **Safari(WebKit)でも同じ E2E を回す**(1.0 の門 1、設計書
+  # `docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md` §1.3)。
+  # iPhone では、どのブラウザも中身は WebKit である——**いちばん多い利用者の
+  # 環境を、それまで CI は 1 度も通っていなかった。** 中身は `End-to-end` と同じで、
+  # 違うのは入れるブラウザ・回す project・報告書の添付名の 3 つだけである。
+  #
+  # **`End-to-end` の中に足さず、別のジョブにした。** 上の時間制限の表は
+  # ジョブごとの実測なので、1 つのジョブで 2 つのブラウザを回すと
+  # `End-to-end` の実績が意味を失う。
+  #
+  # **最初の走行で落ちたものは、手を付ける前に分類する**——(A) 本物の Safari の差 /
+  # (B) テストの書き方の癖 / (C) 環境 / (D) 分からない(無理に振り分けない)。
+  # **再試行で緑にしない**(`retries` を上げる・待ち時間を伸ばすだけで通すのは、
+  # 落ちた理由を消すだけで直していない)。**理由の書かれていない `test.skip` /
+  # `test.fixme` を置かない。**
+  #
+  # **`ubuntu-latest` で `--with-deps webkit` が通るかは(未確認)である。**
+  # 2026-09-10 の作業機では、共有ライブラリが 2 つ足りずに WebKit が起動しな
+  # かった(設計書 §1.2)。**このジョブの最初の走行が、はじめての実測になる。**
+  #
+  # 番人は `tools/tests/webkit-gate.test.ts`(このジョブの形・`--project` の
+  # 名指し・理由の無い skip)と、`release-workflow.test.ts` の時間制限の番人。
+  e2e-webkit:
+    name: End-to-end (WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: wasm
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wasm-pkg
+          path: web/src/wasm/
+      - run: pnpm exec playwright install --with-deps webkit
+      # Layer 5
+      - run: pnpm exec playwright test --project webkit
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          # **`End-to-end` の添付名と分ける。** 同じ走行で両方が落ちたとき、
+          # 名前が同じだと 2 つの報告書を取り違えるか、2 つ目が上がらない
+          # (`upload-artifact` は v4 から同名の上書きを既定で拒む。この版で
+          # 同名を上げたときの挙動は実測していない)。
+          name: playwright-report-webkit
           path: web/playwright-report/
 
   reference:

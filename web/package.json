@@ -14,7 +14,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "e2e": "pnpm wasm && playwright test",
+    "e2e": "pnpm wasm && playwright test --project mobile",
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
