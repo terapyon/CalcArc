@@ -4,6 +4,8 @@ import {
   DEPOSIT_FOR_FIELD_SECTION,
   FINANCE_SECTIONS,
   PERIODS_FOR_FIELD_SECTION,
+  PERIODS_SECTION,
+  TAX_SECTION,
 } from "./finance";
 
 // Finance のキー集合そのものの検査。区画名は E2E のセレクタである(設計書 §3)。
@@ -195,5 +197,60 @@ describe("Finance のキー集合", () => {
         expect(key.token).not.toBeNull();
       }
     }
+  });
+  it("keeps every spelling the user approved, letter for letter", () => {
+    // **★ 承認されたのは組み立て規則ではなく綴りそのもの**である
+    // (設計書 `2026-09-03-finance-convention.md` §10.4.0・§11.4・§5.4.4)。
+    // **この 1 本が、承認済みの綴りを 1 か所で全部持つ。**
+    //
+    // **なぜ要るか。** 2026-09-10、項目キーを `周期他` → `方式` に差し替えたら
+    // **vitest 473 本・E2E 24 本が 1 本も鳴らなかった**(実測)。上の検査は
+    // 「重複が無い」「4 文字以上は改行を持つ」「枠に収まる」を見ていて、
+    // **どの綴りであるかは見ていない**——**承認されていない `周期他` が
+    // 1 日入っていても、誰も言わなかった。**
+    //
+    // **1 つだけ守らない。** 1 つだけ名指しすると、名指ししていない残りが
+    // 「守られている」と読まれる。**承認済みは 10 個で、10 個ともここに置く。**
+    //
+    // **期待値はこのテストが自分で持つ**——`finance.ts` から組み立てると、
+    // 両方が同時に変わっても緑になる。
+    const APPROVED: Record<string, string> = {
+      // 上段(系統 B。利用者裁定 2026-09-10)
+      "mode:payment": "返済\n月額",
+      "mode:principal": "借入\n可能額",
+      "mode:term": "返済\n期間",
+      "mode:compound": "複利\n残高",
+      "mode:deposit-for": "必要\n積立額",
+      "mode:periods-for": "必要\n年数",
+      // 下段(盤面のキー 1 行だけ。読み上げ名は「ボーナス」のまま)
+      "field:bonus": "賞与",
+      // 周期の面を開く項目キー(「周期他」は裁定を受けていなかった)
+      "field:periods": "方式",
+      // 積立の位置(カシオの日本語マニュアルと同じ語)
+      "timing:end": "期末",
+      "timing:start": "期首",
+    };
+
+    const everyKey = [
+      ...FINANCE_SECTIONS,
+      COMPOUND_FIELD_SECTION,
+      DEPOSIT_FOR_FIELD_SECTION,
+      PERIODS_FOR_FIELD_SECTION,
+      PERIODS_SECTION,
+      TAX_SECTION,
+    ].flatMap((sec) => sec.keys);
+
+    const seen: string[] = [];
+    for (const [token, label] of Object.entries(APPROVED)) {
+      const found = everyKey.filter((k) => k.token === token);
+      // **1 つも見つからない綴りを「一致した」と数えない。**
+      expect(found.length, `${token} のキーが見つからない`).toBeGreaterThan(0);
+      for (const key of found) {
+        expect(key.label, `${token} の綴りが承認済みと違う`).toBe(label);
+      }
+      seen.push(token);
+    }
+    // **何件見たかを主張する**——表を 1 行消しても緑にならないように。
+    expect(seen.length).toBe(10);
   });
 });
