@@ -132,6 +132,19 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
   **`engines` だけでは止まらない**——版が違っても `pnpm install` は警告して
   exit 0 になる（実測）。止めるのは `web/.npmrc` と `heavy/.npmrc` の
   `engine-strict=true` で、これがあると `ERR_PNPM_UNSUPPORTED_ENGINE` で落ちる。
+- **この作業機では `wasm-pack test` がセッションを作る段で落ちる**（2026-09-10 実測）。
+  `session not created: This version of ChromeDriver only supports Chrome version 153` /
+  `Current browser version is 135.0.7049.52`。**テストのコードに入る前に落ちるので、
+  枝の変更とは無関係である。** 仕組み: `chromedriver` が PATH に無いと、`wasm-pack` は
+  既定で**自前の最新の ChromeDriver** を取りに行き、それが手元の Chrome 135 と合わない。
+  **CI は `ci.yml` の `Use the runner's ChromeDriver` の段で
+  `CHROMEDRIVER=$(which chromedriver)` を指定し、ランナーの Chrome と対になった
+  ChromeDriver を使わせているので落ちない**（その段の註に、同じ事故が Chrome 135 ×
+  ChromeDriver 151 として起きた経緯がある）。**代わりに手元で守るもの**:
+  `cargo check -p calcarc-wasm --target wasm32-unknown-unknown --tests` と、境界を実 wasm で
+  通す E2E。**`wasm-pack test` 本体は CI が回す。** 手元で直すなら、Chrome 135 に合う
+  `chromedriver` を置いて `CHROMEDRIVER` で指す（利用者の操作）。
+  **毎回同じ文言で落ちる＝不安定ではない**ので、`known-flaky-tests.md` には載せない。
 - **jsdom はアクセシビリティツリーを組み立てない。** ロールの意味論に関わる回帰は
   vitest では捕まらないので、E2E で実ブラウザに確認させる。
 
