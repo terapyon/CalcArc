@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use calcarc_core::CalcError;
 use calcarc_core::expr;
+use calcarc_core::finance::compound::DepositTiming;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse};
 use calcarc_core::finance::{compound, compound_inverse, tax};
@@ -64,6 +65,11 @@ struct Input {
     tax: Option<bool>,
     #[serde(default)]
     target: Option<String>,
+    /// 積立の位置。**書いていないケースは既定の入口を通す**——`Some("end")`
+    /// に倒さない。位置を取らない入口(`compound::grow` ほか)が既定の経路で
+    /// あることを golden の側からも押さえる(設計書 §5.4.6)。
+    #[serde(default)]
+    timing: Option<String>,
     // 式。ローン・複利とは入力が重ならないので、同じ合併型に足すだけで済む。
     #[serde(default)]
     text: Option<String>,
@@ -114,6 +120,16 @@ fn field(map: &mut BTreeMap<String, String>, key: &str, value: impl ToString) {
     map.insert(key.to_string(), value.to_string());
 }
 
+/// golden の綴り → `DepositTiming`。**知らない綴りは panic** させる
+/// ——黙って期末に倒すと、位置を取り違えた golden が緑のまま通る。
+fn timing_of(spelled: &str) -> DepositTiming {
+    match spelled {
+        "end" => DepositTiming::End,
+        "start" => DepositTiming::Start,
+        other => panic!("unknown deposit timing {other}"),
+    }
+}
+
 /// 式。**入力が金利を持たない**ので、下の配線とは分けて受ける。
 fn run_expression(op: &str, input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
     let text = input.text.as_deref().ok_or(CalcError::SyntaxError)?;
@@ -141,12 +157,15 @@ fn run_compound(input: &Input) -> Result<BTreeMap<String, String>, CalcError> {
         &input.rate,
         input.periods_per_year.ok_or(CalcError::SyntaxError)?,
     )?;
-    let growth = compound::grow(
-        input.yen(&input.principal)?,
-        input.yen(&input.deposit)?,
-        &rate,
-        input.periods.ok_or(CalcError::SyntaxError)?,
-    )?;
+    let principal = input.yen(&input.principal)?;
+    let deposit = input.yen(&input.deposit)?;
+    let periods = input.periods.ok_or(CalcError::SyntaxError)?;
+    let growth = match input.timing.as_deref() {
+        None => compound::grow(principal, deposit, &rate, periods)?,
+        Some(spelled) => {
+            compound::grow_with_timing(principal, deposit, &rate, periods, timing_of(spelled))?
+        }
+    };
     let mut out = BTreeMap::new();
     field(&mut out, "final_balance", growth.final_balance);
     field(&mut out, "principal_total", growth.principal_total);
@@ -174,24 +193,35 @@ fn run_compound_inverse(op: &str, input: &Input) -> Result<BTreeMap<String, Stri
     let target = input.yen(&input.target)?;
     let taxed = input.tax == Some(true);
     let mut out = BTreeMap::new();
+    let principal = input.yen(&input.principal)?;
     let s = if op == "compound_deposit_for" {
-        let s = compound_inverse::deposit_for(
-            input.yen(&input.principal)?,
-            &rate,
-            input.periods.ok_or(CalcError::SyntaxError)?,
-            target,
-            taxed,
-        )?;
+        let periods = input.periods.ok_or(CalcError::SyntaxError)?;
+        let s = match input.timing.as_deref() {
+            None => compound_inverse::deposit_for(principal, &rate, periods, target, taxed)?,
+            Some(spelled) => compound_inverse::deposit_for_with_timing(
+                principal,
+                &rate,
+                periods,
+                target,
+                taxed,
+                timing_of(spelled),
+            )?,
+        };
         field(&mut out, "deposit", s.deposit);
         s
     } else {
-        let s = compound_inverse::periods_for(
-            input.yen(&input.principal)?,
-            input.yen(&input.deposit)?,
-            &rate,
-            target,
-            taxed,
-        )?;
+        let deposit = input.yen(&input.deposit)?;
+        let s = match input.timing.as_deref() {
+            None => compound_inverse::periods_for(principal, deposit, &rate, target, taxed)?,
+            Some(spelled) => compound_inverse::periods_for_with_timing(
+                principal,
+                deposit,
+                &rate,
+                target,
+                taxed,
+                timing_of(spelled),
+            )?,
+        };
         field(&mut out, "periods", s.periods);
         s
     };
@@ -367,4 +397,25 @@ fn every_mode_is_covered_by_the_golden() {
         }),
         "no compound_grow case pinning the dip at 20 periods"
     );
+    // **位置の軸が空主張でないこと。** 積立 0 では期首と期末が同じ答になる
+    // ので、「`timing: start` のケースが在る」だけでは何も言えない
+    // (設計書 §5.4.6.1 で 1 度踏んだ形)。**積立のある期首のケース**が
+    // 居ることまで固定する。
+    assert!(
+        golden.cases.iter().any(|c| {
+            c.input.timing.as_deref() == Some("start")
+                && c.input.deposit.as_deref().is_some_and(|d| d != "0")
+        }),
+        "no start-timing golden case with a non-zero deposit"
+    );
+    // 逆算の 2 op にも位置が届いていること(正算だけ通していないか)。
+    for op in ["compound_deposit_for", "compound_periods_for"] {
+        assert!(
+            golden
+                .cases
+                .iter()
+                .any(|c| c.op == op && c.input.timing.as_deref() == Some("start")),
+            "no start-timing golden case for {op}"
+        );
+    }
 }

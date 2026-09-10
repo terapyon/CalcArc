@@ -16,6 +16,7 @@ import init, {
 import type {
   CompoundInverseResult,
   CompoundResult,
+  DepositTiming,
   PeriodsPerYear,
 } from "./types";
 
@@ -23,17 +24,23 @@ export type {
   CompoundErrorCode,
   CompoundInverseResult,
   CompoundResult,
+  DepositTiming,
   PeriodsPerYear,
 } from "./types";
-export { PERIODS_PER_YEAR } from "./types";
+export { DEPOSIT_TIMING_TOKENS, PERIODS_PER_YEAR } from "./types";
 
 export interface FinanceCalc {
   /**
    * 複利で増やす。**一括は `deposit` を "0"、積立は `principal` を "0"**
    * にする —— 一括は積立ループの退化である(設計書 §2)。
    *
-   * 金額は文字列で渡す(円は JS の number を超えうる)。積立は期末、
-   * 換算は名目、丸めは各期切り捨て(numerical-policy)。
+   * 金額は文字列で渡す(円は JS の number を超えうる)。換算は名目、
+   * 丸めは各期切り捨て(numerical-policy)。
+   *
+   * **`timing` に既定値を置かない。** 既定は `end`(期末)だが、それを
+   * 知っているのは呼び出し側の設定であって、このラッパーではない
+   * ——ここで省略できるようにすると、**渡し忘れが黙って期末になる**
+   * (設計書 2026-09-03 §5.4.1)。
    */
   grow(
     principal: string,
@@ -42,6 +49,7 @@ export interface FinanceCalc {
     periodsPerYear: PeriodsPerYear,
     periods: number,
     tax: boolean,
+    timing: DepositTiming,
   ): CompoundResult;
 
   /**
@@ -55,6 +63,7 @@ export interface FinanceCalc {
     periodsPerYear: PeriodsPerYear,
     periods: number,
     tax: boolean,
+    timing: DepositTiming,
   ): CompoundInverseResult;
 
   /**
@@ -70,6 +79,7 @@ export interface FinanceCalc {
     rate: string,
     periodsPerYear: PeriodsPerYear,
     tax: boolean,
+    timing: DepositTiming,
   ): CompoundInverseResult;
 }
 
@@ -85,7 +95,15 @@ export function initFinance(): Promise<FinanceCalc> {
   ready ??= init()
     .then(
       (): FinanceCalc => ({
-        grow: (principal, deposit, rate, periodsPerYear, periods, tax) =>
+        grow: (
+          principal,
+          deposit,
+          rate,
+          periodsPerYear,
+          periods,
+          tax,
+          timing,
+        ) =>
           compound_grow(
             principal,
             deposit,
@@ -93,8 +111,17 @@ export function initFinance(): Promise<FinanceCalc> {
             periodsPerYear,
             periods,
             tax,
+            timing,
           ) as CompoundResult,
-        depositFor: (principal, target, rate, periodsPerYear, periods, tax) =>
+        depositFor: (
+          principal,
+          target,
+          rate,
+          periodsPerYear,
+          periods,
+          tax,
+          timing,
+        ) =>
           compound_deposit_for(
             principal,
             target,
@@ -102,8 +129,17 @@ export function initFinance(): Promise<FinanceCalc> {
             periodsPerYear,
             periods,
             tax,
+            timing,
           ) as CompoundInverseResult,
-        periodsFor: (principal, deposit, target, rate, periodsPerYear, tax) =>
+        periodsFor: (
+          principal,
+          deposit,
+          target,
+          rate,
+          periodsPerYear,
+          tax,
+          timing,
+        ) =>
           compound_periods_for(
             principal,
             deposit,
@@ -111,6 +147,7 @@ export function initFinance(): Promise<FinanceCalc> {
             rate,
             periodsPerYear,
             tax,
+            timing,
           ) as CompoundInverseResult,
       }),
     )

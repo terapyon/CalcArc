@@ -1,6 +1,16 @@
 import type { Offness } from "../Keypad/types";
 import styles from "./Key.module.css";
 
+/**
+ * キーの見た目。
+ *
+ * **`accent` を足そうとして、落とした**(2026-09-10。Finance の上段で群の
+ * 境目を色で出す案。設計書 `2026-09-03-finance-convention.md` §10.4 案 D)。
+ * **`--key-accent-bg` は既に 2 つの意味を持っている**——`.operator`
+ * (演算子)と `.key[aria-pressed="true"]`(押下中)である。3 つ目を載せると
+ * **初期表示で 6 つのうち 4 つが同じ色になり、選択中がどれか色で読めなく
+ * なった**(実測)。**理由の全文は設計書 §10.4.2。**
+ */
 export type KeyVariant = "digit" | "operator" | "function" | "danger";
 
 export interface KeyProps<T> {

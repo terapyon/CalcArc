@@ -29,6 +29,7 @@ use calcarc_core::data_scale::llm::{self, Precision};
 use calcarc_core::data_scale::transfer::{self, BandwidthUnit, DurationUnit};
 use calcarc_core::data_scale::{self, DataType};
 use calcarc_core::expr;
+use calcarc_core::finance::compound::DepositTiming;
 use calcarc_core::finance::loan::rate::Rate;
 use calcarc_core::finance::loan::{bonus, forward, inverse, parse_yen};
 use calcarc_core::finance::{compound, compound_inverse, tax};
@@ -504,10 +505,24 @@ fn inverse_result(s: compound_inverse::Solution, taxed: bool) -> CompoundInverse
     }
 }
 
+/// 積立の位置のトークンを読む。**知らない綴りは `SyntaxError`**——
+/// 既定に倒さない。倒すと、綴りを間違えた呼び出しが**もっともらしい期末の
+/// 答**を返し、誰も気づけない(`convert` の単位トークンと同じ扱い)。
+///
+/// **綴りを持っているのは core** (`DepositTiming::token`)である。ここに
+/// `match` を書くと、同じ表が 2 つの crate に散る。
+fn timing_from_token(token: &str) -> CalcResult<DepositTiming> {
+    DepositTiming::from_token(token).ok_or(CalcError::SyntaxError)
+}
+
 /// 複利で増やす。一括は `deposit` を "0"、積立は `principal` を "0" にする。
 ///
 /// `periods_per_year` は 1・2・12 のみ(年・半年・月)。それ以外は
 /// SyntaxError を戻り値で返す——境界は例外を投げない。
+///
+/// `timing` は積立の位置(`end` / `start`)。**既定は `end`** だが、
+/// **境界では省略できない**——「渡し忘れ」が黙って期末になる形にしない
+/// (設計書 2026-09-03 §5.4.1)。
 #[wasm_bindgen]
 pub fn compound_grow(
     principal: &str,
@@ -516,10 +531,17 @@ pub fn compound_grow(
     periods_per_year: u32,
     periods: u32,
     tax: bool,
+    timing: &str,
 ) -> JsValue {
     let outcome: CalcResult<_> = (|| {
         let rate = Rate::from_annual_percent(rate, periods_per_year)?;
-        let growth = compound::grow(parse_yen(principal)?, parse_yen(deposit)?, &rate, periods)?;
+        let growth = compound::grow_with_timing(
+            parse_yen(principal)?,
+            parse_yen(deposit)?,
+            &rate,
+            periods,
+            timing_from_token(timing)?,
+        )?;
         let taxes = if tax {
             Some(tax::withholding(growth.interest)?)
         } else {
@@ -564,15 +586,17 @@ pub fn compound_deposit_for(
     periods_per_year: u32,
     periods: u32,
     tax: bool,
+    timing: &str,
 ) -> JsValue {
     let outcome: CalcResult<_> = (|| {
         let rate = Rate::from_annual_percent(rate, periods_per_year)?;
-        compound_inverse::deposit_for(
+        compound_inverse::deposit_for_with_timing(
             parse_yen(principal)?,
             &rate,
             periods,
             parse_yen(target)?,
             tax,
+            timing_from_token(timing)?,
         )
     })();
     let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();
@@ -591,15 +615,17 @@ pub fn compound_periods_for(
     rate: &str,
     periods_per_year: u32,
     tax: bool,
+    timing: &str,
 ) -> JsValue {
     let outcome: CalcResult<_> = (|| {
         let rate = Rate::from_annual_percent(rate, periods_per_year)?;
-        compound_inverse::periods_for(
+        compound_inverse::periods_for_with_timing(
             parse_yen(principal)?,
             parse_yen(deposit)?,
             &rate,
             parse_yen(target)?,
             tax,
+            timing_from_token(timing)?,
         )
     })();
     let result: Outcome<CompoundInverse> = outcome.map(|s| inverse_result(s, tax)).into();

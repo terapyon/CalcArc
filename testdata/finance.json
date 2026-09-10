@@ -1120,6 +1120,302 @@
     },
     {
       "expect": {
+        "final_balance": "9873528",
+        "interest": "2673528",
+        "principal_total": "7200000"
+      },
+      "id": "compound_grow/0/30000/3/12/240/False/start",
+      "input": {
+        "deposit": "30000",
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "9873528",
+        "interest": "2673528",
+        "local_tax": "133676",
+        "national_tax": "409450",
+        "net": "9330402",
+        "principal_total": "7200000"
+      },
+      "id": "compound_grow/0/30000/3/12/240/True/start",
+      "input": {
+        "deposit": "30000",
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "tax": true,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "9848906",
+        "interest": "2648906",
+        "principal_total": "7200000"
+      },
+      "id": "compound_grow/0/30000/3/12/240/False/end",
+      "input": {
+        "deposit": "30000",
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "tax": false,
+        "timing": "end"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "114372235",
+        "interest": "74372235",
+        "principal_total": "40000000"
+      },
+      "id": "compound_grow/10000000/50000/3/12/600/False/start",
+      "input": {
+        "deposit": "50000",
+        "periods": 600,
+        "periods_per_year": 12,
+        "principal": "10000000",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "175257",
+        "interest": "25257",
+        "principal_total": "150000"
+      },
+      "id": "compound_grow/0/2500/6/12/60/False/start",
+      "input": {
+        "deposit": "2500",
+        "periods": 60,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "6",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "1180775",
+        "interest": "180775",
+        "principal_total": "1000000"
+      },
+      "id": "compound_grow/0/100000/3/1/10/False/start",
+      "input": {
+        "deposit": "100000",
+        "periods": 10,
+        "periods_per_year": 1,
+        "principal": "0",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "543159",
+        "interest": "43159",
+        "principal_total": "500000"
+      },
+      "id": "compound_grow/0/50000/3/2/10/False/start",
+      "input": {
+        "deposit": "50000",
+        "periods": 10,
+        "periods_per_year": 2,
+        "principal": "0",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "30075",
+        "interest": "75",
+        "principal_total": "30000"
+      },
+      "id": "compound_grow/0/30000/3/12/1/False/start",
+      "input": {
+        "deposit": "30000",
+        "periods": 1,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "360000",
+        "interest": "0",
+        "principal_total": "360000"
+      },
+      "id": "compound_grow/0/30000/0/12/12/False/start",
+      "input": {
+        "deposit": "30000",
+        "periods": 12,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "0",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "1002507",
+        "interest": "2500",
+        "principal_total": "1000007"
+      },
+      "id": "compound_grow/1000000/7/3/12/1/False/start",
+      "input": {
+        "deposit": "7",
+        "periods": 1,
+        "periods_per_year": 12,
+        "principal": "1000000",
+        "rate": "3",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "1002507",
+        "interest": "2500",
+        "principal_total": "1000007"
+      },
+      "id": "compound_grow/1000000/7/3/12/1/False",
+      "input": {
+        "deposit": "7",
+        "periods": 1,
+        "periods_per_year": 12,
+        "principal": "1000000",
+        "rate": "3",
+        "tax": false
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "1051136",
+        "interest": "51136",
+        "principal_total": "1000000"
+      },
+      "id": "compound_grow/1000000/0/1/2/10/False/start",
+      "input": {
+        "deposit": "0",
+        "periods": 10,
+        "periods_per_year": 2,
+        "principal": "1000000",
+        "rate": "1",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "deposit": "30385",
+        "final_balance": "10000232",
+        "interest": "2707832",
+        "principal_total": "7292400"
+      },
+      "id": "compound_deposit_for/0/10000000/3/12/240/False/start",
+      "input": {
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "target": "10000000",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_deposit_for"
+    },
+    {
+      "expect": {
+        "deposit": "32153",
+        "final_balance": "10582118",
+        "interest": "2865398",
+        "local_tax": "143269",
+        "national_tax": "438835",
+        "net": "10000014",
+        "principal_total": "7716720"
+      },
+      "id": "compound_deposit_for/0/10000000/3/12/240/True/start",
+      "input": {
+        "periods": 240,
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "target": "10000000",
+        "tax": true,
+        "timing": "start"
+      },
+      "op": "compound_deposit_for"
+    },
+    {
+      "expect": {
+        "final_balance": "1000627",
+        "interest": "40627",
+        "periods": "32",
+        "principal_total": "960000"
+      },
+      "id": "compound_periods_for/0/30000/1000000/3/12/False/start",
+      "input": {
+        "deposit": "30000",
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "target": "1000000",
+        "tax": false,
+        "timing": "start"
+      },
+      "op": "compound_periods_for"
+    },
+    {
+      "expect": {
+        "final_balance": "1030627",
+        "interest": "40627",
+        "periods": "33",
+        "principal_total": "990000"
+      },
+      "id": "compound_periods_for/0/30000/1000000/3/12/False",
+      "input": {
+        "deposit": "30000",
+        "periods_per_year": 12,
+        "principal": "0",
+        "rate": "3",
+        "target": "1000000",
+        "tax": false
+      },
+      "op": "compound_periods_for"
+    },
+    {
+      "expect": {
         "value": "1000000"
       },
       "id": "expr_integer/1000000/3*3/yen/18446744073709551615",

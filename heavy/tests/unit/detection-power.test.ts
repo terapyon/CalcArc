@@ -8,6 +8,7 @@ import {
   exitCodeFrom,
   MUTATIONS,
   measure,
+  ROOT,
   readMeasurement,
   resultRecord,
   runOneMutation,
@@ -70,6 +71,34 @@ describe("the mutation table", () => {
         mutation.to,
       );
     }
+  });
+
+  it("declares a from-string that still exists in the file it names", async () => {
+    // **黙って当たらない変異を許さない**(`exact-power.test.ts` の同名の検査と
+    // 同じ主張)。`runOneMutation` は `mutation-site-missing` を返すが、それは
+    // `pnpm heavy:power`(11 分、リリースの走行だけが回す)で初めて分かり、
+    // `process.exit(1)` でリリースを止める。engine が動いたらここで気づく。
+    //
+    // **実例 2026-09-10**: 期末/期首の枝が 1 期の漸化式を `compound.rs` の
+    // `step()` に寄せたとき、3 本(`compound-deposit-at-start` /
+    // `compound-round-once-at-maturity` / `periods-for-binary-search`)の
+    // `from` が書き換えられた旧コードを指したまま残った。上の検査は `from` が
+    // 空でないことしか見ておらず、`pnpm test` は緑だった。
+    //
+    // **このファイルは `node:fs` をモックしている**ので、本物の fs で読む。
+    const fs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    // 空の表は 1 度も比較せずに緑になる。
+    expect(MUTATIONS.length).toBeGreaterThan(0);
+    let compared = 0;
+    for (const mutation of MUTATIONS) {
+      const source = fs.readFileSync(join(ROOT, mutation.file), "utf-8");
+      // soft にするのは、当たらない変異を**全部**名前で並べるため。
+      expect
+        .soft(source, `${mutation.id} の from が ${mutation.file} に無い`)
+        .toContain(mutation.from);
+      compared += 1;
+    }
+    expect(compared).toBe(MUTATIONS.length);
   });
 });
 

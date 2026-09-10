@@ -140,6 +140,15 @@ test("the tallest tab still has slack inside the screen", async ({ page }) => {
   // `<h1>` を先に足すと余白は **16.3125px から 742**(`main` の高さそのもの)
   // になる。**赤くならない壊れ方である**——要求は「8 以上」なので、
   // 何も測っていない 742 は緑を返す。
+  //
+  // **行の高さを変えてもこの取り方は変わらないことを 2026-09-10 に実測した**
+  // ——項目行のボタンを DOM で 34px にして(この計画の Task 2 が `half` で
+  // やること)測り直しても、この選択子が返すのは同じ
+  // `<section aria-label="金融計算">` のままで、パネルの高さは
+  // 726.6875→692.6875、余白は 16.3125→50.3125 になった(360×800 では
+  // 693.71875→659.71875、余白 5.28125→39.28125)。**下の下限
+  // (`main` の半分)も割らない。** つまり `half` 化で**この検査が測る対象は
+  // 変わらない**——変わるのは測った値だけである。検査そのものは変えない。
   const { mainHeight, panelHeight, panelTag } = await page.evaluate(() => {
     const main = document.querySelector("main");
     const panel = main?.querySelector(":scope > :not(h1)");

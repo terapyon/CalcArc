@@ -48,7 +48,7 @@ fn no_boundary_field_is_written_in_snake_case() {
 /// 複利の成功の JSON。**税 ON** で取る——税 OFF だと、本当に任意な 3 項目が
 /// `null` になって「フィールドが在るか」の主張とまぎれる(設計書 §3)。
 fn compound_json(principal: &str, deposit: &str, rate: &str, periods: u32) -> String {
-    let value = calcarc_wasm::compound_grow(principal, deposit, rate, 12, periods, true);
+    let value = calcarc_wasm::compound_grow(principal, deposit, rate, 12, periods, true, "end");
     String::from(js_sys::JSON::stringify(&value).unwrap())
 }
 

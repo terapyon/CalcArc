@@ -54,6 +54,11 @@ export type FinanceKeyToken =
   | "field:tax"
   | "field:target"
   | `period:${1 | 2 | 12}`
+  // **積立の位置。** 綴りは境界のトークンと同じ(`web/src/finance/types.ts`
+  // の `DEPOSIT_TIMING_TOKENS`)——盤面の語(「期末」「期首」)は下の
+  // `label` が持つ。
+  | "timing:end"
+  | "timing:start"
   | "tax:none"
   | "tax:withholding";
 
@@ -84,33 +89,66 @@ export const FINANCE_FIELDS: readonly FinanceField[] = [
   "target",
 ];
 
+/**
+ * 計算の種類。**6 つとも「求めるものの名詞」で綴りを揃えてある**
+ * (設計書 §10.4 系統 B、**利用者裁定 2026-09-10**)。
+ *
+ * ```
+ * 返済⏎月額 / 借入⏎可能額 / 返済⏎期間 │ 複利⏎残高 / 必要⏎積立額 / 必要⏎年数
+ * └──────── ローン ────────┘ └──────── 複利 ────────┘
+ * ```
+ *
+ * **なぜ揃えたか。** ここには 2 つの問題があった(設計書 §10.1〜§10.2):
+ * **① 上段の「月額」「期間」が下段の項目キーと同じ語で、役が逆だった**
+ * (上は求める、下は入力する)。**区別は `ariaLabel` にだけ在って、目で見る
+ * 人には無かった。** **② 左 3 つ(ローン)と右 3 つ(複利)の境目が画面に
+ * 何も現れていなかった。**
+ *
+ * **★ 群を分けているのは語だけである。** 冠が左 3 つは `返済 / 借入 / 返済`、
+ * 右 3 つは `複利 / 必要 / 必要`。
+ *
+ * **色でも出す案(§10.4 案 D)は、試して落とした**(2026-09-10)。
+ * `--key-accent-bg` は既に `.operator`(演算子)と
+ * `.key[aria-pressed="true"]`(押下中)の 2 つの意味を持っており、
+ * **3 つ目を載せると初期表示で 6 つのうち 4 つが同じ色になって、群の境目を
+ * 示さないどころか選択中を読めなくした**(実測)。**理由の全文は設計書 §10.4.2。**
+ *
+ * **★ 綴りを変えない。** 承認されたのは組み立て規則ではなく**綴りそのもの**
+ * である(a11y の 13 画面名・期末/期首・賞与と同じ扱い。設計書 §10.4.0)。
+ * **`ariaLabel` は 1 つも変えていない**——画面の語はすべて `ariaLabel` の
+ * 部分文字列であり、**見える側と読み上げ側が同じ語で揃う**のが系統 B が
+ * 選ばれた決め手である。
+ */
 const MODES: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "計算の種類",
   columns: 6,
-  // **4 文字ラベルが 2 行になる**(借入可能 / 必要積立 / 必要年数)。半高だと
-  // 2 行がボタンからはみ出す(0.2.0 設計書 §8)。
+  // **6 つとも 2 行になる**(系統 B の代償。設計書 §10.4.0)。半高だと
+  // 2 行がボタンからはみ出す(0.2.0 設計書 §8)。**内容 63px / 枠 68px**
+  // ——390×844 でも 360×800 でも同じ(2026-09-10 実測)。
   height: "double",
   keys: [
     {
       token: "mode:payment",
-      label: "月額",
-      ariaLabel: "月々の返済額を求める",
-      variant: "function",
-    },
-    {
-      token: "mode:principal",
       // **語の切れ目で固定改行**(設計書レビュー、C 案)。6 列だと 1 枠 54px
       // ほどしか無く、4 文字ラベルは自動折り返しに任せると語の途中で割れる
       // (「必要積」「立」のように)。折り返し位置はデータで固定する——語の
       // 切れ目は設計判断であって描画結果ではない。読み上げ名(ariaLabel)は
       // 変えない。
-      label: "借入\n可能",
+      label: "返済\n月額",
+      ariaLabel: "月々の返済額を求める",
+      variant: "function",
+    },
+    {
+      token: "mode:principal",
+      // **`可能額` は 3 文字なので 1 行に収まる**(可・能・額。2026-09-10
+      // 実測)。5 文字のラベルが 2 行に入るか、が正しい問いだった。
+      label: "借入\n可能額",
       ariaLabel: "借入可能額を求める",
       variant: "function",
     },
     {
       token: "mode:term",
-      label: "期間",
+      label: "返済\n期間",
       ariaLabel: "返済期間を求める",
       variant: "function",
     },
@@ -118,7 +156,7 @@ const MODES: KeypadSection<FinanceKeyToken> = {
     // コアも 1 本の関数である(設計書 §6)。
     {
       token: "mode:compound",
-      label: "複利",
+      label: "複利\n残高",
       ariaLabel: "複利で増やす",
       variant: "function",
     },
@@ -126,7 +164,7 @@ const MODES: KeypadSection<FinanceKeyToken> = {
     // かで探索の形が違う(単調 vs 非単調、設計書 §3〜§4)。
     {
       token: "mode:deposit-for",
-      label: "必要\n積立",
+      label: "必要\n積立額",
       ariaLabel: "必要な積立額を求める",
       variant: "function",
     },
@@ -142,9 +180,18 @@ const MODES: KeypadSection<FinanceKeyToken> = {
 const FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  // 「ボーナス」の 4 文字。**以前は 0.75rem に縮めて収めていた**が、
-  // 器を広げたので読める大きさに戻した(0.2.0 設計書 §8)。
-  height: "double",
+  // **半高。** 収まるようになったのは**字を縮めたからではない——ラベルを
+  // 短くしたからである**(「ボーナス」の 4 文字は 42px で 34px の枠を 8px
+  // はみ出す。「賞与」の 2 文字は 34px に収まる。2026-09-10 実測)。
+  // 0.2.0 が「0.75rem に縮めて収める」から退却して器を倍にした判断
+  // (0.2.0 設計書 §8)は**そのまま生きている**: 字は half の既定のまま
+  // 15px で、縮めていない(設計書 §11.4)。
+  //
+  // **上段(`MODES`)は `double` のまま**——2 行のラベルが 3 つあり 34px に
+  // 入らない。加えて、**同じ高さの 2 行は対等に見え、高さが違うほうが
+  // 階層に見える**——上段が主・下段が従という意図は `double` + `half` の
+  // ほうが達成する(設計書 §11.3)。
+  height: "half",
   keys: [
     {
       token: "field:principal",
@@ -182,7 +229,10 @@ const FIELDS: KeypadSection<FinanceKeyToken> = {
     // 差し替える(設計書 §6)——ここは月額モードの名前を既定として置く。
     {
       token: "field:bonus",
-      label: "ボーナス",
+      // **盤面のキーのラベルだけを短くする。** 読み上げ名(下の `ariaLabel`)
+      // と一覧の見出し(`FinancePanel.tsx` の `bonusName()`)には幅の制約が
+      // 掛からないので、「ボーナス」のまま残す(設計書 §11.4)。
+      label: "賞与",
       ariaLabel: "ボーナス返済分（元本）を入力",
       variant: "function",
     },
@@ -196,7 +246,9 @@ const FIELDS: KeypadSection<FinanceKeyToken> = {
 const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  height: "double",
+  // **`FIELDS` と同じ半高。** 差し替わる行なので高さが違うと入れ替えの
+  // たびに盤面が跳ねる。6 つとも 1 行 3 文字以内で 34px に収まる(実測)。
+  height: "half",
   keys: [
     {
       token: "field:principal",
@@ -224,8 +276,20 @@ const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
     },
     {
       token: "field:periods",
-      label: "周期",
-      ariaLabel: "複利の周期を選ぶ",
+      // **「方式」は利用者の裁定である**(2026-09-10)。面に「周期」と
+      // 「積立の位置」の 2 つが載ったので、どちらも覆う語にした。
+      // **実装役が一時置いた「周期他」は裁定を受けていなかった**ので差し替えた。
+      // **3 文字が上限である**——`variant: "function"` の字は 15px、キーの幅は
+      // 6 列で 54.33px(390) / 49.33px(360) なので、4 文字(60px)は折り返して
+      // 半高の枠からはみ出す(「ボーナス」が 8px はみ出した実測。設計書 §11.4)。
+      //
+      // **入力済みの chip の見出しも「方式」である**(`FinancePanel.tsx` の
+      // `FIELD_LABELS.periods`)。**押したキーと、変わった表示が同じ語になる。**
+      // 前は chip だけ「周期」のままで、キーと別の語だった——chip の見出しは
+      // 上の裁定(#12)の範囲に入っていなかったからで、#13 の裁定(利用者、
+      // 2026-09-10)で揃えた。**読み上げ名は正確なので変えない。**
+      label: "方式",
+      ariaLabel: "複利の周期と積立の位置を選ぶ",
       variant: "function",
     },
     {
@@ -268,9 +332,19 @@ export const PERIODS_FOR_FIELD_SECTION = PERIODS_FOR_FIELDS;
 /**
  * 周期の面。**面が入れ替わるのは「計算に入るもの」だから**——表示の読み方
  * だけを変えるトグルとは置き場所を分ける(設計書 §7)。
+ *
+ * **★ ここは意味の混載である。** 「周期」の面に「積立の位置」を同居させて
+ * いるのは、**縦の予算が決めた妥協**であって意味の整理ではない
+ * (設計書 §5.4.3)。**項目行に 7 つ目のキーは入らない**——`half` にしても
+ * 390px で余白 8.31px(`viewport-budget` の要求はちょうど 8px なので余裕
+ * 0.31px)、360px でははみ出し 3px である(設計書 §5.4.2 の実測)。
+ * **0.31px を頼りに設計しない。**
+ *
+ * **この面には空きスロットが 20 個あった**(`token: null` の「—」)。
+ * 2 つ使って **18 個**になる。**盤面の形は 1px も動かない。**
  */
 const PERIODS_FACE: KeypadSection<FinanceKeyToken> = {
-  ariaLabel: "複利の周期のキー",
+  ariaLabel: "複利の周期と積立の位置のキー",
   columns: 5,
   height: "square",
   keys: [
@@ -299,7 +373,24 @@ const PERIODS_FACE: KeypadSection<FinanceKeyToken> = {
       ariaLabel: "この項目を消去",
       variant: "danger",
     },
-    ...Array.from({ length: 20 }, () => ({
+    // **積立の位置。2 行目の頭に置く**——1 行目は周期と制御で埋まっている。
+    // **綴りは「期末」「期首」で確定している**(利用者裁定 2026-09-10、
+    // 設計書 §5.4.4)。カシオの日本語マニュアルと同じ語であり、
+    // **`BGN` の英字は出さない**(a11y の 13 画面名と同じ裁定)。
+    // **実装で綴りを変えないこと。**
+    {
+      token: "timing:end",
+      label: "期末",
+      ariaLabel: "積立を期末に行う",
+      variant: "function",
+    },
+    {
+      token: "timing:start",
+      label: "期首",
+      ariaLabel: "積立を期首に行う",
+      variant: "function",
+    },
+    ...Array.from({ length: 18 }, () => ({
       token: null,
       label: "—",
       ariaLabel: "空き",

@@ -27,18 +27,40 @@ test("the number pad keeps 44px touch targets", async ({ page }) => {
   }
 });
 
-test("the mode and field rows now clear 44px, both ways", async ({ page }) => {
-  // **この検査は主張が反転した。** 以前は「半高であること」(`< 44px`)を
-  // 守っていた——4 文字ラベルを 0.75rem に縮めて 34px に収めていた頃の話で
-  // ある。0.2.0 で器を倍にしたので(設計書 §8)、この 2 行は **44px を割る
-  // 例外ではなくなった**。縦を戻す変更が入ったらここで気づける。
-  for (const name of ["計算の種類", "入力する項目"]) {
-    const row = panel(page).getByRole("group", { name });
-    for (const button of await row.getByRole("button").all()) {
-      const box = await button.boundingBox();
-      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    }
+test("the mode row clears 44px, both ways", async ({ page }) => {
+  // **上段だけが 44px を両方向で満たす。** 0.2.0 で器を倍にしたので
+  // (設計書 §8)、ここは 44px を割る例外ではない。**下段は別の主張を持つ**
+  // ——次の検査を見ること。上段の縦を戻す変更が入ったらここで気づける。
+  const row = panel(page).getByRole("group", { name: "計算の種類" });
+  const buttons = await row.getByRole("button").all();
+  // **何件見たかを主張する。** 区画名が変わって 0 件になった日から、
+  // 下のループは何も測らないまま緑を返し続ける。
+  expect(buttons.length, "measured no mode keys at all").toBe(6);
+  for (const button of buttons) {
+    const box = await button.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("the field row is half height on purpose, and still 44px wide", async ({
+  page,
+}) => {
+  // **下段は半高に戻した**(設計書 §11)。44px はタッチの推奨最小だが、
+  // **誤爆の実害に比例させる**という上の判断(設計書 §8)がここにも掛かる
+  // ——項目は押し直せば戻るので縦だけ詰める。横の 44px は守る側である。
+  //
+  // **「44px 未満」ではなく「34px ちょうど」で見る。** 上限だけを見ると、
+  // 誰かが 20px に縮めても緑のままになる。34px は
+  // `tokens.css` の `--function-row-height`、つまり Scientific の関数列と
+  // 同じ高さである——**下段が `double` に戻れば 68px でここが赤くなる。**
+  const row = panel(page).getByRole("group", { name: "入力する項目" });
+  const buttons = await row.getByRole("button").all();
+  expect(buttons.length, "measured no field keys at all").toBe(6);
+  for (const button of buttons) {
+    const box = await button.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBe(34);
   }
 });
 

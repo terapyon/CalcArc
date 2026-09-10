@@ -1,3 +1,5 @@
+from decimal import Decimal, localcontext
+
 import pytest
 
 from calcarc_reference import compound_ref
@@ -233,9 +235,15 @@ def test_the_downward_walk_is_bounded_too(monkeypatch: pytest.MonkeyPatch) -> No
     real_seed = compound_ref._deposit_seed
 
     def _seed_ten_too_high(
-        principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+        principal: int,
+        num: int,
+        den: int,
+        periods: int,
+        target: int,
+        taxed: bool,
+        timing: str = compound_ref.END,
     ) -> int:
-        return real_seed(principal, num, den, periods, target, taxed) + 10
+        return real_seed(principal, num, den, periods, target, taxed, timing) + 10
 
     monkeypatch.setattr(compound_ref, "_deposit_seed", _seed_ten_too_high)
     monkeypatch.setattr(compound_ref, "MAX_WALK", 3)
@@ -318,3 +326,126 @@ def test_the_closed_form_check_still_catches_a_drift_worth_a_yen() -> None:
     for wrong in (exact + 1, exact - 100):
         with pytest.raises(ValueError, match="閉形式とのずれが範囲外"):
             compound_ref.check_against_closed_form(wrong, 1_000_000, 1000, num, den, 1)
+
+
+# ---------------------------------------------------------------------------
+# 積立の位置（設計書 2026-09-03 §5.4）
+# ---------------------------------------------------------------------------
+
+
+def test_the_default_timing_is_the_end_of_the_period() -> None:
+    # **既定は期末**（設計書 §5.4.1）。位置を渡さない呼び出しと `END` を
+    # 渡した呼び出しが一致し、`START` とは**違う**ことまで言う——判別ケースを
+    # 添えないと「位置が効いていない実装」でも緑になる。
+    num, den = compound_ref.rate_fraction("12", 12)  # 月 1%
+    assert compound_ref.grow(0, 10_000, num, den, 2) == 20_100
+    assert compound_ref.grow(0, 10_000, num, den, 2, compound_ref.END) == 20_100
+    assert compound_ref.grow(0, 10_000, num, den, 2, compound_ref.START) == 20_301
+
+
+def test_a_deposit_at_the_start_of_the_period_earns_interest_in_that_period() -> None:
+    # 1 期目: 10,000 を入れてから利息 100。2 期目: 20,100 に 10,000 を足して
+    # から利息 201。**期末との差は「その期に入れた金に利息が付くか」だけ**。
+    num, den = compound_ref.rate_fraction("12", 12)
+    assert compound_ref.grow(0, 10_000, num, den, 1, compound_ref.START) == 10_100
+    assert compound_ref.grow(0, 10_000, num, den, 2, compound_ref.START) == 20_301
+
+
+def test_a_deposit_of_zero_does_not_care_about_the_timing() -> None:
+    # **golden の格子で積立 0 を 1 通りに畳んでよい根拠**（設計書 §5.1 の
+    # 実測 0 円、§5.4.6.1 の教訓）。積立が無ければ位置は何も変えない。
+    num, den = compound_ref.rate_fraction("1", 2)
+    for periods in (1, 10, 120):
+        assert compound_ref.grow(1_000_000, 0, num, den, periods) == compound_ref.grow(
+            1_000_000, 0, num, den, periods, compound_ref.START
+        )
+
+
+def test_the_start_of_period_can_tie_with_the_end_of_period() -> None:
+    # **「積立があれば期首は必ず期末を上回る」は偽**（設計書 §5.4.6.1 の実測
+    # 反例）。7 円に付く 1 期の利息 0.0175 円を floor が飲み込む。
+    num, den = compound_ref.rate_fraction("3", 12)
+    assert compound_ref.grow(1_000_000, 7, num, den, 1) == 1_002_507
+    assert compound_ref.grow(1_000_000, 7, num, den, 1, compound_ref.START) == 1_002_507
+
+
+def test_the_closed_form_multiplies_the_annuity_by_one_growth_factor() -> None:
+    # 期首の閉形式は**年金部分に (1+r) を 1 回余分に掛けるだけ**である
+    # （設計書 §5.4.5）。式をそのまま書き下したものと突き合わせる。
+    num, den = compound_ref.rate_fraction("3", 12)
+    r = Decimal(num) / Decimal(den)
+    with localcontext() as ctx:
+        ctx.prec = compound_ref.PRECISION
+        growth = (1 + r) ** 240
+        expected = Decimal(1_000_000) * growth + Decimal(30_000) * (growth - 1) / r * (1 + r)
+        actual = compound_ref.closed_form(1_000_000, 30_000, num, den, 240, compound_ref.START)
+        assert actual == expected
+    # 利率 0 では位置が効かない（`closed_form` の `r == 0` の枝）。
+    zero_num, zero_den = compound_ref.rate_fraction("0", 12)
+    assert compound_ref.closed_form(
+        0, 30_000, zero_num, zero_den, 12, compound_ref.START
+    ) == compound_ref.closed_form(0, 30_000, zero_num, zero_den, 12)
+
+
+def test_the_closed_form_check_holds_for_both_timings() -> None:
+    # **向きと上界を期首について導き直した結果、同じ式で通る**（2026-09-10）。
+    # ここは掃引の縮小版で、**何回比較したかを数えてから**下限を主張する
+    # ——格子の張り方を間違えて 0 回になっても緑になるのを防ぐ。
+    checked = 0
+    for principal in (0, 1_000, 1_000_000):
+        for deposit in (0, 7, 30_000):
+            if principal == 0 and deposit == 0:
+                continue
+            for rate in ("0", "0.0001", "1.5", "6"):
+                for ppy in (1, 2, 12):
+                    num, den = compound_ref.rate_fraction(rate, ppy)
+                    for periods in (1, 12, 240):
+                        for timing in (compound_ref.END, compound_ref.START):
+                            exact = compound_ref.grow(principal, deposit, num, den, periods, timing)
+                            compound_ref.check_against_closed_form(
+                                exact, principal, deposit, num, den, periods, timing
+                            )
+                            checked += 1
+    assert checked == 576, f"格子が {checked} 通りしか回っていない"
+
+
+def test_certifying_one_timing_with_the_other_is_caught() -> None:
+    # **番人自身に判別力があること**を見てから信じる（このファイルの流儀）。
+    # 位置を取り違えると**両方向**に破れる:
+    #   期首の答を期末の閉形式で見る → 閉形式のほうが小さく、**向き**が破れる
+    #   期末の答を期首の閉形式で見る → 差が (1+r) 倍ぶん開き、**上界**が破れる
+    num, den = compound_ref.rate_fraction("3", 12)
+    at_start = compound_ref.grow(0, 30_000, num, den, 240, compound_ref.START)
+    at_end = compound_ref.grow(0, 30_000, num, den, 240)
+    with pytest.raises(ValueError, match="閉形式とのずれが範囲外"):
+        compound_ref.check_against_closed_form(at_start, 0, 30_000, num, den, 240)
+    with pytest.raises(ValueError, match="閉形式とのずれが範囲外"):
+        compound_ref.check_against_closed_form(at_end, 0, 30_000, num, den, 240, compound_ref.START)
+
+
+def test_the_inverse_ops_take_the_timing_too() -> None:
+    # 期首のほうが早く育つので、必要積立額は減り、必要年数は縮む。
+    # **どちらも実際に動く入力を選んである**——期数は整数なので、位置の差が
+    # 期の境界をまたがない入力では同じ答になる（実測。golden の註を参照）。
+    num, den = compound_ref.rate_fraction("3", 12)
+    assert compound_ref.deposit_for(0, num, den, 240, 10_000_000, taxed=False) == 30_461
+    assert (
+        compound_ref.deposit_for(0, num, den, 240, 10_000_000, False, compound_ref.START) == 30_385
+    )
+    assert compound_ref.periods_for(0, 30_000, num, den, 1_000_000, taxed=False) == 33
+    assert compound_ref.periods_for(0, 30_000, num, den, 1_000_000, False, compound_ref.START) == 32
+
+
+def test_an_unknown_timing_is_refused_at_the_entry() -> None:
+    # 知らない綴りを黙って期末に倒すと、位置を取り違えた入力が「既定で計算した
+    # 値」として golden に焼き付く。
+    params = {
+        "principal": "0",
+        "deposit": "30000",
+        "rate": "3",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+        "timing": "middle",
+    }
+    assert compound_ref.compute("compound_grow", params) == {"error": "SyntaxError"}

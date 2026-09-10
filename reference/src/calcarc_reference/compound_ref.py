@@ -10,7 +10,9 @@
 知らなければ独立検証を書けないもの）:
 
 1. 1 期の利息 = `balance * num // den`（厳密整数、円未満切り捨て、元本組入）。
-2. 積立は**期末**——利息を付けてから足す。その期に入れた金は利息を生まない。
+2. 積立の位置は選べる。**既定は期末**——利息を付けてから足す。その期に入れた
+   金は利息を生まない。期首を選ぶと積立が利息の前に入り、その期の利息を生む
+   (設計書 2026-09-03 §5.4)。
 3. 年利 → 1 期の利率は**名目**（分母に期/年を掛ける）。実効換算は使わない
    （無理数になり分数に載らない。numerical-policy）。
 4. 税は国税 15.315% と地方税 5% を**別々に**切り捨て、課税対象は利息。
@@ -22,12 +24,20 @@
 from __future__ import annotations
 
 from decimal import Decimal, localcontext
+from typing import Literal
 
 PRECISION = 50
 U64_MAX = (1 << 64) - 1
 # 期数の上限。loan の MAX_TERM_MONTHS と揃える（月次なら 100 年ぶん）。
 MAX_PERIODS = 1200
 PERIODS_PER_YEAR = (1, 2, 12)
+
+# 積立を期のどちらの端で入れるか。**既定は期末**(設計書 §5.4.1)。Rust の
+# `compound::DepositTiming` と同じ 2 値だが、こちらは golden の JSON にその
+# まま載る綴りを持つ——`timing` を書かないケースが**既定の経路**である。
+Timing = Literal["end", "start"]
+END: Timing = "end"
+START: Timing = "start"
 
 NATIONAL_TAX_NUM, NATIONAL_TAX_DEN = 15315, 100_000  # 15.315%
 LOCAL_TAX_NUM, LOCAL_TAX_DEN = 5, 100  # 5%
@@ -82,12 +92,18 @@ def rate_fraction(percent: str, periods_per_year: int) -> tuple[int, int]:
     return numerator, scale * 100 * periods_per_year
 
 
-def grow(principal: int, deposit: int, num: int, den: int, periods: int) -> int:
+def grow(
+    principal: int, deposit: int, num: int, den: int, periods: int, timing: Timing = END
+) -> int:
     """厳密整数で期を回す。**答はこれが出す。**
 
-    独立: 不可能（`compound::grow` と同じループ——1 期ごとに floor で利息を付け、
-    積立を足す。**各期の切り捨てが経路に依存する**ので閉形式に置き換えられない。
-    この経路の独立は、下の `closed_form` が外から検算することで担っている）
+    `timing` を渡さない呼び出しが**既定の経路**である（Rust が `grow` と
+    `grow_with_timing` を分けているのと同じ理由。設計書 §5.4.6）。
+
+    独立: 不可能（`compound::grow_with_timing` と同じループ——1 期ごとに floor で
+    利息を付け、積立を位置に応じて前か後ろに足す。**各期の切り捨てが経路に依存する**
+    ので閉形式に置き換えられない。この経路の独立は、下の `closed_form` が外から
+    検算することで担っている）
     """
     if periods <= 0 or periods > MAX_PERIODS:
         raise CompoundError("SyntaxError")
@@ -97,15 +113,33 @@ def grow(principal: int, deposit: int, num: int, den: int, periods: int) -> int:
         raise CompoundError("SyntaxError")
     balance = principal
     for _ in range(periods):
+        if timing == START:
+            balance += deposit  # 期首（契約 2）: 利息の前に入るので利息が付く
         balance += balance * num // den  # 期中の利息、円未満切り捨てで元本組入
-        balance += deposit  # 積立は期末（契約 2）
+        if timing == END:
+            balance += deposit  # 期末（契約 2、既定）
+        # 期中で残高が減ることは無いので、期末の 1 点だけ見れば溢れは捕まる。
         if balance > U64_MAX:
             raise CompoundError("Overflow")
     return balance
 
 
-def closed_form(principal: int, deposit: int, num: int, den: int, periods: int) -> Decimal:
+def closed_form(
+    principal: int, deposit: int, num: int, den: int, periods: int, timing: Timing = END
+) -> Decimal:
     """番人。Decimal 50 桁で素直に評価する（int ループの式変形は写さない）。
+
+        期末  FV = P(1+r)^n + PMT·((1+r)^n − 1)/r
+        期首  FV = P(1+r)^n + PMT·((1+r)^n − 1)/r · (1+r)
+
+    期首は**年金部分に (1+r) を 1 回余分に掛けるだけ**である（各回の積立が
+    1 期ぶん長く運用される、という年金の教科書どおりの書き方）。**整数ループに
+    位置の分岐を足したものの写しではない**——ループは 1 期ずつ floor するが、
+    こちらは n 期ぶんをまとめて 1 本の式で評価する。
+
+    利率 0 では位置は効かない（利息が常に 0 なので、いつ入れても同じ）。
+    **その退化はここで 1 行に畳んである**——`(1+r)` を掛けても 1 倍にしか
+    ならないので、分岐そのものが要らない。
 
     独立: 別手順（**Rust にこの経路は無い**。整数ループの答を、閉形式を Decimal 50 桁で
     評価した値と突き合わせるためだけに在る。ここが実質的な独立軸である）
@@ -116,16 +150,64 @@ def closed_form(principal: int, deposit: int, num: int, den: int, periods: int) 
         if r == 0:
             return Decimal(principal) + Decimal(deposit) * periods
         growth = (1 + r) ** periods
-        return Decimal(principal) * growth + Decimal(deposit) * (growth - 1) / r
+        annuity = Decimal(deposit) * (growth - 1) / r
+        if timing == START:
+            annuity *= 1 + r
+        return Decimal(principal) * growth + annuity
 
 
 def check_against_closed_form(
-    exact: int, principal: int, deposit: int, num: int, den: int, periods: int
+    exact: int,
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    periods: int,
+    timing: Timing = END,
 ) -> None:
     """ずれが向きと上界の中に居ることを確かめる。
 
     向き: 各期の切り捨ては受取を減らすので、厳密ループは閉形式**以下**。
     上界: 1 期あたり 1 円未満の損が最後まで複利で育つので 期数×(1+r)^期数。
+
+    **向きと上界を期首について導き直した結果、同じ式になる**（2026-09-10）。
+    設計書 §5.4.5 は「そのまま使えるかは未確認」と書いていたので、仮定せずに
+    導いた。1 期の漸化式を実数で書くと
+
+        期末  b_k = floor(b_{k−1}(1+r)) + d = b_{k−1}(1+r) + d − φ_k
+        期首  b_k = floor((b_{k−1}+d)(1+r))  = (b_{k−1}+d)(1+r)   − φ_k
+
+    で、`φ_k ∈ [0, 1)` は floor が落とした端数である。閉形式 `B_k` は同じ
+    漸化式を `φ_k = 0` で回したものだから、ずれ `e_k = B_k − b_k` は
+    **どちらの位置でも同じ漸化式**に従う:
+
+        e_k = e_{k−1}(1+r) + φ_k,   e_0 = 0
+        ⇒ e_n = Σ_{k=1..n} φ_k (1+r)^{n−k}
+
+    **位置が変えるのは φ_k が乗る残高（期首のほうが大きい）であって、
+    φ_k の範囲でも (1+r) が掛かる回数でもない。** 端数はどちらでも 1 円未満で、
+    どちらでも n−k 回だけ複利で育つ。したがって
+
+        0 ≤ e_n < Σ_{k=1..n} (1+r)^{n−k} = ((1+r)^n − 1)/r
+                ≤ n(1+r)^{n−1} ≤ n(1+r)^n = 上界
+
+    ——**上界は期首でもそのまま使える**（しかも `(1+r)` 倍ぶん緩い）。
+
+    **掃引で確かめた**（2026-09-10 実測。**破れは 1 件も無い**）:
+
+    - 格子: 元本 {0, 1, 1000, 100 万, 10 億} × 積立 {0, 1, 7, 3 万, 500 万} ×
+      年利 {0, 0.0001, 0.1, 1, 1.5, 3, 6, 100}% × 周期 {1, 2, 12} ×
+      期数 {1, 2, 3, 12, 60, 240, 1200} × 位置 2 通り。溢れる組を除いて
+      **7,672 件**、向きの破れ 0 件・上界の破れ 0 件。
+    - 無作為: 同じ定義域から 40,000 回引いて溢れない **11,479 件**、
+      向きの破れ 0 件・上界の破れ 0 件。
+
+    上界に対するずれの比（`e_n / (n(1+r)^n)`）の最大は**期末 0.8607 /
+    期首 0.8665**（どちらも 元本 1,000・積立 7・年 1%・月複利・12 期）。
+    **期首のほうがわずかに上界へ寄るが、超えない**——期首は残高が大きい
+    ぶん端数 φ_k が 1 に近い値を取りやすいだけで、φ_k < 1 の壁は動かない。
+    代表点（積立 3 万・年 3%・月複利・240 期）では
+    **期末 153.94 円 / 期首 154.59 円**（上界 436.98 円、比 0.3523 / 0.3538）。
 
     **下側にわずかな余裕を持たせる。** 向きの主張は数学のものだが、閉形式は
     有限桁の Decimal で評価しているので、ずれが厳密に 0 のときに丸めが
@@ -155,7 +237,7 @@ def check_against_closed_form(
     """
     with localcontext() as ctx:
         ctx.prec = PRECISION
-        closed = closed_form(principal, deposit, num, den, periods)
+        closed = closed_form(principal, deposit, num, den, periods, timing)
         drift = closed - Decimal(exact)
         r = Decimal(num) / Decimal(den)
         bound = Decimal(periods) * (1 + r) ** periods
@@ -175,13 +257,21 @@ def withholding_tax(interest: int) -> tuple[int, int]:
     return national, local
 
 
-def reached(principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool) -> int:
+def reached(
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    periods: int,
+    taxed: bool,
+    timing: Timing = END,
+) -> int:
     """目標と比べる値。税 ON なら手取り、OFF なら残高（公開契約 6）。
 
     独立: 不可能（何と比べるかは公開契約そのもの。`compound_inverse` の `reached` と
     同じ規則になる）
     """
-    balance = grow(principal, deposit, num, den, periods)
+    balance = grow(principal, deposit, num, den, periods, timing)
     if not taxed:
         return balance
     interest = balance - (principal + deposit * periods)
@@ -195,7 +285,13 @@ MAX_WALK = 100_000
 
 
 def _reached_or_nothing(
-    principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    periods: int,
+    taxed: bool,
+    timing: Timing = END,
 ) -> int:
     """探索中の 1 手。**何も入れていない状態は「何にも届かない」**として扱う。
 
@@ -206,11 +302,17 @@ def _reached_or_nothing(
     """
     if principal == 0 and deposit == 0:
         return 0
-    return reached(principal, deposit, num, den, periods, taxed)
+    return reached(principal, deposit, num, den, periods, taxed, timing)
 
 
 def _deposit_seed(
-    principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+    principal: int,
+    num: int,
+    den: int,
+    periods: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
 ) -> int:
     """Decimal 閉形式から積立額の種を作る。**二分探索にしない**——ここが
     唯一の式で、ここが悪いと下の歩きが `MAX_WALK` を使い切る（設計書 §4.9）。
@@ -223,10 +325,14 @@ def _deposit_seed(
         net ≈ balance − TAX_RATE × (balance − 投入合計)
             = balance × (1 − TAX_RATE) + TAX_RATE × 投入合計
 
-    に `balance = principal × growth + d × (growth − 1) / r`、
+    に `balance = principal × growth + d × (growth − 1) / r × f`、
     `投入合計 = principal + d × periods` を代入し、`net = target` を
     `d` について解く。切り捨て 2 回ぶんの誤差は数円に収まるので、
     ここから歩けば数歩で当たる。
+
+    `f` は積立の位置の係数で、**期末なら 1、期首なら (1+r)**（`closed_form` と
+    同じ 1 か所の違い）。投入合計は位置に依らない——いつ入れても入れた額は同じ
+    である。
     """
     with localcontext() as ctx:
         ctx.prec = PRECISION
@@ -234,18 +340,28 @@ def _deposit_seed(
         growth = (1 + r) ** periods
         if r == 0:
             # 利率 0: 利息は常に 0、税があっても効かない。target == balance。
+            # 位置も効かない（利息が無いので入れる順に意味が無い）。
             return int((Decimal(target) - Decimal(principal)) / Decimal(periods))
+        annuity = (growth - 1) / r
+        if timing == START:
+            annuity *= 1 + r
         if not taxed:
             remain = Decimal(target) - Decimal(principal) * growth
-            return int(remain * r / (growth - 1))
+            return int(remain / annuity)
         net_factor = 1 - TAX_RATE
         numerator = Decimal(target) - Decimal(principal) * (net_factor * growth + TAX_RATE)
-        denominator = net_factor * (growth - 1) / r + TAX_RATE * periods
+        denominator = net_factor * annuity + TAX_RATE * periods
         return int(numerator / denominator)
 
 
 def _deposit_search(
-    principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+    principal: int,
+    num: int,
+    den: int,
+    periods: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
 ) -> tuple[int, int]:
     """`deposit_for` の実体。返り値は `(答, 使った歩数)`。
 
@@ -255,9 +371,9 @@ def _deposit_search(
     """
     if target <= 0:
         raise CompoundError("SyntaxError")
-    if _reached_or_nothing(principal, 0, num, den, periods, taxed) >= target:
+    if _reached_or_nothing(principal, 0, num, den, periods, taxed, timing) >= target:
         return 0, 0
-    seed = _deposit_seed(principal, num, den, periods, target, taxed)
+    seed = _deposit_seed(principal, num, den, periods, target, taxed, timing)
     d = max(seed, 0)
     steps = 0
     while d > 0:
@@ -265,18 +381,26 @@ def _deposit_search(
             raise DepositSearchLimitError(
                 f"種から下向きに {MAX_WALK} 歩使い切っても下限に届かない（種 {seed}）"
             )
-        if _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target:
+        if _reached_or_nothing(principal, d - 1, num, den, periods, taxed, timing) < target:
             break
         d -= 1
         steps += 1
     for step in range(MAX_WALK):
-        if _reached_or_nothing(principal, d, num, den, periods, taxed) >= target:
+        if _reached_or_nothing(principal, d, num, den, periods, taxed, timing) >= target:
             return d, steps + step
         d += 1
     raise DepositSearchLimitError(f"種から {MAX_WALK} 歩いても届かない（種 {seed}）")
 
 
-def deposit_for(principal: int, num: int, den: int, periods: int, target: int, taxed: bool) -> int:
+def deposit_for(
+    principal: int,
+    num: int,
+    den: int,
+    periods: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
+) -> int:
     """目標を下回らない最小の積立額（設計書 §1 の裁定 4）。
 
     **二分探索しない**——Rust がそれをやる。ここは Decimal 閉形式の種から
@@ -301,11 +425,19 @@ def deposit_for(principal: int, num: int, den: int, periods: int, target: int, t
         raise CompoundError("SyntaxError")
     if periods <= 0 or periods > MAX_PERIODS:
         raise CompoundError("SyntaxError")
-    answer, _steps = _deposit_search(principal, num, den, periods, target, taxed)
+    answer, _steps = _deposit_search(principal, num, den, periods, target, taxed, timing)
     return answer
 
 
-def periods_for(principal: int, deposit: int, num: int, den: int, target: int, taxed: bool) -> int:
+def periods_for(
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
+) -> int:
     """目標を下回らない最小の期数。**最初に届いた期**（設計書 §4）。
 
     独立: 不可能（`compound_inverse::periods_for` と同じ前進走査。**手取りは期数に
@@ -317,27 +449,41 @@ def periods_for(principal: int, deposit: int, num: int, den: int, target: int, t
     if principal == 0 and deposit == 0:
         raise CompoundError("SyntaxError")
     for n in range(1, MAX_PERIODS + 1):
-        if reached(principal, deposit, num, den, n, taxed) >= target:
+        if reached(principal, deposit, num, den, n, taxed, timing) >= target:
             return n
     raise CompoundError("SyntaxError")  # 1200 期でも届かない = 発散
 
 
 def check_deposit_certificate(
-    d: int, principal: int, num: int, den: int, periods: int, target: int, taxed: bool
+    d: int,
+    principal: int,
+    num: int,
+    den: int,
+    periods: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
 ) -> None:
     """単調側。答の両隣 2 点で足りる（単調性の証明が §3 にある）。
 
     独立: 別手順（**Rust にこの経路は無い**。答が最小であることを両隣で確かめる証明書）
     """
-    assert reached(principal, d, num, den, periods, taxed) >= target, f"{d} が届かない"
+    assert reached(principal, d, num, den, periods, taxed, timing) >= target, f"{d} が届かない"
     if d > 0:
-        assert _reached_or_nothing(principal, d - 1, num, den, periods, taxed) < target, (
+        assert _reached_or_nothing(principal, d - 1, num, den, periods, taxed, timing) < target, (
             f"{d} は最小でない"
         )
 
 
 def check_periods_certificate(
-    n: int, principal: int, deposit: int, num: int, den: int, target: int, taxed: bool
+    n: int,
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    target: int,
+    taxed: bool,
+    timing: Timing = END,
 ) -> None:
     """非単調側。**1..n−1 の全数**を見る——「最初に届く」の定義そのもの。
 
@@ -350,7 +496,11 @@ def check_periods_certificate(
     balance = principal
     total = principal
     for k in range(1, n + 1):
-        balance += balance * num // den + deposit
+        if timing == START:
+            balance += deposit
+        balance += balance * num // den
+        if timing == END:
+            balance += deposit
         total += deposit
         interest = balance - total
         if taxed:
@@ -381,13 +531,27 @@ def compute(op: str, params: dict) -> dict:
     raise ValueError(f"unknown op {op}")
 
 
+def _timing_of(params: dict) -> Timing:
+    """入力の `timing` を読む。**書いていなければ期末**（既定の経路）。
+
+    綴りは golden にそのまま載る。知らない綴りを黙って期末に倒すと、位置を
+    取り違えた入力が「既定で計算した値」として golden に焼き付くので、
+    ここで落とす。
+    """
+    value = params.get("timing", END)
+    if value not in (END, START):
+        raise CompoundError("SyntaxError")
+    return value
+
+
 def _compute_grow(params: dict) -> dict:
     principal = int(params["principal"])
     deposit = int(params["deposit"])
     periods = params["periods"]
+    timing = _timing_of(params)
     num, den = rate_fraction(params["rate"], params["periods_per_year"])
-    final = grow(principal, deposit, num, den, periods)
-    check_against_closed_form(final, principal, deposit, num, den, periods)
+    final = grow(principal, deposit, num, den, periods, timing)
+    check_against_closed_form(final, principal, deposit, num, den, periods, timing)
     principal_total = principal + deposit * periods
     interest = final - principal_total
     result = {
@@ -408,10 +572,11 @@ def _compute_deposit_for(params: dict) -> dict:
     target = int(params["target"])
     periods = params["periods"]
     taxed = bool(params.get("tax"))
+    timing = _timing_of(params)
     num, den = rate_fraction(params["rate"], params["periods_per_year"])
-    d = deposit_for(principal, num, den, periods, target, taxed)
-    check_deposit_certificate(d, principal, num, den, periods, target, taxed)
-    return {"deposit": str(d), **_picture(principal, d, num, den, periods, taxed)}
+    d = deposit_for(principal, num, den, periods, target, taxed, timing)
+    check_deposit_certificate(d, principal, num, den, periods, target, taxed, timing)
+    return {"deposit": str(d), **_picture(principal, d, num, den, periods, taxed, timing)}
 
 
 def _compute_periods_for(params: dict) -> dict:
@@ -419,15 +584,24 @@ def _compute_periods_for(params: dict) -> dict:
     deposit = int(params["deposit"])
     target = int(params["target"])
     taxed = bool(params.get("tax"))
+    timing = _timing_of(params)
     num, den = rate_fraction(params["rate"], params["periods_per_year"])
-    n = periods_for(principal, deposit, num, den, target, taxed)
-    check_periods_certificate(n, principal, deposit, num, den, target, taxed)
-    return {"periods": str(n), **_picture(principal, deposit, num, den, n, taxed)}
+    n = periods_for(principal, deposit, num, den, target, taxed, timing)
+    check_periods_certificate(n, principal, deposit, num, den, target, taxed, timing)
+    return {"periods": str(n), **_picture(principal, deposit, num, den, n, taxed, timing)}
 
 
-def _picture(principal: int, deposit: int, num: int, den: int, periods: int, taxed: bool) -> dict:
+def _picture(
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    periods: int,
+    taxed: bool,
+    timing: Timing = END,
+) -> dict:
     """答におけるその期の全体像（設計書 §4 の Solution と同じ内訳）。"""
-    balance = grow(principal, deposit, num, den, periods)
+    balance = grow(principal, deposit, num, den, periods, timing)
     total = principal + deposit * periods
     interest = balance - total
     out = {

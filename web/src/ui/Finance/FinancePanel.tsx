@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { type ExprCalc, initExpr, type UnitSetName } from "../../expr";
 import {
   type CompoundInverseResult,
+  DEPOSIT_TIMING_TOKENS,
+  type DepositTiming,
   type FinanceCalc,
   initFinance,
 } from "../../finance";
@@ -100,6 +102,19 @@ const PERIOD_LABELS: Record<1 | 2 | 12, string> = {
 };
 
 /**
+ * 積立の位置の、画面に出る語。**「期末」「期首」で確定している**
+ * (利用者裁定 2026-09-10、設計書 §5.4.4)。**`BGN` の英字は出さない。**
+ *
+ * **新しい chip は作らない**(設計書 §5.4.2)。この語は「方式」の chip の
+ * 値に畳まれて `月ごと・期末` のように出る——**7 つ目の chip を足すと、
+ * 綴り次第で 3 行目に届き、パネルの余白が 8px を割る**(実測)。
+ */
+const TIMING_LABELS: Record<DepositTiming, string> = {
+  end: "期末",
+  start: "期首",
+};
+
+/**
  * その項目で単位キーが何になるか。**金額は 万/億、期間は 年/月、年利は無い。**
  * 5 列目の 2 マスは項目に従って差し替わる(設計書 §5)。
  */
@@ -167,7 +182,32 @@ function isCompoundFamily(
   return m === "compound" || m === "deposit-for" || m === "periods-for";
 }
 
-const FIELD_LABELS: Record<FinanceField, string> = {
+/**
+ * 常設の説明。**方式ごとに 1 文字列**(設計書 §4.2.1「常設 2 行だけ。
+ * 開閉式は作らない」)。
+ *
+ * **★ 文案はまだ動く。** 未決 #1・#3・#6 は「常設 2 行の綴り」として
+ * 開いたままである(設計書 §8)。だから**ここが唯一の置き場**であり、
+ * **型にも検査にも染み出させない**——検査が見るのは方式ごとに期待する
+ * 「語」(ローンに `返済額`、複利に `切り捨て`)だけで、文そのものではない。
+ * 綴りを差し替えても検査は動かない。
+ *
+ * **★ 複利の文は「選んだ位置」と言う。** 一度は「積立は期末に行います」と
+ * 言い切っていた——**そのときは期末しか無かった**からである。位置を選べる
+ * ようにした同じコミットで差し替えた(計画 Task 7)。**選べるのに「期末に
+ * 行います」と書いてあると、期首を選んだ画面が嘘をつく。**
+ *
+ * **★ 2 行以内であること。** `tests/e2e/finance-layout.spec.ts` が
+ * 390×844 と 360×800 の両方で数えている。**伸ばすほうを選ばない**
+ * ——3 行目は縦の予算の話になる(設計書 §11.5)。
+ */
+const DISCLAIMER = {
+  loan: "実際の返済額は金融機関の計算方法により異なります。",
+  compound:
+    "各期の利息を 1 円未満切り捨て、積立は選んだ位置（期末／期首）に行います。税は国税と地方税を別々に切り捨てます。",
+} as const;
+
+export const FIELD_LABELS: Record<FinanceField, string> = {
   principal: "借入額",
   rate: "年利",
   months: "期間",
@@ -175,7 +215,7 @@ const FIELD_LABELS: Record<FinanceField, string> = {
   residual: "残価",
   bonus: "ボーナス",
   deposit: "積立額",
-  periods: "周期",
+  periods: "方式",
   tax: "税",
   target: "目標額",
 };
@@ -249,6 +289,11 @@ export function FinancePanel() {
   const [withholding, setWithholding] = useState(
     () => loadSettings().finance.withholding,
   );
+  // **積立の位置も同じ面で選ぶ**(設計書 §5.4.3)。**既定は期末**
+  // ——保存が空なら `defaultSettings()` が `"end"` を返す(§5.4.1)。
+  const [depositTiming, setDepositTiming] = useState<DepositTiming>(
+    () => loadSettings().finance.depositTiming,
+  );
 
   /** 設定を 1 項目だけ書き戻す。**新しい値を使う**——state の更新は
       非同期なので、直後に読むと 1 つ前の値を保存することになる。 */
@@ -256,6 +301,7 @@ export function FinancePanel() {
     mode?: PanelMode;
     periodsPerYear?: PeriodsPerYear;
     withholding?: boolean;
+    depositTiming?: DepositTiming;
   }): void {
     updateSettings((current) => ({
       ...current,
@@ -449,6 +495,7 @@ export function FinancePanel() {
     if (token.startsWith("field:")) return token === `field:${active}`;
     if (token.startsWith("period:"))
       return token === `period:${periodsPerYear}`;
+    if (token.startsWith("timing:")) return token === `timing:${depositTiming}`;
     if (token === "tax:none") return !withholding;
     if (token === "tax:withholding") return withholding;
     return undefined;
@@ -498,6 +545,17 @@ export function FinancePanel() {
     const nextField = parsePrefixed(token, "field:", FINANCE_FIELDS);
     if (nextField !== null) {
       setActive(nextField);
+      return;
+    }
+    // **`as` で切り出さない**(`tests/unit/proven-casts.test.ts`)。一覧に
+    // 載っていることを実行時に確かめてから union に入れる。
+    const nextTiming = parsePrefixed(token, "timing:", DEPOSIT_TIMING_TOKENS);
+    if (nextTiming !== null) {
+      setDepositTiming(nextTiming);
+      // 変わっていないなら書かない(モード・周期と同じ理由)。
+      if (nextTiming !== depositTiming) {
+        rememberFinance({ depositTiming: nextTiming });
+      }
       return;
     }
     if (token.startsWith("digit:")) {
@@ -578,7 +636,12 @@ export function FinancePanel() {
 
   /** 項目の、打った通りの文字列。周期と税は選んだものを言葉で出す。 */
   function typedIn(field: FinanceField): string {
-    if (field === "periods") return PERIOD_LABELS[periodsPerYear];
+    // **「方式」の chip に、周期と積立の位置を畳む**(設計書 §5.4.2)——値は
+    // `月ごと・期末`で、見出しと合わせて `方式 月ごと・期末` と出る。
+    // **新しい chip を作らない**: 7 つ目を足すと綴り次第で 3 行目に届き、
+    // パネルの余白が 8px を割る(実測)。
+    if (field === "periods")
+      return `${PERIOD_LABELS[periodsPerYear]}・${TIMING_LABELS[depositTiming]}`;
     if (field === "tax") return withholding ? "20.315%" : "なし";
     return text(entryOf(field));
   }
@@ -692,6 +755,7 @@ export function FinancePanel() {
         periodsPerYear,
         periods,
         withholding,
+        depositTiming,
       );
       if (r.kind === "error") {
         error = r.code;
@@ -723,6 +787,7 @@ export function FinancePanel() {
         periodsPerYear,
         periods,
         withholding,
+        depositTiming,
       );
       if (r.kind === "error") {
         error = r.code;
@@ -749,6 +814,7 @@ export function FinancePanel() {
         rate,
         periodsPerYear,
         withholding,
+        depositTiming,
       );
       if (r.kind === "error") {
         error = r.code;
@@ -899,8 +965,12 @@ export function FinancePanel() {
         </div>
       )}
       {/* 免責は常設(M6 設計書 §0)。エラーではないので alert にしない。 */}
+      {/* **方式で中身が変わる。** ローンと複利では食い違う点が別だから
+          である(設計書 §4.2.1)。**要素は 1 つのまま**——`<p>` を 2 つに
+          割ると、行数の番人(`finance-layout.spec.ts` の
+          `section[aria-label="金融計算"] > p`)が 2 件を数えて落ちる。 */}
       <p className={styles.disclaimer}>
-        実際の返済額は金融機関の計算方法により異なります。
+        {isCompoundFamily(mode) ? DISCLAIMER.compound : DISCLAIMER.loan}
       </p>
     </section>
   );

@@ -144,6 +144,20 @@ const CALLS: Record<string, (input: Record<string, never>) => unknown> = {
       str(i, "rate"),
       num(i, "n"),
     ),
+  // **複利の 3 つは積立の位置(`timing`)を `"end"` と書いて渡す。**
+  //
+  // 境界にも TypeScript のラッパー(`web/src/finance/index.ts`)にも
+  // **わざと既定値を置いていない**——省略できると、渡し忘れが黙って期末に
+  // なる(設計書 2026-09-03 §5.4.1)。harness も同じ流儀で、「期末で
+  // 回している」をここに書く。入力(`i`)からは読まない: コーパスに
+  // `timing` を持つケースは 0 件で、`str(i, "timing")` は例外を投げる。
+  //
+  // **穴を穴として書いておく。重量級のコーパスは期首のケースを 1 件も
+  // 持たない。** 期首を参照と突き合わせているのは `testdata/finance.json`
+  // の golden(`timing` を持つ 14 件のうち期首 13 件)と E2E
+  // (`web/tests/e2e/finance-compound.spec.ts`)だけで、あとは Rust の
+  // ユニットテストが見ているにとどまる。重量級を期首へ広げるのは、
+  // 期末/期首を足した枝(`docs/finance-convention`)の範囲外。
   compound_grow: (i) =>
     compound_grow(
       str(i, "principal"),
@@ -152,6 +166,7 @@ const CALLS: Record<string, (input: Record<string, never>) => unknown> = {
       num(i, "periods_per_year"),
       num(i, "periods"),
       bool(i, "tax"),
+      "end",
     ),
   compound_deposit_for: (i) =>
     compound_deposit_for(
@@ -161,6 +176,7 @@ const CALLS: Record<string, (input: Record<string, never>) => unknown> = {
       num(i, "periods_per_year"),
       num(i, "periods"),
       bool(i, "tax"),
+      "end",
     ),
   compound_periods_for: (i) =>
     compound_periods_for(
@@ -170,6 +186,7 @@ const CALLS: Record<string, (input: Record<string, never>) => unknown> = {
       str(i, "rate"),
       num(i, "periods_per_year"),
       bool(i, "tax"),
+      "end",
     ),
 };
 
