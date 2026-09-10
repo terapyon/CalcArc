@@ -196,9 +196,10 @@ describe("画面のラベルの集め方", () => {
   it("collects every label the screens show", () => {
     // **件数の下限を置く。** 定義元を 1 つ読み損ねても、集合が空になっても、
     // 「知らない名前 0 件」は緑になる——**空の集合で緑にしない。**
-    // 数は 2026-09-10 に数えた実数（`manuals-pdf` の枝）。ラベルを減らす
+    // 数は 2026-09-11 に数えた実数（`docs/manuals` の枝。本文の草稿が
+    // 名指すために集める側を広げたあと。広げる前は 250）。ラベルを減らす
     // 変更をしたら、ここを実数に下げる。
-    expect(LABELS.size).toBeGreaterThanOrEqual(250);
+    expect(LABELS.size).toBeGreaterThanOrEqual(272);
     for (const [source, labels] of Object.entries(SOURCES)) {
       expect(labels.length, `${source} から 1 つも集まらない`).toBeGreaterThan(
         0,
