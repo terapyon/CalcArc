@@ -8,6 +8,7 @@ import {
   keySequence,
   missingOps,
   pickCases,
+  pickStartCase,
   readAnswer,
   readNumbers,
 } from "./finance-cases";
@@ -39,7 +40,15 @@ const financeCases: CallCase[] = loadCallShards()
   .filter(({ name }) => name.startsWith("finance-"))
   .flatMap(({ shard }) => shard.cases);
 
-const picks = FACES.map((face) => pickCases(face, financeCases));
+/** **既存の 16 件は `finance-000.json` からだけ引く**——期首を足しても 1 件も変えない。 */
+const endCases: CallCase[] = loadCallShards()
+  .filter(({ name }) => name === "finance-000.json")
+  .flatMap(({ shard }) => shard.cases);
+const startCases: CallCase[] = loadCallShards()
+  .filter(({ name }) => name === "finance-start-000.json")
+  .flatMap(({ shard }) => shard.cases);
+
+const picks = FACES.map((face) => pickCases(face, endCases));
 
 /**
  * ケースを 1 件、実画面に打ち込む。
@@ -61,6 +70,60 @@ async function typeCase(page: Page, face: FinanceFace, testCase: CallCase) {
 
 const where = (testCase: CallCase): string =>
   `${testCase.id} (${testCase.stratum ?? "no stratum"})`;
+
+/**
+ * ケース 1 件が実画面に出た答と内訳を、コーパスの期待値と読み比べる。
+ * **答だけでなく内訳も見る**——`typeCase` で打ったあとに呼ぶ。
+ */
+async function expectShownCase(
+  page: Page,
+  face: FinanceFace,
+  testCase: CallCase,
+) {
+  // **答が出るまで待ってから読む。** `innerText()` は待たないので、最後の
+  // 打鍵の再描画が入る前に読むと、空の行を「食い違い」として報告しうる。
+  // 待つのは「何か出ること」だけで、**何が出たかはこの下で比べる**。
+  await expect(main(page)).not.toHaveText("");
+  const shown = (await main(page).innerText()).trim();
+  let got: Answer;
+  try {
+    got = readAnswer(shown);
+  } catch (cause) {
+    throw new Error(
+      `${face.op} ${where(testCase)}: ${(cause as Error).message}. The core ` +
+        "path runs this same case through runCalls — if that one is green " +
+        "and this one is not, the fault is between the keypad and the " +
+        "display, not in the calculation.",
+    );
+  }
+  expect(
+    got,
+    `${face.op} ${where(testCase)}: typed on the real panel the answer line ` +
+      `reads ${JSON.stringify(shown)}, but the reference says ` +
+      `${JSON.stringify(expectedAnswer(face, testCase))}`,
+  ).toEqual(expectedAnswer(face, testCase));
+
+  // **内訳も見る。** 答だけを見ていると、内訳が丸ごと消えても気づかない
+  // ——内訳は「なぜその答か」を利用者に見せている唯一の場所である。
+  const wanted = face.breakdown(testCase);
+  expect(
+    wanted.filter((value) => value === ""),
+    `${face.op} ${where(testCase)}: the expectations for the breakdown came ` +
+      "out empty, which means this face names a field the corpus does not " +
+      "carry. An empty expectation compares nothing.",
+  ).toEqual([]);
+  expect(wanted.length).toBeGreaterThan(0);
+  const numbers = readNumbers(await breakdown(page).innerText());
+  for (const value of wanted) {
+    expect(
+      numbers,
+      `${face.op} ${where(testCase)}: the breakdown on screen holds ` +
+        `${JSON.stringify(numbers)}, and ${value} is not among them. The ` +
+        "numbers are read with the digit grouping stripped, so a wrongly " +
+        "placed separator also lands here.",
+    ).toContain(value);
+  }
+}
 
 /**
  * **面の一覧がコーパスを覆っているか。**
@@ -90,50 +153,7 @@ for (const { face, normal, error } of picks) {
     page,
   }) => {
     await typeCase(page, face, normal);
-
-    // **答が出るまで待ってから読む。** `innerText()` は待たないので、最後の
-    // 打鍵の再描画が入る前に読むと、空の行を「食い違い」として報告しうる。
-    // 待つのは「何か出ること」だけで、**何が出たかはこの下で比べる**。
-    await expect(main(page)).not.toHaveText("");
-    const shown = (await main(page).innerText()).trim();
-    let got: Answer;
-    try {
-      got = readAnswer(shown);
-    } catch (cause) {
-      throw new Error(
-        `${face.op} ${where(normal)}: ${(cause as Error).message}. The core ` +
-          "path runs this same case through runCalls — if that one is green " +
-          "and this one is not, the fault is between the keypad and the " +
-          "display, not in the calculation.",
-      );
-    }
-    expect(
-      got,
-      `${face.op} ${where(normal)}: typed on the real panel the answer line ` +
-        `reads ${JSON.stringify(shown)}, but the reference says ` +
-        `${JSON.stringify(expectedAnswer(face, normal))}`,
-    ).toEqual(expectedAnswer(face, normal));
-
-    // **内訳も見る。** 答だけを見ていると、内訳が丸ごと消えても気づかない
-    // ——内訳は「なぜその答か」を利用者に見せている唯一の場所である。
-    const wanted = face.breakdown(normal);
-    expect(
-      wanted.filter((value) => value === ""),
-      `${face.op} ${where(normal)}: the expectations for the breakdown came ` +
-        "out empty, which means this face names a field the corpus does not " +
-        "carry. An empty expectation compares nothing.",
-    ).toEqual([]);
-    expect(wanted.length).toBeGreaterThan(0);
-    const numbers = readNumbers(await breakdown(page).innerText());
-    for (const value of wanted) {
-      expect(
-        numbers,
-        `${face.op} ${where(normal)}: the breakdown on screen holds ` +
-          `${JSON.stringify(numbers)}, and ${value} is not among them. The ` +
-          "numbers are read with the digit grouping stripped, so a wrongly " +
-          "placed separator also lands here.",
-      ).toContain(value);
-    }
+    await expectShownCase(page, face, normal);
   });
 
   test(`${face.op}: ${where(error)} shows the error on the real panel`, async ({
@@ -158,5 +178,15 @@ for (const { face, normal, error } of picks) {
     // **前の答が残らない。** 内訳が残ったままエラーが出ると、画面は
     // 「エラーなのに根拠がある」という読めない状態になる。
     await expect(breakdown(page)).toHaveCount(0);
+  });
+}
+
+for (const face of FACES.filter((f) => f.compound)) {
+  const start = pickStartCase(face, startCases);
+  test(`${face.op}: ${where(start)} typed on the real panel, deposit at the start`, async ({
+    page,
+  }) => {
+    await typeCase(page, face, start);
+    await expectShownCase(page, face, start);
   });
 }

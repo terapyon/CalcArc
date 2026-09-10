@@ -1,3 +1,4 @@
+import { timingOf } from "../../harness/timing";
 import type { CallCase } from "../corpus/corpus";
 
 /**
@@ -207,6 +208,19 @@ export const TAX_KEY = {
   withholding: "源泉分離課税を引く",
 } as const;
 
+/**
+ * 積立の位置の 2 キー(`web/src/ui/Keypad/finance.ts` の `timing:*`)。
+ * 周期と同じ面に在る。
+ *
+ * **毎回どちらかを押す。** 選択は設定として `localStorage` に残るので、
+ * 始まりの状態(既定は期末)を仮定しない——税を毎回押しているのと同じ
+ * 規律である(設計書 2026-09-10 §4.6)。
+ */
+export const TIMING_KEY = {
+  end: "積立を期末に行う",
+  start: "積立を期首に行う",
+} as const;
+
 /** 期間の上限(`FinancePanel` の `MAX_PERIODS`)。 */
 const MAX_TERM = 1200;
 
@@ -216,8 +230,8 @@ const RATE = /^\d{1,3}(?:\.\d{1,4})?$/;
 /** 金額は u64。10 進 20 桁で頭打ち(`finance/entry.ts` の `MAX_YEN_DIGITS`)。 */
 const AMOUNT = /^\d{1,20}$/;
 
-/** 計算に入るが**欄ではない**もの。周期と税は選択であって打鍵ではない。 */
-const CHOSEN_NOT_TYPED = new Set(["periods_per_year", "tax"]);
+/** 計算に入るが**欄ではない**もの。周期・積立の位置・税は選択であって打鍵ではない。 */
+const CHOSEN_NOT_TYPED = new Set(["periods_per_year", "tax", "timing"]);
 
 /**
  * **この面の盤面から打てるケースか。**
@@ -244,6 +258,10 @@ export function expressible(face: FinanceFace, testCase: CallCase): boolean {
       continue;
     }
     if (key === "tax") continue;
+    if (key === "timing") {
+      if (value !== "end" && value !== "start") return false;
+      continue;
+    }
     if (key === "rate") {
       if (typeof value !== "string") return false;
       if (!RATE.test(value) || Number(value) > 100) return false;
@@ -306,6 +324,28 @@ export function pickCases(face: FinanceFace, cases: CallCase[]): FacePick {
 }
 
 /**
+ * **期首の正常ケースを 1 件、真ん中から引く**(設計書 2026-09-10 §4.6)。
+ * 期首のシャードは複利だけで、異常ケースを持つとは限らないので正常だけを見る。
+ */
+export function pickStartCase(face: FinanceFace, cases: CallCase[]): CallCase {
+  const pool = cases.filter(
+    (testCase) =>
+      testCase.op === face.op &&
+      testCase.input.timing === "start" &&
+      !("error" in testCase.expect) &&
+      expressible(face, testCase),
+  );
+  const chosen = pool[Math.floor(pool.length / 2)];
+  if (chosen === undefined) {
+    throw new Error(
+      `finance-ui: the corpus has no passing start case for ${face.op} that ` +
+        "this panel can express — the start faces would verify nothing.",
+    );
+  }
+  return chosen;
+}
+
+/**
  * **コーパスに在って、どの面も覆っていない op。**
  *
  * 面の一覧を手で持つ以上、コーパスが増えた日に気づく手立てが要る。
@@ -329,11 +369,12 @@ export function digitKeys(value: string): string[] {
 }
 
 /**
- * ケース 1 件を打つキー列。**モードを押し、周期と税を選び、欄ごとに打つ。**
+ * ケース 1 件を打つキー列。**モードを押し、周期・積立の位置・税を選び、
+ * 欄ごとに打つ。**
  *
- * 周期と税を**先に**選ぶのは、その 2 つで盤面の下段が丸ごと入れ替わるから
- * である(設計書 §7)。数字を打っている途中に面を替えると、替えたあとの
- * 欄が `active` のまま残る。
+ * 周期・積立の位置・税を**先に**選ぶのは、その 3 つで盤面の下段が丸ごと
+ * 入れ替わるからである(設計書 §7)。数字を打っている途中に面を替えると、
+ * 替えたあとの欄が `active` のまま残る。
  */
 export function keySequence(face: FinanceFace, testCase: CallCase): string[] {
   const input = testCase.input;
@@ -347,7 +388,11 @@ export function keySequence(face: FinanceFace, testCase: CallCase): string[] {
           "which the keypad cannot select",
       );
     }
-    keys.push("複利の周期と積立の位置を選ぶ", period);
+    keys.push(
+      "複利の周期と積立の位置を選ぶ",
+      period,
+      TIMING_KEY[timingOf(input)],
+    );
     keys.push(
       "税の扱いを選ぶ",
       input.tax === true ? TAX_KEY.withholding : TAX_KEY.none,
