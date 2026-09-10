@@ -4,7 +4,24 @@ export default defineConfig({
   testDir: "./tests/e2e",
   // **ブラウザの時間帯も固定する**(vite.config.ts の `test.env.TZ` と同じ理由)。
   // Playwright はブラウザに時間帯を渡すので、`TZ` 環境変数では効かない。
-  use: { baseURL: "http://localhost:4179", timezoneId: "UTC" },
+  use: {
+    baseURL: "http://localhost:4179",
+    timezoneId: "UTC",
+    // 落ちた検査の画面を報告書に残す(下の html と対)。
+    screenshot: "only-on-failure",
+  },
+  // **失敗の報告書を html で書く**(2026-09-11)。書き出し先は ci.yml の
+  // 2 つの E2E ジョブが落ちた日に上げる `web/playwright-report/` である。
+  // **それまで reporter を書いておらず、html は 1 度も作られていなかった**
+  // ——upload の段は「No files were found」の警告だけで success になり、
+  // **Chromium の End-to-end も含めて、落ちた日に報告書が上がったことは
+  // 1 度も無い**(WebKit の最初の走行 34543367685 で見つけた)。
+  // 端末の出力は既定のまま(CI は dot、手元は list)。
+  // 番人は `tools/tests/webkit-gate.test.ts`(書き出し先と upload の path)。
+  reporter: [
+    [process.env.CI ? "dot" : "list"],
+    ["html", { open: "never", outputFolder: "playwright-report" }],
+  ],
   webServer: {
     // **ポートは 4179（Vite 既定の 4173 ではない）。** 既定のままだと、同じ
     // マシンで動いている別プロジェクトの preview を `reuseExistingServer` が

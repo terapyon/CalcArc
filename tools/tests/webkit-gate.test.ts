@@ -114,6 +114,13 @@ const reportNameOf = (lines: string[]) => {
   return upload?.match(/^ {10}name:\s*(.+?)\s*$/m)?.[1];
 };
 
+/** 失敗時に上げる報告書の置き場(`path:`)。 */
+const reportPathOf = (lines: string[]) => {
+  const steps = lines.join("\n").split(/\n(?= {6}- )/);
+  const upload = steps.find((step) => step.includes("actions/upload-artifact"));
+  return upload?.match(/^ {10}path:\s*(.+?)\s*$/m)?.[1];
+};
+
 /** コメントを除いた ci.yml の行。 */
 const ciLines = ci.split("\n").filter((line) => !/^\s*#/.test(line));
 
@@ -185,6 +192,27 @@ describe("CI が WebKit を入れて回す（門 1）", () => {
     for (const name of named) {
       expect(declared, `ci.yml が名指した project「${name}」`).toContain(name);
     }
+  });
+
+  it("失敗の報告書は、CI が上げる場所に書かれる", () => {
+    // **2026-09-11 まで、報告書は 1 度も上がっていなかった。** 設定に
+    // reporter が無く html が作られないので、upload の段は「No files were
+    // found」の警告だけで success になっていた(WebKit の最初の走行
+    // 34543367685 で見つけた。Chromium の End-to-end も同じ作りだった)。
+    // **書き出し先と upload の path が別々に動くと、同じ壊れ方に戻る。**
+    const reporters = Array.isArray(config.reporter) ? config.reporter : [];
+    const html = reporters.find((reporter) => reporter[0] === "html");
+    expect(html, "html の reporter が在る").toBeDefined();
+    const options = html?.[1] as { outputFolder?: string } | undefined;
+    const folder = (options?.outputFolder ?? "").replace(/^\.\//, "");
+    expect(folder, "html の書き出し先を名指す").not.toBe("");
+    for (const name of ["End-to-end", "End-to-end (WebKit)"]) {
+      expect(reportPathOf(jobNamed(name)), `${name} が上げる場所`).toBe(
+        `web/${folder.replace(/\/?$/, "/")}`,
+      );
+    }
+    // 報告書に画面が残らないと、落ちた理由が文字でしか分からない。
+    expect(config.use?.screenshot).toBe("only-on-failure");
   });
 
   it("2 つのジョブの報告書は別の名前で上がる", () => {

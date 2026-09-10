@@ -99,18 +99,48 @@ for (const face of FACES) {
       // **測った物が名乗った面であること**だけを言っている。
       await expect(disclaimer).toContainText(face.word);
 
-      const { lines, text } = await disclaimer.evaluate((el) => {
+      // **失敗文には 1 行ずつの中身も出す**(2026-09-11)。WebKit の最初の
+      // 走行でこの検査が 3 行を返したとき、**どこで折れたかが分からず**、
+      // 書体の違いか行分割の規則の違いかを切り分けられなかった(門 1 の
+      // 設計書 §1.5)。1 文字ずつの矩形の上端で行を分ける。数える行数と
+      // 閾値は変えない——**これは診断であって判定ではない。**
+      const { lines, text, rows, font } = await disclaimer.evaluate((el) => {
         const range = document.createRange();
         range.selectNodeContents(el);
+        const rows: string[] = [];
+        let top: number | null = null;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const chars = node.textContent ?? "";
+          for (let i = 0; i < chars.length; i++) {
+            const one = document.createRange();
+            one.setStart(node, i);
+            one.setEnd(node, i + 1);
+            const rect = one.getClientRects()[0];
+            if (
+              rect &&
+              (top === null || Math.abs(rect.top - top) > rect.height / 2)
+            ) {
+              rows.push("");
+              top = rect.top;
+            }
+            const last = rows.length - 1;
+            if (last >= 0) rows[last] = (rows[last] ?? "") + chars.charAt(i);
+          }
+        }
         return {
           lines: range.getClientRects().length,
           text: el.textContent ?? "",
+          rows,
+          font: getComputedStyle(el).font,
         };
       });
 
       expect(
         lines,
-        `the ${face.name} disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}`,
+        `the ${face.name} disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}` +
+          ` — rows: ${rows.map((row) => JSON.stringify(row)).join(" / ")}` +
+          ` — font: ${font}`,
       ).toBeLessThanOrEqual(2);
     });
   }
