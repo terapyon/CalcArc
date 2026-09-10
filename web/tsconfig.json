@@ -26,7 +26,8 @@
     "src",
     "tests",
     "vite.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.shots.config.ts"
   ],
   "exclude": ["src/wasm"]
 }

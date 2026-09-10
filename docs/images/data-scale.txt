@@ -1,0 +1,41 @@
+Scientific
+Convert
+Scale
+Finance
+データ量の規模
+データ量 Data Scale
+LLM のメモリ LLM Memory
+データ転送 Data Transfer
+件数
+データ型 float32
+10 進を主表示
+件数を入力中
+この電卓では使えません
+件数
+次元数
+データ型
+(
+)
+DEL
+AC
+7
+8
+9
+÷
+G
+4
+5
+6
+×
+M
+1
+2
+3
+−
+K
+0
+000
++
+=
+10 進 (KB) を主に
+2 進 (KiB) を主に

@@ -15,6 +15,7 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "e2e": "pnpm wasm && playwright test --project mobile",
+    "shots": "playwright test -c playwright.shots.config.ts",
     "icons": "node scripts/generate-icons.mjs",
     "ogp": "node scripts/generate-ogp.mjs",
     "check:sw": "node scripts/check-sw.mjs",
