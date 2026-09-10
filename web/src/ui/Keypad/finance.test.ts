@@ -119,6 +119,119 @@ describe("Finance のキー集合", () => {
     }
   });
 
+  // ---- 上段のラベル(設計書 §10)。**3 本まとめて置く理由が §10.4.0 にある**
+  // ——**群を分けているのは語であり、色はそれを補強するだけである。**
+  // 註は腐るが、**片方だけ動かすと赤くなる**なら腐らない。
+
+  it("never spells a mode the same way as a field", () => {
+    // **上段の「月額」「期間」が下段の項目キーと同じ語で、役が逆だった**
+    // ——上は求める、下は入力する(設計書 §10.1)。**区別は `ariaLabel` に
+    // だけ在って、目で見る人には無かった。** 系統 B は 6 つを
+    // 「求めるものの名詞」に揃えてこれを消した(利用者裁定 2026-09-10)。
+    //
+    // **改行を取り除いて比べる**——`返済\n月額` と `月額` の違いは折り返し
+    // 位置ではなく語であり、`\n` を残すと `返済\n月額` が `月額` と別物に
+    // 見えてしまう(**「月額」に戻す変異を素通しする**)。
+    const strip = (label: string) => label.replaceAll("\n", "");
+    const modes = section("計算の種類").keys.map((k) => strip(k.label));
+    const fields = [
+      section("入力する項目"),
+      COMPOUND_FIELD_SECTION,
+      DEPOSIT_FOR_FIELD_SECTION,
+      PERIODS_FOR_FIELD_SECTION,
+    ].flatMap((s) => s.keys.map((k) => strip(k.label)));
+
+    // **何件見たかを主張する。** 集合が空でも「共通要素なし」は緑になる
+    // ——**0 件どうしを比べて緑になる形を作らない。**
+    expect(modes.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(fields).size).toBeGreaterThanOrEqual(10);
+
+    const clash = modes.filter((label) => fields.includes(label));
+    expect(clash, `上段と下段で同じ語: ${clash.join(" / ")}`).toEqual([]);
+  });
+
+  it("fixes the line break in the data for every label that wraps", () => {
+    // **6 列だと 1 枠 54.33px(390px 幅)/ 49.33px(360px 幅)しか無く、
+    // 1 行に入るのは 3 文字まで**(設計書 §10.3 の実測)。4 文字以上は必ず
+    // 折り返すので、**折り返し位置をデータで固定する**——自動折り返しに
+    // 任せると「必要積」「立」のように語の途中で割れる。
+    //
+    // **6 列の行だけを見る。** 数字面(`PAD`)は 5 列で 1 枠が広く、この
+    // 制約に掛からない。
+    const rows = [
+      section("計算の種類"),
+      section("入力する項目"),
+      COMPOUND_FIELD_SECTION,
+      DEPOSIT_FOR_FIELD_SECTION,
+      PERIODS_FOR_FIELD_SECTION,
+    ];
+    for (const row of rows) expect(row.columns).toBe(6);
+
+    const wrapping: string[] = [];
+    let seen = 0;
+    for (const row of rows) {
+      for (const key of row.keys) {
+        seen += 1;
+        if (key.label.replaceAll("\n", "").length < 4) continue;
+        wrapping.push(key.label);
+        expect(
+          key.label,
+          `${key.ariaLabel} は 4 文字以上なのに改行位置を持たない`,
+        ).toContain("\n");
+      }
+    }
+
+    // **何件見たかを主張する。** 4 文字以上が 1 つも無ければ上の `for` は
+    // **1 度も比較せずに緑を返す**(このリポジトリで何度か踏んでいる形)。
+    // 上段の 6 つは系統 B で全部 4 文字以上になった(設計書 §10.4.0)。
+    expect(seen).toBeGreaterThanOrEqual(30);
+    expect(wrapping.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("colours exactly the group that the words already mark", () => {
+    // **★ 群を分けているのは語であり、色はそれを補強するだけである**
+    // (設計書 §10.4.0)。冠が `複利`/`必要` の 3 つが複利側、
+    // `返済`/`借入`/`返済` の 3 つがローン側で、**語だけで群は読める。**
+    // **色が見えない人には語が残る——この関係が逆になってはいけない。**
+    //
+    // **この 1 本が守るのはその関係そのものである**: 色の群と語の群が
+    // **一致する**。片方だけを動かすと赤くなるので、**「色でしか群が
+    // 分からない」状態にならない。**
+    const modes = section("計算の種類").keys;
+    const crown = (label: string) => label.split("\n")[0];
+
+    const coloured = modes
+      .filter((k) => k.variant === "accent")
+      .map((k) => k.token);
+    const worded = modes
+      .filter((k) => {
+        const head = crown(k.label);
+        return head === "複利" || head === "必要";
+      })
+      .map((k) => k.token);
+
+    // **一致を先に言う。** 下の下限より先に置くのは、**食い違ったときに
+    // 「どのキーが」を名指しするのはこちらだから**である(下限は「3 未満だ」
+    // としか言わない)。**下限が要らないわけではない**——両方が空でも
+    // 一致は緑になる。**0 件どうしの一致で緑になる形を作らない。**
+    expect(
+      coloured,
+      `色の群 ${coloured.join(",")} と語の群 ${worded.join(",")} が食い違う`,
+    ).toEqual(worded);
+
+    expect(modes.length).toBeGreaterThanOrEqual(6);
+    expect(coloured.length).toBeGreaterThanOrEqual(3);
+    expect(worded.length).toBeGreaterThanOrEqual(3);
+    // **ローン側が `accent` を持たない**ことも言う——上を満たしたまま
+    // 6 つ全部を `accent` にする変異を止める。
+    for (const key of modes) {
+      if (coloured.includes(key.token)) continue;
+      expect(key.variant, `${key.ariaLabel} が色の群に入っている`).toBe(
+        "function",
+      );
+    }
+  });
+
   it("has no reserved slots in the mode and field rows", () => {
     // 予約スロットは数字面の 2 マスだけ。モード行と項目行のキーは全部働く。
     for (const name of ["計算の種類", "入力する項目"]) {

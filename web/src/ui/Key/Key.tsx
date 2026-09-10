@@ -1,7 +1,21 @@
 import type { Offness } from "../Keypad/types";
 import styles from "./Key.module.css";
 
-export type KeyVariant = "digit" | "operator" | "function" | "danger";
+/**
+ * キーの見た目。
+ *
+ * **`accent` は `function` と同じ字・同じ器で、色だけが違う**——群の境目を
+ * 出すために足した(Finance の上段。設計書 `2026-09-03-finance-convention.md`
+ * §10.4 案 D)。**縦にも横にも 0px** であることが案 D の前提なので、
+ * `.accent` は `--key-font-size-function` を `.function` と同じに保つ
+ * (`Key.module.css`)。**大きさを変えると、収まりの実測がやり直しになる。**
+ */
+export type KeyVariant =
+  | "digit"
+  | "operator"
+  | "function"
+  | "accent"
+  | "danger";
 
 export interface KeyProps<T> {
   /**
