@@ -1,6 +1,8 @@
 /target
 node_modules/
 web/dist/
+# pnpm manual が刷る PDF。リポジトリに PDF を置かない（マニュアル設計書の裁定）。
+web/manual-dist/
 heavy/dist-harness/
 heavy/heavy-report.md
 # pnpm heavy がシャードごとの集計を落とす場所。globalSetup が毎回消す。

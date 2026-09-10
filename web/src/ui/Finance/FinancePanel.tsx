@@ -109,7 +109,7 @@ const PERIOD_LABELS: Record<1 | 2 | 12, string> = {
  * 値に畳まれて `月ごと・期末` のように出る——**7 つ目の chip を足すと、
  * 綴り次第で 3 行目に届き、パネルの余白が 8px を割る**(実測)。
  */
-const TIMING_LABELS: Record<DepositTiming, string> = {
+export const TIMING_LABELS: Record<DepositTiming, string> = {
   end: "期末",
   start: "期首",
 };
@@ -269,6 +269,24 @@ function compoundInverseBreakdown(
 /** ボーナス欄はモードで意味が変わる(設計書 §6)。値も別々に持つ。 */
 function bonusName(mode: PanelMode): string {
   return mode === "principal" ? "ボーナス回の返済額" : "ボーナス返済分（元本）";
+}
+
+/**
+ * 入力の一覧（chip）に出る項目の見出し。
+ *
+ * **画面に出る綴りはこの関数が決める。`FIELD_LABELS` をそのまま読まない**
+ * ——`bonus` は `bonusName()` に、複利系の `principal` は「元本」に差し替わる。
+ * **`FIELD_LABELS.bonus`（「ボーナス」）は画面に 1 度も出ない。**
+ *
+ * **モジュールの上に出してあるのは、マニュアルのキー名の番人が読むため**
+ * （`tests/unit/manual-key-names.test.ts`、設計書 `2026-09-10-manuals-design.md`
+ * §6）。`FIELD_LABELS` を読むと、画面に無い「ボーナス」を今の綴りとして通す。
+ */
+export function fieldLabel(mode: PanelMode, field: FinanceField): string {
+  // **同じ入れ物でも意味が違えば名前も違う。** 複利系の `principal` は
+  // 負債ではなく投資の元本である(入れ物も別。amountKey を参照)。
+  if (isCompoundFamily(mode) && field === "principal") return "元本";
+  return field === "bonus" ? bonusName(mode) : FIELD_LABELS[field];
 }
 
 interface Line {
@@ -685,10 +703,7 @@ export function FinancePanel() {
   }
 
   function labelOf(field: FinanceField): string {
-    // **同じ入れ物でも意味が違えば名前も違う。** 複利系の `principal` は
-    // 負債ではなく投資の元本である(入れ物も別。amountKey を参照)。
-    if (isCompoundFamily(mode) && field === "principal") return "元本";
-    return field === "bonus" ? bonusName(mode) : FIELD_LABELS[field];
+    return fieldLabel(mode, field);
   }
 
   // 入力の一覧。**打っている項目は大きく、入力済みは画面に残す**
