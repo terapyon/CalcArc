@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   findBoundaryViolations,
@@ -251,5 +254,53 @@ describe("findVisuallyHiddenOutsideTokens", () => {
       "read no css files at all",
     ).toBeGreaterThan(5);
     expect(findVisuallyHiddenOutsideTokens(files)).toEqual([]);
+  });
+});
+
+describe("readWebFiles", () => {
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+
+  it("まだ `git add` していないファイルも読む", () => {
+    // **2026-09-05 に塞いだ穴。** `--cached` だけで一覧を作っていた頃は、
+    // **新しく書いたファイルは `git add` するまで検査を素通りした**
+    // ——手元で「緑だから境界は守れている」と読める時間帯ができる。
+    // 実際にそれで「規則が見逃した」と読みかけた（同日、5 本目の規則の
+    // 穴を調べていて、未追跡のファイルを置いて緑になったのを規則の穴だと
+    // 解釈しかけた）。**CI は必ず追跡下で回るので main は守られていた**が、
+    // 直したのは**手元の緑を信じて結論を出しかける**ほうである。
+    //
+    // **本物のファイルを置いて確かめる。** `git ls-files` を呼ぶ関数なので、
+    // 作業木に無いものは確かめようがない。置いたものは `finally` で必ず消す。
+    const relative = "web/src/__readwebfiles_probe__.css";
+    const absolute = join(root, relative);
+    expect(existsSync(absolute), "probe file already exists").toBe(false);
+    mkdirSync(dirname(absolute), { recursive: true });
+    writeFileSync(absolute, ".probe {\n  color: red;\n}\n", "utf8");
+    try {
+      const files = readWebFiles();
+      expect(files.map((file) => file.path)).toContain(relative);
+      // **中身も読めていること。** 一覧に出るだけでは、規則は何も見ない。
+      expect(files.find((file) => file.path === relative)?.text).toContain(
+        ".probe",
+      );
+    } finally {
+      rmSync(absolute, { force: true });
+    }
+  });
+
+  it("生成物は歩かない（`.gitignore` に載っているものは読まない）", () => {
+    // **未追跡を読むようにした代償が出ていないこと。** 除外の定義は
+    // **追跡下の `.gitignore`** に在る（`node_modules/`・`web/dist/`・
+    // `web/src/wasm/`）ので、`--exclude-standard` がそれを読む。
+    //
+    // **この検査は、その 3 つが手元に無いクローンでは何も主張しない。**
+    // 生成物が在る作業木（`pnpm install` と `pnpm wasm` の後）で意味を持つ
+    // ——CI はその形で回る。
+    const paths = readWebFiles().map((file) => file.path);
+    expect(paths.filter((path) => path.includes("node_modules"))).toEqual([]);
+    expect(paths.filter((path) => path.startsWith("web/dist/"))).toEqual([]);
+    expect(paths.filter((path) => path.startsWith("web/src/wasm/"))).toEqual(
+      [],
+    );
   });
 });

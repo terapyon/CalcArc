@@ -256,8 +256,39 @@ export function findVisuallyHiddenOutsideTokens(files) {
 }
 
 /**
- * 追跡されている `web/` のファイルを読む。**`git ls-files` を使う**
- * ——生成物(`web/src/wasm/`・`node_modules`・`dist`)を歩かないため。
+ * `web/` のファイルを読む。**`git ls-files` を使う**——生成物
+ * (`web/src/wasm/`・`node_modules`・`dist`)を歩かないためで、**除外の定義を
+ * `.gitignore` 1 か所に持たせる**ためでもある(検査が自前の除外一覧を持つと、
+ * `.gitignore` と 2 か所になって食い違う)。
+ *
+ * # **未追跡でも読む**(2026-09-05)
+ *
+ * `--cached --others --exclude-standard` を付けている。**`--cached` だけだと、
+ * 新しく書いたファイルは `git add` するまで検査を素通りする**——手元で
+ * 「緑だから境界は守れている」と読める時間帯ができる。実際にそれで
+ * **「規則が見逃した」と読みかけた**(同日、5 本目の規則の穴を調べていて。
+ * 未追跡のファイルを置いて緑になったのを、規則の穴だと解釈しかけた)。
+ *
+ * **CI は必ず追跡下で回るので、main が守られていたことは変わらない。**
+ * 直したのは**手元の緑を信じて結論を出しかける**ほうである。
+ *
+ * **実測(2026-09-05、生成物が全部在る作業木で)**:
+ *
+ * ```
+ * git ls-files web                                    167 件 / 20 回 0.039s
+ * git ls-files --cached --others --exclude-standard   168 件 / 20 回 0.035s
+ * ```
+ *
+ * **速さは変わらない**(`git` は無視されたディレクトリに降りない)。
+ * **生成物は 1 件も混ざらない**——`node_modules` / `web/dist/` /
+ * `web/src/wasm/` は**追跡下の `.gitignore`** に在る(`.git/info/exclude` では
+ * ない。あれはクローンごとのローカルファイルで、リポジトリに含まれない)。
+ * 168 件目は、確かめるために置いた未追跡の `.css` そのものである。
+ *
+ * **残る性質**: `--exclude-standard` は `.git/info/exclude` と global の
+ * `core.excludesFile` も読む。**追跡下のぶんはどのクローンでも同じだが、
+ * 未追跡のぶんは手元の除外設定に左右される。** 検査の下限
+ * (=追跡下のファイル)は動かないので、これは許容している。
  *
  * @returns {SourceFile[]}
  */
@@ -265,10 +296,19 @@ export function readWebFiles() {
   // **`URL.pathname` を使わない。** %-encode が戻らないので、パスに空白が
   // 入る環境（`/home/My Work/...`）でファイルを開けない(Fable の指摘)。
   const root = fileURLToPath(new URL("..", import.meta.url));
-  const listed = execFileSync("git", ["-C", root, "ls-files", "web"], {
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  const listed = execFileSync(
+    "git",
+    [
+      "-C",
+      root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "web",
+    ],
+    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+  );
   return listed
     .split("\n")
     .filter((path) => path !== "")
