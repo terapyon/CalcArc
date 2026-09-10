@@ -35,6 +35,59 @@ test.beforeEach(async ({ page }) => {
   await press(page, ["複利で増やす"]);
 });
 
+/**
+ * **期間の `月` は月ごとのときだけ出る**(利用者裁定 2026-09-11、設計書
+ * `2026-09-11-compound-period-units-design.md`)。以前は方式を見ずに 年/月 を
+ * 出し、**コアは月ごとでも `月` を知らなかった**——`1` `2` `月` はどの方式
+ * でも Math ERROR だった。**実 wasm でコアの表まで通すのはここだけ**である
+ * (vitest の mock は単位表を持たない)。値はすべて golden の
+ * `compound_grow/10000/0/1/…` である。
+ */
+test("a month is a unit of the period only when compounding monthly", async ({
+  page,
+}) => {
+  const key = (name: string) =>
+    panel(page).getByRole("button", { name, exact: true });
+
+  // 月ごと: `12月` と `1年` は同じ 12 期 → 10,096 円。
+  await press(page, [
+    "元本を入力",
+    "1",
+    "万",
+    "年利を入力",
+    "1",
+    "期間を入力",
+    "1",
+    "2",
+    "月",
+  ]);
+  await expect(main(page)).toHaveText("10,096 円");
+  await press(page, ["この項目を消去", "1", "年"]);
+  await expect(main(page)).toHaveText("10,096 円");
+
+  // 半年ごと・年ごと: `月` は出ない。`1年` は残り、2 期・1 期 → 10,100 円。
+  for (const method of ["半年ごとに複利", "年ごとに複利"]) {
+    await press(page, ["複利の周期と積立の位置を選ぶ", method, "期間を入力"]);
+    await expect(key("月")).toHaveCount(0);
+    await expect(main(page)).toHaveText("10,100 円");
+  }
+
+  // 月ごとで `12月` を打ってから年ごとへ移ると、期間は空になる
+  // ——**Math ERROR を出さない**(設計書の決定 4)。
+  await press(page, [
+    "複利の周期と積立の位置を選ぶ",
+    "月ごとに複利",
+    "期間を入力",
+    "この項目を消去",
+    "1",
+    "2",
+    "月",
+  ]);
+  await expect(main(page)).toHaveText("10,096 円");
+  await press(page, ["複利の周期と積立の位置を選ぶ", "年ごとに複利"]);
+  await expect(main(page)).toBeEmpty();
+});
+
 test("compounds a lump sum every half year", async ({ page }) => {
   // golden: P=1,000,000 / 年 1% / 半年複利 / 10 期 → 1,051,136。
   // **周期の面を通る唯一の E2E である**——「計算に入るものは盤面の中」という

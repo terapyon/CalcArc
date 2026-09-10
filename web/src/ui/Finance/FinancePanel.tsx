@@ -117,13 +117,26 @@ const TIMING_LABELS: Record<DepositTiming, string> = {
 /**
  * その項目で単位キーが何になるか。**金額は 万/億、期間は 年/月、年利は無い。**
  * 5 列目の 2 マスは項目に従って差し替わる(設計書 §5)。
+ *
+ * **複利の期間の `月` は、方式が月ごとのときだけ出す**(利用者裁定
+ * 2026-09-11、設計書 2026-09-11)。コアの単位表で `月` を持つのは
+ * `periods:12` だけである——半年ごと・年ごとで出すと、押せるのに
+ * `12月` が Math ERROR になる(2026-08-15 から実際にそうだった)。
+ * **出さない代わりに別の綴りへ読み替えることはしない**——読み替えは
+ * 単位の規則の写しをもう 1 つ増やす。出さないマスは年利と同じく空きになる。
+ * ローンの期間は方式を持たないので、いつも 年/月 である。
  */
 function unitFor(
   field: FinanceField,
   slot: "unit:high" | "unit:low",
+  mode: PanelMode,
+  periodsPerYear: PeriodsPerYear,
 ): Unit | null {
   if (field === "rate") return null;
-  if (field === "months") return slot === "unit:high" ? YEAR : MONTH;
+  if (field === "months") {
+    if (slot === "unit:high") return YEAR;
+    return isCompoundFamily(mode) && periodsPerYear !== 12 ? null : MONTH;
+  }
   return slot === "unit:high" ? MAN : OKU;
 }
 
@@ -180,6 +193,80 @@ function isCompoundFamily(
   m: PanelMode,
 ): m is "compound" | "deposit-for" | "periods-for" {
   return m === "compound" || m === "deposit-for" || m === "periods-for";
+}
+
+/**
+ * 値の入れ物の名前。
+ *
+ * **複利はローンと別の入れ物を使う**——欄の名前が同じでも**意味が違う**
+ * からである。借入額は負債の元本、複利の元本は投資の元本。年利は借入金利と
+ * 想定利回り。決定的なのは**期間**で、ローンは「か月」、複利は「期」
+ * (長さは周期に従う)——420 か月(35 年)を持ち回ると、年次複利では
+ * **420 年**として黙って計算される。もっともらしい誤答の典型である。
+ *
+ * ボーナスをモードごとに分けたのと同じ理由で、「値は保持する」は
+ * **同じ意味の欄の値が消えない**という意味である(設計書 §6)。
+ *
+ * **2 つの逆算も複利とは別の入れ物を持つ**——欄の名前が同じでも意味が
+ * 違う(F1 が「ローンの値を持ち回らない」と決めたのと同じ理由。設計書
+ * §11)。**ただし目標額だけは 2 つの逆算で共有する**——同じ意味の欄
+ * だからキーを `target` に固定する。
+ *
+ * **モードを引数に取る**——方式を変えたとき、いま打っていないモードの
+ * 期間も見る必要がある(`withoutMonthPeriods`)。
+ */
+function amountKeyIn(field: FinanceField, mode: PanelMode): string {
+  if (mode === "compound") return `compound:${field}`;
+  if (mode === "deposit-for" || mode === "periods-for") {
+    return field === "target" ? "target" : `${mode}:${field}`;
+  }
+  if (field !== "bonus") return field;
+  // ボーナスの入れ物はモードで別々(設計書 §6)。
+  return mode === "principal" ? "bonusPayment" : "bonusPrincipal";
+}
+
+/**
+ * 期間の欄を持つ複利系のモード。**方式は 3 モードで共有**なので、方式を
+ * 変えたときは打っている最中のモードだけでなく、ここに挙がる全部を見る
+ * ——さもないと、別のモードの期間に `12月` が残り、戻った先で同じ
+ * Math ERROR が出る。
+ */
+const COMPOUND_PERIOD_MODES = PANEL_MODES.filter(
+  (m) => isCompoundFamily(m) && COMPOUND_MODE_FIELDS[m].includes("months"),
+);
+
+/**
+ * 期間に `月` が打たれているか。**トークンで見る**——打った文字列から
+ * 当てない(`12月` の `月` は単位のトークンとして入っている)。
+ */
+function holdsMonth(entry: Entry): boolean {
+  return entry.tokens.some(
+    (token) => token.kind === "unit" && token.unit.label === MONTH.label,
+  );
+}
+
+/**
+ * **方式が月ごとを離れるとき、`月` を含む期間を空にする**(設計書
+ * 2026-09-11 の決定 4)。
+ *
+ * **換算しない**——`12月` は 12 期であり、年ごとの 12 期は 12 年である。
+ * 意味を変えて持ち越すのは、420 か月を 420 年にするのと同じ形の誤答になる。
+ * **残しもしない**——残すと、押した覚えのない Math ERROR が黙って出る
+ * (この修正の元の不具合そのもの)。**`月` を含まない期間(`10年`)は
+ * 残す**——年ごとでも同じ意味で読める(設計書 2026-08-15 §5「周期を
+ * 変えても期間の値は保持する」)。月ごとへ戻しても復元しない。
+ *
+ * 変わる入れ物が無ければ**同じオブジェクトを返す**(描き直さない)。
+ */
+function withoutMonthPeriods(
+  amounts: Record<string, Entry>,
+): Record<string, Entry> {
+  let next = amounts;
+  for (const mode of COMPOUND_PERIOD_MODES) {
+    const key = amountKeyIn("months", mode);
+    if (holdsMonth(amounts[key] ?? EMPTY)) next = { ...next, [key]: EMPTY };
+  }
+  return next;
 }
 
 /**
@@ -384,32 +471,9 @@ export function FinancePanel() {
     );
   }
 
-  /** ボーナスの入れ物の名前。モードで別々(設計書 §6)。 */
-  const bonusKey = mode === "principal" ? "bonusPayment" : "bonusPrincipal";
-
-  /**
-   * 値の入れ物の名前。
-   *
-   * **複利はローンと別の入れ物を使う**——欄の名前が同じでも**意味が違う**
-   * からである。借入額は負債の元本、複利の元本は投資の元本。年利は借入金利と
-   * 想定利回り。決定的なのは**期間**で、ローンは「か月」、複利は「期」
-   * (長さは周期に従う)——420 か月(35 年)を持ち回ると、年次複利では
-   * **420 年**として黙って計算される。もっともらしい誤答の典型である。
-   *
-   * ボーナスをモードごとに分けたのと同じ理由で、「値は保持する」は
-   * **同じ意味の欄の値が消えない**という意味である(設計書 §6)。
-   *
-   * **2 つの逆算も複利とは別の入れ物を持つ**——欄の名前が同じでも意味が
-   * 違う(F1 が「ローンの値を持ち回らない」と決めたのと同じ理由。設計書
-   * §11)。**ただし目標額だけは 2 つの逆算で共有する**——同じ意味の欄
-   * だからキーを `target` に固定する。
-   */
+  /** いまのモードの入れ物の名前(理由は `amountKeyIn`)。 */
   function amountKey(field: FinanceField): string {
-    if (mode === "compound") return `compound:${field}`;
-    if (mode === "deposit-for" || mode === "periods-for") {
-      return field === "target" ? "target" : `${mode}:${field}`;
-    }
-    return field === "bonus" ? bonusKey : field;
+    return amountKeyIn(field, mode);
   }
 
   function entryOf(field: FinanceField): Entry {
@@ -469,10 +533,10 @@ export function FinancePanel() {
       case "zeros3":
         return active === "rate" ? "transient" : null;
       // **単位キーは項目に従う**(設計書 §5)。金額は 万/億、期間は 年/月、
-      // 年利は単位を持たないので空きになる。
+      // 年利は単位を持たないので空きになる。複利の期間の `月` は月ごとだけ。
       case "unit:high":
       case "unit:low": {
-        const unit = unitFor(active, token);
+        const unit = unitFor(active, token, mode, periodsPerYear);
         return unit === null || !canPushUnit(entryOf(active), unit)
           ? "transient"
           : null;
@@ -602,6 +666,10 @@ export function FinancePanel() {
         if (nextPeriod !== periodsPerYear) {
           rememberFinance({ periodsPerYear: nextPeriod });
         }
+        // **月ごとを離れるなら、`月` を含む期間を空にする**(設計書
+        // 2026-09-11 の決定 4。理由は `withoutMonthPeriods`)。**前の値を
+        // 読まずに関数で渡す**——同じイベントの中の他の書き込みを潰さない。
+        if (nextPeriod !== 12) setAmounts(withoutMonthPeriods);
         break;
       }
       case "tax:none":
@@ -621,7 +689,7 @@ export function FinancePanel() {
       }
       case "unit:high":
       case "unit:low": {
-        const unit = unitFor(active, token);
+        const unit = unitFor(active, token, mode, periodsPerYear);
         if (unit === null) break;
         const next = pushUnit(entryOf(active), unit);
         // 盤面は押せないようにしてあるので、null はここに来ない(設計書 §5)。
@@ -953,7 +1021,7 @@ export function FinancePanel() {
         ]}
       />
       <Keypad
-        sections={sectionsFor(mode, active)}
+        sections={sectionsFor(mode, active, periodsPerYear)}
         onPress={press}
         pressed={keyPressed}
         off={keyOff}
@@ -1001,7 +1069,11 @@ function compoundFieldSection(
 }
 
 /** ボーナス欄の名前だけモードで差し替える(設計書 §6)。 */
-function sectionsFor(mode: PanelMode, active: FinanceField) {
+function sectionsFor(
+  mode: PanelMode,
+  active: FinanceField,
+  periodsPerYear: PeriodsPerYear,
+) {
   // 複利系は項目行を差し替え、周期・税では**面が入れ替わる**(設計書 §7)。
   const base = isCompoundFamily(mode)
     ? [
@@ -1024,9 +1096,10 @@ function sectionsFor(mode: PanelMode, active: FinanceField) {
           keys: section.keys.map((key) => {
             if (key.token !== "unit:high" && key.token !== "unit:low")
               return key;
-            const unit = unitFor(active, key.token);
+            const unit = unitFor(active, key.token, mode, periodsPerYear);
             if (unit === null) {
-              // 年利には単位が無い。予約スロットとして無効に描く。
+              // 年利には単位が無い(複利の期間の下のマスも、月ごと以外では
+              // 無い)。予約スロットとして無効に描く。
               return { ...key, token: null, label: "—", ariaLabel: "空き" };
             }
             return { ...key, label: unit.label, ariaLabel: unit.label };
