@@ -1,14 +1,19 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  extractKeyNames,
   findUnknownKeyNames,
   type ManualFile,
   type UnknownKeyName,
 } from "../../scripts/manual/markdown.ts";
 import { CONVERT_CATEGORY_IDS } from "../../src/convert/types";
 import { PANEL_MODES } from "../../src/settings/types";
+import { optionText } from "../../src/ui/Category/CategorySelect";
+import { OPTIONS as CONVERT_OPTIONS } from "../../src/ui/Convert/ConvertPanel";
+import { PRIMARY_BUTTON_LABELS } from "../../src/ui/DataScale/DataScalePanel";
 import { fieldLabel, TIMING_LABELS } from "../../src/ui/Finance/FinancePanel";
+import { HISTORY_LABELS } from "../../src/ui/History/History";
 import {
   CATEGORY_LABELS,
   CATEGORY_LABELS_EN,
@@ -46,6 +51,10 @@ import {
   TRANSFER_PAD,
 } from "../../src/ui/Keypad/transfer";
 import type { KeypadSection } from "../../src/ui/Keypad/types";
+import { MODULES } from "../../src/ui/Nav/Nav";
+import { OPTIONS as SCALE_OPTIONS } from "../../src/ui/Scale/ScalePanel";
+import { UPDATE_TOAST_LABELS } from "../../src/ui/UpdateToast/UpdateToast";
+import { EXPECTED_MANUALS, manualName, readManuals } from "./manuals";
 
 /**
  * **マニュアルのキー名は、いまの画面のラベルのどれかである**（設計書
@@ -159,9 +168,27 @@ const SOURCES: Record<string, readonly string[]> = {
     // 「方式」の chip の値（`月ごと・期末`）に畳まれる語（設計書 §6 が名指しする）。
     ...Object.values(TIMING_LABELS),
   ],
+  // **盤面の外の、押せるもの**（T4 で足した）。マニュアルが名前で呼ぶので、
+  // 盤面のキーと同じく定義元から読む。
+  // - ナビのタブ（`Scientific` ほか。画面では英語のまま）
+  "Nav/Nav.tsx": Object.values(MODULES).map((tab) => tab.label),
+  // - カテゴリの選択肢。画面には `為替 Currency` のように日英が 1 つの
+  //   選択肢として出るので、**組み立ては画面と同じ `optionText` を通す**
+  "Category/CategorySelect.tsx": [...CONVERT_OPTIONS, ...SCALE_OPTIONS].map(
+    optionText,
+  ),
+  // - データ量の画面の、主に表示する単位系を選ぶ 2 つのボタン
+  "DataScale/DataScalePanel.tsx": Object.values(PRIMARY_BUTTON_LABELS),
+  // - 履歴の画面のボタンとチェックボックス
+  "History/History.tsx": Object.values(HISTORY_LABELS),
+  // - 更新のお知らせのボタン
+  "UpdateToast/UpdateToast.tsx": Object.values(UPDATE_TOAST_LABELS),
 };
 
 const LABELS: ReadonlySet<string> = new Set(Object.values(SOURCES).flat());
+
+/** 3 冊のマニュアルが持つ【…】の件数の下限（実数。下の 1 本の註）。 */
+const KEY_NAME_FLOOR = 625;
 
 const format = (u: UnknownKeyName) => `${u.path}:${u.line} 【${u.name}】`;
 
@@ -200,6 +227,13 @@ describe("画面のラベルの集め方", () => {
       "asin",
       "手入力",
       "帯域幅",
+      // 盤面の外（T4 で足した定義元から）
+      "Scientific",
+      "為替 Currency",
+      "データ量 Data Scale",
+      "10 進 (KB) を主に",
+      "すべて消す",
+      "再読み込み",
     ]) {
       expect(LABELS.has(label), `${label} が集まっていない`).toBe(true);
     }
@@ -260,19 +294,21 @@ describe("マニュアルの【…】の番人", () => {
   });
 
   it("passes every manual in docs/manual", () => {
-    // **いまは 0 冊なので、何も比べずに緑になる。** 本文（`docs/manual/*.md`）は
-    // 章立ての承認のあとで T4 が書く（計画 `2026-09-10-manuals.md`）。
-    // **T4 が、冊数と【…】の件数の下限をここに足す**——それまでこの 1 本は
-    // 番人ではなく、番人の置き場である。
-    const dir = join(import.meta.dirname, "..", "..", "..", "docs", "manual");
-    const files: ManualFile[] = existsSync(dir)
-      ? readdirSync(dir)
-          .filter((name) => name.endsWith(".md"))
-          .map((name) => ({
-            path: `docs/manual/${name}`,
-            text: readFileSync(join(dir, name), "utf8"),
-          }))
-      : [];
+    // **読んだものを先に数える。** 読み損ねて 0 冊・0 件になっても、
+    // 「知らない名前 0 件」は緑になる——**何も比べずに緑にしない。**
+    const files = readManuals();
+    expect(files.map(manualName)).toEqual(EXPECTED_MANUALS);
+    for (const file of files) {
+      expect(
+        extractKeyNames(file.text).length,
+        `${file.path} に【…】が 1 つも無い`,
+      ).toBeGreaterThan(0);
+    }
+    // 下限は 2026-09-10 に 3 冊の草稿で数えた実数。**マニュアルからキー名を
+    // 減らしたら、ここを実数に下げる**（黙って減らさない）。
+    expect(
+      files.flatMap((file) => extractKeyNames(file.text)).length,
+    ).toBeGreaterThanOrEqual(KEY_NAME_FLOOR);
     expect(findUnknownKeyNames(files, LABELS).map(format)).toEqual([]);
   });
 });
