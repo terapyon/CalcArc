@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HEAVY_BODY_JOB, HEAVY_REPORT } from "../release-evidence.mjs";
 
@@ -536,5 +536,120 @@ describe("赤くなるべき日（条件式を場面ごとに動かす）", () =
         "success",
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * ワークフローの `jobs:` 以下を、ジョブごとに分ける。
+ *
+ * **`jobs:` より前は見ない。** `on:` の下にも `  push:` のような 2 段目の
+ * 鍵が並ぶので、ファイル全体を走らせると引き金をジョブとして数える。
+ */
+const jobsOf = (yaml: string) => {
+  const body = yaml.split(/^jobs:$/m)[1] ?? "";
+  const jobs: { id: string; runsOn: boolean; timeout: number | null }[] = [];
+  for (const line of body.split("\n")) {
+    const head = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (head?.[1] !== undefined) {
+      jobs.push({ id: head[1], runsOn: false, timeout: null });
+      continue;
+    }
+    const job = jobs[jobs.length - 1];
+    if (job === undefined) continue;
+    if (/^ {4}runs-on:/.test(line)) job.runsOn = true;
+    const limit = line.match(/^ {4}timeout-minutes:\s*(\d+)\s*$/);
+    if (limit?.[1] !== undefined) job.timeout = Number(limit[1]);
+  }
+  return jobs;
+};
+
+/** 時間制限を要求するワークフロー。**いまは全部である。** */
+const TIMED = ["ci.yml", "deploy.yml", "heavy-corpus.yml", "release.yml"];
+
+/**
+ * 要求しないもの——**理由つきで名指しする**。
+ *
+ * **黙って外さない。** 一覧から漏れたのか、外すと決めたのかが、
+ * ここを読めば分かるようにしておく。
+ */
+const UNTIMED: Record<string, string> = {};
+
+describe("すべてのジョブに時間制限が在る（2026-09-05）", () => {
+  // **書かないと既定は 360 分である。** 2026-09-05 の `v0.8.0` の Release
+  // 走行で `Rust core` が 45m0s で死んだ(走行 33942305098 の 1 回目、
+  // `The hosted runner lost communication with the server.`)——**普段 1 分**の
+  // ジョブである。あのときは GitHub 側が見切ったが、**私たちが決めた値では
+  // なかった。**
+  //
+  // **ただし、この 1 例が時間制限で短く終わったかは(未確認)である**
+  // ——死因は `runner lost communication` で、**runner が居なくなった走行に
+  // `timeout-minutes` がどう効くかは一次資料で確かめられない**(2026-09-09 の
+  // レビュー指摘)。**動機の例としては残すが、証明はしていない。** 主眼は
+  // 固まった走行を私たちの決めた時刻で切ることで、そちらは揺るがない。
+  //
+  // 値の決め方と実績は `ci.yml` の `jobs:` の上に書いてある。
+
+  it.each(TIMED)("%s の runner で走るジョブは全部持っている", (file) => {
+    const missing = jobsOf(read(file))
+      .filter((job) => job.runsOn && job.timeout === null)
+      .map((job) => job.id);
+    expect(missing, `${file} で時間制限の無いジョブ`).toEqual([]);
+  });
+
+  it.each(TIMED)(
+    "%s のジョブを 1 つは見ている（0 件で緑を返さない）",
+    (file) => {
+      // 綴りが変わって `jobsOf` が何も拾わなくなった日から、上の「[] と一致」は
+      // 何も主張しない。
+      expect(
+        jobsOf(read(file)).filter((job) => job.runsOn).length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it("値は 5〜90 分に収まる", () => {
+    // **下は「固まった」の検出器として意味を持つ幅**、上は**既定 360 分の
+    // 1/4 以下**。ここを外すときは、外す理由を考えてから外すことになる。
+    for (const file of TIMED) {
+      for (const job of jobsOf(read(file))) {
+        if (job.timeout === null) continue;
+        expect(job.timeout, `${file}:${job.id}`).toBeGreaterThanOrEqual(5);
+        expect(job.timeout, `${file}:${job.id}`).toBeLessThanOrEqual(90);
+      }
+    }
+  });
+
+  it("他のワークフローを呼ぶだけのジョブには求めない", () => {
+    // `release.yml` の `ci` / `heavy` / `deploy` は `uses:` で別の
+    // ワークフローを呼ぶ。**runner を使うのは呼ばれた側**なので、時間制限も
+    // そちらのジョブが持つ——ここに書いても守る対象が無い。
+    // (**GitHub がこの鍵をそこに受け付けるかどうかは確かめていない**。
+    // 確かめずに「書けない」とは書かない。)
+    const callers = jobsOf(read("release.yml")).filter((job) => !job.runsOn);
+    expect(callers.map((job) => job.id)).toEqual(["ci", "heavy", "deploy"]);
+    expect(callers.every((job) => job.timeout === null)).toBe(true);
+  });
+
+  it("免除は 0 件である", () => {
+    // **`deploy.yml` はここに居た**(2026-09-05 まで)。「途中で殺すと配信が
+    // 半端に終わりうる」という留保で外していたが、**調べたら区間で分かれた**
+    // ——`wrangler` より前で殺しても本番は変わらず、後で殺すと**出たまま
+    // 未検査**になる。後者を減らすには**制限を置いたうえで緩くする**のが
+    // 正しく、外しておくことではなかった。理由は `deploy.yml` に在る。
+    //
+    // **0 件を主張しておく。** 免除は `UNTIMED` に足すだけで静かに増える。
+    // ここが在ると、**外すときにこの行も直すことになる**——差分に出る。
+    expect(Object.keys(UNTIMED)).toEqual([]);
+  });
+
+  it("ワークフローが増えたら、どちらかの一覧に載る", () => {
+    // **これが本題である。** 上の 4 本は名指しした 3 ファイルしか見ない。
+    // 新しいワークフローが増えた日に、それが黙って対象外になるのを止める。
+    const found = readdirSync(
+      new URL("../../.github/workflows", import.meta.url),
+    ).sort();
+    expect(found).toEqual([...TIMED, ...Object.keys(UNTIMED)].sort());
   });
 });

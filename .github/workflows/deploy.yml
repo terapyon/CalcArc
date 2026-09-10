@@ -31,6 +31,35 @@ jobs:
   deploy:
     name: Build and deploy to Cloudflare Pages
     runs-on: ubuntu-latest
+    # **途中で殺されると何が起きるかを先に調べた**(2026-09-05)。下の steps は
+    # 3 つの区間に分かれ、**危ないのは ③ だけ**である。
+    #
+    #   ① `wrangler` より前(checkout・wasm-pack・vite build・刻印・check:sw)
+    #      —— 全部この runner の中の話で、**本番は 1 バイトも変わらない**。
+    #      殺して失うのはビルドだけ。
+    #   ② `wrangler pages deploy` の最中 —— **未確認**。中断した Direct Upload
+    #      が live なデプロイになりうるかは Cloudflare 側の振る舞いで、
+    #      ここからは試せない。**確かめていないので、確かめた顔で書かない。**
+    #   ③ `wrangler` の後(スモーク 3 本と `deployed-dist` の保存)
+    #      —— **本番は既に新しいビルドを配っている。** 失うのは「配った物が
+    #      本当に配信されているか」の検査 3 本と、Release に添える証拠
+    #      (`upload-artifact` に `if: always()` は無い)。**これがいちばん悪い
+    #      終わり方**である——出てはいるが、出たことを誰も確かめておらず、
+    #      証拠も残っていない。
+    #
+    # **だから観測最大では決めない。** 実績は 25 本(単独 20・Release 経由 5)で
+    # **最大 87 秒**だが、**このジョブは 6 分の再試行予算を内側に持つ**
+    # ——下のスモーク 3 本がそれぞれ 12 回 × 10 秒待つので、**伝播が遅い日には
+    # 何も壊れていなくても 7 分半**かかる。観測最大の 2 倍(→ 下限の 10 分)だと、
+    # **その日に ③ で殺す。**
+    #
+    # `ci.yml` の規則を**再試行予算込みの上限 7.5 分**に当てると 15 分。
+    # そこから **1 段(5 分)緩めて 20 分**にした——**ここだけ規則より緩い**のは、
+    # 失敗の形が非対称だからである。他のジョブを殺すと検査が 1 つ落ちるだけ
+    # だが、**このジョブを ③ で殺すと本番が「出たまま未検査」になる。**
+    # public なリポジトリなので runner 時間は課金されず、緩い側の代償は
+    # 固まった日の wall-clock 5 分だけである。
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -56,7 +85,7 @@ jobs:
             echo ""
             echo "**Release に何を配ったかを書き足すこと**(docs/deploy.md)。"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-wasm-pack
       - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
       - uses: ./.github/actions/setup-web
@@ -74,6 +103,14 @@ jobs:
       # 検査した物を配るには、配る物を検査するしかない(設計書 §2)。
       - run: pnpm check:sw
         working-directory: web
+      # **これは node20 のまま残す**(2026-09-05、Node 24 への移行のとき)。
+      # `v0.8.0` の走行の注意書きは**この action も挙げていた**ので、
+      # 「言われていないから」は理由にならない。**上げない理由は 1 つだけ
+      # である**——**この 1 か所は本番配信でしか走らない。**
+      # `deploy.yml` は `workflow_call`(リリース)か、緊急の
+      # `workflow_dispatch` でしか動かず、**普段の CI では 1 度も通らない。**
+      # v3 → v4 はメジャー跳びで、**確かめる場所が無いまま上げると、
+      # 失敗するのは本番配信の最中である。** 上げるなら別の枝・別の裁定で。
       - uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
         # バージョンを指定しないと実行ごとに入るものが変わる(wasm-pack
         # v0.9 事件と同じ穴)。上げるときは意図して上げる。
@@ -154,7 +191,7 @@ jobs:
       # 配信されていることを確かめた後だけである。`build-info.json`(刻印)を
       # 含む `web/dist/` をそのまま上げる。
       - name: Keep what was deployed
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: deployed-dist
           path: web/dist/
