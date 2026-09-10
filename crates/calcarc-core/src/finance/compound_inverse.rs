@@ -7,7 +7,7 @@
 //! (numerical-policy「手取りは期数について単調でない」)。積立額については
 //! 単調なので、そちらは二分探索でよい。
 
-use super::compound::{Growth, MAX_PERIODS, grow};
+use super::compound::{DepositTiming, Growth, MAX_PERIODS, grow_with_timing, step};
 use super::loan::rate::Rate;
 use super::tax::withholding;
 use crate::{CalcError, CalcResult};
@@ -56,7 +56,11 @@ fn solution(deposit: u64, periods: u32, growth: Growth, taxed: bool) -> CalcResu
     })
 }
 
-/// 目標を下回らない最小の積立額。**単調なので二分探索でよい**(設計書 §3)。
+/// 目標を下回らない最小の積立額(**積立は期末**)。位置を選ぶなら
+/// `deposit_for_with_timing`。
+///
+/// **位置を取らないこの入口が既定の経路である**(`compound::grow` と同じ理由。
+/// 設計書 §5.4.6)。
 pub fn deposit_for(
     principal: u64,
     rate: &Rate,
@@ -64,13 +68,36 @@ pub fn deposit_for(
     target: u64,
     taxed: bool,
 ) -> CalcResult<Solution> {
+    deposit_for_with_timing(
+        principal,
+        rate,
+        periods,
+        target,
+        taxed,
+        DepositTiming::default(),
+    )
+}
+
+/// 目標を下回らない最小の積立額。**単調なので二分探索でよい**(設計書 §3)。
+///
+/// **単調性は位置によらない**——期首でも期末でも、積立額を増やせば各期の
+/// 残高は減らない。証明ではなく検査として
+/// `the_net_is_monotone_in_the_deposit` が両方の位置を掃いている。
+pub fn deposit_for_with_timing(
+    principal: u64,
+    rate: &Rate,
+    periods: u32,
+    target: u64,
+    taxed: bool,
+    timing: DepositTiming,
+) -> CalcResult<Solution> {
     if target == 0 || periods == 0 || periods > MAX_PERIODS {
         return Err(CalcError::SyntaxError);
     }
     // **Overflow は「届く側」として扱う**——探索を u64 の定義域で閉じるため。
     // 選ばれた答は最後に必ず grow を走らせるので、収まらないなら Overflow が出る。
     let probe = |d: u64| -> bool {
-        match grow(principal, d, rate, periods) {
+        match grow_with_timing(principal, d, rate, periods, timing) {
             Ok(g) => matches!(reached(g.final_balance, g.interest, taxed), Ok(v) if v >= target),
             Err(CalcError::Overflow) => true,
             Err(_) => false,
@@ -103,20 +130,43 @@ pub fn deposit_for(
         }
         high
     };
-    let growth = grow(principal, answer, rate, periods)?;
+    let growth = grow_with_timing(principal, answer, rate, periods, timing)?;
     solution(answer, periods, growth, taxed)
 }
 
-/// 目標を下回らない最小の期数。**最初に届いた期**を前進 1 本で見つける。
+/// 目標を下回らない最小の期数(**積立は期末**)。位置を選ぶなら
+/// `periods_for_with_timing`。
 ///
-/// 二分探索を使わないのは手取りが期数について単調でないからで、これは
-/// 効率の話ではなく正しさの話である(設計書 §3)。
+/// **位置を取らないこの入口が既定の経路である**(`compound::grow` と同じ理由。
+/// 設計書 §5.4.6)。
 pub fn periods_for(
     principal: u64,
     deposit: u64,
     rate: &Rate,
     target: u64,
     taxed: bool,
+) -> CalcResult<Solution> {
+    periods_for_with_timing(
+        principal,
+        deposit,
+        rate,
+        target,
+        taxed,
+        DepositTiming::default(),
+    )
+}
+
+/// 目標を下回らない最小の期数。**最初に届いた期**を前進 1 本で見つける。
+///
+/// 二分探索を使わないのは手取りが期数について単調でないからで、これは
+/// 効率の話ではなく正しさの話である(設計書 §3)。
+pub fn periods_for_with_timing(
+    principal: u64,
+    deposit: u64,
+    rate: &Rate,
+    target: u64,
+    taxed: bool,
+    timing: DepositTiming,
 ) -> CalcResult<Solution> {
     if target == 0 {
         return Err(CalcError::SyntaxError);
@@ -127,10 +177,10 @@ pub fn periods_for(
     let mut balance = principal;
     let mut principal_total = principal;
     for n in 1..=MAX_PERIODS {
-        balance = balance
-            .checked_add(rate.interest_floor(balance)?)
-            .and_then(|b| b.checked_add(deposit))
-            .ok_or(CalcError::Overflow)?;
+        // **1 期の式は `compound::step` にしか無い。** ここで書き写すと、
+        // 位置の分岐が 2 口になり、片方だけ壊しても答がもっともらしいまま
+        // になる。
+        balance = step(balance, deposit, rate, timing)?;
         principal_total = principal_total
             .checked_add(deposit)
             .ok_or(CalcError::Overflow)?;
@@ -158,6 +208,8 @@ pub fn periods_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // 既定の経路(位置を取らない入口)をテストからも通す。
+    use super::super::compound::grow;
 
     #[test]
     fn the_deposit_is_the_smallest_that_does_not_fall_short() {
@@ -227,6 +279,51 @@ mod tests {
     }
 
     #[test]
+    fn the_inversions_take_the_deposit_timing_too() {
+        // **逆算に位置を通していないと「期首で必要な積立額」が出せない。**
+        // 期首は同じ金がその期の利息を生むので、同じ目標なら**必要な積立額は
+        // 減り、必要な期数は延びない**。
+        let r = Rate::from_annual_percent("3", 12).unwrap();
+        let end = deposit_for(0, &r, 240, 10_000_000, false).unwrap();
+        let start =
+            deposit_for_with_timing(0, &r, 240, 10_000_000, false, DepositTiming::Start).unwrap();
+        assert_eq!(end.deposit, 30_461); // 既定は動かない
+        assert_eq!(start.deposit, 30_385);
+        // 定義の両側: 期首でも「下回らない最小」である。
+        assert!(start.growth.final_balance >= 10_000_000);
+        assert!(
+            grow_with_timing(0, start.deposit - 1, &r, 240, DepositTiming::Start)
+                .unwrap()
+                .final_balance
+                < 10_000_000
+        );
+
+        // 必要期数も同じ向き。**目標は差の出るところに取る**——10,000,000 は
+        // 期末も期首も 243 期で、位置を通していなくても緑になる格子だった
+        // (実測)。1,000,000 なら 1 期ずれる。
+        let end_n = periods_for(0, 30_000, &r, 1_000_000, false).unwrap();
+        let start_n =
+            periods_for_with_timing(0, 30_000, &r, 1_000_000, false, DepositTiming::Start).unwrap();
+        assert_eq!(end_n.periods, 33);
+        assert_eq!(start_n.periods, 32);
+    }
+
+    #[test]
+    fn the_default_path_of_the_inversions_is_the_end_of_the_period() {
+        // **既定は期末**(設計書 §5.4.1)。位置を取らない入口が期末を指して
+        // いることを、位置の効く入力で押さえる。
+        let r = Rate::from_annual_percent("3", 12).unwrap();
+        assert_eq!(
+            deposit_for(0, &r, 240, 10_000_000, false).unwrap(),
+            deposit_for_with_timing(0, &r, 240, 10_000_000, false, DepositTiming::End).unwrap()
+        );
+        assert_eq!(
+            periods_for(0, 30_000, &r, 10_000_000, false).unwrap(),
+            periods_for_with_timing(0, 30_000, &r, 10_000_000, false, DepositTiming::End).unwrap()
+        );
+    }
+
+    #[test]
     fn the_error_table() {
         let r = Rate::from_annual_percent("3", 12).unwrap();
         let zero = Rate::from_annual_percent("0", 12).unwrap();
@@ -262,31 +359,33 @@ mod tests {
         // **§3 の証明を検査として残す。** 二分探索の正当性はこれに依存している。
         // 範囲は設計書 §15 の総当たりの縮小版(テスト時間に収める)。
         let mut compared = 0usize;
-        for percent in ["0", "0.0001", "1.5", "3", "20"] {
-            for ppy in [1u32, 2, 12] {
-                let r = Rate::from_annual_percent(percent, ppy).unwrap();
-                for periods in [1u32, 2, 3, 12, 240] {
-                    for principal in [0u64, 999, 1_000_000] {
-                        let mut previous = 0u64;
-                        for d in 0..200u64 {
-                            // principal=0 かつ d=0 は grow の契約上「入れた金がゼロ」で
-                            // SyntaxError になる(無効な入力であって単調性の反例ではない)。
-                            // 高率×長期×高額(例: 20%・240 期・元本 100 万)は u64 を
-                            // あふれることがある(これも単調性の反例ではなく、別の契約の
-                            // 話なので素通りする)。20%・ppy=1・240 期は d=1 でも
-                            // あふれる格子で、この 3 セルは 200 個の d が全て continue
-                            // する(この関数では 1 度も比較しない)。
-                            let g = match grow(principal, d, &r, periods) {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            let v = reached(g.final_balance, g.interest, true).unwrap();
-                            assert!(
-                                v >= previous,
-                                "手取りが減った: {percent}% ppy={ppy} n={periods} P={principal} d={d}"
-                            );
-                            previous = v;
-                            compared += 1;
+        for timing in [DepositTiming::End, DepositTiming::Start] {
+            for percent in ["0", "0.0001", "1.5", "3", "20"] {
+                for ppy in [1u32, 2, 12] {
+                    let r = Rate::from_annual_percent(percent, ppy).unwrap();
+                    for periods in [1u32, 2, 3, 12, 240] {
+                        for principal in [0u64, 999, 1_000_000] {
+                            let mut previous = 0u64;
+                            for d in 0..200u64 {
+                                // principal=0 かつ d=0 は grow の契約上「入れた金がゼロ」で
+                                // SyntaxError になる(無効な入力であって単調性の反例ではない)。
+                                // 高率×長期×高額(例: 20%・240 期・元本 100 万)は u64 を
+                                // あふれることがある(これも単調性の反例ではなく、別の契約の
+                                // 話なので素通りする)。20%・ppy=1・240 期は d=1 でも
+                                // あふれる格子で、この 3 セルは 200 個の d が全て continue
+                                // する(この関数では 1 度も比較しない)。
+                                let g = match grow_with_timing(principal, d, &r, periods, timing) {
+                                    Ok(g) => g,
+                                    Err(_) => continue,
+                                };
+                                let v = reached(g.final_balance, g.interest, true).unwrap();
+                                assert!(
+                                    v >= previous,
+                                    "手取りが減った: {timing:?} {percent}% ppy={ppy} n={periods} P={principal} d={d}"
+                                );
+                                previous = v;
+                                compared += 1;
+                            }
                         }
                     }
                 }
@@ -294,8 +393,9 @@ mod tests {
         }
         // **空振りの検査**。`continue` が全部を飲み込んでも通ってしまう形に
         // しないための下限である(オーバーフローする格子は実際にある: 20% ×
-        // 年複利 × 240 期は d=1 でも u64 を超える)。実測 44,326 / 45,000。
-        assert!(compared > 40_000, "比較したのは {compared} 回だけ");
+        // 年複利 × 240 期は d=1 でも u64 を超える)。位置の軸を足して
+        // 格子は 2 倍(90,000)。実測 88,652。
+        assert!(compared > 80_000, "比較したのは {compared} 回だけ");
     }
 
     #[test]
@@ -319,46 +419,53 @@ mod tests {
         // もっともらしいままである。**複数の n で縛る**: 1 点の一致では
         // 「その n までは同じ」しか言えず、写しずれは特定の期で初めて出うる。
         let mut compared = 0usize;
-        for percent in ["0", "0.0001", "1.5", "3", "20"] {
-            for ppy in [1u32, 2, 12] {
-                let r = Rate::from_annual_percent(percent, ppy).unwrap();
-                for n in [1u32, 2, 3, 19, 20, 21, 240, MAX_PERIODS] {
-                    for (principal, deposit) in [(999u64, 0u64), (0, 30_000), (1_000_000, 7)] {
-                        // 目標を「その n でちょうど届く値」に取る。ただし高率×長期は
-                        // u64 をあふれる(そのもの自体は別の契約の話なので、ここでは
-                        // 素通りする)。
-                        let expected = match grow(principal, deposit, &r, n) {
-                            Ok(g) => g,
-                            Err(_) => continue,
-                        };
-                        // taxed=false なので reached は残高をそのまま返す(常に Ok)。
-                        let target =
-                            reached(expected.final_balance, expected.interest, false).unwrap();
-                        let s = periods_for(principal, deposit, &r, target, false);
-                        if let Ok(s) = s {
-                            // **止まった期がどこであれ**、そこまで積んだ残高は
-                            // 同じ入力の grow と一致しなければならない。以前は
-                            // `s.periods == n` で絞っていたが、それだと「積み方が
-                            // ずれて止まる期も n からずれる」種類の写しずれが
-                            // 沈黙側(if の外)に落ちてしまい、検査が空振りになる。
-                            // s.periods <= n は残高の単調性から保証されるので、
-                            // grow(..., s.periods) はあふれない。
-                            let at_stop = grow(principal, deposit, &r, s.periods).unwrap();
-                            assert_eq!(
-                                s.growth, at_stop,
-                                "写しがずれた: {percent}% ppy={ppy} n={n} P={principal} d={deposit} 止まった期={}",
-                                s.periods
+        for timing in [DepositTiming::End, DepositTiming::Start] {
+            for percent in ["0", "0.0001", "1.5", "3", "20"] {
+                for ppy in [1u32, 2, 12] {
+                    let r = Rate::from_annual_percent(percent, ppy).unwrap();
+                    for n in [1u32, 2, 3, 19, 20, 21, 240, MAX_PERIODS] {
+                        for (principal, deposit) in [(999u64, 0u64), (0, 30_000), (1_000_000, 7)] {
+                            // 目標を「その n でちょうど届く値」に取る。ただし高率×長期は
+                            // u64 をあふれる(そのもの自体は別の契約の話なので、ここでは
+                            // 素通りする)。
+                            let expected = match grow_with_timing(principal, deposit, &r, n, timing)
+                            {
+                                Ok(g) => g,
+                                Err(_) => continue,
+                            };
+                            // taxed=false なので reached は残高をそのまま返す(常に Ok)。
+                            let target =
+                                reached(expected.final_balance, expected.interest, false).unwrap();
+                            let s = periods_for_with_timing(
+                                principal, deposit, &r, target, false, timing,
                             );
-                            compared += 1;
+                            if let Ok(s) = s {
+                                // **止まった期がどこであれ**、そこまで積んだ残高は
+                                // 同じ入力の grow と一致しなければならない。以前は
+                                // `s.periods == n` で絞っていたが、それだと「積み方が
+                                // ずれて止まる期も n からずれる」種類の写しずれが
+                                // 沈黙側(if の外)に落ちてしまい、検査が空振りになる。
+                                // s.periods <= n は残高の単調性から保証されるので、
+                                // grow(..., s.periods) はあふれない。
+                                let at_stop =
+                                    grow_with_timing(principal, deposit, &r, s.periods, timing)
+                                        .unwrap();
+                                assert_eq!(
+                                    s.growth, at_stop,
+                                    "写しがずれた: {timing:?} {percent}% ppy={ppy} n={n} P={principal} d={deposit} 止まった期={}",
+                                    s.periods
+                                );
+                                compared += 1;
+                            }
                         }
                     }
                 }
             }
         }
         // **空振りの検査**。ガードを外した後も `continue`(高率×長期の
-        // オーバーフロー)は残るので、下限は満杯の 360 より緩く置く。
-        // 実測 349 / 360(残り 11 は grow 自体があふれた格子)。
-        assert!(compared > 300, "比較したのは {compared} 回だけ");
+        // オーバーフロー)は残るので、下限は満杯の 720 より緩く置く。
+        // 位置の軸を足して格子は 2 倍。実測 698 / 720。
+        assert!(compared > 600, "比較したのは {compared} 回だけ");
     }
 
     #[test]
