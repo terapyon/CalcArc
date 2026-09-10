@@ -310,15 +310,16 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names nineteen shards, and names them once", () => {
+  it("names twenty shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
     //
     // **19 枚目は 2026-08-30**（`combinatorics-display-000.json`）。
-    // `ALL_SHARDS` の docstring が「正当に 19 枚目を足す日には、ここの更新が
-    // 意識的な 1 行になる」と書いていた——**そのとおりになった。**
-    expect(ALL_SHARDS).toHaveLength(19);
-    expect(new Set(ALL_SHARDS).size).toBe(19);
+    // **20 枚目は 2026-09-10**（`finance-start-000.json (calls)`、期首の
+    // シャード）。枚数を名前で持っているので、1 枚消えて別の 1 枚が現れる
+    // 走行も、枚数が合っているだけでは見逃さない。
+    expect(ALL_SHARDS).toHaveLength(20);
+    expect(new Set(ALL_SHARDS).size).toBe(20);
   });
 
   it("expects only shards that this run is supposed to load", () => {

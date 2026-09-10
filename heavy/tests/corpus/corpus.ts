@@ -482,6 +482,7 @@ export const COVERAGE_STATUSES = new Set([
 /** `coverage` を必ず持つシャード(第 1 段階は金融だけ。設計書 §11.1)。 */
 export const COVERAGE_REQUIRED_SHARDS = new Set([
   "finance-000.json",
+  "finance-start-000.json",
   // **科学計算の 9 領域**（2026-08-30、`scientific-v1`）。モデルがシャードを
   // またぐので、**10 枚すべてが同じブロックを持つ**——どれを開いても同じ
   // 会計が読める（任意の 1 枚を選ぶ恣意性を避けた）。

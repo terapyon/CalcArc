@@ -35,8 +35,10 @@ const RUN_JSON = join(HEAVY, "heavy-run.json");
  * 枚数だけを assert しても足りない。1 枚消えて 1 枚増えた走行が緑で通り、
  * 壊れたときに何が消えたのかを言えない。**名前で持つ。**
  *
- * 正当に 19 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
- * この定数の狙いである。
+ * **正当にシャードを足す日には、ここの更新が意識的な 1 行になる。**それが
+ * この定数の狙いである。**枚数は書かない**——「19 枚目を足す日には」と
+ * 書いていた註は、19 枚目が入ったあとも同じ文のまま腐っていた
+ * (2026-09-10、期首のシャード＝20 枚目を足す段で見つけた)。
  */
 export const ALL_SHARDS = [
   "angle-mode-000.json (values)",
@@ -53,6 +55,7 @@ export const ALL_SHARDS = [
   "equivalence-000.json (equivalences)",
   "data-scale-000.json (calls)",
   "finance-000.json (calls)",
+  "finance-start-000.json (calls)",
   "combinatorics-display-000.json (displays)",
   "complex-display-000.json (displays)",
   "display-000.json (displays)",

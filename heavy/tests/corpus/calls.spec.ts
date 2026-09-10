@@ -149,7 +149,10 @@ for (const { name, shard } of SHARDS) {
  */
 const CERT_BATCH = 5000;
 
-const FINANCE_SHARD = SHARDS.find(({ name }) => name === "finance-000.json");
+const FINANCE_SHARDS = SHARDS.filter(({ name }) => name.startsWith("finance-"));
+const FINANCE_SHARD = FINANCE_SHARDS.find(
+  ({ name }) => name === "finance-000.json",
+);
 if (FINANCE_SHARD === undefined) {
   throw new Error(
     "calls.spec.ts: finance-000.json is not among the call shards — the " +
@@ -158,27 +161,36 @@ if (FINANCE_SHARD === undefined) {
 }
 const FINANCE_CASES = FINANCE_SHARD.shard.cases;
 
-for (const { op, build } of CERTIFICATES) {
-  test(`${op}'s answer is the boundary, not just a number`, async ({
-    page,
-  }) => {
-    await openHarness(page);
-    const probes = build(FINANCE_CASES);
-    expect(
-      probes.length,
-      `${op}: built zero boundary checks — either the corpus has no normal ` +
-        `${op} cases, or the certificate is not wired up`,
-    ).toBeGreaterThan(0);
-
-    const mismatches = await runProbes(page, probes, CERT_BATCH);
-
-    expect(
-      mismatches,
-      `${op}: ${mismatches.length} of ${probes.length} boundary checks ` +
-        "failed. Each line says which case, and which side of the boundary " +
-        "(the answer itself, or one step past it), broke.",
-    ).toEqual([]);
-  });
+for (const { name, shard } of FINANCE_SHARDS) {
+  for (const { op, build } of CERTIFICATES) {
+    // **`finance-000.json` のテスト名は 1 文字も変えない**——報告書と
+    // 変異の記録がその名前で赤を数えている。期首のシャードだけ名前に付ける。
+    const title =
+      name === "finance-000.json"
+        ? `${op}'s answer is the boundary, not just a number`
+        : `${op}'s answer in ${name} is the boundary, not just a number`;
+    test(title, async ({ page }) => {
+      await openHarness(page);
+      const probes = build(shard.cases);
+      // `loan_*` の証明書は期首のシャードに対象が無い(複利だけのシャード)。
+      if (name !== "finance-000.json" && op.startsWith("loan_")) {
+        expect(probes).toEqual([]);
+        return;
+      }
+      expect(
+        probes.length,
+        `${op} in ${name}: built zero boundary checks — either the corpus has ` +
+          `no normal ${op} cases, or the certificate is not wired up`,
+      ).toBeGreaterThan(0);
+      const mismatches = await runProbes(page, probes, CERT_BATCH);
+      expect(
+        mismatches,
+        `${op} in ${name}: ${mismatches.length} of ${probes.length} boundary ` +
+          "checks failed. Each line says which case, and which side of the " +
+          "boundary (the answer itself, or one step past it), broke.",
+      ).toEqual([]);
+    });
+  }
 }
 
 test("loan_principal's degenerate answers are counted, not silently dropped", () => {
@@ -249,6 +261,36 @@ test("実物の finance-000.json が、測った数をそのまま載せてい�
   expect(reasons).toEqual({
     not_applicable: 10,
     inverse_target_unconstructible: 14,
+    source_overflow: 8,
+  });
+});
+
+test("実物の finance-start-000.json が、測った数をそのまま載せている", () => {
+  // **作り物ではなく現物を見る。** 上の検算は「宣言が自分と矛盾しないか」
+  // しか見ないので、**数そのものが実測と合っているか**はここで留める。
+  const financeStart = loadCallShards().find(
+    (s) => s.name === "finance-start-000.json",
+  );
+  expect(financeStart, "finance-start-000.json が読めない").toBeDefined();
+  const coverage = financeStart?.shard.coverage;
+  expect(coverage?.model).toBe("finance-start-v1");
+  const totals = Object.fromEntries(
+    (coverage?.requirements ?? []).map((r) => [
+      r.scope,
+      [r.covered_cells, r.excluded_cells, r.required_cells],
+    ]),
+  );
+  expect(totals).toEqual({
+    compound_grow: [266, 0, 266],
+    compound_deposit_for: [258, 8, 266],
+    compound_periods_for: [56, 0, 56],
+  });
+  // **理由の内訳も留める。** 合計だけだと、理由が入れ替わっても気づかない。
+  const reasons: Record<string, number> = {};
+  for (const exclusion of coverage?.excluded_cells ?? []) {
+    reasons[exclusion.reason] = (reasons[exclusion.reason] ?? 0) + 1;
+  }
+  expect(reasons).toEqual({
     source_overflow: 8,
   });
 });
