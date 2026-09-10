@@ -34,6 +34,27 @@ describe("WebKit の project が在る（門 1）", () => {
     expect(rest.isMobile).toBe(false);
   });
 
+  it("`webkit` だけ再試行や待ち時間を緩めていない", () => {
+    // **「再試行で緑にしない」の番人**(設計書 §1.3・§1.4)。上の 1 本は
+    // `use` しか比べていない——`retries` や `timeout` は project の直下に
+    // 書くので、`webkit` に `retries: 2` を足しても 27 本が全部緑のまま
+    // だった(2026-09-10、レビュー役の実測)。**最初の WebKit の赤が出た日に、
+    // いちばん安易な逃げ道がそこである。**
+    //
+    // `use` と `name` のほかに鍵を持たせない。**2 つとも空であることまで
+    // 見る**——両方に同じ `retries` を足すと、比べるだけでは緑になる。
+    const beyondUse = (name: string) =>
+      Object.fromEntries(
+        Object.entries(project(name) ?? {}).filter(
+          ([key]) => key !== "use" && key !== "name",
+        ),
+      );
+    expect(beyondUse("webkit")).toEqual(beyondUse("mobile"));
+    expect(beyondUse("webkit")).toEqual({});
+    // 設定の全体で `retries` を上げても同じ逃げ道になる。
+    expect(config.retries ?? 0).toBe(0);
+  });
+
   it("`mobile` は Chromium のままである", () => {
     // `End-to-end` のジョブは chromium しか入れない。`mobile` が WebKit に
     // なった日に、Chromium の走行が 1 本も無くなる。
@@ -95,6 +116,19 @@ const reportNameOf = (lines: string[]) => {
 
 /** コメントを除いた ci.yml の行。 */
 const ciLines = ci.split("\n").filter((line) => !/^\s*#/.test(line));
+
+const webPackage = JSON.parse(
+  readFileSync(new URL("../../web/package.json", import.meta.url), "utf8"),
+) as { scripts: Record<string, string> };
+
+describe("手元の `pnpm e2e` は Chromium だけを回す（門 1）", () => {
+  it("`pnpm e2e` は `mobile` の project を名指す", () => {
+    // 外すと `webkit` の project も回り、WebKit を起動できない機械では
+    // 起動の段で落ちる(2026-09-10 の作業機がそうだった。設計書 §1.2)。
+    // **落ちるので目には見えるが、理由が分かりにくい**——ここで名指す。
+    expect(webPackage.scripts.e2e).toMatch(/playwright test --project mobile$/);
+  });
+});
 
 describe("CI が WebKit を入れて回す（門 1）", () => {
   it("`End-to-end (WebKit)` は WebKit を入れて `webkit` の project を回す", () => {

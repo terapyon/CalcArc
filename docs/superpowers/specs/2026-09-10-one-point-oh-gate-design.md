@@ -132,12 +132,17 @@ WebKit の project は、**Chromium の project と同じ条件**（390×844、`
 
 ### §1.4 門 1 の番人
 
+**【追記 2026-09-10】** 下の表の 5 行目と 6 行目は、レビューで足した（「再試行で緑にしない」に
+番人が無く、`webkit` に `retries: 2` を足しても番人が全部緑だった——レビュー役の実測）。
+
 | 主張 | 番人 | これを破る変異 |
 |---|---|---|
 | WebKit の project が在る | `web/playwright.config.ts` を読む単体テスト（`tools/tests/` の流儀） | project を消す |
 | CI が WebKit を入れて回す | `tools/tests/release-workflow.test.ts` と同じ形で `ci.yml` を読む——WebKit のジョブが在り、`--with-deps webkit` と `--project` を持つ | ジョブを消す／`--project` を外す |
 | そのジョブにも時間制限が在る | **既存の番人**（`release-workflow.test.ts` の「すべてのジョブに時間制限が在る」、免除 0 件） | `timeout-minutes` を消す |
 | 理由の無い skip が無い | `web/tests/e2e/` の `test.skip` / `test.fixme` を数え、**すべてに理由の文字列が在る**ことを見る単体テスト | 理由の無い `test.fixme` を足す |
+| **WebKit だけ再試行・待ち時間を緩めていない**（§1.3「再試行で緑にしない」） | `webkit-gate.test.ts` の 1 本——project の `use`・`name` 以外の鍵が `webkit` にも `mobile` にも無く、設定全体の `retries` が 0 | `webkit` に `retries: 2` を足す／`timeout` を足す／両方に同じ `retries` を足す |
+| 手元の `pnpm e2e` は Chromium だけ | `webkit-gate.test.ts` の 1 本——`e2e` の台本が `--project mobile` で終わる | `--project mobile` を外す |
 
 ---
 
