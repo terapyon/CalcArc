@@ -129,14 +129,22 @@ def _loan_params(rng: random.Random, op: str) -> dict:
 
 
 def _compound_reached(
-    principal: int, deposit: int, rate: str, periods_per_year: int, periods: int, tax: bool
+    principal: int,
+    deposit: int,
+    rate: str,
+    periods_per_year: int,
+    periods: int,
+    tax: bool,
+    timing: compound_ref.Timing = compound_ref.END,
 ) -> int | None:
     """到達値(税 ON なら手取り、OFF なら残高。公開契約 6)。参照実装が
     受理しない組(元本も積立も 0、期数域外など)は `None`(設計書 §4.4)。
+
+    `timing` の既定は期末(`compound_ref.END`)——期首は次の Task が使う。
     """
     try:
         num, den = compound_ref.rate_fraction(rate, periods_per_year)
-        return compound_ref.reached(principal, deposit, num, den, periods, tax)
+        return compound_ref.reached(principal, deposit, num, den, periods, tax, timing)
     except compound_ref.CompoundError:
         return None
 
@@ -2571,6 +2579,7 @@ def _construct_loan_term_row(rate: str, target: int) -> tuple[int, int] | None:
 
 def compound_deposit_for_exclusions(
     covered: set[coverage.Cell],
+    timing: compound_ref.Timing = compound_ref.END,
 ) -> dict[coverage.Cell, coverage.Exclusion]:
     """踏めなかったペアに理由を付ける(設計書 §9.1・§10)。
 
@@ -2594,7 +2603,11 @@ def compound_deposit_for_exclusions(
             continue
         axes = dict(cell.axes)
         rate, periods = axes.get("rate"), axes.get("periods")
-        if rate is None or periods is None or _deposit_for_target_exists(str(rate), int(periods)):
+        if (
+            rate is None
+            or periods is None
+            or _deposit_for_target_exists(str(rate), int(periods), timing)
+        ):
             # 溢れていない(または期間を名指ししていない)セルは、**構成できる
             # はずのものが未達で残っている**ということである。理由を作らない。
             unexplained.append(cell.id)
@@ -2613,7 +2626,9 @@ def compound_deposit_for_exclusions(
     return out
 
 
-def _deposit_for_target_exists(rate: str, periods: int) -> bool:
+def _deposit_for_target_exists(
+    rate: str, periods: int, timing: compound_ref.Timing = compound_ref.END
+) -> bool:
     """その (金利, 期間) で、積立 1 円の正算が答を出せるか。
 
     **周期と税の全通りを試す。** 1 つでも通れば「溢れて作れない」とは言えない
@@ -2621,7 +2636,7 @@ def _deposit_for_target_exists(rate: str, periods: int) -> bool:
     """
     for per_year in PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]:
         for tax in PAIRWISE_COMPOUND_GROW_FACTORS["tax"]:
-            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax))
+            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax), timing)
             if reached is not None and reached > 0:
                 return True
     return False
@@ -2817,7 +2832,9 @@ def _pairwise_compound_grow_strata() -> tuple[Stratum, ...]:
 PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 0
 
 
-def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int] | None:
+def _deposit_for_construction(
+    row: Mapping[str, object], timing: compound_ref.Timing = compound_ref.END
+) -> tuple[int, int, int] | None:
     """ペアワイズ 1 行から `(periods, target)` を作る。**溢れたら期間を振り直す。**
 
     **1 行が運ぶのはペア 6 組である**(設計書 §7.2): (金利,期間)・(金利,周期)・
@@ -2842,12 +2859,12 @@ def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int]
     # (金利, 期間) の組で、周期は他の行がいくらでも運ぶ——**動かす順が
     # そのまま「何を諦めるか」の順である。**
     for per in (per_year, *per_years):
-        target = _compound_reached(0, 1, rate, int(per), periods0, tax)
+        target = _compound_reached(0, 1, rate, int(per), periods0, tax, timing)
         if target is not None and target > 0:
             return periods0, int(per), target
     for periods in PAIRWISE_COMPOUND_GROW_FACTORS["periods"]:
         for per in (per_year, *per_years):
-            target = _compound_reached(0, 1, rate, int(per), int(periods), tax)
+            target = _compound_reached(0, 1, rate, int(per), int(periods), tax, timing)
             if target is not None and target > 0:
                 return int(periods), int(per), target
     return None
@@ -3229,7 +3246,7 @@ class ReferenceGaveUp(Exception):
         self.reason = reason
 
 
-def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
+def _finance_entry(index: int, op: str, params: dict, stratum: str, prefix: str = "fin") -> dict:
     """1 件を組み立てる。**期待値は参照実装がそのまま返した辞書である。**
 
     `stratum` はケースが属する層の識別子(`"{op}/{name}"`。乱択で作られた
@@ -3258,7 +3275,7 @@ def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
         raise RuntimeError(f"unclassified ReferenceGaveUp for {op}: {error}") from error
     return {
         "kind": "call",
-        "id": f"fin-{index:06d}",
+        "id": f"{prefix}-{index:06d}",
         "op": op,
         "input": params,
         "expect": expect,
