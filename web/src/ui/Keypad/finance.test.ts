@@ -188,50 +188,6 @@ describe("Finance のキー集合", () => {
     expect(wrapping.length).toBeGreaterThanOrEqual(6);
   });
 
-  it("colours exactly the group that the words already mark", () => {
-    // **★ 群を分けているのは語であり、色はそれを補強するだけである**
-    // (設計書 §10.4.0)。冠が `複利`/`必要` の 3 つが複利側、
-    // `返済`/`借入`/`返済` の 3 つがローン側で、**語だけで群は読める。**
-    // **色が見えない人には語が残る——この関係が逆になってはいけない。**
-    //
-    // **この 1 本が守るのはその関係そのものである**: 色の群と語の群が
-    // **一致する**。片方だけを動かすと赤くなるので、**「色でしか群が
-    // 分からない」状態にならない。**
-    const modes = section("計算の種類").keys;
-    const crown = (label: string) => label.split("\n")[0];
-
-    const coloured = modes
-      .filter((k) => k.variant === "accent")
-      .map((k) => k.token);
-    const worded = modes
-      .filter((k) => {
-        const head = crown(k.label);
-        return head === "複利" || head === "必要";
-      })
-      .map((k) => k.token);
-
-    // **一致を先に言う。** 下の下限より先に置くのは、**食い違ったときに
-    // 「どのキーが」を名指しするのはこちらだから**である(下限は「3 未満だ」
-    // としか言わない)。**下限が要らないわけではない**——両方が空でも
-    // 一致は緑になる。**0 件どうしの一致で緑になる形を作らない。**
-    expect(
-      coloured,
-      `色の群 ${coloured.join(",")} と語の群 ${worded.join(",")} が食い違う`,
-    ).toEqual(worded);
-
-    expect(modes.length).toBeGreaterThanOrEqual(6);
-    expect(coloured.length).toBeGreaterThanOrEqual(3);
-    expect(worded.length).toBeGreaterThanOrEqual(3);
-    // **ローン側が `accent` を持たない**ことも言う——上を満たしたまま
-    // 6 つ全部を `accent` にする変異を止める。
-    for (const key of modes) {
-      if (coloured.includes(key.token)) continue;
-      expect(key.variant, `${key.ariaLabel} が色の群に入っている`).toBe(
-        "function",
-      );
-    }
-  });
-
   it("has no reserved slots in the mode and field rows", () => {
     // 予約スロットは数字面の 2 マスだけ。モード行と項目行のキーは全部働く。
     for (const name of ["計算の種類", "入力する項目"]) {

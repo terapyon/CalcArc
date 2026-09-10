@@ -41,31 +41,6 @@
   font-size: var(--key-font-size-function);
 }
 
-/* **`function` の色違い。** 字の大きさも器も `.function` と同じで、
-   **変わるのは色だけである**(設計書 `2026-09-03-finance-convention.md`
-   §10.4 案 D —— **縦にも横にも 0px**)。`--key-font-size-function` を
-   書くのはそのため——`.key` の既定(`--key-font-size` = 1.375rem)のままだと
-   2 行のラベルが枠を割り、**「色だけ」でなくなる**。
-
-   **太字にはしない。** `.operator` は同じ背景色に
-   `--key-font-weight-emphasis` を重ねるが、こちらは**群の境目**を出すだけで
-   あって、押す重みを主張するキーではない。
-
-   高コントラストでは `--key-accent-bg: #000000` 対
-   `--key-function-bg: #ffffff` で、**白地に黒と黒地に白**という最も強い差に
-   なる(`tokens.css`)。
-
-   **★ 色は語の補強であって、群の本体ではない。** 群を分けているのは語
-   (Finance 上段の `返済/借入/返済` 対 `複利/必要/必要`)で、
-   **色が見えない人には語が残る。** その関係は
-   `web/src/ui/Keypad/finance.test.ts` が見張っている——**片方だけを動かすと
-   赤くなる。** */
-.accent {
-  background: var(--key-accent-bg);
-  color: var(--key-accent-fg);
-  font-size: var(--key-font-size-function);
-}
-
 .danger {
   background: var(--key-danger-bg);
   color: var(--key-danger-fg);
