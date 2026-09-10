@@ -127,8 +127,8 @@ test("starts on the end of the period with nothing saved", async ({ page }) => {
   // **まっさらな状態の見張り**(設計書 §5.4.6)。`fixtures.ts` の走行は
   // 保存を持たないので、ここに出る位置は `defaultSettings()` の既定である。
   //
-  // **見るのは chip である。** 新しい chip は作らず「周期」の値に畳んだ
-  // (§5.4.2)ので、既定は `月ごと・期末` として画面に出る。
+  // **見るのは chip である。** 新しい chip は作らず「方式」の chip の値に
+  // 畳んだ(§5.4.2)ので、既定は `月ごと・期末` として画面に出る。
   const done = page.getByTestId("display-entries-done");
   await expect(done).toContainText("月ごと・期末");
   await expect(done).not.toContainText("期首");
@@ -151,7 +151,8 @@ test("both timings are on the period face and can be pressed", async ({
     face.getByRole("button", { name: "積立を期首に行う" }),
   ).toBeEnabled();
   // 押すと chip が付いてくる。**既定は期末なので、押して変わるのは期首側**。
-  // **`display-echo` で受ける**——このとき「周期」は**打っている項目**なので、
+  // **`display-echo` で受ける**——このとき「方式」(`periods`)は
+  // **打っている項目**なので、
   // chip は `display-entries-done` ではなく `display-entry-active` に居る。
   await press(page, ["積立を期首に行う"]);
   await expect(page.getByTestId("display-echo")).toContainText("月ごと・期首");

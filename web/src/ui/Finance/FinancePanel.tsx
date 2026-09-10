@@ -105,7 +105,7 @@ const PERIOD_LABELS: Record<1 | 2 | 12, string> = {
  * 積立の位置の、画面に出る語。**「期末」「期首」で確定している**
  * (利用者裁定 2026-09-10、設計書 §5.4.4)。**`BGN` の英字は出さない。**
  *
- * **新しい chip は作らない**(設計書 §5.4.2)。この語は「周期」の chip の
+ * **新しい chip は作らない**(設計書 §5.4.2)。この語は「方式」の chip の
  * 値に畳まれて `月ごと・期末` のように出る——**7 つ目の chip を足すと、
  * 綴り次第で 3 行目に届き、パネルの余白が 8px を割る**(実測)。
  */
@@ -207,7 +207,7 @@ const DISCLAIMER = {
     "各期の利息を 1 円未満切り捨て、積立は選んだ位置（期末／期首）に行います。税は国税と地方税を別々に切り捨てます。",
 } as const;
 
-const FIELD_LABELS: Record<FinanceField, string> = {
+export const FIELD_LABELS: Record<FinanceField, string> = {
   principal: "借入額",
   rate: "年利",
   months: "期間",
@@ -215,7 +215,7 @@ const FIELD_LABELS: Record<FinanceField, string> = {
   residual: "残価",
   bonus: "ボーナス",
   deposit: "積立額",
-  periods: "周期",
+  periods: "方式",
   tax: "税",
   target: "目標額",
 };
@@ -636,7 +636,8 @@ export function FinancePanel() {
 
   /** 項目の、打った通りの文字列。周期と税は選んだものを言葉で出す。 */
   function typedIn(field: FinanceField): string {
-    // **周期の chip に積立の位置を畳む**(設計書 §5.4.2)——`月ごと・期末`。
+    // **「方式」の chip に、周期と積立の位置を畳む**(設計書 §5.4.2)——値は
+    // `月ごと・期末`で、見出しと合わせて `方式 月ごと・期末` と出る。
     // **新しい chip を作らない**: 7 つ目を足すと綴り次第で 3 行目に届き、
     // パネルの余白が 8px を割る(実測)。
     if (field === "periods")

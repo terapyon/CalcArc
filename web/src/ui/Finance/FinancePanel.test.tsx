@@ -648,9 +648,10 @@ describe("FinancePanel（電卓）", () => {
     await press(["半年ごとに複利"]);
     // **周期と積立の位置は 1 つの chip に畳む**(設計書 §5.4.2)。
     // 既定は期末なので、位置を押さなければ `半年ごと・期末` になる。
-    expect(echo()).toHaveTextContent("周期 半年ごと・期末");
+    // 見出しはキーと同じ「方式」(#13 の裁定、2026-09-10)。
+    expect(echo()).toHaveTextContent("方式 半年ごと・期末");
     await press(["積立を期首に行う"]);
-    expect(echo()).toHaveTextContent("周期 半年ごと・期首");
+    expect(echo()).toHaveTextContent("方式 半年ごと・期首");
     await press(["税の扱いを選ぶ"]);
     expect(screen.getByRole("group", { name: "税のキー" })).toBeInTheDocument();
     await press(["源泉分離課税を引く"]);

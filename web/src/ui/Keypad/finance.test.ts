@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FIELD_LABELS } from "../Finance/FinancePanel";
 import {
   COMPOUND_FIELD_SECTION,
   DEPOSIT_FOR_FIELD_SECTION,
@@ -210,7 +211,8 @@ describe("Finance のキー集合", () => {
     // 1 日入っていても、誰も言わなかった。**
     //
     // **1 つだけ守らない。** 1 つだけ名指しすると、名指ししていない残りが
-    // 「守られている」と読まれる。**承認済みは 10 個で、10 個ともここに置く。**
+    // 「守られている」と読まれる。**承認済みは 11 個(キー 10・chip の見出し 1)
+    // で、11 個ともここに置く。**
     //
     // **期待値はこのテストが自分で持つ**——`finance.ts` から組み立てると、
     // 両方が同時に変わっても緑になる。
@@ -229,6 +231,9 @@ describe("Finance のキー集合", () => {
       // 積立の位置(カシオの日本語マニュアルと同じ語)
       "timing:end": "期末",
       "timing:start": "期首",
+      // 入力済みの chip の見出し(#13 の裁定、2026-09-10)。**キーではない**が、
+      // 「押したキー(方式)と同じ語にする」が裁定の中身なので、同じ表に置く。
+      "chip:periods": "方式",
     };
 
     const everyKey = [
@@ -239,18 +244,26 @@ describe("Finance のキー集合", () => {
       PERIODS_SECTION,
       TAX_SECTION,
     ].flatMap((sec) => sec.keys);
+    // chip の見出しは盤面のキーに無いので、`FinancePanel.tsx` の表から引く。
+    const chips: Record<string, string> = {
+      "chip:periods": FIELD_LABELS.periods,
+    };
 
     const seen: string[] = [];
-    for (const [token, label] of Object.entries(APPROVED)) {
-      const found = everyKey.filter((k) => k.token === token);
+    for (const [token, expected] of Object.entries(APPROVED)) {
+      const chip = chips[token];
+      const labels =
+        chip !== undefined
+          ? [chip]
+          : everyKey.filter((k) => k.token === token).map((k) => k.label);
       // **1 つも見つからない綴りを「一致した」と数えない。**
-      expect(found.length, `${token} のキーが見つからない`).toBeGreaterThan(0);
-      for (const key of found) {
-        expect(key.label, `${token} の綴りが承認済みと違う`).toBe(label);
+      expect(labels.length, `${token} のキーが見つからない`).toBeGreaterThan(0);
+      for (const label of labels) {
+        expect(label, `${token} の綴りが承認済みと違う`).toBe(expected);
       }
       seen.push(token);
     }
     // **何件見たかを主張する**——表を 1 行消しても緑にならないように。
-    expect(seen.length).toBe(10);
+    expect(seen.length).toBe(11);
   });
 });
