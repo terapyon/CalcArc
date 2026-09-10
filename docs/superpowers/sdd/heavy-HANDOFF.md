@@ -23,13 +23,13 @@
 迷ったらユーザーに聞く。代理承認者は居ない。
 
 
-## 1. いまの状態（2026-08-31）
+## 1. いまの状態（2026-09-11）
 
 | | |
 |---|---|
-| `origin/main` | **`6b39dff`**（PR #105 まで。**タグは `v0.6.0` まで**——#96 以降は未リリース） |
-| 私の枝 | **`docs/heavy-ui-confirmed`**（`origin/main` から。未 push） |
-| 作業台 | **きれい**（`git update-index --really-refresh` 済み・全ファイル照合一致） |
+| `origin/main` | **`e266a6d`**（`git rev-parse --short origin/main`。**タグは `v0.9.0` まで**——`git describe --tags --abbrev=0 origin/main`） |
+| 未 push の枝（縦積み） | `docs/independent-verification-gaps`（`fcbfaaf`）→ `test/spell-differential`（`44ac21b`）→ `heavy/finance-start`（この記録を書いた時点の直前は `02bdb0b`。この節を書いたコミット自身で先端が 1 つ進む） |
+| 作業台 | **きれい**（`git status --porcelain` が空。2026-09-11 に `/home/terapyon/dev/CalcArc-e2e` で確認） |
 
 **★ この作業台は、走行が落ち、ファイルが化ける。** 2026-08-30 に
 **Segmentation fault 9 回**（`pnpm heavy` 5・`heavy:ui` 3・`vitest` 1〈伝聞〉）、
@@ -80,9 +80,11 @@
    **探索は `reference/scripts/find_convert_overflow.py` に上限つきで在る**
 3. **第 3 段階の試験空間モデルをどこへ置くか**——**`convert` は候補から
    外してよい**（軸が 2 本、単位はすでに満点。産物が当てる前に分かっている）
-4. **期首を重量級へ広げるか**（2026-09-10 に足した）。**重量級のコーパスは期首のケースを
-   1 件も持たない**——ハーネスは `compound_*` に期末（`"end"`）を明示して渡す。期首を
-   参照と突き合わせているのは golden と E2E だけ。広げるかは別に決めること
+4. **期首のシャードを足した（20 枚目）。** `corpus/generated/finance-start-000.json`
+   （1,200 件）を重量級が読み・証明書で検算し・検出力で測る形にした
+   （2026-09-11、`heavy/finance-start`）。**`heavy:ui` の期首 3 件と、期首の
+   `minRate`（手元の `heavy:power` の実測、余裕 0）は CI の最初の `Heavy corpus`
+   の走行で確かめる（未確認）。測ったら消す。**
 
 ## 3. これまで（1 行ずつ）
 

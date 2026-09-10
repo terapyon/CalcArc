@@ -4068,3 +4068,81 @@ Segmentation fault。機械側だと
 **予測を固定して、健全な runner の走行に突き合わせる**という形が、
 **2 回続けて成立した**（`33317021920` に続いて 2 度目）。
 **回せない台でも、予測と成果物があれば台帳は続けられる。**
+
+## 期首のシャード `finance-start-000.json` を足した（2026-09-11 実測、
+independent-verification-gaps Task 8〜10・記録は Task 12）
+
+**書いてあるのは道具が印字した数、または既存の設計書・報告書に固定された実測だけ**
+で、CI の走行番号は 1 つも無い——**このシャードはまだ CI を 1 度も通っていない。**
+`heavy:ui` の期首 3 件と期首の `minRate` は CI の最初の `Heavy corpus` の走行で
+確かめる（未確認）。
+
+### 件数（`corpus/generated/finance-start-000.json` を直接数えた）
+
+| op | 件数 |
+|---|---:|
+| `compound_grow` | 443 |
+| `compound_deposit_for` | 421 |
+| `compound_periods_for` | 336 |
+| **計** | **1,200** |
+
+すべて複利・すべて `timing: "start"`・積立 > 0。`loan_*` は 0 件。
+`compound_grow` の 92 件が `Overflow`（`expect.error` を持つ）で、残りは正常。
+`finance-000.json`（既存 3,500 件、`compound_grow` 437 / `compound_deposit_for` 431 /
+`compound_periods_for` 315 / `loan_*` 2,317）は 1 バイトも変えていない。
+
+### 被覆（`heavy/tests/corpus/calls.spec.ts:268-` の固定値。model `finance-start-v1`）
+
+| 対象 | 必須セル | 実行 | 理由付き除外 | 未達 |
+|---|---:|---:|---:|---:|
+| `compound_grow` | 266 | 266 | 0 | 0 |
+| `compound_deposit_for` | 266 | 258 | 8 | 0 |
+| `compound_periods_for` | 56 | 56 | 0 | 0 |
+
+`finance-v1`（`finance-000.json`）の同じ 3 対象と数がそろっている
+（既存の「試験空間モデル `finance-v1` を入れて測り直した」節の表と同じ 266/258/56）
+——ペアワイズの因子表を共有しているので当然の一致であり、偶然ではない。
+
+### 検出（`heavy/scripts/detection-power.mjs` の各変異の註、2026-09-11 に手元の
+`heavy:power` で実測。CI は未確認）
+
+| 変異 | finance-000.json（3,500 件中） | finance-start-000.json（1,200 件中） |
+|---|---:|---:|
+| loan-interest-round-not-floor | 2,715 | 951 |
+| loan-interest-as-f64 | 109 | 108 |
+| compound-deposit-at-start | **910** | **0** |
+| compound-start-deposit-at-end（新規） | **0** | **969** |
+| compound-round-once-at-maturity | 612 | 640 |
+| rate-nominal-to-effective | 2,276 | 594 |
+| tax-combined-rate | 405 | 459 |
+| loan-final-row-no-adjustment | 1,615 | 0 |
+| bonus-half-year-becomes-monthly | 368 | 0 |
+| periods-for-binary-search | 1 | 0 |
+| compound-inverse-ignores-tax-flag | 272 | 305 |
+
+**腕の独立は両方向で確かめた**——期末しか動かさない `compound-deposit-at-start` は
+期首で 0、期首しか動かさない `compound-start-deposit-at-end` は期末で 0。
+**`finance-000.json` の既知 3 件（910 / 612 / 1）はどれも動いていない。**
+
+**`compound-round-once-at-maturity` の当て直し。** 旧い `to` は `let _ = timing;`
+で積立の位置を捨てていたため、期首のケースでは「一度だけ丸める」と「期首を
+期末として計算する」の 2 つの壊れを同時に入れていた（旧い `to` での期首の実測は
+674 件）。**`to` を積立の位置どおりに読むよう直した**（期末の式は一字も変えない）。
+直した後: `finance-000.json` 612 件（不変）・`finance-start-000.json` 640 件。
+差の 34 件（674 − 640）は位置の取り違えだけで動いていたケースだった。
+
+**`periods-for-binary-search` は期首のシャードに届かない（0 件）。** コードは
+timing を問わず通るが、期首・積立 1 円では谷が無い（`reference` 側の実測、
+設計書 §4.3）ので、二分探索と全走査の答が食い違うケースが 1 件も無かった。
+
+**969 件は動きうる期首のケースの全数である。** `finance-start-000.json` 1,200 件の
+うち、期末で解き直しても答が変わらない 231 件（正常 139 件＋`Overflow` 92 件）を
+除いた残りがちょうど 969 件（1,200 − 231）で、`compound-start-deposit-at-end` は
+その全件を捕まえた。
+
+出どころ: 件数は `corpus/generated/finance-start-000.json` を直接数えた（本節）。
+被覆は `heavy/tests/corpus/calls.spec.ts:268-303`。検出の件数は
+`heavy/scripts/detection-power.mjs` の各変異の 2026-09-11 の註、および
+`.superpowers/sdd/2026-09-10-independent-verification-gaps/task-10-report.md`
+の run 3・run 4 の表（走行の生ログは scratchpad の `power-run3.json` /
+`power-run4.json`、この worktree のみに存在し追跡外）。

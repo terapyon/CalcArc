@@ -455,10 +455,20 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   （積立を利息の後へ）。**期首の腕 2 本を同時に動かす**——片方だけだと「積立が
   消える」別の、はるかに大きい壊れ方になる（09-10 の当て直しで確かめた教訓と同じ）。
   `expectShards` は **`finance-start-000.json (calls)` だけ。**
+
+  **【実測 2026-09-11、Task 10、手元の `heavy:power`】** `finance-start-000.json`
+  969 件（1,200 件中）、`finance-000.json` 0 件（3,500 件中）。率 0.807 は薄まった
+  値——分母の 1,200 件には答が動かない 231 件（§4.3・§4.7）が入っており、
+  969 = 1,200 − 231 で動きうるケースはすべて赤かった。
 - **既存の `compound-deposit-at-start` は `finance-000.json` だけを期待したまま**
   にする。これは期末の腕しか動かさないので、**期首のシャードでは 0 件であるべき**
   ——`detection-power.mjs` は「捕まらないはずの変異が捕まっても失敗」とする。
   **2 本で腕の独立を両方向から確かめる**ことになる。
+
+  **【実測 2026-09-11、Task 10、手元の `heavy:power`】** `finance-000.json` 910 件
+  （3,500 件中。09-10 と同じ）、`finance-start-000.json` 0 件（1,200 件中）——
+  期末しか動かさない変異が期首で 0、期首しか動かさない変異が期末で 0。腕の独立を
+  両方向から実測で確かめた。
 - **`compound-round-once-at-maturity` と `periods-for-binary-search`** は期首の
   シャードにも届く（前者は `grow_with_timing` のループ、後者は `periods_for` の
   ループに在り、どちらも timing を問わず通る）。**`verdictFor` は「反応した
@@ -468,9 +478,50 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   どれが反応するかは**推測せず `heavy:power` で測ってから**書く。**`finance-000.json` の件数は
   612 / 1 のまま変わらないこと**を回帰として見る。新しいシャードの件数は新しい行として
   報告書に出る。
+
+  **【訂正 2026-09-11、Task 10 の裁定】両方が「届く」わけではなかった——実測で
+  分かれた。**
+  - `periods-for-binary-search`: **コードは通るが、期首のシャードでは 0 件**
+    （§4.3 の実測どおり、期首・積立 1 円では谷が無い）。`expectShards` は
+    `finance-000.json` だけのまま、件数は 1（3,500 件中、不変）。
+  - `compound-round-once-at-maturity`: **旧い `to` は `let _ = timing;` で
+    積立の位置を捨てていた**ため、期首のケースでは「一度だけ丸める」と
+    「期首を期末として計算する」の 2 つの壊れを同時に入れていた
+    （旧い `to` での期首の実測は 674 件、1,200 件中）。**`to` を積立の位置どおりに
+    読むよう直した**（期末の式は一字も変えない）。直した後の実測:
+    `finance-000.json` 612 件（不変）・`finance-start-000.json` 640 件。
+    差の 34 件（674 − 640）は位置の取り違えだけで動いていたケースで、
+    丸めの検出力ではなかった。
+
+  **実測 2026-09-11（手元の `heavy:power`。CI は未確認）——両方のシャードに
+  反応した変異と件数（`finance-000.json` は 3,500 件中、`finance-start-000.json`
+  は 1,200 件中）:**
+
+  | 変異 | finance-000.json | finance-start-000.json |
+  |---|---:|---:|
+  | loan-interest-round-not-floor | 2,715 | 951 |
+  | loan-interest-as-f64 | 109 | 108 |
+  | compound-round-once-at-maturity（`to` を位置どおりに直した後） | 612 | 640 |
+  | rate-nominal-to-effective | 2,276 | 594 |
+  | tax-combined-rate | 405 | 459 |
+  | compound-inverse-ignores-tax-flag | 272 | 305 |
+
+  片方のシャードにしか反応しない 2 種（`compound-deposit-at-start` 910/0・
+  `compound-start-deposit-at-end` 0/969）は上に別記。`finance-000.json` 専用の
+  まま期首では 0 件だった残り 3 種は `loan-final-row-no-adjustment` 1,615/0・
+  `bonus-half-year-becomes-monthly` 368/0・`periods-for-binary-search` 1/0
+  ——コードは通っても、期首の入力空間には壊れが現れない。
 - **`minRate`**: 新しい変異と新しいシャードの分は、**最初の CI の実測から決める。**
   それまでの版は下限 1（`minRate` 未指定＝`verdictFor` の `max(1, …)`）とし、
   **註に「未測定」と書く**。実測したら値を入れ、註を実測に置き換える。
+
+  **【訂正 2026-09-11、Task 10 の裁定】最初の CI を待たず、手元の `heavy:power` の
+  実測から入れた。** 理由: 検出力の走行は決定的で、09-10 に手元と CI が 910 で
+  一致した前例がある。下限 1 のままだと、弱まっても黙って通る「未測定」の期間が
+  できる。**CI での件数は未確認**（CI の最初の `heavy:power` で当て直す）。
+  期首の `minRate` はすべて `floor(件数 / 1,200 × 1,000) / 1,000` から
+  `verdictFor` の下限 `ceil(1,200 × rate − 1e-9)` が測った件数とちょうど一致する
+  ように置いてあり、**余裕は 0**。1 件でも違えば CI の `heavy:power` が赤くなる。
 
 ### §4.6 `heavy:ui`（実画面）
 
@@ -478,12 +529,32 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   start: "積立を期首に行う" }` を持つ（**アクセシブルネームは実装の日に
   `finance.ts` から当て直す**）。期首のケースは、方式の面で期首の chip を押してから
   打つ。
+
+  【訂正 2026-09-11、Task 11 の当て直し】**積立の位置のキーは「方式の面」ではない。**
+  周期と同じ面（`複利の周期と積立の位置を選ぶ` で開く面）に在り、周期の直後・税の前に
+  押す（`heavy/tests/ui/finance-cases.ts` の `keySequence`。Task 11 の実測）。
 - **既存の 16 件は `finance-000.json` からだけ引き、1 件も変えない。** 期首は
   複利の 3 面に 1 件ずつ、新しいシャードの正常ケースから足す。
+
+  **【実測 2026-09-11、Task 11、`playwright test --list`】** 既存 17 件
+  （面ごとの正常/エラーが 16 件＋「8 面が全 op を覆う」ケースが 1 件——数えるときに
+  この 1 件を取り違えない）に、期首の 3 件（複利の 3 面に 1 件ずつ、`compound_grow` /
+  `compound_deposit_for` / `compound_periods_for`）を足して**計 20 件**。既存 17 件の
+  テスト名は前後で byte-identical（Task 11 の報告 `task-11-report.md` の diff 確認）。
+  期首 3 件も既存の正常ケースと同じ `expectShownCase`（答と内訳の両方を見る）を
+  くくり出して共有——本文の移動のみで、比較や文言は変えていない。**実画面での
+  確認は CI の最初の `Heavy corpus` の走行（未確認）。**
 - **積立の位置は毎回押す。** 選択は `localStorage` に保存され、ページを開き直しても
   次のケースへ持ち越される——期首のケースのあとの期末のケースが期首で打たれる。
   **既定を仮定しない**（税を毎回押しているのと同じ理由。記憶
   `harness-state-outlives-ac` と同じ形）。
+
+  【訂正 2026-09-11、Task 11 の当て直し】**「次のケースへ持ち越される」は誤り。**
+  選択が `localStorage` に保存されるのは正しい（`rememberFinance`）。ただし
+  `finance-ui.spec.ts` は `@playwright/test` の既定どおり test ごとに新しい
+  context（`storageState` 無し）から始まるので、**いま持ち越しは起きていない。**
+  毎回押す理由は「持ち越し」ではなく「**始まりの状態を仮定しない**」——税を
+  毎回押しているのと同じ理由であることは変わらない。
 - 【訂正 2026-09-10】**押下台帳は動かない。** 当初「動く」と書いたが、
   `finance-ui.spec.ts` は**台帳に載らない**（docstring:「意図的に `recordPress` を
   呼ばない」）。期首のシャードは関数呼び出しでキー列を持たないので、科学計算の
@@ -498,11 +569,12 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
 compound_grow 437 / compound_deposit_for 431 / compound_periods_for 315 / loan_* 2,317   計 3,500
 ```
 
-**新しい表が 1 つ増える（件数は実測前）:**
+**新しい表が 1 つ増えた（実測 2026-09-11、`corpus/generated/finance-start-000.json`
+を直接数えた）:**
 
 ```
 finance-start-000.json (calls)   すべて複利・すべて期首・積立 > 0
-  compound_grow / compound_deposit_for / compound_periods_for   （loan_* は 0 件）
+  compound_grow 443 / compound_deposit_for 421 / compound_periods_for 336   計 1,200（loan_* は 0 件）
 ```
 
 **率の分母に注意（実測 2026-09-11）。** このシャードの分母 1,200 には、期首の腕を
@@ -522,6 +594,20 @@ finance-start-000.json (calls)   すべて複利・すべて期首・積立 > 0
   - `compound-deposit-at-start` が新しいシャードで**0**、`finance-000.json` で**910**（09-10 と同じ）
   - `compound-round-once-at-maturity` の `finance-000.json` が **612**、`periods-for-binary-search` が **1**
   - `Corpus vs reference` の所要時間（**実測前**。いまの 85 分の制限の内側であること）
+
+**【実測 2026-09-11、Task 10。手元の `heavy:power` で先取りして確かめた——CI は未確認】**
+上の 4 項目のうち検出力の値は次のとおり: `compound-start-deposit-at-end` は
+`finance-start-000.json` で **969**・`finance-000.json` で **0**。
+`compound-deposit-at-start` は `finance-start-000.json` で **0**・`finance-000.json` で
+**910**（09-10 と同じ）——腕の独立を両方向から確かめた。`compound-round-once-at-maturity`
+の `finance-000.json` は **612**（不変）、`finance-start-000.json` は **640**
+（`to` を積立の位置どおりに読むよう直したあと。直す前の 674 は「積立の位置の
+取り違え」との重複だった——§4.5 の訂正）。`periods-for-binary-search` の
+`finance-000.json` は **1**（不変）、`finance-start-000.json` は **0**（§4.5 の
+訂正のとおり、期首のシャードには届かない）。**新しい変異が捕まえた 969 件は
+1,200 − 231（§4.3・§4.7 の、答が動かない件数）と一致し、動きうる期首のケースは
+すべて赤かった。** `Corpus vs reference` の所要時間はここでは測っていない
+（CI の初回で確認する）。
 
 ---
 
