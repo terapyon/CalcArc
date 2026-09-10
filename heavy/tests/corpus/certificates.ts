@@ -337,6 +337,9 @@ export function compoundDepositForProbes(cases: CallCase[]): Probe[] {
       periods_per_year: c.input.periods_per_year as number,
       periods: c.input.periods as number,
       tax: taxed,
+      // **期首の答は期首で検算する**(設計書 2026-09-10 §4.4)。期末のケースは
+      // `timing` を持たないので何も足さない——`finance-000.json` の probe は不変。
+      ...(c.input.timing === undefined ? {} : { timing: c.input.timing }),
     };
     probes.push({
       input: {
@@ -388,6 +391,9 @@ export function compoundPeriodsForProbes(cases: CallCase[]): Probe[] {
       rate: c.input.rate as string,
       periods_per_year: c.input.periods_per_year as number,
       tax: taxed,
+      // **期首の答は期首で検算する**(設計書 2026-09-10 §4.4)。期末のケースは
+      // `timing` を持たないので何も足さない——`finance-000.json` の probe は不変。
+      ...(c.input.timing === undefined ? {} : { timing: c.input.timing }),
     };
     for (let k = 1; k < n; k += 1) {
       probes.push({
