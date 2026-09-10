@@ -63,7 +63,11 @@ function isModuleId(text: string): text is ModuleId {
 export function routeFromHash(hash: string): Route {
   const [head = "", category] = hash.replace(/^#/, "").split("/");
   // **知らない先頭は既定へ倒す。** 旧 `#data-scale` も `#loan` もここに
-  // 落ちる——互換分岐は作らない(設計書 §1-4)。
+  // 落ちる——互換分岐は作らない(設計書 §1-4)。**これは 1.0 までの方針
+  // である。** 1.0 のあとは `web/tests/promised-urls.ts` の URL が同じ画面を
+  // 開き続ける約束なので(1.0 の門の設計書 §2.3、利用者の裁定 2026-09-10)、
+  // そのどれかを消す・綴りを変えるなら、**古い URL を新しい画面へ向ける
+  // 分岐をここに足す。**
   if (!isModuleId(head)) return { module: "scientific", category: null };
   const known = category !== undefined && CATEGORIES[head].includes(category);
   return { module: head, category: known ? category : DEFAULT_CATEGORY[head] };
