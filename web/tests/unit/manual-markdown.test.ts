@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  extractChapters,
   extractKeyNames,
   extractShotRefs,
   fontFaceCss,
@@ -51,6 +52,18 @@ describe("マニュアルの印の抜き出し", () => {
       ),
     ).toEqual([
       { name: "finance-compound", alt: "画面: 金融・複利残高", line: 2 },
+    ]);
+  });
+
+  it("finds numbered chapters only", () => {
+    // 番号の無い `##`（英語版の用語表）と `###` は章に数えない。
+    expect(
+      extractChapters(
+        "# 題\n## Glossary\n## 1. はじめに\n### 1.1 小節\n## 2. Tabs  \n##3. 詰めた",
+      ),
+    ).toEqual([
+      { number: 1, title: "はじめに", line: 3 },
+      { number: 2, title: "Tabs", line: 5 },
     ]);
   });
 

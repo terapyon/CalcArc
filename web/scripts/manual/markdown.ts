@@ -56,6 +56,34 @@ const KEY_NAME = /【([^【】\n]+)】/g;
  */
 const SHOT_REF = /!\[([^\]\n]*)\]\(\s*shot:([a-z0-9-]+)\s*\)/g;
 
+/**
+ * 章の見出し。`## 3. 基本の使い方` のように **`##` と番号とピリオド**で書く
+ * （設計書 §8 の章立て）。番号の無い `##`（英語版の用語表など）は章に数えない。
+ */
+const CHAPTER = /^##[ \t]+(\d+)\.[ \t]+(.+?)[ \t]*$/;
+
+export interface Chapter {
+  number: number;
+  title: string;
+  line: number;
+}
+
+/** 番号つきの章を、書かれた順に抜き出す。 */
+export function extractChapters(markdown: string): Chapter[] {
+  const found: Chapter[] = [];
+  markdown.split("\n").forEach((text, index) => {
+    const match = CHAPTER.exec(text);
+    if (match !== null) {
+      found.push({
+        number: Number(match[1]),
+        title: match[2] ?? "",
+        line: index + 1,
+      });
+    }
+  });
+  return found;
+}
+
 /** `【…】` を行番号つきで抜き出す。 */
 export function extractKeyNames(markdown: string): Marker[] {
   const found: Marker[] = [];

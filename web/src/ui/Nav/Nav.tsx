@@ -9,7 +9,11 @@ import styles from "./Nav.module.css";
 //
 // `Record<ModuleId, ...>` にしているのは、系統を 1 つ書き忘れたら
 // typecheck が落ちるようにするため——配列だと 1 件抜けても型は通る。
-const MODULES: Record<ModuleId, { href: string; label: string }> = {
+//
+// **export してあるのは、マニュアルのキー名の番人が読むため**
+// (`tests/unit/manual-key-names.test.ts`)。マニュアルはタブを
+// `【Scientific】` のように画面の綴りで書く。
+export const MODULES: Record<ModuleId, { href: string; label: string }> = {
   scientific: { href: "#scientific", label: "Scientific" },
   convert: { href: "#convert/length", label: "Convert" },
   scale: { href: "#scale/data-scale", label: "Scale" },

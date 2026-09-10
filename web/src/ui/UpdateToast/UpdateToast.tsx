@@ -13,6 +13,15 @@ function previewRequested(): boolean {
   );
 }
 
+/**
+ * トーストのボタンの文字。**export してあるのは、マニュアルのキー名の番人が
+ * 読むため**(`tests/unit/manual-key-names.test.ts`)。
+ */
+export const UPDATE_TOAST_LABELS = {
+  reload: "再読み込み",
+  close: "閉じる",
+} as const;
+
 export function UpdateToast() {
   const [waiting, setWaiting] = useState(previewRequested);
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
@@ -94,10 +103,10 @@ export function UpdateToast() {
               className={styles.primary}
               onClick={() => apply?.()}
             >
-              再読み込み
+              {UPDATE_TOAST_LABELS.reload}
             </button>
             <button type="button" onClick={() => setWaiting(false)}>
-              閉じる
+              {UPDATE_TOAST_LABELS.close}
             </button>
           </div>
         </div>
