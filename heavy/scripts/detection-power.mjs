@@ -18,7 +18,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HEAVY = dirname(dirname(fileURLToPath(import.meta.url)));
-const ROOT = dirname(HEAVY);
+/** リポジトリの根。`mutation.file` はここからの相対パス(テストも読む)。 */
+export const ROOT = dirname(HEAVY);
 const OUT = join(HEAVY, "detection-power.json");
 const RUN_JSON = join(HEAVY, "heavy-run.json");
 
@@ -285,36 +286,52 @@ export const MUTATIONS = [
   },
   {
     id: "compound-deposit-at-start",
-    what: "積立を期末から期首へ動かす(その期の利息を積立額にも付ける)",
+    what: "期末の腕を期首と同じにする(その期の利息を積立額にも付ける)",
     file: "crates/calcarc-core/src/finance/compound.rs",
-    from: `    let mut balance = principal;
-    for _ in 0..periods {
-        let interest = rate.interest_floor(balance)?;
-        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
-        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
+    from: `    let balance = match timing {
+        DepositTiming::End => balance,
+        DepositTiming::Start => balance.checked_add(deposit).ok_or(CalcError::Overflow)?,
+    };
+    let interest = rate.interest_floor(balance)?;
+    let balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    match timing {
+        DepositTiming::End => balance.checked_add(deposit).ok_or(CalcError::Overflow),
+        DepositTiming::Start => Ok(balance),
     }`,
-    to: `    let mut balance = principal;
-    for _ in 0..periods {
-        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
-        let interest = rate.interest_floor(balance)?;
-        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    to: `    let balance = match timing {
+        DepositTiming::End => balance.checked_add(deposit).ok_or(CalcError::Overflow)?,
+        DepositTiming::Start => balance.checked_add(deposit).ok_or(CalcError::Overflow)?,
+    };
+    let interest = rate.interest_floor(balance)?;
+    let balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    match timing {
+        DepositTiming::End => Ok(balance),
+        DepositTiming::Start => Ok(balance),
     }`,
-    // 3 行の並べ替えだけ(設計書 §5)。積立額が 0 の一括預入は影響を
+    // 積立を利息の前に入れる(設計書 §5)。積立額が 0 の一括預入は影響を
     // 受けない——`grow(P, 0, ...)` の毎期は変わらない。
+    //
+    // **2026-09-10 に `step()` への集約に合わせて当て直した。当て直し後の
+    // 検出率は未測定**(`minRate` は旧の実測のまま)。旧は `grow` のループの
+    // 3 行を並べ替えていたが、期首が `step()` の正規の腕になったので、
+    // **期末の腕を期首と同じ振る舞いにする**形で同じ壊れ方を作る。重量級の
+    // コーパスは全件期末なので、期末を壊さないと何も測れない。
+    // **当たる範囲は旧より広い**: 旧の `periods_for` は漸化式を書き写して
+    // いたので変異が届かなかったが、いまは同じ `step()` を通る。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.087 },
   },
   {
     id: "compound-round-once-at-maturity",
-    what: "毎期切り捨てをやめ、満期時に一度だけ丸める",
+    what: "毎期切り捨てをやめ、満期時に一度だけ丸める(期末積立のまま)",
     file: "crates/calcarc-core/src/finance/compound.rs",
     from: `    let mut balance = principal;
     for _ in 0..periods {
-        let interest = rate.interest_floor(balance)?;
-        balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
-        balance = balance.checked_add(deposit).ok_or(CalcError::Overflow)?;
+        balance = step(balance, deposit, rate, timing)?;
     }`,
-    to: `    let scale: u128 = 1_000_000_000;
+    to: `    // 変異は期末だけを書く(重量級のコーパスは全件期末)。
+    let _ = timing;
+    let scale: u128 = 1_000_000_000;
     let mut scaled = principal as u128 * scale;
     for _ in 0..periods {
         let interest = scaled * rate.numerator as u128 / rate.denominator as u128;
@@ -327,6 +344,14 @@ export const MUTATIONS = [
     // 設計書 §5.1: 残高を 10^9 スケールの分数のまま持ち回し、最後の
     // 1 回だけ円に落とす。毎期の 1 円未満切り捨てが積み上がらないので、
     // 期数が多い口座ほど正しい厳密値との差が大きくなる。
+    //
+    // **2026-09-10 に `step()` への集約に合わせて当て直した。当て直し後の
+    // 検出率は未測定**(`minRate` は旧の実測のまま)。`from` は
+    // `grow_with_timing` の `step()` を呼ぶループ、`to` は旧と同じ式
+    // (利息を付けてから積立を足す = 期末)。位置を読まないので、
+    // 未使用の警告を `let _ = timing;` で黙らせる。当たる範囲は旧と同じ
+    // (`grow` と、それを呼ぶ `deposit_for`。`periods_for` は `step()` を
+    // 直に呼ぶので届かない)。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.086 },
   },
@@ -405,10 +430,10 @@ export const MUTATIONS = [
     from: `    let mut balance = principal;
     let mut principal_total = principal;
     for n in 1..=MAX_PERIODS {
-        balance = balance
-            .checked_add(rate.interest_floor(balance)?)
-            .and_then(|b| b.checked_add(deposit))
-            .ok_or(CalcError::Overflow)?;
+        // **1 期の式は \`compound::step\` にしか無い。** ここで書き写すと、
+        // 位置の分岐が 2 口になり、片方だけ壊しても答がもっともらしいまま
+        // になる。
+        balance = step(balance, deposit, rate, timing)?;
         principal_total = principal_total
             .checked_add(deposit)
             .ok_or(CalcError::Overflow)?;
@@ -433,8 +458,11 @@ export const MUTATIONS = [
     Err(CalcError::SyntaxError)`,
     to: `    // Overflow は「届く側」として扱う(engine 自身の流儀。
     // \`deposit_for\` の \`probe\` と同じ: \`Err(CalcError::Overflow) => true\`)。
+    // 1 期の式は \`grow_with_timing\` 経由で \`step()\` を通る(書き写さない)。
+    // 前進走査を消すと \`step\` の import が未使用になるので黙らせる。
+    let _ = step;
     let probe = |n: u32| -> bool {
-        match grow(principal, deposit, rate, n) {
+        match grow_with_timing(principal, deposit, rate, n, timing) {
             Ok(g) => matches!(reached(g.final_balance, g.interest, taxed), Ok(v) if v >= target),
             Err(CalcError::Overflow) => true,
             Err(_) => false,
@@ -453,8 +481,16 @@ export const MUTATIONS = [
             low = mid;
         }
     }
-    let g = grow(principal, deposit, rate, high)?;
+    let g = grow_with_timing(principal, deposit, rate, high, timing)?;
     solution(deposit, high, g, taxed)`,
+    // **2026-09-10 に `step()` への集約に合わせて当て直した。当て直し後の
+    // 検出率は未測定**(`minRate` は置かないまま)。`from` は
+    // `periods_for_with_timing` の前進走査(1 期は `step()` を呼ぶ)。`to` は
+    // 旧の二分探索の移植で、旧の `grow(...)` は `compound_inverse.rs` の
+    // 本体からもう見えない(import はテストのモジュールだけ)ので、
+    // `grow_with_timing(..., timing)` を呼ぶ——その中の 1 期は `step()` で
+    // ある。重量級のコーパスは全件期末なので、`timing` は常に `End` で届く。
+    //
     // **最初の版はここで Overflow を `?` で伝播させていて、152 件を検出
     // していた。** 実際は谷とは無関係の別の欠陥だった: `probe(MAX_PERIODS)`
     // を先に呼ぶので、答が小さい期(例: 10 期)のケースでも 1,200 期まで
