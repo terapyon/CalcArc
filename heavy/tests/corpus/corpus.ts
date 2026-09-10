@@ -299,7 +299,8 @@ export function partitionCases(
  * (設計書 2026-08-17 §3.1)。ここで名前を挙げているのは、`loadShards` が
  * 黙って読み飛ばして「そんなシャードは無かった」ことにしないためである。
  */
-export const CALL_SHARD_PATTERN = /^(finance|data-scale)-\d+\.json$/;
+export const CALL_SHARD_PATTERN =
+  /^(finance|finance-start|data-scale)-\d+\.json$/;
 
 /**
  * 表示文字列を比べるシャード。**値ではなく表示文字列を比べる。**
@@ -440,6 +441,9 @@ export const KNOWN_COVERAGE_SCHEMA = 1;
 
 export const SUPPORTED_COVERAGE_MODELS = new Set([
   "finance-v1",
+  // 期首のシャード `finance-start-000.json`（設計書 2026-09-10 §4.3）。
+  // 要求は `finance-v1` の複利 3 要求そのもので、名前だけが別。
+  "finance-start-v1",
   "scientific-v1",
 ]);
 
