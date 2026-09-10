@@ -188,8 +188,14 @@ version → CI → Heavy corpus → Deploy ─┬→ Manuals ─┐
 **番人（単体テスト）**: マニュアルの Markdown に出てくる**すべての `【…】` が、
 いまの画面のラベルのどれかと一致する**こと。ラベルは定義元から読む——
 キーは盤面の定義（`web/src/ui/Keypad/*.ts`。例: `finance.ts` の `"返済\n月額"`）、
-金融の面の表示名は `web/src/ui/Finance/FinancePanel.tsx`（`FIELD_LABELS` や
-`期末` / `期首`）。2 行のラベルは改行を除いて比べる（マニュアルでは `【返済月額】`）。
+金融の面の表示名は `web/src/ui/Finance/FinancePanel.tsx` の `fieldLabel(mode, field)` と
+`TIMING_LABELS`（`期末` / `期首`）。2 行のラベルは改行を除いて比べる（マニュアルでは `【返済月額】`）。
+
+**【訂正 2026-09-10】 `FIELD_LABELS` をそのまま読まない。** 初版は「`FIELD_LABELS` から読む」と
+書いていたが、**`FIELD_LABELS.bonus`（「ボーナス」）は画面に 1 度も出ない**——見出しは
+`bonusName(mode)` に差し替わり、複利系の `principal` は「元本」になる。表を読むと、
+**画面に無い【ボーナス】を今の綴りとして通す**（実装の担当が見つけた）。画面に出る綴りを
+決めている関数 `fieldLabel` を export して、番人はそれを読む。
 
 **これで「キー名を変えたのにマニュアルが古い」が CI で止まる。** 次のように鎖に
 なる:
