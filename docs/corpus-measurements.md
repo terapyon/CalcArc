@@ -4091,7 +4091,8 @@ independent-verification-gaps Task 8〜10・記録は Task 12）
 `finance-000.json`（既存 3,500 件、`compound_grow` 437 / `compound_deposit_for` 431 /
 `compound_periods_for` 315 / `loan_*` 2,317）は 1 バイトも変えていない。
 
-### 被覆（`heavy/tests/corpus/calls.spec.ts:268-` の固定値。model `finance-start-v1`）
+### 被覆（`heavy/tests/corpus/calls.spec.ts` の「実物の finance-start-000.json が、
+測った数をそのまま載せている」の固定値。model `finance-start-v1`）
 
 | 対象 | 必須セル | 実行 | 理由付き除外 | 未達 |
 |---|---:|---:|---:|---:|
@@ -4141,8 +4142,9 @@ timing を問わず通るが、期首・積立 1 円では谷が無い（`refere
 その全件を捕まえた。
 
 出どころ: 件数は `corpus/generated/finance-start-000.json` を直接数えた（本節）。
-被覆は `heavy/tests/corpus/calls.spec.ts:268-303`。検出の件数は
-`heavy/scripts/detection-power.mjs` の各変異の 2026-09-11 の註、および
-`.superpowers/sdd/2026-09-10-independent-verification-gaps/task-10-report.md`
-の run 3・run 4 の表（走行の生ログは scratchpad の `power-run3.json` /
-`power-run4.json`、この worktree のみに存在し追跡外）。
+被覆は `heavy/tests/corpus/calls.spec.ts` の「実物の finance-start-000.json が、
+測った数をそのまま載せている」の固定値。検出の件数は
+`heavy/scripts/detection-power.mjs` の各変異の 2026-09-11 の註（`compound-round-once-at-maturity`
+ほか、変異 id ごとに書いてある）——走行はどれも手元の `pnpm heavy:power`
+（`cd heavy && pnpm heavy:power`）で、**誰でも同じコマンドで再現できる**。
+走行の生ログは残していない（CI の走行番号はまだ無い）。

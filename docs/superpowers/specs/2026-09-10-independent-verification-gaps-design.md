@@ -540,7 +540,9 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   （面ごとの正常/エラーが 16 件＋「8 面が全 op を覆う」ケースが 1 件——数えるときに
   この 1 件を取り違えない）に、期首の 3 件（複利の 3 面に 1 件ずつ、`compound_grow` /
   `compound_deposit_for` / `compound_periods_for`）を足して**計 20 件**。既存 17 件の
-  テスト名は前後で byte-identical（Task 11 の報告 `task-11-report.md` の diff 確認）。
+  テスト名は前後で byte-identical——`pnpm exec playwright test -c playwright.ui.config.ts
+  --list tests/ui/finance-ui.spec.ts` の出力を変更の前後で比べて確認した
+  （既存 17 件は不変、新たに 3 件が足された）。
   期首 3 件も既存の正常ケースと同じ `expectShownCase`（答と内訳の両方を見る）を
   くくり出して共有——本文の移動のみで、比較や文言は変えていない。**実画面での
   確認は CI の最初の `Heavy corpus` の走行（未確認）。**
