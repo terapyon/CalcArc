@@ -509,6 +509,13 @@ export const MUTATIONS = [
     // `residual == 0` の最終回だけを狙う(schedule.rs:90-91)。定例額が
     // 端数をちょうど吸収する稀な入力以外はすべて `final_payment` と
     // `final_balance` が真値からずれる。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 1,615 件
+    // (3,500 件中)、`finance-start-000.json` 0 件(1,200 件中)。** 期首の
+    // シャードは複利の 3 op だけでローンのケースを持たないので 0 件であるべきで、
+    // 実際に 0 件だった。**`expectShards` を変えないのはそのためである**——
+    // 期首のシャードを足すと、反応したシャードの集合が `expectShards` と
+    // 一致しないので判定が落ちる。`minRate` は旧のまま。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.232 },
   },
@@ -521,6 +528,13 @@ export const MUTATIONS = [
     // ボーナス併用のローン・複利だけが半年利を要る。半年利が月利の
     // 6 倍(=正しい利率の 1/6)のままになるので、半年ぶんの利息が
     // ごく僅かにしか付かなくなる。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 368 件
+    // (3,500 件中)、`finance-start-000.json` 0 件(1,200 件中)。** 期首の
+    // シャードは複利の 3 op だけで、ボーナスの入力を持つケースが 1 件も無い
+    // ので 0 件であるべきで、実際に 0 件だった。**`expectShards` を変えないのは
+    // そのためである**——期首のシャードを足すと、反応したシャードの集合が
+    // `expectShards` と一致しないので判定が落ちる。`minRate` は旧のまま。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.052 },
   },

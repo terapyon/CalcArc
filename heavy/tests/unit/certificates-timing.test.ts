@@ -58,21 +58,30 @@ describe("timingOf", () => {
 });
 
 describe("the compound certificates carry the case's timing", () => {
+  // **どれも probes が空でないことを先に見る。** ループの中の expect は、
+  // probes が 0 本なら 1 度も走らずに緑になる——3 本とも、何も作らない
+  // 証明書でも通ってしまう。
   it("probes a start deposit_for at the start", () => {
-    for (const probe of compoundDepositForProbes([depositFor("start")])) {
+    const probes = compoundDepositForProbes([depositFor("start")]);
+    expect(probes.length).toBeGreaterThan(0);
+    for (const probe of probes) {
       expect(probe.input.input.timing).toBe("start");
     }
   });
   it("probes a start periods_for at the start", () => {
-    for (const probe of compoundPeriodsForProbes([periodsFor("start")])) {
+    const probes = compoundPeriodsForProbes([periodsFor("start")]);
+    expect(probes.length).toBeGreaterThan(0);
+    for (const probe of probes) {
       expect(probe.input.input.timing).toBe("start");
     }
   });
   it("adds no timing to an end case (finance-000's probes do not change)", () => {
-    for (const probe of [
+    const probes = [
       ...compoundDepositForProbes([depositFor()]),
       ...compoundPeriodsForProbes([periodsFor()]),
-    ]) {
+    ];
+    expect(probes.length).toBeGreaterThan(0);
+    for (const probe of probes) {
       expect("timing" in probe.input.input).toBe(false);
     }
   });

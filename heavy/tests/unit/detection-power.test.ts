@@ -315,7 +315,7 @@ describe("the verdict looks at the health of the measurement first", () => {
     // 通してしまう**ので、重複が無いことも一緒に見る。
     //
     // **19 枚目は 2026-08-30**（`combinatorics-display-000.json`）。
-    // **20 枚目は 2026-09-10**（`finance-start-000.json (calls)`、期首の
+    // **20 枚目は 2026-09-11**（`finance-start-000.json (calls)`、期首の
     // シャード）。枚数を名前で持っているので、1 枚消えて別の 1 枚が現れる
     // 走行も、枚数が合っているだけでは見逃さない。
     expect(ALL_SHARDS).toHaveLength(20);
