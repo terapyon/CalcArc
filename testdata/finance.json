@@ -772,6 +772,57 @@
     },
     {
       "expect": {
+        "final_balance": "10096",
+        "interest": "96",
+        "principal_total": "10000"
+      },
+      "id": "compound_grow/10000/0/1/12/12/False",
+      "input": {
+        "deposit": "0",
+        "periods": 12,
+        "periods_per_year": 12,
+        "principal": "10000",
+        "rate": "1",
+        "tax": false
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "10100",
+        "interest": "100",
+        "principal_total": "10000"
+      },
+      "id": "compound_grow/10000/0/1/2/2/False",
+      "input": {
+        "deposit": "0",
+        "periods": 2,
+        "periods_per_year": 2,
+        "principal": "10000",
+        "rate": "1",
+        "tax": false
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
+        "final_balance": "10100",
+        "interest": "100",
+        "principal_total": "10000"
+      },
+      "id": "compound_grow/10000/0/1/1/1/False",
+      "input": {
+        "deposit": "0",
+        "periods": 1,
+        "periods_per_year": 1,
+        "principal": "10000",
+        "rate": "1",
+        "tax": false
+      },
+      "op": "compound_grow"
+    },
+    {
+      "expect": {
         "error": "Overflow"
       },
       "id": "compound_grow/18446744073709551615/0/100/12/12/False",
@@ -1579,6 +1630,78 @@
         "max": "1200",
         "text": "10\u5e74",
         "unit_set": "periods:1"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "12"
+      },
+      "id": "expr_integer/12\u6708/periods:12/1200",
+      "input": {
+        "max": "1200",
+        "text": "12\u6708",
+        "unit_set": "periods:12"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "18"
+      },
+      "id": "expr_integer/1\u5e746\u6708/periods:12/1200",
+      "input": {
+        "max": "1200",
+        "text": "1\u5e746\u6708",
+        "unit_set": "periods:12"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/12\u6708/periods:2/1200",
+      "input": {
+        "max": "1200",
+        "text": "12\u6708",
+        "unit_set": "periods:2"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/12\u6708/periods:1/1200",
+      "input": {
+        "max": "1200",
+        "text": "12\u6708",
+        "unit_set": "periods:1"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "error": "SyntaxError"
+      },
+      "id": "expr_integer/12\u671f/periods:12/1200",
+      "input": {
+        "max": "1200",
+        "text": "12\u671f",
+        "unit_set": "periods:12"
+      },
+      "op": "expr_integer"
+    },
+    {
+      "expect": {
+        "value": "3"
+      },
+      "id": "expr_integer/1\u5e741\u671f/periods:2/1200",
+      "input": {
+        "max": "1200",
+        "text": "1\u5e741\u671f",
+        "unit_set": "periods:2"
       },
       "op": "expr_integer"
     },

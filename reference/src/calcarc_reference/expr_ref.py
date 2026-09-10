@@ -57,6 +57,10 @@ def unit_table(unit_set: str) -> list[tuple[str, int]]:
             raise ExprError("SyntaxError")
         if per_year == 1:
             return [("年", 1)]
+        if per_year == 12:
+            # 月ごとの下は `月`（1 期 = 1 か月。設計書 2026-08-15 §5 の表）。
+            # `期` と並べない——scale が同じ 2 つは降順を崩す（設計書 2026-09-11）。
+            return [("年", 12), ("月", 1)]
         return [("年", per_year), ("期", 1)]
     if unit_set not in UNIT_SETS:
         raise ExprError("SyntaxError")

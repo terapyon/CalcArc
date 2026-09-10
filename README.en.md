@@ -115,7 +115,7 @@ The main points:
   institution. **Only the monthly payment is decided in floating point; the amortization
   schedule is exact-integer.** See [docs/numerical-policy.md](docs/numerical-policy.md)
   for details
-- **Expressions typed into the Finance and Data Scale fields are not rounded partway
+- **Expressions typed into the Finance fields are not rounded partway
   through.** They are evaluated as a rational number and rounded exactly once at the end,
   so entering the same answer via a different sequence of keystrokes does not change the
   result

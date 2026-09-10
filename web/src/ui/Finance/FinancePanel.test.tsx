@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExprCalc } from "../../expr";
@@ -9,6 +9,14 @@ import type { LoanCalc } from "../../finance/loan";
 // (DataScalePanel.test.tsx と同じ流儀)。
 vi.mock("../../finance/loan", () => ({
   initLoan: vi.fn(),
+}));
+
+// **複利の期間は、コアへ渡った引数でしか確かめられない**(設計書
+// 2026-09-11)——盤面が `12月` を「方式の表で読め」と頼み、その答の期数で
+// 正算を呼んでいるか。巻き上げられる factory から見えるよう hoisted に置く。
+const { growSpy, integerSpy } = vi.hoisted(() => ({
+  growSpy: vi.fn(),
+  integerSpy: vi.fn(),
 }));
 
 // 式の評価器も WASM なので、ラッパーごと差し替える。**単位を解釈するのは
@@ -25,16 +33,39 @@ vi.mock("../../finance", () => ({
       // **`kind` を書き忘れると、この mock は黙って成功の枝に落ちる**
       // ——`undefined === "error"` は false なので、テストは緑のまま
       // 「盤面が失敗をどう出すか」を 1 度も見なくなる。
-      grow: () => ({
-        kind: "ok",
-        finalBalance: "1051136",
-        principalTotal: "1000000",
-        interest: "51136",
-        // 税の 3 項目**だけ**が null になりうる(税 OFF。設計書 §3)。
-        nationalTax: null,
-        localTax: null,
-        net: null,
-      }),
+      grow: (principal, deposit, rate, periodsPerYear, periods, ...rest) => {
+        growSpy(principal, deposit, rate, periodsPerYear, periods, ...rest);
+        // golden `compound_grow/10000/0/1/12/12/False`(設計書 2026-09-11 の
+        // 報告例)。**この引数で呼ばれたときだけ** 10,096 を返す——盤面が
+        // 「月ごとの 12 期」を渡したことが、答の行で見える。
+        if (
+          principal === "10000" &&
+          deposit === "0" &&
+          rate === "1" &&
+          periodsPerYear === 12 &&
+          periods === 12
+        ) {
+          return {
+            kind: "ok",
+            finalBalance: "10096",
+            principalTotal: "10000",
+            interest: "96",
+            nationalTax: null,
+            localTax: null,
+            net: null,
+          };
+        }
+        return {
+          kind: "ok",
+          finalBalance: "1051136",
+          principalTotal: "1000000",
+          interest: "51136",
+          // 税の 3 項目**だけ**が null になりうる(税 OFF。設計書 §3)。
+          nationalTax: null,
+          localTax: null,
+          net: null,
+        };
+      },
       // 設計書 §7 の必須ケース #1(golden)。元本 0・年 3%・月次・240 期・
       // 目標 1,000 万・税なし → 積立 30,461、残高 10,000,251。
       depositFor: () => ({
@@ -75,7 +106,10 @@ vi.mock("../../finance", () => ({
 vi.mock("../../expr", () => ({
   initExpr: (): Promise<ExprCalc> =>
     Promise.resolve({
-      integer: (text: string, max: string) => {
+      // **この簡易版は単位表を持たない**(`年` はいつも 12)。どの表で読むかは
+      // `integerSpy` に渡った名前で見る——表の中身を写すと、写しがもう 1 つ増える。
+      integer: (text: string, max: string, unitSet: string) => {
+        integerSpy(text, max, unitSet);
         const units: Record<string, bigint> = {
           億: 10n ** 8n,
           万: 10n ** 4n,
@@ -207,6 +241,9 @@ async function fillHousingExample() {
 // 「設定の永続化」describe にも及ぶ)。
 beforeEach(() => {
   window.localStorage.clear();
+  // 呼ばれ方を見るスパイは、前のテストの呼び出しを持ち越さない。
+  growSpy.mockClear();
+  integerSpy.mockClear();
 });
 
 describe("FinancePanel（電卓）", () => {
@@ -683,6 +720,142 @@ describe("FinancePanel（電卓）", () => {
     // ローンへ戻れば、打った値はそのまま残っている。
     await press(["月々の返済額を求める", "借入額を入力"]);
     expect(echo()).toHaveTextContent("借入額 3000万円");
+  });
+
+  // **複利の期間の単位は方式に従う**(利用者裁定 2026-09-11、設計書
+  // 2026-09-11)。`月` は月ごとのときだけ出す。以前は方式を見ずに 年/月 を
+  // 出しており、半年ごと・年ごとで `1` `2` `月` と打つと Math ERROR だった
+  // ——コアの `periods:2` / `periods:1` の表に `月` が無い。
+  describe("複利の期間の単位", () => {
+    const pad = () => screen.getByRole("group", { name: "数字と演算のキー" });
+    const unitKey = (name: string) =>
+      within(pad()).queryByRole("button", { name });
+    const blanks = () => within(pad()).getAllByRole("button", { name: "空き" });
+    const done = () => screen.getByTestId("display-entries-done");
+
+    async function choose(method: string) {
+      await press(["複利の周期と積立の位置を選ぶ", method]);
+    }
+
+    const METHODS = [
+      { method: "月ごとに複利", unitSet: "periods:12", month: true },
+      { method: "半年ごとに複利", unitSet: "periods:2", month: false },
+      { method: "年ごとに複利", unitSet: "periods:1", month: false },
+    ] as const;
+
+    // **期間を打つ 2 つのモードの両方で見る**(必要年数は期間が答なので欄が無い)。
+    for (const mode of ["複利で増やす", "必要な積立額を求める"]) {
+      for (const { method, month } of METHODS) {
+        it(`${mode}・${method}: ${month ? "offers" : "leaves out"} 月`, async () => {
+          await renderPanel();
+          await press([mode]);
+          await choose(method);
+          // 数字が無いうちは単位を置けない(既存の規則)ので、1 つ打ってから見る。
+          await press(["期間を入力", "1"]);
+          expect(unitKey("年")).toBeEnabled();
+          if (month) {
+            expect(unitKey("月")).toBeEnabled();
+            // 数字面の空きは、いつもの 2 マス(`+/−` の席と右の 4 段目)だけ。
+            expect(blanks()).toHaveLength(2);
+          } else {
+            // **消すのではなく空きにする**——年利と同じ描き方で、格子は動かない。
+            expect(unitKey("月")).toBeNull();
+            expect(blanks()).toHaveLength(3);
+            for (const blank of blanks()) expect(blank).toBeDisabled();
+          }
+        });
+      }
+    }
+
+    it("reads 12月 and 1年 as the same twelve periods under 月ごと", async () => {
+      // 報告例(golden `compound_grow/10000/0/1/12/12/False`): 元本 1 万・
+      // 年 1%・月ごと。**`12月` も `1年` も 10,096 円**になる。
+      await renderPanel();
+      await press(["複利で増やす", "元本を入力", "1", "万", "年利を入力", "1"]);
+      await choose("月ごとに複利");
+      await press(["期間を入力", "1", "2", "月"]);
+      expect(integerSpy).toHaveBeenCalledWith("12月", "1200", "periods:12");
+      expect(main()).toHaveTextContent("10,096 円");
+      await press(["この項目を消去", "1", "年"]);
+      expect(integerSpy).toHaveBeenCalledWith("1年", "1200", "periods:12");
+      expect(main()).toHaveTextContent("10,096 円");
+    });
+
+    for (const { method, unitSet } of METHODS.filter((m) => !m.month)) {
+      it(`asks the core to read 1年 on ${unitSet} under ${method}`, async () => {
+        // **値は golden と E2E が見る**(この mock は表を持たない)。ここで
+        // 言えるのは、盤面が**方式の表の名前で**コアに頼んでいることである。
+        await renderPanel();
+        await press([
+          "複利で増やす",
+          "元本を入力",
+          "1",
+          "万",
+          "年利を入力",
+          "1",
+        ]);
+        await choose(method);
+        await press(["期間を入力", "1", "年"]);
+        expect(integerSpy).toHaveBeenCalledWith("1年", "1200", unitSet);
+        expect(main()).not.toHaveTextContent("Math ERROR");
+      });
+    }
+
+    it("empties a period holding 月 when the method leaves 月ごと", async () => {
+      // **換算しない、残さない**(設計書 2026-09-11 の決定 4)。`12月` は
+      // 12 期——年ごとの 12 期は 12 年である。残すと、押した覚えのない
+      // Math ERROR が出る(この修正の元の不具合)。
+      await renderPanel();
+      await press(["複利で増やす"]);
+      await choose("月ごとに複利");
+      await press(["期間を入力", "1", "2", "月"]);
+      await press(["複利の周期と積立の位置を選ぶ"]);
+      // 空になる前は入力済みの一覧に居る(下の否定が空振りでないことの確認)。
+      expect(done()).toHaveTextContent("期間 12月");
+      await press(["年ごとに複利"]);
+      expect(done()).not.toHaveTextContent("12月");
+      await press(["期間を入力"]);
+      expect(echo()).toHaveTextContent("期間");
+      expect(echo()).not.toHaveTextContent("12");
+      // 月ごとへ戻しても復元しない。
+      await choose("月ごとに複利");
+      await press(["期間を入力"]);
+      expect(echo()).not.toHaveTextContent("12");
+    });
+
+    it("keeps a period without 月 when the method changes", async () => {
+      // `10年` はどの方式でも同じ意味で読める(設計書 2026-08-15 §5
+      // 「周期を変えても期間の値は保持する」)。
+      await renderPanel();
+      await press(["複利で増やす", "期間を入力", "1", "0", "年"]);
+      await choose("年ごとに複利");
+      expect(done()).toHaveTextContent("期間 10年");
+      await choose("半年ごとに複利");
+      expect(done()).toHaveTextContent("期間 10年");
+    });
+
+    it("empties 月 in the other compound mode's period too", async () => {
+      // **方式は 3 モードで共有**なので、打っている最中のモードだけを見ると、
+      // 必要積立額の期間に `12月` が残り、戻った先で同じ Math ERROR が出る。
+      await renderPanel();
+      await press(["必要な積立額を求める", "期間を入力", "1", "2", "月"]);
+      expect(echo()).toHaveTextContent("期間 12月");
+      await press(["複利で増やす"]);
+      await choose("年ごとに複利");
+      await press(["必要な積立額を求める", "期間を入力"]);
+      expect(echo()).not.toHaveTextContent("12");
+    });
+
+    it("leaves the loan's period on 年/月 whatever the method", async () => {
+      // **ローンは変えない**(利用者裁定 2026-09-11)。方式を持たないので、
+      // 方式を年ごとにしてからローンへ移っても 年/月 のままである。
+      await renderPanel();
+      await press(["複利で増やす"]);
+      await choose("年ごとに複利");
+      await press(["月々の返済額を求める", "返済期間を入力", "1"]);
+      expect(unitKey("年")).toBeEnabled();
+      expect(unitKey("月")).toBeEnabled();
+    });
   });
 
   it("solves for the deposit and shows what it lands on", async () => {

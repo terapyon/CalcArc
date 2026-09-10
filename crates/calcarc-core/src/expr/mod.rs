@@ -27,7 +27,9 @@ pub enum UnitSet {
     Count,
     /// ローンの期間。年 = 12、月 = 1。
     Months,
-    /// 複利の期間。**年 = 1 年あたりの期数**、期 = 1。どの周期でも割り切れる。
+    /// 複利の期間。**年 = 1 年あたりの期数**。どの周期でも割り切れる。
+    /// **下の単位は周期で決まる**: 月ごとは 月 = 1(1 期が 1 か月だから)、
+    /// 半年ごとは 期 = 1、年ごとは無い(1 期 = 1 年)。
     Periods(u32),
     /// LLM のパラメータ数。**B = 10^9、M = 10^6**。`Count` と係数は同じだが、
     /// モデルカードの慣習では `G` ではなく `B` と呼ぶ(spec §4.3)。
@@ -44,6 +46,12 @@ impl UnitSet {
             UnitSet::Count => vec![('G', 1_000_000_000), ('M', 1_000_000), ('K', 1_000)],
             UnitSet::Months => vec![('年', 12), ('月', 1)],
             UnitSet::Periods(1) => vec![('年', 1)],
+            // **月ごとの下は `月`**(設計書 2026-08-15 §5 の表)。以前はここも
+            // `期` だった——盤面は `月` を出すのにコアが知らず、`12月` が
+            // Math ERROR になっていた(設計書 2026-09-11)。**`期` と並べて
+            // 足さない**: scale が同じ 2 つを置くと降順が崩れ、並び順だけで
+            // 決まる `1期2月` という誰も決めていない文法が生まれる。
+            UnitSet::Periods(12) => vec![('年', 12), ('月', 1)],
             UnitSet::Periods(per_year) => vec![('年', *per_year as u128), ('期', 1)],
             UnitSet::Params => vec![('B', 1_000_000_000), ('M', 1_000_000)],
             UnitSet::None => Vec::new(),
@@ -131,6 +139,8 @@ mod tests {
             UnitSet::Count,
             UnitSet::Months,
             UnitSet::Periods(12),
+            UnitSet::Periods(2),
+            UnitSet::Periods(1),
             UnitSet::Params,
         ] {
             let units = set.units();
@@ -161,6 +171,23 @@ mod tests {
         assert_eq!(UnitSet::Periods(2).units()[0], ('年', 2));
         // 1 期 = 1 年なので下位単位が無い。
         assert_eq!(UnitSet::Periods(1).units(), vec![('年', 1)]);
+    }
+
+    #[test]
+    fn a_month_is_a_unit_only_when_compounding_monthly() {
+        // **盤面が `月` を出すのは月ごとのときだけ**(利用者裁定 2026-09-11)。
+        // コアの表がそれと同じ形であることをここで固定する(設計書 2026-09-11)。
+        let at =
+            |text: &str, per_year: u32| evaluate_to_integer(text, 1200, UnitSet::Periods(per_year));
+        assert_eq!(UnitSet::Periods(12).units(), vec![('年', 12), ('月', 1)]);
+        assert_eq!(at("12月", 12), Ok(12));
+        assert_eq!(at("1年6月", 12), Ok(18));
+        // 半年ごと・年ごとは `月` を知らない。**黙って読み替えない。**
+        assert_eq!(at("12月", 2), Err(CalcError::SyntaxError));
+        assert_eq!(at("12月", 1), Err(CalcError::SyntaxError));
+        // **`期` は月ごとから外した**(下の単位は 1 つ)。半年ごとには残る。
+        assert_eq!(at("12期", 12), Err(CalcError::SyntaxError));
+        assert_eq!(at("1年1期", 2), Ok(3));
     }
 
     #[test]

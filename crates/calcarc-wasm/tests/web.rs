@@ -460,6 +460,27 @@ fn the_unit_table_is_chosen_by_name() {
             "{name}"
         );
     }
+    // **`月` は月ごとの表にだけ在る**(設計書 2026-09-11)。半年・年の表で
+    // 打てば戻り値のエラーであって、読み替えも例外も無い。
+    for (name, expected) in [
+        ("periods:12", Some("12")),
+        ("periods:2", None),
+        ("periods:1", None),
+    ] {
+        let result = calcarc_wasm::expr_integer("12月", "1200", name);
+        assert_eq!(
+            get(&result, "value").as_string().as_deref(),
+            expected,
+            "{name}"
+        );
+        if expected.is_none() {
+            assert_eq!(
+                get(&result, "code").as_string().as_deref(),
+                Some("SyntaxError"),
+                "{name}"
+            );
+        }
+    }
     // 知らない名前は例外ではなく戻り値のエラー。
     let unknown = calcarc_wasm::expr_integer("10年", "1200", "periods:4");
     assert_eq!(
