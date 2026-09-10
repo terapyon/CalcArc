@@ -537,6 +537,36 @@ COMPOUND_INPUTS: list[dict] = [
         "periods": 1200,
         "tax": False,
     },
+    # 1 年を 3 つの周期で（設計書 2026-09-11 の報告例）。元本 1 万・年 1%。
+    # 盤面で `12月` と `1年` が同じ期数になることを、E2E が**この値で**見る
+    # ——月ごと 12 期 → 10,096、半年ごと 2 期・年ごと 1 期 → 10,100。
+    {
+        "op": "compound_grow",
+        "principal": "10000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 12,
+        "periods": 12,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "10000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 2,
+        "periods": 2,
+        "tax": False,
+    },
+    {
+        "op": "compound_grow",
+        "principal": "10000",
+        "deposit": "0",
+        "rate": "1",
+        "periods_per_year": 1,
+        "periods": 1,
+        "tax": False,
+    },
     # u64 Overflow（**新設のエラー経路**。ローンには無かった。設計書 §3）
     {
         "op": "compound_grow",
@@ -986,6 +1016,14 @@ EXPR_INPUTS: list[dict] = [
     {"op": "expr_integer", "text": "10年", "unit_set": "periods:12", "max": "1200"},
     {"op": "expr_integer", "text": "10年", "unit_set": "periods:2", "max": "1200"},
     {"op": "expr_integer", "text": "10年", "unit_set": "periods:1", "max": "1200"},
+    # 月ごとの下の単位は `月`（設計書 2026-09-11）。半年・年は `月` を知らない。
+    # **`期` は月ごとから外した**——外したことも golden に残す（`12期`）。
+    {"op": "expr_integer", "text": "12月", "unit_set": "periods:12", "max": "1200"},
+    {"op": "expr_integer", "text": "1年6月", "unit_set": "periods:12", "max": "1200"},
+    {"op": "expr_integer", "text": "12月", "unit_set": "periods:2", "max": "1200"},
+    {"op": "expr_integer", "text": "12月", "unit_set": "periods:1", "max": "1200"},
+    {"op": "expr_integer", "text": "12期", "unit_set": "periods:12", "max": "1200"},
+    {"op": "expr_integer", "text": "1年1期", "unit_set": "periods:2", "max": "1200"},
     # 件数の単位
     {"op": "expr_integer", "text": "100M/4", "unit_set": "count", "max": U128_MAX_TEXT},
     # 定義域。f64 なら壊れる桁

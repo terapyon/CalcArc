@@ -37,6 +37,18 @@ def test_the_period_length_scales_the_year():
     assert expr_ref.evaluate("10年", "periods:1") == Fraction(10)
 
 
+def test_a_month_is_a_unit_only_when_compounding_monthly():
+    # 月ごとの下の単位は `月`（設計書 2026-09-11）。1 期 = 1 か月だから。
+    assert expr_ref.evaluate("12月", "periods:12") == Fraction(12)
+    assert expr_ref.evaluate("1年6月", "periods:12") == Fraction(18)
+    # 半年・年は `月` を知らない。月ごとは `期` を知らない（外した）。
+    for text, unit_set in (("12月", "periods:2"), ("12月", "periods:1"), ("12期", "periods:12")):
+        with pytest.raises(expr_ref.ExprError) as error:
+            expr_ref.evaluate(text, unit_set)
+        assert error.value.code == "SyntaxError", (text, unit_set)
+    assert expr_ref.evaluate("1年1期", "periods:2") == Fraction(3)
+
+
 def test_units_only_step_down():
     with pytest.raises(expr_ref.ExprError) as error:
         expr_ref.evaluate("1万億", "yen")
