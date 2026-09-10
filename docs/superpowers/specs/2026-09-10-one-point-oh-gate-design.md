@@ -144,6 +144,32 @@ WebKit の project は、**Chromium の project と同じ条件**（390×844、`
 | **WebKit だけ再試行・待ち時間を緩めていない**（§1.3「再試行で緑にしない」） | `webkit-gate.test.ts` の 1 本——project の `use`・`name` 以外の鍵が `webkit` にも `mobile` にも無く、設定全体の `retries` が 0 | `webkit` に `retries: 2` を足す／`timeout` を足す／両方に同じ `retries` を足す |
 | 手元の `pnpm e2e` は Chromium だけ | `webkit-gate.test.ts` の 1 本——`e2e` の台本が `--project mobile` で終わる | `--project mobile` を外す |
 
+### §1.5 最初の実測（2026-09-11、PR #127 の CI、走行 `34543367685`）
+
+- **落ちたのは `End-to-end (WebKit)` だけ。** ほかの 6 ジョブは緑。**WebKit は 3 failed / 245 passed（1.7 分）**。
+  `--with-deps webkit` は ubuntu-24.04（20260828.587）で 39 秒で通った
+- **実行機に入った書体のパッケージは、WebKit と Chromium で完全に同じ**（`fonts-freefont-ttf`・`fonts-ipafont-gothic`・
+  `fonts-tlwg-loma-otf`・`fonts-unifont`・`fonts-wqy-zenhei`。両ジョブのログの apt から）
+
+| 落ちた検査 | 分類 | 材料 |
+|---|---|---|
+| `finance-layout.spec.ts:77` 複利の説明が 360px で 3 行 | **(D)** | 余白は 5.28125px——2026-09-10 に Chromium で説明を 3 行にしたときと同じ値。縦の寸法はエンジン間で同じで、**違うのはどこで折れるか**。書体の解決の違い（C）か、行分割の規則の違い（A 寄り）か |
+| `finance-layout.spec.ts:144` 同じ面の余白 5.28125px（8px を割る） | 上と同じ原因 | 行数の番人が原因を、余白の番人が結果を名指ししている |
+| `pwa.spec.ts:49` offline にして reload で「WebKit encountered an internal error」 | **(D)、(C) 寄り** | microsoft/playwright#34402（offline で読み込むと WebKit と Firefox が落ちる。closed as not planned）。ただし向こうは読み込む前、こちらは reload |
+
+**★ 見つかった (C): 失敗の報告書が 1 度も上がっていなかった。** 設定に reporter が無く html が作られず、
+upload の段は「No files were found」の警告だけで success になっていた——**Chromium の End-to-end も同じで、
+落ちた日に報告書が上がったことは 1 度も無い。** html の reporter と `screenshot: 'only-on-failure'` を足し、
+書き出し先と upload の path の一致を番人にした（`webkit-gate.test.ts`）。
+
+**★ 記録: Chromium で offline を確かめている強さは、見た目より弱い。** microsoft/playwright#2311 によると、
+Chromium では `setOffline` が Service Worker の要求に効かない（WebKit では効く）。`pwa.spec.ts` の SW は
+precache から返すので Chromium の緑は嘘ではないが、**「ネットワークを切った」の再現は、Chromium では
+ページの要求についてだけ**である。1.0 で「offline で動くことを確かめた」と言うときは、この幅で言う。
+
+**次の走行で取るもの**: 行数の検査の失敗文に 1 行ずつの中身（どこで折れたか）と計算された書体、
+html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**閾値と文言は変えていない。**
+
 ---
 
 ## §2 門 2 —— 保存データと URL の約束
@@ -331,6 +357,6 @@ on-device; nothing is sent to a server.」）を写す。
 
 - **WebKit で 1 本も回していない。** §1 の設計は「CI で最初に測る」ことを前提に
   している。**落ちる本数も理由も分かっていない**
-- **CI の `ubuntu-latest` で `--with-deps webkit` が通るかは未確認**
+- ~~CI の `ubuntu-latest` で `--with-deps webkit` が通るかは未確認~~ → **通った**（2026-09-11、ubuntu-24.04 で 39 秒。§1.5）
 - **門 3 の設計書は、重なる箇所（`heavy:ui` の §4.6 と §7 の 4 番目）しか読んでいない。**
   門 1 と門 3 は `heavy:ui` の走行で重なる（§1.3・§4 #3）
