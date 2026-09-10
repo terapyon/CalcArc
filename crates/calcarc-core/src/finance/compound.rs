@@ -43,6 +43,32 @@ pub enum DepositTiming {
     Start,
 }
 
+impl DepositTiming {
+    /// 盤面と境界を渡る綴り。**並びは `web/src/finance/types.ts` の
+    /// `DEPOSIT_TIMING_TOKENS` と一致する**——`crates/calcarc-wasm/tests/
+    /// token_parity.rs` が突き合わせている。
+    ///
+    /// **利用者に見える語(「期末」「期首」)はここに無い。** あれは
+    /// `web/src/ui/Keypad/finance.ts` が持つ画面の綴りで、こちらは
+    /// 境界を渡るトークンである。
+    pub const ALL: [DepositTiming; 2] = [DepositTiming::End, DepositTiming::Start];
+
+    /// トークン。**既定(`End`)も明示的な綴りを持つ**——境界で「省略された」と
+    /// 「期末を選んだ」を区別しないためである。
+    pub fn token(self) -> &'static str {
+        match self {
+            DepositTiming::End => "end",
+            DepositTiming::Start => "start",
+        }
+    }
+
+    /// トークンから読む。**知らない綴りは `None`**——境界はそれを
+    /// `SyntaxError` にして返す(黙って既定に倒さない)。
+    pub fn from_token(token: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|t| t.token() == token)
+    }
+}
+
 /// 1 期ぶん進める。**漸化式はここ 1 か所しか無い。**
 ///
 /// `grow_with_timing` と `compound_inverse::periods_for_with_timing` の
@@ -136,6 +162,18 @@ mod tests {
                 .final_balance,
             1_051_136
         );
+    }
+
+    #[test]
+    fn the_tokens_round_trip_and_the_default_spells_the_end() {
+        for t in DepositTiming::ALL {
+            assert_eq!(DepositTiming::from_token(t.token()), Some(t));
+        }
+        assert_eq!(DepositTiming::default().token(), "end");
+        // 知らない綴りは既定に倒れない(境界が SyntaxError にする)。
+        assert_eq!(DepositTiming::from_token("End"), None);
+        assert_eq!(DepositTiming::from_token(""), None);
+        assert_eq!(DepositTiming::from_token("bgn"), None);
     }
 
     #[test]

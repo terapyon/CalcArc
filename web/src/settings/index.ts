@@ -10,6 +10,7 @@ import { ALLOWED, defaultSettings, type Settings } from "./types";
 
 export type {
   DataScaleSettings,
+  DepositTiming,
   FinanceSettings,
   HistorySettings,
   PanelMode,
@@ -19,6 +20,7 @@ export type {
   Settings,
 } from "./types";
 export {
+  DEPOSIT_TIMING_TOKENS,
   defaultSettings,
   PANEL_MODES,
   PERIODS_PER_YEAR,
@@ -94,6 +96,11 @@ function parse(raw: string): Settings {
         typeof fin.withholding === "boolean"
           ? fin.withholding
           : fallback.finance.withholding,
+      depositTiming: pick(
+        ALLOWED.depositTiming,
+        fin.depositTiming,
+        fallback.finance.depositTiming,
+      ),
     },
     history: {
       enabled:

@@ -17,6 +17,20 @@ export const PERIODS_PER_YEAR = [1, 2, 12] as const;
 export type PeriodsPerYear = (typeof PERIODS_PER_YEAR)[number];
 
 /**
+ * 積立を期のどちらの端で入れるか。**既定は `end`(期末)**(設計書
+ * 2026-09-03 §5.4.1)——既定を動かすと同じ入力に対する答が黙って変わり、
+ * `testdata/` の複利 golden が全部動く。
+ *
+ * **並びと綴りは Rust の `DepositTiming::ALL` と一致する**——
+ * `crates/calcarc-wasm/tests/token_parity.rs` が突き合わせている。
+ * **境界を渡るトークンであって、画面に出る語ではない**(画面の「期末」
+ * 「期首」は `web/src/ui/Keypad/finance.ts` が持つ)。
+ */
+export const DEPOSIT_TIMING_TOKENS = ["end", "start"] as const;
+
+export type DepositTiming = (typeof DEPOSIT_TIMING_TOKENS)[number];
+
+/**
  * 複利・積立の結果。金額はすべて文字列 —— 円は JS の number を超えうる。
  *
  * 税の 3 項目は、税を求めなかったとき `null` になる。**既定はタックス

@@ -347,7 +347,7 @@ export function keySequence(face: FinanceFace, testCase: CallCase): string[] {
           "which the keypad cannot select",
       );
     }
-    keys.push("複利の周期を選ぶ", period);
+    keys.push("複利の周期と積立の位置を選ぶ", period);
     keys.push(
       "税の扱いを選ぶ",
       input.tax === true ? TAX_KEY.withholding : TAX_KEY.none,

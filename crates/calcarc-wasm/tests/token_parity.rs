@@ -220,3 +220,21 @@ fn the_panel_period_cap_matches_the_compound_domain() {
         "FinancePanel.tsx の MAX_PERIODS と finance::compound::MAX_PERIODS が食い違っている"
     );
 }
+
+#[test]
+fn deposit_timing_tokens_match_between_typescript_and_rust() {
+    // **積立の位置は境界を文字列で渡る**(`compound_grow` の `timing`)。
+    // 綴りがずれると、TS 側の "start" が Rust に届かず**戻り値の
+    // SyntaxError になるだけ**で、画面には「Math ERROR」としか出ない
+    // ——どのテストも「綴りがずれた」とは言わない。ここで突き合わせる。
+    let src = include_str!("../../../web/src/finance/types.ts");
+    let ts = tokens_in_ts_array(src, "export const DEPOSIT_TIMING_TOKENS = [");
+    let rust: Vec<String> = calcarc_core::finance::compound::DepositTiming::ALL
+        .iter()
+        .map(|t| t.token().to_owned())
+        .collect();
+    assert_eq!(
+        ts, rust,
+        "web/src/finance/types.ts の DEPOSIT_TIMING_TOKENS と DepositTiming::ALL の token() が食い違っている"
+    );
+}

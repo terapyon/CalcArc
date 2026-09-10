@@ -13,6 +13,7 @@ import {
 } from "../calc";
 import { DATA_TYPE_TOKENS, type DataTypeToken } from "../datascale/types";
 import { LOAN_MODES } from "../finance/loan/types";
+import { DEPOSIT_TIMING_TOKENS, type DepositTiming } from "../finance/types";
 
 /** 主に表示する単位系。UI だけの概念で、Rust に対応物が無い。 */
 export const PRIMARY_UNITS = ["decimal", "binary"] as const;
@@ -38,6 +39,9 @@ export type PanelMode = (typeof PANEL_MODES)[number];
 export const PERIODS_PER_YEAR = [1, 2, 12] as const;
 export type PeriodsPerYear = (typeof PERIODS_PER_YEAR)[number];
 
+export type { DepositTiming };
+export { DEPOSIT_TIMING_TOKENS };
+
 /**
  * **`notation` は保存しない**(【変更 2026-08-25、0.4.0】)。ENG がモードでは
  * なくなり、**ENG 以外のどのキーでも通常表記に戻る**ようになったので、
@@ -60,10 +64,24 @@ export interface DataScaleSettings {
   primary: Primary;
 }
 
+/**
+ * **積立の位置も保存する**(Task 7 の判断、2026-09-10)。
+ *
+ * **理由は「同じ面に載っている 4 つを揃える」**である。周期の面で選ぶ
+ * ものは、いまや**周期と積立の位置の 2 つ**であり、`mode` /
+ * `periodsPerYear` / `withholding` はどれも保存されている。ここだけ
+ * 保存しないと、**同じ面で「半年ごと」は残るのに「期首」は消える**
+ * ——利用者から見て規則が読めない。
+ *
+ * **既定は動かない。** 保存が空なら `defaultSettings()` の `"end"`
+ * (期末)である(設計書 §5.4.1)。保存するのは**利用者が選んだこと**で
+ * あって、既定ではない。
+ */
 export interface FinanceSettings {
   mode: PanelMode;
   periodsPerYear: PeriodsPerYear;
   withholding: boolean;
+  depositTiming: DepositTiming;
 }
 
 /** 計算履歴を貯めるかどうか。既定は入(設計書 §7)。 */
@@ -93,7 +111,14 @@ export function defaultSettings(): Settings {
   return {
     scientific: { angle: "Deg", form: "Rect" },
     dataScale: { dtype: "float32", primary: "decimal" },
-    finance: { mode: "payment", periodsPerYear: 12, withholding: false },
+    finance: {
+      mode: "payment",
+      periodsPerYear: 12,
+      withholding: false,
+      // **期末**(設計書 §5.4.1)。まっさらな状態の見張りは
+      // `web/tests/e2e/finance-compound.spec.ts` に在る。
+      depositTiming: "end",
+    },
     history: { enabled: true },
   };
 }
@@ -106,4 +131,5 @@ export const ALLOWED = {
   primary: PRIMARY_UNITS,
   mode: PANEL_MODES,
   periodsPerYear: PERIODS_PER_YEAR,
+  depositTiming: DEPOSIT_TIMING_TOKENS,
 } as const;

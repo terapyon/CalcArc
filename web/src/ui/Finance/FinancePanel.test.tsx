@@ -64,6 +64,12 @@ vi.mock("../../finance", () => ({
         net: "1016",
       }),
     }),
+  // **値の export もそのまま出す。** `DEPOSIT_TIMING_TOKENS` は
+  // `parsePrefixed` の白リストとして**実行時に読まれる**ので、
+  // mock が落とすと「timing:start が解けない」= キーが無反応になる。
+  // 綴りは `web/src/finance/types.ts` と同じ 2 つで、そちらは
+  // `token_parity.rs` が Rust と突き合わせている。
+  DEPOSIT_TIMING_TOKENS: ["end", "start"] as const,
 }));
 
 vi.mock("../../expr", () => ({
@@ -635,12 +641,16 @@ describe("FinancePanel（電卓）", () => {
     // **計算に入るものは盤面の中**(設計書 §7)。表示の読み方だけを変える
     // トグルとは置き場所を分ける。
     await renderPanel();
-    await press(["複利で増やす", "複利の周期を選ぶ"]);
+    await press(["複利で増やす", "複利の周期と積立の位置を選ぶ"]);
     expect(
-      screen.getByRole("group", { name: "複利の周期のキー" }),
+      screen.getByRole("group", { name: "複利の周期と積立の位置のキー" }),
     ).toBeInTheDocument();
     await press(["半年ごとに複利"]);
-    expect(echo()).toHaveTextContent("周期 半年ごと");
+    // **周期と積立の位置は 1 つの chip に畳む**(設計書 §5.4.2)。
+    // 既定は期末なので、位置を押さなければ `半年ごと・期末` になる。
+    expect(echo()).toHaveTextContent("周期 半年ごと・期末");
+    await press(["積立を期首に行う"]);
+    expect(echo()).toHaveTextContent("周期 半年ごと・期首");
     await press(["税の扱いを選ぶ"]);
     expect(screen.getByRole("group", { name: "税のキー" })).toBeInTheDocument();
     await press(["源泉分離課税を引く"]);
@@ -899,7 +909,7 @@ describe("設定の永続化", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "複利で増やす" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "複利の周期を選ぶ" }),
+      screen.getByRole("button", { name: "複利の周期と積立の位置を選ぶ" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "月ごとに複利" }));
     await userEvent.click(

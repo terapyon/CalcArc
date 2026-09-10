@@ -6,6 +6,7 @@ import {
   DURATION_UNIT_TOKENS,
   PRECISION_TOKENS,
 } from "../../datascale/types";
+import { DEPOSIT_TIMING_TOKENS } from "../../finance/types";
 import { PANEL_MODES } from "../../settings/types";
 import {
   CONVERT_FIELDS,
@@ -18,7 +19,7 @@ import {
   DATA_SCALE_SECTIONS,
   TYPE_SECTIONS,
 } from "./dataScale";
-import { FINANCE_FIELDS, FINANCE_SECTIONS } from "./finance";
+import { FINANCE_FIELDS, FINANCE_SECTIONS, PERIODS_SECTION } from "./finance";
 import { CANDIDATE_SECTIONS, LLM_FIELD_ORDER, LLM_FIELD_SECTION } from "./llm";
 import { parsePrefixed } from "./parse";
 import {
@@ -110,6 +111,9 @@ describe("盤面のトークンと一覧のずれ", () => {
     ],
     ["Finance 項目", FINANCE_SECTIONS, "field:", FINANCE_FIELDS],
     ["Finance モード", FINANCE_SECTIONS, "mode:", PANEL_MODES],
+    // **積立の位置は周期の面に同居している**(設計書 §5.4.3)ので、
+    // `FINANCE_SECTIONS` には現れない——面を名指しで足す。
+    ["Finance 積立の位置", [PERIODS_SECTION], "timing:", DEPOSIT_TIMING_TOKENS],
     ["Convert 項目", CONVERT_SECTIONS, "field:", CONVERT_FIELDS],
   ];
 

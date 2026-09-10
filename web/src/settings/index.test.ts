@@ -92,6 +92,15 @@ describe("readSettings", () => {
     expect(readSettings(storage).finance.periodsPerYear).toBe(12);
   });
 
+  it("rejects a deposit timing that is not one of the two tokens", () => {
+    // **知らない綴りは既定(期末)に倒す。** ここで倒さないと、壊れた保存が
+    // 画面の初期値を `undefined` にして「期末でも期首でもない」状態を作る。
+    const storage = fakeStorage(
+      JSON.stringify({ v: 1, finance: { depositTiming: "BGN" } }),
+    );
+    expect(readSettings(storage).finance.depositTiming).toBe("end");
+  });
+
   it("rejects a non-boolean withholding", () => {
     const storage = fakeStorage(
       JSON.stringify({ v: 1, finance: { withholding: "yes" } }),
@@ -155,7 +164,12 @@ describe("writeSettings", () => {
     const next: ReturnType<typeof defaultSettings> = {
       scientific: { angle: "Rad", form: "Polar" },
       dataScale: { dtype: "int8", primary: "binary" },
-      finance: { mode: "compound", periodsPerYear: 1, withholding: true },
+      finance: {
+        mode: "compound",
+        periodsPerYear: 1,
+        withholding: true,
+        depositTiming: "start",
+      },
       history: { enabled: false },
     };
     writeSettings(storage, next);

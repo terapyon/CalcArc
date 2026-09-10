@@ -54,6 +54,11 @@ export type FinanceKeyToken =
   | "field:tax"
   | "field:target"
   | `period:${1 | 2 | 12}`
+  // **積立の位置。** 綴りは境界のトークンと同じ(`web/src/finance/types.ts`
+  // の `DEPOSIT_TIMING_TOKENS`)——盤面の語(「期末」「期首」)は下の
+  // `label` が持つ。
+  | "timing:end"
+  | "timing:start"
   | "tax:none"
   | "tax:withholding";
 
@@ -271,8 +276,15 @@ const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
     },
     {
       token: "field:periods",
-      label: "周期",
-      ariaLabel: "複利の周期を選ぶ",
+      // **面に 2 つ載っているので、ラベルも 2 つある形にする**(設計書
+      // §5.4.3)。**3 文字が上限である**——`variant: "function"` の字は
+      // 15px、キーの幅は 6 列で 54.33px(390) / 49.33px(360) なので、
+      // 4 文字(60px)は折り返して半高の枠からはみ出す(「ボーナス」が
+      // 8px はみ出した実測がそれ。設計書 §11.4)。**「周期」を残したのは、
+      // 入力済みの chip の見出しがこの語だから**である——キーと chip が
+      // 別の語だと、押した先で何が変わったのかを目で追えない。
+      label: "周期他",
+      ariaLabel: "複利の周期と積立の位置を選ぶ",
       variant: "function",
     },
     {
@@ -315,9 +327,19 @@ export const PERIODS_FOR_FIELD_SECTION = PERIODS_FOR_FIELDS;
 /**
  * 周期の面。**面が入れ替わるのは「計算に入るもの」だから**——表示の読み方
  * だけを変えるトグルとは置き場所を分ける(設計書 §7)。
+ *
+ * **★ ここは意味の混載である。** 「周期」の面に「積立の位置」を同居させて
+ * いるのは、**縦の予算が決めた妥協**であって意味の整理ではない
+ * (設計書 §5.4.3)。**項目行に 7 つ目のキーは入らない**——`half` にしても
+ * 390px で余白 8.31px(`viewport-budget` の要求はちょうど 8px なので余裕
+ * 0.31px)、360px でははみ出し 3px である(設計書 §5.4.2 の実測)。
+ * **0.31px を頼りに設計しない。**
+ *
+ * **この面には空きスロットが 20 個あった**(`token: null` の「—」)。
+ * 2 つ使って **18 個**になる。**盤面の形は 1px も動かない。**
  */
 const PERIODS_FACE: KeypadSection<FinanceKeyToken> = {
-  ariaLabel: "複利の周期のキー",
+  ariaLabel: "複利の周期と積立の位置のキー",
   columns: 5,
   height: "square",
   keys: [
@@ -346,7 +368,24 @@ const PERIODS_FACE: KeypadSection<FinanceKeyToken> = {
       ariaLabel: "この項目を消去",
       variant: "danger",
     },
-    ...Array.from({ length: 20 }, () => ({
+    // **積立の位置。2 行目の頭に置く**——1 行目は周期と制御で埋まっている。
+    // **綴りは「期末」「期首」で確定している**(利用者裁定 2026-09-10、
+    // 設計書 §5.4.4)。カシオの日本語マニュアルと同じ語であり、
+    // **`BGN` の英字は出さない**(a11y の 13 画面名と同じ裁定)。
+    // **実装で綴りを変えないこと。**
+    {
+      token: "timing:end",
+      label: "期末",
+      ariaLabel: "積立を期末に行う",
+      variant: "function",
+    },
+    {
+      token: "timing:start",
+      label: "期首",
+      ariaLabel: "積立を期首に行う",
+      variant: "function",
+    },
+    ...Array.from({ length: 18 }, () => ({
       token: null,
       label: "—",
       ariaLabel: "空き",
