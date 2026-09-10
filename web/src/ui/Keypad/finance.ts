@@ -142,9 +142,18 @@ const MODES: KeypadSection<FinanceKeyToken> = {
 const FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  // 「ボーナス」の 4 文字。**以前は 0.75rem に縮めて収めていた**が、
-  // 器を広げたので読める大きさに戻した(0.2.0 設計書 §8)。
-  height: "double",
+  // **半高。** 収まるようになったのは**字を縮めたからではない——ラベルを
+  // 短くしたからである**(「ボーナス」の 4 文字は 42px で 34px の枠を 8px
+  // はみ出す。「賞与」の 2 文字は 34px に収まる。2026-09-10 実測)。
+  // 0.2.0 が「0.75rem に縮めて収める」から退却して器を倍にした判断
+  // (0.2.0 設計書 §8)は**そのまま生きている**: 字は half の既定のまま
+  // 15px で、縮めていない(設計書 §11.4)。
+  //
+  // **上段(`MODES`)は `double` のまま**——2 行のラベルが 3 つあり 34px に
+  // 入らない。加えて、**同じ高さの 2 行は対等に見え、高さが違うほうが
+  // 階層に見える**——上段が主・下段が従という意図は `double` + `half` の
+  // ほうが達成する(設計書 §11.3)。
+  height: "half",
   keys: [
     {
       token: "field:principal",
@@ -182,7 +191,10 @@ const FIELDS: KeypadSection<FinanceKeyToken> = {
     // 差し替える(設計書 §6)——ここは月額モードの名前を既定として置く。
     {
       token: "field:bonus",
-      label: "ボーナス",
+      // **盤面のキーのラベルだけを短くする。** 読み上げ名(下の `ariaLabel`)
+      // と一覧の見出し(`FinancePanel.tsx` の `bonusName()`)には幅の制約が
+      // 掛からないので、「ボーナス」のまま残す(設計書 §11.4)。
+      label: "賞与",
       ariaLabel: "ボーナス返済分（元本）を入力",
       variant: "function",
     },
@@ -196,7 +208,9 @@ const FIELDS: KeypadSection<FinanceKeyToken> = {
 const COMPOUND_FIELDS: KeypadSection<FinanceKeyToken> = {
   ariaLabel: "入力する項目",
   columns: 6,
-  height: "double",
+  // **`FIELDS` と同じ半高。** 差し替わる行なので高さが違うと入れ替えの
+  // たびに盤面が跳ねる。6 つとも 1 行 3 文字以内で 34px に収まる(実測)。
+  height: "half",
   keys: [
     {
       token: "field:principal",

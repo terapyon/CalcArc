@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPOUND_FIELD_SECTION,
   DEPOSIT_FOR_FIELD_SECTION,
   FINANCE_SECTIONS,
   PERIODS_FOR_FIELD_SECTION,
@@ -62,9 +63,13 @@ describe("Finance のキー集合", () => {
     expect(pad.keys[4]?.token).toBe("ac");
   });
 
-  it("keeps the mode and field rows double height", () => {
+  it("keeps the mode row double and the field row half", () => {
+    // **高さが違うのが意図である**——同じ高さの 2 行は対等に見え、高さが
+    // 違うほうが階層に見える(上が主、下が従。設計書 §11.3)。上段は
+    // 2 行のラベルを 3 つ持つので 34px には入らない(実測 42px)。
     expect(section("計算の種類").height).toBe("double");
-    expect(section("入力する項目").height).toBe("double");
+    expect(section("入力する項目").height).toBe("half");
+    expect(COMPOUND_FIELD_SECTION.height).toBe("half");
     // ローン 3 + 複利 1 + 複利の逆算 2 (設計書 §11)。
     expect(section("計算の種類").keys).toHaveLength(6);
     expect(section("計算の種類").columns).toBe(6);
