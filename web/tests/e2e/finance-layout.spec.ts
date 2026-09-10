@@ -58,37 +58,60 @@ test("the widened rows still read at the function size", async ({ page }) => {
 // **上限を 2 にしたのは設計書 §11.5 の予算による。** 下段を `half` にして
 // 空くのは 34px(実測。余白 16.31→50.31 / 5.28→39.28)で、1 行は 17px
 // ——**2 行までは入る。3 行目は縦の予算の話になる。**
-for (const size of [
-  { width: 390, height: 844 },
-  { width: 360, height: 800 },
-]) {
-  test(`the standing disclaimer stays within 2 lines at ${size.width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize(size);
-    await page.goto("/#finance");
-    await expect(page.getByTestId("display-main")).toBeVisible();
+//
+// **★ 面ごとに測る(2026-09-10、この計画の Task 4)。** 説明は方式で
+// 中身が変わるようになった——**`#finance` を開いた既定は `payment`(ローン)
+// なので、この検査は 1 面しか見ていなかった。** 伸びたのは複利の面のほう
+// (1 行 → 2 行)であり、**見張っていない面が伸びる**のは「赤くならない
+// 壊れ方」である。だから 2 面 × 2 幅の 4 本にする。
+const FACES = [
+  { name: "loan", mode: null, word: "返済額" },
+  { name: "compound", mode: "複利で増やす", word: "切り捨て" },
+] as const;
 
-    const disclaimer = page.locator('section[aria-label="金融計算"] > p');
+for (const face of FACES) {
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
+  ]) {
+    test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto("/#finance");
+      await expect(page.getByTestId("display-main")).toBeVisible();
+      if (face.mode) {
+        await page.getByRole("button", { name: face.mode }).click();
+      }
 
-    // **何件見たかを主張する。** パネルの組み立てが変わってこの取り方が
-    // 0 件になった日から、下の行数は測られないまま緑を返し続ける
-    // ——`toHaveCount` を挟まないと `evaluate` は最初の 1 件を見るだけで、
-    // 「1 件も無い」は待ち時間の果てのタイムアウトにしかならない。
-    await expect(disclaimer).toHaveCount(1);
+      const disclaimer = page.locator('section[aria-label="金融計算"] > p');
 
-    const { lines, text } = await disclaimer.evaluate((el) => {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      return {
-        lines: range.getClientRects().length,
-        text: el.textContent ?? "",
-      };
+      // **何件見たかを主張する。** パネルの組み立てが変わってこの取り方が
+      // 0 件になった日から、下の行数は測られないまま緑を返し続ける
+      // ——`toHaveCount` を挟まないと `evaluate` は最初の 1 件を見るだけで、
+      // 「1 件も無い」は待ち時間の果てのタイムアウトにしかならない。
+      await expect(disclaimer).toHaveCount(1);
+
+      // **どの面を測ったかも主張する。** モードのボタンが押せなかった日、
+      // この検査はローンの 1 行を測って**複利の面を見張っているつもりで
+      // 緑を返し続ける。** 語の中身そのものは vitest 側
+      // (`FinancePanel.test.tsx` の「常設の説明」)が持っていて、ここでは
+      // **測った物が名乗った面であること**だけを言っている。
+      await expect(disclaimer).toContainText(face.word);
+
+      const { lines, text } = await disclaimer.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return {
+          lines: range.getClientRects().length,
+          text: el.textContent ?? "",
+        };
+      });
+
+      expect(
+        lines,
+        `the ${face.name} disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}`,
+      ).toBeLessThanOrEqual(2);
     });
-
-    expect(
-      lines,
-      `the disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}`,
-    ).toBeLessThanOrEqual(2);
-  });
+  }
 }

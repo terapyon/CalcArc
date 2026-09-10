@@ -731,6 +731,72 @@ describe("FinancePanel（電卓）", () => {
     expect(breakdown).toHaveTextContent("手取り");
     expect(breakdown).toHaveTextContent("1,016 円");
   });
+
+  // **常設の説明は方式で変わる**(設計書 §4.2.1)。ローンと複利では
+  // 「実際とどう食い違うか」が別なので、1 文を使い回すと**どちらかの面で
+  // 嘘になる**——複利には返済額が無く、ローンには税も積立の位置も無い。
+  //
+  // **★ 見るのは「語」であって文ではない。** 文案は未決 #1・#3・#6 の
+  // ままである(設計書 §8)から、綴りを検査に写すと**綴りを直すたびに
+  // 検査を直すことになり、検査は何も守らなくなる**。方式の取り違えだけを
+  // 捕まえたいので、**その方式にしか現れない語**を 1 つずつ見る:
+  // ローンに `返済額`、複利に `切り捨て`。
+  //
+  // **★ 置き場が vitest なのは、これが文字列の分岐だから**である。
+  // 行数(2 行以内)は実ブラウザの折り返しでしか決まらないので
+  // `tests/e2e/finance-layout.spec.ts` が持つ。**同じ `<p>` を 2 本で
+  // 見張っているが、問いが違う**——こちらは「どの文が出ているか」、
+  // 向こうは「その文が何行になるか」。
+  describe("常設の説明", () => {
+    // **無いときは投げる。** `querySelector` の `null` をそのまま
+    // `toHaveTextContent` に渡すと「語が無い」と読める失敗になり、
+    // **「そもそも文が消えた」と「文が違う」が同じ顔で出る。**
+    const disclaimer = (): Element => {
+      const el = screen
+        .getByRole("region", { name: "金融計算" })
+        .querySelector(":scope > p");
+      if (!el) throw new Error("パネル直下に常設の説明が無い");
+      return el;
+    };
+
+    it("names the repayment on the loan modes", async () => {
+      await renderPanel();
+      for (const mode of [
+        "月々の返済額を求める",
+        "借入可能額を求める",
+        "返済期間を求める",
+      ]) {
+        await press([mode]);
+        expect(disclaimer(), mode).toHaveTextContent("返済額");
+        expect(disclaimer(), mode).not.toHaveTextContent("切り捨て");
+      }
+    });
+
+    it("names the truncation on the compound modes", async () => {
+      await renderPanel();
+      for (const mode of [
+        "複利で増やす",
+        "必要な積立額を求める",
+        "必要な期間を求める",
+      ]) {
+        await press([mode]);
+        expect(disclaimer(), mode).toHaveTextContent("切り捨て");
+        expect(disclaimer(), mode).not.toHaveTextContent("返済額");
+      }
+    });
+
+    it("keeps the standing text in a single element", async () => {
+      // **行数の番人は `section > p` を 1 件だけ数える**
+      // (`finance-layout.spec.ts` の `toHaveCount(1)`)。文を 2 つの
+      // `<p>` に割ると、あちらは**待ち時間の果てのタイムアウト**でしか
+      // 落ちない——ここで先に、速く、名前を出して落とす。
+      await renderPanel();
+      const panel = screen.getByRole("region", { name: "金融計算" });
+      expect(panel.querySelectorAll(":scope > p")).toHaveLength(1);
+      await press(["複利で増やす"]);
+      expect(panel.querySelectorAll(":scope > p")).toHaveLength(1);
+    });
+  });
 });
 
 describe("設定の永続化", () => {
