@@ -115,3 +115,68 @@ for (const face of FACES) {
     });
   }
 }
+
+// **複利の面にも縦の余裕があること。**
+//
+// **★ `viewport-budget.spec.ts` は複利の面を 1 度も測っていない。** あちらの
+// 「いちばん高いタブに 8px 以上の余白」は **390×844 で、既定のモード
+// (`payment` = ローン)** を測る 1 本である。**この枝で複利の面のほうが
+// 高くなった**(常設の説明が 2 行になった)ので、**予算の検査は低いほうを
+// 測り続けることになった。**
+//
+// **穴の大きさは実測してある**(2026-09-10、説明を 3 行に伸ばした状態):
+//
+//   複利の面 390×844   余白 16.31px  はみ出し 0
+//   複利の面 360×800   余白  5.28px  はみ出し 0   ← **8px を割っている**
+//
+// **そのとき `viewport-budget.spec.ts` は 30 本すべて緑だった。** 行数の
+// 番人(上)だけが名前を出した。**上の番人が 2 行を上限にしているので実害は
+// 塞がっている**が、**塞いでいるのは行数のほうであって余白のほうではない**
+// ——**説明以外の何かが複利の面を伸ばした日には、誰も言わない。** ここで
+// 余白のほうも見る。
+//
+// **閾値は `viewport-budget.spec.ts` と同じ 8px にそろえる**——別の数字に
+// すると、2 か所が別々に動く。**いまの実測は 33.31px / 22.28px**(2 行)。
+for (const size of [
+  { width: 390, height: 844 },
+  { width: 360, height: 800 },
+]) {
+  test(`the compound face keeps slack inside the screen at ${size.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await page.goto("/#finance");
+    await expect(page.getByTestId("display-main")).toBeVisible();
+    await page.getByRole("button", { name: "複利で増やす" }).click();
+    // **測った物が複利の面であることを先に言う**(上の 4 本と同じ理由)。
+    await expect(
+      page.locator('section[aria-label="金融計算"] > p'),
+    ).toContainText("切り捨て");
+
+    const { mainHeight, panelHeight, panelTag } = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      const panel = main?.querySelector(":scope > :not(h1)");
+      if (!main || !panel) {
+        return { mainHeight: -1, panelHeight: -1, panelTag: "(見つからない)" };
+      }
+      return {
+        mainHeight: main.getBoundingClientRect().height,
+        panelHeight: panel.getBoundingClientRect().height,
+        panelTag: panel.tagName,
+      };
+    });
+
+    // **測った物がパネルであることを先に主張する**(`viewport-budget.spec.ts`
+    // と同じ形。1×1 の要素を測って緑になるのを止める下限である)。
+    expect(
+      panelHeight,
+      `measured <${panelTag}> at ${panelHeight}px inside a ${mainHeight}px <main> — that is not the panel`,
+    ).toBeGreaterThanOrEqual(mainHeight / 2);
+
+    const slack = mainHeight - panelHeight;
+    expect(
+      slack,
+      `only ${slack}px of slack left on the compound face`,
+    ).toBeGreaterThanOrEqual(8);
+  });
+}
