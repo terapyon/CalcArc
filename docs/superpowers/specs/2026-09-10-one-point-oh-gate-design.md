@@ -179,11 +179,15 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
   いなければ、reload は「ネットワークから来た」ままでも緑になるため）
 - **次の走行で WebKit が赤なら**、`test.fixme(browserName === "webkit", "<理由と #34402 の URL>")` にする
   （番人が許す理由つきの形）
+- **→ 結果（2026-09-11、走行 `34545368399`）: WebKit では効かなかった。** reload が「**Blocked by Web Inspector**」で
+  落ちた——WebKit では `context.route` が、SW が答える前にナビゲーションを捕まえて落とす（Chromium では捕まえない。
+  同じ枝の Chromium は緑）。**裁定どおり WebKit だけ理由つきの `test.fixme` にした。** Chromium は route の切り方の
+  まま回す（setOffline より強い——SW の要求も切れる）
 
 **1.0 でオフラインについて言えること**（正直に）: **自動の検査がオフラインを確かめているのは、実行機の上の
 ブラウザのエンジン**である。Chromium では、切り方を route にしたのでページの要求も SW の要求も切れている
-（Playwright の文書では、Chromium は SW の要求も `context.route` に見せる）。**WebKit は、次の走行が緑なら
-「ページの要求を切っても SW から開ける」まで言え、赤なら 1 度も確かめていない。** どちらの場合も、
+（Playwright の文書では、Chromium は SW の要求も `context.route` に見せる）。**WebKit では 1 度も確かめて
+いない**——setOffline も route も、Playwright の WebKit ではナビゲーションそのものを落とした（上）。どちらにしても、
 **本物の iPhone の Safari でオフラインを確かめたことは無い**（実機の確認は、利用者の判断で門に入れていない）。
 **「iPhone でオフラインで使える」とは、1.0 では言い切れない。** マニュアルの草稿もこの幅で書く。
 
