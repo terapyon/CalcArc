@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { narrowWidth, WEBKIT_NARROW_WIDTH } from "./widths";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/#finance");
@@ -74,10 +75,17 @@ for (const face of FACES) {
     { width: 390, height: 844 },
     { width: 360, height: 800 },
   ]) {
-    test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px`, async ({
+    // **WebKit の複利の面の 360px だけは 375px で測る**(`widths.ts` の理由、
+    // 2026-09-11 の利用者の裁定)。ローンの面は WebKit でも 360px のまま。
+    const narrow = face.name === "compound" && size.width === 360;
+    const onWebKit = narrow ? ` (${WEBKIT_NARROW_WIDTH}px on WebKit)` : "";
+    test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px${onWebKit}`, async ({
       page,
+      browserName,
     }) => {
-      await page.setViewportSize(size);
+      await page.setViewportSize(
+        narrow ? { ...size, width: narrowWidth(browserName) } : size,
+      );
       await page.goto("/#finance");
       await expect(page.getByTestId("display-main")).toBeVisible();
       if (face.mode) {
@@ -171,10 +179,16 @@ for (const size of [
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ]) {
-  test(`the compound face keeps slack inside the screen at ${size.width}px`, async ({
+  // **WebKit の 360px だけは 375px で測る**(`widths.ts` の理由)。
+  const narrow = size.width === 360;
+  const onWebKit = narrow ? ` (${WEBKIT_NARROW_WIDTH}px on WebKit)` : "";
+  test(`the compound face keeps slack inside the screen at ${size.width}px${onWebKit}`, async ({
     page,
+    browserName,
   }) => {
-    await page.setViewportSize(size);
+    await page.setViewportSize(
+      narrow ? { ...size, width: narrowWidth(browserName) } : size,
+    );
     await page.goto("/#finance");
     await expect(page.getByTestId("display-main")).toBeVisible();
     await page.getByRole("button", { name: "複利で増やす" }).click();

@@ -456,6 +456,13 @@ ELIFECYCLE  Command failed with exit code 1.
 
 ## `convert.spec.ts` — keeps the rate date in the same place in every state（**WebKit**）
 
+> **★ 原因の見立てと直し（2026-09-11、同じ日のうちに）: 間欠ではなく、本物のネットワークに出ていた。**
+> 下の「画面写真が言っていること」の筋で、**Service Worker の配下で WebKit の要求が差し替えをすり抜けた**と見て、
+> **SW が要らない E2E では SW を止めた**（`playwright.config.ts` の `serviceWorkers: "block"`、`pwa.spec.ts` だけ許す）。
+> あわせて、**外へ出ようとした要求があれば赤くする網**を `web/tests/e2e/fixtures.ts` に置いた（`strayRequestsBlocked`）。
+> **次の WebKit の走行から、この項は「間欠の赤」ではなく「網の赤」として出る**——出たら、それは本物の漏れである。
+> 閉じたと言えるのは、直しのあとの走行で緑が続いてから（標本として下の表に足す）。
+
 | | |
 |---|---|
 | ファイル | `web/tests/e2e/convert.spec.ts:761`（落ちた行は `:803`） |

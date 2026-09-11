@@ -184,6 +184,24 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
   同じ枝の Chromium は緑）。**裁定どおり WebKit だけ理由つきの `test.fixme` にした。** Chromium は route の切り方の
   まま回す（setOffline より強い——SW の要求も切れる）
 
+**2 回目の走行（2026-09-11、`34545368399`）と、そのあとの裁定:**
+
+- **複利の説明（`finance-layout.spec.ts` の 360px の 2 本）→ WebKit は 375px で測る**（利用者の裁定）。はみ出したのは
+  最後の「す。」だけで（1 行あたり 1 文字に満たない差）、失敗文と画面写真からは書体の違いか折り方の違いかを
+  決め切れなかった。**360px の iPhone は無い**（Playwright 1.62.1 の端末定義で iPhone は 39 件、幅 360px は 0 件）
+  ——「WebKit × 360px」は実在する端末に当たらない。**Chromium は 360px のまま**、文言は変えない。
+  幅と理由は `web/tests/e2e/widths.ts` の 1 か所に置き、番人（`webkit-gate.test.ts`）が「呼ぶのは 2 本だけ・理由が在る」を見る。
+  **★ 裁定の前提に 1 つ訂正**: 「最小の iPhone は 375px」ではない——**いちばん狭いのは 320px の初代 iPhone SE**。
+  375px は 2 番目（iPhone 6〜8・SE 第 2 世代以降・12/13 mini）。**320px はどちらのエンジンでも測っていない**
+  （Chromium にも 320px の Android が在る）。**375px で 2 行に収まるかは、次の走行が最初の実測**である
+- **為替（`convert.spec.ts:761`）→ 間欠ではなく、本物のネットワークに出ていた**。失敗時の画面写真に**その日の
+  本物のレートの日付**（`Rate: 2026-09-10`。検査が仕込む日付のどれでもない）が出た。Playwright が Service Worker を
+  通る要求を route に見せるのは Chromium だけなので、WebKit では差し替え（`page.route`）をすり抜けた、と見立てる。
+  **直し（監視役の判断）: SW が要らない E2E では SW を止める**（設定の `serviceWorkers: "block"`、`pwa.spec.ts` だけ許す）。
+  **止めても Chromium の 248 本はすべて通った**（事前の測定）。**さらに、外へ出ようとした要求を落として数え、
+  1 本でもあれば赤くする網**を fixtures に置いた——**為替は画面の日付で気づけたが、気づけない形で外へ出る検査を
+  次は網が捕まえる**
+
 **1.0 でオフラインについて言えること**（正直に）: **自動の検査がオフラインを確かめているのは、実行機の上の
 ブラウザのエンジン**である。Chromium では、切り方を route にしたのでページの要求も SW の要求も切れている
 （Playwright の文書では、Chromium は SW の要求も `context.route` に見せる）。**WebKit では 1 度も確かめて
@@ -315,6 +333,8 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **保存した設定と履歴は、版が変わると失われうる**
 > - 画面の見た目やキーの並び
 > - 為替レートの値（取得元の値をそのまま使う）
+> - **確かめている画面の幅**: Android の Chrome などは幅 360px 以上、iPhone の Safari は幅 375px 以上で
+>   確かめている。それより狭い画面（320px など）でも表示はされるが、崩れないことは確かめていない
 >
 > 気づいたことは Issue で教えてもらえると助かる。
 
@@ -333,8 +353,15 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **Saved settings and history may be lost when the version changes**
 > - The look of the screens or the layout of the keys
 > - Exchange-rate values (the source's values are used as they are)
+> - **Screen widths that are checked**: Chrome on Android and similar browsers from 360px wide, Safari on
+>   iPhone from 375px wide. Narrower screens (such as 320px) still show the app, but nothing checks that
+>   the layout holds there
 >
 > If you notice anything, it would help to hear about it in an Issue.
+
+**【追記 2026-09-11】「確かめている画面の幅」の行**は、利用者の裁定（320px は確かめない。対応幅を書いておく）で
+足した。数字の出どころは `web/tests/e2e/widths.ts`（Chromium 360px・WebKit 375px）で、マニュアルにも同じ文を
+置き、番人が文の数字をその定数と突き合わせる（`docs/manuals` の枝）。
 
 **★ README への反映は、1.0 に版を上げるコミットで行う。** 文案は「1.0（正式版）」を
 名乗るので、0.9.0 の README には入れられない（版数は明示の指示があるときだけ上げる）。

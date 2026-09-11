@@ -9,6 +9,13 @@ export default defineConfig({
     timezoneId: "UTC",
     // 落ちた検査の画面を報告書に残す(下の html と対)。
     screenshot: "only-on-failure",
+    // **Service Worker は止める。要るのは `pwa.spec.ts` だけ**(あちらで許す)。
+    // Playwright が SW を通る要求を route に見せるのは Chromium だけなので、
+    // SW が居ると WebKit では差し替え(`page.route`)をすり抜けて**本物の
+    // ネットワークに出る**——2026-09-11 の WebKit の走行 34545368399 で、
+    // 為替の画面にその日の本物のレートが入った(`known-flaky-tests.md`)。
+    // 番人は `tools/tests/webkit-gate.test.ts`。
+    serviceWorkers: "block",
   },
   // **失敗の報告書を html で書く**(2026-09-11)。書き出し先は ci.yml の
   // 2 つの E2E ジョブが落ちた日に上げる `web/playwright-report/` である。
