@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHROMIUM_NARROW_WIDTH, WEBKIT_NARROW_WIDTH } from "../e2e/widths";
 import { readManuals } from "./manuals";
@@ -36,8 +37,13 @@ describe("マニュアルの画面幅は E2E の幅と同じである", () => {
   it("viewport-budget のいちばん狭い幅は、Chromium の幅と同じである", () => {
     // **もう 1 つの持ち主。** `viewport-budget.spec.ts` は幅を自分で書いている
     // ——あちらを狭めた(または広げた)日に、マニュアルの数字と食い違う。
+    // **パスは `import.meta.dirname` から組む**(`manuals.ts` と同じ)。
+    // vitest の jsdom 環境では、大域の `URL` が jsdom のものに差し替わっていて、
+    // `readFileSync(new URL(相対, import.meta.url))` は「The URL must be of
+    // scheme file」で投げる(`import.meta.url` そのものは `file:` である。
+    // 2026-09-11 に実際に落ち、使い捨ての検査で原因を確かめた)。
     const budget = readFileSync(
-      new URL("../e2e/viewport-budget.spec.ts", import.meta.url),
+      join(import.meta.dirname, "../e2e/viewport-budget.spec.ts"),
       "utf8",
     );
     const widths = [...budget.matchAll(/width:\s*(\d+)/g)].map((m) =>
