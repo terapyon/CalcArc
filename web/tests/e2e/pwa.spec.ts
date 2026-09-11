@@ -49,7 +49,16 @@ test("the service worker registration becomes ready", async ({ page }) => {
 test("Scientific and Scale keep working once the network drops, after one controlled reload", async ({
   page,
   context,
+  browserName,
 }) => {
+  // **WebKit ではネットワークを切る手段が無い**(2026-09-11、門 1 の設計書
+  // §1.5、利用者の裁定「別の切り方を 1 案試し、効かなければ理由つきで外す」)。
+  // **Chromium ではこのまま回る**——WebKit(＝iPhone のエンジン)でオフラインを
+  // 確かめていない穴は、設計書とマニュアルに書いてある。
+  test.fixme(
+    browserName === "webkit",
+    "WebKit: Playwright cannot cut the network under a service worker here. context.setOffline(true) makes the next reload fail with 'WebKit encountered an internal error' (https://github.com/microsoft/playwright/issues/34402, CI run 34543367685), and context.route aborts the navigation before the service worker answers it ('Blocked by Web Inspector', CI run 34545368399). Offline is checked on Chromium only; see docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md section 1.5.",
+  );
   await page.goto("/");
   // workbox の precache 充填は install の waitUntil 内で完了するため、
   // ready(=activated) は precache 充填済みを含意する——この待機 1 つで足りる。
