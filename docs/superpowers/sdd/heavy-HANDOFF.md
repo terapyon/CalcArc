@@ -28,7 +28,7 @@
 | | |
 |---|---|
 | `origin/main` | **`e266a6d`**（`git rev-parse --short origin/main`。**タグは `v0.9.0` まで**——`git describe --tags --abbrev=0 origin/main`） |
-| 未 push の枝（縦積み） | `docs/independent-verification-gaps` → `test/spell-differential` → `heavy/finance-start`（この順に積んである。**先端は `git rev-parse --short <枝>` で見る。** push で積み直すと SHA は変わるので、ここには書かない——§7 の「引用は名前で」と同じ理由） |
+| 門 3 の枝（縦積み・push 済み・PR 審査中） | `docs/independent-verification-gaps`（#130 → `main`）→ `test/spell-differential`（#131）→ `heavy/finance-start`（#132）。この順にマージする。**先端は `git rev-parse --short <枝>` で見る。** マージで SHA は変わるので、ここには書かない——§7 の「引用は名前で」と同じ理由 |
 | 作業台 | **きれい**（`git status --porcelain` が空。2026-09-11 に `/home/terapyon/dev/CalcArc-e2e` で確認） |
 
 **★ この作業台は、走行が落ち、ファイルが化ける。** 2026-08-30 に
@@ -69,6 +69,13 @@
   「測ったら消す」として置いていた項目を、測れたので消した）。**v0.8.0 と比べて
   弱くなっていない**——3 本とも前と同じ範囲で同じ数。数字と出どころは金融の設計書
   `docs/superpowers/specs/2026-09-03-finance-convention.md` の「検証への影響」の節
+- **期首のシャード（20 枚目）は CI で確かめた**（2026-09-11、Heavy corpus 走行
+  `34543925445`・ジョブ `103092418248`、`heavy/finance-start` を手動起動。ここの「次に
+  誰かが触るなら」に「測ったら消す」として置いていた項目を、測れたので消した）。
+  **検出数は手元の実測と完全一致**（期首の `minRate` は余裕 0 のまま通った）、
+  **`heavy:ui` の期首 3 件は最初の実走で緑**（40 passed）、`Corpus vs reference` は
+  37 分 08 秒（85 分の制限の内側）。数字と出どころは設計書
+  `2026-09-10-independent-verification-gaps-design.md` §4.8 の【CI で確認】
 
 **次に誰かが触るなら、材料はこれだけ残っている:**
 
@@ -80,13 +87,6 @@
    **探索は `reference/scripts/find_convert_overflow.py` に上限つきで在る**
 3. **第 3 段階の試験空間モデルをどこへ置くか**——**`convert` は候補から
    外してよい**（軸が 2 本、単位はすでに満点。産物が当てる前に分かっている）
-4. **期首のシャードを足した（20 枚目）。** `corpus/generated/finance-start-000.json`
-   （1,200 件）を重量級が読み・証明書で検算し・検出力で測る形にした
-   （2026-09-11、`heavy/finance-start`）。**`heavy:ui` の期首 3 件と、期首の
-   `minRate`（手元の `heavy:power` の実測、余裕 0）と、`Corpus vs reference` の
-   所要時間（実測前。いまの 85 分の制限の内側であること——設計書
-   `2026-09-10-independent-verification-gaps-design.md` §4.8）は CI の最初の
-   `Heavy corpus` の走行で確かめる（未確認）。測ったら消す。**
 
 ## 3. これまで（1 行ずつ）
 

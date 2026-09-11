@@ -4077,6 +4077,10 @@ independent-verification-gaps Task 8〜10・記録は Task 12）
 `heavy:ui` の期首 3 件と期首の `minRate` は CI の最初の `Heavy corpus` の走行で
 確かめる（未確認）。
 
+**【追記 2026-09-11】その後、CI を通った**——Heavy corpus 走行 `34543925445`
+（`heavy/finance-start` の `e10f82a` を手動起動、ジョブ `103092418248`）。数は節の終わりの
+「CI で確かめた」に書いた。
+
 ### 件数（`corpus/generated/finance-start-000.json` を直接数えた）
 
 | op | 件数 |
@@ -4124,6 +4128,8 @@ independent-verification-gaps Task 8〜10・記録は Task 12）
 **腕の独立は両方向で確かめた**——期末しか動かさない `compound-deposit-at-start` は
 期首で 0、期首しか動かさない `compound-start-deposit-at-end` は期末で 0。
 **`finance-000.json` の既知 3 件（910 / 612 / 1）はどれも動いていない。**
+**【追記 2026-09-11】この表は CI（走行 `34543925445`）の `heavy-report.md` の検出の表と
+1 件も違わない**（節の終わりの「CI で確かめた」）。
 
 **`compound-round-once-at-maturity` の当て直し。** 旧い `to` は `let _ = timing;`
 で積立の位置を捨てていたため、期首のケースでは「一度だけ丸める」と「期首を
@@ -4148,3 +4154,27 @@ timing を問わず通るが、期首・積立 1 円では谷が無い（`refere
 ほか、変異 id ごとに書いてある）——走行はどれも手元の `pnpm heavy:power`
 （`cd heavy && pnpm heavy:power`）で、**誰でも同じコマンドで再現できる**。
 走行の生ログは残していない（CI の走行番号はまだ無い）。
+**【追記 2026-09-11】CI の走行番号は `34543925445`（ジョブ `103092418248`）。** 下の節。
+
+### CI で確かめた（2026-09-11、Heavy corpus 走行 `34543925445`）
+
+`heavy/finance-start` の `e10f82a` を手動起動（ジョブ `Corpus vs reference` =
+`103092418248`、成功）。数はその走行の成果物 `heavy-report.md` と、ジョブのログ・
+ステップの時刻から写した。
+
+- **検出の件数は、上の表と 1 件も違わない。** 期首 951 / 108 / 969 / 640 / 594 / 459 / 305、
+  `finance-000.json` は 11 行とも同じ。`finance-000.json` の検出数は v0.9.0 の Release 走行
+  `34479446474` の報告書とも 10 本すべて同じ（新しい変異は v0.9.0 に無い）。**期首の
+  `minRate` は余裕 0 のまま通った**——検出は決定的で、手元と CI は一致する
+  （09-10 の 910 に続く 2 例目）
+- **`heavy:ui` は 40 passed（12.0 分）**（v0.9.0 は 37 passed / 11.9 分）。増えた 3 件が期首の
+  3 件で、**最初の実走で緑**: `compound_grow` `fin-start-000545`・`compound_deposit_for`
+  `fin-start-000526`・`compound_periods_for` `fin-start-000713`。既存の面ごとの 16 件は
+  ケースの id が v0.9.0 の走行と同じ
+- **`Corpus vs reference` は 37 分 08 秒**（制限 85 分）。v0.9.0 の 35 分 36 秒より 92 秒長く、
+  うち `Measure what this corpus can detect` が +68 秒（20:54 → 22:02）、`Type a sample on
+  the real keypad` が +6 秒（11:58 → 12:04）、`Run the heavy corpus` は 1:01 のまま
+  （257 → 263 passed）
+- 報告書の判定: finance は **完全に正しい**（4,700 件、厳密一致、不一致 0）。
+  `finance-start-000.json (calls)` は 1,200 件中 正常 1,108・`Overflow` 92、被覆
+  `finance-start-v1` は上の表と同じ（未達 0）、307 層（乱択 896 件）、参照が捨てた件数 0

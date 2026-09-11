@@ -517,6 +517,11 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   まま期首では 0 件だった残り 3 種は `loan-final-row-no-adjustment` 1,615/0・
   `bonus-half-year-becomes-monthly` 368/0・`periods-for-binary-search` 1/0
   ——コードは通っても、期首の入力空間には壊れが現れない。
+
+  **【CI で確認 2026-09-11、Heavy corpus 走行 `34543925445`（`e10f82a` を手動起動、
+  ジョブ `103092418248`）】** 上の表と別記の件数は、CI の `heavy-report.md` の検出の表と
+  **1 件も違わない**（上回ったものも無い——検出は決定的である）。`heavy:power` の 19 変異は
+  すべて「期待したシャードだけが反応した」（ジョブのログの判定行 19 本、NG 0）。
 - **`minRate`**: 新しい変異と新しいシャードの分は、**最初の CI の実測から決める。**
   それまでの版は下限 1（`minRate` 未指定＝`verdictFor` の `max(1, …)`）とし、
   **註に「未測定」と書く**。実測したら値を入れ、註を実測に置き換える。
@@ -528,6 +533,9 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   期首の `minRate` はすべて `floor(件数 / 1,200 × 1,000) / 1,000` から
   `verdictFor` の下限 `ceil(1,200 × rate − 1e-9)` が測った件数とちょうど一致する
   ように置いてあり、**余裕は 0**。1 件でも違えば CI の `heavy:power` が赤くなる。
+
+  **【CI で確認 2026-09-11、走行 `34543925445`】CI の件数は手元と完全に一致し、
+  期首の `minRate` は余裕 0 のまま通った。**
 
 ### §4.6 `heavy:ui`（実画面）
 
@@ -552,6 +560,14 @@ prefix に A と同じ条件を掛けた。コミットしていない）。い�
   期首 3 件も既存の正常ケースと同じ `expectShownCase`（答と内訳の両方を見る）を
   くくり出して共有——本文の移動のみで、比較や文言は変えていない。**実画面での
   確認は CI の最初の `Heavy corpus` の走行（未確認）。**
+
+  **【CI で確認 2026-09-11、走行 `34543925445`】** `heavy:ui` は **40 passed（12.0 分）**
+  ——v0.9.0 の Release 走行 `34479446474` の 37 passed から期首の 3 件ぶん増えた。
+  `finance-ui.spec.ts` は 20 件で、期首の 3 件（`compound_grow` `fin-start-000545`・
+  `compound_deposit_for` `fin-start-000526`・`compound_periods_for` `fin-start-000713`、
+  いずれも「typed on the real panel, deposit at the start」）は**最初の実走で緑**。
+  既存の面ごとの 16 件は、ケースの id が v0.9.0 の走行と 16 件とも同じ
+  （`finance-000.json` からだけ引く形で、1 件も変わっていない）。
 - **積立の位置は毎回押す。** 選択は `localStorage` に保存され、ページを開き直しても
   次のケースへ持ち越される——期首のケースのあとの期末のケースが期首で打たれる。
   **既定を仮定しない**（税を毎回押しているのと同じ理由。記憶
@@ -617,6 +633,22 @@ finance-start-000.json (calls)   すべて複利・すべて期首・積立 > 0
 すべて赤かった。** `Corpus vs reference` の所要時間はここでは測っていない
 （CI の初回で確認する）。
 
+**【CI で確認 2026-09-11、Heavy corpus 走行 `34543925445`（`heavy/finance-start` の
+`e10f82a` を手動起動、ジョブ `103092418248`）——受け入れの 4 項目はすべて満たした】**
+
+- `compound-start-deposit-at-end` は `finance-start-000.json` で **969**・`finance-000.json` で **0**、
+  `compound-deposit-at-start` は **0**・**910**、`compound-round-once-at-maturity` の
+  `finance-000.json` は **612**、`periods-for-binary-search` は **1**——どれも CI の
+  `heavy-report.md` の検出の表の数。`finance-000.json` の検出数は 10 本とも v0.9.0 の
+  Release 走行 `34479446474` の報告書と同じ
+- `Corpus vs reference` は **37 分 08 秒**（85 分の制限の内側）。v0.9.0 の 35 分 36 秒との差
+  +92 秒のうち、`Measure what this corpus can detect` が +68 秒（20 分 54 秒 → 22 分 02 秒。
+  この走行の金融の変異 1 本は 65〜83 秒なので、新しい変異 1 本ぶんに収まる）、`Type a sample on the
+  real keypad` が +6 秒、`Run the heavy corpus` は 1 分 01 秒で変わらない
+- 再現性の段（`The committed corpus must equal a fresh generation`）は緑。報告書では
+  finance が「完全に正しい」（4,700 件＝3,500＋1,200、厳密一致、不一致 0）、
+  `finance-start-v1` の被覆は `calls.spec.ts` の固定と同じ（266/266・266/258/除外 8・56/56、未達 0）
+
 ---
 
 ## §5 番人の表（この門で足すもの）
@@ -668,6 +700,9 @@ finance-start-000.json (calls)   すべて複利・すべて期首・積立 > 0
 - **期首で非単調な谷が見つかるか**は探してみるまで分からない。
 - **新しいシャードの件数と、`Corpus vs reference` の伸び**は実測前。
 - **`heavy:ui` の変更は手元で 1 度も走らない。** 確かめは CI の手動起動だけである。
+- **【CI で確認 2026-09-11、走行 `34543925445`】** 上の 2 つは測った——件数は §4.3・§4.7、
+  `Corpus vs reference` は 37 分 08 秒、`heavy:ui` は 40 passed（§4.6・§4.8 の【CI で確認】）。
+  **手元では依然として `heavy:ui` を回していない**（確かめたのは CI だけである）。
 
 ---
 
