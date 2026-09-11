@@ -35,8 +35,9 @@ calculations.
 - Open it at https://calc.terapyon.net/
 - No installation is needed. It works in the browser
 - Add it to your home screen to open it like an app
-- Once it has been opened, it works without a network
-  (fetching exchange rates is the one thing that needs a network)
+- Once it has been opened, it is built to keep working without a network
+  (fetching exchange rates is the one thing that needs a network). Working without a
+  network has been checked only in Chrome-type browsers, not yet in Safari on iPhone
 
 ## 2. The four tabs
 
