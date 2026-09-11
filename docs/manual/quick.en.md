@@ -38,6 +38,9 @@ calculations.
 - Once it has been opened, it is built to keep working without a network
   (fetching exchange rates is the one thing that needs a network). Working without a
   network has been checked only in Chrome-type browsers, not yet in Safari on iPhone
+- The layout is checked on screens from 360px wide in Chrome on Android and similar browsers,
+  and from 375px wide in Safari on iPhone. Narrower screens (such as 320px) still show the app,
+  but nothing checks that the layout holds there
 
 ## 2. The four tabs
 
