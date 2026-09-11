@@ -1,5 +1,9 @@
 import { expect, type Page, test } from "./fixtures";
 
+// **この spec だけ Service Worker を許す**——precache と offline が中身である。
+// ほかの E2E は設定で止めている(`playwright.config.ts`)。
+test.use({ serviceWorkers: "allow" });
+
 /** 画面のボタンを順に押す(vertical-slice.spec.ts と同じ流儀)。 */
 async function press(page: Page, labels: string[]): Promise<void> {
   for (const label of labels) {
