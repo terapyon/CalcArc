@@ -33,16 +33,19 @@ import {
   summarizeCallShard,
 } from "./corpus";
 import {
+  AREAS,
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
   CERTIFICATE_PROBES,
   CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  comparisonOf,
   corpusDigest,
   type DetectionPower,
   ENTRY_SHARD,
   ERRORS_SHARD,
   type ErrorPathId,
+  EXACT_AREAS,
   errorCaseCount,
   errorPaths,
   expectedSummaryNames,
@@ -692,6 +695,7 @@ test("the report reads as a result, not as a change log", () => {
     "実在したバグ",
     "fix round",
     "review round",
+    "完全に正しい",
   ];
   // 上書きが有る走行・無い走行の両方を見る(理由の全文が載る経路が違う)。
   for (const entry of [
@@ -1879,35 +1883,67 @@ test("the angle-mode and notation items say what the run actually pressed", () =
 });
 
 test("an area with no cases is never called correct", () => {
-  // **これが判定でいちばん重い嘘になりうる。** 3 領域のうち 2 領域が
-  // 現に 0 件なので、0 件が「完全に正しい」に落ちると報告書が破綻する。
-  //
-  // このテストを赤くする編集: verdictOf の `caseCount === 0` の枝を消す
-  // (誤差 0 として扱われ「完全に正しい」になる)。
-  expect(verdictOf(0, 0, 0)).toBe("検証していない");
+  // このテストを赤くする編集: verdictOf の `caseCount === 0` の枝を消す。
+  expect(verdictOf(0, 0, 0, "exact")).toBe("検証していない");
+  expect(verdictOf(0, 0, 0, "threshold")).toBe("検証していない");
 });
 
 test("the verdict ladder cuts where the display cuts", () => {
-  // 表示は有効数字 10 桁なので、境界は 5e-10。
-  expect(verdictOf(100, 0, 0)).toBe("完全に正しい");
-  expect(verdictOf(100, 5e-10, 0)).toBe("完全に正しい");
-  // f64 由来のずれ。**警告であって不合格ではない**(ユーザ裁定 2026-08-16)。
-  expect(verdictOf(100, 1.34e-9, 0)).toBe("ある程度正しい");
-  expect(verdictOf(100, 9.9e-7, 0)).toBe("ある程度正しい");
-  // 有効数字の上位が違う。
-  expect(verdictOf(100, 1e-6, 0)).toBe("多少疑問がある");
-  expect(verdictOf(100, 0.5, 0)).toBe("多少疑問がある");
-  // 桁が違う。
-  expect(verdictOf(100, 1, 0)).toBe("間違っている");
-  expect(verdictOf(100, 1e6, 0)).toBe("間違っている");
+  // 表示は有効数字 10 桁なので、閾値の領域の最上位は 5e-10 まで。
+  expect(verdictOf(100, 0, 0, "threshold")).toBe("採録ケースで表示精度内");
+  expect(verdictOf(100, 5e-10, 0, "threshold")).toBe("採録ケースで表示精度内");
+  expect(verdictOf(100, 1.34e-9, 0, "threshold")).toBe("ある程度正しい");
+  expect(verdictOf(100, 9.9e-7, 0, "threshold")).toBe("ある程度正しい");
+  expect(verdictOf(100, 1e-6, 0, "threshold")).toBe("多少疑問がある");
+  expect(verdictOf(100, 0.5, 0, "threshold")).toBe("多少疑問がある");
+  expect(verdictOf(100, 1, 0, "threshold")).toBe("間違っている");
+  expect(verdictOf(100, 1e6, 0, "threshold")).toBe("間違っている");
+});
+
+test("an exactly compared area earns the exact name, and only it does", () => {
+  // 利用者の裁定(2026-09-12): 厳密な領域は「採録ケースで一致」、閾値の領域は「採録ケースで表示精度内」。
+  // このテストを赤くする編集: comparisonOf を常に "threshold" にする。
+  expect(verdictOf(100, 0, 0, comparisonOf("finance"))).toBe(
+    "採録ケースで一致",
+  );
+  expect(verdictOf(100, 0, 0, comparisonOf("data_scale"))).toBe(
+    "採録ケースで一致",
+  );
+  expect(verdictOf(100, 0, 0, comparisonOf("display"))).toBe(
+    "採録ケースで一致",
+  );
+  expect(verdictOf(100, 0, 0, comparisonOf("complex"))).toBe(
+    "採録ケースで表示精度内",
+  );
+  expect(verdictOf(100, 0, 0, comparisonOf("scientific"))).toBe(
+    "採録ケースで表示精度内",
+  );
+  expect(verdictOf(100, 0, 0, comparisonOf("cancellation"))).toBe(
+    "採録ケースで表示精度内",
+  );
+});
+
+test("the comparison kind comes from the area, not from whether an error was measured", () => {
+  // レビュー注記 D(calcarc-1e): 閾値の領域で全件がエラー経路だと相対誤差を 1 件も測らない。
+  // それでも「一致」と名乗らない——比べ方は領域の表から引く。
+  //
+  // **凡例(判定の意味)は「採録ケースで一致」という語そのものを常に説明文として
+  // 含む**ので、markdown 全体を見ると凡例のせいで常に見つかってしまう。
+  // 判定表の `scientific` の行だけを見る。
+  const markdown = renderReport(
+    [summary({ name: "scientific-000.json", relMeasured: 0 })],
+    PROVENANCE,
+  );
+  expect(markdown).not.toContain("`scientific` | **採録ケースで一致**");
+});
+
+test("every exact area is a known area", () => {
+  for (const area of EXACT_AREAS) expect(AREAS).toContain(area);
 });
 
 test("a structural failure outweighs a small numeric error", () => {
-  // 不一致が 1 件でもあれば、誤差がいくら小さくても「間違っている」。
-  // 有限の答があるのに inf/NaN/エラーになった場合がこれに当たる。
-  //
-  // このテストを赤くする編集: verdictOf の structuralFailures の条件を外す。
-  expect(verdictOf(100, 0, 1)).toBe("間違っている");
+  expect(verdictOf(100, 0, 1, "exact")).toBe("間違っている");
+  expect(verdictOf(100, 0, 1, "threshold")).toBe("間違っている");
 });
 
 test("a shard whose area is unknown is refused instead of guessed", () => {

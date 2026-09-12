@@ -652,6 +652,24 @@ export const AREAS = [
 export type Area = (typeof AREAS)[number];
 
 /**
+ * **最上位の判定名は、その領域の比べ方で分ける**(設計書 2026-09-12 §6、利用者の裁定)。
+ *
+ * 厳密に比べる領域(整数円・整数・表示文字列そのもの)は「採録ケースで一致」、
+ * 閾値で比べる領域(表示の 10 桁から導いた相対誤差 ≤ 5e-10)は「採録ケースで表示精度内」。
+ * **比べ方は領域から引く**——「相対誤差を 1 件も測らなかった」から引くと、閾値の領域で
+ * 全件がエラー経路だった走行が「一致」を名乗る(レビュー注記 D)。
+ */
+export const EXACT_AREAS: readonly Area[] = [
+  "data_scale",
+  "finance",
+  "display",
+];
+export type Comparison = "exact" | "threshold";
+export function comparisonOf(area: Area): Comparison {
+  return EXACT_AREAS.includes(area) ? "exact" : "threshold";
+}
+
+/**
  * 集計の名前からシャードの幹を取り出す。`"errors-000.json (displays)"` →
  * `"errors-000"`。
  *
@@ -722,9 +740,10 @@ export function areaOfShard(shardName: string): Area {
   );
 }
 
-/** 判定の 4 段。閾値は表示(有効数字 10 桁)から導く。 */
+/** 判定の段。閾値は表示(有効数字 10 桁)から導く。最上位だけ領域の比べ方で名前が分かれる。 */
 export const VERDICTS = [
-  "完全に正しい",
+  "採録ケースで一致",
+  "採録ケースで表示精度内",
   "ある程度正しい",
   "多少疑問がある",
   "間違っている",
@@ -735,7 +754,9 @@ export type Verdict = (typeof VERDICTS)[number];
 /**
  * 判定の閾値。**桁で切る。**
  *
- * - `完全に正しい` — 表示 10 桁がすべて一致(相対誤差 ≤ 5e-10)
+ * - `採録ケースで一致` — 厳密に比べる領域で、採録したケースがすべて厳密一致
+ * - `採録ケースで表示精度内` — 閾値の領域で、採録したケースがすべて相対誤差 ≤ 5e-10
+ *   (**表示の 10 桁の文字列を突き合わせてはいない**。10 桁目の丸めの境目では表示が 1 違いうる)
  * - `ある程度正しい` — 差はあるが 1e-6 未満。**表示の末尾数桁だけ違う。**
  *   f64 の丸めや桁落ちで説明でき、桁は合っている。**警告であって不合格ではない**
  * - `多少疑問がある` — 1e-6 以上 1 未満。有効数字の上位が違うが、桁は同じ
@@ -748,6 +769,7 @@ export function verdictOf(
   caseCount: number,
   worstRelativeError: number,
   structuralFailures: number,
+  comparison: Comparison,
 ): Verdict {
   if (caseCount === 0) {
     // **「一件も試していない」を「正しい」と書かない。** これが 3 領域のうち
@@ -763,7 +785,7 @@ export function verdictOf(
   if (worstRelativeError > VERDICT_EDGES.correct) {
     return "ある程度正しい";
   }
-  return "完全に正しい";
+  return comparison === "exact" ? "採録ケースで一致" : "採録ケースで表示精度内";
 }
 
 /**
@@ -1725,7 +1747,7 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
       worst,
       mismatches,
       exact: cases > 0 && measured === 0,
-      verdict: verdictOf(cases, worst, mismatches),
+      verdict: verdictOf(cases, worst, mismatches, comparisonOf(area)),
     };
   });
   const exactAreas = rows.filter((row) => row.exact).map((row) => row.area);
@@ -1756,7 +1778,8 @@ export function renderVerdicts(entries: ShardSummary[]): string[] {
         ]),
     "判定の意味:",
     "",
-    "- **完全に正しい** — 表示される 10 桁がすべて一致した",
+    "- **採録ケースで一致** — 厳密に比べる領域(`finance`・`data_scale`・`display`)で、採録したケースがすべて厳密一致した(整数円・整数・表示文字列そのもの)",
+    "- **採録ケースで表示精度内** — 閾値で比べる領域(`scientific`・`cancellation`・`complex`)で、採録したケースがすべて表示の 10 桁から導いた相対誤差 ≤ 5e-10 に収まった。**表示の 10 桁の文字列を突き合わせたのではない**",
     "- **ある程度正しい** — 表示の末尾数桁だけ違う(相対誤差 1e-6 未満)。",
     "  f64 の丸めや桁落ちで説明でき、桁は合っている。**警告であって不合格ではない**",
     "- **多少疑問がある** — 有効数字の上位が違う(1e-6 以上)。桁は同じ",
