@@ -1935,6 +1935,7 @@ test("the comparison kind comes from the area, not from whether an error was mea
     PROVENANCE,
   );
   expect(markdown).not.toContain("`scientific` | **採録ケースで一致**");
+  expect(markdown).toContain("`scientific` | **採録ケースで表示精度内**");
 });
 
 test("every exact area is a known area", () => {
