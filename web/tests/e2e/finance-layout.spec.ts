@@ -197,18 +197,56 @@ for (const size of [
       page.locator('section[aria-label="金融計算"] > p'),
     ).toContainText("切り捨て");
 
-    const { mainHeight, panelHeight, panelTag } = await page.evaluate(() => {
-      const main = document.querySelector("main");
-      const panel = main?.querySelector(":scope > :not(h1)");
-      if (!main || !panel) {
-        return { mainHeight: -1, panelHeight: -1, panelTag: "(見つからない)" };
-      }
-      return {
-        mainHeight: main.getBoundingClientRect().height,
-        panelHeight: panel.getBoundingClientRect().height,
-        panelTag: panel.tagName,
-      };
-    });
+    const { mainHeight, panelHeight, panelTag, parts } = await page.evaluate(
+      () => {
+        const main = document.querySelector("main");
+        const panel = main?.querySelector(":scope > :not(h1)");
+        if (!main || !panel) {
+          return {
+            mainHeight: -1,
+            panelHeight: -1,
+            panelTag: "(見つからない)",
+            parts: [],
+          };
+        }
+        const box = (el: Element | null | undefined) => {
+          const r = el?.getBoundingClientRect();
+          return r ? `top ${r.top} h ${r.height}` : "(無い)";
+        };
+        // **失敗文に出す内訳**(2026-09-12)。WebKit の 3 回目の走行で余白が
+        // 5.83px になったとき、**目に見える箱は Chromium と 1 画素も違わなかった**
+        // (画面写真を 1 行ずつ比べた)——差は見えない所にある。どれかを名指す
+        // ために、外枠の 4 つとパネルの子を並べる。**判定には使わない。**
+        return {
+          mainHeight: main.getBoundingClientRect().height,
+          panelHeight: panel.getBoundingClientRect().height,
+          panelTag: panel.tagName,
+          parts: [
+            `nav ${box(document.querySelector("nav"))}`,
+            `status ${box(document.querySelector('[aria-label="画面の切り替え"]'))}`,
+            `main ${box(main)}`,
+            `footer ${box(document.querySelector("footer"))}`,
+            `panel <${panel.tagName.toLowerCase()}> ${box(panel)}`,
+            ...Array.from(panel.children).map(
+              (child, i) =>
+                `panel[${i}] <${child.tagName.toLowerCase()}> ${box(child)}`,
+            ),
+          ],
+        };
+      },
+    );
+
+    // **測るだけ——判定しない**(2026-09-12、監視役の依頼)。iPhone 13/14 の
+    // Safari の見える高さ(Playwright の端末定義で viewport 390×664)で、この面が
+    // どれだけスクロールするか。**高さの約束の裁定の材料**であり、裁定が出たら
+    // 外す。上の寸法は測り終えているので、ここで大きさを変えても判定は変わらない。
+    await page.setViewportSize({ width: 390, height: 664 });
+    const safariScroll = await page.evaluate(
+      () => document.documentElement.scrollHeight - window.innerHeight,
+    );
+    const measured = `390x664 (iPhone 13/14 Safari): scrolls ${safariScroll}px`;
+    test.info().annotations.push({ type: "measure", description: measured });
+    console.log(`[measure] compound face ${measured}`);
 
     // **測った物がパネルであることを先に主張する**(`viewport-budget.spec.ts`
     // と同じ形。1×1 の要素を測って緑になるのを止める下限である)。
@@ -220,7 +258,7 @@ for (const size of [
     const slack = mainHeight - panelHeight;
     expect(
       slack,
-      `only ${slack}px of slack left on the compound face`,
+      `only ${slack}px of slack left on the compound face — ${parts.join(" / ")} — ${measured}`,
     ).toBeGreaterThanOrEqual(8);
   });
 }
