@@ -1,4 +1,9 @@
 import { expect, test } from "./fixtures";
+import {
+  narrowSize,
+  WEBKIT_NARROW_HEIGHT,
+  WEBKIT_NARROW_WIDTH,
+} from "./widths";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/#finance");
@@ -74,10 +79,17 @@ for (const face of FACES) {
     { width: 390, height: 844 },
     { width: 360, height: 800 },
   ]) {
-    test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px`, async ({
+    // **WebKit の複利の面の 360px だけは 375×812 で測る**(`widths.ts` の理由、
+    // 2026-09-11 の利用者の裁定)。ローンの面は WebKit でも 360px のまま。
+    const narrow = face.name === "compound" && size.width === 360;
+    const onWebKit = narrow
+      ? ` (${WEBKIT_NARROW_WIDTH}x${WEBKIT_NARROW_HEIGHT} on WebKit)`
+      : "";
+    test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px${onWebKit}`, async ({
       page,
+      browserName,
     }) => {
-      await page.setViewportSize(size);
+      await page.setViewportSize(narrow ? narrowSize(browserName) : size);
       await page.goto("/#finance");
       await expect(page.getByTestId("display-main")).toBeVisible();
       if (face.mode) {
@@ -99,18 +111,48 @@ for (const face of FACES) {
       // **測った物が名乗った面であること**だけを言っている。
       await expect(disclaimer).toContainText(face.word);
 
-      const { lines, text } = await disclaimer.evaluate((el) => {
+      // **失敗文には 1 行ずつの中身も出す**(2026-09-11)。WebKit の最初の
+      // 走行でこの検査が 3 行を返したとき、**どこで折れたかが分からず**、
+      // 書体の違いか行分割の規則の違いかを切り分けられなかった(門 1 の
+      // 設計書 §1.5)。1 文字ずつの矩形の上端で行を分ける。数える行数と
+      // 閾値は変えない——**これは診断であって判定ではない。**
+      const { lines, text, rows, font } = await disclaimer.evaluate((el) => {
         const range = document.createRange();
         range.selectNodeContents(el);
+        const rows: string[] = [];
+        let top: number | null = null;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const chars = node.textContent ?? "";
+          for (let i = 0; i < chars.length; i++) {
+            const one = document.createRange();
+            one.setStart(node, i);
+            one.setEnd(node, i + 1);
+            const rect = one.getClientRects()[0];
+            if (
+              rect &&
+              (top === null || Math.abs(rect.top - top) > rect.height / 2)
+            ) {
+              rows.push("");
+              top = rect.top;
+            }
+            const last = rows.length - 1;
+            if (last >= 0) rows[last] = (rows[last] ?? "") + chars.charAt(i);
+          }
+        }
         return {
           lines: range.getClientRects().length,
           text: el.textContent ?? "",
+          rows,
+          font: getComputedStyle(el).font,
         };
       });
 
       expect(
         lines,
-        `the ${face.name} disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}`,
+        `the ${face.name} disclaimer wrapped onto ${lines} lines: ${JSON.stringify(text)}` +
+          ` — rows: ${rows.map((row) => JSON.stringify(row)).join(" / ")}` +
+          ` — font: ${font}`,
       ).toBeLessThanOrEqual(2);
     });
   }
@@ -141,10 +183,16 @@ for (const size of [
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ]) {
-  test(`the compound face keeps slack inside the screen at ${size.width}px`, async ({
+  // **WebKit の 360×800 だけは 375×812 で測る**(`widths.ts` の理由)。
+  const narrow = size.width === 360;
+  const onWebKit = narrow
+    ? ` (${WEBKIT_NARROW_WIDTH}x${WEBKIT_NARROW_HEIGHT} on WebKit)`
+    : "";
+  test(`the compound face keeps slack inside the screen at ${size.width}px${onWebKit}`, async ({
     page,
+    browserName,
   }) => {
-    await page.setViewportSize(size);
+    await page.setViewportSize(narrow ? narrowSize(browserName) : size);
     await page.goto("/#finance");
     await expect(page.getByTestId("display-main")).toBeVisible();
     await page.getByRole("button", { name: "複利で増やす" }).click();
@@ -153,18 +201,44 @@ for (const size of [
       page.locator('section[aria-label="金融計算"] > p'),
     ).toContainText("切り捨て");
 
-    const { mainHeight, panelHeight, panelTag } = await page.evaluate(() => {
-      const main = document.querySelector("main");
-      const panel = main?.querySelector(":scope > :not(h1)");
-      if (!main || !panel) {
-        return { mainHeight: -1, panelHeight: -1, panelTag: "(見つからない)" };
-      }
-      return {
-        mainHeight: main.getBoundingClientRect().height,
-        panelHeight: panel.getBoundingClientRect().height,
-        panelTag: panel.tagName,
-      };
-    });
+    const { mainHeight, panelHeight, panelTag, parts } = await page.evaluate(
+      () => {
+        const main = document.querySelector("main");
+        const panel = main?.querySelector(":scope > :not(h1)");
+        if (!main || !panel) {
+          return {
+            mainHeight: -1,
+            panelHeight: -1,
+            panelTag: "(見つからない)",
+            parts: [],
+          };
+        }
+        const box = (el: Element | null | undefined) => {
+          const r = el?.getBoundingClientRect();
+          return r ? `top ${r.top} h ${r.height}` : "(無い)";
+        };
+        // **失敗文に出す内訳**(2026-09-12)。WebKit の 3 回目の走行で余白が
+        // 5.83px になったとき、**目に見える箱は Chromium と 1 画素も違わなかった**
+        // (画面写真を 1 行ずつ比べた)——差は見えない所にある。どれかを名指す
+        // ために、外枠の 4 つとパネルの子を並べる。**判定には使わない。**
+        return {
+          mainHeight: main.getBoundingClientRect().height,
+          panelHeight: panel.getBoundingClientRect().height,
+          panelTag: panel.tagName,
+          parts: [
+            `nav ${box(document.querySelector("nav"))}`,
+            `status ${box(document.querySelector('[aria-label="画面の切り替え"]'))}`,
+            `main ${box(main)}`,
+            `footer ${box(document.querySelector("footer"))}`,
+            `panel <${panel.tagName.toLowerCase()}> ${box(panel)}`,
+            ...Array.from(panel.children).map(
+              (child, i) =>
+                `panel[${i}] <${child.tagName.toLowerCase()}> ${box(child)}`,
+            ),
+          ],
+        };
+      },
+    );
 
     // **測った物がパネルであることを先に主張する**(`viewport-budget.spec.ts`
     // と同じ形。1×1 の要素を測って緑になるのを止める下限である)。
@@ -176,7 +250,7 @@ for (const size of [
     const slack = mainHeight - panelHeight;
     expect(
       slack,
-      `only ${slack}px of slack left on the compound face`,
+      `only ${slack}px of slack left on the compound face — ${parts.join(" / ")}`,
     ).toBeGreaterThanOrEqual(8);
   });
 }

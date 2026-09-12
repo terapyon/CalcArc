@@ -14,6 +14,15 @@ import styles from "./CategorySelect.module.css";
 export type CategoryOption = { value: string; ja: string; en: string };
 
 /**
+ * 選択肢 1 つの画面の文字（`長さ Length`）。**綴りの組み立てはここ 1 か所**
+ * ——マニュアルのキー名の番人（`tests/unit/manual-key-names.test.ts`）も
+ * この関数で組み立てるので、併記の形を変えた日にマニュアルの古い綴りが赤くなる。
+ */
+export function optionText(option: CategoryOption): string {
+  return `${option.ja} ${option.en}`;
+}
+
+/**
  * 系統の中でカテゴリを選ぶ器(U-0 §1-1)。**Scale と Convert が同じ部品を
  * 使う**——見た目が揃っている必要があり、CSS を 2 つの module に写すと
  * 片方だけが動く。
@@ -44,7 +53,7 @@ export function CategorySelect({
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
-            {`${o.ja} ${o.en}`}
+            {optionText(o)}
           </option>
         ))}
       </select>

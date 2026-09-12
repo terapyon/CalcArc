@@ -33,6 +33,18 @@ export interface HistoryProps {
 }
 
 /**
+ * 履歴の画面のボタンの文字。**export してあるのは、マニュアルのキー名の
+ * 番人が読むため**(`tests/unit/manual-key-names.test.ts`)。マニュアルは
+ * `【すべて消す】` のように画面の綴りで書く。
+ */
+export const HISTORY_LABELS = {
+  back: "< 戻る",
+  remove: "×",
+  clearAll: "すべて消す",
+  recording: "今後の計算を記録する",
+} as const;
+
+/**
  * 履歴の一覧。**盤面を丸ごと置き換える画面**であって、パネルの内側に
  * 差し込む部品ではない(Task 9 ブリーフ)。表示するだけで、貯める側の
  * 規則(上限・並び順)は `web/src/history` が持つ。
@@ -59,7 +71,7 @@ export function History({
           「全消し(一覧の下)」のとおり)。 */}
       <div className={styles.header}>
         <button type="button" className={styles.back} onClick={onBack}>
-          {"< 戻る"}
+          {HISTORY_LABELS.back}
         </button>
         <h2 className={styles.heading}>履歴</h2>
       </div>
@@ -131,7 +143,7 @@ export function History({
                 aria-label={`${entry.expression} を削除`}
                 onClick={() => onRemove(index)}
               >
-                ×
+                {HISTORY_LABELS.remove}
               </button>
             </li>
           ))}
@@ -152,10 +164,10 @@ export function History({
             <button
               type="button"
               className={styles.clearAll}
-              aria-label="すべて消す"
+              aria-label={HISTORY_LABELS.clearAll}
               onClick={onClearAll}
             >
-              すべて消す
+              {HISTORY_LABELS.clearAll}
             </button>
           </div>
         )}
@@ -176,7 +188,7 @@ export function History({
                 onRecordingEnabledChange(event.target.checked)
               }
             />
-            今後の計算を記録する
+            {HISTORY_LABELS.recording}
           </label>
           <p className={styles.recordingNote}>
             オフにしても、すでに記録した履歴は消えません。

@@ -1,5 +1,6 @@
 import { CONVERT_CATEGORY_IDS } from "../../src/convert/types";
 import { SCALE_CATEGORIES } from "../../src/route";
+import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
 
 /**
@@ -34,7 +35,11 @@ import { expect, test } from "./fixtures";
  * 突き合わせたら、両方が同時に間違っても緑になる」)。
  *
  * **導くのは網羅だけである**(下の 1 本)。カテゴリを足してこの一覧に
- * 書き忘れたら、件数が合わずに赤くなる。
+ * 書き忘れたら、件数が合わずに赤くなる。**導いた件数は、カテゴリを消した
+ * 日には一緒に減る**——カテゴリとこの一覧の行を両方消すと、緑のまま通って
+ * いた。**そこは約束の表(`web/tests/promised-urls.ts`)が塞ぐ**——下の
+ * 2 本目が、字面で書いた 13 の URL がすべてこの一覧に在ることを見る
+ * (1.0 の門の設計書 §2.4)。
  *
  * **13 全部を入れる。** `#convert/currency` と `#scale/llm` は
  * `viewport-budget.spec.ts` の巡回からは外れているが、**あれは寸法の話**
@@ -65,6 +70,21 @@ test("the tour covers every route there is", () => {
     SCREENS.length,
     `the tour lists ${SCREENS.length} screens: ${SCREENS.map(([hash]) => hash).join(" ")}`,
   ).toBe(1 + CONVERT_CATEGORY_IDS.length + SCALE_CATEGORIES.length + 1);
+});
+
+test("the tour covers every URL promised at 1.0", () => {
+  // **上の 1 本は、カテゴリと巡回の行を両方消すと緑のまま通る**——導いた
+  // 件数も一緒に減るからである。**約束の表は字面で書かれていて、減らない**
+  // (下限 13 は `web/src/route.test.ts` が持つ)。その URL が 1 つでも
+  // 巡回から消えたら、ここが赤くなる(1.0 の門の設計書 §2.4)。
+  const toured = new Set<string>(SCREENS.map(([hash]) => hash));
+  const missing = PROMISED_URLS.map(({ hash }) => hash).filter(
+    (hash) => !toured.has(hash),
+  );
+  expect(
+    missing,
+    `promised URLs missing from the tour: ${missing.join(" ")}`,
+  ).toEqual([]);
 });
 
 for (const [hash, title, heading] of SCREENS) {
@@ -116,6 +136,8 @@ test("the tab name starts with the heading, on every screen", async () => {
 test("an unknown hash falls back to the default screen", async ({ page }) => {
   // **互換分岐を作らないという `route.ts` の裁定**の、タイトル側の姿。
   // 知らない先頭は `scientific` へ倒れるので、名前もそちらになる。
+  // (その裁定は 1.0 までの方針になったが、約束の表に無いハッシュは
+  // 1.0 のあとも既定へ倒れる。この 1 本はそのまま真である。)
   await page.goto("/#nope");
   await expect(page).toHaveTitle("関数電卓 | CalcArc");
 });

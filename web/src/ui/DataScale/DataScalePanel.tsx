@@ -55,6 +55,15 @@ const PRIMARY_STATUS: Record<Primary, string> = {
   binary: "2 進を主表示",
 };
 
+/**
+ * 主に表示する単位系を選ぶボタンの文字。**export してあるのは、マニュアルの
+ * キー名の番人が読むため**(`tests/unit/manual-key-names.test.ts`)。
+ */
+export const PRIMARY_BUTTON_LABELS: Record<Primary, string> = {
+  decimal: "10 進 (KB) を主に",
+  binary: "2 進 (KiB) を主に",
+};
+
 export function DataScalePanel() {
   const [calc, setCalc] = useState<DataScaleCalc | null>(null);
   const [expr, setExpr] = useState<ExprCalc | null>(null);
@@ -325,7 +334,7 @@ export function DataScalePanel() {
             aria-pressed={primary === system}
             onClick={() => choosePrimary(system)}
           >
-            {system === "decimal" ? "10 進 (KB) を主に" : "2 進 (KiB) を主に"}
+            {PRIMARY_BUTTON_LABELS[system]}
           </button>
         ))}
       </fieldset>

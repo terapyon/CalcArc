@@ -451,3 +451,87 @@ ELIFECYCLE  Command failed with exit code 1.
   **直後の `playwright test` 単体（ビルド無し）は緑**である——**ビルドと同居した
   ことが効いたのかは、標本 1 では言えない**
 - **上の 3 件と同じ原因かは分からない**
+
+---
+
+## `convert.spec.ts` — keeps the rate date in the same place in every state（**WebKit**）
+
+> **★ 原因の見立てと直し（2026-09-11、同じ日のうちに）: 間欠ではなく、本物のネットワークに出ていた。**
+> 下の「画面写真が言っていること」の筋で、**Service Worker の配下で WebKit の要求が差し替えをすり抜けた**と見て、
+> **SW が要らない E2E では SW を止めた**（`playwright.config.ts` の `serviceWorkers: "block"`、`pwa.spec.ts` だけ許す）。
+> あわせて、**外へ出ようとした要求があれば赤くする網**を `web/tests/e2e/fixtures.ts` に置いた（`strayRequestsBlocked`）。
+> **次の WebKit の走行から、この項は「間欠の赤」ではなく「網の赤」として出る**——出たら、それは本物の漏れである。
+> 閉じたと言えるのは、直しのあとの走行で緑が続いてから（標本として下の表に足す）。
+
+| | |
+|---|---|
+| ファイル | `web/tests/e2e/convert.spec.ts:761`（落ちた行は `:803`） |
+| テスト名 | `keeps the rate date in the same place in every state` |
+| 走行 | CI の `End-to-end (WebKit)`（`[webkit]` プロジェクト） |
+| 初出 | 2026-09-11 |
+
+### エラーの原文
+
+```
+1) [webkit] › tests/e2e/convert.spec.ts:761:1 › keeps the rate date in the same place in every state
+
+  Error: expect(locator).toBeVisible() failed
+
+  Locator: getByTestId('currency-none')
+  Expected: visible
+  Timeout: 5000ms
+  Error: element(s) not found
+
+  > 803 |       await expect(page.getByTestId("currency-none")).toBeVisible();
+```
+
+5 つ目の状態「キャッシュ無し」で、`Rate: —` の確かめ（`:801`）は通り、そのあと「為替レートがありません」の
+欄が 5 秒出なかった。
+
+### 走行ごとの結果
+
+| 走行 | 枝・先端 | 結果 |
+|---|---|---|
+| `34543367685`（WebKit の最初の走行） | `docs/one-point-oh-gate` `d80523c` | **通過** |
+| `34545368399`、ジョブ `103096844599` | `docs/one-point-oh-gate` `e409916` | **失敗** |
+| `34545382797` | `docs/manuals` `c1b3222`（`e409916` を含む） | **通過** |
+
+Chromium の `End-to-end` はどの走行でも通っている。**`d80523c` → `e409916` の変更は為替に触れていない**
+（E2E の報告書・行数の失敗文・`pwa.spec.ts` だけ）。
+
+### ★ 画面写真が言っていること
+
+失敗時の画面写真（報告書に添付）の為替の行は **`Rate: 2026-09-10`** だった。**この検査が仕込む日付の
+どれでもない**——提供元の差し替えが返す `SERVED_DATE` は `2026-08-14`、新しいキャッシュは `2026-08-19`、
+古いキャッシュは `2026-08-01`。**`2026-09-10` はその走行の日付（UTC）である。** つまり**本物の提供元
+（open.er-api.com）のレートが画面に入った**と読むのが素直で、**`stubProvider` の `page.route` を
+すり抜けた要求が 1 本あった**ことになる（見立て。ネットワークの記録は取っていない）。
+
+### 筋（実測ではない）
+
+1. 4 つ目の状態「取得に失敗」では、古いキャッシュ（`2026-08-01`）がすぐ出るので `:801` はすぐ通る。
+   **その裏で走った取得が差し替えを抜けて本物に届いた**
+2. その応答が、5 つ目の状態が `writeCache(null)` でキャッシュを消した**あと**に着き、IndexedDB に
+   書かれた——だから「キャッシュ無し」の画面に本物の日付が出て、`currency-none` が出なかった
+3. すり抜けの筋: **Playwright が Service Worker を通る要求を route に見せるのは Chromium だけ**である
+   （文書「Service Workers」）。E2E のページはどれも本番と同じく SW を登録し、`openCurrency` は reload
+   するので、WebKit ではページが SW の配下に入ってから取得が走る。**同じ走行で `pwa.spec.ts` も、WebKit では
+   route と SW の順序が Chromium と違うことを見せている**（門 1 の設計書 §1.5）
+
+### ★ 何が分かっていないか
+
+- **すり抜けた要求を直接見ていない。** 画面の日付からの推論である
+- **ほかの WebKit の E2E が本物に出ていないか**は確かめていない（為替を開く spec は `convert.spec.ts` だけ）
+- **待ちの長さ（5 秒）は原因ではない**と見ている——出ていたのは「遅い正しい状態」ではなく
+  「別の状態（本物のレート）」だったので。**ただしこれも画面 1 枚からの見立て**
+- 標本は WebKit の 3 走行（うち失敗 1）だけ
+
+### 直しの候補（ここに書くこととは別の判断）
+
+- **SW を使わない E2E では `serviceWorkers: "block"` にする。** SW を要るのは grep で `pwa.spec.ts` だけ
+  （`convert.spec.ts` の SW への言及はコメントだけ）。SW が居なければ、どのエンジンでも `page.route` が
+  要求を必ず捕まえる。**248 本の走り方が変わるので、利用者の判断が要る**
+- **再試行で緑にはしない**（番人 `webkit-gate.test.ts` が `retries` を止める）
+
+**次に赤を見た人へ**: 上の表に 1 行足してください。**画面写真の日付が仕込みの日付のどれかか、その日の
+日付か**が分かれば、すり抜けの筋を確かめる標本になります。

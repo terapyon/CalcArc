@@ -1,5 +1,9 @@
 import { expect, type Page, test } from "./fixtures";
 
+// **この spec だけ Service Worker を許す**——precache と offline が中身である。
+// ほかの E2E は設定で止めている(`playwright.config.ts`)。
+test.use({ serviceWorkers: "allow" });
+
 /** 画面のボタンを順に押す(vertical-slice.spec.ts と同じ流儀)。 */
 async function press(page: Page, labels: string[]): Promise<void> {
   for (const label of labels) {
@@ -49,7 +53,16 @@ test("the service worker registration becomes ready", async ({ page }) => {
 test("Scientific and Scale keep working once the network drops, after one controlled reload", async ({
   page,
   context,
+  browserName,
 }) => {
+  // **WebKit ではネットワークを切る手段が無い**(2026-09-11、門 1 の設計書
+  // §1.5、利用者の裁定「別の切り方を 1 案試し、効かなければ理由つきで外す」)。
+  // **Chromium ではこのまま回る**——WebKit(＝iPhone のエンジン)でオフラインを
+  // 確かめていない穴は、設計書とマニュアルに書いてある。
+  test.fixme(
+    browserName === "webkit",
+    "WebKit: Playwright cannot cut the network under a service worker here. context.setOffline(true) makes the next reload fail with 'WebKit encountered an internal error' (https://github.com/microsoft/playwright/issues/34402, CI run 34543367685), and context.route aborts the navigation before the service worker answers it ('Blocked by Web Inspector', CI run 34545368399). Offline is checked on Chromium only; see docs/superpowers/specs/2026-09-10-one-point-oh-gate-design.md section 1.5.",
+  );
   await page.goto("/");
   // workbox の precache 充填は install の waitUntil 内で完了するため、
   // ready(=activated) は precache 充填済みを含意する——この待機 1 つで足りる。
@@ -68,9 +81,36 @@ test("Scientific and Scale keep working once the network drops, after one contro
   await page.reload();
   await expect(main(page)).toHaveText("0");
 
-  await context.setOffline(true);
+  // **ネットワークは要求を全部落として切る。`context.setOffline(true)` は
+  // 使わない**(2026-09-11、門 1 の設計書 §1.5、利用者の裁定)。setOffline は
+  // WebKit で次の reload を「WebKit encountered an internal error」で落とし
+  // (最初の WebKit の走行 34543367685。playwright#34402 と同じ系統)、
+  // Chromium では Service Worker の要求に効かない(playwright#2311)
+  // ——**2 つのエンジンで別々のことを確かめていた。** 切り方を 1 つにする。
+  //
+  // **SW が precache から返す要求は route に掛からない**(Playwright の
+  // 文書「Service Workers」)。だから下の reload が緑なら、**そのページは
+  // SW から来た**ことになる。SW が返せなければ、要求は route に落とされて
+  // 赤くなる。
+  await context.route("**/*", (route) => route.abort("internetdisconnected"));
   await page.reload();
   await expect(main(page)).toHaveText("0");
+
+  // **本当に切れていることを先に言う。** route が何も捕まえていなければ、
+  // 上の reload は「ネットワークから来た」ままでも緑になる。precache に
+  // 無い URL(ナビゲーションでない fetch なので navigateFallback にも
+  // 当たらない。vite.config.ts に runtimeCaching は無い)を取りに行き、
+  // 落ちることを確かめる。
+  const probe = await page.evaluate(() =>
+    fetch(`/offline-probe-${Date.now()}`).then(
+      () => "reached",
+      () => "blocked",
+    ),
+  );
+  expect(
+    probe,
+    "a request outside the precache still reached the network",
+  ).toBe("blocked");
 
   // Scientific: 3 + 4 = 7 が offline でも wasm 経由で計算できる。
   await press(page, ["3", "足す", "4", "計算する"]);

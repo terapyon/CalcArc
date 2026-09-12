@@ -24,10 +24,14 @@ export const LABELS: Record<ScaleCategory, { ja: string; en: string }> = {
   transfer: { ja: "データ転送", en: "Data Transfer" },
 };
 
-const OPTIONS: readonly CategoryOption[] = SCALE_CATEGORIES.map((id) => ({
-  value: id,
-  ...LABELS[id],
-}));
+/** カテゴリの選択肢。**export してあるのは、マニュアルのキー名の番人が
+ * 読むため**(`tests/unit/manual-key-names.test.ts`)。 */
+export const OPTIONS: readonly CategoryOption[] = SCALE_CATEGORIES.map(
+  (id) => ({
+    value: id,
+    ...LABELS[id],
+  }),
+);
 
 function isCategory(text: string | null): text is ScaleCategory {
   return (SCALE_CATEGORIES as readonly string[]).includes(text ?? "");

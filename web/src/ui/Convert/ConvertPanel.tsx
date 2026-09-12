@@ -8,12 +8,17 @@ import styles from "./ConvertPanel.module.css";
 import { UnitPanel } from "./UnitPanel";
 
 /** カテゴリの選択肢。**日英を併記する**(U-0 §9 の【変更 2026-08-20】)。
- * 綴りの表は `Keypad/convert.ts` が持つ——ここで写すと 3 つ目の写しになる。 */
-const OPTIONS: readonly CategoryOption[] = CONVERT_CATEGORIES.map((id) => ({
-  value: id,
-  ja: CATEGORY_LABELS[id],
-  en: CATEGORY_LABELS_EN[id],
-}));
+ * 綴りの表は `Keypad/convert.ts` が持つ——ここで写すと 3 つ目の写しになる。
+ *
+ * **export してあるのは、マニュアルのキー名の番人が読むため**
+ * (`tests/unit/manual-key-names.test.ts`)。 */
+export const OPTIONS: readonly CategoryOption[] = CONVERT_CATEGORIES.map(
+  (id) => ({
+    value: id,
+    ja: CATEGORY_LABELS[id],
+    en: CATEGORY_LABELS_EN[id],
+  }),
+);
 
 function isCategory(text: string | null): text is ConvertCategory {
   return (CONVERT_CATEGORIES as readonly string[]).includes(text ?? "");

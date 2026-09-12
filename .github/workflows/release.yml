@@ -3,7 +3,11 @@ name: Release
 # **`v*` タグが本番への唯一の扉である**(ユーザ裁定 2026-08-25、
 # `docs/superpowers/specs/2026-08-25-release-gate-design.md`)。
 #
-#   タグ → 版数ゲート → CI 全部 → 重量級コーパス → 本番展開 → 証拠と Release
+#   タグ → 版数ゲート → CI 全部 → 重量級コーパス → 本番展開 ─┬→ マニュアル ─┐
+#                                                             └─────────────┴→ 証拠と Release
+#
+# **マニュアル(PDF)は本番展開のあとで作り、落ちても本番を止めない**
+# (2026-09-10 の裁定。下の `manuals` ジョブ)。落ちたことは証拠が書く。
 #
 # **検査の定義をここに写さない。** `ci.yml` と `heavy-corpus.yml` と `deploy.yml` を
 # `workflow_call` で**呼ぶ**だけにする——写しを持つと、片方だけ直された日に
@@ -95,9 +99,96 @@ jobs:
     # 呼び出し元の secrets を自動では受け取らない。**
     secrets: inherit
 
+  # **マニュアルの PDF は本番展開のあとで作る**(1.0 の門 4、マニュアルの設計書
+  # `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、裁定 §9 #3
+  # 「本番は止めない」)。
+  #
+  #   … → Deploy ─┬→ Manuals ─┐
+  #               └───────────┴→ Evidence and GitHub Release
+  #
+  # **落ちても本番は既に出ている。** 代わりに `Evidence` が「マニュアル(PDF)は
+  # 作れなかった」と証拠に書く——`tools/release-evidence.mjs` の `MANUALS_JOB`。
+  # **証拠が落ちたジョブを許すのは、この 1 つだけである**(`MAY_FAIL`)。
+  #
+  # **手順は `ci.yml` の `Manuals` と同じ `pnpm manuals` の 1 行**で、違うのは
+  # PDF を artifact に上げる 1 段と `permissions` だけである(段の一致は
+  # `tools/tests/release-workflow.test.ts` が見る)。検査ではなく**作る**ジョブ
+  # なので上の「写さない」には当たらないが、**写すと片方だけ直る**のは同じなので、
+  # 手順は `web/package.json` の 1 か所に置いた。
+  #
+  # **wasm は、この走行の `CI` が作ったもの(`wasm-pkg`)を取る。** 呼ばれた
+  # ワークフローが上げた artifact は呼び出し元の走行に属する——`Evidence` が
+  # `heavy-report` と `deployed-dist` を同じ形で取っている(v0.4.1 の走行
+  # 32908847850 で 3 点が付いた)。画面は撮影の設定が E2E の `webServer`
+  # (`vite build` → `preview`)で組み立てる。**配った `dist` からは撮らない**
+  # ——同じタグのコミットを同じ手順でビルドするので中身は同じはずだが、
+  # **バイト一致は確かめていない**(見立て)。
+  #
+  # **時間制限: 25 分。** `ci.yml` の規則(観測の最大の 2 倍・5 分刻み・下限 10 分)を
+  # このジョブに当てる実績は、まだ 1 本も無い(足した時点、2026-09-11)。手元の
+  # 実測は `pnpm manuals` の 2 段で 11.0 秒(撮影 9.0 秒と PDF 1.9 秒。作業機、
+  # 2026-09-11)だが、**手元の秒数は runner の実績ではない。**
+  # **重い段は `ci.yml` の `End-to-end` と同じ**(Chromium を `--with-deps` で入れ、
+  # `vite build` → `preview` を立てる)で、あちらの実績の最大は 612 秒の外れ値
+  # ——**それがどの段で延びたかは追っていない**ので、同じ段を持つこのジョブが
+  # 同じ日に 10 分(下限)を超えないとは言えない。だから `End-to-end` の実績から
+  # 出た 25 分を借りた(`ci.yml` の表の `Manuals` の行も同じ値を同じ理由で借りて
+  # いる。**値を写したのではなく、同じ実績に同じ規則を当てた**)。
+  # **ここで殺しても本番は変わらない**——失うのは PDF だけで、証拠はそれを書く。
+  # 緩い側の代償は、固まった日に `Evidence` がこの分だけ遅れて付くことである。
+  # 実績が溜まったら、このジョブの走行から決め直す。
+  manuals:
+    name: Manuals
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      # 読むのはリポジトリだけ。**同じ走行の artifact の取得と上げに、トークンの
+      # 権限は要らない**(`download-artifact` の README——`github-token` は
+      # 別の走行・別のリポジトリから取るときだけ要る。この権限のまま取れるかは
+      # 実走で確かめていない。取れなければこのジョブが赤くなり、証拠がそれを書く)。
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wasm-pkg
+          path: web/src/wasm/
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm manuals
+      - name: Keep the manuals
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: manuals
+          path: web/manual-dist/*.pdf
+          # **`warn` にしない。** `pnpm manuals` が緑なのに PDF が無いなら、
+          # それは「作れた」ではない(`heavy-corpus.yml` の報告書と同じ、B-2)。
+          if-no-files-found: error
+          retention-days: 90
+
   evidence:
     name: Evidence and GitHub Release
-    needs: deploy
+    # **`Manuals` を待つが、`Manuals` の結論には縛られない**(マニュアルの設計書 §5)。
+    #
+    # - **待つ理由**: 証拠を書くには `Manuals` の結論が要る。`Manuals` を証拠の
+    #   後ろに置くと、証拠は結論を知らずに書かれる
+    # - **縛られない理由**: 既定の条件(`success()`)のままだと、`Manuals` が
+    #   落ちた日にこのジョブは**飛ばされる**——**本番へは出たのに、証拠 3 点が
+    #   1 つも付かない。** 設計書が「採らない」とした (ウ) と同じ結末である
+    # - **`always()` にしない**(`release-workflow.test.ts` の「always() の意味を
+    #   分ける」と同じ規律)。`always()` は**手で止めた走行でも走る**——止めた人は
+    #   理由を知っているので、証拠を書き足す意味が無い。`!cancelled()` は失敗の
+    #   あとには走り、止められた走行では走らない
+    # - **前提を名指す**: `Deploy` が成功したときだけ。名指さないと、重量級が
+    #   落ちて本番へ出なかった走行でも `!cancelled()` が真になり、このジョブが
+    #   走って「緑でない走行から証拠は作れない」で赤くなる——**本番へ出ていない
+    #   走行に、証拠のジョブの赤が 1 つ増える。**
+    needs: [deploy, manuals]
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -123,6 +214,19 @@ jobs:
         with:
           name: deployed-dist
           path: dist/
+      # **マニュアルの PDF は、`Manuals` が成功したときだけ取る。** 落ちた日に
+      # 取りに行くと、この段が「artifact が無い」で落ち、**証拠ごと付かなくなる**
+      # ——`Manuals` を本番のあとへ置いた意味が裏返る。**`continue-on-error` で
+      # 流さない**——流すと「PDF が無い」の理由が「作れなかった」と「取れなかった」
+      # の 2 つになり、証拠がどちらかを言えない。成功したのに取れないなら、
+      # 上の 2 つと同じく**証拠が揃わない**ので落ちてよい。
+      # 取った PDF は `evidence/` に入り、下の `ls evidence` で添付と証拠の両方に載る。
+      - name: Fetch the manuals
+        if: ${{ needs.manuals.result == 'success' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: manuals
+          path: evidence/
 
       - name: Pack what was deployed
         # `mkdir -p` は残す。取得の順序を入れ替えたときに `evidence/` が
@@ -137,7 +241,9 @@ jobs:
         # 書き写すと、「緑だったと書いてあるが実は落ちていた」が作れてしまう。
         # 組み立ての中身は `heavy/tests/unit/release-evidence.test.ts` が固定して
         # いる——落ちた検査が 1 つでもあれば、このスクリプトは証拠を書かずに
-        # 落ちる。
+        # 落ちる。**例外は `Manuals` の 1 つだけ**で、落ちていれば「マニュアル(PDF)は
+        # 作れなかった」と書いて続ける(`MAY_FAIL`。1 つであることを
+        # `tools/tests/release-workflow.test.ts` が固定する)。
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
