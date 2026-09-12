@@ -19,11 +19,13 @@ import type {
   ToleranceBand,
 } from "./corpus";
 import {
+  CALL_SHARD_PATTERN,
   type CallBreakdown,
   type Coverage,
   type CoverageExclusion,
   type CoverageRequirement,
   countSequencesWithoutEq,
+  DISPLAY_SHARD_PATTERN,
   displaySequences,
   loadCallShards,
   loadDisplayShards,
@@ -33,7 +35,6 @@ import {
   summarizeCallShard,
 } from "./corpus";
 import {
-  AREAS,
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
@@ -45,7 +46,6 @@ import {
   ENTRY_SHARD,
   ERRORS_SHARD,
   type ErrorPathId,
-  EXACT_AREAS,
   errorCaseCount,
   errorPaths,
   expectedSummaryNames,
@@ -68,6 +68,7 @@ import {
   runHealth,
   type ShardSummary,
   SPEC_TRANSCRIPTION_MARK,
+  shardStem,
   summaryName,
   uiHealth,
   verdictOf,
@@ -161,8 +162,20 @@ function kindsOf(
   return kinds;
 }
 
-/** 見出し以外の欄は既定で埋める。個々のテストは見たい欄だけ上書きする。 */
+/**
+ * 見出し以外の欄は既定で埋める。個々のテストは見たい欄だけ上書きする。
+ *
+ * **関数呼び出しと表示のシャードは `relMeasured: 0` を既定にする。** 実走行では、その 2 種は
+ * 値のローダー(`loadShards`)が読まず(`corpus.ts` の `CALL_SHARD_PATTERN` /
+ * `DISPLAY_SHARD_PATTERN` で除く)、専用のローダーが `relMeasured: 0` を書く
+ * (`calls.spec.ts`・`display-cases.spec.ts`)。既定の 2000 のままだと、実走行が作れない状態
+ * ——厳密に比べる領域が相対誤差を測った——を見本が作り、`renderVerdicts` がそれを拒む
+ * (最終レビュー I-3)。上書きすれば、その状態も作れる(拒むことを確かめるテストが使う)。
+ */
 function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
+  const file = `${shardStem(overrides.name ?? "")}.json`;
+  const loaderWritesNoError =
+    CALL_SHARD_PATTERN.test(file) || DISPLAY_SHARD_PATTERN.test(file);
   return {
     name: "scientific-000.json (values)",
     total: 2000,
@@ -174,7 +187,7 @@ function summary(overrides: Partial<ShardSummary> = {}): ShardSummary {
     maxAbsoluteError: 1.1e-11,
     appliedOverrides: [],
     relUndefinedCases: [],
-    relMeasured: 2000,
+    relMeasured: loaderWritesNoError ? 0 : 2000,
     relUndefinedNonZeroAbs: 0,
     looserThanDisplay: 0,
     precedenceCases: 0,
@@ -1936,10 +1949,28 @@ test("the comparison kind comes from the area, not from whether an error was mea
   );
   expect(markdown).not.toContain("`scientific` | **採録ケースで一致**");
   expect(markdown).toContain("`scientific` | **採録ケースで表示精度内**");
+  // **「厳密一致」の欄と段落も比べ方の表に従う**(最終レビュー M-4)。判定だけ直して
+  // 同じ行に「厳密一致」、下の段落に「`scientific` は「厳密一致」である」と残すと、
+  // 報告書が自分と食い違う。
+  expect(onlyLine(markdown, "| `scientific` | **")).not.toContain("厳密一致");
+  for (const line of markdown
+    .split("\n")
+    .filter((l) => l.includes("は「厳密一致」である"))) {
+    expect(line).not.toContain("`scientific`");
+  }
 });
 
-test("every exact area is a known area", () => {
-  for (const area of EXACT_AREAS) expect(AREAS).toContain(area);
+test("an exact area that measured a relative error is refused, not reported as a match", () => {
+  // **厳密に比べる領域が相対誤差を測った状態は、実走行では作れない**——関数呼び出しの
+  // シャードは値のローダーが読まず、専用のローダーが `relMeasured: 0` を書く。それが
+  // 起きたなら比べ方の表とシャードの読み込みが食い違っているので、「採録ケースで一致」を
+  // 出さずに止める(最終レビュー I-3。`areaOfShard` が未知の接頭辞を拒むのと同じ)。
+  expect(() =>
+    renderReport(
+      [summary({ name: "finance-000.json", relMeasured: 5 })],
+      PROVENANCE,
+    ),
+  ).toThrow(/厳密に比べる領域/);
 });
 
 test("a structural failure outweighs a small numeric error", () => {
