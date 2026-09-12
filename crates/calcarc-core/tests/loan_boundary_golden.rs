@@ -158,8 +158,15 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries() {
         }
         compared += 1;
     }
-    // **何かを比べたことを数える**(記憶 tests-can-assert-nothing)。
-    assert_eq!(compared, golden.cases.len());
+    eprintln!("loan boundary (native): {tallies:?}");
+    // 失敗の一覧を先に出す——セルの全件が Err でも、下の「空のセル」より先にその一覧が見える。
+    assert!(
+        failures.is_empty(),
+        "{} outside the allowance:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+    // **比べたことを数えるのはこのセルごとの「空でない」**(記憶 tests-can-assert-nothing)。
     for set in ["plain", "residual", "bonus"] {
         for boundary in ["exact", "below", "above"] {
             let t = tallies.get(&format!("{set}/{boundary}"));
@@ -169,11 +176,6 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries() {
             );
         }
     }
-    eprintln!("loan boundary (native): {tallies:?}");
-    assert!(
-        failures.is_empty(),
-        "{} outside the allowance:\n{}",
-        failures.len(),
-        failures.join("\n")
-    );
+    // `compared` は全件を試みた(走査が途中で抜けていない)ことの番人。比べたことの番人ではない。
+    assert_eq!(compared, golden.cases.len());
 }
