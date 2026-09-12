@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type ApplyUpdate, watchForUpdate } from "../../pwa";
 import styles from "./UpdateToast.module.css";
 
@@ -62,6 +62,48 @@ export function UpdateToast() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [waiting]);
 
+  // **お知らせが覆う下の帯のぶん、ページに空きを足す**(2026-09-12、利用者の
+  // 裁定 (a)。門 1 の設計書 §1.5)。お知らせは下に固定され(`position: fixed`)、
+  // それまでは**ページの下に空きを取っていなかった**——いちばん下までスクロール
+  // しても最後の行がお知らせの下に残り、Safari の高さで 41〜66 個、390×844 でも
+  // 5 個のキーが押せなかった(`short-screens.spec.ts` が測った)。
+  //
+  // - **高さは実物から測る。** 文言・書体・幅・`safe-area` で変わるので、数字を
+  //   決め打ちしない。帯 = 見える高さ − お知らせの上端(下の余白 12px も含む)
+  // - **足すのは 2 つ。** ページの下の空き(スクロールできる所を作る)と、
+  //   根の `scroll-padding-bottom`(フォーカスや `scrollIntoView` が、キーを
+  //   お知らせの下ではなく上に止める)
+  // - **お知らせが出ていないときは何も変えない**——空きも余白も 0、要素も無い
+  //   (予算の検査と README の写真の番人が、1px も変わっていないことを見る)
+  const toastRef = useRef<HTMLDivElement>(null);
+  const [reserve, setReserve] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!waiting) {
+      setReserve(0);
+      return;
+    }
+    const measure = () => {
+      const rect = toastRef.current?.getBoundingClientRect();
+      // 寸法の取れない環境(jsdom)では 0 のまま——空きを作らない。
+      setReserve(
+        rect && rect.height > 0 ? Math.ceil(window.innerHeight - rect.top) : 0,
+      );
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [waiting]);
+
+  useEffect(() => {
+    if (reserve === 0) return;
+    const root = document.documentElement;
+    root.style.scrollPaddingBottom = `${reserve}px`;
+    return () => {
+      root.style.scrollPaddingBottom = "";
+    };
+  }, [reserve]);
+
   return (
     /*
       **領域は常設である。中身だけが出入りする**(設計書 §6)。
@@ -86,31 +128,35 @@ export function UpdateToast() {
       理由つきで巡回の外に置かれている)
       (Finance の余白は常設化の前後どちらも 16.3125px)。
     */
-    <div
-      role="status"
-      aria-label="更新のお知らせ"
-      // 更新は事故ではない。読み上げを割り込ませない(設計書 §2)。
-      aria-live="polite"
-    >
-      {waiting && (
-        <div className={styles.toast}>
-          <p className={styles.message}>
-            新しいバージョンがあります。再読み込みすると入力中の内容は消えます。
-          </p>
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.primary}
-              onClick={() => apply?.()}
-            >
-              {UPDATE_TOAST_LABELS.reload}
-            </button>
-            <button type="button" onClick={() => setWaiting(false)}>
-              {UPDATE_TOAST_LABELS.close}
-            </button>
+    <>
+      <div
+        role="status"
+        aria-label="更新のお知らせ"
+        // 更新は事故ではない。読み上げを割り込ませない(設計書 §2)。
+        aria-live="polite"
+      >
+        {waiting && (
+          <div ref={toastRef} className={styles.toast}>
+            <p className={styles.message}>
+              新しいバージョンがあります。再読み込みすると入力中の内容は消えます。
+            </p>
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={styles.primary}
+                onClick={() => apply?.()}
+              >
+                {UPDATE_TOAST_LABELS.reload}
+              </button>
+              <button type="button" onClick={() => setWaiting(false)}>
+                {UPDATE_TOAST_LABELS.close}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+      {/* 空きは live 領域の外に置く——中身の出入りで読み上げが鳴らないように。 */}
+      {reserve > 0 && <div aria-hidden="true" style={{ height: reserve }} />}
+    </>
   );
 }
