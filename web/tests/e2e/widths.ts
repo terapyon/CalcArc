@@ -25,6 +25,24 @@ export const WEBKIT_NARROW_REASON =
  */
 export const CHROMIUM_NARROW_WIDTH = 360;
 
+/**
+ * **iPhone の Safari のタブの見える大きさ**(Playwright 1.62.1 の端末定義の
+ * `viewport`。2026-09-12 に `devices` を読んで写した)。
+ *
+ * 予算の検査(390×844・360×800)は**画面の高さ**——ホーム画面から開いたときに
+ * 近い——であって、**Safari のタブの高さを 1 度も測っていなかった。** タブで
+ * 開くと、どの機種でも 1 画面に収まらずスクロールする(手元の Chromium で
+ * 127〜165px)。**約束は「崩れない」だけ**(利用者の裁定 2026-09-12)——
+ * スクロールすれば、すべての表示とキーが見えて押せる。その番人
+ * (`short-screens.spec.ts`)がこの 4 つを使う。
+ */
+export const SAFARI_VIEWPORTS = [
+  { device: "iPhone 13/14", width: 390, height: 664 },
+  { device: "iPhone 16e", width: 390, height: 651 },
+  { device: "iPhone SE (3rd gen)", width: 375, height: 667 },
+  { device: "iPhone 13 mini", width: 375, height: 629 },
+] as const;
+
 /** 360px の検査を、WebKit では 375px で測る。 */
 export function narrowWidth(browserName: string): number {
   return browserName === "webkit" ? WEBKIT_NARROW_WIDTH : CHROMIUM_NARROW_WIDTH;

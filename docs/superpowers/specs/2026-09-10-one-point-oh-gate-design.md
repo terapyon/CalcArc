@@ -202,6 +202,21 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
   1 本でもあれば赤くする網**を fixtures に置いた——**為替は画面の日付で気づけたが、気づけない形で外へ出る検査を
   次は網が捕まえる**
 
+**3 回目の走行（2026-09-12、`34686438702`）と高さの裁定:**
+
+- 説明の行数（`:77`）は 375px で 2 行に収まった。為替は緑、網は何も捕まえなかった。残るのは複利の面の余白
+  （`:185`、375×800 で 5.83px）——**目に見える箱の境目は Chromium と 1 画素も違わなかった**（画面写真を 1 行ずつ比べた）ので、
+  差は見えない所にある。**失敗文に外枠とパネルの子の寸法を出す診断**を足し、次の走行で名指す
+- **★ 予算の検査の高さは、iPhone の Safari のタブの高さではなかった。** 390×844 は iPhone 13/14 の**画面**の高さで、
+  Safari の**見える**高さは 390×664（Playwright の端末定義）。タブで開くと、どの機種でも 1 画面に収まらず
+  **127〜165px スクロールする**（手元の Chromium で実測）。外枠は `min-height: 100dvh` なので崩れはしない
+- **裁定（利用者）: 崩れないことだけ約束する。** 1 画面に収まるのは、ホーム画面から開いたときの高さで確かめている範囲。
+  **番人**: `short-screens.spec.ts`——Safari の見える大きさ 4 つ（`widths.ts` の `SAFARI_VIEWPORTS`）で、約束した 13 画面と
+  金融の 6 モードについて、横にはみ出さないこと・押せるキーがすべてスクロールで見えて、上に何も重なっていないこと。
+  **両エンジンで同じ検査**（エンジンで分岐しない）。README の文案（§3）の「約束すること」「約束しないこと」に 1 行ずつ
+- 余白 8px の検査（ホーム画面の高さで 1 画面に収まることを守る）は残す。WebKit の狭い幅の寸法（375×800 は実在しない）を
+  実在する iPhone の画面（mini の 375×812 など）に替えるかは、診断の数字が出てから提案する
+
 **1.0 でオフラインについて言えること**（正直に）: **自動の検査がオフラインを確かめているのは、実行機の上の
 ブラウザのエンジン**である。Chromium では、切り方を route にしたのでページの要求も SW の要求も切れている
 （Playwright の文書では、Chromium は SW の要求も `context.route` に見せる）。**WebKit では 1 度も確かめて
@@ -327,6 +342,9 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > **正式版として約束すること:**
 > - **画面の URL は変わらない。** ブックマークした URL は、以後の版でも同じ画面を開く
 > - **計算は端末内で完結し、サーバへ送信しない**
+> - **画面が低くても崩れない。** 画面が低いと（ブラウザのタブで開いたときなど）ページがスクロールすることが
+>   あるが、そのときも、すべての表示とキーはスクロールすれば見えて押せる。ただし更新のお知らせが出ている
+>   あいだは、下のキーが隠れることがある（お知らせを閉じれば見える）
 >
 > **約束しないこと:**
 > - **計算結果の正しさ。** 計算結果は無保証で、重要な判断の根拠にしないでほしい
@@ -335,6 +353,7 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - 為替レートの値（取得元の値をそのまま使う）
 > - **確かめている画面の幅**: Android の Chrome などは幅 360px 以上、iPhone の Safari は幅 375px 以上で
 >   確かめている。それより狭い画面（320px など）でも表示はされるが、崩れないことは確かめていない
+> - **1 画面に収まること。** 収まるように確かめているのは、ホーム画面から開いたときの高さである
 >
 > 気づいたことは Issue で教えてもらえると助かる。
 
@@ -346,6 +365,9 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > **What 1.0 promises:**
 > - **Screen URLs do not change.** A bookmarked URL opens the same screen in later versions
 > - **Calculations complete entirely on-device; nothing is sent to a server.**
+> - **Short screens do not break the layout.** On a short screen (for example in a browser tab) the page
+>   may scroll, but every display and key can still be scrolled to and pressed. While the update notice is
+>   showing, it can hide the bottom keys (closing the notice shows them)
 >
 > **What it does not promise:**
 > - **Correct results.** Calculation results come with no warranty and should not be relied
@@ -356,6 +378,8 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **Screen widths that are checked**: Chrome on Android and similar browsers from 360px wide, Safari on
 >   iPhone from 375px wide. Narrower screens (such as 320px) still show the app, but nothing checks that
 >   the layout holds there
+> - **Fitting on one screen.** It is checked to fit at the height you get when opening it from the home
+>   screen
 >
 > If you notice anything, it would help to hear about it in an Issue.
 
