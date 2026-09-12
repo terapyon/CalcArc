@@ -12,10 +12,21 @@
  */
 export const WEBKIT_NARROW_WIDTH = 375;
 
+/**
+ * **WebKit の狭い幅で測る高さ**(2026-09-12、利用者の了承)。812 は iPhone 13 mini・
+ * X・11 Pro の**画面**の高さ(Playwright 1.62.1 の端末定義の `screen`)——ホーム画面
+ * から開いたときの高さである。幅だけ 375 にして高さを Android の 800 のまま据え置くと、
+ * **実在しない 375×800 を測ることになる**:キーの高さは幅に比例して伸びるので、
+ * 375px では 360px よりパネルが 16.45px 高く、どのエンジンでも余白が 5.83px しか
+ * 残らなかった(Chromium の 375×800 も同じ値。WebKit の差ではなかった)。
+ */
+export const WEBKIT_NARROW_HEIGHT = 812;
+
 /** 375px を選んだ理由。**番人がこの文の在ることを見る。消さない。** */
 export const WEBKIT_NARROW_REASON =
   "360px の iPhone は無い——Playwright 1.62.1 の端末定義で iPhone は 39 件、幅 360px は 0 件。" +
   "375px は iPhone 6〜8・SE（第 2 世代以降）・12/13 mini の幅である。" +
+  "高さの 812 は iPhone 13 mini・X・11 Pro の、ホーム画面から開いたときの高さ——375×800 は Android の高さを写しただけの、実在しない寸法だった。" +
   "いちばん狭い 320px（初代 iPhone SE）は、どちらのエンジンでもこの検査の幅に入っていない。";
 
 /**
@@ -43,7 +54,12 @@ export const SAFARI_VIEWPORTS = [
   { device: "iPhone 13 mini", width: 375, height: 629 },
 ] as const;
 
-/** 360px の検査を、WebKit では 375px で測る。 */
-export function narrowWidth(browserName: string): number {
-  return browserName === "webkit" ? WEBKIT_NARROW_WIDTH : CHROMIUM_NARROW_WIDTH;
+/** 360×800 の検査を、WebKit では 375×812 で測る。Chromium は 360×800 のまま。 */
+export function narrowSize(browserName: string): {
+  width: number;
+  height: number;
+} {
+  return browserName === "webkit"
+    ? { width: WEBKIT_NARROW_WIDTH, height: WEBKIT_NARROW_HEIGHT }
+    : { width: CHROMIUM_NARROW_WIDTH, height: 800 };
 }

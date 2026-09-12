@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import config from "../../web/playwright.config.ts";
 import shotsConfig from "../../web/playwright.shots.config.ts";
 import {
+  WEBKIT_NARROW_HEIGHT,
   WEBKIT_NARROW_REASON,
   WEBKIT_NARROW_WIDTH,
 } from "../../web/tests/e2e/widths.ts";
@@ -408,22 +409,23 @@ describe("WebKit だけ幅が違うのは、理由の書かれた 2 本だけで
     // **理由を消した日に赤くする。** 黙って幅を変えると「WebKit だけ緩めた」と
     // 読まれる——理由は幅の隣に在り続けなければならない。
     expect(WEBKIT_NARROW_WIDTH).toBe(375);
-    for (const word of ["360px", "375px", "iPhone"]) {
+    expect(WEBKIT_NARROW_HEIGHT).toBe(812);
+    for (const word of ["360px", "375px", "iPhone", "812"]) {
       expect(WEBKIT_NARROW_REASON, `理由に「${word}」が無い`).toContain(word);
     }
   });
 
-  it("`narrowWidth` を呼ぶのは finance-layout.spec.ts の 2 か所だけである", () => {
+  it("`narrowSize` を呼ぶのは finance-layout.spec.ts の 2 か所だけである", () => {
     const calls = e2eTexts.flatMap(({ file, text }) =>
       file === "widths.ts"
         ? []
-        : [...text.matchAll(/narrowWidth\(/g)].map(() => file),
+        : [...text.matchAll(/narrowSize\(/g)].map(() => file),
     );
     expect(calls).toEqual(["finance-layout.spec.ts", "finance-layout.spec.ts"]);
   });
 
   it("`browserName` に触れる E2E は、許した 3 つだけである", () => {
-    // エンジンで分岐する道は `narrowWidth`(幅)と `pwa.spec.ts` の理由つき
+    // エンジンで分岐する道は `narrowSize`(寸法)と `pwa.spec.ts` の理由つき
     // fixme だけ。**別の spec が `browserName` で期待値を分けた日に赤くする。**
     const touching = e2eTexts
       .filter(({ text }) => /\bbrowserName\b/.test(text))

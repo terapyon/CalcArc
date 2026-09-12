@@ -1,5 +1,9 @@
 import { expect, test } from "./fixtures";
-import { narrowWidth, WEBKIT_NARROW_WIDTH } from "./widths";
+import {
+  narrowSize,
+  WEBKIT_NARROW_HEIGHT,
+  WEBKIT_NARROW_WIDTH,
+} from "./widths";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/#finance");
@@ -75,17 +79,17 @@ for (const face of FACES) {
     { width: 390, height: 844 },
     { width: 360, height: 800 },
   ]) {
-    // **WebKit の複利の面の 360px だけは 375px で測る**(`widths.ts` の理由、
+    // **WebKit の複利の面の 360px だけは 375×812 で測る**(`widths.ts` の理由、
     // 2026-09-11 の利用者の裁定)。ローンの面は WebKit でも 360px のまま。
     const narrow = face.name === "compound" && size.width === 360;
-    const onWebKit = narrow ? ` (${WEBKIT_NARROW_WIDTH}px on WebKit)` : "";
+    const onWebKit = narrow
+      ? ` (${WEBKIT_NARROW_WIDTH}x${WEBKIT_NARROW_HEIGHT} on WebKit)`
+      : "";
     test(`the standing disclaimer stays within 2 lines on the ${face.name} face at ${size.width}px${onWebKit}`, async ({
       page,
       browserName,
     }) => {
-      await page.setViewportSize(
-        narrow ? { ...size, width: narrowWidth(browserName) } : size,
-      );
+      await page.setViewportSize(narrow ? narrowSize(browserName) : size);
       await page.goto("/#finance");
       await expect(page.getByTestId("display-main")).toBeVisible();
       if (face.mode) {
@@ -179,16 +183,16 @@ for (const size of [
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ]) {
-  // **WebKit の 360px だけは 375px で測る**(`widths.ts` の理由)。
+  // **WebKit の 360×800 だけは 375×812 で測る**(`widths.ts` の理由)。
   const narrow = size.width === 360;
-  const onWebKit = narrow ? ` (${WEBKIT_NARROW_WIDTH}px on WebKit)` : "";
+  const onWebKit = narrow
+    ? ` (${WEBKIT_NARROW_WIDTH}x${WEBKIT_NARROW_HEIGHT} on WebKit)`
+    : "";
   test(`the compound face keeps slack inside the screen at ${size.width}px${onWebKit}`, async ({
     page,
     browserName,
   }) => {
-    await page.setViewportSize(
-      narrow ? { ...size, width: narrowWidth(browserName) } : size,
-    );
+    await page.setViewportSize(narrow ? narrowSize(browserName) : size);
     await page.goto("/#finance");
     await expect(page.getByTestId("display-main")).toBeVisible();
     await page.getByRole("button", { name: "複利で増やす" }).click();
@@ -236,18 +240,6 @@ for (const size of [
       },
     );
 
-    // **測るだけ——判定しない**(2026-09-12、監視役の依頼)。iPhone 13/14 の
-    // Safari の見える高さ(Playwright の端末定義で viewport 390×664)で、この面が
-    // どれだけスクロールするか。**高さの約束の裁定の材料**であり、裁定が出たら
-    // 外す。上の寸法は測り終えているので、ここで大きさを変えても判定は変わらない。
-    await page.setViewportSize({ width: 390, height: 664 });
-    const safariScroll = await page.evaluate(
-      () => document.documentElement.scrollHeight - window.innerHeight,
-    );
-    const measured = `390x664 (iPhone 13/14 Safari): scrolls ${safariScroll}px`;
-    test.info().annotations.push({ type: "measure", description: measured });
-    console.log(`[measure] compound face ${measured}`);
-
     // **測った物がパネルであることを先に主張する**(`viewport-budget.spec.ts`
     // と同じ形。1×1 の要素を測って緑になるのを止める下限である)。
     expect(
@@ -258,7 +250,7 @@ for (const size of [
     const slack = mainHeight - panelHeight;
     expect(
       slack,
-      `only ${slack}px of slack left on the compound face — ${parts.join(" / ")} — ${measured}`,
+      `only ${slack}px of slack left on the compound face — ${parts.join(" / ")}`,
     ).toBeGreaterThanOrEqual(8);
   });
 }
