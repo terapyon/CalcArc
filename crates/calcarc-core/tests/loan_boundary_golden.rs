@@ -118,31 +118,40 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries() {
         match case.op.as_str() {
             "loan_forward" => {
                 let residual = yen(case.input.residual.as_deref().unwrap_or("0"));
-                let out = forward::compute(principal, &rate, case.input.n, residual)
-                    .unwrap_or_else(|e| panic!("{}: {e:?}", case.id));
-                if !check(out.monthly_payment, want_monthly, &golden.tolerance, tally) {
-                    failures.push(format!(
-                        "{}: monthly {} vs floor {}",
-                        case.id, out.monthly_payment, want_monthly
-                    ));
+                match forward::compute(principal, &rate, case.input.n, residual) {
+                    Ok(out) => {
+                        if !check(out.monthly_payment, want_monthly, &golden.tolerance, tally) {
+                            failures.push(format!(
+                                "{}: monthly {} vs floor {}",
+                                case.id, out.monthly_payment, want_monthly
+                            ));
+                        }
+                    }
+                    // Err は許容の話ではなく製品側の異常終了。tally には入れず、
+                    // failures にだけ積んで走査を続ける(1 件の Err で残り全部を
+                    // 見ないままにしない)。
+                    Err(e) => failures.push(format!("{}: {} returned {e:?}", case.id, case.op)),
                 }
             }
             "loan_bonus_forward" => {
                 let bp = yen(case.input.bonus_principal.as_deref().unwrap_or("0"));
                 let want_bonus = yen(case.expect.bonus_floor.as_deref().unwrap_or("0"));
-                let out = bonus::compute_forward(principal, bp, &rate, case.input.n)
-                    .unwrap_or_else(|e| panic!("{}: {e:?}", case.id));
-                if !check(out.monthly_payment, want_monthly, &golden.tolerance, tally) {
-                    failures.push(format!(
-                        "{}: monthly {} vs floor {}",
-                        case.id, out.monthly_payment, want_monthly
-                    ));
-                }
-                if !check(out.bonus_payment, want_bonus, &golden.tolerance, tally) {
-                    failures.push(format!(
-                        "{}: bonus {} vs floor {}",
-                        case.id, out.bonus_payment, want_bonus
-                    ));
+                match bonus::compute_forward(principal, bp, &rate, case.input.n) {
+                    Ok(out) => {
+                        if !check(out.monthly_payment, want_monthly, &golden.tolerance, tally) {
+                            failures.push(format!(
+                                "{}: monthly {} vs floor {}",
+                                case.id, out.monthly_payment, want_monthly
+                            ));
+                        }
+                        if !check(out.bonus_payment, want_bonus, &golden.tolerance, tally) {
+                            failures.push(format!(
+                                "{}: bonus {} vs floor {}",
+                                case.id, out.bonus_payment, want_bonus
+                            ));
+                        }
+                    }
+                    Err(e) => failures.push(format!("{}: {} returned {e:?}", case.id, case.op)),
                 }
             }
             other => panic!("{}: unknown op {other}", case.id),
