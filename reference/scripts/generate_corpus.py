@@ -31,7 +31,11 @@ from calcarc_reference import (
     real_ref,
     sexagesimal_ref,
 )
-from calcarc_reference.corpus_calls import build_data_scale_shard, build_finance_shard
+from calcarc_reference.corpus_calls import (
+    build_data_scale_shard,
+    build_finance_shard,
+    build_finance_start_shard,
+)
 from calcarc_reference.corpus_complex import (
     COMPLEX_BINARY_OPS,
     COMPLEX_UNARY_FNS,
@@ -2432,17 +2436,21 @@ def _summary_line(total_cases: int, elapsed: float) -> str:
 # つもりの変更が finance の golden も一緒に動かしてしまう。
 FINANCE_COUNT = 3500
 
+# 期首のシャードの総件数(設計書 2026-09-10 §4.3)。**`finance-000.json` の複利の
+# 件数(437 + 431 + 315 = 1,183)に揃えた出発点**で、被覆の門が通る最小ではない。
+FINANCE_START_COUNT = 1200
+
 
 def _shards(count: int) -> Iterator[tuple[str, dict]]:
-    """書き出す 18 枚を、名前と中身の対で 1 枚ずつ生む。
+    """書き出すシャードを、名前と中身の対で 1 枚ずつ生む。
 
     **書き出す枚数はここが唯一の一覧である。** 1 枚足せば、書き出しにも
     末尾の要約行の分母にも自動でついてくる——`main` の側に写しの件数を
     持たせない理由がこれで、以前は `count` という写しを分母にしていて
     finance だけ件数が変わった時点で嘘になった。
 
-    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。18 枚
-    ぶんの payload を同時に抱えない。
+    遅延生成にしてあるので、`main` は 1 枚組み立てては 1 枚書く。全部の
+    payload を同時に抱えない。
     """
     yield "scientific-000.json", build_shard(seed=20260815, count=count)
     yield "equivalence-000.json", build_equivalences(seed=20260816, count=count)
@@ -2464,6 +2472,12 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # 厳密一致で比べる(設計書 2026-08-17 §3.2)。finance だけ `count` を使わず
     # `FINANCE_COUNT`(3,500)を渡す。理由は上の定義を見よ。
     yield "finance-000.json", build_finance_shard(seed=20260821, count=FINANCE_COUNT)
+    # **期首は別のシャード**(設計書 2026-09-10 §4.2)。`finance-000.json` を
+    # 1 バイトも変えないために、seed も層も別に持つ。
+    yield (
+        "finance-start-000.json",
+        build_finance_start_shard(seed=20260910, count=FINANCE_START_COUNT),
+    )
     yield "data-scale-000.json", build_data_scale_shard(seed=20260822, count=count)
     # 入力途中の表示。**乱択も `count` も持たない**——engine_table.rs /
     # state.rs から起こした固定の列挙であって、サンプリングする集合では

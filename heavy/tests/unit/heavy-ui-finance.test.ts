@@ -9,8 +9,10 @@ import {
   keySequence,
   missingOps,
   pickCases,
+  pickStartCase,
   readAnswer,
   readNumbers,
+  TIMING_KEY,
 } from "../ui/finance-cases";
 
 /**
@@ -127,6 +129,13 @@ describe("expressible", () => {
     expect(expressible(grow, compoundGrow({ periods: 0 }))).toBe(false);
   });
 
+  it("accepts the deposit timing as a choice, not as a field to type", () => {
+    const grow = faceFor("compound_grow");
+    expect(expressible(grow, compoundGrow({ timing: "start" }))).toBe(true);
+    expect(expressible(grow, compoundGrow({ timing: "end" }))).toBe(true);
+    expect(expressible(grow, compoundGrow({ timing: "sometime" }))).toBe(false);
+  });
+
   it("refuses a case that carries a field this face never types", () => {
     // **ボーナスと残価は排他**なので、残価つきのボーナス案件は盤面から
     // 打てない。同じ判定が、コーパスが入力の欄を 1 つ増やした日にも効く。
@@ -222,17 +231,18 @@ describe("keySequence", () => {
     ]);
   });
 
-  it("chooses the compounding frequency and the tax before typing anything", () => {
+  it("chooses the compounding frequency, the deposit timing and the tax before typing anything", () => {
     // **面が入れ替わるキーを先に押す。** 数字を打っている途中で面を替えると、
     // 替えたあとの欄が入力中のまま残る。
     const keys = keySequence(
       faceFor("compound_grow"),
       compoundGrow({ tax: true }),
     );
-    expect(keys.slice(0, 5)).toEqual([
+    expect(keys.slice(0, 6)).toEqual([
       "複利で増やす",
       "複利の周期と積立の位置を選ぶ",
       "月ごとに複利",
+      TIMING_KEY.end,
       "税の扱いを選ぶ",
       "源泉分離課税を引く",
     ]);
@@ -241,6 +251,30 @@ describe("keySequence", () => {
 
   it("has no key for anything but digits and the decimal point", () => {
     expect(() => digitKeys("1e5")).toThrow(/no key/);
+  });
+
+  it("always presses a deposit-timing key, so a case never rests on the panel's starting state", () => {
+    // 選択は設定として localStorage に残る。いまの finance-ui.spec.ts は
+    // test ごとに新しい context で始まるので持ち越しは起きないが、始まりの
+    // 状態(既定は期末)を仮定しない——税を毎回押しているのと同じ規律。
+    const grow = faceFor("compound_grow");
+    const end = keySequence(grow, compoundGrow());
+    expect(end).toContain(TIMING_KEY.end);
+    expect(end).not.toContain(TIMING_KEY.start);
+    const start = keySequence(grow, compoundGrow({ timing: "start" }));
+    expect(start).toContain(TIMING_KEY.start);
+    expect(start).not.toContain(TIMING_KEY.end);
+  });
+
+  it("presses the deposit timing on the period face, right after the period", () => {
+    const seq = keySequence(
+      faceFor("compound_grow"),
+      compoundGrow({ timing: "start" }),
+    );
+    const opened = seq.indexOf("複利の周期と積立の位置を選ぶ");
+    expect(opened).toBeGreaterThanOrEqual(0);
+    expect(seq[opened + 2]).toBe(TIMING_KEY.start);
+    expect(seq.indexOf("税の扱いを選ぶ")).toBeGreaterThan(opened + 2);
   });
 });
 
@@ -291,5 +325,23 @@ describe("readNumbers", () => {
 
   it("splits a wrongly grouped number, so it never matches the expectation", () => {
     expect(readNumbers("総支払額 38579007 円")).not.toContain("38579007");
+  });
+});
+
+describe("pickStartCase", () => {
+  it("takes the middle passing start case of the face's op", () => {
+    const cases = [0, 1, 2].map((n) => ({
+      ...compoundGrow({ timing: "start" }),
+      id: `s-${n}`,
+    }));
+    expect(pickStartCase(faceFor("compound_grow"), cases).id).toBe("s-1");
+  });
+  it("skips end cases even when they are the only ones", () => {
+    expect(() =>
+      pickStartCase(faceFor("compound_grow"), [
+        compoundGrow(),
+        compoundGrow({ timing: "end" }),
+      ]),
+    ).toThrow(/start/);
   });
 });

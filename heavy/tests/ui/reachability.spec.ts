@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { KEY_TOKENS } from "../../../web/src/calc";
-import { BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
+import { ACTION_BUTTONS, BUTTON_FOR, SHIFT_ARIA_LABEL } from "./keys";
+
+/** 盤面の押せる面の全部。**トークンと操作の両方**(設計書 2026-09-10 §3)。 */
+const PRESSABLE: [string, import("./keys").ButtonFor][] = [
+  ...[...BUTTON_FOR].map(
+    ([token, b]) => [token, b] as [string, import("./keys").ButtonFor],
+  ),
+  ...[...ACTION_BUTTONS].map(
+    ([action, b]) =>
+      [`action:${action}`, b] as [string, import("./keys").ButtonFor],
+  ),
+];
 
 /**
  * **盤面から届くか。**
@@ -54,7 +65,7 @@ test("every button the keypad claims can actually be pressed", async ({
   // **定義にあることと、押せることは別である。** 描画されない、重なって
   // いる、無効化されている——どれも定義からは分からない。
   const unreachable: string[] = [];
-  for (const [token, button] of BUTTON_FOR) {
+  for (const [token, button] of PRESSABLE) {
     if (button.needsShift) {
       continue; // 下のテストが見る。
     }
@@ -88,7 +99,7 @@ test("every button the keypad claims can actually be pressed", async ({
 test("the keys behind Shift appear only after Shift is pressed", async ({
   page,
 }) => {
-  const shifted = [...BUTTON_FOR].filter(([, b]) => b.needsShift);
+  const shifted = PRESSABLE.filter(([, b]) => b.needsShift);
   expect(
     shifted.length,
     "no key is behind Shift — if the second face was removed, this test is " +
@@ -111,7 +122,7 @@ test("the keys behind Shift appear only after Shift is pressed", async ({
     .getByRole("button", { name: SHIFT_ARIA_LABEL, exact: true })
     .click();
 
-  // 押した後は 1 つだけある。
+  // 押した後は 1 つだけあり、**押せる**(操作の面——`hist`——も含む)。
   const stillMissing: string[] = [];
   for (const [token, button] of shifted) {
     const locator = panel(page).getByRole("button", {
@@ -120,6 +131,10 @@ test("the keys behind Shift appear only after Shift is pressed", async ({
     });
     if ((await locator.count()) !== 1) {
       stillMissing.push(`${token} ("${button.ariaLabel}")`);
+      continue;
+    }
+    if (!(await locator.isEnabled())) {
+      stillMissing.push(`${token} ("${button.ariaLabel}") は在るが押せない`);
     }
   }
   expect(

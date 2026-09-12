@@ -13,7 +13,7 @@ from fractions import Fraction
 import mpmath as mp
 import pytest
 
-from calcarc_reference import corpus_calls, corpus_coverage, loan_ref
+from calcarc_reference import compound_ref, corpus_calls, corpus_coverage, loan_ref
 from calcarc_reference.corpus_eval import evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_KEYS,
@@ -1612,13 +1612,15 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     expected_total = sum(
         len(json.loads(path.read_text(encoding="utf-8"))["cases"]) for path in written
     )
-    # 18 枚すべてが分母に入っていること。1 枚落ちても総件数は「それらしい」
+    # 書き出した全部が分母に入っていること。1 枚落ちても総件数は「それらしい」
     # 数字のままなので、枚数も見る。
     # **19 枚目は 2026-08-30 に増えた**（`combinatorics-display-000.json`）。
+    # **20 枚目は 2026-09-11 に増えた**（`finance-start-000.json`、設計書
+    # 2026-09-10 §4.2）。
     # **数を持っているのはここだけではない**——`ALL_SHARDS`（heavy の検出力）と
     # `SCIENCE_SHARDS`、`COVERAGE_REQUIRED_SHARDS`、`DISPLAY_SHARD_PATTERN` が
     # それぞれ一覧を持つ。**足す日には全部が意識的な 1 行になる。**
-    assert len(written) == 19
+    assert len(written) == 20
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)
@@ -2543,3 +2545,101 @@ def test_every_covered_elsewhere_pointer_resolves_to_a_real_cell() -> None:
     for cell, pointer in pointers:
         assert pointer in known, f"{cell.id} の covered_elsewhere が指す {pointer} が無い"
         assert pointer != cell.id, f"{cell.id} が自分自身を指している"
+
+
+# ---------------------------------------------------------------------------
+# 期首のシャード(設計書 2026-09-10 §4)
+# ---------------------------------------------------------------------------
+
+
+def _start_shard() -> dict:
+    return corpus_calls.build_finance_start_shard(
+        seed=20260910, count=generate_corpus.FINANCE_START_COUNT
+    )
+
+
+def test_the_start_shard_is_all_compound_and_all_start() -> None:
+    """**期首のシャードは複利の 3 op だけ・全件期首。**
+
+    期末は `finance-000.json` と golden が持つ。"""
+    cases = _start_shard()["cases"]
+    assert cases, "期首のシャードが空"
+    assert {c["op"] for c in cases} == set(corpus_calls.COMPOUND_OPS)
+    assert all(c["input"].get("timing") == "start" for c in cases)
+    assert all(c["id"].startswith("fin-start-") for c in cases)
+
+
+def test_every_start_case_has_a_deposit_for_the_start_arm_to_move() -> None:
+    """**積立 0 の期首は期末と同じ答を返す**(`cases.py:754`)ので、積立を必ず
+    持たせる。正算と必要期間は積立 > 0。必要積立額は積立が答なので、正常
+    ケースの答が 1 円以上であることを見る。
+
+    **これは「全件が期首と期末を区別できる」ではない。** 積立があっても、
+    金利 0 の 39 件・金利 > 0 のペアワイズ行 100 件・`Overflow` の 92 件、
+    計 231 件は期末で解いても同じ答になる(設計書 2026-09-10 §4.3、実測)。
+    区別できる件数は `test_most_start_answers_differ_from_the_end_answer` が数える。"""
+    for c in _start_shard()["cases"]:
+        if c["op"] in ("compound_grow", "compound_periods_for"):
+            assert int(c["input"]["deposit"]) > 0, c["id"]
+        elif "error" not in c["expect"]:
+            assert int(c["expect"]["deposit"]) > 0, c["id"]
+
+
+def test_the_start_shard_carries_its_own_coverage() -> None:
+    shard = _start_shard()
+    cov = shard["coverage"]
+    assert cov["model"] == corpus_calls.FINANCE_START_MODEL == "finance-start-v1"
+    assert [r["id"] for r in cov["requirements"]] == [
+        r.id for r in corpus_calls.FINANCE_START_REQUIREMENTS
+    ]
+    for r in cov["requirements"]:
+        assert r["unmet_cells"] == 0, f"{r['id']} に未達が残っている"
+    assert list(shard) == ["schema", "generated_by", "rejections", "coverage", "cases"]
+
+
+def test_the_start_requirements_are_finance_v1s_compound_requirements_by_reference() -> None:
+    """**因子表も要求も写さない。** `finance-v1` の複利 3 要求そのものを指す。"""
+    for r in corpus_calls.FINANCE_START_REQUIREMENTS:
+        assert r is corpus_calls._REQUIREMENT_OF[r.scope]
+
+
+def test_generating_the_start_shard_twice_is_byte_identical() -> None:
+    first, second = _start_shard(), _start_shard()
+    assert json.dumps(first) == json.dumps(second)
+
+
+def test_the_start_coverage_totals_are_the_ones_we_measured() -> None:
+    """**3 対象それぞれの数を固定する**(2026-09-11 実測)。"""
+    got = {
+        r["scope"]: (r["covered_cells"], r["excluded_cells"], r["required_cells"])
+        for r in _start_shard()["coverage"]["requirements"]
+    }
+    assert got == {
+        "compound_grow": (266, 0, 266),
+        "compound_deposit_for": (258, 8, 266),
+        "compound_periods_for": (56, 0, 56),
+    }
+
+
+def test_most_start_answers_differ_from_the_end_answer() -> None:
+    """**同じ入力を期末で解くと答が変わる**——このシャードが期首の腕を見ている証拠。
+    金利 0 などでは同じになりうるので全件は求めず、実測の下限を置く
+    (2026-09-11 実測: 正常 1108 件のうち 969 件)。"""
+    differ = 0
+    normal = 0
+    for c in _start_shard()["cases"]:
+        if "error" in c["expect"]:
+            continue
+        normal += 1
+        end = compound_ref.compute(c["op"], {**c["input"], "timing": "end"})
+        if end != c["expect"]:
+            differ += 1
+    assert normal > 0
+    assert differ >= 969
+
+
+def test_the_start_arm_has_no_valley_with_a_one_yen_deposit() -> None:
+    """期首のシャードに谷の層が無い理由(設計書 §4.3 の実測)を、赤くなる形で見張る。"""
+    num, den = compound_ref.rate_fraction("0.0001", 1)
+    with pytest.raises(RuntimeError, match="谷が見つからない"):
+        corpus_calls._find_non_monotone_net_valley(1_000_000, 1, num, den, 200, compound_ref.START)

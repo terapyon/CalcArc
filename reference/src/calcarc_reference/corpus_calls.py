@@ -129,14 +129,22 @@ def _loan_params(rng: random.Random, op: str) -> dict:
 
 
 def _compound_reached(
-    principal: int, deposit: int, rate: str, periods_per_year: int, periods: int, tax: bool
+    principal: int,
+    deposit: int,
+    rate: str,
+    periods_per_year: int,
+    periods: int,
+    tax: bool,
+    timing: compound_ref.Timing = compound_ref.END,
 ) -> int | None:
     """到達値(税 ON なら手取り、OFF なら残高。公開契約 6)。参照実装が
     受理しない組(元本も積立も 0、期数域外など)は `None`(設計書 §4.4)。
+
+    `timing` の既定は期末(`compound_ref.END`)——期首は次の Task が使う。
     """
     try:
         num, den = compound_ref.rate_fraction(rate, periods_per_year)
-        return compound_ref.reached(principal, deposit, num, den, periods, tax)
+        return compound_ref.reached(principal, deposit, num, den, periods, tax, timing)
     except compound_ref.CompoundError:
         return None
 
@@ -1721,7 +1729,12 @@ def _find_tax_rounding_mismatch(start: int) -> int:
 
 
 def _find_non_monotone_net_valley(
-    principal: int, deposit: int, num: int, den: int, search_limit: int
+    principal: int,
+    deposit: int,
+    num: int,
+    den: int,
+    search_limit: int,
+    timing: compound_ref.Timing = compound_ref.END,
 ) -> tuple[int, int, int]:
     """`到達 → 未達 → 再到達` の形を、`compound_ref.reached` を期の昇順に
     呼びながら決定的に探す(乱数を使わない、設計書 §5.2・Task 8)。
@@ -1740,7 +1753,7 @@ def _find_non_monotone_net_valley(
     返り値は `(到達した期, 未達の期, 再到達した期)`。すべて 1-indexed。
     """
     values = [
-        compound_ref.reached(principal, deposit, num, den, n, True)
+        compound_ref.reached(principal, deposit, num, den, n, True, timing)
         for n in range(1, search_limit + 1)
     ]
     for dip_index in range(1, len(values)):
@@ -2571,6 +2584,7 @@ def _construct_loan_term_row(rate: str, target: int) -> tuple[int, int] | None:
 
 def compound_deposit_for_exclusions(
     covered: set[coverage.Cell],
+    timing: compound_ref.Timing = compound_ref.END,
 ) -> dict[coverage.Cell, coverage.Exclusion]:
     """踏めなかったペアに理由を付ける(設計書 §9.1・§10)。
 
@@ -2594,7 +2608,11 @@ def compound_deposit_for_exclusions(
             continue
         axes = dict(cell.axes)
         rate, periods = axes.get("rate"), axes.get("periods")
-        if rate is None or periods is None or _deposit_for_target_exists(str(rate), int(periods)):
+        if (
+            rate is None
+            or periods is None
+            or _deposit_for_target_exists(str(rate), int(periods), timing)
+        ):
             # 溢れていない(または期間を名指ししていない)セルは、**構成できる
             # はずのものが未達で残っている**ということである。理由を作らない。
             unexplained.append(cell.id)
@@ -2613,7 +2631,9 @@ def compound_deposit_for_exclusions(
     return out
 
 
-def _deposit_for_target_exists(rate: str, periods: int) -> bool:
+def _deposit_for_target_exists(
+    rate: str, periods: int, timing: compound_ref.Timing = compound_ref.END
+) -> bool:
     """その (金利, 期間) で、積立 1 円の正算が答を出せるか。
 
     **周期と税の全通りを試す。** 1 つでも通れば「溢れて作れない」とは言えない
@@ -2621,7 +2641,7 @@ def _deposit_for_target_exists(rate: str, periods: int) -> bool:
     """
     for per_year in PAIRWISE_COMPOUND_GROW_FACTORS["periods_per_year"]:
         for tax in PAIRWISE_COMPOUND_GROW_FACTORS["tax"]:
-            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax))
+            reached = _compound_reached(0, 1, rate, int(per_year), periods, bool(tax), timing)
             if reached is not None and reached > 0:
                 return True
     return False
@@ -2817,7 +2837,9 @@ def _pairwise_compound_grow_strata() -> tuple[Stratum, ...]:
 PAIRWISE_COMPOUND_DEPOSIT_FOR_SKIPPED_COUNT = 0
 
 
-def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int] | None:
+def _deposit_for_construction(
+    row: Mapping[str, object], timing: compound_ref.Timing = compound_ref.END
+) -> tuple[int, int, int] | None:
     """ペアワイズ 1 行から `(periods, target)` を作る。**溢れたら期間を振り直す。**
 
     **1 行が運ぶのはペア 6 組である**(設計書 §7.2): (金利,期間)・(金利,周期)・
@@ -2842,12 +2864,12 @@ def _deposit_for_construction(row: Mapping[str, object]) -> tuple[int, int, int]
     # (金利, 期間) の組で、周期は他の行がいくらでも運ぶ——**動かす順が
     # そのまま「何を諦めるか」の順である。**
     for per in (per_year, *per_years):
-        target = _compound_reached(0, 1, rate, int(per), periods0, tax)
+        target = _compound_reached(0, 1, rate, int(per), periods0, tax, timing)
         if target is not None and target > 0:
             return periods0, int(per), target
     for periods in PAIRWISE_COMPOUND_GROW_FACTORS["periods"]:
         for per in (per_year, *per_years):
-            target = _compound_reached(0, 1, rate, int(per), int(periods), tax)
+            target = _compound_reached(0, 1, rate, int(per), int(periods), tax, timing)
             if target is not None and target > 0:
                 return int(periods), int(per), target
     return None
@@ -3229,7 +3251,7 @@ class ReferenceGaveUp(Exception):
         self.reason = reason
 
 
-def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
+def _finance_entry(index: int, op: str, params: dict, stratum: str, prefix: str = "fin") -> dict:
     """1 件を組み立てる。**期待値は参照実装がそのまま返した辞書である。**
 
     `stratum` はケースが属する層の識別子(`"{op}/{name}"`。乱択で作られた
@@ -3258,7 +3280,7 @@ def _finance_entry(index: int, op: str, params: dict, stratum: str) -> dict:
         raise RuntimeError(f"unclassified ReferenceGaveUp for {op}: {error}") from error
     return {
         "kind": "call",
-        "id": f"fin-{index:06d}",
+        "id": f"{prefix}-{index:06d}",
         "op": op,
         "input": params,
         "expect": expect,
@@ -3451,3 +3473,244 @@ def _provenance() -> str:
         "calcarc_reference (exact integers / Decimal), "
         f"Python {sys.version_info.major}.{sys.version_info.minor}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 期首のシャード `finance-start-000.json`(設計書 2026-09-10 §4)
+#
+# **`finance-000.json` は 1 バイトも変えない。** 期首は別の seed・別の層・
+# 別の署名集合で作る——既存の乱数列にも、既存の重複判定にも触れない。
+# ---------------------------------------------------------------------------
+
+FINANCE_START_MODEL = "finance-start-v1"
+
+#: **`finance-v1` の複利 3 要求をそのまま指す**(写さない)。
+FINANCE_START_REQUIREMENTS: tuple[coverage.Requirement, ...] = tuple(
+    _REQUIREMENT_OF[op] for op in COMPOUND_OPS
+)
+
+#: 期首の層が使った (op, input) の署名。**`_PAIRWISE_CLAIMED_SIGNATURES` と混ぜない。**
+_START_CLAIMED_SIGNATURES: set[str] = set()
+
+
+def _claim_start_signature(op: str, params: dict) -> bool:
+    signature = _finance_signature(op, params)
+    if signature in _START_CLAIMED_SIGNATURES:
+        return False
+    _START_CLAIMED_SIGNATURES.add(signature)
+    return True
+
+
+def _start_stratum(op: str, name: str, params: dict) -> Stratum:
+    result = compound_ref.compute(op, params)
+    return Stratum(op, name, result.get("error", "ok"), 0, lambda rng, i, params=params: params)
+
+
+def _start_pairwise_strata() -> tuple[Stratum, ...]:
+    """複利 3 op のペアワイズ行を**期首で**作る。行そのものは `finance-v1` と同じ。"""
+    strata: list[Stratum] = []
+    for index, row in enumerate(_PAIRWISE_COMPOUND_GROW_ROWS):
+        params = {
+            "principal": "1000000",
+            "deposit": "10000",
+            "rate": row["rate"],
+            "periods_per_year": row["periods_per_year"],
+            "periods": row["periods"],
+            "tax": row["tax"],
+            "timing": compound_ref.START,
+        }
+        if _claim_start_signature("compound_grow", params):
+            strata.append(_start_stratum("compound_grow", f"start_pairwise_{index:04d}", params))
+    for index, row in enumerate(_PAIRWISE_COMPOUND_DEPOSIT_FOR_ROWS):
+        constructed = _deposit_for_construction(row, compound_ref.START)
+        if constructed is None:
+            continue
+        periods, per_year, target = constructed
+        params = {
+            "principal": "0",
+            "target": str(target),
+            "periods": periods,
+            "rate": row["rate"],
+            "periods_per_year": per_year,
+            "tax": row["tax"],
+            "timing": compound_ref.START,
+        }
+        if _claim_start_signature("compound_deposit_for", params):
+            strata.append(
+                _start_stratum("compound_deposit_for", f"start_pairwise_{index:04d}", params)
+            )
+    for index, row in enumerate(_PAIRWISE_COMPOUND_PERIODS_FOR_ROWS):
+        target = _compound_reached(
+            0,
+            1000,
+            str(row["rate"]),
+            int(row["periods_per_year"]),  # type: ignore[arg-type]
+            10,
+            bool(row["tax"]),
+            compound_ref.START,
+        )
+        assert target is not None and target > 0, f"期首 periods_for pairwise: 構成が失敗した {row}"
+        params = {
+            "principal": "0",
+            "deposit": "1000",
+            "target": str(target),
+            "rate": row["rate"],
+            "periods_per_year": row["periods_per_year"],
+            "tax": row["tax"],
+            "timing": compound_ref.START,
+        }
+        if _claim_start_signature("compound_periods_for", params):
+            strata.append(
+                _start_stratum("compound_periods_for", f"start_pairwise_{index:04d}", params)
+            )
+    return tuple(strata)
+
+
+#: 期首の層。**非単調な谷の層は無い**(設計書 2026-09-10 §4.3、実測 2026-09-11)
+#: ——`_find_non_monotone_net_valley(1_000_000, 1, …, 200, START)` は谷を見つけず
+#: `RuntimeError` で止まった。積立 1 円が税の床の同時跳び(利息 19→20・39→40)の
+#: 増分 2 円をちょうど相殺し、手取りは下がらずに平ら(差 0)になる。二分探索の変異は
+#: timing に依らないので、`finance-000.json` の `fin-000265` が捕まえ続ける。
+FINANCE_START_STRATA: tuple[Stratum, ...] = _start_pairwise_strata()
+
+
+def _compound_start_params(rng: random.Random, op: str) -> dict:
+    """期首の乱択入力。**積立は 1 円以上**(積立 0 は期首の腕を見ない)。"""
+    periods_per_year = rng.choice(PERIODS_PER_YEAR_OK)
+    for _attempt in range(_INVERSE_CONSTRUCTION_MAX_ATTEMPTS):
+        principal = rng.randint(0, PRINCIPAL_MAX)
+        deposit = rng.randint(1, DEPOSIT_MAX)
+        rate = _rate(rng)
+        periods = rng.randint(1, COMPOUND_PERIODS_MAX)
+        tax = rng.random() < 0.5
+        if op == "compound_grow":
+            return {
+                "principal": str(principal),
+                "deposit": str(deposit),
+                "periods": periods,
+                "rate": rate,
+                "periods_per_year": periods_per_year,
+                "tax": tax,
+                "timing": compound_ref.START,
+            }
+        target = _compound_reached(
+            principal, deposit, rate, periods_per_year, periods, tax, compound_ref.START
+        )
+        if target is None or target <= 0:
+            continue
+        if op == "compound_deposit_for":
+            return {
+                "principal": str(principal),
+                "target": str(target),
+                "periods": periods,
+                "rate": rate,
+                "periods_per_year": periods_per_year,
+                "tax": tax,
+                "timing": compound_ref.START,
+            }
+        if op == "compound_periods_for":
+            return {
+                "principal": str(principal),
+                "deposit": str(deposit),
+                "target": str(target),
+                "rate": rate,
+                "periods_per_year": periods_per_year,
+                "tax": tax,
+                "timing": compound_ref.START,
+            }
+        raise ValueError(f"unknown compound op: {op!r}")
+    raise RuntimeError(f"{op}(期首): 有効な入力を引けなかった(構成の式を疑う)")
+
+
+def _finance_start_provenance() -> str:
+    """期首のシャードを作ったもの。**期首の取り決めも Rust と共有している。**
+
+    **「全部が同じ手順」とは書かない**(2026-09-11 の見直し)。同じ手順なのは
+    積立を期首に置く 1 期ごとのループ(`grow` / `reached`)と、その上の
+    `periods_for` の前進走査までで、`deposit_for` の探索は別手順である
+    (`compound_ref` の docstring の `独立:` の宣言どおり)。"""
+    return (
+        f"{_provenance()}。"
+        "ただし丸めの取り決め——毎期の利息を切り捨てること、積立を期首に"
+        "置くときはその期の利息を積立額にも付けること、税を国税と地方税で"
+        "別々に掛けること——は Rust と共有している。"
+        "**積立を期首に置く 1 期ごとのループは Rust と同じ手順である**"
+        "(compound_ref の `grow` / `reached`、独立: 不可能)。"
+        "したがって compound_grow と compound_periods_for は、同じ手順の"
+        "実装どうしを比べている(`periods_for` も Rust と同じ前進走査で、"
+        "独立: 不可能)。compound_deposit_for の探索は別手順である"
+        "(`deposit_for`、独立: 別手順——Rust は二分探索で挟み、Python は"
+        "閉形式の Decimal の種から歩く)。ループそのものを別手順で検算するのは "
+        "`compound_ref.closed_form`(独立: 別手順、期首を持つ)で、参照側の"
+        "テストが持つ。"
+    )
+
+
+def build_finance_start_shard(seed: int, count: int) -> dict:
+    """期首のシャード。**層を先に全部入れ、残りを乱択で埋める**。
+
+    `build_finance_shard` と同じ流儀である。"""
+    if len(FINANCE_START_STRATA) > count:
+        raise RuntimeError(f"期首の層 {len(FINANCE_START_STRATA)} 件が総件数 {count} を超えている")
+    rng = random.Random(seed)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    rejections: dict[str, object] = {
+        "dup": 0,
+        "reference_gave_up": {reason.value: 0 for reason in GaveUpReason},
+    }
+    for stratum in FINANCE_START_STRATA:
+        params = stratum.build(rng, 0)
+        key = repr((stratum.op, sorted(params.items())))
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(_finance_entry(len(entries), stratum.op, params, stratum.key, "fin-start"))
+    attempts = 0
+    while len(entries) < count:
+        attempts += 1
+        if attempts > count * 200:
+            raise RuntimeError(f"期首: {attempts} 回試して {len(entries)}/{count} 件")
+        op = rng.choice(COMPOUND_OPS)
+        params = _compound_start_params(rng, op)
+        key = repr((op, sorted(params.items())))
+        if key in seen:
+            rejections["dup"] += 1  # type: ignore[operator]
+            continue
+        seen.add(key)
+        try:
+            entries.append(
+                # **乱択の層は `{op}/random` と名乗る。** 報告書(`report.ts` の
+                # `RANDOM_STRATUM_SUFFIX`)は `/random` で終わる層だけを乱択と数える
+                # ——別の名前にすると、乱択のケースが「名指しで置いた層」と書かれる。
+                # シャードが別なので、`finance-000.json` の同名の層とは混ざらない。
+                _finance_entry(len(entries), op, params, f"{op}/random", "fin-start")
+            )
+        except ReferenceGaveUp as gave_up:
+            rejections["reference_gave_up"][gave_up.reason.value] += 1  # type: ignore[index]
+    covered = covered_cells_from_cases(entries)
+    exclusions = compound_deposit_for_exclusions(covered, compound_ref.START)
+    gave_up = rejections["reference_gave_up"]
+    coverage_payload = coverage.build_payload(
+        FINANCE_START_MODEL,
+        FINANCE_START_REQUIREMENTS,
+        covered,
+        exclusions,
+        {
+            "candidate_duplicate": rejections["dup"],
+            "oracle_near_yen_boundary": gave_up["near_yen_boundary"],  # type: ignore[index]
+            "oracle_search_limit": gave_up["compound_deposit_search_limit"],  # type: ignore[index]
+        },
+    )
+    for summary in coverage_payload["requirements"]:  # type: ignore[attr-defined]
+        if summary["unmet_cells"]:
+            raise RuntimeError(
+                f"期首 {summary['id']}: 未達セルが {summary['unmet_cells']} 件ある(設計書 §13.1)"
+            )
+    return {
+        "schema": SCHEMA,
+        "generated_by": _finance_start_provenance(),
+        "rejections": rejections,
+        "coverage": coverage_payload,
+        "cases": entries,
+    }

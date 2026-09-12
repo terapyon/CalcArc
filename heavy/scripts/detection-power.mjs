@@ -35,8 +35,10 @@ const RUN_JSON = join(HEAVY, "heavy-run.json");
  * 枚数だけを assert しても足りない。1 枚消えて 1 枚増えた走行が緑で通り、
  * 壊れたときに何が消えたのかを言えない。**名前で持つ。**
  *
- * 正当に 19 枚目を足す日には、ここの更新が意識的な 1 行になる。それが
- * この定数の狙いである。
+ * **正当にシャードを足す日には、ここの更新が意識的な 1 行になる。**それが
+ * この定数の狙いである。**枚数は書かない**——「19 枚目を足す日には」と
+ * 書いていた註は、19 枚目が入ったあとも同じ文のまま腐っていた
+ * (2026-09-10、期首のシャード＝20 枚目を足す段で見つけた)。
  */
 export const ALL_SHARDS = [
   "angle-mode-000.json (values)",
@@ -53,6 +55,7 @@ export const ALL_SHARDS = [
   "equivalence-000.json (equivalences)",
   "data-scale-000.json (calls)",
   "finance-000.json (calls)",
+  "finance-start-000.json (calls)",
   "combinatorics-display-000.json (displays)",
   "complex-display-000.json (displays)",
   "display-000.json (displays)",
@@ -240,12 +243,17 @@ export const MUTATIONS = [
     minRate: { "complex-display-000.json (displays)": 0.165 },
   },
 
-  // **ここから Finance 用の 10 種(設計書 §5)。**
+  // **ここから Finance 用の変異(設計書 §5。`compound-start-deposit-at-end` は
+  // 設計書 2026-09-10 §4.5)。**
   //
-  // すべて `expectShards` は `finance-000.json (calls)` の 1 枚だけである
-  // ——Finance は整数の厳密一致なので、値が 1 ビットでもずれれば必ず
-  // 不一致として出る。他の 14 枚は Finance のコードを一切通らないので、
-  // 反応したらそれ自体が「Finance の変更が漏れている」という報告になる。
+  // `expectShards` は Finance の 2 枚——`finance-000.json (calls)`(全件期末。
+  // ローンと複利)と `finance-start-000.json (calls)`(全件複利・期首)——の
+  // 片方か両方である。Finance は整数の厳密一致なので、値が 1 ビットでも
+  // ずれれば必ず不一致として出る。Finance 以外のシャードは Finance の
+  // コードを一切通らないので、反応したらそれ自体が「Finance の変更が
+  // 漏れている」という報告になる。**どちらに反応するかは推測せず、
+  // `heavy:power` で測った集合をそのまま書く**(2026-09-11 に全部を実測。
+  // 件数は各変異の註)。
   //
   // **変異は Rust の finance を意図的に壊す。** この走行中に
   // `cargo test --workspace` を回すと当然赤くなる——`detection-power` は
@@ -259,8 +267,13 @@ export const MUTATIONS = [
     // ローンの各行・複利の各期の両方がここを通る(`interest_floor` は
     // `monthly_interest_floor` の別名)。四捨五入で 1 円上がる期が
     // 1 つでもあれば、その口座の以後の残高がすべてずれる。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.386 },
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 2,715 件
+    // (3,500 件中)、`finance-start-000.json` 951 件(1,200 件中)。** 期首の
+    // ケースも毎期この床を通るので、期首のシャードでも赤い。期首の `minRate` は
+    // `floor(951 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.386, "finance-start-000.json (calls)": 0.792 },
   },
   {
     id: "loan-interest-as-f64",
@@ -281,8 +294,12 @@ export const MUTATIONS = [
     }`,
     // f64 は仮数部 53 ビットしか持たない。残高が大きい・分母が細かい
     // (bp 刻みの金利)口座では、厳密な床と f64 の床が 1 円単位でずれる。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.015 },
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 109 件
+    // (3,500 件中)、`finance-start-000.json` 108 件(1,200 件中)。** 期首の
+    // `minRate` は `floor(108 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.015, "finance-start-000.json (calls)": 0.09 },
   },
   {
     id: "compound-deposit-at-start",
@@ -320,31 +337,86 @@ export const MUTATIONS = [
     // 集めて `periods_for` にも届くようになったぶんで、コーパスが良くなったの
     // ではない。** `minRate` は旧の実測のまま。旧は `grow` のループの
     // 3 行を並べ替えていたが、期首が `step()` の正規の腕になったので、
-    // **期末の腕を期首と同じ振る舞いにする**形で同じ壊れ方を作る。重量級の
-    // コーパスは全件期末なので、期末を壊さないと何も測れない。
+    // **期末の腕を期首と同じ振る舞いにする**形で同じ壊れ方を作る。
+    // `finance-000.json` は全件期末なので、期末を壊さないとそこでは何も
+    // 測れない。
     // **当たる範囲は旧より広い**: 旧の `periods_for` は漸化式を書き写して
     // いたので変異が届かなかったが、いまは同じ `step()` を通る。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 910 件
+    // (3,500 件中。09-10 と同じ)、`finance-start-000.json` 0 件(1,200 件中)。**
+    // 期末の腕しか動かさないので期首のシャードでは 0 件であるべきで、実際に
+    // 0 件だった——`compound-start-deposit-at-end` と組で、腕の独立を両方向
+    // から見る(設計書 2026-09-10 §4.5)。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.087 },
   },
   {
+    id: "compound-start-deposit-at-end",
+    what: "期首の腕を期末と同じにする(積立に、その期の利息を付けない)",
+    file: "crates/calcarc-core/src/finance/compound.rs",
+    from: `    let balance = match timing {
+        DepositTiming::End => balance,
+        DepositTiming::Start => balance.checked_add(deposit).ok_or(CalcError::Overflow)?,
+    };
+    let interest = rate.interest_floor(balance)?;
+    let balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    match timing {
+        DepositTiming::End => balance.checked_add(deposit).ok_or(CalcError::Overflow),
+        DepositTiming::Start => Ok(balance),
+    }`,
+    to: `    let balance = match timing {
+        DepositTiming::End => balance,
+        DepositTiming::Start => balance,
+    };
+    let interest = rate.interest_floor(balance)?;
+    let balance = balance.checked_add(interest).ok_or(CalcError::Overflow)?;
+    match timing {
+        DepositTiming::End => balance.checked_add(deposit).ok_or(CalcError::Overflow),
+        DepositTiming::Start => balance.checked_add(deposit).ok_or(CalcError::Overflow),
+    }`,
+    // **期首の腕を 2 本とも動かす**——片方だけだと「積立が消える」別の、
+    // はるかに大きい壊れ方になる(`compound-deposit-at-start` の当て直しで
+    // 確かめた教訓と同じ)。**期末の変異と組で、腕の独立を両方向から見る**:
+    // これは期首のシャードだけで赤く、`compound-deposit-at-start` は
+    // `finance-000.json` だけで赤い(設計書 2026-09-10 §4.5)。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-start-000.json`
+    // 969 件(1,200 件中)、`finance-000.json` 0 件(3,500 件中)。**
+    // **率 0.807 は薄まった値である**: 分母の 1,200 件には、この変異では
+    // 答が動かない 231 件(正常 139 件＋`Overflow` 92 件、設計書 §4.3・§4.7)
+    // が入っている。969 = 1,200 − 231 で、動きうるケースはすべて赤かった
+    // (231 件が動かないことは §4.3 の実測)。`minRate` は
+    // `floor(969 / 1200 × 1000) / 1000`。
+    expectShards: ["finance-start-000.json (calls)"],
+    minRate: { "finance-start-000.json (calls)": 0.807 },
+  },
+  {
     id: "compound-round-once-at-maturity",
-    what: "毎期切り捨てをやめ、満期時に一度だけ丸める(期末積立のまま)",
+    what: "毎期切り捨てをやめ、満期時に一度だけ丸める(積立の位置は変えない)",
     file: "crates/calcarc-core/src/finance/compound.rs",
     from: `    let mut balance = principal;
     for _ in 0..periods {
         balance = step(balance, deposit, rate, timing)?;
     }`,
-    to: `    // 変異は期末だけを書く(重量級のコーパスは全件期末)。
-    let _ = timing;
+    to: `    // 変異は丸めの回数だけを変える。積立の位置は step() と同じに読む。
     let scale: u128 = 1_000_000_000;
     let mut scaled = principal as u128 * scale;
     for _ in 0..periods {
-        let interest = scaled * rate.numerator as u128 / rate.denominator as u128;
-        scaled = scaled
-            .checked_add(interest)
-            .and_then(|v| v.checked_add(deposit as u128 * scale))
-            .ok_or(CalcError::Overflow)?;
+        let base = match timing {
+            DepositTiming::End => scaled,
+            DepositTiming::Start => scaled
+                .checked_add(deposit as u128 * scale)
+                .ok_or(CalcError::Overflow)?,
+        };
+        let interest = base * rate.numerator as u128 / rate.denominator as u128;
+        scaled = match timing {
+            DepositTiming::End => base
+                .checked_add(interest)
+                .and_then(|v| v.checked_add(deposit as u128 * scale))
+                .ok_or(CalcError::Overflow)?,
+            DepositTiming::Start => base.checked_add(interest).ok_or(CalcError::Overflow)?,
+        };
     }
     let balance = u64::try_from(scaled / scale).map_err(|_| CalcError::Overflow)?;`,
     // 設計書 §5.1: 残高を 10^9 スケールの分数のまま持ち回し、最後の
@@ -354,13 +426,27 @@ export const MUTATIONS = [
     // **2026-09-10 に `step()` への集約に合わせて当て直した。当て直し後の
     // 検出数は 612 で、v0.8.0 と同じ**(走行 `34463437618` の `heavy-report.md`。
     // v0.8.0 は Release 走行 `33942305098`)。`minRate` は旧の実測のまま。`from` は
-    // `grow_with_timing` の `step()` を呼ぶループ、`to` は旧と同じ式
-    // (利息を付けてから積立を足す = 期末)。位置を読まないので、
-    // 未使用の警告を `let _ = timing;` で黙らせる。当たる範囲は旧と同じ
+    // `grow_with_timing` の `step()` を呼ぶループ。当たる範囲は旧と同じ
     // (`grow` と、それを呼ぶ `deposit_for`。`periods_for` は `step()` を
     // 直に呼ぶので届かない)。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.086 },
+    //
+    // **2026-09-11 に `to` が積立の位置を読むようにした。** それまでの `to` は
+    // `let _ = timing;` で位置を捨て、期末の式(利息を付けてから積立を足す)
+    // だけで育てていた——「重量級のコーパスは全件期末」が前提だったが、期首の
+    // シャードが入ってその前提が崩れた。期首のケースには「満期に一度だけ
+    // 丸める」と「期首を期末として計算する」の 2 つの欠陥が同時に入るので、
+    // 手元の `heavy:power` で期首のシャードに出た 674 件(1,200 件中)は丸めの
+    // 検出力ではなく、`compound-start-deposit-at-end`(969 件)が見ている位置の
+    // 取り違えの信号を混ぜて数えていた。いまの `to` は位置を `step()` と同じに
+    // 読み(期首は利息の前に積立を足す)、**丸めの回数だけを変える**。期末の
+    // 腕は旧と同じ算術なので `finance-000.json` は動かない(実際に 612 のまま)。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測(位置を読む `to`):
+    // `finance-000.json` 612 件(3,500 件中。09-10 と同じ)、
+    // `finance-start-000.json` 640 件(1,200 件中)。** 期首の `minRate` は
+    // `floor(640 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.086, "finance-start-000.json (calls)": 0.533 },
   },
   {
     id: "rate-nominal-to-effective",
@@ -387,8 +473,12 @@ export const MUTATIONS = [
     // 設計書 §5.1: 実効換算は無理数で分数に載らないので、f64 で近似して
     // 分母 10^12 の分数に丸め直す。名目(年利÷期/年)と実効の差は
     // `periods_per_year == 1` では 0 だが、月次・半年では複利ぶんだけ開く。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.324 },
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 2,276 件
+    // (3,500 件中)、`finance-start-000.json` 594 件(1,200 件中)。** 期首の
+    // `minRate` は `floor(594 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.324, "finance-start-000.json (calls)": 0.495 },
   },
   {
     id: "tax-combined-rate",
@@ -401,8 +491,12 @@ export const MUTATIONS = [
     // 別々に切り捨てると 1 円ずれるケースがある(`tax.rs` のテスト
     // `the_two_taxes_are_floored_separately` の 2,648,906 円が実例)。
     // 一括計算はそのケースだけ違う総額を返す。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.058 },
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 405 件
+    // (3,500 件中)、`finance-start-000.json` 459 件(1,200 件中)。** 期首の
+    // `minRate` は `floor(459 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.058, "finance-start-000.json (calls)": 0.382 },
   },
   {
     id: "loan-final-row-no-adjustment",
@@ -415,6 +509,13 @@ export const MUTATIONS = [
     // `residual == 0` の最終回だけを狙う(schedule.rs:90-91)。定例額が
     // 端数をちょうど吸収する稀な入力以外はすべて `final_payment` と
     // `final_balance` が真値からずれる。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 1,615 件
+    // (3,500 件中)、`finance-start-000.json` 0 件(1,200 件中)。** 期首の
+    // シャードは複利の 3 op だけでローンのケースを持たないので 0 件であるべきで、
+    // 実際に 0 件だった。**`expectShards` を変えないのはそのためである**——
+    // 期首のシャードを足すと、反応したシャードの集合が `expectShards` と
+    // 一致しないので判定が落ちる。`minRate` は旧のまま。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.232 },
   },
@@ -427,6 +528,13 @@ export const MUTATIONS = [
     // ボーナス併用のローン・複利だけが半年利を要る。半年利が月利の
     // 6 倍(=正しい利率の 1/6)のままになるので、半年ぶんの利息が
     // ごく僅かにしか付かなくなる。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 368 件
+    // (3,500 件中)、`finance-start-000.json` 0 件(1,200 件中)。** 期首の
+    // シャードは複利の 3 op だけで、ボーナスの入力を持つケースが 1 件も無い
+    // ので 0 件であるべきで、実際に 0 件だった。**`expectShards` を変えないのは
+    // そのためである**——期首のシャードを足すと、反応したシャードの集合が
+    // `expectShards` と一致しないので判定が落ちる。`minRate` は旧のまま。
     expectShards: ["finance-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.052 },
   },
@@ -497,7 +605,7 @@ export const MUTATIONS = [
     // 旧の二分探索の移植で、旧の `grow(...)` は `compound_inverse.rs` の
     // 本体からもう見えない(import はテストのモジュールだけ)ので、
     // `grow_with_timing(..., timing)` を呼ぶ——その中の 1 期は `step()` で
-    // ある。重量級のコーパスは全件期末なので、`timing` は常に `End` で届く。
+    // ある。`finance-000.json` は全件期末なので、そこでは `timing` は常に `End` で届く。
     //
     // **最初の版はここで Overflow を `?` で伝播させていて、152 件を検出
     // していた。** 実際は谷とは無関係の別の欠陥だった: `probe(MAX_PERIODS)`
@@ -515,6 +623,13 @@ export const MUTATIONS = [
     // 3500 件中 1 件は 3 桁の下限表現に載らない(floor が 0 になる)。
     // `verdictFor` の `floor = Math.max(1, Math.ceil(total * rate - 1e-9))`
     // が `rate` 未指定(=0)のときに 1 を保証するので、それに委ねる。
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 1 件
+    // (3,500 件中。09-10 と同じ)、`finance-start-000.json` 0 件(1,200 件中)。**
+    // 設計書 2026-09-10 §4.5 は「期首のシャードにも届く」と見込んだ——
+    // コードには届く(`periods_for` のループは位置を問わず通る)が、期首の
+    // 1,200 件には二分探索と全走査の答が食い違うケースが無かった。集合は
+    // 測ったとおり `finance-000.json` だけにする。
     expectShards: ["finance-000.json (calls)"],
     minRate: {},
   },
@@ -527,8 +642,12 @@ export const MUTATIONS = [
     // `reached` が常に残高をそのまま返すようになる。税 OFF の逆算は
     // 元々 `reached` が同じ経路(`if !taxed`)を通るので影響を受けず、
     // **税 ON のケースだけ**が違う値と比較されて壊れる。
-    expectShards: ["finance-000.json (calls)"],
-    minRate: { "finance-000.json (calls)": 0.038 },
+    //
+    // **2026-09-11 に手元の `heavy:power` で実測: `finance-000.json` 272 件
+    // (3,500 件中)、`finance-start-000.json` 305 件(1,200 件中)。** 期首の
+    // `minRate` は `floor(305 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
+    expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
+    minRate: { "finance-000.json (calls)": 0.038, "finance-start-000.json (calls)": 0.254 },
   },
 ];
 

@@ -109,6 +109,30 @@ function onlyLine(markdown: string, needle: string): string {
   return lines[0] ?? "";
 }
 
+/**
+ * 呼び出しのシャード 1 枚ぶんの節を取り出す。**見出し `### <名前>` から、
+ * 次のシャードの見出し(または `## `)の手前まで。**
+ *
+ * **層の行・棄却の行はシャードの名前を持たない**——金融の呼び出しシャードが
+ * 2 枚になった日(2026-09-11、`finance-start-000.json`)から、報告書の全体で
+ * `onlyLine` を引くと 2 本に当たる。**どのシャードの行かを見出しで決める。**
+ * 節の中の `###` 見出し(`### 理由付き除外——…`)では切らない——シャードの
+ * 見出しは必ず `(calls)` で終わる。
+ */
+function callSection(markdown: string, name: string): string {
+  const lines = markdown.split("\n");
+  const heading = `### ${name}`;
+  expect(
+    lines.filter((line) => line === heading).length,
+    `「${heading}」の見出しが 1 本ではない`,
+  ).toBe(1);
+  const rest = lines.slice(lines.indexOf(heading) + 1);
+  const end = rest.findIndex(
+    (line) => /^### .+ \(calls\)$/.test(line) || line.startsWith("## "),
+  );
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
 function errorPathLine(markdown: string, title: string): string {
   return onlyLine(markdown, title);
 }
@@ -2110,12 +2134,41 @@ test("the finance shard is broken down by op, kind and stratum, not left as one 
   expect(onlyLine(markdown, "| **合計** | **3500** |")).toBe(
     "| **合計** | **3500** | **3150** | **91** | **259** |",
   );
-  expect(onlyLine(markdown, "の層から引かれている")).toContain(
+  // **層の行と棄却の行はシャードの名前を持たない**ので、シャードの節の中で
+  // 1 本だけを取る(2026-09-11、金融の呼び出しシャードが 2 枚になった)。
+  // **金融の各シャードについて、自分の行がちょうど 1 本在ることを見る。**
+  const financeSection = callSection(markdown, "finance-000.json (calls)");
+  expect(onlyLine(financeSection, "の層から引かれている")).toContain(
     "3500 件は 1191 の層から引かれている",
   );
-  expect(onlyLine(markdown, "- `near_yen_boundary`:")).toBe(
+  expect(onlyLine(financeSection, "- `near_yen_boundary`:")).toBe(
     "- `near_yen_boundary`: 7",
   );
+  // **期首のシャード(設計書 2026-09-10 §4)。** 乱択の層は `{op}/random` と
+  // 名乗るので、報告書は 896 件を**乱択**と数える——`start_random` のように
+  // `/random` で終わらない名前に戻すと「乱択の 0 層」になり、ここが赤くなる。
+  const startSection = callSection(markdown, "finance-start-000.json (calls)");
+  expect(onlyLine(startSection, "の層から引かれている")).toContain(
+    "1200 件は 307 の層から引かれている——乱択の 3 層が 896 件",
+  );
+  expect(onlyLine(startSection, "- `near_yen_boundary`:")).toBe(
+    "- `near_yen_boundary`: 0",
+  );
+  // **節の外に紛れた行が無いこと。** 報告書の全体でも、金融の呼び出し
+  // シャードの枚数ぶんだけ在る(節で切り出すだけでは、3 本目を見落とす)。
+  const financeShards = entries.filter((e) =>
+    /^finance(-start)?-\d+\.json \(calls\)$/.test(e.name),
+  );
+  expect(financeShards.map((e) => e.name)).toEqual([
+    "finance-000.json (calls)",
+    "finance-start-000.json (calls)",
+  ]);
+  for (const needle of ["の層から引かれている", "- `near_yen_boundary`:"]) {
+    expect(
+      markdown.split("\n").filter((line) => line.includes(needle)).length,
+      `「${needle}」の行が金融の呼び出しシャードの枚数と合わない`,
+    ).toBe(financeShards.length);
+  }
   // **その 3500 が全部正常な計算だとは読ませない。**
   expect(markdown).toContain("電卓が計算を拒むことを期待値として");
 });

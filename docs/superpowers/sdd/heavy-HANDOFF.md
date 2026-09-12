@@ -23,13 +23,13 @@
 迷ったらユーザーに聞く。代理承認者は居ない。
 
 
-## 1. いまの状態（2026-08-31）
+## 1. いまの状態（2026-09-11）
 
 | | |
 |---|---|
-| `origin/main` | **`6b39dff`**（PR #105 まで。**タグは `v0.6.0` まで**——#96 以降は未リリース） |
-| 私の枝 | **`docs/heavy-ui-confirmed`**（`origin/main` から。未 push） |
-| 作業台 | **きれい**（`git update-index --really-refresh` 済み・全ファイル照合一致） |
+| `origin/main` | **`e266a6d`**（`git rev-parse --short origin/main`。**タグは `v0.9.0` まで**——`git describe --tags --abbrev=0 origin/main`） |
+| 門 3 の枝（縦積み・push 済み・PR 審査中） | `docs/independent-verification-gaps`（#130 → `main`）→ `test/spell-differential`（#131）→ `heavy/finance-start`（#132）。この順にマージする。**先端は `git rev-parse --short <枝>` で見る。** マージで SHA は変わるので、ここには書かない——§7 の「引用は名前で」と同じ理由 |
+| 作業台 | **きれい**（`git status --porcelain` が空。2026-09-11 に `/home/terapyon/dev/CalcArc-e2e` で確認） |
 
 **★ この作業台は、走行が落ち、ファイルが化ける。** 2026-08-30 に
 **Segmentation fault 9 回**（`pnpm heavy` 5・`heavy:ui` 3・`vitest` 1〈伝聞〉）、
@@ -69,6 +69,13 @@
   「測ったら消す」として置いていた項目を、測れたので消した）。**v0.8.0 と比べて
   弱くなっていない**——3 本とも前と同じ範囲で同じ数。数字と出どころは金融の設計書
   `docs/superpowers/specs/2026-09-03-finance-convention.md` の「検証への影響」の節
+- **期首のシャード（20 枚目）は CI で確かめた**（2026-09-11、Heavy corpus 走行
+  `34543925445`・ジョブ `103092418248`、`heavy/finance-start` を手動起動。ここの「次に
+  誰かが触るなら」に「測ったら消す」として置いていた項目を、測れたので消した）。
+  **検出数は手元の実測と完全一致**（期首の `minRate` は余裕 0 のまま通った）、
+  **`heavy:ui` の期首 3 件は最初の実走で緑**（40 passed）、`Corpus vs reference` は
+  37 分 08 秒（85 分の制限の内側）。数字と出どころは設計書
+  `2026-09-10-independent-verification-gaps-design.md` §4.8 の【CI で確認】
 
 **次に誰かが触るなら、材料はこれだけ残っている:**
 
@@ -80,9 +87,6 @@
    **探索は `reference/scripts/find_convert_overflow.py` に上限つきで在る**
 3. **第 3 段階の試験空間モデルをどこへ置くか**——**`convert` は候補から
    外してよい**（軸が 2 本、単位はすでに満点。産物が当てる前に分かっている）
-4. **期首を重量級へ広げるか**（2026-09-10 に足した）。**重量級のコーパスは期首のケースを
-   1 件も持たない**——ハーネスは `compound_*` に期末（`"end"`）を明示して渡す。期首を
-   参照と突き合わせているのは golden と E2E だけ。広げるかは別に決めること
 
 ## 3. これまで（1 行ずつ）
 
