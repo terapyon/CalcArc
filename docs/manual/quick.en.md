@@ -43,8 +43,7 @@ calculations.
   but nothing checks that the layout holds there
 - On a short screen (for example in a browser tab) the page may scroll. Every display and key can
   still be scrolled to and pressed. It is checked to fit on one screen at the height you get when
-  opening it from the home screen. While the update notice is showing, it can hide the bottom keys;
-  close the notice to see them
+  opening it from the home screen
 
 ## 2. The four tabs
 
