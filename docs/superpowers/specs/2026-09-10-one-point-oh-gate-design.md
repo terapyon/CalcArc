@@ -343,7 +343,8 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **画面の URL は変わらない。** ブックマークした URL は、以後の版でも同じ画面を開く
 > - **計算は端末内で完結し、サーバへ送信しない**
 > - **画面が低くても崩れない。** 画面が低いと（ブラウザのタブで開いたときなど）ページがスクロールすることが
->   あるが、そのときも、すべての表示とキーはスクロールすれば見えて押せる
+>   あるが、そのときも、すべての表示とキーはスクロールすれば見えて押せる。ただし更新のお知らせが出ている
+>   あいだは、下のキーが隠れることがある（お知らせを閉じれば見える）
 >
 > **約束しないこと:**
 > - **計算結果の正しさ。** 計算結果は無保証で、重要な判断の根拠にしないでほしい
@@ -365,7 +366,8 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **Screen URLs do not change.** A bookmarked URL opens the same screen in later versions
 > - **Calculations complete entirely on-device; nothing is sent to a server.**
 > - **Short screens do not break the layout.** On a short screen (for example in a browser tab) the page
->   may scroll, but every display and key can still be scrolled to and pressed
+>   may scroll, but every display and key can still be scrolled to and pressed. While the update notice is
+>   showing, it can hide the bottom keys (closing the notice shows them)
 >
 > **What it does not promise:**
 > - **Correct results.** Calculation results come with no warranty and should not be relied
