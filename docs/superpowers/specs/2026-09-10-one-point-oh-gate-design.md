@@ -214,6 +214,12 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
   **番人**: `short-screens.spec.ts`——Safari の見える大きさ 4 つ（`widths.ts` の `SAFARI_VIEWPORTS`）で、約束した 13 画面と
   金融の 6 モードについて、横にはみ出さないこと・押せるキーがすべてスクロールで見えて、上に何も重なっていないこと。
   **両エンジンで同じ検査**（エンジンで分岐しない）。README の文案（§3）の「約束すること」「約束しないこと」に 1 行ずつ
+- **★ 更新のお知らせがキーを隠していた**（2026-09-12 に測った。お知らせは下に固定され、ページの下に空きを取っていなかった
+  ——Safari の高さで 41〜66 個、390×844 でも 5 個のキーが、いちばん下までスクロールしてもお知らせの下に残った）。
+  **裁定（利用者）: (a) 出ているあいだ、ページの下にその高さぶんの空きを足す**（場所と見た目は変えない）。
+  直し: `UpdateToast.tsx` が、お知らせが覆う帯の高さを実物から測り（見える高さ − お知らせの上端）、ページの下の空きと
+  根の `scroll-padding-bottom` に使う。**出ていないときは何も変えない**。live 領域は常設のまま、Escape の分岐には触らない。
+  番人: `short-screens.spec.ts` のお知らせありの 5 本（Safari の 4 つと 390×844）。**利用者に見える振る舞いの変更**なので PR の説明に書く
 - 余白 8px の検査（ホーム画面の高さで 1 画面に収まることを守る）は残す。WebKit の狭い幅の寸法（375×800 は実在しない）を
   実在する iPhone の画面（mini の 375×812 など）に替えるかは、診断の数字が出てから提案する
 
@@ -343,8 +349,7 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **画面の URL は変わらない。** ブックマークした URL は、以後の版でも同じ画面を開く
 > - **計算は端末内で完結し、サーバへ送信しない**
 > - **画面が低くても崩れない。** 画面が低いと（ブラウザのタブで開いたときなど）ページがスクロールすることが
->   あるが、そのときも、すべての表示とキーはスクロールすれば見えて押せる。ただし更新のお知らせが出ている
->   あいだは、下のキーが隠れることがある（お知らせを閉じれば見える）
+>   あるが、そのときも、すべての表示とキーはスクロールすれば見えて押せる
 >
 > **約束しないこと:**
 > - **計算結果の正しさ。** 計算結果は無保証で、重要な判断の根拠にしないでほしい
@@ -366,8 +371,7 @@ html の報告書の画面。これで 1・2 を (A) か (C) に分ける。**�
 > - **Screen URLs do not change.** A bookmarked URL opens the same screen in later versions
 > - **Calculations complete entirely on-device; nothing is sent to a server.**
 > - **Short screens do not break the layout.** On a short screen (for example in a browser tab) the page
->   may scroll, but every display and key can still be scrolled to and pressed. While the update notice is
->   showing, it can hide the bottom keys (closing the notice shows them)
+>   may scroll, but every display and key can still be scrolled to and pressed
 >
 > **What it does not promise:**
 > - **Correct results.** Calculation results come with no warranty and should not be relied
