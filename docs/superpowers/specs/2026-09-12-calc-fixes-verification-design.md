@@ -312,7 +312,8 @@ native の Rust（`cargo test -p calcarc-core --test loan_boundary_golden`）と
 
 bonus の行は 1 件につき月額と賞与額の 2 回を比べて数えるので、bonus のセルの合計は件数の 2 倍になる（bonus/exact は 104 件で 37 + 171 = 208）。
 
-native と wasm32 の集計は 1 セルも違わない（`final-fix-report.md` の A4 に両方の印字を転記）。
+native と wasm32 の集計は 1 セルも違わない（両方の印字は
+`docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md` §2 に転記）。
 **上下 1 円を超えた件は native 0・wasm32 0。**
 （native: `test result: ok. 1 passed`、`assert!(failures.is_empty(), …)` が通った。wasm32: 同じアサーションが
 `monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32 ... ok` で通った。）
@@ -320,7 +321,8 @@ native と wasm32 の集計は 1 セルも違わない（`final-fix-report.md` �
 bonus の 6 セルの数は前回と同じである。
 
 **golden の網羅には限度がある。** 集合別のセル件数と、実際に届いている年利・期間・残価の最大は
-`testdata/loan_boundary.json` を直接集計した（スクリプトと出力は `final-fix-report.md` に貼る）:
+`testdata/loan_boundary.json` を直接集計した（スクリプトと出力は
+`docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md` §3 に貼る）:
 
 | 集合/境界 | 件数 | 年利 | 期間(回) | 残価の最大(円) |
 |---|---|---|---|---|
@@ -372,7 +374,8 @@ golden の年 0.0001%・2 回の最大の B は 5,400,000,209,999,980（B の上
 **残る限度は期間 12 回以上の残価である。** `c2·B` を整数に保つ現行の作り方では B は `c2` の分母の倍数でなければ
 ならず、期間 12 回以上ではその分母（12 回で年 100% の 44 bit〜年 0.0001% の 263 bit）が、月額の上限が許す B の
 最大（12 回で年 100% の約 1.1e10〜年 0.0001% の約 1.1e16）を 6 つの年利すべてで超える（(年利, n) ごとの値は
-`final-fix-report.md`）。そのため残価の件は、境界ちょうども含めて期間 2・3 回にしか無い。**n ≥ 12 の残価を置くには
+`docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md` §3）。そのため残価の件は、境界ちょうども含めて
+期間 2・3 回にしか無い。**n ≥ 12 の残価を置くには
 別の構成が要る。これは 0.9.2 では未着手の既知の限度であり、やらないことにした項目ではない。**
 
 ### §4.8 上限（10 億円）のエラー——製品側と合わせる

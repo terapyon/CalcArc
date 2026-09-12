@@ -31,7 +31,8 @@ RATES = ("0.0001", "0.5", "1", "2", "15", "100")
 TERMS = (2, 3, 12, 120, 360, 1200)
 BONUS_TERMS = (12, 120, 360, 1200)
 # ブリーフの (1, 2, 3, 10, 1_000, 1_000_000) から広げた(residual/below・residual/above が
-# 20 件に届かなかったため、task-2-report.md に理由を記載)。
+# 20 件に届かなかったため。理由は
+# docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md §1 に記載)。
 MULTS = (
     1,
     2,
@@ -59,14 +60,16 @@ MULTS = (
     10_000_000,
 )
 # 小さい残価(B = c2.denominator·j)の j。ブリーフの (1, 2, 5) から広げた(n=2 の中で
-# below/above を 20 件以上採るため、task-2-report.md)。大きい残価の j は `_residual_js` が
-# 月額の上限から決める。**置き場を n=2 に縛っていたのは c2 の分母ではなく、B を 10^12 で
-# 打ち切り、元本を実現可能な窓に向けて探していなかった生成器の側だった**(最終レビュー I-1。
-# 年 0.0001%・n=3 の分母は 49 bit で u64 に収まる)。
+# below/above を 20 件以上採るため。理由は
+# docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md §1)。大きい残価の j は
+# `_residual_js` が月額の上限から決める。**置き場を n=2 に縛っていたのは c2 の分母では
+# なく、B を 10^12 で打ち切り、元本を実現可能な窓に向けて探していなかった生成器の側
+# だった**(最終レビュー I-1。年 0.0001%・n=3 の分母は 49 bit で u64 に収まる)。
 RESIDUAL_J_MULTS = (1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 50)
 # ブリーフの 8 から広げた(residual/below・residual/above を 20 件以上にするため。
-# 同じ (rate, n) = (0.0001, 2) に候補が集中するので、その 1 セルからもっと採れるようにする
-# 必要があった。task-2-report.md 参照)。
+# 同じ (rate, n) = (0.0001, 2) に候補が集中するので、その 1 セルからもっと採れるように
+# する必要があった。理由は docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md
+# §1 参照)。
 PER_CELL = 25
 # 残価 B ≥ LARGE_B の件は (rate, n, kind) ごとに別枠で採る——小さい残価の枠を奪わず、
 # 奪われもしない(最終レビュー I-1)。f64 の誤差が最も大きいのは B が上限に近い所なので、
@@ -126,8 +129,8 @@ def _principals(c: Fraction, offset: int) -> Iterator[tuple[int, Fraction]]:
     """理論月額 = c·P − offset(offset は整数)が境界に来そうな元本 P と、その理論月額を挙げる。
 
     2 系統(c.denominator の倍数と、連分数の近似分母×MULTS±1)は同じ P を出すことがある
-    (近似分母が c.denominator 自身のとき等)ので、P で重複除去する(ブリーフの記述からの逸脱、
-    task-2-report.md に理由を記載)。
+    (近似分母が c.denominator 自身のとき等)ので、P で重複除去する(ブリーフの記述からの
+    逸脱、理由は docs/superpowers/sdd/2026-09-12-calc-fixes-verification.md §1 に記載)。
     """
     seen: set[int] = set()
     if c.denominator <= U64_MAX and c.numerator > 0:
