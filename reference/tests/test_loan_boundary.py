@@ -77,6 +77,27 @@ def test_the_ends_of_rate_and_term_are_covered(cases):
     assert {2, 1200} <= terms, terms
 
 
+def test_residual_cases_reach_the_largest_residuals_the_cap_allows(cases):
+    # 月額 10 億円の上限は残価 B も縛る(年 0.0001%・2 回で B ≤ 約 6.0e15)。f64 の余裕が
+    # 最も薄いのは B が大きい所なので、そこに件を置く(最終レビュー I-1)。
+    big = [
+        c
+        for c in cases
+        if c["set"] == "residual"
+        and c["input"]["rate"] == "0.0001"
+        and c["input"]["n"] == 2
+        and int(c["input"]["residual"]) >= 10**15
+    ]
+    assert len(big) >= 10, len(big)
+
+
+def test_residual_near_boundary_cases_reach_beyond_two_payments(cases):
+    # 残価ありのすぐ下・すぐ上は n=2 の 1 点に縛られていない(最終レビュー I-1)。
+    for kind in ("below", "above"):
+        terms = {c["input"]["n"] for c in cases if c["set"] == "residual" and c["boundary"] == kind}
+        assert any(n >= 3 for n in terms), (kind, terms)
+
+
 def test_ids_are_unique(cases):
     ids = [c["id"] for c in cases]
     assert len(ids) == len(set(ids))

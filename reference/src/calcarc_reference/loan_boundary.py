@@ -7,7 +7,8 @@
 - すぐ下・すぐ上: c の連分数の近似分母 t で P = t·m, t·m ± 1 にすると、c·P が整数のごく近くに来る。
   整数から `NEAR`(1e-6 円)以内のものだけを採る。
 - 残価あり: 理論月額 = c1·P − c2·B。B を c2 の分母の倍数にすると c2·B は整数なので、
-  P の側は残価なしと同じ。
+  P の側は残価なしと同じ。B は月額の上限が許す最大まで取り、P は実現可能な窓
+  (B, (上限 + c2·B)/c1] の両端から探す(`_window_principals`)。
 - 賞与: 賞与分は半年利・floor(n/6) 回の残価なしなので、賞与分の元本を上と同じく作る。
   元本はその 2 倍(上限 50%)。
 
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from fractions import Fraction
+from itertools import chain
 
 from calcarc_reference import loan_ref
 
@@ -56,15 +58,23 @@ MULTS = (
     5_000_000,
     10_000_000,
 )
-# ブリーフの (1, 2, 5) から広げた——残価あり(B=c2.denominator·j)は n=2 でしか使えず
-# (n が増えると c2.denominator が u64 域を超えて `p <= b` を満たす候補が消える)、
-# その n=2 の中で below/above を 20 件以上採るには j の刻みをもっと細かくする必要が
-# あった(task-2-report.md)。
+# 小さい残価(B = c2.denominator·j)の j。ブリーフの (1, 2, 5) から広げた(n=2 の中で
+# below/above を 20 件以上採るため、task-2-report.md)。大きい残価の j は `_residual_js` が
+# 月額の上限から決める。**置き場を n=2 に縛っていたのは c2 の分母ではなく、B を 10^12 で
+# 打ち切り、元本を実現可能な窓に向けて探していなかった生成器の側だった**(最終レビュー I-1。
+# 年 0.0001%・n=3 の分母は 49 bit で u64 に収まる)。
 RESIDUAL_J_MULTS = (1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 50)
 # ブリーフの 8 から広げた(residual/below・residual/above を 20 件以上にするため。
-# 上の 2 つの広げだけでは、同じ (rate, n) = (0.0001, 2) に候補が集中するので、
-# その 1 セルからもっと採れるようにする必要があった。task-2-report.md 参照)。
+# 同じ (rate, n) = (0.0001, 2) に候補が集中するので、その 1 セルからもっと採れるようにする
+# 必要があった。task-2-report.md 参照)。
 PER_CELL = 25
+# 残価 B ≥ LARGE_B の件は (rate, n, kind) ごとに別枠で採る——小さい残価の枠を奪わず、
+# 奪われもしない(最終レビュー I-1)。f64 の誤差が最も大きいのは B が上限に近い所なので、
+# 大きい残価は上から採る(`_residual_js`)。
+LARGE_B = 10**12
+PER_CELL_LARGE_B = 10
+# 窓の両端から何個の m を試すか(`_window_principals`)。
+WINDOW_STEPS = 3
 U64_MAX = loan_ref.U64_MAX
 
 
@@ -136,6 +146,86 @@ def _principals(c: Fraction, offset: int) -> Iterator[tuple[int, Fraction]]:
                     yield p, c * p - offset
 
 
+def _window_principals(
+    c: Fraction, offset: int, p_lo: int, p_hi: int
+) -> Iterator[tuple[int, Fraction]]:
+    """元本の窓 [p_lo, p_hi] の中で、理論月額 = c·P − offset が境界に来そうな P と理論月額を挙げる。
+
+    残価が大きいと P の窓は (B, (上限 + c2·B)/c1] に狭まり、`_principals` の固定の刻み
+    (近似分母×MULTS)は窓に届かない。そこで窓の両端から数える:
+
+    - c の連分数の近似分母 t について P = t·m + d(d ∈ {−1, 0, 1})。m は ceil(p_lo/t) から上へ、
+      floor(p_hi/t) から下へ、それぞれ WINDOW_STEPS 個。
+    - c.denominator の倍数(c·P が整数になる)。同じく窓の両端から WINDOW_STEPS 個。
+
+    P で重複除去する。
+    """
+    if p_lo > p_hi:
+        return
+    seen: set[int] = set()
+
+    def near_ends(t: int, ds: tuple[int, ...]) -> Iterator[tuple[int, Fraction]]:
+        lo_m = -(-p_lo // t)
+        hi_m = p_hi // t
+        ms = set(range(lo_m, lo_m + WINDOW_STEPS)) | set(range(hi_m - WINDOW_STEPS + 1, hi_m + 1))
+        for m in sorted(ms):
+            for d in ds:
+                p = t * m + d
+                if p_lo <= p <= p_hi and p not in seen:
+                    seen.add(p)
+                    yield p, c * p - offset
+
+    for t in _convergent_denominators(c, p_hi):
+        yield from near_ends(t, (-1, 0, 1))
+    yield from near_ends(c.denominator, (0,))
+
+
+def _residual_js(c2_den: int, b_limit: int) -> list[int]:
+    """残価 B = c2_den·j の j を、試す順に並べる。
+
+    小さい残価(B < LARGE_B)は昇順——`RESIDUAL_J_MULTS` と `_spread` の小さい側。大きい残価は
+    **降順**で、上限 b_limit の j から十分の一刻みで下りる(f64 の誤差が最も大きい、B が上限に
+    近い所から採る)。どちらも b_limit を超える j は含めない。
+    """
+    j_limit = b_limit // c2_den
+    js = set(RESIDUAL_J_MULTS) | set(_spread(j_limit)) | {j_limit * k // 10 for k in range(1, 10)}
+    js = {j for j in js if 1 <= j <= j_limit}
+    small = sorted(j for j in js if c2_den * j < LARGE_B)
+    large = sorted((j for j in js if c2_den * j >= LARGE_B), reverse=True)
+    return small + large
+
+
+def _residual_candidates(
+    c1: Fraction, c2: Fraction, b_limit: int
+) -> Iterator[tuple[int, int, Fraction]]:
+    """残価ありの (B, P, 理論月額) を試す順に挙げる。(B, P) で重複除去する。
+
+    1 巡目は以前の生成と同じ候補を同じ順で出す(`RESIDUAL_J_MULTS` の小さい残価 × `_principals`)。
+    2 巡目で新しい候補——大きい残価と、窓の両端の元本——を足す。**枠が埋まる順を 1 巡目に
+    固定するので、足した候補が既存の小さい残価の件を押し出さない**(最終レビュー I-1)。
+    """
+    seen: set[tuple[int, int]] = set()
+
+    def at(b: int, window: bool) -> Iterator[tuple[int, int, Fraction]]:
+        offset = int(c2 * b)
+        source: Iterator[tuple[int, Fraction]] = _principals(c1, offset)
+        if window:
+            # 月額 c1·P − offset ≤ 上限 となる P の上端。下端は P > B。
+            p_hi = _floor((MAX_MONTHLY_YEN + offset) / c1)
+            source = chain(source, _window_principals(c1, offset, b + 1, p_hi))
+        for p, a in source:
+            if (b, p) not in seen:
+                seen.add((b, p))
+                yield b, p, a
+
+    for j in RESIDUAL_J_MULTS:
+        b = c2.denominator * j
+        if b < LARGE_B and b <= b_limit:
+            yield from at(b, window=False)
+    for j in _residual_js(c2.denominator, b_limit):
+        yield from at(c2.denominator * j, window=True)
+
+
 def _schedule_ok(principal: int, num: int, den: int, n: int, floor_: int, residual: int) -> bool:
     if floor_ < 2:
         return False
@@ -184,28 +274,32 @@ def _residual(rate: str) -> Iterator[dict]:
         annuity = (1 - base ** (-(n - 1))) / r
         c1 = 1 / annuity
         c2 = 1 / (base**n * annuity)
-        taken: dict[str, int] = {}
-        for j in RESIDUAL_J_MULTS:
-            b = c2.denominator * j
-            if b > 10**12:
-                break
-            offset = int(c2 * b)
-            for p, a in _principals(c1, offset):
-                kind = _kind(a)
-                if (
-                    kind is None
-                    or taken.get(kind, 0) >= PER_CELL
-                    or p <= b
-                    or not 0 < a <= MAX_MONTHLY_YEN
-                ):
-                    continue
-                if loan_ref.monthly_payment_exact(p, num, den, n, b) != a:
-                    raise AssertionError(f"residual decomposition drifted: {rate} {n} {p} {b}")
-                fl = _floor(a)
-                if not _schedule_ok(p, num, den, n, fl, b):
-                    continue
-                taken[kind] = taken.get(kind, 0) + 1
-                yield _forward_case("residual", kind, rate, n, p, b, fl)
+        # 残価の利息はどの月額にも乗る: P > B なので月額 = c1·P − c2·B ≥ c1·(B+1) − c2·B。
+        # したがって月額の上限が B を縛る(これを超える B では、どの元本も上限を超える)。
+        b_limit = _floor((MAX_MONTHLY_YEN - c1) / (c1 - c2))
+        taken_small: dict[str, int] = {}
+        taken_large: dict[str, int] = {}
+        for b, p, a in _residual_candidates(c1, c2, b_limit):
+            if b > b_limit:
+                continue
+            taken, quota = (
+                (taken_large, PER_CELL_LARGE_B) if b >= LARGE_B else (taken_small, PER_CELL)
+            )
+            kind = _kind(a)
+            if (
+                kind is None
+                or taken.get(kind, 0) >= quota
+                or p <= b
+                or not 0 < a <= MAX_MONTHLY_YEN
+            ):
+                continue
+            if loan_ref.monthly_payment_exact(p, num, den, n, b) != a:
+                raise AssertionError(f"residual decomposition drifted: {rate} {n} {p} {b}")
+            fl = _floor(a)
+            if not _schedule_ok(p, num, den, n, fl, b):
+                continue
+            taken[kind] = taken.get(kind, 0) + 1
+            yield _forward_case("residual", kind, rate, n, p, b, fl)
 
 
 def _bonus(rate: str) -> Iterator[dict]:
