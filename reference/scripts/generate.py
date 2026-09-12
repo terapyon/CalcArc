@@ -22,6 +22,7 @@ from calcarc_reference import (
     data_scale_ref,
     expr_ref,
     llm_ref,
+    loan_boundary,
     loan_ref,
     scientific_ref,
     sexagesimal_ref,
@@ -365,6 +366,21 @@ def build_finance() -> dict:
     }
 
 
+def build_loan_boundary() -> dict:
+    """境界専用の golden(設計書 2026-09-12 §4)。**許容と上限はここにだけ置く**——Rust のテストは
+    ここから読み、テストコードに 1 円も 10 億円も書かない(CLAUDE.md)。"""
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": {
+            "below_yen": loan_boundary.TOLERANCE_YEN,
+            "above_yen": loan_boundary.TOLERANCE_YEN,
+        },
+        "max_monthly_yen": str(loan_boundary.MAX_MONTHLY_YEN),
+        "cases": loan_boundary.build_cases(),
+    }
+
+
 def _envelope(entries: list[dict]) -> dict:
     return {
         "schema": SCHEMA,
@@ -397,6 +413,7 @@ def main() -> None:
     write("convert.json", build_convert())
     write("currency.json", build_currency())
     write("finance.json", build_finance())
+    write("loan_boundary.json", build_loan_boundary())
 
 
 if __name__ == "__main__":
