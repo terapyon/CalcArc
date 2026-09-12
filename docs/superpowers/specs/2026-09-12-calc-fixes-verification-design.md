@@ -292,6 +292,41 @@ calcarc-3d の設計（§3.7）で拒まれる形——打ちかけの数のあ�
 361,202。`pow_1p − 1` = 0.0033361111111112063 と `expm1(2·log1p r)` = 0.0033361111111111113 の差は約 9.5e−16、
 `a` = 361200.99999998976。expm1 の値を直接使えば 361201.00000000006 → 361201。**§2.3 の写しと食い違わない。**
 
+【実測 2026-09-12、Task 3・4】`testdata/loan_boundary.json`（2,458 件——生成の印字から）を、native の Rust
+（`cargo test -p calcarc-core --test loan_boundary_golden`）と wasm32（手元の `wasm-pack test --headless --chrome`、
+自動選択のドライバがインストール済み Chrome 135.0.7049.52 と不一致だったため `--chromedriver` で 135.x 系のキャッシュ
+済みドライバ（`chromedriver-d65213741bcf1a26`、135.0.7049.114）を明示——CI 待ちではない）で比べた。
+集合ごとの [低い, 同じ, 高い]:
+
+| 集合/境界 | native | wasm32 |
+|---|---|---|
+| plain/exact | [69, 56, 0] | [69, 56, 0] |
+| plain/below | [0, 535, 64] | [0, 535, 64] |
+| plain/above | [149, 433, 0] | [149, 433, 0] |
+| residual/exact | [150, 125, 0] | [150, 125, 0] |
+| residual/below | [0, 25, 0] | [0, 25, 0] |
+| residual/above | [25, 0, 0] | [25, 0, 0] |
+| bonus/exact | [37, 171, 0] | [37, 171, 0] |
+| bonus/below | [0, 665, 87] | [0, 665, 87] |
+| bonus/above | [32, 662, 0] | [32, 662, 0] |
+
+native と wasm32 の集計は 1 セルも違わない（`task-3-report.md` の PASS run／`task-4-report.md` の
+`--nocapture` 再実行の印字を転記）。**上下 1 円を超えた件は native 0・wasm32 0。**
+（native: `test result: ok. 1 passed`、`assert!(failures.is_empty(), …)` が通った。wasm32: 同じアサーションが
+`monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32 ... ok` で通った。）
+
+**golden の網羅には限度がある。** 集合別のセル件数（`testdata/loan_boundary.json`／`task-2-report.md`
+「Case counts, coverage, runtime」、674b4df 相当のコミットで実測）: plain exact/below/above =
+125/599/582、residual = 275/25/25、bonus = 104/376/347（計 2,458）。**残価（residual）集合の below/above は
+年利 0.0001%・n=2 の 1 系列にほぼ集中している。** 参照実装は残価つきの理論月額を厳密有理数で作るとき、係数
+`c2 = 1/(base**n · annuity)` の分母が `base.denominator ** n` のオーダーで伸びる——年利 0.0001% では n=3 で
+すでに 49 bit、n=4 で 73 bit（`task-2-report.md` 実測）——ため、u64 の実現可能な元本レンジを超え、n=2 を除く
+ほぼ全ての `(年利, n)` で残価の境界ちょうど・近傍のケースが構造的に作れない。したがって残価集合の `exact` は
+年利を通じて n=2・3 まで届くが、`below`／`above` は年利 0.0001% の n=2 だけでできている。plain と bonus の
+`below`／`above` は年利の両端（0.0001%・100%）と期間の両端（2・1,200）に届く。**残価の近傍網羅を n=2 を超えて
+広げるには、`c2·B` を整数に保つ現行の作り方とは別の構成が要る。これは 0.9.2 では未着手の既知の限度であり、
+やらないことにした項目ではない。**
+
 ### §4.8 上限（10 億円）のエラー——製品側と合わせる
 
 - **仮置き（推し）**: 上限は **f64 を通る経路（正の年利かつ 2 回以上）の月額と賞与額**に掛け、超えたら既存の
