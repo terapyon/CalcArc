@@ -169,6 +169,8 @@ expm1/log1p の libm 実装が違えば ulp 差がありうる。境界から離
 すぐ上に来る入力を、年利 0.0001%〜100%・期間 2〜1,200 回の端まで分数で作る）を、native の
 Rust（`crates/calcarc-core/tests/loan_boundary_golden.rs`）と、製品が走る wasm32
 （`crates/calcarc-wasm/tests/loan_boundary.rs`）の両方が読み、上の許容で比べる。
+ただし網羅には限度がある——境界ちょうどの件は期間 2・3 回（賞与は 12 回）まで、残価ありのすぐ下・すぐ上は
+年 0.0001% の 2・3 回と、すぐ下だけ年 0.5%・1% の 3 回に限られる（設計書 2026-09-12 §4.7 の表）。
 許容と上限の数はこの JSON が持ち、この文と食い違えば
 `reference/tests/test_policy_matches_loan_boundary.py` が赤くなる。
 
