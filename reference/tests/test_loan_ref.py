@@ -1,6 +1,7 @@
 """Loan 参照実装の健全性テスト。突き合わせ本番は golden の仕事。"""
 
 from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -11,6 +12,7 @@ from calcarc_reference.loan_ref import (
     forward,
     monthly_interest,
     monthly_payment,
+    monthly_payment_exact,
     principal_for,
     rate_fraction,
     run_schedule,
@@ -124,3 +126,45 @@ def test_schedule_rejects_a_payment_that_cannot_cover_interest() -> None:
     num, den = rate_fraction("12.0")
     with pytest.raises(LoanError):
         run_schedule(1_000_000, num, den, 120, 10_000, 0)
+
+
+def test_the_audit_boundary_is_an_exact_integer() -> None:
+    # 720,600 円・年 2%・2 か月の理論月額は 361,201 円ちょうど
+    # （外部監査 F2、設計書 2026-09-12 §2.3）。
+    num, den = rate_fraction("2")
+    assert monthly_payment_exact(720_600, num, den, 2, 0) == Fraction(361_201)
+
+
+def test_the_exact_value_agrees_with_the_decimal_one_away_from_boundaries() -> None:
+    # 境界から離れた入力では、Decimal 50 桁の月額の切り捨てと一致する。
+    num, den = rate_fraction("1.5")
+    exact = monthly_payment_exact(30_000_000, num, den, 420, 0)
+    assert exact.numerator // exact.denominator == monthly_payment(30_000_000, num, den, 420, 0)
+
+
+def test_a_residual_moves_the_payment_down() -> None:
+    num, den = rate_fraction("2")
+    plain = monthly_payment_exact(3_000_000, num, den, 60, 0)
+    with_residual = monthly_payment_exact(3_000_000, num, den, 60, 1_000_000)
+    assert with_residual < plain
+
+
+def test_zero_rate_follows_the_integer_rule() -> None:
+    assert monthly_payment_exact(2_999_999, 0, 1200, 12, 0) == Fraction(2_999_999, 12)
+    assert monthly_payment_exact(3_000_000, 0, 1200, 12, 600_000) == Fraction(2_400_000, 11)
+
+
+def test_the_same_inputs_are_refused() -> None:
+    num, den = rate_fraction("2")
+    bad_inputs = [
+        (0, num, den, 12, 0),
+        (100, num, den, 0, 0),
+        (100, num, den, 12, 100),
+        (100, num, den, 1, 10),
+    ]
+    for args in bad_inputs:
+        try:
+            monthly_payment_exact(*args)
+        except loan_ref.LoanError:
+            continue
+        raise AssertionError(f"accepted {args}")

@@ -25,6 +25,7 @@ f64 出力が存在せず、ガードの対象にならない。
 from __future__ import annotations
 
 from decimal import ROUND_FLOOR, Decimal, localcontext
+from fractions import Fraction
 
 PRECISION = 50
 U64_MAX = (1 << 64) - 1
@@ -230,6 +231,34 @@ def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -
         if amount > Decimal(U64_MAX):
             raise _overflow()
         return int(amount.to_integral_value(rounding=ROUND_FLOOR))
+
+
+def monthly_payment_exact(principal: int, num: int, den: int, n: int, residual: int) -> Fraction:
+    """理論月額を厳密な有理数で返す（境界専用の golden の期待値、設計書 2026-09-12 §4.2）。
+
+    独立: 一部（式は `closed_form::monthly_payment` と同じ閉形式——残価ありは n−1 回の年金現価と
+    n 回後の残価の現在価値——で、演算は厳密な有理数。f64 の評価の誤りは共有しない、
+    式の誤りは共有する）
+
+    **`_guard_boundary` を通さない。** 境界ちょうどの月額こそが見たいものであり、Decimal 50 桁でも
+    境界ちょうどでは整数の下に着地する（720,600 円・年 2%・2 か月で 361200.99…）。
+    """
+    if n == 0 or principal == 0 or residual >= principal:
+        raise _syntax()
+    if residual > 0 and n < 2:
+        raise _syntax()
+    if num == 0:
+        return Fraction(principal, n) if residual == 0 else Fraction(principal - residual, n - 1)
+    r = Fraction(num, den)
+    if n == 1:
+        return principal * (1 + r)
+    base = 1 + r
+    m = n if residual == 0 else n - 1
+    annuity = (1 - base ** (-m)) / r
+    present_value = principal - Fraction(residual) / base**n
+    if present_value <= 0:
+        raise _syntax()
+    return present_value / annuity
 
 
 def forward(principal: int, num: int, den: int, n: int, residual: int) -> dict:
