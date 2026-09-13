@@ -9,7 +9,8 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 5: `EngineState` に `notation`(ENG トグル)が入った(設計書 §4)。
 /// 6: `Buffer` に 60 進の段が、`EngineState` に 60 進表示の一時状態が
 ///    入った(S-4 設計書 §3.2)。**3 つ目の入力モード**である。
-/// 7: 押し直しの戻り先 `replace_base` が入った(0.9.2 設計書 §2.2)。
+/// 7: 押し直しの戻り先 `replace_base`(0.9.2 設計書 §2.2)と、手元の値の旗
+///    `on_hand`(§3.3)が入った。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
 pub const STATE_SCHEMA: u32 = 7;
@@ -445,6 +446,12 @@ pub struct EngineState {
     /// なるのに要る)。
     #[serde(default)]
     pub replace_base: Option<ReplaceBase>,
+    /// **手元の値があるか**(0.9.2 設計書 §3.2・§3.3)。`)`・後置関数・`+/−`(確定値に
+    /// 掛けたとき)・`π`・`e` の直後に真。まだどの演算子の被演算数にもなっていない、画面の
+    /// 値である。これがあるあいだ、新しい数を始めるキーは押せない(`refuses`)。
+    /// **`operator_pending` と同じく、DEL と表示トグルでは動かさない。**
+    #[serde(default)]
+    pub on_hand: bool,
 }
 
 impl EngineState {
@@ -462,6 +469,7 @@ impl EngineState {
             error: None,
             operator_pending: false,
             replace_base: None,
+            on_hand: false,
         }
     }
 

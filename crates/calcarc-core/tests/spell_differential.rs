@@ -80,6 +80,11 @@ fn walk(state: &EngineState, keys: &mut Vec<Key>, depth: usize, max: usize, comp
         return;
     }
     for &key in &CLASSES {
+        // 拒まれたキーは web の打鍵の列に積まれない(ScientificPanel、0.9.2 設計書 §3.3 の
+        // 条件 1)。列に足さず、その枝も降りない。判断は engine の `refuses`(写しではない)。
+        if calcarc_core::engine::refuses(state, key) {
+            continue;
+        }
         let (next, _) = reduce(state, key);
         keys.push(key);
         match check(keys, &next) {
@@ -103,11 +108,18 @@ fn walk(state: &EngineState, keys: &mut Vec<Key>, depth: usize, max: usize, comp
 /// ので、`÷ 0 xʸ ÷|−`(`0`・`.`・`+/−`・`√`・`000` のどれで 0 に確定させても
 /// 同じ)と `xʸ j xʸ ÷|−` の 2 つの形、それぞれに続く 6 通りの入力開始キーを
 /// 合わせた 72 列が、直接押した列と同じく `0 ÷ 0` または `0 xʸ 1j` で終わって
-/// エラーになり、比べられなくなったため。網羅は決定的なので
-/// 下限は実測値そのものである。**これが 0 に近づいたら A は何も見ていない**
-/// ——`check` は入力中でない打鍵を黙って通すので、engine が `buffer` を
-/// 開かなくなっても、数えなければ緑のままである。CLASSES か深さを変えて
-/// 回数が動いたら、実測を取り直してここを書き直す。
+/// エラーになり、比べられなくなったため(F1)。
+///
+/// **再実測(2026-09-13、F5 のあと)**: 426,191 回に減った。**拒まれたキーの枝を
+/// 降りなくなったためである**(0.9.2 設計書 §3.3 の条件 1)——`walk` は `refuses`
+/// が真のキーを列に足さず、その先を辿らない。手元の値(`on_hand`)があるあいだ
+/// 数字・`(`・`π`・`e` を拒むようになったので、S4・S5 に当たる形(`)`・`√` などの
+/// あとに数字や `(` を続ける列)がまるごと網から落ちる。
+///
+/// 網羅は決定的なので下限は実測値そのものである。**これが 0 に近づいたら A は
+/// 何も見ていない**——`check` は入力中でない打鍵を黙って通すので、engine が
+/// `buffer` を開かなくなっても、数えなければ緑のままである。CLASSES か深さを
+/// 変えて回数が動いたら、実測を取り直してここを書き直す。
 #[test]
 fn every_sequence_up_to_five_keys_spells_the_entry_as_the_engine_shows_it() {
     let mut compared = 0;
@@ -119,8 +131,8 @@ fn every_sequence_up_to_five_keys_spells_the_entry_as_the_engine_shows_it() {
         &mut compared,
     );
     assert!(
-        compared >= 768_209,
-        "網羅で比べたのは {compared} 回(2026-09-13 に実測 768,209 回)。\
+        compared >= 426_191,
+        "網羅で比べたのは {compared} 回(2026-09-13・F5 のあとの実測 426,191 回)。\
          打鍵の途中で buffer が開かなくなっていないかを確認すること"
     );
 }
@@ -178,6 +190,11 @@ fn random_entry_heavy_sequences_spell_the_entry_as_the_engine_shows_it() {
             if state.error.is_some() {
                 state = reduce(&state, Key::Ac).0;
                 keys.push(Key::Ac);
+            }
+            // 拒まれたキーは web の打鍵の列に積まれない(0.9.2 設計書 §3.3 の条件 1)。
+            // 列にも `reduce` にも渡さない。
+            if calcarc_core::engine::refuses(&state, key) {
+                continue;
             }
             state = reduce(&state, key).0;
             keys.push(key);

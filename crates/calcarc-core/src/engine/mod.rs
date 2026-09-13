@@ -12,6 +12,55 @@ use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
 use state::{Backspace, BinOp, Buffer, Notation, OpToken, ReplaceBase};
 
+/// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
+/// (0.9.2 設計書 §3.2、外部監査 F5。§9 の 1・8・11)。
+///
+/// **真なら `reduce` は何も変えない**——押せないキーは押されなかったのと同じ。盤面と
+/// キーボードはこの答え(wasm の `Step.refused`)を読むだけで、規則を持たない。
+/// **二項演算子はどの状態でも拒まない**(F1 の訂正が押せる。calcarc-1e の注記 A)。
+/// 拒む集合は、数字・`000`・`.`・`Exp`・`j`・`(`・`π`・`e` の外に出ない。
+pub fn refuses(state: &EngineState, key: Key) -> bool {
+    if state.error.is_some() {
+        // エラー中は AC 以外が既に何もしない(`reduce`)。押せなくはしない(S7)。
+        return false;
+    }
+    if let Some(buffer) = &state.buffer {
+        // S1 打ちかけ。`(`・`π`・`e` はバッファを確定せずに捨てる(`open_paren`・`Key::Pi`・
+        // `Key::E`)。`j` は仮数の数字が無く、指数か 60 進の段があるときだけ、新しい虚数入力で
+        // 上書きして捨てる(§9 の 11。`Key::J` の「数字が無ければ新しい虚数入力」)。
+        return match key {
+            Key::LParen | Key::Pi | Key::E => true,
+            Key::J => {
+                !buffer.has_digits()
+                    && (buffer.exponent.is_some() || !buffer.sexagesimal.is_empty())
+            }
+            _ => false,
+        };
+    }
+    // S4・S5 手元の値。新しい数を始めるキーはどれも手元の値を捨てる。
+    state.on_hand
+        && matches!(
+            key,
+            Key::Digit(_)
+                | Key::Zeros3
+                | Key::Dot
+                | Key::Exp
+                | Key::J
+                | Key::LParen
+                | Key::Pi
+                | Key::E
+        )
+}
+
+/// `refuses` が真になるキーの一覧(`Key::ALL` の順)。wasm の `Step.refused` がこれを運ぶ。
+pub fn refused_keys(state: &EngineState) -> Vec<Key> {
+    Key::ALL
+        .iter()
+        .copied()
+        .filter(|&key| refuses(state, key))
+        .collect()
+}
+
 /// 電卓の唯一の遷移関数。
 ///
 /// 状態を持たず、渡された状態から新しい状態を作って返す。決して panic せず、
@@ -24,12 +73,20 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         EngineState::initial()
     };
 
+    // 押せないキーは押されなかったのと同じ(0.9.2 設計書 §3.3)。**表示の一時状態(60 進・
+    // ENG)も戻さない**ので、下の解除より前で返す。
+    if refuses(&next, key) {
+        let shown = display::render(&next);
+        return (next, shown);
+    }
+
     if key == Key::Ac {
         next = next.cleared();
     } else if next.error.is_some() {
         // エラー中は AC 以外を受け付けない。
     } else {
         let was_pending = next.operator_pending;
+        let was_on_hand = next.on_hand;
 
         if let Err(err) = apply(&mut next, key) {
             next.error = Some(err);
@@ -89,6 +146,48 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // `°'"` は入力中なら区切り(場所は動かない)、そうでなければ
                 // 表示トグル(値に触らない)。どちらも場所を動かさない。
                 | Key::Dms => was_pending,
+            };
+        // 手元の値があるか(0.9.2 設計書 §3.3)。`operator_pending` と同じく、場所を
+        // 動かさないキー(DEL・表示トグル)では引き継ぐ。
+        next.on_hand = next.error.is_none()
+            && match key {
+                Key::RParen
+                | Key::Pi
+                | Key::E
+                | Key::Sqrt
+                | Key::Sqr
+                | Key::Sin
+                | Key::Cos
+                | Key::Tan
+                | Key::Ln
+                | Key::Log10
+                | Key::ExpE
+                | Key::Recip
+                | Key::Asin
+                | Key::Acos
+                | Key::Atan
+                | Key::NFact => true,
+                // 確定値に掛かったならバッファは消えている。指数の符号ならバッファが
+                // 残り、打ちかけのまま(§3.2)。
+                Key::Neg => next.buffer.is_none(),
+                Key::Del | Key::AngleToggle | Key::PolarToggle | Key::EngToggle | Key::Dms => {
+                    was_on_hand
+                }
+                Key::Digit(_)
+                | Key::Zeros3
+                | Key::Dot
+                | Key::Exp
+                | Key::J
+                | Key::LParen
+                | Key::Add
+                | Key::Sub
+                | Key::Mul
+                | Key::Div
+                | Key::Pow
+                | Key::Npr
+                | Key::Ncr
+                | Key::Eq
+                | Key::Ac => false,
             };
         // 押し直しの戻り先は「演算子の直後」のあいだだけ生きる(0.9.2 設計書 §2.2、
         // calcarc-1e の注記 A)。捨てる条件はここ 1 か所。
@@ -238,6 +337,8 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
 /// 演算子は消さない。消せるようにすると、確定済みの入力を復元する必要が
 /// 生じて undo になる。undo は状態に履歴スタックを要求し、EngineState が
 /// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
+///
+/// どれも無ければ何もしない（設計書 I7）。開き括弧を消したときの戻し方は下の註。
 fn delete_one(state: &mut EngineState) {
     if let Some(buffer) = &mut state.buffer {
         // 1 段目と 2 段目は Buffer::backspace が担う。
@@ -250,6 +351,19 @@ fn delete_one(state: &mut EngineState) {
     // 入らない。括弧を演算子の下から抜くことはない。
     if matches!(state.operators.last(), Some(OpToken::OpenParen)) {
         state.operators.pop();
+        // `(` を DEL で消すのは訂正であり、`3 × ( DEL =` は `3 × =` と同じ 9 になる
+        // (0.9.2 設計書 §9 の 2、F1 の原則)。`(` が 0 にした `current` を、戻った先の
+        // 演算子の被演算数へ戻す。
+        // - **`(` のあとに手元の値があれば戻さない**(`3 + ( 4 √ DEL =` は 5 のまま)。
+        //   戻すと √ の答えを黙って捨てる(§9 のあとの詰め)。
+        // - **先頭が演算子にならないときは戻さない**(`2 + 3 = ( DEL =` は 0 のまま。
+        //   `=` のあとの `(` は新しい計算の始まり。§9 の 10)。
+        if !state.on_hand
+            && matches!(state.operators.last(), Some(OpToken::Op(_)))
+            && let Some(&operand) = state.operands.last()
+        {
+            state.current = operand;
+        }
     }
 }
 

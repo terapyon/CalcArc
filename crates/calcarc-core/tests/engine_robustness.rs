@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
+    use calcarc_core::{DisplayState, EngineState, Key, Value, reduce, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -78,6 +78,7 @@ mod invariants {
         real_axis_is_closed(step)?;
         operator_press_replaces(step)?;
         del_removes_at_most_one_thing(step)?;
+        a_refused_key_changes_nothing(step)?;
         Ok(())
     }
 
@@ -348,10 +349,34 @@ mod invariants {
         None
     }
 
+    /// DEL が開き括弧を消して、戻った先が演算子なら `current` を戻す
+    /// (0.9.2 設計書 §9 の 2・10、あとの詰め)。戻さないなら before.current のまま。
+    ///
+    /// **`delete_one` を写したものではない**——外から見た判定として、「バッファが無く、
+    /// 開き括弧が先頭で、手元の値が無く(`on_hand` が偽)、戻った先が演算子」なら
+    /// `operands` の末尾へ戻ると読む。`)` が畳んだ答え(`3 + ( 4 √ DEL`)を
+    /// `on_hand` で除くのは§9 のあとの詰め、`=` のあとの `(`(`operators` が
+    /// `[OpenParen]` だけで戻る先が無い)を除くのは §9 の 10。
+    fn current_after_del(before: &EngineState) -> Value {
+        let restores = before.buffer.is_none()
+            && !before.on_hand
+            && matches!(before.operators.last(), Some(OpToken::OpenParen))
+            && before.operators.len() >= 2
+            && matches!(before.operators[before.operators.len() - 2], OpToken::Op(_));
+        if restores {
+            if let Some(&operand) = before.operands.last() {
+                return operand;
+            }
+        }
+        before.current
+    }
+
     /// I7: DEL は 3 段のうち 1 つだけを消す。
     ///
     /// 段は 数字 → `j` マーカー → 閉じられていない開き括弧 の順で、
-    /// 確定した値（`current` / `operands`）と演算子には触れない。
+    /// 演算子には触れない。**確定した値(`current`)は、開き括弧を消して演算子の
+    /// 被演算数へ戻るとき(`current_after_del`)だけ動く**(0.9.2 設計書 §9 の 2、
+    /// F1 の原則)——それ以外は不変。`operands` は常に不変。
     /// **段の順序と、消える文字数まで見る。** ここを `operands` と
     /// スタックの本数だけで書くと、設計書 §1 の動機になった実バグ
     /// （DEL が虚数入力の `j` を捨てる）を再導入しても無言で通る。
@@ -360,10 +385,11 @@ mod invariants {
         if step.key != Key::Del || before.error.is_some() {
             return Ok(());
         }
-        if after.current != before.current {
+        let expected_current = current_after_del(before);
+        if after.current != expected_current {
             return Err(format!(
-                "I7: DEL changed the committed value ({:?} -> {:?})",
-                before.current, after.current
+                "I7: DEL left current as {:?}, expected {:?} (before: {:?})",
+                after.current, expected_current, before.current
             ));
         }
         if after.operands != before.operands {
@@ -403,6 +429,23 @@ mod invariants {
                     ));
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// I8: 押せないキーは状態を変えない(0.9.2 設計書 §3.3)。**押されなかったのと同じ**
+    /// ——表示の一時状態(60 進・ENG)も含めて、状態をまるごと比べる。
+    fn a_refused_key_changes_nothing(step: &Step<'_>) -> Result<(), String> {
+        if !calcarc_core::engine::refuses(step.before, step.key) {
+            return Ok(());
+        }
+        if step.after != step.before {
+            return Err(format!(
+                "I8: refused {} changed the state\n  before: {:?}\n  after:  {:?}",
+                step.key.token(),
+                step.before,
+                step.after
+            ));
         }
         Ok(())
     }
@@ -545,6 +588,12 @@ fn walk(
         };
         if let Err(why) = invariants::check(&step) {
             panic!("{why}\n  key sequence: {trail:?}");
+        }
+        // 拒まれたキーの先は、拒む前の状態と同じなので辿らない(I8 は上で検査した)。
+        // web は拒まれたキーを打鍵の列に積まない(0.9.2 設計書 §3.3 の条件 1)。
+        if calcarc_core::engine::refuses(state, key) {
+            trail.pop();
+            continue;
         }
         let kept_position = invariants::keeps_the_position(key, state, &next);
         let next_anchor = if kept_position { anchor } else { Some(key) };
@@ -871,6 +920,14 @@ const DEEP: usize = 5;
 /// 実測値も動く。`Cargo.toml` の `proptest = "1"` は minor を固定して
 /// いないので、`cargo update` の後にこのテストが落ちたら、まず実測を
 /// 取り直して数字を更新することを疑う。
+///
+/// **再実測(2026-09-13、0.9.2 F5)**: `refuses` が入り、手元の値(`on_hand`)がある
+/// あいだは数字・`(`・`π`・`e` を拒むようになった(外部監査 F5)。`weighted_key` が
+/// 深さを伸ばす経路の一部——`π`・`√` のような単項の答えのあとに `(` を続けて入れ子を
+/// 増やす形——がこれで塞がる(`(` も「新しい数を始めるキー」に入るため)。**深さ 5
+/// 以上の打鍵は 315 → 30、復帰回数は 1159 → 1437 に変わった。最大到達深さは 7 のまま
+/// (崩れても動かない極値統計であることは変わらない)。** 下の閾値はこの実測に合わせて
+/// 引き直した——**エンジンの意味論が変わったのであって、生成器の重みは触っていない**。
 #[test]
 fn the_weighted_search_still_reaches_deep_states() {
     use proptest::strategy::ValueTree;
@@ -903,14 +960,14 @@ fn the_weighted_search_still_reaches_deep_states() {
     }
 
     assert!(
-        dwell >= 150,
-        "深さ {DEEP} 以上で打たれた打鍵が {dwell} 回しかない（実測 315）。\
+        dwell >= 15,
+        "深さ {DEEP} 以上で打たれた打鍵が {dwell} 回しかない（0.9.2 F5 後の実測 30）。\
          最大到達深さ {deepest} は崩れても動かないので当てにならない。\
          weighted_key の重みを確認すること"
     );
     assert!(
-        (900..=1400).contains(&recoveries),
-        "エラーからの復帰が {recoveries} 回（実測 1159）。生成器が崩れると\
+        (1100..=1750).contains(&recoveries),
+        "エラーからの復帰が {recoveries} 回（0.9.2 F5 後の実測 1437）。生成器が崩れると\
          増える側にも動くので両側で挟んである。weighted_key の重みを確認すること"
     );
 }
