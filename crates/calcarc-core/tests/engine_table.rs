@@ -623,6 +623,23 @@ fn an_unmatched_closing_paren_is_a_syntax_error() {
 }
 
 #[test]
+fn an_unmatched_closing_paren_folds_the_pending_operations_first() {
+    use calcarc_core::CalcError;
+    // 開いていない `)` は、`(` を探す前に保留の演算を畳む(`close_paren`)。畳みが失敗すれば、
+    // その失敗が先に出る——`3 ÷ 0 )` は SyntaxError ではなく DivisionByZero。どちらも画面は
+    // Math ERROR で、利用者に見える違いは無い。0.9.2 の値の照合(`engine_values.rs`)がこの
+    // 順を決める行を必要としたので、いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
+    assert_eq!(
+        run(&["3", "div", "0", "rparen"]).error,
+        Some(CalcError::DivisionByZero)
+    );
+    assert_eq!(
+        run(&["3", "add", "4", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+}
+
+#[test]
 fn reports_the_parenthesis_depth() {
     assert_eq!(run(&["lparen", "lparen"]).pending_depth, 2);
     assert_eq!(run(&["lparen", "1", "rparen"]).pending_depth, 0);
