@@ -50,6 +50,7 @@ let spellCallCount = 0;
 const FAKE_GLYPHS: Partial<Record<KeyToken, string>> = {
   sqrt: "\u221a",
   neg: "+/\u2212",
+  lparen: "(",
 };
 
 function fakeCalc(): Calc {
@@ -65,10 +66,10 @@ function fakeCalc(): Calc {
     error: null,
   };
   /** 表示を 1 つの state に結び付けて返す。state は毎回新しい物である。 */
-  function stepOf(display: DisplayState): Step {
+  function stepOf(display: DisplayState, refused: KeyToken[] = []): Step {
     const state = {} as EngineState;
     displays.set(state, display);
-    return { state, display };
+    return { state, display, refused };
   }
   return {
     initial: () => stepOf(base),
@@ -107,10 +108,13 @@ function fakeCalc(): Calc {
       // 数字は主表示に積む。**「打った物は保存しない」を測るのに要る**
       // ——打鍵が表示に出ない偽物では、保存されていないことも言えない。
       if (/^[0-9]$/.test(key)) {
-        return stepOf({
-          ...from,
-          main: from.main === "0" ? key : `${from.main}${key}`,
-        });
+        return stepOf(
+          {
+            ...from,
+            main: from.main === "0" ? key : `${from.main}${key}`,
+          },
+          ["lparen", "pi", "e"],
+        );
       }
       // 小数点・符号・指数は「呼び戻しの等価性」(Task 10 Step 5)と
       // 「仮数・指数の符号を送り分ける」(Fix round 1 finding 1)を測るのに

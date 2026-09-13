@@ -45,6 +45,16 @@ use wasm_bindgen::prelude::*;
 struct Step {
     state: EngineState,
     display: DisplayState,
+    /// いま押せないキー(トークン、`Key::ALL` の順)。盤面はこれを読んで押せなくし、
+    /// 打鍵の列にも積まない(0.9.2 設計書 §3.3)。判断は `calcarc_core::engine::refuses`。
+    refused: Vec<&'static str>,
+}
+
+fn refused_tokens(state: &EngineState) -> Vec<&'static str> {
+    calcarc_core::engine::refused_keys(state)
+        .into_iter()
+        .map(Key::token)
+        .collect()
 }
 
 #[wasm_bindgen(start)]
@@ -77,9 +87,11 @@ fn to_js(step: &Step) -> JsValue {
 
 fn step_of(state: EngineState) -> Step {
     let shown = render(&state);
+    let refused = refused_tokens(&state);
     Step {
         state,
         display: shown,
+        refused,
     }
 }
 
@@ -105,9 +117,11 @@ pub fn reduce_key(state: JsValue, key: &str) -> JsValue {
     };
 
     let (next, shown) = reduce(&current, parsed);
+    let refused = refused_tokens(&next);
     to_js(&Step {
         state: next,
         display: shown,
+        refused,
     })
 }
 
