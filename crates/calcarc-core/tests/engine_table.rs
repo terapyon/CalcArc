@@ -1120,6 +1120,13 @@ fn a_key_that_would_drop_a_number_cannot_be_pressed() {
     refused_after(&["exp", "2"], "j");
     refused_after(&["j", "exp"], "j");
     refused_after(&["1", "dms"], "j");
+    // `on_hand` は DEL と表示トグルでは動かさない(`operator_pending` と同じ、
+    // §3.3)。これが落ちると `4 √ DEL 5` が黙って 2 を捨てる(F5 の再発)。
+    refused_after(&["4", "sqrt", "del"], "5");
+    refused_after(&["pi", "angle_toggle"], "5");
+    refused_after(&["lparen", "3", "rparen", "eng"], "lparen");
+    refused_after(&["pi", "dms"], "5");
+    refused_after(&["4", "sqrt", "polar_toggle"], "dot");
     // 押せないキーを押した列は、押さなかった列と同じ。
     assert_eq!(
         main_of(&["lparen", "3", "add", "4", "rparen", "5", "eq"]),
@@ -1191,4 +1198,38 @@ fn keys_that_keep_the_number_stay_pressable() {
     );
     // エラー中は押せなくしない(AC 以外が既に何もしない。S7 はいまの見た目のまま)。
     accepted_after(&["1", "div", "0", "eq"], "5");
+}
+
+#[test]
+fn refused_keys_lists_every_key_that_refuses_in_key_all_order() {
+    // `refused_keys` は `refuses` を `Key::ALL` の順に濾しただけ(mod.rs)。
+    // `4 √` のあとは on_hand(0.9.2 設計書 §3.3)——`Key::ALL` に出る 10 種の
+    // 数字それぞれと、`.`・`000`・`Exp`・`π`・`(`・`j`・`e` が該当する。
+    let mut state = EngineState::initial();
+    for token in ["4", "sqrt"] {
+        let k = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        state = reduce(&state, k).0;
+    }
+    assert_eq!(
+        calcarc_core::engine::refused_keys(&state),
+        vec![
+            Key::Digit(0),
+            Key::Digit(1),
+            Key::Digit(2),
+            Key::Digit(3),
+            Key::Digit(4),
+            Key::Digit(5),
+            Key::Digit(6),
+            Key::Digit(7),
+            Key::Digit(8),
+            Key::Digit(9),
+            Key::Dot,
+            Key::Zeros3,
+            Key::Exp,
+            Key::Pi,
+            Key::LParen,
+            Key::J,
+            Key::E,
+        ]
+    );
 }

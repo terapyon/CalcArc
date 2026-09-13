@@ -332,13 +332,12 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
 }
 
 /// DEL の 1 回分。数字 → `j` マーカー → 閉じられていない開き括弧の順に、
-/// ひとつだけ消す。どれも無ければ何もしない（設計書 I7）。
+/// ひとつだけ消す。どれも無ければ何もしない（設計書 I7）。開き括弧を
+/// 消したときの戻し方は下の註。
 ///
 /// 演算子は消さない。消せるようにすると、確定済みの入力を復元する必要が
 /// 生じて undo になる。undo は状態に履歴スタックを要求し、EngineState が
 /// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
-///
-/// どれも無ければ何もしない（設計書 I7）。開き括弧を消したときの戻し方は下の註。
 fn delete_one(state: &mut EngineState) {
     if let Some(buffer) = &mut state.buffer {
         // 1 段目と 2 段目は Buffer::backspace が担う。
@@ -369,7 +368,9 @@ fn delete_one(state: &mut EngineState) {
 
 /// `(` が押されたときの遷移。
 ///
-/// 新しい被演算数の文脈を開く。入力途中の数値があっても破棄する。
+/// 新しい被演算数の文脈を開く。**`buffer` はここでは常に `None` のはず**
+/// ——打ちかけの数があれば `refuses` がこのキーを止める(0.9.2 設計書 §3.2、
+/// 外部監査 F5)。`state.buffer = None` は防御的な初期化として残す。
 /// `3 (` のような打鍵は意味を持たないため、暗黙の乗算にはしない。
 fn open_paren(state: &mut EngineState) {
     state.buffer = None;
@@ -505,11 +506,14 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             apply_unary(state, |v| scientific::atan(v, mode))?;
         }
         Key::Pi => {
+            // `buffer` はここでは常に `None` のはず——打ちかけの数があれば `refuses`
+            // がこのキーを止める(0.9.2 設計書 §3.2、外部監査 F5)。`state.buffer = None`
+            // は防御的な初期化として残し、値そのものを置く。
             state.buffer = None;
             state.current = Value::real(std::f64::consts::PI);
         }
         Key::E => {
-            // π と同じ。入力中のバッファを捨てて値そのものを置く。
+            // π と同じ(上のコメント参照)。
             state.buffer = None;
             state.current = Value::real(std::f64::consts::E);
         }
