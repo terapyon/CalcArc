@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, render};
+    use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -31,6 +31,9 @@ mod invariants {
         /// 求め方は `keeps_the_position` を見ること。走査側（`walk` と
         /// `Run`）が、渡したキー列と観測した状態差だけから積む。
         pub anchor: Option<Key>,
+        /// `anchor` のキーを押す**直前**の状態。I4 が「その状態から、いま押した演算子を
+        /// 直接押した姿」を作るのに使う(0.9.2 設計書 §2.5)。`anchor` と同じく走査側が積む。
+        pub anchor_base: Option<&'a EngineState>,
         pub before: &'a EngineState,
         pub key: Key,
         pub after: &'a EngineState,
@@ -175,10 +178,20 @@ mod invariants {
     }
 
     /// 状態が実数だけで構成されているか。
+    ///
+    /// **`replace_base` も見る。** あれは押し直しが確定済みの値を戻す先
+    /// (0.9.2 設計書 §2.2)——`current` や `operands` が畳んで実数に戻っていても、
+    /// 戻り先の中に虚数が残っていれば、その状態は「実数だけ」とは言えない。
+    /// `3 j − 3 j − ÷` がこれを示した。2 つ目の `−` で `3j − 3j` が畳まれて
+    /// 表向きは実数の `0` になるが、`÷` を押すと戻り先に残っていた `3j` へ
+    /// 戻って積み直すので、`j` を経ずに虚数へ出る。
     fn all_real(state: &EngineState) -> bool {
         state.current.im == 0.0
             && state.operands.iter().all(|v| v.im == 0.0)
             && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
+            && state.replace_base.as_ref().is_none_or(|base| {
+                base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
+            })
     }
 
     /// I3: 実軸は演算で閉じており、虚軸への出口は `j` キーだけ。
@@ -228,77 +241,55 @@ mod invariants {
         })
     }
 
-    /// I4: 二項演算子を続けて押したら、最後の 1 つだけが残る。
+    /// I4: 二項演算子を続けて押したら、**最初からその演算子を押したのと同じ**になる
+    /// (0.9.2 設計書 §2.5、外部監査 F1)。
     ///
-    /// 局所的に言い換える。直前の打鍵が二項演算子だったなら、次の二項
-    /// 演算子は積むのではなく差し替えでなければならず、被演算数も演算子も
-    /// 増えてはならない。累算すると 3 + + 4 = が 10 になる。
+    /// 以前は「被演算数も現在値も変わらない」を要求していた——**内部構造を固定していた**
+    /// (監査の指摘)。`2 + 3 + ×` の正しい姿は `2 + 3 ×` で、被演算数は 5 から 2・3 に戻る。
     ///
-    /// 同種・異種を問わない。実際に起きたバグは `3 + × 4 =` と
-    /// `3 + DEL + 4 =` であって、同種の連打ではなかった。表示トグルや
-    /// 何も消さない DEL を挟んだ形も `anchor` が拾うので射程に入る。
+    /// 局所的に言い換える。`anchor` の演算子を押す直前の状態から、いま押した演算子を
+    /// **直接**押した状態と、押し直した後の状態が、位置を決めるフィールドで一致すること。
+    /// これで「数を二重に積まない」(被演算数が直接の経路と同じ)と「訂正後の意味が直接の
+    /// 入力と一致する」の両方を見る。
     ///
-    /// **前提は `anchor` から取る。** engine の `operator_pending` を読むと、
-    /// 旗が誤ってクリアされるバグでは前提そのものが偽になり、この検査が
-    /// 黙って無効化される。実測: 二項演算子の腕を `true` から `false` に
-    /// 退行させると、旗を読む版は 7 本すべて緑のまま通り、`anchor` を
-    /// 読む版は `3 + +` で落ちる。
+    /// **前提は `anchor` から取る。** engine の `operator_pending` を読むと、旗が誤って
+    /// クリアされるバグでは前提そのものが偽になり、この検査が黙って無効化される(実測:
+    /// 二項演算子の腕を `true` から `false` に退行させると、旗を読む版は 7 本すべて緑のまま
+    /// 通り、`anchor` を読む版は `3 + +` で落ちた)。
     ///
-    /// 何かを消した DEL を挟んだ形（`3 × 4 DEL × 5 =`）は前提から外れる。
-    /// 位置が動いたかどうかを走査側から言えないためで、そちらは
+    /// 何かを消した DEL を挟んだ形(`3 × 4 DEL × 5 =`)は前提から外れる。そちらは
     /// engine_table.rs の `del_returns_to_the_pending_operator` が受け持つ。
     fn operator_press_replaces(step: &Step<'_>) -> Result<(), String> {
-        let (before, after) = (step.before, step.after);
         let Some(op) = binop_of(step.key) else {
             return Ok(());
         };
         if !step.anchor.is_some_and(|k| binop_of(k).is_some()) {
             return Ok(());
         }
-        if before.error.is_some() {
+        let Some(base) = step.anchor_base else {
+            return Ok(());
+        };
+        if step.before.error.is_some() {
             // 直前の演算子は畳み込みに失敗している。I5 の領域。
             return Ok(());
         }
-        // 差し替えは計算を起こさないので、失敗しようがない。
-        if after.error.is_some() {
+        let (direct, _) = reduce(base, step.key);
+        let after = step.after;
+        if after.buffer != direct.buffer
+            || after.current != direct.current
+            || after.operands != direct.operands
+            || after.operators != direct.operators
+            || after.error != direct.error
+            || after.replace_base != direct.replace_base
+        {
             return Err(format!(
-                "I4: {} after a pending operator errored ({:?})",
-                step.key.token(),
-                after.error
+                "I4: {} after a pending operator differs from pressing it directly\n  corrected: {after:?}\n  direct:    {direct:?}",
+                step.key.token()
             ));
         }
-        // **長さで比べてはならない。** 優先順位が同じか降順のときは、
-        // 誤って積んだ被演算数が直後の畳み込みで戻されるため長さが変わらない。
-        // 3 + + 4 = が 10 になるバグはまさにこの経路で、長さ比較では
-        // 素通りする（operands も operators も 1 -> 1 のまま）。
-        // 積まれたかどうかは内容にしか現れない。
-        if after.operands != before.operands {
-            return Err(format!(
-                "I4: {} after a pending operator changed the operands ({:?} -> {:?})",
-                step.key.token(),
-                before.operands,
-                after.operands
-            ));
-        }
-        if after.current != before.current {
-            return Err(format!(
-                "I4: {} after a pending operator changed the value ({:?} -> {:?})",
-                step.key.token(),
-                before.current,
-                after.current
-            ));
-        }
-        if after.operators.len() != before.operators.len() {
-            return Err(format!(
-                "I4: {} after a pending operator grew the operator stack ({} -> {})",
-                step.key.token(),
-                before.operators.len(),
-                after.operators.len()
-            ));
-        }
-        // 長さだけでなく、押した演算子がスタックの先頭に載っていること。
-        // 見ないと、差し替えを「何もせず return」に退行させても通る。
-        if after.operators.last() != Some(&OpToken::Op(op)) {
+        // 押した演算子がスタックの先頭に載っていること。見ないと、押し直しを
+        // 「何もせず return」に退行させても(直接の経路も同じ誤りでない限り)通る。
+        if after.error.is_none() && after.operators.last() != Some(&OpToken::Op(op)) {
             return Err(format!(
                 "I4: {} left {:?} on top of the operator stack",
                 step.key.token(),
@@ -523,6 +514,7 @@ fn walk(
     depth: usize,
     trail: &mut Vec<&'static str>,
     anchor: Option<Key>,
+    anchor_base: Option<&EngineState>,
     seen_focus: bool,
 ) {
     if depth == sweep.max {
@@ -538,6 +530,7 @@ fn walk(
         trail.push(key.token());
         let step = invariants::Step {
             anchor,
+            anchor_base,
             before: state,
             key,
             after: &next,
@@ -551,6 +544,11 @@ fn walk(
         } else {
             Some(key)
         };
+        let next_anchor_base = if invariants::keeps_the_position(key, state, &next) {
+            anchor_base
+        } else {
+            Some(state)
+        };
         // エラー状態からは AC 以外で新しい状態に届かないので、ここから
         // **先を辿らない**。遷移そのものは上で必ず検査する。枝刈りの根拠が
         // I5（エラーは AC でしか解けない）である以上、I5 を検査せずに
@@ -562,6 +560,7 @@ fn walk(
                 depth + 1,
                 trail,
                 next_anchor,
+                next_anchor_base,
                 seen_focus || sweep.focus.contains(&key),
             );
         }
@@ -576,7 +575,7 @@ fn walk_from_the_start(keys: &[Key], max: usize, focus: &[Key]) {
         panic!("{why}\n  key sequence: []");
     }
     let sweep = Sweep { keys, max, focus };
-    walk(&sweep, &start, 0, &mut Vec::new(), None, false);
+    walk(&sweep, &start, 0, &mut Vec::new(), None, None, false);
 }
 
 /// 構造に関わるキーだけで、長さ 7 までのすべての打鍵列を検査する。
@@ -709,6 +708,8 @@ struct Run {
     state: EngineState,
     /// 打鍵位置を最後に動かしたキー。I4 の前提になる（`Step::anchor`）。
     anchor: Option<Key>,
+    /// `anchor` のキーを押す直前の状態(0.9.2 設計書 §2.5、`Step::anchor_base`)。
+    anchor_base: Option<EngineState>,
     /// 実際に `reduce` に渡したキー列。挟んだ AC も含む。
     ///
     /// proptest が出す縮小結果は `Vec<Key>` の Debug 表示で、しかも AC を
@@ -723,6 +724,7 @@ impl Run {
         Run {
             state: EngineState::initial(),
             anchor: None,
+            anchor_base: None,
             trail: Vec::new(),
         }
     }
@@ -752,6 +754,7 @@ impl Run {
         self.trail.push(key.token());
         let step = invariants::Step {
             anchor: self.anchor,
+            anchor_base: self.anchor_base.as_ref(),
             before: &self.state,
             key,
             after: &next,
@@ -762,6 +765,7 @@ impl Run {
         }
         if !invariants::keeps_the_position(key, &self.state, &next) {
             self.anchor = Some(key);
+            self.anchor_base = Some(self.state.clone());
         }
         self.state = next;
         Ok(())

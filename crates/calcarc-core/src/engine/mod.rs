@@ -10,7 +10,7 @@ pub use state::{EngineState, MAX_ENTRY_LEN};
 
 use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
-use state::{Backspace, BinOp, Buffer, Notation, OpToken};
+use state::{Backspace, BinOp, Buffer, Notation, OpToken, ReplaceBase};
 
 /// 電卓の唯一の遷移関数。
 ///
@@ -90,6 +90,11 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // 表示トグル(値に触らない)。どちらも場所を動かさない。
                 | Key::Dms => was_pending,
             };
+        // 押し直しの戻り先は「演算子の直後」のあいだだけ生きる(0.9.2 設計書 §2.2、
+        // calcarc-1e の注記 A)。捨てる条件はここ 1 か所。
+        if !next.operator_pending {
+            next.replace_base = None;
+        }
     }
 
     // §3.1: **`°'"` 以外のあらゆるキーで 60 進表示を解除する。**
@@ -154,22 +159,41 @@ fn reduce_top(state: &mut EngineState) -> CalcResult<()> {
 /// 同じか高い優先順位の演算子が保留されていれば先に畳む。これにより
 /// `2 + 3 +` の時点で 5 が表示され、`2 + 3 ×` では畳まれない。
 fn push_binop(state: &mut EngineState, op: BinOp) -> CalcResult<()> {
-    // 演算子を続けて押したときは、直前の演算子を差し替える。押し直しは
-    // 打ち間違いの訂正であって、もう一度計算しろという意味ではない。
-    // 差し替えないと accumulator 自身が右辺として積まれ、3 + + 4 = が
-    // 10 になる。
+    // 演算子を続けて押したときは訂正である(もう一度計算しろという意味ではない)。
+    // **訂正した列は、最初から正しい演算子を打った列と同じになる**(0.9.2 設計書 §2、
+    // 外部監査 F1)。先頭を差し替えるだけでは、下にある演算子との優先順位も、積むときに
+    // 畳んだ値も戻らない(`8 − 3 × +` が `8 − (3 + …)`、`2 + 3 + ×` が `5 × …` になっていた)。
+    // そこで積む直前の状態へ戻し、下の通常の経路で積み直す。
     //
-    // 差し替えてよいのは、演算子の直後から一歩も動いていないときだけである。
-    // 入力中のバッファがあれば 3 + 4 + の 4 が消えるし、スタックの先頭が
-    // 開き括弧なら 3 + ( + がその括弧を演算子で上書きしてしまう。
+    // 訂正してよいのは、演算子の直後から一歩も動いていないときだけである。入力中の
+    // バッファがあれば `3 + 4 +` の 4 が消えるし、先頭が開き括弧なら `3 + ( +` はその
+    // 括弧を上書きしてしまう(先頭が括弧のときは訂正ではなく、括弧の中の新しい演算になる)。
     if state.operator_pending
         && state.buffer.is_none()
-        && let Some(last @ OpToken::Op(_)) = state.operators.last_mut()
+        && matches!(state.operators.last(), Some(OpToken::Op(_)))
     {
-        *last = OpToken::Op(op);
-        return Ok(());
+        match state.replace_base.take() {
+            Some(base) => {
+                state.operands = base.operands;
+                state.operators = base.operators;
+                state.current = base.current;
+            }
+            None => {
+                // 到達しない(戻り先は通常の経路で必ず取られ、`operator_pending` が偽に
+                // なるまで残る)。万一のときは従来の差し替えに落ちる——panic しない。
+                if let Some(last) = state.operators.last_mut() {
+                    *last = OpToken::Op(op);
+                }
+                return Ok(());
+            }
+        }
     }
     commit_entry(state)?;
+    state.replace_base = Some(ReplaceBase {
+        operands: state.operands.clone(),
+        operators: state.operators.clone(),
+        current: state.current,
+    });
     state.operands.push(state.current);
     // `state.operators.last()` の借用を while の条件式で終わらせてから
     // `reduce_top(&mut state)` を呼ぶ。matches! の中に閉じ込めるのがその手段。

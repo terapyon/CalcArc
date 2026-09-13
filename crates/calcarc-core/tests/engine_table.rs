@@ -801,6 +801,41 @@ fn a_second_operator_replaces_the_first() {
 }
 
 #[test]
+fn a_corrected_operator_means_what_the_right_one_would_have() {
+    // 0.9.2 設計書 §2(外部監査 F1、利用者の裁定): 訂正した列は、最初から正しい演算子を
+    // 打った列と同じになる。いままでは先頭の演算子を差し替えるだけで、下にある演算子との
+    // 優先順位も、積むときに畳んだ値も戻さなかった(`2 + 3 + × 4 =` が 20)。
+    assert_eq!(main_of(&["8", "sub", "3", "mul", "add", "2", "eq"]), "7");
+    assert_eq!(main_of(&["3", "sub", "3", "div", "sub", "3", "eq"]), "-3");
+    assert_eq!(main_of(&["8", "div", "2", "pow", "mul", "2", "eq"]), "8");
+    assert_eq!(main_of(&["2", "add", "3", "add", "mul", "4", "eq"]), "14");
+    assert_eq!(main_of(&["2", "add", "3", "add", "mul"]), "3");
+    assert_eq!(echo_of(&["2", "add", "3", "add", "mul"]), "2 + 3 ×");
+    // 原則そのもの: 押し直した列と最初から正しい演算子の列は、表示のすべてが同じ。
+    for (corrected, direct) in [
+        (
+            &["8", "sub", "3", "mul", "add"][..],
+            &["8", "sub", "3", "add"][..],
+        ),
+        (
+            &["3", "sub", "3", "div", "sub"][..],
+            &["3", "sub", "3", "sub"][..],
+        ),
+        (
+            &["8", "div", "2", "pow", "mul"][..],
+            &["8", "div", "2", "mul"][..],
+        ),
+        (
+            &["2", "add", "3", "add", "mul"][..],
+            &["2", "add", "3", "mul"][..],
+        ),
+        (&["3", "mul", "4", "del", "add"][..], &["3", "add"][..]),
+    ] {
+        assert_eq!(run(corrected), run(direct), "{corrected:?} と {direct:?}");
+    }
+}
+
+#[test]
 fn a_key_that_changes_nothing_does_not_defeat_operator_replacement() {
     // 演算子を押し直す前に、何も起きないキーを挟んでも意味は変わらない。
     assert_eq!(main_of(&["3", "add", "del", "add", "4", "eq"]), "7");
