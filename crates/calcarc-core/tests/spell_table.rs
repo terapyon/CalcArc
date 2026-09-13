@@ -327,6 +327,9 @@ fn a_corrected_operator_is_spelled_once() {
     );
     // 開き括弧の直後の演算子は訂正ではない(engine も差し替えない)。
     assert_eq!(spell_of(&["3", "mul", "lparen", "add", "4"]), "3 × ( + 4");
+    // `=` のあとの演算子は訂正ではない(engine の `finish` が `+` を使い切っている)。
+    // 綴りは打った通りのまま。web は `=` で列を切るので、この形は画面からは来ない。
+    assert_eq!(spell_of(&["3", "add", "eq", "mul", "5"]), "3 + × 5");
 }
 
 #[test]

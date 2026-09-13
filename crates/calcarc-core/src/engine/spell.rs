@@ -134,12 +134,17 @@ fn is_binary(key: Key) -> bool {
 pub fn spell(keys: &[Key]) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut current: Option<Buffer> = None;
+    // 押し直しの判定に使う: 直前に積んだ語が二項演算子で、そのあと `=` で計算が閉じて
+    // いないか。`=` は綴りに何も足さないので、語の並びだけでは「閉じた」ことが見えない
+    // ——`3 + = × 5` の `+` は訂正の対象ではない(engine の `finish` が演算子を使い切っている)。
+    let mut open_operator = false;
 
     for &key in keys {
         match key {
             Key::Ac => {
                 parts.clear();
                 current = None;
+                open_operator = false;
             }
             Key::Del => {
                 // `delete_one`(engine/mod.rs)をそのまま辿る。
@@ -215,6 +220,7 @@ pub fn spell(keys: &[Key]) -> String {
             }
             Key::Eq => {
                 commit_into(&mut current, &mut parts);
+                open_operator = false;
             }
             _ => {
                 // 二項演算子・`)`・後置関数。
@@ -222,7 +228,10 @@ pub fn spell(keys: &[Key]) -> String {
                 // 演算子の直後の演算子は訂正(engine の `push_binop`)。綴りも最後の 1 つ
                 // だけを残す(0.9.2 設計書 §9 の 9)。バッファがあれば上の行が数を流し込む
                 // ので、ここで末尾が演算子なのは「演算子の直後から動いていない」ときだけ。
+                // `=` は綴りに何も足さないので、`open_operator` フラグで「演算子がまだ開いている」
+                // かどうかを判定する(engine の `finish` が演算子を消費したかどうか)。
                 if is_binary(key)
+                    && open_operator
                     && parts
                         .last()
                         .is_some_and(|part| BINARY_GLYPHS.contains(&part.as_str()))
@@ -232,9 +241,28 @@ pub fn spell(keys: &[Key]) -> String {
                 if let Some(text) = commit_glyph(key) {
                     parts.push(text.to_string());
                 }
+                // 後置関数と `)` は二項ではないので、フラグを false にする。
+                open_operator = is_binary(key);
             }
         }
     }
     commit_into(&mut current, &mut parts);
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_binary_glyphs_are_the_ones_commit_glyph_writes() {
+        // `BINARY_GLYPHS` は `commit_glyph` の二項演算子の字面と同じでなければならない
+        // ——片方だけ変えると押し直しの判定が黙って外れる。
+        let binary: Vec<Key> = Key::ALL.iter().copied().filter(|&k| is_binary(k)).collect();
+        assert_eq!(binary.len(), BINARY_GLYPHS.len());
+        for key in binary {
+            let glyph = commit_glyph(key).unwrap();
+            assert!(BINARY_GLYPHS.contains(&glyph), "{key:?} → {glyph}");
+        }
+    }
 }
