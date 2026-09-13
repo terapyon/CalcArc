@@ -261,11 +261,11 @@ fn del_walks_the_exact_stages_the_real_engine_walks() {
     assert_entry(&["1", "dot", "5", "exp", "3", "del", "del", "del"], "1.");
 
     // engine_table.rs:892
-    // (`del` が j 入力をまるごと消したあと、次の `mul` は差し替えでは
-    // なく確定した 3 に対する新しい演算になる。答は 15)。
+    // (`del` が j 入力をまるごと消したあと、次の `mul` は差し替え(訂正)。
+    // 綴りは最後の 1 つだけを残す(0.9.2 設計書 §9 の 9)。答は 15)。
     assert_eq!(
         spell_of(&["3", "mul", "j", "del", "mul", "5", "eq"]),
-        "3 × × 5"
+        "3 × 5"
     );
 
     // engine_table.rs:870,875
@@ -281,9 +281,9 @@ fn del_walks_the_exact_stages_the_real_engine_walks() {
     );
 
     // engine_table.rs:806
-    // (del は演算子を消さない。2 度目の `+` は打ち直しとして、押した
-    // 通りにもう 1 つ現れる。答は 7)。
-    assert_eq!(spell_of(&["3", "add", "del", "add", "4", "eq"]), "3 + + 4");
+    // (del は演算子を消さない。2 度目の `+` は打ち直し(訂正)。綴りは最後の
+    // 1 つだけを残す(0.9.2 設計書 §9 の 9)。答は 7)。
+    assert_eq!(spell_of(&["3", "add", "del", "add", "4", "eq"]), "3 + 4");
 }
 
 #[test]
@@ -307,6 +307,26 @@ fn del_after_lparen_returns_to_the_operator() {
     // 「既知の穴」は閉じた。
     assert_eq!(spell_of(&["3", "mul", "lparen", "del"]), "3 ×");
     assert_eq!(spell_of(&["3", "add", "lparen", "del"]), "3 +");
+}
+
+#[test]
+fn a_corrected_operator_is_spelled_once() {
+    // 押し直しは訂正であって計算ではない(engine_table の `a_second_operator_replaces_the_first`)。
+    // 綴りも最後の 1 つだけを残す(0.9.2 設計書 §9 の 9、利用者の裁定)。以前は
+    // 同じ演算子も違う演算子も両方並べていた(実測: `3 + + 4` → 「3 + + 4」)。
+    assert_eq!(spell_of(&["3", "add", "add", "4"]), "3 + 4");
+    assert_eq!(spell_of(&["3", "mul", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["3", "add", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["3", "add", "sub", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["2", "add", "3", "add", "mul", "4"]), "2 + 3 × 4");
+    // DEL で演算子の直後に戻ってからの押し直しも訂正(engine と同じ)。
+    assert_eq!(spell_of(&["3", "mul", "4", "del", "add", "5"]), "3 + 5");
+    assert_eq!(
+        spell_of(&["3", "mul", "lparen", "del", "add", "4"]),
+        "3 + 4"
+    );
+    // 開き括弧の直後の演算子は訂正ではない(engine も差し替えない)。
+    assert_eq!(spell_of(&["3", "mul", "lparen", "add", "4"]), "3 × ( + 4");
 }
 
 #[test]

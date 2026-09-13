@@ -3,6 +3,8 @@
 //! **打った順に、キーのラベルをそのまま並べる。** 構文木を組まない
 //! ——組めばそれは計算であり、参照実装に同じ手順を書くことになって
 //! 照合の意味が消える(設計書 `2026-09-03-history-design.md` §4a)。
+//! **ただし演算子の直後の演算子は訂正なので、最後の 1 つだけを残す**
+//! (0.9.2 設計書 §9 の 9。engine の押し直しと同じ意味)。
 //!
 //! 独立: 不可能。**綴りは「盤面のキーが何と書いてあるか」という取り決め**
 //! であって数学的な事実ではないので、別手順で同じ文字列に到達する道が無い。
@@ -94,6 +96,16 @@ fn commit_glyph(key: Key) -> Option<&'static str> {
         Key::Atan => "atan",
         _ => return None,
     })
+}
+
+/// 二項演算子の字面。**押し直しの判定にだけ使う**(`spell` の `_` の腕)。
+const BINARY_GLYPHS: [&str; 7] = ["+", "−", "×", "÷", "xʸ", "nPr", "nCr"];
+
+fn is_binary(key: Key) -> bool {
+    matches!(
+        key,
+        Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Pow | Key::Npr | Key::Ncr
+    )
 }
 
 /// キー列を式の文字列に綴る。
@@ -207,6 +219,16 @@ pub fn spell(keys: &[Key]) -> String {
             _ => {
                 // 二項演算子・`)`・後置関数。
                 commit_into(&mut current, &mut parts);
+                // 演算子の直後の演算子は訂正(engine の `push_binop`)。綴りも最後の 1 つ
+                // だけを残す(0.9.2 設計書 §9 の 9)。バッファがあれば上の行が数を流し込む
+                // ので、ここで末尾が演算子なのは「演算子の直後から動いていない」ときだけ。
+                if is_binary(key)
+                    && parts
+                        .last()
+                        .is_some_and(|part| BINARY_GLYPHS.contains(&part.as_str()))
+                {
+                    parts.pop();
+                }
                 if let Some(text) = commit_glyph(key) {
                     parts.push(text.to_string());
                 }
