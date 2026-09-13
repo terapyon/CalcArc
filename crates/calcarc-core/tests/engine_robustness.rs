@@ -231,12 +231,19 @@ mod invariants {
         Ok(())
     }
 
+    /// **7 つとも持つ。** `mod.rs` の `operator_pending` は 7 つの二項演算子キー
+    /// すべてで真になる(`Add`・`Sub`・`Mul`・`Div`・`Pow`・`Npr`・`Ncr`)。ここが
+    /// 4 つしか持たなければ、I4 は `Pow`・`Npr`・`Ncr` の押し直しを検査しない
+    /// ——F1 がいちばん変える `xʸ` の訂正が素通りする。
     fn binop_of(key: Key) -> Option<BinOp> {
         Some(match key {
             Key::Add => BinOp::Add,
             Key::Sub => BinOp::Sub,
             Key::Mul => BinOp::Mul,
             Key::Div => BinOp::Div,
+            Key::Pow => BinOp::Pow,
+            Key::Npr => BinOp::Npr,
+            Key::Ncr => BinOp::Ncr,
             _ => return None,
         })
     }
@@ -539,12 +546,9 @@ fn walk(
         if let Err(why) = invariants::check(&step) {
             panic!("{why}\n  key sequence: {trail:?}");
         }
-        let next_anchor = if invariants::keeps_the_position(key, state, &next) {
-            anchor
-        } else {
-            Some(key)
-        };
-        let next_anchor_base = if invariants::keeps_the_position(key, state, &next) {
+        let kept_position = invariants::keeps_the_position(key, state, &next);
+        let next_anchor = if kept_position { anchor } else { Some(key) };
+        let next_anchor_base = if kept_position {
             anchor_base
         } else {
             Some(state)
