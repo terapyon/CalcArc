@@ -950,6 +950,36 @@ fn del_removes_an_unclosed_paren() {
 }
 
 #[test]
+fn del_after_a_closed_group_removes_the_unclosed_paren_before_it() {
+    use calcarc_core::CalcError;
+    // 閉じた組のあとの DEL は、その組の前に開いたまま残る `(` を消す(組の中身は残る)。
+    // `( ( 3 ) DEL` は外の `(` が消えて、画面の 3 はそのまま——最後の `)` は開いていない
+    // `)` になる。0.9.2 の値の照合(`engine_values.rs`)がこの形を決める行を必要としたので、
+    // いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
+    assert_eq!(
+        run(&["lparen", "lparen", "3", "rparen", "del"]).pending_depth,
+        0
+    );
+    assert_eq!(
+        main_of(&["lparen", "lparen", "3", "rparen", "del", "eq"]),
+        "3"
+    );
+    assert_eq!(
+        run(&["lparen", "lparen", "3", "rparen", "del", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+    // 演算子が先に積まれていれば、DEL は何も消さない(`3 + ( 4 ) DEL`)。
+    assert_eq!(
+        run(&["3", "add", "lparen", "4", "rparen", "del"]).pending_depth,
+        0
+    );
+    assert_eq!(
+        main_of(&["3", "add", "lparen", "4", "rparen", "del", "eq"]),
+        "7"
+    );
+}
+
+#[test]
 fn del_walks_the_three_tiers_in_order() {
     // 数字 → j マーカー → 開き括弧（設計書 I7）。
     assert_eq!(main_of(&["3", "add", "lparen", "j", "4", "del"]), "j");
@@ -1005,10 +1035,38 @@ fn del_on_a_fresh_paren_returns_to_the_operator_before_it() {
 }
 
 #[test]
+fn the_answer_carries_on_until_a_new_entry_is_committed() {
+    // `=` の答えは、新しい数が確定するまで画面の値として次の計算に入る。0.9.2 の値の照合
+    // (`engine_values.rs`)が決める行を必要としたので、いまの振る舞いをそのまま仕様として
+    // 書いた(2026-09-13)。
+    // 何も新しく打たずに `=` を押しても答えのまま(同じ演算を繰り返さない)。
+    assert_eq!(main_of(&["2", "add", "3", "eq", "eq"]), "5");
+    // 答えに続けて演算子を押せば、答えが左辺になる。
+    assert_eq!(main_of(&["2", "add", "3", "eq", "mul", "4", "eq"]), "20");
+    // `=` のあとに打ち始めた数を DEL で消し切れば、答えに戻る。上の `2 + 3 = ( DEL =` → 0
+    // との違い: **`(` は押した時点で新しい計算を始める**が、**数字は確定するまで始めない**。
+    assert_eq!(
+        main_of(&["2", "add", "3", "eq", "4", "del", "add", "1", "eq"]),
+        "6"
+    );
+}
+
+#[test]
+fn an_operator_right_after_an_open_paren_takes_zero_as_its_left_operand() {
+    // `(` の直後の演算子は 0 を左辺にする(`( + 3 )` は `( 0 + 3 )`)。0.9.2 の値の照合
+    // (`engine_values.rs`)が決める行を必要としたので、いまの振る舞いをそのまま仕様として
+    // 書いた(2026-09-13)。
+    assert_eq!(main_of(&["lparen", "add", "3", "rparen", "eq"]), "3");
+}
+
+#[test]
 fn del_after_a_closing_paren_does_not_fake_a_pending_operator() {
     // `)` の直後は「演算子の直後」ではない。**数字は押せない**(0.9.2 設計書 §3.2 の
-    // S4)ので `5` は何も起こさず、DEL も消すものが無い。次の `+` は差し替えではなく
-    // 通常の演算になる。
+    // S4)ので `5` は何も起こさない。DEL も消すものが無い——**組の外で `+` が保留されて
+    // いるから**である(`3 + ( 4 )` は `+` が先頭)。`)` の直後の DEL がいつも何も消さない
+    // のではない: 組の前に開いたままの `(` があれば、DEL はそれを消す
+    // (`del_after_a_closed_group_removes_the_unclosed_paren_before_it`)。
+    // 次の `+` は差し替えではなく通常の演算になる。
     //
     // この形は状態だけを見ると `3 + 4 DEL` と区別がつかない。どちらも
     // バッファが消えて演算子スタックの先頭が `+` になる。だから

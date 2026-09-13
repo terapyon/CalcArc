@@ -216,10 +216,11 @@ impl Typed {
                         self.toks.pop();
                     }
                     // 何も打っていなければ画面の値が左辺(`=` のあとは答え。engine_table:
-                    // `multiplies_a_complex_number_by_a_real` の `… = × 2 =`)。
+                    // `the_answer_carries_on_until_a_new_entry_is_committed` の `2 + 3 = × 4 =` → 20)。
                     None => self.toks.push(Tok::Val(self.base)),
-                    // `(` の直後は 0 が左辺(設計書 §2.2 の実測「`3 × ( +` は `3 × ( 0 +`」。
-                    // engine_table に行は無い)。
+                    // `(` の直後は 0 が左辺(engine_table:
+                    // `an_operator_right_after_an_open_paren_takes_zero_as_its_left_operand` の
+                    // `( + 3 ) =` → 3)。
                     Some(Tok::Open) => self.toks.push(Tok::Val(Q::int(0))),
                     _ => {}
                 }
@@ -233,7 +234,8 @@ impl Typed {
                 }
                 // 何も打っていないときの `(` は新しい計算の始まり。DEL で消しても
                 // 前の答えは戻らない(engine_table: `del_on_a_fresh_paren_returns_to_the_operator_before_it`
-                // の `2 + 3 = ( DEL =` → 0、§9 の 10)。
+                // の `2 + 3 = ( DEL =` → 0、§9 の 10)。数字はここが違う——確定するまで
+                // 新しい計算を始めない(DEL の腕と `the_answer_carries_on_until_a_new_entry_is_committed`)。
                 if self.toks.is_empty() {
                     self.base = Q::int(0);
                 }
@@ -264,8 +266,9 @@ impl Typed {
                 self.toks.push(Tok::Close);
             }
             Key::Eq => {
-                // 何も打っていなければ画面の値のまま(engine_table: `equals_without_an_operator_keeps_the_entry`。
-                // `2 + 3 = =` → 5 の形そのものの行は無い)。
+                // 何も打っていなければ画面の値のまま(engine_table:
+                // `the_answer_carries_on_until_a_new_entry_is_committed` の `2 + 3 = =` → 5、
+                // `equals_without_an_operator_keeps_the_entry`)。
                 if self.toks.is_empty() {
                     return;
                 }
@@ -287,29 +290,38 @@ impl Typed {
             }
             Key::Del => {
                 if let Some(Tok::Num(s)) = self.toks.last_mut() {
-                    // 数字を 1 つ消す(engine_table: `del_removes_the_last_character`)。
+                    // 数字を 1 つ消す(engine_table: `del_removes_the_last_character`)。消し切って
+                    // 何も残らなければ、画面は `base`(`=` のあとは答え)に戻る(engine_table:
+                    // `the_answer_carries_on_until_a_new_entry_is_committed` の `2 + 3 = 4 DEL + 1 =` → 6)。
                     s.pop();
                     if s.is_empty() {
                         self.toks.pop();
                     }
                 } else if let Some(i) = self.top_open() {
-                    // 保留のいちばん上が開き括弧なら、それを消す(engine_table:
-                    // `del_removes_an_unclosed_paren`)。**括弧の後ろに閉じた組が
-                    // あっても消える**——`( ( 3 ) DEL )` は外の括弧が消え、最後の `)` が
-                    // SyntaxError になる。括弧が末尾なら「演算子の直後に戻る」
-                    // (engine_table: `del_on_a_fresh_paren_returns_to_the_operator_before_it`。
-                    // `3 × ( DEL =` は `3 × =`)。
+                    // 打ちかけの数が無いときの DEL は、**いちばん最後の閉じていない `(`** を消す——
+                    // ただし、その `(` のあとに**同じ深さの演算子**が続いていないときだけ(うしろの
+                    // 閉じた組と数は数えない。組の中身は残る)。engine_table:
+                    // `del_removes_an_unclosed_paren`・
+                    // `del_after_a_closed_group_removes_the_unclosed_paren_before_it`
+                    // (`( ( 3 ) DEL` は外の `(` が消え、最後の `)` は開いていない `)` になる)。
+                    // `(` が末尾なら、消したあとは演算子の直後に戻る
+                    // (`del_on_a_fresh_paren_returns_to_the_operator_before_it`。`3 × ( DEL =` は `3 × =`)。
                     self.toks.remove(i);
                 }
-                // 演算子・答えは消さない(DEL は undo ではない。engine_table:
-                // `del_does_not_remove_an_operator`)。
+                // 演算子・答えは消さない(DEL は undo ではない)。`( 3 + DEL` は `(` のあとに同じ
+                // 深さの `+` があるので何も消さない(engine_table: `del_does_not_remove_an_operator`)。
+                // `3 + ( 4 ) DEL` は閉じていない `(` が無いので何も消さない
+                // (`del_after_a_closed_group_removes_the_unclosed_paren_before_it` の後半)。
             }
             _ => unreachable!("網に無いキー: {key:?}"),
         }
     }
 
-    /// 保留のいちばん上——末尾から、閉じた組と数を飛ばして最初に当たる演算子か開き括弧——が
-    /// 開き括弧なら、その位置。engine の演算子スタックの先頭に当たる。
+    /// 打ちかけの数が無いときに DEL が消す `(` の位置: **いちばん最後の閉じていない `(`** で、
+    /// そのあとに**同じ深さの演算子**が続いていないもの(うしろの閉じた組と数は数えない)。
+    /// 末尾から読み、閉じた組は深さを数えて飛ばす。深さ 0 で先に演算子に当たれば無し、
+    /// 開き括弧に当たればそれ(engine_table: `del_removes_an_unclosed_paren`・
+    /// `del_after_a_closed_group_removes_the_unclosed_paren_before_it`・`del_does_not_remove_an_operator`)。
     fn top_open(&self) -> Option<usize> {
         let mut depth = 0usize;
         for (i, t) in self.toks.iter().enumerate().rev() {
@@ -382,7 +394,9 @@ fn walk(state: &EngineState, typed: &Typed, trail: &mut Vec<Key>, compared: &mut
         ),
     }
     *compared += 1;
-    if trail.len() + 1 >= LENGTH || typed.error.is_some() {
+    // 降りるのをやめるのは、**評価器とエンジンの両方が**もうエラーのときだけ。片方だけなら
+    // 先の列でもう片方が値を出すかもしれないので、比べ続ける。
+    if trail.len() + 1 >= LENGTH || (typed.error.is_some() && state.error.is_some()) {
         return;
     }
     for &key in &NET {
@@ -406,7 +420,9 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
     );
     println!("比べた回数: {compared}");
     // **比べた回数の下限**(0 本で緑にしない)。網羅は決定的なので下限は実測値そのもの
-    // (2026-09-13、LENGTH = 7 で実測 682,651 回、2.83 秒(debug))。
+    // (2026-09-13、LENGTH = 7 で実測 682,651 回、2.83 秒(debug))。降りるのをやめる条件を
+    // 「両方がエラー」にしたあとも同じ 682,651 回(2.89 秒)——評価器がエラーにする所では
+    // エンジンもエラーなので、切る枝は変わらなかった。
     assert!(
         compared >= 682_651,
         "比べたのは {compared} 回(2026-09-13 の実測 682,651 回)"
