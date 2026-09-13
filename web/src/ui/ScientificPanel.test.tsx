@@ -343,6 +343,24 @@ describe("履歴", () => {
     expect(screen.getByText("23")).toBeInTheDocument();
   });
 
+  it("disables a key the engine refuses, and keeps it out of the recorded expression", async () => {
+    // 0.9.2 設計書 §3.3(条件 1): 押せないキーは盤面で押せず、キーボードから打っても
+    // 打鍵の列に積まない。積むと engine は `2` のまま、履歴の式は「2 (」になって嘘になる。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["2"]);
+    expect(screen.getByRole("button", { name: "開き括弧" })).toBeDisabled();
+    fireEvent.keyDown(window, { key: "(" });
+    await pressKeys(["計算する"]);
+    await openHistory();
+    // ここは `records one entry when = is pressed` と同じ形で、記録された式が「2」だけ
+    // であることを見る。偽 `dispatch` は単独の数字を変えないので答も「2」になり、
+    // `getByText("2")` は式・答の 2 か所に当たって曖昧になる——`getAllByText` で
+    // 数え、綴りが「2 (」に伸びていないこと(=一致が増えていないこと)を見る。
+    expect(screen.getAllByText("2")).toHaveLength(2);
+    expect(screen.queryByText("2 (")).not.toBeInTheDocument();
+  });
+
   it("does not fold a key typed before the engine has loaded into the next recorded expression", async () => {
     // **Fix round 3 finding.** `useKeyboard(press)` はこのコンポーネントの
     // 早期リターン(`if (!calc || !step) return <p>Loading…</p>`)より前で

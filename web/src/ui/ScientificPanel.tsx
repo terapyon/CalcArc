@@ -426,6 +426,11 @@ export function ScientificPanel() {
     // 「leaves no fragment of the entry that the error interrupted」——
     // 残した列が次の式に漏れないこと(=外から見える約束)を見張る。
     const previous = stepRef.current;
+    // **押せないキーは列にも engine にも渡さない**(0.9.2 設計書 §3.3、calcarc-1e の条件 1)。
+    // 判断は engine が前の Step に載せた `refused` を読むだけ——ここに規則を書かない。
+    // 盤面では押せないが、キーボード(`useKeyboard`)は同じ `press` を通るので、ここで止まる。
+    // 積むと engine は数を捨てずに元のまま、綴りだけが「2 (」になり、履歴の式が嘘になる。
+    if (previous?.refused.includes(token)) return;
     const inError = previous !== null && previous.display.error !== null;
     if (ready && previous && !(inError && token !== "ac")) {
       keysRef.current.push(token);
@@ -670,6 +675,7 @@ export function ScientificPanel() {
           <Keypad
             sections={SCIENTIFIC_SECTIONS}
             onPress={press}
+            off={(token) => (step.refused.includes(token) ? "transient" : null)}
             onAction={(action) => {
               if (action === "history") setShowingHistory(true);
             }}
