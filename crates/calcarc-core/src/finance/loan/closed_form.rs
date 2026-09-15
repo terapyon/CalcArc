@@ -13,6 +13,19 @@
 use super::rate::Rate;
 use crate::{CalcError, CalcResult};
 
+/// f64 で決める月額の上限(円)。**これを超える月額は答えを出さず `Overflow` にする。**
+///
+/// 月額は f64 で決めるので、金額が大きいと切り捨てが理論値から 1 円を超えてずれうる
+/// (Python で閉形式を写した計算で、年 0.0001%・2 回の月額約 45 億円から 1 円に届いた)。
+/// 精度を確かめたのはここまで——出どころは `docs/numerical-policy.md` の節
+/// 「定例月額の許容(2026-09-12、外部監査 F2・利用者の裁定)」で、同じ数を
+/// `testdata/loan_boundary.json` の `max_monthly_yen` が持つ(参照実装が照合する)。
+///
+/// **比べるのは切り捨てたあとの月額**——ちょうど 10 億円は通す(境界 golden の
+/// `residual/exact/15/2/987654400/81`)。**f64 を通らない経路(金利 0%・1 回払い)と
+/// 逆算の答えには掛けない**(0.9.2 設計書 §9 の 7)。
+const MAX_VERIFIED_MONTHLY_YEN: u64 = 1_000_000_000;
+
 /// (1+r)^n。素朴な `powi` ではなく expm1/log1p 経由で評価する。
 ///
 /// 素朴式は低金利で桁落ちし、年 0.001% では ~1e-5 円まで悪化する
@@ -41,6 +54,7 @@ pub(super) fn annuity(r: f64, n: u32) -> f64 {
 ///
 /// 金利 0% と 1 回払いは f64 を通さない——理論値が円境界ちょうどに乗るのが
 /// 常態で、f64 の floor が式の書き方次第で 1 円ずれるため(設計書 §1-4)。
+/// f64 の枝の答えは `MAX_VERIFIED_MONTHLY_YEN` まで(超えたら `Overflow`)。
 pub fn monthly_payment(principal: u64, rate: &Rate, n: u32, residual: u64) -> CalcResult<u64> {
     if n == 0 || principal == 0 || residual >= principal {
         return Err(CalcError::SyntaxError);
@@ -74,7 +88,12 @@ pub fn monthly_payment(principal: u64, rate: &Rate, n: u32, residual: u64) -> Ca
     if !a.is_finite() || a < 0.0 || a >= u64::MAX as f64 {
         return Err(CalcError::Overflow);
     }
-    Ok(a as u64) // 円未満切り捨て(設計書 §2 の 1 語)
+    let monthly = a as u64; // 円未満切り捨て(設計書 §2 の 1 語)
+    if monthly > MAX_VERIFIED_MONTHLY_YEN {
+        // 精度を確かめていない答えは出さない(0.9.2 設計書 §5.1。画面は既存の Math ERROR)。
+        return Err(CalcError::Overflow);
+    }
+    Ok(monthly)
 }
 
 #[cfg(test)]
@@ -164,5 +183,40 @@ mod tests {
             monthly_payment(1_000_000, &r, 1, 500_000),
             Err(CalcError::SyntaxError)
         );
+    }
+
+    #[test]
+    fn a_monthly_payment_above_the_verified_cap_is_an_error() {
+        // 0.9.2 設計書 §5.1(外部監査 F2 の追加の裁定): f64 で決める月額は 10 億円まで
+        // しか精度を確かめていない。**切り捨てた月額**がそれを超えたら答えを出さない。
+        let r = Rate::from_percent("1").unwrap();
+        // 理論月額は約 1,001,250,000 円(上限 + 2 円より十分に上。境目の 1 円は f64 で揺れる)。
+        assert_eq!(
+            monthly_payment(2_000_000_000, &r, 2, 0),
+            Err(CalcError::Overflow)
+        );
+        // 上限の下は答えが出る(約 996,000,000 円)。
+        assert!(monthly_payment(1_990_000_000, &r, 2, 0).is_ok());
+    }
+
+    #[test]
+    fn exactly_the_cap_is_still_an_answer() {
+        // ちょうど 10 億円は通す(calcarc-1e の条件 2)。calcarc-88 の境界 golden の
+        // `residual/exact/15/2/987654400/81`(`monthly_floor` = 1,000,000,000)と同じ入力。
+        let r = Rate::from_percent("15").unwrap();
+        assert_eq!(monthly_payment(987_654_400, &r, 2, 81), Ok(1_000_000_000));
+    }
+
+    #[test]
+    fn the_exact_paths_are_outside_the_cap() {
+        // 金利 0% と 1 回払いは f64 を通らない厳密な経路で、精度の心配が無い(§9 の 7)。
+        // 0%: finance.json の `loan_forward/18446744073709551615/0/600/0` と同じ答え。
+        let zero = Rate::from_percent("0").unwrap();
+        assert_eq!(
+            monthly_payment(18_446_744_073_709_551_615, &zero, 600, 0),
+            Ok(30_744_573_456_182_586)
+        );
+        let r = Rate::from_percent("1").unwrap();
+        assert!(monthly_payment(5_000_000_000, &r, 1, 0).is_ok());
     }
 }

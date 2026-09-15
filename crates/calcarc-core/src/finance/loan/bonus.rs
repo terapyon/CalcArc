@@ -229,4 +229,15 @@ mod tests {
             plain_p
         );
     }
+
+    #[test]
+    fn a_bonus_payment_above_the_cap_is_an_error() {
+        // 賞与の分も同じ `monthly_payment` の f64 の枝を通る(0.9.2 設計書 §5.1)。
+        // 月払い分は約 4.6 億円で上限の下、賞与分は 4 回で 1 回あたり約 22.8 億円。
+        let r = Rate::from_percent("1").unwrap();
+        assert_eq!(
+            compute_forward(20_000_000_000, 9_000_000_000, &r, 24),
+            Err(CalcError::Overflow)
+        );
+    }
 }
