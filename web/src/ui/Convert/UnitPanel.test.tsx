@@ -890,10 +890,13 @@ describe("UnitPanel（為替の盤面）", () => {
     // **12.5 のままである。** `convertCurrency` で畳んでいたら、JPY の
     // 小数桁 0 で丸められて `13` になる。
     expect(echo()).toHaveTextContent("値 12.5");
-    // **`calls`(`convert`)ではなく `settleCalls` を見る。** `=` は
-    // `settle` だけを呼ぶ——`convert` は表示専用になったので、`calls` は
-    // 表示側の再計算(着地通貨の桁で丸めたもの)しか記録しない。
-    expect(settleCalls.at(-1)?.value).toBe("12.5");
+    // **`currencyCalls` を見る。** `=` が押した直後の値(`typed`)を
+    // `convertCurrency` が結果表示のために読み直す(`UnitPanel.tsx` の
+    // `shown` の計算、`:325` で `=` が書き換えた `typed` を再び渡す側)。
+    // ここが「打った値が着地通貨の桁で丸められていない」ことを主張できる
+    // 口である——`settleCalls` は `=` の押下そのものより先に、`keyOff` が
+    // 毎描画で呼ぶ `settled()` の記録も混ざるので、ここでは使わない。
+    expect(currencyCalls.at(-1)?.value).toBe("12.5");
   });
 
   it("asks the provider once per session, even when the fetch fails", async () => {

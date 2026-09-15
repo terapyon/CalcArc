@@ -48,15 +48,31 @@ function setOnline(online: boolean): void {
 }
 
 /** レート表 1 枚。**値は文字列**(spec §2.1)——`number` にした時点で誤差が入る。 */
-function rateSet(rates: Record<string, string>): CurrencyRateSet {
+function rateSet(
+  rates: Record<string, string>,
+  when: { date: string; fetchedAt: string },
+): CurrencyRateSet {
   return {
     baseCurrency: "USD",
-    date: "2026-08-14",
-    fetchedAt: "2026-08-14T00:00:00.000Z",
+    date: when.date,
+    fetchedAt: when.fetchedAt,
     provider: "https://www.exchangerate-api.com",
     rates,
   };
 }
+
+/**
+ * いま。**取りに行かない側**(24 時間以内、`UnitPanel.test.tsx` の同名の
+ * ヘルパーと同じ)。`fetchedAt` を固定した日付にすると、`decide()`
+ * (`currency/provider.ts:215`)が「24 時間より古い」と読んで背後で
+ * 取得を試み、`exchangeRateApi.getLatestRates` の reject が
+ * 意図しない `act()` 警告の種になる——ここは為替の桁の検査で、
+ * 取得の背後経路を検査対象にしない。
+ */
+const fresh = () => ({
+  date: "2026-08-14",
+  fetchedAt: new Date().toISOString(),
+});
 
 async function renderPanel(category: "length" | "currency" = "length") {
   const view = render(<UnitPanel category={category} />);
@@ -85,6 +101,7 @@ const FIELD = {
 } as const;
 const DOT = "小数点";
 const EQ = "計算する";
+const SIGN = "符号を変える";
 
 beforeEach(() => {
   vi.mocked(readRates).mockReset().mockResolvedValue(null);
@@ -110,6 +127,18 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     // `1/3 × 3 - 1 = 0`。分数のまま次の演算子を受け取れることの確認。
     await press(["掛ける", "3", "引く", "1"]);
     expect(main()).toHaveTextContent("0 mi");
+  });
+
+  it("settles a negative fraction, sign and all", async () => {
+    // `fromSettled` は符号なしの答えしか受けない(`convert/entry.ts`)ので、
+    // `UnitPanel.tsx` の `eq` ケースは先頭の `-` を剥がしてから渡し、符号は
+    // `negative` state へ移す(`:305-306`)。**分数でもこの受け渡しが保つ**
+    // ことを見る。
+    await renderPanel("length");
+    await press(["1", "割る", "3", SIGN]);
+    await press([EQ]);
+    expect(echo()).toHaveTextContent("値 -1/3");
+    expect(main()).toHaveTextContent("-0.2071237307 mi");
   });
 
   it("does not round a terminating decimal at any length", async () => {
@@ -143,7 +172,7 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     // JPY(小数桁 0)を着地に選んでも、`=` は打った桁を丸めない
     // (`UnitPanel.test.tsx` の偽物の同名の検査と対になる、実物での確認)。
     vi.mocked(readRates).mockResolvedValue(
-      rateSet({ USD: "1", JPY: "155.23" }),
+      rateSet({ USD: "1", JPY: "155.23" }, fresh()),
     );
     await renderPanel("currency");
     await screen.findByText("Rate: 2026-08-14");
@@ -155,7 +184,7 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
 
   it("does not round a long decimal in currency mode either", async () => {
     vi.mocked(readRates).mockResolvedValue(
-      rateSet({ USD: "1", JPY: "155.23" }),
+      rateSet({ USD: "1", JPY: "155.23" }, fresh()),
     );
     await renderPanel("currency");
     await screen.findByText("Rate: 2026-08-14");
