@@ -977,6 +977,18 @@ fn del_after_a_closed_group_removes_the_unclosed_paren_before_it() {
         main_of(&["3", "add", "lparen", "4", "rparen", "del", "eq"]),
         "7"
     );
+    // `+/−` で手元にある値の上の `(` も同じく消える(calcarc-1e の検算、2026-09-16)。
+    // `( 3 +/− DEL )` は `(` が消えて最後の `)` が開いていない `)` になり、SyntaxError。
+    // `2 × ( 3 +/− DEL + 1 =` は 2 × (−3) + 1 = −5。いまの振る舞いをそのまま固定する
+    // (履歴の綴りは spell_table の `del_on_a_paren_under_a_value_spells_what_the_engine_computes`)。
+    assert_eq!(
+        run(&["lparen", "3", "neg", "del", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+    assert_eq!(
+        main_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1", "eq"]),
+        "-5"
+    );
 }
 
 #[test]

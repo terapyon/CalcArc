@@ -384,4 +384,18 @@ fn del_on_a_paren_under_a_value_spells_what_the_engine_computes() {
         spell_of(&["3", "add", "lparen", "4", "rparen", "del", "add", "5"]),
         "3 + ( 4 ) + 5"
     );
+    // `+/−` で手元にある値の上の `(` も、engine の DEL は消す(calcarc-1e の検算で見つかった族)。
+    // 綴りも同じ `(` を消す——`( 3 +/− DEL )` は engine が SyntaxError、綴りも開いていない `)` になる。
+    // **この族は網ではなくこの行が守る**: `engine_values.rs` の網に `+/−` を足すと、Task 4 の
+    // 独立の評価器に新しい規則を教えることになる(engine_table の
+    // `del_after_a_closed_group_removes_the_unclosed_paren_before_it` が engine 側を固定する)。
+    assert_eq!(
+        spell_of(&["lparen", "3", "neg", "del", "rparen"]),
+        "3 +/− )"
+    );
+    // 2 × (−3) + 1 = −5。engine も同じ(`2 × ( 3 +/− DEL + 1 =` → −5)。
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1"]),
+        "2 × 3 +/− + 1"
+    );
 }
