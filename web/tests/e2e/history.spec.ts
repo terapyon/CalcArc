@@ -336,11 +336,14 @@ test("a recall made while the display was in an error state still becomes part o
  * `1e12` として入力欄に残っていた。欠陥自体は 0.9.2 より前からあり、F5 は
  * 症状を変えただけ)。
  *
- * ここでは `0 − 3 × 1 指数入力 1 2 =` で `-3e12` を作る——絶対値が
- * 1e10 を超えるので指数表記になる(numerical-policy: 有効数字 10 桁、
- * 指数が `[-9, 10)` の外)。**演算子と `(` の直後**という、0.9.2 でも
- * 拒否されない経路だけで組み立てているので、この答が拒否ではなく
- * `mapAnswerToKeys` の `null` 判定で弾かれることを見る。
+ * ここでは `引く 3 掛ける 1 指数入力 1 2 =` で `-3e12` を **1 回の計算**で
+ * 作る——絶対値が 1e10 を超えるので指数表記になる(numerical-policy: 有効
+ * 数字 10 桁、指数が `[-9, 10)` の外)。**演算子から始める**——2 回に分けて
+ * `0 − 3 =` を先に確定すると、その行(`-3`、指数を持たないので正しく
+ * 呼び戻せる)が履歴にもう 1 件積まれ、この検査の主張(1 件・呼び戻し不可)
+ * が崩れる(Fix round 1 finding)。演算子が先で `+/−` のあとに数字を打たない
+ * という、0.9.2 でも拒否されない経路だけで組み立てているので、この答が
+ * 拒否ではなく `mapAnswerToKeys` の `null` 判定で弾かれることを見る。
  */
 test("a negative mantissa with an exponent is recorded but offers no recall button, on the real WASM core", async ({
   page,
@@ -349,9 +352,19 @@ test("a negative mantissa with an exponent is recorded but offers no recall butt
   await page.goto("/");
   await expect(display).toHaveText("0");
 
-  await press(page, ["0", "引く", "3", "計算する"]);
-  await expect(display).toHaveText("-3");
-  await press(page, ["掛ける", "1", "指数入力", "1", "2", "計算する"]);
+  // 演算子から始めて 1 回の計算で作る(0 − 3 × 1e12)。0.9.2 でも拒否されない
+  // 経路だけ——演算子が先で、`+/−` のあとに数字を打たない。
+  await press(page, [
+    "引く",
+    "3",
+    "掛ける",
+    "1",
+    "指数入力",
+    "1",
+    "2",
+    "計算する",
+  ]);
+  await expect(display).toHaveText("-3e12");
 
   await press(page, ["第2面に切り替え", "履歴"]);
   await expect(page.getByRole("listitem")).toHaveCount(1);
