@@ -557,6 +557,17 @@ fn a_conversion_crosses_the_boundary_as_text() {
 }
 
 #[wasm_bindgen_test]
+fn settling_keeps_the_exact_value_across_the_boundary() {
+    // 0.9.2 設計書 §4: `=` は丸めない。表示の 10 桁(`convert`)とは別の口。
+    let text = |value: &str| get(&calcarc_wasm::settle_expression(value), "text").as_string();
+    assert_eq!(text("1/3").as_deref(), Some("1/3"));
+    assert_eq!(text("12345678901.5").as_deref(), Some("12345678901.5"));
+    assert_eq!(text("-12.5").as_deref(), Some("-12.5"));
+    let bad = calcarc_wasm::settle_expression("1/0");
+    assert_eq!(get(&bad, "kind").as_string().as_deref(), Some("error"));
+}
+
+#[wasm_bindgen_test]
 fn the_temperature_fixed_point_crosses_the_boundary() {
     // −40 は factor と offset の両方が同時に効く唯一の点(設計書 §6)。
     // 単項マイナスは構文解析器に無く、convert の入口が担う。

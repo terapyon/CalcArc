@@ -717,6 +717,17 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
     to_js_value(&result)
 }
 
+/// `=` で式を値にまとめる(0.9.2 設計書 §4、外部監査 F3)。**丸めない**——有限小数か
+/// 既約分数 `p/q`。表示の 10 桁(`convert`)とは別の口で、Convert の値の欄に入る。
+/// 計算は `calcarc-core` の `convert::settle` が持つ(ここには置かない)。
+#[wasm_bindgen]
+pub fn settle_expression(value: &str) -> JsValue {
+    let result: Outcome<ConvertText> = convert_core::settle::settle(value)
+        .map(|text| ConvertText { text })
+        .into();
+    to_js_value(&result)
+}
+
 /// カテゴリの単位トークンを **`Category::units()` の並びのまま**返す。
 ///
 /// **盤面はこの順に並べる**(設計書 §4.1)。並びをコアが持つのは、単位を足した
