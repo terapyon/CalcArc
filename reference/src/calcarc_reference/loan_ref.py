@@ -32,6 +32,12 @@ U64_MAX = (1 << 64) - 1
 MAX_TERM_MONTHS = 1200
 BONUS_INTERVAL_MONTHS = 6
 
+# f64 の経路(正の年利・2 回以上)で切り捨てた月額の上限(円)。超えたら Overflow
+# (製品の `closed_form::MAX_VERIFIED_MONTHLY_YEN` と同じ公開契約——数値方針
+# 「定例月額の許容」。出どころは製品の 1 か所で、こちらは `testdata/loan_boundary.json`
+# の `max_monthly_yen`(`loan_boundary.MAX_MONTHLY_YEN` 経由)で照合する)。
+MAX_VERIFIED_MONTHLY_YEN = 10**9
+
 # 円境界からこれ以上離れていなければ golden に採らない（設計書 §1-4）。
 # 絶対 1e-6 円だけでは u64 域の巨大な月額を守れない——f64 の誤差は値に比例する
 # ので、相対 1e-9 との大きいほうを使う（f64 の実力 ~1e-15 に対して 6 桁の余裕）。
@@ -205,6 +211,10 @@ def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -
     組み立て、桁落ちを避けるため `ln_1p`/`exp_m1` を使う。こちらは **Decimal
     50 桁**で式のまま評価する。**同じ式を別の演算系で解く**ので、評価の誤りは
     共有しない。式そのものの誤りは共有する）
+
+    上限: f64 の経路(正の年利・2 回以上)で、切り捨てた月額が
+    `MAX_VERIFIED_MONTHLY_YEN` を超えたら `Overflow`(製品の公開契約と同じ、
+    ちょうど上限は通す)。金利 0% と 1 回払いは厳密経路なので掛けない。
     """
     if n == 0 or principal == 0 or residual >= principal:
         raise _syntax()
@@ -227,10 +237,18 @@ def monthly_payment(principal: int, num: int, den: int, n: int, residual: int) -
         if present_value <= 0 or annuity <= 0:
             raise _syntax()
         amount = present_value / annuity
+        monthly = int(amount.to_integral_value(rounding=ROUND_FLOOR))
+        # 上限より上は _guard_boundary の前で切る(番人の後注記): 円境界ガードの
+        # 相対しきい値(値 × 1e-9)は月額 5 億円あたりで最大距離 0.5 円を超え、
+        # それより大きい月額を常に「境界に近すぎる」として弾いてしまう(実測)。
+        # Decimal 50 桁は cap+2 円の余裕(R2)を見分けるのに十分正確なので、
+        # 上限超えは先に確定させ、円境界ガードの対象にしない。
+        if monthly > MAX_VERIFIED_MONTHLY_YEN:
+            raise _overflow()
         _guard_boundary(amount)
         if amount > Decimal(U64_MAX):
             raise _overflow()
-        return int(amount.to_integral_value(rounding=ROUND_FLOOR))
+        return monthly
 
 
 def monthly_payment_exact(principal: int, num: int, den: int, n: int, residual: int) -> Fraction:
@@ -242,6 +260,10 @@ def monthly_payment_exact(principal: int, num: int, den: int, n: int, residual: 
 
     **`_guard_boundary` を通さない。** 境界ちょうどの月額こそが見たいものであり、Decimal 50 桁でも
     境界ちょうどでは整数の下に着地する（720,600 円・年 2%・2 か月で 361200.99…）。
+
+    **上限を掛けない。** `monthly_payment` の `MAX_VERIFIED_MONTHLY_YEN` はここには無い——
+    上限は golden が行を選ぶことで担う(`loan_boundary` の `over_cap`/`exempt` セル)。
+    理論値そのものを上限で切ると、上限ちょうど・上限超えの行の期待値が作れなくなる。
     """
     if n == 0 or principal == 0 or residual >= principal:
         raise _syntax()

@@ -24,7 +24,7 @@ from itertools import chain
 
 from calcarc_reference import loan_ref
 
-MAX_MONTHLY_YEN = 10**9
+MAX_MONTHLY_YEN = loan_ref.MAX_VERIFIED_MONTHLY_YEN
 TOLERANCE_YEN = 1
 NEAR = Fraction(1, 10**6)
 RATES = ("0.0001", "0.5", "1", "2", "15", "100")
