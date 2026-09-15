@@ -19,8 +19,11 @@ test("the factorial key is reachable behind the opening paren", async ({
   await shift(page).click();
   await key(page, "階乗").click();
   await expect(page.getByTestId("display-main")).toHaveText("120");
-  // ワンショット: 面は戻り、( は括弧に戻っている。
-  await expect(key(page, "開き括弧")).toBeEnabled();
+  // ワンショット: 面は戻り、( は括弧に戻っている——見えている面が入れ替わる。
+  await expect(key(page, "開き括弧")).toBeVisible();
+  await expect(key(page, "階乗")).not.toBeVisible();
+  // n! のあとは手元の値があるので ( は押せない(§9-1)。
+  await expect(key(page, "開き括弧")).toBeDisabled();
 });
 
 test("nPr and nCr compute through the browser", async ({ page }) => {

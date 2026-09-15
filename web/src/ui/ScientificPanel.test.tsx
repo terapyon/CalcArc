@@ -137,12 +137,41 @@ function fakeCalc(): Calc {
         // 見分けられるようにする(`engine_table.rs:125` と同じ規則)。
         const eIndex = from.main.indexOf("e");
         if (eIndex === -1) {
-          return stepOf({
-            ...from,
-            main: from.main.startsWith("-")
-              ? from.main.slice(1)
-              : `-${from.main}`,
-          });
+          // **仮数の符号で値が確定する(S5)——この後 engine は 0.9.2 設計書
+          // §9-8 の通り、これらのキーを拒否する。** これを持たせないと、
+          // 偽物はこの後も `exp` を素通しし続け、本物の engine では二度と
+          // 正しく呼び戻せない `-1.5e-3` のような形を、偽物の上でだけ
+          // 「呼び戻せた」ことにしてしまう——ファイル冒頭の警句
+          // 「偽物のほうが本物より寛容だと、何を書いても緑になる」が指す
+          // 事故そのもの(`ScientificPanel.test.tsx:1165` の旧テストが
+          // それだった)。
+          return stepOf(
+            {
+              ...from,
+              main: from.main.startsWith("-")
+                ? from.main.slice(1)
+                : `-${from.main}`,
+            },
+            [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "dot",
+              "zeros3",
+              "exp",
+              "j",
+              "lparen",
+              "pi",
+              "e",
+            ],
+          );
         }
         const head = from.main.slice(0, eIndex + 1);
         const exponent = from.main.slice(eIndex + 1);
@@ -1162,10 +1191,23 @@ describe("履歴", () => {
     expect(screen.getByTestId("display-main")).toHaveTextContent("1.5e-3");
   });
 
-  it("recalls a negative mantissa together with a negative exponent", async () => {
-    // 送り分けの規則は `mapAnswerToKeys`(`ScientificPanel.tsx` の冒頭)の
-    // docstring が持つ——ここでは繰り返さず、2 つの `neg` が別の宛先に
-    // 届くことだけ確かめる(Fix round 1 finding 1)。
+  it("does not offer a negative mantissa with an exponent for recall", async () => {
+    // **置き換えた旧テスト(「recalls a negative mantissa together with a
+    // negative exponent」)がここに在った。** `-1.5e-3` を「呼び戻せる」と
+    // 主張していたが、それは `fakeCalc` の `neg` が本物より寛容だった
+    // ためで(ファイル冒頭の警句「偽物のほうが本物より寛容だと、何を
+    // 書いても緑になる」)、実機では最初から正しく呼び戻せていなかった
+    // ——コントローラが実 wasm で測った: `1 dot 5 neg exp 3 neg` は
+    // 0.9.2 より前は `1e-3` を、いまは `1.5` を返す(仮数の符号(`neg`)で
+    // 値が確定し、続く `exp` を 0.9.2 より前は黙って捨て、いまは 0.9.2
+    // 設計書 §9-8 で拒否する——症状が変わっただけで、写せないという欠陥
+    // 自体は 0.9.2 より前からある)。この偽物はいまは `neg` の後、`e` の
+    // 無い側の分岐で S5 の拒否列を返す(上)ので、この形はもう「呼び戻せた」
+    // ことにならない。
+    //
+    // `mapAnswerToKeys` は「写せない形は `null` を返す」規則
+    // (`ScientificPanel.tsx` の docstring)をこの形に適用する——
+    // `canRecall` が弾くので、ボタンにならない。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
@@ -1178,10 +1220,12 @@ describe("履歴", () => {
       screen.getByRole("button", { name: "第2面に切り替え" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "履歴" }));
-    await userEvent.click(
-      screen.getByRole("button", { name: "x = -1.5e-3 を入力に入れる" }),
-    );
-    expect(screen.getByTestId("display-main")).toHaveTextContent("-1.5e-3");
+    // 見える。
+    expect(screen.getByText("-1.5e-3")).toBeInTheDocument();
+    // でも押せない——「呼び戻す」ボタンとしては存在しない。
+    expect(
+      screen.queryByRole("button", { name: "x = -1.5e-3 を入力に入れる" }),
+    ).not.toBeInTheDocument();
   });
 
   it("recalls a negative number with thousands separators", async () => {
