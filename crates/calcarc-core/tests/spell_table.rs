@@ -359,3 +359,29 @@ fn every_key_spells_or_is_one_of_the_seven() {
     assert_eq!(spelled, Key::ALL.len() - silent.len());
     assert_eq!(spelled, 39);
 }
+
+#[test]
+fn del_on_a_paren_under_a_value_spells_what_the_engine_computes() {
+    // 利用者の裁定(2026-09-16、0.9.2 設計書 §10): 綴りの DEL は engine の `delete_one` と
+    // 同じ `(`——保留のいちばん上の、閉じていない `(`——を消す。以前は末尾の `(` しか消さず、
+    // 値や閉じた組の下の `(` が綴りに残って、履歴の式が答えを生まなかった。
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "pi", "del", "add", "1"]),
+        "2 × π + 1"
+    );
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "4", "sqrt", "del", "add", "1"]),
+        "2 × 4 √ + 1"
+    );
+    assert_eq!(
+        spell_of(&[
+            "2", "mul", "lparen", "lparen", "3", "rparen", "del", "add", "1"
+        ]),
+        "2 × ( 3 ) + 1"
+    );
+    // 演算子が保留されていれば DEL は何も消さない(engine と同じ。`3 + ( 4 ) DEL + 5 =` は 12)。
+    assert_eq!(
+        spell_of(&["3", "add", "lparen", "4", "rparen", "del", "add", "5"]),
+        "3 + ( 4 ) + 5"
+    );
+}

@@ -6,11 +6,20 @@
 //! 各腕が engine_table.rs の行を名指しして持つ——**写しの出どころを 1 か所にする**。
 //!
 //! **押せないキーも列に残す**(calcarc-1e の確認、設計書 §2.6)。エンジンには全キーを渡し、
-//! ここは自前の規則で押せないキーを無視する。`refuses` は呼ばない——呼べば、エンジンが
-//! 拒みすぎても拒み足りなくても、ここが同じ誤りに従って黙る。
+//! ここは自前の規則で押せないキーを無視する。**値の照合は `refuses` を呼ばない**——呼べば、
+//! エンジンが拒みすぎても拒み足りなくても、ここが同じ誤りに従って黙る。
+//!
+//! **綴りを読み直す不変条件**(0.9.2 の Task 9、利用者の裁定 2026-09-16、設計書 §10・§9 の 12。
+//! calcarc-e3 の提案): 1 つの計算を `=` で閉じたとき、**web が記録する列**を `spell` で綴り、
+//! その式を同じ評価器で読んだ値が engine の答えと一致する。`refuses` を呼ぶのはここだけで、
+//! **web の記録を真似るため**である(`ScientificPanel` の `press` は `Step.refused` に載った
+//! キーを列に積まない)。値の照合のほうは今までどおり全キーをエンジンと評価器の両方に渡す。
+//! **評価器は engine に寄せていない**——`Typed` は Task 4 のまま、綴りを語に分けて打ち直した
+//! キーを読むだけで、この不変条件のために規則を 1 つも足していない。
 
+use calcarc_core::engine::{refuses, spell::spell};
 use calcarc_core::numeric::format::format_real;
-use calcarc_core::{CalcError, EngineState, Key, reduce};
+use calcarc_core::{CalcError, DisplayState, EngineState, Key, reduce};
 
 /// 既約の有理数。分母は正。
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -370,61 +379,253 @@ const NET: [Key; 10] = [
 /// 実測して、6 は 74,871 回・0.29 秒、7 は 682,651 回・2.80 秒(9 倍の網が 3 秒に収まる)。
 const LENGTH: usize = 7;
 
-/// `trail` を打った状態から `=` で閉じた値を比べ、1 キー足して降りる。
-fn walk(state: &EngineState, typed: &Typed, trail: &mut Vec<Key>, compared: &mut usize) {
-    let (_, shown) = reduce(state, Key::Eq);
-    let mut closed = typed.clone();
-    closed.press(Key::Eq);
-    let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
-    match (shown.error, closed.error) {
+/// 括弧に寄せた網(Task 9)。**値の下の `(` を DEL が消し、その前の演算子が組み方を変える形**
+/// ——`× ( ( 3 ) DEL + 3 =` は 9 打鍵要り、`NET` の長さ 7 には届かない。キーを 6 つに絞って
+/// 長さを 9 まで伸ばす。`=` は列を閉じるときだけ押す(途中の `=` は綴りの照合の外なので、
+/// 網に入れても綴りの比較は増えない)。
+const PAREN_NET: [Key; 6] = [
+    Key::Digit(3),
+    Key::Mul,
+    Key::Add,
+    Key::LParen,
+    Key::RParen,
+    Key::Del,
+];
+
+/// `PAREN_NET` の列の長さの上限(最後の `=` を含む)。
+///
+/// **9 にした。** 2026-09-16 に debug で実測して 7.91 秒(値の照合 856,681 回・綴りの読み直し
+/// 782,703 回)。予算の 15 秒に収まるので、`× ( ( 3 ) DEL + 3 =` の形に届く 9 を下げない。
+const PAREN_LENGTH: usize = 9;
+
+/// 網の歩き方を 1 つにまとめる。
+struct Net {
+    keys: &'static [Key],
+    /// 列の長さの上限(最後の `=` を含む)。
+    length: usize,
+}
+
+/// 比べた回数。どちらも下限を置く(0 本で緑にしない)。
+#[derive(Default)]
+struct Counts {
+    /// 打った全キーを評価器に渡した列の、`=` で閉じた値の照合。
+    values: usize,
+    /// 綴りを読み直した値の照合。
+    spellings: usize,
+}
+
+/// engine の答え `shown` と、`=` で閉じた評価器 `closed` を比べる。値ならその表示、エラーなら
+/// 種類。`what` は落ちたときに列を説明する(成功のたびには組み立てない)。
+fn agree(shown: &DisplayState, closed: &Typed, what: &dyn Fn() -> String) {
+    match (&shown.error, &closed.error) {
         (Some(engine), Some(oracle)) => {
-            assert_eq!(engine, oracle, "エラーの種類が違う: {tokens:?} + eq");
+            assert_eq!(engine, oracle, "エラーの種類が違う: {}", what());
         }
         (None, None) => {
             assert_eq!(
                 shown.main,
                 format_real(closed.base.to_f64()),
-                "最終値が違う: {tokens:?} + eq(評価器の式 {:?})",
-                typed.toks
+                "最終値が違う(左が engine、右が評価器): {}",
+                what()
             );
         }
         (engine, oracle) => panic!(
-            "片方だけエラー: engine {engine:?} / 評価器 {oracle:?}: {tokens:?} + eq(式 {:?})",
-            typed.toks
+            "片方だけエラー: engine {engine:?} / 評価器 {oracle:?}: {}",
+            what()
         ),
     }
-    *compared += 1;
-    // 降りるのをやめるのは、**評価器とエンジンの両方が**もうエラーのときだけ。片方だけなら
-    // 先の列でもう片方が値を出すかもしれないので、比べ続ける。
-    if trail.len() + 1 >= LENGTH || (typed.error.is_some() && state.error.is_some()) {
+}
+
+/// 綴りを空白で語に分け、評価器のキーに打ち直す。数字だけの語は `Key::Digit` の列、演算子と
+/// 括弧はそのキー。**減算は U+2212 の `−`**(`spell.rs` の `commit_glyph`)で、ASCII の `-` は
+/// 網のキーからは出ないので落とす。
+///
+/// **評価器が黙って捨てる並びも落とす**: 数の語が 2 つ続く(評価器は 1 つの数に繋げる)・
+/// `)` の直後の数・数か `)` の直後の `(`(評価器は押せないキーとして無視する)・二項演算子が
+/// 2 つ続く(評価器は押し直しとして前を捨てる)。これを許すと、綴りに余計な語が残っても
+/// 読み直した値は変わらず、不変条件がその取りこぼしに黙る。**評価器の規則は変えていない**
+/// ——ここは綴りの語の並びを見るだけである。
+fn keys_of_spelling(spelled: &str) -> Vec<Key> {
+    fn is_number(word: &str) -> bool {
+        !word.is_empty() && word.bytes().all(|b| b.is_ascii_digit())
+    }
+    fn is_binary(word: &str) -> bool {
+        matches!(word, "+" | "−" | "×" | "÷")
+    }
+    let mut keys = Vec::new();
+    let mut previous: Option<&str> = None;
+    for word in spelled.split(' ').filter(|w| !w.is_empty()) {
+        let dropped = match previous {
+            Some(p) if is_number(word) => is_number(p) || p == ")",
+            Some(p) if word == "(" => is_number(p) || p == ")",
+            Some(p) if is_binary(word) => is_binary(p),
+            _ => false,
+        };
+        assert!(
+            !dropped,
+            "評価器が黙って捨てる並び {previous:?} {word:?}: 綴り {spelled:?}"
+        );
+        match word {
+            "+" => keys.push(Key::Add),
+            "−" => keys.push(Key::Sub),
+            "×" => keys.push(Key::Mul),
+            "÷" => keys.push(Key::Div),
+            "(" => keys.push(Key::LParen),
+            ")" => keys.push(Key::RParen),
+            digits if is_number(digits) => {
+                keys.extend(digits.bytes().map(|b| Key::Digit(b - b'0')));
+            }
+            other => panic!("網のキーからは出ない語 {other:?}: 綴り {spelled:?}"),
+        }
+        previous = Some(word);
+    }
+    keys
+}
+
+/// **綴りを読み直す不変条件。** `trail + =` について、web が記録する列 `recorded` を綴り、
+/// その式を新しい評価器で `=` まで読んだ値が engine の答え `shown` と一致する。
+fn spelling_reads_back(
+    state: &EngineState,
+    shown: &DisplayState,
+    trail: &[Key],
+    recorded: &[Key],
+    counts: &mut Counts,
+) {
+    // 途中に `=` がある列は数えない。web は `=` で列を切り、前の答えは綴りの外から自分で
+    // 頭に足す(`ScientificPanel` の `pendingSpellRef` と `carriedAnswerRef`)。
+    if trail.contains(&Key::Eq) {
         return;
     }
-    for &key in &NET {
+    // `=` の前に engine がもうエラーなら数えない。エラー中の web は `AC` 以外を列に積まず
+    // (`ScientificPanel` の `press`、H-3)、その `=` も積まれないので、履歴の行ができない。
+    // エラーは `AC` でしか解けない(網に無い)ので、ここを通る列は途中でも一度もエラーに
+    // なっておらず、`recorded` はエラーの門で 1 つも落ちていない。
+    if state.error.is_some() {
+        return;
+    }
+    let spelled = spell(recorded);
+    let mut read = Typed::new();
+    for key in keys_of_spelling(&spelled) {
+        read.press(key);
+    }
+    read.press(Key::Eq);
+    agree(shown, &read, &|| {
+        let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
+        format!("綴りを読み直した値: {tokens:?} + eq、綴り {spelled:?}")
+    });
+    counts.spellings += 1;
+}
+
+/// `trail` を打った状態から `=` で閉じた値を比べ、1 キー足して降りる。`recorded` は web が
+/// 記録する列(engine が拒まなかったキーだけ)。
+fn walk(
+    net: &Net,
+    state: &EngineState,
+    typed: &Typed,
+    trail: &mut Vec<Key>,
+    recorded: &mut Vec<Key>,
+    counts: &mut Counts,
+) {
+    let (_, shown) = reduce(state, Key::Eq);
+    let mut closed = typed.clone();
+    closed.press(Key::Eq);
+    agree(&shown, &closed, &|| {
+        let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
+        format!("{tokens:?} + eq(評価器の式 {:?})", typed.toks)
+    });
+    counts.values += 1;
+    spelling_reads_back(state, &shown, trail, recorded, counts);
+    // 降りるのをやめるのは、**評価器とエンジンの両方が**もうエラーのときだけ。片方だけなら
+    // 先の列でもう片方が値を出すかもしれないので、比べ続ける。
+    if trail.len() + 1 >= net.length || (typed.error.is_some() && state.error.is_some()) {
+        return;
+    }
+    for &key in net.keys {
+        // エンジンと評価器には全キーを渡す(値の照合)。web の記録だけが拒まれたキーを落とす。
+        let web_records = !refuses(state, key);
         let (next, _) = reduce(state, key);
         let mut t = typed.clone();
         t.press(key);
         trail.push(key);
-        walk(&next, &t, trail, compared);
+        if web_records {
+            recorded.push(key);
+        }
+        walk(net, &next, &t, trail, recorded, counts);
+        if web_records {
+            recorded.pop();
+        }
         trail.pop();
     }
 }
 
-#[test]
-fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
-    let mut compared = 0;
+fn walk_from_the_start(net: &Net) -> Counts {
+    let mut counts = Counts::default();
     walk(
+        net,
         &EngineState::initial(),
         &Typed::new(),
         &mut Vec::new(),
-        &mut compared,
+        &mut Vec::new(),
+        &mut counts,
     );
-    println!("比べた回数: {compared}");
+    counts
+}
+
+#[test]
+fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
+    let counts = walk_from_the_start(&Net {
+        keys: &NET,
+        length: LENGTH,
+    });
+    println!(
+        "比べた回数: 値 {} / 綴りの読み直し {}",
+        counts.values, counts.spellings
+    );
     // **比べた回数の下限**(0 本で緑にしない)。網羅は決定的なので下限は実測値そのもの
     // (2026-09-13、LENGTH = 7 で実測 682,651 回、2.83 秒(debug))。降りるのをやめる条件を
     // 「両方がエラー」にしたあとも同じ 682,651 回(2.89 秒)——評価器がエラーにする所では
     // エンジンもエラーなので、切る枝は変わらなかった。
     assert!(
-        compared >= 682_651,
-        "比べたのは {compared} 回(2026-09-13 の実測 682,651 回)"
+        counts.values >= 682_651,
+        "比べたのは {} 回(2026-09-13 の実測 682,651 回)",
+        counts.values
+    );
+    // 綴りを読み直した回数の下限(Task 9、SPELLINGS_NET)。
+    assert!(
+        counts.spellings >= SPELLINGS_NET,
+        "綴りを読み直したのは {} 回(実測 {SPELLINGS_NET} 回)",
+        counts.spellings
     );
 }
+
+#[test]
+fn spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer() {
+    let counts = walk_from_the_start(&Net {
+        keys: &PAREN_NET,
+        length: PAREN_LENGTH,
+    });
+    println!(
+        "比べた回数: 値 {} / 綴りの読み直し {}",
+        counts.values, counts.spellings
+    );
+    assert!(
+        counts.values >= VALUES_PAREN,
+        "比べたのは {} 回(実測 {VALUES_PAREN} 回)",
+        counts.values
+    );
+    assert!(
+        counts.spellings >= SPELLINGS_PAREN,
+        "綴りを読み直したのは {} 回(実測 {SPELLINGS_PAREN} 回)",
+        counts.spellings
+    );
+}
+
+// 下限は実測値そのもの(決定的な網羅。2026-09-16、debug)。綴りの読み直しが値の照合より
+// 少ないのは、途中に `=` がある列と、`=` の前に engine がエラーの列を数えないため
+// (`spelling_reads_back`)。
+/// `NET`(長さ 7)で綴りを読み直した回数。値の照合 682,651 回と合わせて 3.84 秒。
+const SPELLINGS_NET: usize = 338_898;
+/// `PAREN_NET`(長さ 9)の値の照合の回数。
+const VALUES_PAREN: usize = 856_681;
+/// `PAREN_NET`(長さ 9)で綴りを読み直した回数。値の照合と合わせて 7.91 秒。
+const SPELLINGS_PAREN: usize = 782_703;

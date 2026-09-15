@@ -108,6 +108,23 @@ fn is_binary(key: Key) -> bool {
     )
 }
 
+/// 綴りの語の列で、保留のいちばん上が閉じていない `(` なら、その位置。engine の演算子
+/// スタックの先頭が `(` であることと同じ——末尾から、閉じた組・数・後置関数・定数を
+/// 飛ばし、最初に当たるのが二項演算子なら無し、閉じていない `(` ならそれ。
+fn top_open(parts: &[String]) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, part) in parts.iter().enumerate().rev() {
+        match part.as_str() {
+            ")" => depth += 1,
+            "(" if depth > 0 => depth -= 1,
+            "(" => return Some(i),
+            p if depth == 0 && BINARY_GLYPHS.contains(&p) => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
 /// キー列を式の文字列に綴る。
 ///
 /// **`ac` は列を空にする**(`engine/mod.rs` の `next.cleared()` と同じ
@@ -129,8 +146,14 @@ fn is_binary(key: Key) -> bool {
 ///   拒否が掛からないため。
 ///
 /// **`del` は `Buffer::backspace` を呼ぶ**(`delete_one` と同じ)。
-/// バッファが無ければ、先頭の開き括弧だけを消す(`delete_one` の唯一の
-/// 例外)——演算子は消えない。
+/// バッファが無ければ、**保留のいちばん上の、閉じていない `(`** を消す
+/// (`delete_one` が演算子スタックの先頭の `(` を抜くのと同じ `(`)——
+/// **その `(` のあとに値や閉じた組があっても消す**(`2 × ( π DEL + 1` は
+/// 「2 × π + 1」、`2 × ( ( 3 ) DEL + 1` は「2 × ( 3 ) + 1」)。演算子は消えず、
+/// 演算子が保留されていれば何も消さない(`3 + ( 4 ) DEL` は「3 + ( 4 )」のまま)。
+/// 以前は末尾の `(` しか消さず、値の下の `(` が綴りに残って履歴の式が答えを
+/// 生まなかった(0.9.2 設計書 §10 の既知の穴。利用者の裁定 2026-09-16、同 §9 の 12
+/// ——綴りを engine に合わせ、engine は変えない)。
 ///
 /// どの分岐も空の列に来ては何も起きない(**panic しない**)。
 pub fn spell(keys: &[Key]) -> String {
@@ -149,13 +172,20 @@ pub fn spell(keys: &[Key]) -> String {
                 open_operator = false;
             }
             Key::Del => {
-                // `delete_one`(engine/mod.rs)をそのまま辿る。
+                // `delete_one`(engine/mod.rs)をそのまま辿る。バッファが無ければ、
+                // engine が演算子スタックの先頭から抜く `(` を綴りからも抜く——末尾の語で
+                // なくてもよい(値や閉じた組の下の `(`。利用者の裁定 2026-09-16、0.9.2 設計書
+                // §10・§9 の 12)。`open_operator` には触らない: 押し直しは末尾の語が演算子の
+                // ときにしか効かない。`(` の後ろに値や閉じた組があれば、消したあとも末尾はその
+                // 値か `)` のままなので押し直しにならない(engine でも値のあとの演算子は訂正では
+                // ない)。末尾の `(` を消せば、その前の演算子と真偽がそのまま戻る(`(` を消した
+                // 直後の演算子は訂正。spell_table の `3 × ( DEL + 4` →「3 + 4」)。
                 if let Some(buffer) = current.as_mut() {
                     if buffer.backspace() == Backspace::Exhausted {
                         current = None;
                     }
-                } else if parts.last().map(String::as_str) == Some("(") {
-                    parts.pop();
+                } else if let Some(i) = top_open(&parts) {
+                    parts.remove(i);
                 }
             }
             Key::Digit(d) => {
