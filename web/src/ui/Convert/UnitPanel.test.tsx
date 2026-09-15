@@ -9,6 +9,7 @@ import type {
   ConvertCategoryId,
   ConvertResult,
   ConvertUnitToken,
+  SettleResult,
 } from "../../convert/types";
 import {
   CONVERT_CATEGORY_IDS,
@@ -284,10 +285,35 @@ function convertCurrencyStub(
   };
 }
 
+/**
+ * `settle` の呼び出し記録。**`calls`(`convert`)や `currencyCalls`
+ * (`convertCurrency`)とは別の口である**——`=` は `settle` だけを呼び、
+ * 結果を値の欄に書き戻す(`convert`/`convertCurrency` は表示専用になった)。
+ * 「`=` が値を書き換えたか」は、この記録だけが主張できる。
+ */
+const settleCalls: { value: string }[] = [];
+
+/**
+ * `settle` のスタブ。**コアの移植ではない**——既存の `evaluate()`(式を数に
+ * するだけの部分表)を借りて `String(n)` を返すだけで、既約分数も丸めの規則
+ * も持たない(CLAUDE.md「参照実装を Rust の移植にしない」と同じ理由で、
+ * これは**配線を確かめるスタブ**である)。答えの正しさは
+ * `crates/calcarc-core/src/convert/settle.rs` と `UnitPanel.wasm.test.tsx`
+ * が持つ。
+ */
+function settleStub(value: string): SettleResult {
+  settleCalls.push({ value });
+  const parsed = evaluate(value);
+  return parsed === null
+    ? { kind: "error", code: "SyntaxError" }
+    : { kind: "ok", text: String(parsed) };
+}
+
 function stubCalc(): ConvertCalc {
   return {
     convert: convertStub,
     convertCurrency: convertCurrencyStub,
+    settle: settleStub,
     // 単位面の並びはキー集合(`Keypad/convert.ts`)が持つので、パネルはこれを
     // 呼ばない。**呼ばれたら失敗させて検知する**(TransferPanel.test.tsx と同じ)。
     units: vi.fn(() => {
@@ -343,6 +369,7 @@ const main = () => screen.getByTestId("display-main");
 beforeEach(() => {
   calls.length = 0;
   currencyCalls.length = 0;
+  settleCalls.length = 0;
   vi.mocked(readRates).mockReset().mockResolvedValue(null);
   vi.mocked(writeRates).mockReset().mockResolvedValue(undefined);
   vi.mocked(exchangeRateApi.getLatestRates)
@@ -863,7 +890,10 @@ describe("UnitPanel（為替の盤面）", () => {
     // **12.5 のままである。** `convertCurrency` で畳んでいたら、JPY の
     // 小数桁 0 で丸められて `13` になる。
     expect(echo()).toHaveTextContent("値 12.5");
-    expect(calls.at(-1)?.value).toBe("12.5");
+    // **`calls`(`convert`)ではなく `settleCalls` を見る。** `=` は
+    // `settle` だけを呼ぶ——`convert` は表示専用になったので、`calls` は
+    // 表示側の再計算(着地通貨の桁で丸めたもの)しか記録しない。
+    expect(settleCalls.at(-1)?.value).toBe("12.5");
   });
 
   it("asks the provider once per session, even when the fetch fails", async () => {

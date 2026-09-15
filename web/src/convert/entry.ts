@@ -44,3 +44,20 @@ export function pushDigit(entry: units.Entry, digit: string): units.Entry {
 export function pushDot(entry: units.Entry): units.Entry {
   return units.pushDot(entry, MAX_VALUE_DIGITS);
 }
+
+/**
+ * `=` の答え(コアの `settle`: 有限小数か既約分数 `p/q`、**符号なし**)から値の欄を組み直す
+ * (0.9.2 設計書 §4)。分数は「数・/・数」の 3 語にする——次に打つ演算子はそのあとに続き、
+ * コアが式として読み直す(`/` は `×`・`÷` と同じ段で左から畳むので、`1/3 × 3` は 1)。
+ */
+export function fromSettled(value: string): units.Entry {
+  const [numerator = "", denominator] = value.split("/");
+  if (denominator === undefined) return units.fromDigits(numerator);
+  return {
+    tokens: [
+      { kind: "digits", text: numerator },
+      { kind: "op", op: "/" },
+      { kind: "digits", text: denominator },
+    ],
+  };
+}
