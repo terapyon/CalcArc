@@ -174,7 +174,7 @@ Rust（`crates/calcarc-core/tests/loan_boundary_golden.rs`）と、製品が走�
 許容と上限の数はこの JSON が持ち、この文と食い違えば
 `reference/tests/test_policy_matches_loan_boundary.py` が赤くなる。
 
-**10 億円を超える月額は `Overflow` のエラーにする（予定。製品の変更が入る PR でこの注記を外す）。**
+**10 億円を超える定例月額（と賞与額）は `Overflow` のエラーにする。**
 それより大きい金額では、f64 の精度のため 1 円を超えてずれうる（Python で閉形式を写した計算で、
 年 0.0001%・2 回の月額約 45 億円から 1 円に届いた）。
 
