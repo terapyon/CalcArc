@@ -20,7 +20,11 @@
 //! 実際に走らせて `render(...).main` と綴りの両方を突き合わせる
 //! ——片方だけが動いたら赤くなる。
 
-use calcarc_core::{EngineState, Key, engine::spell::spell, reduce, render};
+use calcarc_core::{
+    EngineState, Key,
+    engine::{refuses, spell::spell},
+    reduce, render,
+};
 
 fn spell_of(tokens: &[&str]) -> String {
     let keys: Vec<Key> = tokens
@@ -28,6 +32,22 @@ fn spell_of(tokens: &[&str]) -> String {
         .map(|t| Key::from_token(t).expect("unknown token in the table"))
         .collect();
     spell(&keys)
+}
+
+/// engine が受け付けたキーだけの列。**web は拒まれたキーを打鍵の列に積まない**
+/// (ScientificPanel、0.9.2 設計書 §3.3 の条件 1)ので、綴りに渡るのはこの列である。
+fn accepted(tokens: &[&str]) -> Vec<Key> {
+    let mut state = EngineState::initial();
+    let mut keys = Vec::new();
+    for token in tokens {
+        let key = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        if refuses(&state, key) {
+            continue;
+        }
+        state = reduce(&state, key).0;
+        keys.push(key);
+    }
+    keys
 }
 
 /// 同じキー列を **engine に通した**ときのメイン表示。
@@ -241,11 +261,11 @@ fn del_walks_the_exact_stages_the_real_engine_walks() {
     assert_entry(&["1", "dot", "5", "exp", "3", "del", "del", "del"], "1.");
 
     // engine_table.rs:892
-    // (`del` が j 入力をまるごと消したあと、次の `mul` は差し替えでは
-    // なく確定した 3 に対する新しい演算になる。答は 15)。
+    // (`del` が j 入力をまるごと消したあと、次の `mul` は差し替え(訂正)。
+    // 綴りは最後の 1 つだけを残す(0.9.2 設計書 §9 の 9)。答は 15)。
     assert_eq!(
         spell_of(&["3", "mul", "j", "del", "mul", "5", "eq"]),
-        "3 × × 5"
+        "3 × 5"
     );
 
     // engine_table.rs:870,875
@@ -261,42 +281,55 @@ fn del_walks_the_exact_stages_the_real_engine_walks() {
     );
 
     // engine_table.rs:806
-    // (del は演算子を消さない。2 度目の `+` は打ち直しとして、押した
-    // 通りにもう 1 つ現れる。答は 7)。
-    assert_eq!(spell_of(&["3", "add", "del", "add", "4", "eq"]), "3 + + 4");
+    // (del は演算子を消さない。2 度目の `+` は打ち直し(訂正)。綴りは最後の
+    // 1 つだけを残す(0.9.2 設計書 §9 の 9)。答は 7)。
+    assert_eq!(spell_of(&["3", "add", "del", "add", "4", "eq"]), "3 + 4");
 }
 
 #[test]
-fn lparen_pi_and_e_discard_the_entry_being_typed_instead_of_committing_it() {
-    // **`(`・`π`・`e` は `commit_entry` を経由しない**——`open_paren`・
-    // `Key::Pi`・`Key::E`(engine/mod.rs)がそれぞれ `state.buffer = None`
-    // を直接代入する。押しかけの数字は式に残らない——残すと、その式が
-    // 答を説明しなくなる(engine_table.rs:858 の
-    // `main_of(&["3","lparen","del"]) == "0"` が、"3" を確定させて
-    // いない証拠——確定させていたら del は "3" を残すはずである)。
-    assert_eq!(spell_of(&["3", "lparen", "del"]), "");
-    assert_eq!(spell_of(&["3", "pi"]), "π");
-    assert_eq!(spell_of(&["3", "e"]), "e");
+fn a_refused_key_never_reaches_the_spelling() {
+    // 打ちかけの数のあとの `(`・`π`・`e` は数を捨てるので押せない(0.9.2 設計書 §3.2)。
+    // 拒まれたキーは打鍵の列に来ないので、綴りにも出ない。
+    assert_eq!(spell(&accepted(&["3", "lparen", "del"])), "");
+    assert_eq!(spell(&accepted(&["3", "pi"])), "3");
+    assert_eq!(spell(&accepted(&["3", "e"])), "3");
+    assert_eq!(
+        spell(&accepted(&["lparen", "3", "add", "4", "rparen", "5"])),
+        "( 3 + 4 )"
+    );
 }
 
 #[test]
-fn del_after_lparen_cannot_recover_the_zero_it_silently_substituted() {
-    // **既知の穴。Fix round 4 finding A の見直しで見つけたが、直して
-    // いない。** `(` は入力途中の値を捨てて `current` を 0 にする
-    // (`open_paren` の註)。その `(` を del で消しても、この 0 への
-    // 差し替えは戻らない——engine_table.rs の
-    // `del_does_not_restore_the_value_a_paren_discarded`(:906-909)の
-    // 名前のとおり。**その 0 は一度も打鍵されていない**ので、綴りには
-    // 足す文字が無い——「打った通りに並べる」(§4a)だけでは説明できない、
-    // いまのところ唯一の形である。
-    //
-    // engine_table.rs:908 は `["3","mul","lparen","del","eq"]` を "0" に
-    // 固定しているが、綴りは "3 ×" のまま(暗黙の 0 を語らない)。
+fn del_after_lparen_returns_to_the_operator() {
+    // `(` を DEL で消すと、engine は `(` の前へ戻る(0.9.2 設計書 §9 の 2。
+    // engine_table の `del_on_a_fresh_paren_returns_to_the_operator_before_it`)。
+    // 綴りは「3 ×」「3 +」のままで、答え 9・6 をそのまま説明する——以前ここにあった
+    // 「既知の穴」は閉じた。
     assert_eq!(spell_of(&["3", "mul", "lparen", "del"]), "3 ×");
-    // engine_table.rs:909 は加算版を "3" に固定している(+ の単位元が 0
-    // なので値としては偶然合って見えるが、綴りが 0 を語っていない点は
-    // 同じ穴である)。
     assert_eq!(spell_of(&["3", "add", "lparen", "del"]), "3 +");
+}
+
+#[test]
+fn a_corrected_operator_is_spelled_once() {
+    // 押し直しは訂正であって計算ではない(engine_table の `a_second_operator_replaces_the_first`)。
+    // 綴りも最後の 1 つだけを残す(0.9.2 設計書 §9 の 9、利用者の裁定)。以前は
+    // 同じ演算子も違う演算子も両方並べていた(実測: `3 + + 4` → 「3 + + 4」)。
+    assert_eq!(spell_of(&["3", "add", "add", "4"]), "3 + 4");
+    assert_eq!(spell_of(&["3", "mul", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["3", "add", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["3", "add", "sub", "mul", "4"]), "3 × 4");
+    assert_eq!(spell_of(&["2", "add", "3", "add", "mul", "4"]), "2 + 3 × 4");
+    // DEL で演算子の直後に戻ってからの押し直しも訂正(engine と同じ)。
+    assert_eq!(spell_of(&["3", "mul", "4", "del", "add", "5"]), "3 + 5");
+    assert_eq!(
+        spell_of(&["3", "mul", "lparen", "del", "add", "4"]),
+        "3 + 4"
+    );
+    // 開き括弧の直後の演算子は訂正ではない(engine も差し替えない)。
+    assert_eq!(spell_of(&["3", "mul", "lparen", "add", "4"]), "3 × ( + 4");
+    // `=` のあとの演算子は訂正ではない(engine の `finish` が `+` を使い切っている)。
+    // 綴りは打った通りのまま。web は `=` で列を切るので、この形は画面からは来ない。
+    assert_eq!(spell_of(&["3", "add", "eq", "mul", "5"]), "3 + × 5");
 }
 
 #[test]
@@ -325,4 +358,44 @@ fn every_key_spells_or_is_one_of_the_seven() {
     }
     assert_eq!(spelled, Key::ALL.len() - silent.len());
     assert_eq!(spelled, 39);
+}
+
+#[test]
+fn del_on_a_paren_under_a_value_spells_what_the_engine_computes() {
+    // 利用者の裁定(2026-09-16、0.9.2 設計書 §10): 綴りの DEL は engine の `delete_one` と
+    // 同じ `(`——保留のいちばん上の、閉じていない `(`——を消す。以前は末尾の `(` しか消さず、
+    // 値や閉じた組の下の `(` が綴りに残って、履歴の式が答えを生まなかった。
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "pi", "del", "add", "1"]),
+        "2 × π + 1"
+    );
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "4", "sqrt", "del", "add", "1"]),
+        "2 × 4 √ + 1"
+    );
+    assert_eq!(
+        spell_of(&[
+            "2", "mul", "lparen", "lparen", "3", "rparen", "del", "add", "1"
+        ]),
+        "2 × ( 3 ) + 1"
+    );
+    // 演算子が保留されていれば DEL は何も消さない(engine と同じ。`3 + ( 4 ) DEL + 5 =` は 12)。
+    assert_eq!(
+        spell_of(&["3", "add", "lparen", "4", "rparen", "del", "add", "5"]),
+        "3 + ( 4 ) + 5"
+    );
+    // `+/−` で手元にある値の上の `(` も、engine の DEL は消す(calcarc-1e の検算で見つかった族)。
+    // 綴りも同じ `(` を消す——`( 3 +/− DEL )` は engine が SyntaxError、綴りも開いていない `)` になる。
+    // **この族は網ではなくこの行が守る**: `engine_values.rs` の網に `+/−` を足すと、Task 4 の
+    // 独立の評価器に新しい規則を教えることになる(engine_table の
+    // `del_after_a_closed_group_removes_the_unclosed_paren_before_it` が engine 側を固定する)。
+    assert_eq!(
+        spell_of(&["lparen", "3", "neg", "del", "rparen"]),
+        "3 +/− )"
+    );
+    // 2 × (−3) + 1 = −5。engine も同じ(`2 × ( 3 +/− DEL + 1 =` → −5)。
+    assert_eq!(
+        spell_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1"]),
+        "2 × 3 +/− + 1"
+    );
 }

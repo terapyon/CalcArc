@@ -53,8 +53,11 @@ test("pi is reachable through the Shift face and reaches the core", async ({
   await page.getByRole("button", { name: "円周率" }).click();
   await expect(page.getByTestId("display-main")).toHaveText("3.141592654");
 
-  // ワンショット: 面は戻っている。
-  await expect(page.getByRole("button", { name: "指数入力" })).toBeEnabled();
+  // ワンショット: 面は戻っている——第 1 面が見え、第 2 面(π)は見えない。
+  await expect(page.getByRole("button", { name: "指数入力" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "円周率" })).not.toBeVisible();
+  // π のあとは手元の値があるので Exp は押せない(0.9.2 設計書 §9 の 1)。
+  await expect(page.getByRole("button", { name: "指数入力" })).toBeDisabled();
 });
 
 test("the second face is full now, not a row of placeholders", async ({

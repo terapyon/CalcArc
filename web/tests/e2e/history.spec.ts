@@ -133,6 +133,14 @@ test("turning the recording toggle off stops new entries but keeps what was alre
  * `3 − 3.5 = -0.5`。`mapAnswerToKeys` は仮数の符号を `neg` に写すので、
  * 呼び戻しは `ac, 0, dot, 5, neg` という打鍵列を送る——これは手で
  * 「0」「.」「5」「+/−」と打つのと同じ列である。
+ *
+ * **共有する続きは演算子。** 0.9.2 より前は `+/−` の直後の数字が確定値を
+ * 静かに置き換えていた(`neg` の後の `3` は新しい入力を始め、`-0.5` を
+ * 捨てて `3` になっていた)。0.9.2 の F5(設計書 §9-8)はこれを拒否に
+ * 変えた——`neg` で値が確定した後の数字キーは押せない。どちらの経路
+ * (呼び戻し・手打ち)も同じ拒否に当たるので、続きを数字で揃えることは
+ * もうできない。ここでは両経路とも「3 は無効」を確かめたあと、演算子
+ * (`足す`)で続きを揃える。
  */
 test("a recalled negative decimal behaves like the same digits typed by hand, on the real WASM core", async ({
   page,
@@ -153,14 +161,24 @@ test("a recalled negative decimal behaves like the same digits typed by hand, on
     .getByRole("button", { name: "3 − 3.5 = -0.5 を入力に入れる" })
     .click();
   await expect(display).toHaveText("-0.5");
-  // 呼び戻した直後にもう 1 打鍵する。
-  await press(page, ["3"]);
-  const recalledThenTyped = await display.textContent();
+  // +/− のあとは手元の値があるので数字は押せない(§9-8)。
+  await expect(
+    page.getByRole("button", { name: "3", exact: true }),
+  ).toBeDisabled();
+  // 共有する続きは演算子。
+  await press(page, ["足す", "3", "計算する"]);
+  const recalledThenContinued = await display.textContent();
+  expect(recalledThenContinued).toBe("2.5");
 
   // 別に、同じ桁を手で打つ。
   await press(page, ["全消去"]);
-  await press(page, ["0", "小数点", "5", "符号を反転", "3"]);
-  await expect(display).toHaveText(recalledThenTyped ?? "");
+  await press(page, ["0", "小数点", "5", "符号を反転"]);
+  await expect(display).toHaveText("-0.5");
+  await expect(
+    page.getByRole("button", { name: "3", exact: true }),
+  ).toBeDisabled();
+  await press(page, ["足す", "3", "計算する"]);
+  await expect(display).toHaveText(recalledThenContinued ?? "");
 });
 
 /**
@@ -307,4 +325,53 @@ test("a recall made while the display was in an error state still becomes part o
   await expect(page.getByText("2 + 3")).toBeVisible();
   // 直す前はここに「+ 3 = 5」の行が在った。
   await expect(page.getByText("+ 3", { exact: true })).toHaveCount(0);
+});
+
+/**
+ * **0.9.2 の欠陥を実 WASM で閉じる。** `mapAnswerToKeys`
+ * (`web/src/ui/ScientificPanel.tsx`)は、仮数が負で指数もある答を「写せ
+ * ない形」として `null` を返す——仮数の符号(`neg`)は `exp` を送る前で
+ * なければならないが、送った時点で値は確定し、続く `exp` は 0.9.2 設計書
+ * §9-8 で拒否される(拒否される前は黙って値を捨てていた——`-1.5e12` は
+ * `1e12` として入力欄に残っていた。欠陥自体は 0.9.2 より前からあり、F5 は
+ * 症状を変えただけ)。
+ *
+ * ここでは `引く 3 掛ける 1 指数入力 1 2 =` で `-3e12` を **1 回の計算**で
+ * 作る——絶対値が 1e10 を超えるので指数表記になる(numerical-policy: 有効
+ * 数字 10 桁、指数が `[-9, 10)` の外)。**演算子から始める**——2 回に分けて
+ * `0 − 3 =` を先に確定すると、その行(`-3`、指数を持たないので正しく
+ * 呼び戻せる)が履歴にもう 1 件積まれ、この検査の主張(1 件・呼び戻し不可)
+ * が崩れる(Fix round 1 finding)。演算子が先で `+/−` のあとに数字を打たない
+ * という、0.9.2 でも拒否されない経路だけで組み立てているので、この答が
+ * 拒否ではなく `mapAnswerToKeys` の `null` 判定で弾かれることを見る。
+ */
+test("a negative mantissa with an exponent is recorded but offers no recall button, on the real WASM core", async ({
+  page,
+}) => {
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  // 演算子から始めて 1 回の計算で作る(0 − 3 × 1e12)。0.9.2 でも拒否されない
+  // 経路だけ——演算子が先で、`+/−` のあとに数字を打たない。
+  await press(page, [
+    "引く",
+    "3",
+    "掛ける",
+    "1",
+    "指数入力",
+    "1",
+    "2",
+    "計算する",
+  ]);
+  await expect(display).toHaveText("-3e12");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByRole("listitem")).toHaveCount(1);
+  // **押せるボタンとしては存在しない。** 呼び戻しボタンのアクセシブル
+  // ネームは既存の履歴 E2E が使う「… を入力に入れる」のパターンに従う
+  // ——この行がそれに 1 つも当たらないことを数える。
+  await expect(
+    page.getByRole("button", { name: /を入力に入れる/ }),
+  ).toHaveCount(0);
 });

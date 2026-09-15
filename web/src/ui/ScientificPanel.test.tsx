@@ -50,6 +50,7 @@ let spellCallCount = 0;
 const FAKE_GLYPHS: Partial<Record<KeyToken, string>> = {
   sqrt: "\u221a",
   neg: "+/\u2212",
+  lparen: "(",
 };
 
 function fakeCalc(): Calc {
@@ -65,10 +66,10 @@ function fakeCalc(): Calc {
     error: null,
   };
   /** 表示を 1 つの state に結び付けて返す。state は毎回新しい物である。 */
-  function stepOf(display: DisplayState): Step {
+  function stepOf(display: DisplayState, refused: KeyToken[] = []): Step {
     const state = {} as EngineState;
     displays.set(state, display);
-    return { state, display };
+    return { state, display, refused };
   }
   return {
     initial: () => stepOf(base),
@@ -107,10 +108,13 @@ function fakeCalc(): Calc {
       // 数字は主表示に積む。**「打った物は保存しない」を測るのに要る**
       // ——打鍵が表示に出ない偽物では、保存されていないことも言えない。
       if (/^[0-9]$/.test(key)) {
-        return stepOf({
-          ...from,
-          main: from.main === "0" ? key : `${from.main}${key}`,
-        });
+        return stepOf(
+          {
+            ...from,
+            main: from.main === "0" ? key : `${from.main}${key}`,
+          },
+          ["lparen", "pi", "e"],
+        );
       }
       // 小数点・符号・指数は「呼び戻しの等価性」(Task 10 Step 5)と
       // 「仮数・指数の符号を送り分ける」(Fix round 1 finding 1)を測るのに
@@ -133,12 +137,41 @@ function fakeCalc(): Calc {
         // 見分けられるようにする(`engine_table.rs:125` と同じ規則)。
         const eIndex = from.main.indexOf("e");
         if (eIndex === -1) {
-          return stepOf({
-            ...from,
-            main: from.main.startsWith("-")
-              ? from.main.slice(1)
-              : `-${from.main}`,
-          });
+          // **仮数の符号で値が確定する(S5)——この後 engine は 0.9.2 設計書
+          // §9-8 の通り、これらのキーを拒否する。** これを持たせないと、
+          // 偽物はこの後も `exp` を素通しし続け、本物の engine では二度と
+          // 正しく呼び戻せない `-1.5e-3` のような形を、偽物の上でだけ
+          // 「呼び戻せた」ことにしてしまう——ファイル冒頭の警句
+          // 「偽物のほうが本物より寛容だと、何を書いても緑になる」が指す
+          // 事故そのもの(`ScientificPanel.test.tsx:1165` の旧テストが
+          // それだった)。
+          return stepOf(
+            {
+              ...from,
+              main: from.main.startsWith("-")
+                ? from.main.slice(1)
+                : `-${from.main}`,
+            },
+            [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "dot",
+              "zeros3",
+              "exp",
+              "j",
+              "lparen",
+              "pi",
+              "e",
+            ],
+          );
         }
         const head = from.main.slice(0, eIndex + 1);
         const exponent = from.main.slice(eIndex + 1);
@@ -337,6 +370,24 @@ describe("履歴", () => {
     // 偽 `dispatch` は `mul`/`eq` を no-op として扱うので、答は数字を
     // そのまま連結した「23」になる——本物の掛け算ではない。
     expect(screen.getByText("23")).toBeInTheDocument();
+  });
+
+  it("disables a key the engine refuses, and keeps it out of the recorded expression", async () => {
+    // 0.9.2 設計書 §3.3(条件 1): 押せないキーは盤面で押せず、キーボードから打っても
+    // 打鍵の列に積まない。積むと engine は `2` のまま、履歴の式は「2 (」になって嘘になる。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys(["2"]);
+    expect(screen.getByRole("button", { name: "開き括弧" })).toBeDisabled();
+    fireEvent.keyDown(window, { key: "(" });
+    await pressKeys(["計算する"]);
+    await openHistory();
+    // ここは `records one entry when = is pressed` と同じ形で、記録された式が「2」だけ
+    // であることを見る。偽 `dispatch` は単独の数字を変えないので答も「2」になり、
+    // `getByText("2")` は式・答の 2 か所に当たって曖昧になる——`getAllByText` で
+    // 数え、綴りが「2 (」に伸びていないこと(=一致が増えていないこと)を見る。
+    expect(screen.getAllByText("2")).toHaveLength(2);
+    expect(screen.queryByText("2 (")).not.toBeInTheDocument();
   });
 
   it("does not fold a key typed before the engine has loaded into the next recorded expression", async () => {
@@ -1140,10 +1191,23 @@ describe("履歴", () => {
     expect(screen.getByTestId("display-main")).toHaveTextContent("1.5e-3");
   });
 
-  it("recalls a negative mantissa together with a negative exponent", async () => {
-    // 送り分けの規則は `mapAnswerToKeys`(`ScientificPanel.tsx` の冒頭)の
-    // docstring が持つ——ここでは繰り返さず、2 つの `neg` が別の宛先に
-    // 届くことだけ確かめる(Fix round 1 finding 1)。
+  it("does not offer a negative mantissa with an exponent for recall", async () => {
+    // **置き換えた旧テスト(「recalls a negative mantissa together with a
+    // negative exponent」)がここに在った。** `-1.5e-3` を「呼び戻せる」と
+    // 主張していたが、それは `fakeCalc` の `neg` が本物より寛容だった
+    // ためで(ファイル冒頭の警句「偽物のほうが本物より寛容だと、何を
+    // 書いても緑になる」)、実機では最初から正しく呼び戻せていなかった
+    // ——コントローラが実 wasm で測った: `1 dot 5 neg exp 3 neg` は
+    // 0.9.2 より前は `1e-3` を、いまは `1.5` を返す(仮数の符号(`neg`)で
+    // 値が確定し、続く `exp` を 0.9.2 より前は黙って捨て、いまは 0.9.2
+    // 設計書 §9-8 で拒否する——症状が変わっただけで、写せないという欠陥
+    // 自体は 0.9.2 より前からある)。この偽物はいまは `neg` の後、`e` の
+    // 無い側の分岐で S5 の拒否列を返す(上)ので、この形はもう「呼び戻せた」
+    // ことにならない。
+    //
+    // `mapAnswerToKeys` は「写せない形は `null` を返す」規則
+    // (`ScientificPanel.tsx` の docstring)をこの形に適用する——
+    // `canRecall` が弾くので、ボタンにならない。
     window.localStorage.setItem(
       "calcarc.history",
       JSON.stringify([
@@ -1156,10 +1220,12 @@ describe("履歴", () => {
       screen.getByRole("button", { name: "第2面に切り替え" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "履歴" }));
-    await userEvent.click(
-      screen.getByRole("button", { name: "x = -1.5e-3 を入力に入れる" }),
-    );
-    expect(screen.getByTestId("display-main")).toHaveTextContent("-1.5e-3");
+    // 見える。
+    expect(screen.getByText("-1.5e-3")).toBeInTheDocument();
+    // でも押せない——「呼び戻す」ボタンとしては存在しない。
+    expect(
+      screen.queryByRole("button", { name: "x = -1.5e-3 を入力に入れる" }),
+    ).not.toBeInTheDocument();
   });
 
   it("recalls a negative number with thousands separators", async () => {
