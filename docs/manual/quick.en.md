@@ -127,7 +127,11 @@ Calculations you finish with 【=】 are kept in the history, including ones tha
 in "Math ERROR". Open it with 【Shift】 then 【hist】.
 
 **Input rules (summary):** Keys that would silently drop what's on screen (such as
-【(】 【π】 【e】 in the middle of typing a number) simply cannot be pressed. 【DEL】
+【(】 【π】 【e】 in the middle of typing a number) simply cannot be pressed. The same
+applies once an answer is on screen — right after 【)】, after a function's answer such
+as 【√】, after 【π】 or 【e】, and after 【+/−】 — where every key that would start a new
+number, the digits included, cannot be pressed until you clear it or continue with an
+operator. (That is why 【+/−】 goes after the digits, not before them.) 【DEL】
 is not an undo, and it does not delete operators. 【=】 fills in an unclosed 【(】, but
 an unmatched 【)】 is "Math ERROR". If you press the wrong operator and immediately
 press the right one, you get the same answer as if you had typed it correctly the
