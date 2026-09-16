@@ -101,6 +101,9 @@ On these three tabs, choose an item first, then enter its number.
 - Items you have filled in stay on the display, in small type above the answer
 - On Convert and Finance you can type an expression into an item. 【=】 turns the
   expression into its value
+- **On Convert, 【値】 (value) is not rounded by 【=】.** When it doesn't divide evenly it
+  stays a fraction, such as `1/3`, and carries that value into whatever you type next
+  (for example, 【=】 on `1/3*3-1` gives `0`)
 - Keys that cannot be pressed right now look disabled. Some become available when
   you change the item or the kind of calculation; others are not used on that screen
 
@@ -125,7 +128,8 @@ Type a number into 【値】 (value), and choose units with 【変換元】 (con
 and 【変換先】 (convert to). 【⇅】 swaps the two. There are eight categories:
 length, mass, temperature, area, volume, speed, data size, and currency.
 
-Currency is converted with rates fetched from the internet.
+Currency is converted with rates fetched from the internet. 【値】 (value) also takes
+an expression for currency, and the answer appears before you press 【=】.
 
 ### Scale — data-size estimates
 
