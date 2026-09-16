@@ -117,8 +117,9 @@ base-spec §43 の線を自分で下げる判断なので、根拠を spec と�
 
   > **2026-09-16 の訂正。** 「`DEL` で戻せる」は誤りだった。DEL は確定前の
   > 打鍵を消すだけで、関数の適用は戻さない——`4 √ DEL` は `4` ではなく `2` の
-  > まま（`crates/calcarc-core/tests/engine_table.rs` の
-  > `del_on_a_fresh_paren_returns_to_the_operator_before_it` が実例）。
+  > まま（`crates/calcarc-core/tests/engine_table.rs:676`
+  > `main_of(["4","sqrt"]) == "2"`、および `:1211` の `on_hand` は DEL で
+  > 動かさないという注記と `refused_after(["4","sqrt","del"], "5")` が実例）。
   > 「数字・演算子の入力は壊れず、関数が 1 回余計にかかるだけ」という比較自体は
   > 生きている——戻すのは DEL ではなく AC。正しい理由は
   > `docs/definition-of-done.md` の表を見よ。
