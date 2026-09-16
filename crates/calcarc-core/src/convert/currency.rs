@@ -502,13 +502,18 @@ mod tests {
     }
 
     #[test]
-    fn the_literal_rule_is_the_same_for_values_and_rates() {
-        // 受ける形。
+    fn the_literal_rule_for_rates() {
+        // **レートだけの規則である**(利用者の裁定 2026-09-16 で値の規則とは
+        // 分かれた——`parse_decimal` の doc コメントを見よ)。ここは
+        // `parse_decimal` を直接呼ぶので、変わっていないレート側の規則を
+        // そのまま検査できる。
+        //
+        // レートが受ける形。
         assert_eq!(parse_decimal("100"), Ok(r(100, 1)));
         assert_eq!(parse_decimal("1.0855"), Ok(r(10855, 10000)));
         assert_eq!(parse_decimal("-0.001"), Ok(r(-1, 1000)));
         assert_eq!(parse_decimal("0"), Ok(r(0, 1)));
-        // 受けない形。**式も指数も全角も受けない。**
+        // レートが受けない形。**式も指数も全角も受けない。**
         for bad in [
             "1e3",
             "１２３",
@@ -580,8 +585,14 @@ mod tests {
     fn the_rate_arguments_still_reject_expressions() {
         // **「値だけ広げた」ことの番人。** レートに式を渡しても `SyntaxError` の
         // まま——広げたのは値の引数だけで、レートは `parse_decimal` のままである。
+        // `from_rate` と `to_rate` は同じ関数(`parse_decimal`)を通るので、
+        // 2 つとも見るのは冗長ではあるが、1 行なので両方押さえる。
         assert_eq!(
             convert_currency("1", Currency::Jpy, "1+1", "155.23"),
+            Err(CalcError::SyntaxError)
+        );
+        assert_eq!(
+            convert_currency("1", Currency::Jpy, "1", "1+1"),
             Err(CalcError::SyntaxError)
         );
     }
@@ -590,11 +601,19 @@ mod tests {
     fn the_accepted_spelling_does_not_widen() {
         // **calcarc-88 の制約: 綴りの受け付け範囲は変えない。** golden の
         // 「書式が誤り」行 5 本(`1e3` 3 件・全角 2 件)がこれに依存する。
-        // 値の引数は式を読むようになったが、指数表記は式としても
-        // `SyntaxError` のままである(`evaluate_to_rational` は指数表記を
-        // 知らない)。
+        // 値の引数は式を読むようになったが、指数表記・全角数字は式としても
+        // `SyntaxError` のままである(`evaluate_to_rational` はどちらも知らない)。
+        //
+        // **値の経路そのものでも押さえる。** `the_literal_rule_for_rates` は
+        // `parse_decimal` を直接呼ぶのでレート側の話にしかならない——
+        // 全角がここでも `SyntaxError` になることは、`convert_currency` の
+        // 値の引数を通してこの 1 行が確かめる。
         assert_eq!(
             convert_currency("1e3", Currency::Jpy, "1", "155.23"),
+            Err(CalcError::SyntaxError)
+        );
+        assert_eq!(
+            convert_currency("１２３", Currency::Jpy, "1", "155.23"),
             Err(CalcError::SyntaxError)
         );
     }
