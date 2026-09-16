@@ -64,18 +64,22 @@ def test_every_case_is_display_kind_and_does_not_end_with_eq() -> None:
     # 打鍵の途中を主張するシャードなので、eq で終わるケースが 1 件でも
     # 混じると「確定した表示」を「途中の表示」と偽ることになる。
     #
-    # **`entry-000033` だけは例外。** +/- の直後の数字キーは製品が拒む
+    # **`1 2 neg add 3 eq` だけは例外。** +/- の直後の数字キーは製品が拒む
     # (0.9.2 F5、`engine_table.rs:1200` の
     # `refused_after(&["1", "2", "neg"], "3")`)ので、その拒否を打てる列の
     # 中に残すと `crates/calcarc-core/tests/corpus_refused_presses.rs` の
     # 番人に触れる(押せないキーはコーパスに置かない)。かわりに +/- の答えが
     # 次の演算の左の被演算子になることを、確定まで打って示す
-    # (計画 2026-09-16-operator-correction-shard R4)。
+    # (計画 2026-09-16-operator-correction-shard R4)。**キー列で例外を選ぶ**
+    # ——`build_entry_shard` は id を連番で振り直すので、id で選ぶと挿入で
+    # 別のケースにずれる(2026-09-16 の全枝レビュー M-3、`test_sign_toggle_*`
+    # と同じ形)。
+    exempt_keys = ["1", "2", "neg", "add", "3", "eq"]
     shard = build_entry_shard()
     for case in shard["cases"]:
         assert case["kind"] == "display"
         assert case["keys"], f"{case['id']}: empty key sequence"
-        if case["id"] != "entry-000033":
+        if case["keys"] != exempt_keys:
             assert case["keys"][-1] != "eq", f"{case['id']}: ends with eq"
         assert "main" in case["expect"]
         assert case["mode"] == "Deg"

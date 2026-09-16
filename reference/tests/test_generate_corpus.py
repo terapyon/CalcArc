@@ -2761,6 +2761,10 @@ def test_the_operator_correction_shard_is_a_thousand_pairs() -> None:
         stratum: sum(1 for case in cases if case["stratum"] == stratum)
         for stratum in sorted({case["stratum"] for case in cases})
     }
+    # **公表している内訳をピン留めする**(2026-09-16 の全枝レビュー M-1)。PR の説明と
+    # 設計書 §3.8 が「discriminating 639 / same-level 361」と数を名指ししている。ふるいや
+    # seed が変わって内訳がずれても、上の自己無矛盾の assert だけでは緑のままになる。
+    assert payload["strata"] == {"control": 1000, "discriminating": 639, "same-level": 361}
     assert [case["id"] for case in cases] == [f"opc-{index:06d}" for index in range(2000)]
     assert {case["kind"] for case in cases} == {"value"}
     assert {case["mode"] for case in cases} == {"Deg"}

@@ -15,6 +15,7 @@
 //! バラバラ(`keys` を持つもの、`left`/`right` を持つもの、どちらも持たないもの)
 //! なので、型に写さず `serde_json::Value` のまま読む。
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -25,6 +26,15 @@ use serde_json::Value;
 /// キー列を運ぶ可能性があるフィールドだけを見る。`input`/`op`(finance・data-scale)
 /// のような、キー列ではないフィールドは数えない。
 const SEQUENCE_FIELDS: [&str; 3] = ["keys", "left", "right"];
+
+/// `value` が「文字列トークンの配列」の形をしているか。空配列は形が判定できない
+/// ので数えない(この基準は下の完全性チェックにしか使わない——`tokens_of` はここを
+/// 通らない)。
+fn is_sequence_shaped(value: &Value) -> bool {
+    value
+        .as_array()
+        .is_some_and(|array| !array.is_empty() && array.iter().all(Value::is_string))
+}
 
 fn corpus_dir() -> PathBuf {
     [
@@ -67,6 +77,10 @@ fn no_committed_corpus_sequence_presses_a_refused_key() {
     let mut refused: Vec<String> = Vec::new();
     let mut unknown: Vec<String> = Vec::new();
     let mut sequences: usize = 0;
+    // 「今日は {keys, left, right} だけ」を確かめ続ける。新しいシャードが別名で
+    // キー列を運んでも、このチェックが無いと SEQUENCE_FIELDS を素通りして
+    // 静かに数えられなくなる(2026-09-16 の全枝レビュー M-2)。
+    let mut observed_sequence_fields: BTreeSet<String> = BTreeSet::new();
 
     for path in corpus_files() {
         let text = fs::read_to_string(&path)
@@ -85,6 +99,13 @@ fn no_committed_corpus_sequence_presses_a_refused_key() {
 
         for case in cases {
             let id = case.get("id").and_then(Value::as_str).unwrap_or("?");
+            if let Some(object) = case.as_object() {
+                for (field, value) in object {
+                    if is_sequence_shaped(value) {
+                        observed_sequence_fields.insert(field.clone());
+                    }
+                }
+            }
             for field in SEQUENCE_FIELDS {
                 let Some(tokens) = tokens_of(case, field) else {
                     continue;
@@ -109,6 +130,13 @@ fn no_committed_corpus_sequence_presses_a_refused_key() {
         }
     }
 
+    let allow_list: BTreeSet<String> = SEQUENCE_FIELDS.iter().map(|s| s.to_string()).collect();
+    assert_eq!(
+        observed_sequence_fields, allow_list,
+        "a case carries a string-array field not in SEQUENCE_FIELDS (or an allow-listed \
+         field is no longer present anywhere) — decide whether the new field is a key \
+         sequence the guard must fold, then update SEQUENCE_FIELDS deliberately"
+    );
     assert_eq!(
         unknown,
         Vec::<String>::new(),

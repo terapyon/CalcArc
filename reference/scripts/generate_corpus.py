@@ -2444,8 +2444,10 @@ def _summary_line(total_cases: int, elapsed: float) -> str:
 #
 # **誤りのキーは期待値に何も寄与しない。** 期待値は「正しい式の木」を mpmath で
 # 評価した値であって、押し直しの手順を写したものではない(設計書 §3.2 の正規化)。
-# 木の組み方は `corpus_opcorr.build_tree`——公開の表(`docs/base-spec.md`:333-343)
-# からの優先順位の登りであり、エンジンの演算子スタックの畳み込みとは別の手順である。
+# 木の組み方は `corpus_opcorr.build_tree`——公開の表(`docs/base-spec.md`:333-343 の
+# `xʸ`/`nPr`/`nCr` の段と右結合、`docs/numerical-policy.md`:673 の `+ −` = 1・
+# `× ÷` = 2)からの優先順位の登りであり、エンジンの演算子スタックの畳み込みとは
+# 別の手順である。
 
 #: 段の名前。**`correction` に書く綴り**で、公開の表(`LEVEL`)の段と 1 対 1。
 OPCORR_LEVEL_NAME = {1: "add-sub", 2: "mul-div", 3: "comb", 4: "pow"}

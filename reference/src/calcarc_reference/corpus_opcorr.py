@@ -3,11 +3,15 @@
 **ここは `Num`/`Bin` の木を作るだけで、計算はしない。** 値を出すのは
 `corpus_eval.evaluate()` である。
 
-読むのは `docs/base-spec.md`:333-343 の公開の約束だけ——
-`+ −` < `× ÷` < `nPr nCr` < `xʸ`、`xʸ` だけが右結合——であって、
-`crates/calcarc-core/src/engine/` は読まない。組み方は公開の表からの
-優先順位の登り(再帰の precedence climbing)であり、エンジンの演算子
-スタックの畳み込みとは手順そのものが別である。
+読むのは `docs/base-spec.md`:333-343 と `docs/numerical-policy.md`:673 の
+公開の約束だけ——`+ −` < `× ÷` < `nPr nCr` < `xʸ`、`xʸ` だけが右結合——で
+あって、`crates/calcarc-core/src/engine/` は読まない。**`+ −` = 1 /
+`× ÷` = 2 は `numerical-policy.md`:673 が持ち、`nPr nCr` = 3 と `xʸ` = 4・
+右結合は `base-spec.md`:333-343 が持つ**——base-spec の当該範囲は `xʸ` の
+右結合と `nPr`/`nCr` の位置しか述べておらず、`× ÷` が `+ −` より先という
+半分は base-spec に無い。組み方は公開の表からの優先順位の登り(再帰の
+precedence climbing)であり、エンジンの演算子スタックの畳み込みとは
+手順そのものが別である。
 """
 
 from __future__ import annotations
@@ -16,7 +20,8 @@ from dataclasses import dataclass
 
 from .corpus_expr import BINARY_KEYS, DIGIT_KEYS, Bin, Node, Num
 
-# **公開の表そのもの**(docs/base-spec.md:333-343)。段が低いほど先に読む。
+# **公開の表そのもの**(docs/base-spec.md:333-343 の `xʸ`/`nPr`/`nCr` の段と
+# 右結合、docs/numerical-policy.md:673 の `+ −` = 1・`× ÷` = 2)。段が低いほど先に読む。
 LEVEL: dict[str, int] = {
     "+": 1,
     "-": 1,
