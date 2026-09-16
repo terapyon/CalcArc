@@ -30,7 +30,7 @@ export {
 export const SETTINGS_KEY = "calcarc.settings";
 
 /**
- * 保存側の版。**STATE_SCHEMA(= 6)とは別物**である——あれは保存しない
+ * 保存側の版。**STATE_SCHEMA とは別物**である——あれは保存しない
  * EngineState の版である(P-1 設計書 §5)。
  *
  * **これは移行の仕組みではない。** 意味が変わったらキーの綴りを変える

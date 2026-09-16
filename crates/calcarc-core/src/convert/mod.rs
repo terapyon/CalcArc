@@ -18,6 +18,7 @@
 
 pub mod currency;
 pub mod format;
+pub mod settle;
 
 use crate::expr::rational::Rational;
 use crate::expr::{UnitSet, evaluate_to_rational};

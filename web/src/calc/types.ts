@@ -106,6 +106,11 @@ export type EngineState = { readonly __engineState: unique symbol };
 export interface Step {
   state: EngineState;
   display: DisplayState;
+  /**
+   * いま押せないキー(0.9.2 設計書 §3.3)。盤面はこれを読んで押せなくし、打鍵の列にも
+   * 積まない。**判断は engine の 1 か所**(`calcarc_core::engine::refuses`)で、web は読むだけ。
+   */
+  refused: KeyToken[];
 }
 
 /**

@@ -272,6 +272,26 @@ fn the_new_entry_keys_cross_the_boundary() {
     );
 }
 
+fn refused(step: &JsValue) -> Vec<String> {
+    js_sys::Array::from(&get(step, "refused"))
+        .iter()
+        .filter_map(|v| v.as_string())
+        .collect()
+}
+
+#[wasm_bindgen_test]
+fn the_refused_keys_cross_the_boundary() {
+    // 0.9.2 設計書 §3.3: 押せないキーは Step に載って盤面へ届く(トークン、`Key::ALL` の順)。
+    assert!(refused(&calcarc_wasm::initial_state()).is_empty());
+    let step = press(calcarc_wasm::initial_state(), &["2"]);
+    assert_eq!(refused(&step), vec!["pi", "lparen", "e"]);
+    let step = press(calcarc_wasm::initial_state(), &["4", "sqrt"]);
+    assert!(refused(&step).contains(&"5".to_string()));
+    // 押せないキーは境界を通っても何も変えない。
+    let step = press(calcarc_wasm::initial_state(), &["2", "lparen"]);
+    assert_eq!(main_text(&step), "2");
+}
+
 #[wasm_bindgen_test]
 fn compound_crosses_the_boundary() {
     // 種①: 100 万・年 1%・5 年・半年複利。golden(finance.json)と同じ
@@ -534,6 +554,17 @@ fn a_conversion_crosses_the_boundary_as_text() {
     );
     // **成功に `error` の欄は無い。在るのは `kind` である**(設計書 §0)。
     assert_eq!(get(&value, "kind").as_string().as_deref(), Some("ok"));
+}
+
+#[wasm_bindgen_test]
+fn settling_keeps_the_exact_value_across_the_boundary() {
+    // 0.9.2 設計書 §4: `=` は丸めない。表示の 10 桁(`convert`)とは別の口。
+    let text = |value: &str| get(&calcarc_wasm::settle_expression(value), "text").as_string();
+    assert_eq!(text("1/3").as_deref(), Some("1/3"));
+    assert_eq!(text("12345678901.5").as_deref(), Some("12345678901.5"));
+    assert_eq!(text("-12.5").as_deref(), Some("-12.5"));
+    let bad = calcarc_wasm::settle_expression("1/0");
+    assert_eq!(get(&bad, "kind").as_string().as_deref(), Some("error"));
 }
 
 #[wasm_bindgen_test]

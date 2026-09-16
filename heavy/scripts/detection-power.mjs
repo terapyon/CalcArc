@@ -48,6 +48,7 @@ export const ALL_SHARDS = [
   "complex-000.json (values)",
   "elementary-000.json (values)",
   "inverse-trig-000.json (values)",
+  "operator-correction-000.json (values)",
   "precedence-000.json (values)",
   "scientific-000.json (values)",
   "typed-000.json (values)",
@@ -115,6 +116,13 @@ export const MUTATIONS = [
       "typed-000.json (values)",
       "complex-display-000.json (displays)",
       "display-000.json (displays)",
+      // **`operator-correction-000.json` も反応する(2026-09-16 実測、
+      // `heavy:power` 13m15s)。** 有効桁を 1 桁落とす摂動は値シャード一般に
+      // 効くので驚きではない——新しいシャードも `tolerance.rel` 5e-10 の
+      // 値シャードで、他の 9 枚と同じ理由(半 ulp の相対誤差が 1e-6 の
+      // 桁を跨がない)で跨ぐ。2000 件中 572 件(28.6%)、下限はその約 12%
+      // 下。
+      "operator-correction-000.json (values)",
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
@@ -128,6 +136,7 @@ export const MUTATIONS = [
       "typed-000.json (values)": 0.222,
       "complex-display-000.json (displays)": 0.083,
       "display-000.json (displays)": 0.103,
+      "operator-correction-000.json (values)": 0.25,
     },
   },
   {
@@ -152,8 +161,17 @@ export const MUTATIONS = [
     expectShards: [
       "precedence-000.json (values)",
       "entry-000.json (displays)",
+      // **`operator-correction-000.json` も反応する(2026-09-16 実測、
+      // `heavy:power` 13m15s)。** そのシャードも括弧を省いたキー列を持つ
+      // ので、× ÷ の優先順位を + − に落とせば答えがずれる——
+      // `precedence-000.json` と同じ理由。2000 件中 656 件(32.8%)、
+      // 下限はその約 12% 下。
+      "operator-correction-000.json (values)",
     ],
-    minRate: { "precedence-000.json (values)": 0.274 },
+    minRate: {
+      "precedence-000.json (values)": 0.274,
+      "operator-correction-000.json (values)": 0.29,
+    },
   },
   {
     id: "associativity-flip",
@@ -181,8 +199,18 @@ export const MUTATIONS = [
     // **実測 2026-08-20: 2000 件中ちょうど 1000 件**——平坦なキー列が 1000 本、
     // 全括弧の双子が 1000 本で、**赤くなったのは平坦な側だけ**である。
     // 対照群は 1 件も動いていない。下限は実測率(50.00%)の半分。
-    expectShards: ["associativity-000.json (values)"],
-    minRate: { "associativity-000.json (values)": 0.25 },
+    expectShards: [
+      "associativity-000.json (values)",
+      // **`operator-correction-000.json` も反応する(2026-09-16 実測、
+      // `heavy:power` 13m15s)。** そのシャードも括弧を省いた同順位の連鎖を
+      // 持つので、畳む向きを反転すれば答えがずれる——`associativity-000.json`
+      // と同じ理由。2000 件中 726 件(36.3%)、下限はその約 12% 下。
+      "operator-correction-000.json (values)",
+    ],
+    minRate: {
+      "associativity-000.json (values)": 0.25,
+      "operator-correction-000.json (values)": 0.32,
+    },
   },
   {
     id: "ncr-multiply-first",
@@ -648,6 +676,26 @@ export const MUTATIONS = [
     // `minRate` は `floor(305 / 1200 × 1000) / 1000`、`finance-000.json` は旧のまま。
     expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.038, "finance-start-000.json (calls)": 0.254 },
+  },
+
+  // **ここから演算子の押し直しの変異(設計書 §3.8、外部監査 F1)。**
+  {
+    id: "operator-correction-revert",
+    what: "演算子の押し直しを、演算子スタックの末尾の差し替えに戻す(修正前の F1)",
+    file: "crates/calcarc-core/src/engine/mod.rs",
+    from: "match state.replace_base.take() {",
+    to: "match None::<ReplaceBase> {",
+    // `Some(base)` の枝に届かなくなり、`None` の枝(演算子の末尾の差し替え
+    // = 修正前の挙動)だけが走る。calcarc-3d(#138)が直した F1 をそのまま
+    // 巻き戻す形。他の 20 枚は 1 件も動かない。
+    //
+    // **2026-09-16 に `heavy:power`(13m15s)で実測: 2000 件中 454 件
+    // (22.7%)。** 下限はその約 12% 下。**454 は §3.8 の赤の確認
+    // (修正前のエンジンでの手作業の走行)で出た件数と同じ**——変異が
+    // 修正前の挙動を正しく再現していることを、2 つの独立した測定が
+    // 裏づけている。
+    expectShards: ["operator-correction-000.json (values)"],
+    minRate: { "operator-correction-000.json (values)": 0.2 },
   },
 ];
 

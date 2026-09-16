@@ -9,6 +9,7 @@ import type {
   ConvertCategoryId,
   ConvertResult,
   ConvertUnitToken,
+  SettleResult,
 } from "../../convert/types";
 import {
   CONVERT_CATEGORY_IDS,
@@ -284,10 +285,40 @@ function convertCurrencyStub(
   };
 }
 
+/**
+ * `settle` の呼び出し記録。**`calls`(`convert`)や `currencyCalls`
+ * (`convertCurrency`)とは別の口である**——`=` は `settle` だけを呼び、
+ * 結果を値の欄に書き戻す(`convert`/`convertCurrency` は表示専用になった)。
+ * 「`=` が値を書き換えたか」は、この記録だけが主張できる。
+ *
+ * **最後の 1 件が「直前に押した `=`」とは限らない。** `settled()` は
+ * `=` の disabled 判定(`UnitPanel.tsx` の `keyOff` の `eq`)からも毎描画
+ * 呼ばれる——`settleCalls.at(-1)` は「最後の描画がこの記録に足した値」
+ * であって「最後に押した `=` の入力」ではない。
+ */
+const settleCalls: { value: string }[] = [];
+
+/**
+ * `settle` のスタブ。**コアの移植ではない**——既存の `evaluate()`(式を数に
+ * するだけの部分表)を借りて `String(n)` を返すだけで、既約分数も丸めの規則
+ * も持たない(CLAUDE.md「参照実装を Rust の移植にしない」と同じ理由で、
+ * これは**配線を確かめるスタブ**である)。答えの正しさは
+ * `crates/calcarc-core/src/convert/settle.rs` と `UnitPanel.wasm.test.tsx`
+ * が持つ。
+ */
+function settleStub(value: string): SettleResult {
+  settleCalls.push({ value });
+  const parsed = evaluate(value);
+  return parsed === null
+    ? { kind: "error", code: "SyntaxError" }
+    : { kind: "ok", text: String(parsed) };
+}
+
 function stubCalc(): ConvertCalc {
   return {
     convert: convertStub,
     convertCurrency: convertCurrencyStub,
+    settle: settleStub,
     // 単位面の並びはキー集合(`Keypad/convert.ts`)が持つので、パネルはこれを
     // 呼ばない。**呼ばれたら失敗させて検知する**(TransferPanel.test.tsx と同じ)。
     units: vi.fn(() => {
@@ -343,6 +374,7 @@ const main = () => screen.getByTestId("display-main");
 beforeEach(() => {
   calls.length = 0;
   currencyCalls.length = 0;
+  settleCalls.length = 0;
   vi.mocked(readRates).mockReset().mockResolvedValue(null);
   vi.mocked(writeRates).mockReset().mockResolvedValue(undefined);
   vi.mocked(exchangeRateApi.getLatestRates)
@@ -863,7 +895,13 @@ describe("UnitPanel（為替の盤面）", () => {
     // **12.5 のままである。** `convertCurrency` で畳んでいたら、JPY の
     // 小数桁 0 で丸められて `13` になる。
     expect(echo()).toHaveTextContent("値 12.5");
-    expect(calls.at(-1)?.value).toBe("12.5");
+    // **`currencyCalls` を見る。** `=` が押した直後の値(`typed`)を
+    // `convertCurrency` が結果表示のために読み直す(`UnitPanel.tsx` の
+    // `shown` の計算、`:325` で `=` が書き換えた `typed` を再び渡す側)。
+    // ここが「打った値が着地通貨の桁で丸められていない」ことを主張できる
+    // 口である——`settleCalls` は `=` の押下そのものより先に、`keyOff` が
+    // 毎描画で呼ぶ `settled()` の記録も混ざるので、ここでは使わない。
+    expect(currencyCalls.at(-1)?.value).toBe("12.5");
   });
 
   it("asks the provider once per session, even when the fetch fails", async () => {

@@ -45,6 +45,16 @@ use wasm_bindgen::prelude::*;
 struct Step {
     state: EngineState,
     display: DisplayState,
+    /// いま押せないキー(トークン、`Key::ALL` の順)。盤面はこれを読んで押せなくし、
+    /// 打鍵の列にも積まない(0.9.2 設計書 §3.3)。判断は `calcarc_core::engine::refuses`。
+    refused: Vec<&'static str>,
+}
+
+fn refused_tokens(state: &EngineState) -> Vec<&'static str> {
+    calcarc_core::engine::refused_keys(state)
+        .into_iter()
+        .map(Key::token)
+        .collect()
 }
 
 #[wasm_bindgen(start)]
@@ -77,9 +87,11 @@ fn to_js(step: &Step) -> JsValue {
 
 fn step_of(state: EngineState) -> Step {
     let shown = render(&state);
+    let refused = refused_tokens(&state);
     Step {
         state,
         display: shown,
+        refused,
     }
 }
 
@@ -105,9 +117,11 @@ pub fn reduce_key(state: JsValue, key: &str) -> JsValue {
     };
 
     let (next, shown) = reduce(&current, parsed);
+    let refused = refused_tokens(&next);
     to_js(&Step {
         state: next,
         display: shown,
+        refused,
     })
 }
 
@@ -700,6 +714,17 @@ pub fn convert(value: &str, category: &str, from: &str, to: &str) -> JsValue {
         convert_core::format::format_rational(convert_core::convert(value, category, from, to)?)
     })();
     let result: Outcome<ConvertText> = outcome.map(|text| ConvertText { text }).into();
+    to_js_value(&result)
+}
+
+/// `=` で式を値にまとめる(0.9.2 設計書 §4、外部監査 F3)。**丸めない**——有限小数か
+/// 既約分数 `p/q`。表示の 10 桁(`convert`)とは別の口で、Convert の値の欄に入る。
+/// 計算は `calcarc-core` の `convert::settle` が持つ(ここには置かない)。
+#[wasm_bindgen]
+pub fn settle_expression(value: &str) -> JsValue {
+    let result: Outcome<ConvertText> = convert_core::settle::settle(value)
+        .map(|text| ConvertText { text })
+        .into();
     to_js_value(&result)
 }
 

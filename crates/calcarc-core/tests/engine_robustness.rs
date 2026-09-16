@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, render};
+    use calcarc_core::{DisplayState, EngineState, Key, Value, reduce, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -31,6 +31,9 @@ mod invariants {
         /// 求め方は `keeps_the_position` を見ること。走査側（`walk` と
         /// `Run`）が、渡したキー列と観測した状態差だけから積む。
         pub anchor: Option<Key>,
+        /// `anchor` のキーを押す**直前**の状態。I4 が「その状態から、いま押した演算子を
+        /// 直接押した姿」を作るのに使う(0.9.2 設計書 §2.5)。`anchor` と同じく走査側が積む。
+        pub anchor_base: Option<&'a EngineState>,
         pub before: &'a EngineState,
         pub key: Key,
         pub after: &'a EngineState,
@@ -75,6 +78,7 @@ mod invariants {
         real_axis_is_closed(step)?;
         operator_press_replaces(step)?;
         del_removes_at_most_one_thing(step)?;
+        a_refused_key_changes_nothing(step)?;
         Ok(())
     }
 
@@ -175,10 +179,20 @@ mod invariants {
     }
 
     /// 状態が実数だけで構成されているか。
+    ///
+    /// **`replace_base` も見る。** あれは押し直しが確定済みの値を戻す先
+    /// (0.9.2 設計書 §2.2)——`current` や `operands` が畳んで実数に戻っていても、
+    /// 戻り先の中に虚数が残っていれば、その状態は「実数だけ」とは言えない。
+    /// `3 j − 3 j − ÷` がこれを示した。2 つ目の `−` で `3j − 3j` が畳まれて
+    /// 表向きは実数の `0` になるが、`÷` を押すと戻り先に残っていた `3j` へ
+    /// 戻って積み直すので、`j` を経ずに虚数へ出る。
     fn all_real(state: &EngineState) -> bool {
         state.current.im == 0.0
             && state.operands.iter().all(|v| v.im == 0.0)
             && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
+            && state.replace_base.as_ref().is_none_or(|base| {
+                base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
+            })
     }
 
     /// I3: 実軸は演算で閉じており、虚軸への出口は `j` キーだけ。
@@ -218,87 +232,72 @@ mod invariants {
         Ok(())
     }
 
+    /// **7 つとも持つ。** `mod.rs` の `operator_pending` は 7 つの二項演算子キー
+    /// すべてで真になる(`Add`・`Sub`・`Mul`・`Div`・`Pow`・`Npr`・`Ncr`)。ここが
+    /// 4 つしか持たなければ、I4 は `Pow`・`Npr`・`Ncr` の押し直しを検査しない
+    /// ——F1 がいちばん変える `xʸ` の訂正が素通りする。
     fn binop_of(key: Key) -> Option<BinOp> {
         Some(match key {
             Key::Add => BinOp::Add,
             Key::Sub => BinOp::Sub,
             Key::Mul => BinOp::Mul,
             Key::Div => BinOp::Div,
+            Key::Pow => BinOp::Pow,
+            Key::Npr => BinOp::Npr,
+            Key::Ncr => BinOp::Ncr,
             _ => return None,
         })
     }
 
-    /// I4: 二項演算子を続けて押したら、最後の 1 つだけが残る。
+    /// I4: 二項演算子を続けて押したら、**最初からその演算子を押したのと同じ**になる
+    /// (0.9.2 設計書 §2.5、外部監査 F1)。
     ///
-    /// 局所的に言い換える。直前の打鍵が二項演算子だったなら、次の二項
-    /// 演算子は積むのではなく差し替えでなければならず、被演算数も演算子も
-    /// 増えてはならない。累算すると 3 + + 4 = が 10 になる。
+    /// 以前は「被演算数も現在値も変わらない」を要求していた——**内部構造を固定していた**
+    /// (監査の指摘)。`2 + 3 + ×` の正しい姿は `2 + 3 ×` で、被演算数は 5 から 2・3 に戻る。
     ///
-    /// 同種・異種を問わない。実際に起きたバグは `3 + × 4 =` と
-    /// `3 + DEL + 4 =` であって、同種の連打ではなかった。表示トグルや
-    /// 何も消さない DEL を挟んだ形も `anchor` が拾うので射程に入る。
+    /// 局所的に言い換える。`anchor` の演算子を押す直前の状態から、いま押した演算子を
+    /// **直接**押した状態と、押し直した後の状態が、位置を決めるフィールドで一致すること。
+    /// これで「数を二重に積まない」(被演算数が直接の経路と同じ)と「訂正後の意味が直接の
+    /// 入力と一致する」の両方を見る。
     ///
-    /// **前提は `anchor` から取る。** engine の `operator_pending` を読むと、
-    /// 旗が誤ってクリアされるバグでは前提そのものが偽になり、この検査が
-    /// 黙って無効化される。実測: 二項演算子の腕を `true` から `false` に
-    /// 退行させると、旗を読む版は 7 本すべて緑のまま通り、`anchor` を
-    /// 読む版は `3 + +` で落ちる。
+    /// **前提は `anchor` から取る。** engine の `operator_pending` を読むと、旗が誤って
+    /// クリアされるバグでは前提そのものが偽になり、この検査が黙って無効化される(実測:
+    /// 二項演算子の腕を `true` から `false` に退行させると、旗を読む版は 7 本すべて緑のまま
+    /// 通り、`anchor` を読む版は `3 + +` で落ちた)。
     ///
-    /// 何かを消した DEL を挟んだ形（`3 × 4 DEL × 5 =`）は前提から外れる。
-    /// 位置が動いたかどうかを走査側から言えないためで、そちらは
+    /// 何かを消した DEL を挟んだ形(`3 × 4 DEL × 5 =`)は前提から外れる。そちらは
     /// engine_table.rs の `del_returns_to_the_pending_operator` が受け持つ。
     fn operator_press_replaces(step: &Step<'_>) -> Result<(), String> {
-        let (before, after) = (step.before, step.after);
         let Some(op) = binop_of(step.key) else {
             return Ok(());
         };
         if !step.anchor.is_some_and(|k| binop_of(k).is_some()) {
             return Ok(());
         }
-        if before.error.is_some() {
+        let Some(base) = step.anchor_base else {
+            return Ok(());
+        };
+        if step.before.error.is_some() {
             // 直前の演算子は畳み込みに失敗している。I5 の領域。
             return Ok(());
         }
-        // 差し替えは計算を起こさないので、失敗しようがない。
-        if after.error.is_some() {
+        let (direct, _) = reduce(base, step.key);
+        let after = step.after;
+        if after.buffer != direct.buffer
+            || after.current != direct.current
+            || after.operands != direct.operands
+            || after.operators != direct.operators
+            || after.error != direct.error
+            || after.replace_base != direct.replace_base
+        {
             return Err(format!(
-                "I4: {} after a pending operator errored ({:?})",
-                step.key.token(),
-                after.error
+                "I4: {} after a pending operator differs from pressing it directly\n  corrected: {after:?}\n  direct:    {direct:?}",
+                step.key.token()
             ));
         }
-        // **長さで比べてはならない。** 優先順位が同じか降順のときは、
-        // 誤って積んだ被演算数が直後の畳み込みで戻されるため長さが変わらない。
-        // 3 + + 4 = が 10 になるバグはまさにこの経路で、長さ比較では
-        // 素通りする（operands も operators も 1 -> 1 のまま）。
-        // 積まれたかどうかは内容にしか現れない。
-        if after.operands != before.operands {
-            return Err(format!(
-                "I4: {} after a pending operator changed the operands ({:?} -> {:?})",
-                step.key.token(),
-                before.operands,
-                after.operands
-            ));
-        }
-        if after.current != before.current {
-            return Err(format!(
-                "I4: {} after a pending operator changed the value ({:?} -> {:?})",
-                step.key.token(),
-                before.current,
-                after.current
-            ));
-        }
-        if after.operators.len() != before.operators.len() {
-            return Err(format!(
-                "I4: {} after a pending operator grew the operator stack ({} -> {})",
-                step.key.token(),
-                before.operators.len(),
-                after.operators.len()
-            ));
-        }
-        // 長さだけでなく、押した演算子がスタックの先頭に載っていること。
-        // 見ないと、差し替えを「何もせず return」に退行させても通る。
-        if after.operators.last() != Some(&OpToken::Op(op)) {
+        // 押した演算子がスタックの先頭に載っていること。見ないと、押し直しを
+        // 「何もせず return」に退行させても(直接の経路も同じ誤りでない限り)通る。
+        if after.error.is_none() && after.operators.last() != Some(&OpToken::Op(op)) {
             return Err(format!(
                 "I4: {} left {:?} on top of the operator stack",
                 step.key.token(),
@@ -350,10 +349,39 @@ mod invariants {
         None
     }
 
+    /// DEL が開き括弧を消して、戻った先が演算子なら `current` を戻す
+    /// (0.9.2 設計書 §9 の 2・10、あとの詰め)。戻さないなら before.current のまま。
+    ///
+    /// **`delete_one` と同じ条件を、ここに独立に書き下したもの**——「バッファが無く、
+    /// 開き括弧が先頭で、手元の値が無く(`on_hand` が偽)、戻った先が演算子」なら
+    /// `operands` の末尾へ戻ると読む。`)` が畳んだ答え(`3 + ( 4 √ DEL`)を
+    /// `on_hand` で除くのは §9 のあとの詰め、`=` のあとの `(`(`operators` が
+    /// `[OpenParen]` だけで戻る先が無い)を除くのは §9 の 10。**この関数が
+    /// 捕まえるのは、2 つの実装が別々に存在することで起きるずれである**——
+    /// 片方(`delete_one`)だけが直されて条件が食い違えば I7 が落ちる。
+    /// **戻す値そのものの正しさは、`engine_table.rs` の
+    /// `del_on_a_fresh_paren_returns_to_the_operator_before_it` が固定する**
+    /// ——ここは値の仕様ではなく、実装との一致を見る。
+    fn current_after_del(before: &EngineState) -> Value {
+        let restores = before.buffer.is_none()
+            && !before.on_hand
+            && matches!(before.operators.last(), Some(OpToken::OpenParen))
+            && before.operators.len() >= 2
+            && matches!(before.operators[before.operators.len() - 2], OpToken::Op(_));
+        if restores {
+            if let Some(&operand) = before.operands.last() {
+                return operand;
+            }
+        }
+        before.current
+    }
+
     /// I7: DEL は 3 段のうち 1 つだけを消す。
     ///
     /// 段は 数字 → `j` マーカー → 閉じられていない開き括弧 の順で、
-    /// 確定した値（`current` / `operands`）と演算子には触れない。
+    /// 演算子には触れない。**確定した値(`current`)は、開き括弧を消して演算子の
+    /// 被演算数へ戻るとき(`current_after_del`)だけ動く**(0.9.2 設計書 §9 の 2、
+    /// F1 の原則)——それ以外は不変。`operands` は常に不変。
     /// **段の順序と、消える文字数まで見る。** ここを `operands` と
     /// スタックの本数だけで書くと、設計書 §1 の動機になった実バグ
     /// （DEL が虚数入力の `j` を捨てる）を再導入しても無言で通る。
@@ -362,10 +390,11 @@ mod invariants {
         if step.key != Key::Del || before.error.is_some() {
             return Ok(());
         }
-        if after.current != before.current {
+        let expected_current = current_after_del(before);
+        if after.current != expected_current {
             return Err(format!(
-                "I7: DEL changed the committed value ({:?} -> {:?})",
-                before.current, after.current
+                "I7: DEL left current as {:?}, expected {:?} (before: {:?})",
+                after.current, expected_current, before.current
             ));
         }
         if after.operands != before.operands {
@@ -405,6 +434,23 @@ mod invariants {
                     ));
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// I8: 押せないキーは状態を変えない(0.9.2 設計書 §3.3)。**押されなかったのと同じ**
+    /// ——表示の一時状態(60 進・ENG)も含めて、状態をまるごと比べる。
+    fn a_refused_key_changes_nothing(step: &Step<'_>) -> Result<(), String> {
+        if !calcarc_core::engine::refuses(step.before, step.key) {
+            return Ok(());
+        }
+        if step.after != step.before {
+            return Err(format!(
+                "I8: refused {} changed the state\n  before: {:?}\n  after:  {:?}",
+                step.key.token(),
+                step.before,
+                step.after
+            ));
         }
         Ok(())
     }
@@ -523,6 +569,7 @@ fn walk(
     depth: usize,
     trail: &mut Vec<&'static str>,
     anchor: Option<Key>,
+    anchor_base: Option<&EngineState>,
     seen_focus: bool,
 ) {
     if depth == sweep.max {
@@ -538,6 +585,7 @@ fn walk(
         trail.push(key.token());
         let step = invariants::Step {
             anchor,
+            anchor_base,
             before: state,
             key,
             after: &next,
@@ -546,10 +594,18 @@ fn walk(
         if let Err(why) = invariants::check(&step) {
             panic!("{why}\n  key sequence: {trail:?}");
         }
-        let next_anchor = if invariants::keeps_the_position(key, state, &next) {
-            anchor
+        // 拒まれたキーの先は、拒む前の状態と同じなので辿らない(I8 は上で検査した)。
+        // web は拒まれたキーを打鍵の列に積まない(0.9.2 設計書 §3.3 の条件 1)。
+        if calcarc_core::engine::refuses(state, key) {
+            trail.pop();
+            continue;
+        }
+        let kept_position = invariants::keeps_the_position(key, state, &next);
+        let next_anchor = if kept_position { anchor } else { Some(key) };
+        let next_anchor_base = if kept_position {
+            anchor_base
         } else {
-            Some(key)
+            Some(state)
         };
         // エラー状態からは AC 以外で新しい状態に届かないので、ここから
         // **先を辿らない**。遷移そのものは上で必ず検査する。枝刈りの根拠が
@@ -562,6 +618,7 @@ fn walk(
                 depth + 1,
                 trail,
                 next_anchor,
+                next_anchor_base,
                 seen_focus || sweep.focus.contains(&key),
             );
         }
@@ -576,7 +633,7 @@ fn walk_from_the_start(keys: &[Key], max: usize, focus: &[Key]) {
         panic!("{why}\n  key sequence: []");
     }
     let sweep = Sweep { keys, max, focus };
-    walk(&sweep, &start, 0, &mut Vec::new(), None, false);
+    walk(&sweep, &start, 0, &mut Vec::new(), None, None, false);
 }
 
 /// 構造に関わるキーだけで、長さ 7 までのすべての打鍵列を検査する。
@@ -666,38 +723,71 @@ fn every_sequence_over_all_classes_up_to_five_keys_and_six_through_the_focus() {
 }
 
 /// 重みつきのキー生成。演算子と括弧を厚くして、深い入れ子と長い畳み込みに
-/// 届かせる。
+/// 届かせる。**1 回の抽選が 1 手とは限らない**——`(` は単体では持たず、
+/// 「演算子のあとに `(`」という 2 手の単位で持つ(下の註)。返す型が
+/// `Vec<Key>` なのはそのため。
 ///
-/// **効いているのは重みの絶対値ではなく `(` と `)` の比である。** 合計 20 の
-/// うち `(` が 3（15%）、`)` が 2（10%）で、一様な 1/30（3.3%）よりどちらも
-/// 厚い。`)` を引く率はむしろ 3 倍に上げてある。深さが伸びるのは `(` が
-/// `)` より 1.5 倍出やすいからであって、`)` を薄くしているからではない。
+/// **効いているのは重みの絶対値ではなく `(` と `)` の比である。** 「演算子の
+/// あとの `(`」(3)は `)`(2)の 1.5 倍出やすく、一様な比(1:1)より厚い。
+/// 深さが伸びるのは `(` が `)` より出やすいからであって、`)` を薄くして
+/// いるからではない。
+///
+/// **単体の `(` をやめて 2 手の単位にした理由(2026-09-13、F5 の再計量)**:
+/// F5 で `(` は「打ちかけの数が無く、手元の値も無い」ときしか受け付けなく
+/// なった(`refuses`、0.9.2 設計書 §3.2)——直前が演算子・`AC`・`=`・別の `(`
+/// のときだけである。単体の `(` を iid に引くと、直前がたまたまそのどれか
+/// である確率が低く、実測で深さ 5 以上の打鍵が 315 → 30 に落ちた。
+/// `push_binop` は演算子を無条件に受け付けて必ずこの状態に戻すので、
+/// 「演算子 → `(`」を 1 つの単位として引けば、その `(` は毎回確実に開く。
+/// **単体の `(` を残さなかった結果、この乱択探索は `(` を先頭・`=` の直後・
+/// `AC` の直後・別の `(` の直後には一度も押さない**——`(` は必ず「演算子の
+/// あとの `(`」という単位でしか引かれないので、直前に演算子が無いその 4 つの
+/// 位置は、この乱択探索の外側でしか埋まらない。埋めているのは
+/// `every_structural_sequence_up_to_seven_keys_holds_the_invariants`
+/// (長さ 7 までの構造キーの全数)と
+/// `every_sequence_over_all_classes_up_to_five_keys_and_six_through_the_focus`
+/// (全等価類で長さ 5 までの全数)という 2 本の網羅探索——どちらも `(` を
+/// 単体で引く。一様に引く `never_panics` proptest(下)も `(` をどこにでも
+/// 押すので、そちらでも埋まる。
 ///
 /// 列が最後まで生き延びるのは重みのおかげではなく、下のループが挟む **AC
 /// 復帰**のおかげである。実測では列の 9 割近くが途中で一度はエラーに落ちる。
 /// 「`)` を薄くすれば列が死ななくなる」と読んで重みを触ると、深さだけが
 /// 静かに消える。触るなら the_weighted_search_still_reaches_deep_states の
 /// 実測値ごと見直すこと。
-fn weighted_key() -> impl Strategy<Value = Key> {
+fn weighted_key() -> impl Strategy<Value = Vec<Key>> {
     prop_oneof![
         5 => prop::sample::select(vec![
             Key::Digit(0), Key::Digit(3), Key::Digit(7),
-        ]),
+        ]).prop_map(|k| vec![k]),
         4 => prop::sample::select(vec![
             Key::Add, Key::Sub, Key::Mul, Key::Div,
-        ]),
-        3 => Just(Key::LParen),
-        2 => Just(Key::RParen),
-        2 => Just(Key::Eq),
-        1 => Just(Key::J),
-        1 => Just(Key::Dot),
+        ]).prop_map(|k| vec![k]),
+        // 演算子のあとの `(`。演算子は常に受け付けられ、必ず「打ちかけなし・
+        // 手元の値なし」に戻すので、続けて引いた `(` は毎回開く(上の註)。
+        3 => prop::sample::select(vec![
+            Key::Add, Key::Sub, Key::Mul, Key::Div,
+        ]).prop_map(|op| vec![op, Key::LParen]),
+        2 => Just(vec![Key::RParen]),
+        2 => Just(vec![Key::Eq]),
+        1 => Just(vec![Key::J]),
+        1 => Just(vec![Key::Dot]),
         1 => prop::sample::select(vec![
             Key::Sqrt, Key::Sqr, Key::Neg, Key::Sin, Key::Cos, Key::Tan, Key::Pi,
-        ]),
+        ]).prop_map(|k| vec![k]),
         1 => prop::sample::select(vec![
             Key::Del, Key::AngleToggle, Key::PolarToggle, Key::Ac,
-        ]),
+        ]).prop_map(|k| vec![k]),
     ]
+}
+
+/// `weighted_key` の抽選を打鍵の列へ展開する。**2 か所(乱択 2 本)が同じ
+/// 展開をすること**が要点なので、1 か所にまとめる。
+fn weighted_key_sequence(
+    max: impl Into<proptest::collection::SizeRange>,
+) -> impl Strategy<Value = Vec<Key>> {
+    prop::collection::vec(weighted_key(), max)
+        .prop_map(|chunks| chunks.into_iter().flatten().collect())
 }
 
 /// 乱択探索が辿る 1 本の列。
@@ -709,6 +799,8 @@ struct Run {
     state: EngineState,
     /// 打鍵位置を最後に動かしたキー。I4 の前提になる（`Step::anchor`）。
     anchor: Option<Key>,
+    /// `anchor` のキーを押す直前の状態(0.9.2 設計書 §2.5、`Step::anchor_base`)。
+    anchor_base: Option<EngineState>,
     /// 実際に `reduce` に渡したキー列。挟んだ AC も含む。
     ///
     /// proptest が出す縮小結果は `Vec<Key>` の Debug 表示で、しかも AC を
@@ -723,6 +815,7 @@ impl Run {
         Run {
             state: EngineState::initial(),
             anchor: None,
+            anchor_base: None,
             trail: Vec::new(),
         }
     }
@@ -752,6 +845,7 @@ impl Run {
         self.trail.push(key.token());
         let step = invariants::Step {
             anchor: self.anchor,
+            anchor_base: self.anchor_base.as_ref(),
             before: &self.state,
             key,
             after: &next,
@@ -762,6 +856,7 @@ impl Run {
         }
         if !invariants::keeps_the_position(key, &self.state, &next) {
             self.anchor = Some(key);
+            self.anchor_base = Some(self.state.clone());
         }
         self.state = next;
         Ok(())
@@ -822,7 +917,7 @@ proptest! {
     /// エラーからの復帰を繰り返す領域を担当する。
     #[test]
     fn long_sequences_hold_the_invariants(
-        keys in prop::collection::vec(weighted_key(), 0..120)
+        keys in weighted_key_sequence(0..120)
     ) {
         let mut run = Run::new();
         for key in keys {
@@ -844,25 +939,38 @@ const DEEP: usize = 5;
 /// 表明しておかないと、この領域の網は音もなく消える。
 ///
 /// **測るのは最大値ではなく滞在量である。** 深さの最大値は極値統計なので
-/// 鈍い。実測（この種で 300 列）:
+/// 鈍い。
+///
+/// **再計量(2026-09-13、0.9.2 F5)**: `refuses` が入り、手元の値(`on_hand`)が
+/// あるあいだは数字・`(`・`π`・`e` を拒むようになった(外部監査 F5)。単体の
+/// `(` を iid に引く旧 `weighted_key` はこれで深さがほぼ死んだ(実測: 深さ
+/// 5 以上の打鍵が 315 → 30、`)` を含む F1 前の表の生成器はもう存在しない)
+/// ——**単体の `(` をやめ、「演算子のあとに `(`」という 2 手の単位にした**
+/// (`weighted_key` の註)。表は生成器ごとこの新しい形で撮り直した(この種で
+/// 300 列):
 ///
 /// | 生成器 | 最大深さ | 深さ 5 以上の打鍵数 | 復帰回数 |
 /// |---|---|---|---|
-/// | 現状 | 9 | 315 | 1159 |
-/// | `(` を 3 → 2 | 9 | 29 | 1586 |
-/// | `)` を 2 → 6 | 8 | 29 | 3382 |
-/// | 重みを全部 1 | 9 | 87 | 1751 |
+/// | 現状(演算子のあとの `(` が 3) | 8 | 270 | 1490 |
+/// | 演算子のあとの `(` を 3 → 2 | 8 | 99 | 1706 |
+/// | `)` を 2 → 6 | 7 | 63 | 3391 |
+/// | 重みを全部 1 | 8 | 56 | 2008 |
 ///
-/// 崩した 3 通りのどれでも最大深さは 8〜9 のままで、`deepest >= 5` は
-/// 素通りする。滞在量なら 3 通りとも捕まる。
+/// 崩した 3 通りのどれでも最大深さは 7〜8 のままで、`deepest >= 5` は
+/// 素通りする。滞在量なら 3 通りとも捕まり、しかも現状(270)から明確に
+/// 離れている(最大でも 99)——下の閾値 150 はこの 99 と 270 のあいだに置いた。
 ///
 /// **復帰回数は両側で挟む。** 生成器が悪化するほど復帰は単調に増えるので、
-/// 下限だけでは「重みが崩れた」ことに原理的に気づけない。
+/// 下限だけでは「重みが崩れた」ことに原理的に気づけない。下の窓
+/// `1300..=1600` は現状の 1490 を挟み、3 通りの崩し(1706・3391・2008)の
+/// どれよりも上限が低い。
 ///
 /// 種は固定してあるので結果は揺れない。ただし proptest の RNG が変われば
 /// 実測値も動く。`Cargo.toml` の `proptest = "1"` は minor を固定して
 /// いないので、`cargo update` の後にこのテストが落ちたら、まず実測を
-/// 取り直して数字を更新することを疑う。
+/// 取り直して数字を更新することを疑う——**その際は表の 4 行を全部撮り直す
+/// こと**（生成器を一時的に壊して測り、直してから戻す。壊しっぱなしで
+/// コミットしない）。
 #[test]
 fn the_weighted_search_still_reaches_deep_states() {
     use proptest::strategy::ValueTree;
@@ -872,7 +980,7 @@ fn the_weighted_search_still_reaches_deep_states() {
         Config::default(),
         TestRng::deterministic_rng(RngAlgorithm::ChaCha),
     );
-    let strategy = prop::collection::vec(weighted_key(), 0..120);
+    let strategy = weighted_key_sequence(0..120);
 
     let (mut deepest, mut dwell, mut recoveries) = (0usize, 0usize, 0usize);
     for _ in 0..300 {
@@ -896,14 +1004,15 @@ fn the_weighted_search_still_reaches_deep_states() {
 
     assert!(
         dwell >= 150,
-        "深さ {DEEP} 以上で打たれた打鍵が {dwell} 回しかない（実測 315）。\
-         最大到達深さ {deepest} は崩れても動かないので当てにならない。\
-         weighted_key の重みを確認すること"
+        "深さ {DEEP} 以上で打たれた打鍵が {dwell} 回しかない（0.9.2 F5 の再計量後の実測 270、\
+         崩した 3 通りの最大は 99）。最大到達深さ {deepest} は崩れても動かないので\
+         当てにならない。weighted_key の重みを確認すること"
     );
     assert!(
-        (900..=1400).contains(&recoveries),
-        "エラーからの復帰が {recoveries} 回（実測 1159）。生成器が崩れると\
-         増える側にも動くので両側で挟んである。weighted_key の重みを確認すること"
+        (1300..=1600).contains(&recoveries),
+        "エラーからの復帰が {recoveries} 回（0.9.2 F5 の再計量後の実測 1490、崩した 3 通りは\
+         いずれも 1700 台以上）。生成器が崩れると増える側にも動くので両側で挟んである。\
+         weighted_key の重みを確認すること"
     );
 }
 

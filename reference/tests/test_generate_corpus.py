@@ -1,7 +1,9 @@
 """生成器。**同じ種から常に同じコーパスが出ること**が最重要である。"""
 
 import collections
+import functools
 import importlib.util
+import itertools
 import json
 import math
 import pathlib
@@ -14,7 +16,7 @@ import mpmath as mp
 import pytest
 
 from calcarc_reference import compound_ref, corpus_calls, corpus_coverage, loan_ref
-from calcarc_reference.corpus_eval import evaluate
+from calcarc_reference.corpus_eval import OutOfShard, evaluate
 from calcarc_reference.corpus_expr import (
     BINARY_KEYS,
     BINARY_PRECEDENCE,
@@ -25,6 +27,7 @@ from calcarc_reference.corpus_expr import (
     Un,
     to_expr_text,
 )
+from calcarc_reference.corpus_opcorr import LEVEL, Group, build_tree
 
 _PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "generate_corpus.py"
 _SPEC = importlib.util.spec_from_file_location("generate_corpus", _PATH)
@@ -1617,10 +1620,12 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     # **19 枚目は 2026-08-30 に増えた**（`combinatorics-display-000.json`）。
     # **20 枚目は 2026-09-11 に増えた**（`finance-start-000.json`、設計書
     # 2026-09-10 §4.2）。
+    # **21 枚目は 2026-09-16 に増えた**（`operator-correction-000.json`、設計書
+    # 2026-09-12 §3）。
     # **数を持っているのはここだけではない**——`ALL_SHARDS`（heavy の検出力）と
     # `SCIENCE_SHARDS`、`COVERAGE_REQUIRED_SHARDS`、`DISPLAY_SHARD_PATTERN` が
     # それぞれ一覧を持つ。**足す日には全部が意識的な 1 行になる。**
-    assert len(written) == 20
+    assert len(written) == 21
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)
@@ -2643,3 +2648,350 @@ def test_the_start_arm_has_no_valley_with_a_one_yen_deposit() -> None:
     num, den = compound_ref.rate_fraction("0.0001", 1)
     with pytest.raises(RuntimeError, match="谷が見つからない"):
         corpus_calls._find_non_monotone_net_valley(1_000_000, 1, num, den, 200, compound_ref.START)
+
+
+# --- 演算子の押し直し(`operator-correction-000.json`、設計書 2026-09-12 §3、
+# 計画 2026-09-16 Task 2)------------------------------------------------------
+#
+# **この節はコミットされた JSON を読み直して組み直す。** 生成器が持っている
+# `terms` / `ops` をそのまま受け取ると、テストは生成器の内部状態を写すだけになる
+# (結合方向の `_flat_chain_of` と同じ理由)。キー列が壊れていれば、ここで戻せない。
+
+_OPCORR_BINARY_TOKENS = frozenset(BINARY_KEYS.values())
+_OPCORR_OP_OF_KEY = {key: op for op, key in BINARY_KEYS.items()}
+#: 段の名前。**生成器から取らずに書き写す**——名前がずれたら赤くなってよい。
+_OPCORR_LEVEL_NAME = {1: "add-sub", 2: "mul-div", 3: "comb", 4: "pow"}
+
+
+@functools.cache
+def _opcorr_payload() -> dict:
+    path = _CORPUS_GENERATED / "operator-correction-000.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _opcorr_corrections() -> list[dict]:
+    return _opcorr_payload()["cases"][0::2]
+
+
+def _opcorr_parse(keys: list[str], pos: int) -> tuple[tuple, tuple[str, ...], int]:
+    """キー列を `(項, 演算子, 次の位置)` に戻す。括弧は `Group` に戻る。"""
+    terms: list = []
+    ops: list[str] = []
+    while True:
+        if keys[pos] == "lparen":
+            inner_terms, inner_ops, pos = _opcorr_parse(keys, pos + 1)
+            assert keys[pos] == "rparen", keys
+            pos += 1
+            terms.append(Group(terms=inner_terms, ops=inner_ops))
+        else:
+            digits = ""
+            while pos < len(keys) and keys[pos].isdigit():
+                digits += keys[pos]
+                pos += 1
+            assert digits, keys
+            terms.append(int(digits))
+        if pos >= len(keys) or keys[pos] in ("rparen", "eq"):
+            return tuple(terms), tuple(ops), pos
+        assert keys[pos] in _OPCORR_OP_OF_KEY, keys
+        ops.append(_OPCORR_OP_OF_KEY[keys[pos]])
+        pos += 1
+
+
+def _opcorr_chain_of(keys: list[str]) -> tuple[tuple, tuple[str, ...]]:
+    terms, ops, pos = _opcorr_parse(keys, 0)
+    assert pos == len(keys), keys
+    return terms, ops
+
+
+def _opcorr_group_operators(term: object) -> int:
+    if isinstance(term, Group):
+        return len(term.ops) + sum(_opcorr_group_operators(inner) for inner in term.terms)
+    return 0
+
+
+def _opcorr_path(terms: tuple, ops: tuple[str, ...], index: int) -> tuple[int, ...]:
+    """大域の演算子番号(打鍵の順)を `build_tree` の `override` のパスに直す。"""
+    seen = 0
+    for j, term in enumerate(terms):
+        inside = _opcorr_group_operators(term)
+        if seen + inside > index:
+            assert isinstance(term, Group)
+            return (j, *_opcorr_path(term.terms, term.ops, index - seen))
+        seen += inside
+        if j < len(ops):
+            if seen == index:
+                return (j,)
+            seen += 1
+    raise AssertionError(f"operator {index} is not in {ops!r}")
+
+
+def _opcorr_right_steps(node: object, steps: int = 0) -> list[int]:
+    """中順に `Bin` を並べ、根から**右へ降りた回数**を添える。中順は打鍵の順である。"""
+    if not isinstance(node, Bin):
+        return []
+    return [
+        *_opcorr_right_steps(node.left, steps),
+        steps,
+        *_opcorr_right_steps(node.right, steps + 1),
+    ]
+
+
+def _opcorr_comb_operands_are_leaves(node: object) -> bool:
+    if not isinstance(node, Bin):
+        return True
+    if node.op in ("nPr", "nCr") and not (
+        isinstance(node.left, Num) and isinstance(node.right, Num)
+    ):
+        return False
+    return _opcorr_comb_operands_are_leaves(node.left) and _opcorr_comb_operands_are_leaves(
+        node.right
+    )
+
+
+def test_the_operator_correction_shard_is_a_thousand_pairs() -> None:
+    payload = _opcorr_payload()
+    cases = payload["cases"]
+    assert len(cases) == 2000
+    corrections, controls = cases[0::2], cases[1::2]
+    assert len(corrections) == 1000
+    assert len(controls) == 1000
+    assert {case["stratum"] for case in controls} == {"control"}
+    assert {case["stratum"] for case in corrections} == {"discriminating", "same-level"}
+    assert payload["strata"] == {
+        stratum: sum(1 for case in cases if case["stratum"] == stratum)
+        for stratum in sorted({case["stratum"] for case in cases})
+    }
+    # **公表している内訳をピン留めする**(2026-09-16 の全枝レビュー M-1)。PR の説明と
+    # 設計書 §3.8 が「discriminating 639 / same-level 361」と数を名指ししている。ふるいや
+    # seed が変わって内訳がずれても、上の自己無矛盾の assert だけでは緑のままになる。
+    assert payload["strata"] == {"control": 1000, "discriminating": 639, "same-level": 361}
+    assert [case["id"] for case in cases] == [f"opc-{index:06d}" for index in range(2000)]
+    assert {case["kind"] for case in cases} == {"value"}
+    assert {case["mode"] for case in cases} == {"Deg"}
+    # **`levels` は持たない**(計画 R6)。`SCIENCE_SHARDS` の外なので誰も読まない。
+    assert all("levels" not in case for case in cases)
+
+
+def test_each_operator_correction_control_is_the_same_chain_without_the_wrong_presses() -> None:
+    """対照は**同じ正しい列から誤りを抜いたもの**。期待値は対の訂正ケースと同じ。"""
+    cases = _opcorr_payload()["cases"]
+    for correction, control in zip(cases[0::2], cases[1::2], strict=True):
+        assert control["expect"] == correction["expect"]
+        assert control["expr"] == correction["expr"]
+        assert "correction" not in control
+        wrong = correction["correction"]["wrong"]
+        at = correction["correction"]["at"]
+        assert control["keys"] == correction["keys"][: at - len(wrong)] + correction["keys"][at:]
+        # **対照には二項演算子の隣接が無い。** 押し直しが 1 つも残っていない証拠。
+        for left, right in zip(control["keys"], control["keys"][1:], strict=False):
+            assert not (left in _OPCORR_BINARY_TOKENS and right in _OPCORR_BINARY_TOKENS), control
+
+
+def test_the_wrong_presses_sit_exactly_before_the_corrected_operator() -> None:
+    for case in _opcorr_corrections():
+        correction = case["correction"]
+        at, wrong = correction["at"], correction["wrong"]
+        assert case["keys"][at - len(wrong) : at] == wrong
+        assert case["keys"][at] in _OPCORR_BINARY_TOKENS
+        assert len(wrong) == correction["count"]
+        assert 1 <= len(wrong) <= 3
+        pressed = [_OPCORR_OP_OF_KEY[key] for key in wrong]
+        correct = _OPCORR_OP_OF_KEY[case["keys"][at]]
+        for left, right in zip(pressed, pressed[1:], strict=False):
+            assert left != right, case["id"]
+        for op in pressed:
+            # **同じ演算子の押し直しは、段に演算子が 1 つしかないときだけ**(裁定 B)。
+            # 段 `pow` は `xʸ` 1 つなので、`^` のあとの `^` だけが許される。
+            assert op != correct or op == "^", case["id"]
+
+
+def test_every_reachable_operator_correction_cell_has_a_case() -> None:
+    """**格子の番人。** 除外は手で並べず、生成器が 2 つの規則から計算した集合と
+    突き合わせる。到達可能になったセルが空のままなら、ここが赤くなる。
+    """
+    required, excluded = generate_corpus.opcorr_cells()
+    assert len(required) + len(excluded) == 480
+    assert len(required) == 348
+    assert len(excluded) == 132
+    covered = {
+        (
+            case["correction"]["pending"],
+            case["correction"]["wrong_level"],
+            case["correction"]["right_level"],
+            case["correction"]["context"],
+            case["correction"]["count"],
+        )
+        for case in _opcorr_corrections()
+        if case["correction"]["count"] in (1, 2)
+    }
+    assert covered == set(required)
+
+
+def _opcorr_live_triples(max_ops: int) -> set[tuple[str, str, str, str]]:
+    """**テストの側の実装。** 2 つの規則から、到達可能な
+    `(保留の段, 誤りの段, 正しい段, 文脈)` を数え直す。
+
+    (a) 組合せの被演算子は葉だけ(設計書 §3.5)。
+    (b) 段が違うときは、**訂正前の読み(R2)が別の木になれること**。同じ木にしか
+        ならない組では、二つの値が必ず一致するので識別のふるい(1e-3)を 1 件も
+        通せない。同じ段の押し直しにはふるいが無いので、(a) だけで決まる。
+    """
+    representative = {"add-sub": "+", "mul-div": "*", "comb": "nPr", "pow": "^"}
+    groups = [Group(terms=(7,), ops=()), Group(terms=(7, 8), ops=("+",))]
+    pool = sorted(LEVEL)
+    live: set[tuple[str, str, str, str]] = set()
+    for size in range(1, max_ops + 1):
+        for ops in itertools.product(pool, repeat=size):
+            terms = tuple(10 + k for k in range(size + 1))
+            for position in range(size):
+                layouts = [("flat", terms, ops, None)]
+                for group in groups:
+                    replaced = list(terms)
+                    replaced[position] = group
+                    layouts.append(("after-close", tuple(replaced), ops, None))
+                inner = Group(terms=terms, ops=ops)
+                layouts.append(("paren", (inner, 5), ("+",), 0))
+                layouts.append(("paren", (5, inner), ("*",), 1))
+                for context, top_terms, top_ops, group_index in layouts:
+                    tree = build_tree(top_terms, top_ops)
+                    if not _opcorr_comb_operands_are_leaves(tree):
+                        continue
+                    pending = (
+                        "none" if position == 0 else _OPCORR_LEVEL_NAME[LEVEL[ops[position - 1]]]
+                    )
+                    right = _OPCORR_LEVEL_NAME[LEVEL[ops[position]]]
+                    path = (position,) if group_index is None else (group_index, position)
+                    for wrong in _OPCORR_LEVEL_NAME.values():
+                        key = (pending, wrong, right, context)
+                        if key in live:
+                            continue
+                        # 同じ段にはふるいが無いので、木を組み直すまでもない。
+                        reads_alike = wrong != right and (
+                            build_tree(top_terms, top_ops, {path: representative[wrong]}) == tree
+                        )
+                        if not reads_alike:
+                            live.add(key)
+    return live
+
+
+def test_the_reachable_operator_correction_cells_recompute_from_the_two_rules() -> None:
+    """**生成器の数え方とテストの数え方が離れないように留める。**
+
+    死ぬ組の理由は 2 つある——組合せの被演算子は葉だけ(§3.5)で、保留と正しいが
+    隣り合うと組合せの子が `Bin` になる組。もう 1 つは、**`nPr nCr` と `xʸ` の
+    あいだに段が無い**ために、読みを変えても木が変わらない組である(段を跨いで
+    組み替えられる演算子は組合せか `xʸ` しか無く、それを組合せの隣に置くと
+    (a) に反する)。**鎖の長さを伸ばしても増えない**(3 と 4 が同じ答え)。
+    """
+    required, excluded = generate_corpus.opcorr_cells()
+    reachable = {cell[:4] for cell in required}
+    assert reachable == _opcorr_live_triples(3)
+    assert reachable == _opcorr_live_triples(4)
+    assert not reachable & {cell[:4] for cell in excluded}
+    assert len(reachable) == 174
+    assert len(reachable) + len({cell[:4] for cell in excluded}) == 5 * 4 * 4 * 3
+
+
+def test_the_operator_correction_shard_covers_the_depths_and_a_third_press() -> None:
+    """格子の外で 1 件以上を求めるもの——保留の深さ 1/2/3 と、押し直し 3 回。"""
+    corrections = _opcorr_corrections()
+    depths = collections.Counter(case["correction"]["depth"] for case in corrections)
+    assert all(depths[depth] >= 1 for depth in (1, 2, 3)), depths
+    counts = collections.Counter(case["correction"]["count"] for case in corrections)
+    assert counts[3] >= 1, counts
+
+
+def test_every_operator_correction_case_recomputes_from_its_own_keys() -> None:
+    """**書かれたキー列だけから、期待値と層を組み直す。**
+
+    誤りのキーを抜いた列を木に組み、`evaluate` で値を出して `expect` と比べる。
+    層は「訂正前の読み」(R2: 最初に押した誤りの段・結合で読む)との相対差で
+    決まるので、その読みもここで組み直す。**生成器の変数は 1 つも見ない。**
+    """
+    gap_floor = generate_corpus.ASSOC_MIN_RELATIVE_GAP
+    seen: collections.Counter = collections.Counter()
+    for case in _opcorr_corrections():
+        correction = case["correction"]
+        at, wrong = correction["at"], correction["wrong"]
+        keys = case["keys"][: at - len(wrong)] + case["keys"][at:]
+        assert keys[-1] == "eq"
+        terms, ops = _opcorr_chain_of(keys[:-1])
+        index = sum(1 for key in keys[: at - len(wrong)] if key in _OPCORR_BINARY_TOKENS)
+        path = _opcorr_path(terms, ops, index)
+        tree = build_tree(terms, ops)
+        value = evaluate(tree)
+        assert math.isclose(float(value), case["expect"]["re"], rel_tol=1e-15), case["id"]
+        assert case["expect"]["im"] == 0.0
+        assert to_expr_text(tree) == case["expr"], case["id"]
+        # **組合せの被演算子は葉だけ**(設計書 §3.5)。`^` には求めない——
+        # `2 ^ 3 ^ 2` はこのシャードの本命の形である(裁定 A)。
+        assert _opcorr_comb_operands_are_leaves(tree), case["id"]
+        assert _opcorr_right_steps(tree)[index] == correction["depth"], case["id"]
+        try:
+            before = evaluate(build_tree(terms, ops, {path: _OPCORR_OP_OF_KEY[wrong[0]]}))
+        except OutOfShard:
+            before = None
+        if case["stratum"] == "same-level":
+            # 同じ段の押し直しは優先順位の読み違いを起こさない。
+            assert correction["wrong_level"] == correction["right_level"], case["id"]
+            assert before == value, case["id"]
+        else:
+            assert correction["wrong_level"] != correction["right_level"], case["id"]
+            differs = (
+                before is None
+                or not mp.isfinite(before)
+                or abs(value - before) / max(abs(value), mp.mpf(1)) >= gap_floor
+            )
+            assert differs, (case["id"], case["expr"], before)
+        seen[case["stratum"]] += 1
+    assert seen["discriminating"] >= 1
+    assert seen["same-level"] >= 1
+    assert sum(seen.values()) == 1000
+
+
+def test_the_correction_record_recomputes_from_its_own_keys() -> None:
+    """`pending` / `right_level` / `context` / `commits` を、キー列から組み直す。"""
+    for case in _opcorr_corrections():
+        correction = case["correction"]
+        at, wrong = correction["at"], correction["wrong"]
+        keys = case["keys"][: at - len(wrong)] + case["keys"][at:]
+        terms, ops = _opcorr_chain_of(keys[:-1])
+        index = sum(1 for key in keys[: at - len(wrong)] if key in _OPCORR_BINARY_TOKENS)
+        path = _opcorr_path(terms, ops, index)
+        chain_terms, chain_ops = terms, ops
+        for step in path[:-1]:
+            group = chain_terms[step]
+            assert isinstance(group, Group)
+            chain_terms, chain_ops = group.terms, group.ops
+        position = path[-1]
+        pending = chain_ops[position - 1] if position else None
+        first_wrong = _OPCORR_OP_OF_KEY[wrong[0]]
+        assert correction["right_level"] == _OPCORR_LEVEL_NAME[LEVEL[chain_ops[position]]]
+        assert correction["wrong_level"] == _OPCORR_LEVEL_NAME[LEVEL[first_wrong]]
+        assert correction["pending"] == (
+            "none" if pending is None else _OPCORR_LEVEL_NAME[LEVEL[pending]]
+        )
+        if path[:-1]:
+            assert correction["context"] == "paren", case["id"]
+        elif isinstance(chain_terms[position], Group):
+            assert correction["context"] == "after-close", case["id"]
+        else:
+            assert correction["context"] == "flat", case["id"]
+        # `commits` は「最初の誤りが保留の演算子に畳まれるか」。同段のときは
+        # 結合の向きで決まる(右結合の `xʸ` は畳まれない)。
+        if pending is None:
+            commits = False
+        elif LEVEL[first_wrong] != LEVEL[pending]:
+            commits = LEVEL[first_wrong] < LEVEL[pending]
+        else:
+            commits = first_wrong != "^"
+        assert correction["commits"] is commits, case["id"]
+
+
+def test_the_operator_correction_shard_is_deterministic() -> None:
+    """**小さい件数で回す。** 格子(348 セル)の充足はコミット済みの 1,000 件の側で
+    見ており、ここで見たいのは同じ種から同じものが出ることだけである。
+    """
+    first = generate_corpus.build_operator_correction_shard(seed=20260916, count=40)
+    second = generate_corpus.build_operator_correction_shard(seed=20260916, count=40)
+    assert first == second

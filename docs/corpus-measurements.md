@@ -1490,6 +1490,11 @@ Finance 用の 10 種を足した。既存 8 種と合わせて 18 変異。**�
 | `periods-for-binary-search` | **1**(修正後。下の節を見よ) | 0.029% | 置いていない(下限は `Math.max(1, …)` に委ねる) |
 | `compound-inverse-ignores-tax-flag` | 272 | 7.77% | 0.038 |
 
+（**注記 2026-09-16**: この 272 は `finance-000.json` だけの数——このときはまだ
+`finance-start-000.json` が無かった。09-11 以降、Finance 系の変異は 2 枚のシャードに
+またがって反応するので、比べるときは「演算子の押し直しシャード」節の警告
+（`finance-000` と `finance-start-000` の合計を、古い節の数と突き合わせる）を見よ。）
+
 **既存 8 変異の検出件数は Task 7 の記録から 1 件も動いていない**
 （`display-digits` の 10 シャード内訳・`precedence-collapse` 1,099・
 `ncr-multiply-first` 10・`eng-exponent-toward-zero` 96・
@@ -2737,6 +2742,9 @@ currency-half-even-becomes-half-up 2 / rounded-zero-keeps-its-sign 2
 `sexagesimal-no-carry` 10 / `complex-multiply-sign` 147 / `polar-angle-flipped` 661 /
 `bonus-half-year-becomes-monthly` 368 / `periods-for-binary-search` 1 /
 `compound-inverse-ignores-tax-flag` 272。
+
+（**注記 2026-09-16**: この 272 も `finance-000.json` だけの数——`finance-start-000.json` は
+まだ無かった。同上、「演算子の押し直しシャード」節の警告を見よ。）
 
 **下限(`minRate`)には手を伸ばしていない。** 確かめ方は
 `git diff origin/main..HEAD -- heavy/scripts/` で、**差分は 0 行**である
@@ -4183,3 +4191,54 @@ timing を問わず通るが、期首・積立 1 円では谷が無い（`refere
 - 報告書の判定: finance は **完全に正しい**（4,700 件、厳密一致、不一致 0）。
   `finance-start-000.json (calls)` は 1,200 件中 正常 1,108・`Overflow` 92、被覆
   `finance-start-v1` は上の表と同じ（未達 0）、307 層（乱択 896 件）、参照が捨てた件数 0
+
+## 演算子の押し直しシャード `operator-correction-000.json`（2026-09-16 実測）
+
+**【警告】Finance 系の変異の検出件数は per-shard（シャードごと）である。** この文書の古い節（1471〜1499 行付近、
+2701〜2761 行付近）に載っている `loan-*` / `compound-*` の変異の検出件数は、`finance-start-000.json` が
+まだ無かった日に測ったもので、**`finance-000.json` だけ**を数えている。09-11 に `finance-start-000.json`
+（複利の期首シャード）が増えてからは、Finance 系の変異は 2 枚のシャードにまたがって反応する。**比べるときは
+`finance-000` と `finance-start-000` の合計を、古い節の数と突き合わせる**——シャードごとの数をそのまま古い数と
+比べると、動いていないのに動いたように見える（またはその逆）。
+
+危うく踏むところだった実例: `compound-inverse-ignores-tax-flag` は古い節で **272**（`finance-000.json` のみ）。
+この枝の検出力の走行では `finance-000.json` が 272・`finance-start-000.json` が 305 で、**合計 577**。
+一見「272 → 577」の退行に見えるが、**古い 272 は `finance-000.json` だけを数えた数で、動いたのは
+`finance-start-000.json` 側の 305 が新たに足されただけ**であり、`finance-000.json` 側の 272 は 1 件も動いていない。
+「元の数が何を数えていたかを確かめてから比べ直す」の実例として記録する。
+
+### 赤の確認（§3.8、`eb94e72` に載せた使い捨ての作業木、`pnpm heavy`）
+
+| 層 | 件数 | 赤 |
+|---|---:|---:|
+| `discriminating` | 639 | **454** |
+| `same-level` | 361 | 0 |
+| `control` | 1,000 | 0 |
+| 計 | 2,000 | **454**（`mismatches.length` の印字どおり） |
+
+停止条件（この訂正の形の外が赤くなること）は発火しなかった。修正後（この枝の先端）は `pnpm heavy` 全件緑
+（267 passed）。
+
+**639 のうち 185 は、修正前のエンジンでも正しい値に着く。** ふるい（識別のモデル、設計書 §3.4）は「訂正前の読みを、
+最初の誤りの演算子の段と結合の向きで読んだ木」という**数式のモデル**であり、修正前のエンジンの挙動をすべて
+写したものではない。185 件はモデルが違いを予測したのに実物のエンジンがその違いを出さなかったケースで、
+弱点ではなくふるいの精度の実測——**このシャードが赤くする 454 件はどれも本物の不一致であって、起こりうる
+不一致を全部拾い切っているわけではない**。
+
+### 検出力（`heavy:power`、13 分 15 秒、`detection-power.json`）
+
+| 変異 | このシャードでの検出 |
+|---|---:|
+| `operator-correction-revert`（新規） | **454 / 2,000**（他のシャードには反応しない） |
+| `precedence-collapse` | 656 |
+| `associativity-flip` | 726 |
+| `display-digits` | 572 |
+
+既存 19 変異はすべて 09-11 に記録した件数（CI 走行 `34543925445` と一致した回）のまま——**Finance 系はこの節の
+冒頭の警告どおり `finance-000` + `finance-start-000` の合計で比べた**。足した下限（floor）はどの実測値より
+約 12% 下にあり、既存の下限は 1 つも触っていない。
+
+**454（赤の確認）と 454（検出力）は独立した 2 つの測り方から出た同じ数である。** 1 つ目は修正前のエンジンに
+このシャードを掛けて出た不一致の数、2 つ目は修正後のエンジンに `operator-correction-revert`（訂正前の読みに
+戻す変異）を掛けて捕まった数。**一致するのは道理である**——変異は修正前の挙動を再現するので、同じ 454 件が
+分かれる。偶然の一致ではなく、変異が旧エンジンの忠実な代役であることの裏付けとして読む。

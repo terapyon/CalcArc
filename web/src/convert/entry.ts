@@ -34,6 +34,12 @@ export {
  * 値は `Rational`(i128 有界)へ載る。`i128::MAX` は 10 進 39 桁なので、
  * そこで頭打ちにする。**これは上限であって保証ではない**——39 桁でも
  * 係数の比の向き次第で `Overflow` は起きる(spec §3.5)。
+ *
+ * **この 39 は `calcarc_core::convert::settle::MAX_VALUE_CHARS` と同じ数で、
+ * 2 つは一緒に動かす。** 定数は境界を越えて公開されていないので機械の番人は
+ * 置けない——ここだけ上げると、コアの上限を超える桁を打てるようになり、
+ * `settle` がその値を `Overflow` で返して `=` が disabled になる(押せなく
+ * なるだけで、値が黙って壊れることはない)。
  */
 const MAX_VALUE_DIGITS = 39;
 
@@ -43,4 +49,21 @@ export function pushDigit(entry: units.Entry, digit: string): units.Entry {
 
 export function pushDot(entry: units.Entry): units.Entry {
   return units.pushDot(entry, MAX_VALUE_DIGITS);
+}
+
+/**
+ * `=` の答え(コアの `settle`: 有限小数か既約分数 `p/q`、**符号なし**)から値の欄を組み直す
+ * (0.9.2 設計書 §4)。分数は「数・/・数」の 3 語にする——次に打つ演算子はそのあとに続き、
+ * コアが式として読み直す(`/` は `×`・`÷` と同じ段で左から畳むので、`1/3 × 3` は 1)。
+ */
+export function fromSettled(value: string): units.Entry {
+  const [numerator = "", denominator] = value.split("/");
+  if (denominator === undefined) return units.fromDigits(numerator);
+  return {
+    tokens: [
+      { kind: "digits", text: numerator },
+      { kind: "op", op: "/" },
+      { kind: "digits", text: denominator },
+    ],
+  };
 }

@@ -9,9 +9,11 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 5: `EngineState` に `notation`(ENG トグル)が入った(設計書 §4)。
 /// 6: `Buffer` に 60 進の段が、`EngineState` に 60 進表示の一時状態が
 ///    入った(S-4 設計書 §3.2)。**3 つ目の入力モード**である。
+/// 7: 押し直しの戻り先 `replace_base`(0.9.2 設計書 §2.2)と、手元の値の旗
+///    `on_hand`(§3.3)が入った。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 6;
+pub const STATE_SCHEMA: u32 = 7;
 
 /// 入力欄に打ち込める最大文字数。
 ///
@@ -115,6 +117,17 @@ impl BinOp {
 pub enum OpToken {
     Op(BinOp),
     OpenParen,
+}
+
+/// 二項演算子を積む直前の状態(0.9.2 設計書 §2.2)。
+///
+/// 押し直しはここへ戻してから、新しい演算子を**通常の経路で**積み直す。畳み・優先順位・
+/// 結合方向はいまのコードがそのまま担う——押し直しのための計算の規則を別に持たない。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReplaceBase {
+    pub operands: Vec<Value>,
+    pub operators: Vec<OpToken>,
+    pub current: Value,
 }
 
 /// 入力中の指数部。`Exp` を押した時点で、桁が無いまま存在する。
@@ -426,6 +439,19 @@ pub struct EngineState {
     /// 状態かどうかは、この旗と `buffer` / `operators` の形を併せて
     /// `push_binop` が決める。
     pub operator_pending: bool,
+    /// 押し直しの戻り先(0.9.2 設計書 §2.2)。**`operator_pending` に従属する**
+    /// (calcarc-1e の注記 A)——取るのは `push_binop` の通常の経路だけ、捨てるのは
+    /// `reduce` の後判定で `operator_pending` が偽になる所だけ。DEL・表示トグル・
+    /// 演算子の直後の `(` は旗を動かさないので、これも残る(`3 × ( DEL +` が `3 +` に
+    /// なるのに要る)。
+    #[serde(default)]
+    pub replace_base: Option<ReplaceBase>,
+    /// **手元の値があるか**(0.9.2 設計書 §3.2・§3.3)。`)`・後置関数・`+/−`(確定値に
+    /// 掛けたとき)・`π`・`e` の直後に真。まだどの演算子の被演算数にもなっていない、画面の
+    /// 値である。これがあるあいだ、新しい数を始めるキーは押せない(`refuses`)。
+    /// **`operator_pending` と同じく、DEL と表示トグルでは動かさない。**
+    #[serde(default)]
+    pub on_hand: bool,
 }
 
 impl EngineState {
@@ -442,6 +468,8 @@ impl EngineState {
             sexagesimal_view: false,
             error: None,
             operator_pending: false,
+            replace_base: None,
+            on_hand: false,
         }
     }
 

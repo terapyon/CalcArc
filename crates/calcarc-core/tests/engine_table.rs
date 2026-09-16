@@ -24,6 +24,41 @@ fn echo_of(keys: &[&str]) -> String {
     run(keys).echo
 }
 
+/// `keys` を打ったあと、`key` が押せない(拒まれる)こと。**押しても状態も表示も変わらない**
+/// (0.9.2 設計書 §3.4)。
+fn refused_after(keys: &[&str], key: &str) {
+    let mut state = EngineState::initial();
+    for token in keys {
+        let k = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        state = reduce(&state, k).0;
+    }
+    let k = Key::from_token(key).unwrap_or_else(|| panic!("unknown key: {key}"));
+    assert!(
+        calcarc_core::engine::refuses(&state, k),
+        "{keys:?} のあと {key} は押せないはず"
+    );
+    let (after, shown) = reduce(&state, k);
+    assert_eq!(
+        after, state,
+        "{keys:?} のあと {key}: 押せないキーが状態を変えた"
+    );
+    assert_eq!(shown, render(&state));
+}
+
+/// `keys` を打ったあと、`key` が押せること。
+fn accepted_after(keys: &[&str], key: &str) {
+    let mut state = EngineState::initial();
+    for token in keys {
+        let k = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        state = reduce(&state, k).0;
+    }
+    let k = Key::from_token(key).unwrap_or_else(|| panic!("unknown key: {key}"));
+    assert!(
+        !calcarc_core::engine::refuses(&state, k),
+        "{keys:?} のあと {key} は押せるはず"
+    );
+}
+
 #[test]
 fn the_echo_shows_the_pending_expression() {
     // 設計書 §4: 保留中の式を状態から導出する。打鍵履歴は持たない。
@@ -588,6 +623,23 @@ fn an_unmatched_closing_paren_is_a_syntax_error() {
 }
 
 #[test]
+fn an_unmatched_closing_paren_folds_the_pending_operations_first() {
+    use calcarc_core::CalcError;
+    // 開いていない `)` は、`(` を探す前に保留の演算を畳む(`close_paren`)。畳みが失敗すれば、
+    // その失敗が先に出る——`3 ÷ 0 )` は SyntaxError ではなく DivisionByZero。どちらも画面は
+    // Math ERROR で、利用者に見える違いは無い。0.9.2 の値の照合(`engine_values.rs`)がこの
+    // 順を決める行を必要としたので、いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
+    assert_eq!(
+        run(&["3", "div", "0", "rparen"]).error,
+        Some(CalcError::DivisionByZero)
+    );
+    assert_eq!(
+        run(&["3", "add", "4", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+}
+
+#[test]
 fn reports_the_parenthesis_depth() {
     assert_eq!(run(&["lparen", "lparen"]).pending_depth, 2);
     assert_eq!(run(&["lparen", "1", "rparen"]).pending_depth, 0);
@@ -801,6 +853,41 @@ fn a_second_operator_replaces_the_first() {
 }
 
 #[test]
+fn a_corrected_operator_means_what_the_right_one_would_have() {
+    // 0.9.2 設計書 §2(外部監査 F1、利用者の裁定): 訂正した列は、最初から正しい演算子を
+    // 打った列と同じになる。いままでは先頭の演算子を差し替えるだけで、下にある演算子との
+    // 優先順位も、積むときに畳んだ値も戻さなかった(`2 + 3 + × 4 =` が 20)。
+    assert_eq!(main_of(&["8", "sub", "3", "mul", "add", "2", "eq"]), "7");
+    assert_eq!(main_of(&["3", "sub", "3", "div", "sub", "3", "eq"]), "-3");
+    assert_eq!(main_of(&["8", "div", "2", "pow", "mul", "2", "eq"]), "8");
+    assert_eq!(main_of(&["2", "add", "3", "add", "mul", "4", "eq"]), "14");
+    assert_eq!(main_of(&["2", "add", "3", "add", "mul"]), "3");
+    assert_eq!(echo_of(&["2", "add", "3", "add", "mul"]), "2 + 3 ×");
+    // 原則そのもの: 押し直した列と最初から正しい演算子の列は、表示のすべてが同じ。
+    for (corrected, direct) in [
+        (
+            &["8", "sub", "3", "mul", "add"][..],
+            &["8", "sub", "3", "add"][..],
+        ),
+        (
+            &["3", "sub", "3", "div", "sub"][..],
+            &["3", "sub", "3", "sub"][..],
+        ),
+        (
+            &["8", "div", "2", "pow", "mul"][..],
+            &["8", "div", "2", "mul"][..],
+        ),
+        (
+            &["2", "add", "3", "add", "mul"][..],
+            &["2", "add", "3", "mul"][..],
+        ),
+        (&["3", "mul", "4", "del", "add"][..], &["3", "add"][..]),
+    ] {
+        assert_eq!(run(corrected), run(direct), "{corrected:?} と {direct:?}");
+    }
+}
+
+#[test]
 fn a_key_that_changes_nothing_does_not_defeat_operator_replacement() {
     // 演算子を押し直す前に、何も起きないキーを挟んでも意味は変わらない。
     assert_eq!(main_of(&["3", "add", "del", "add", "4", "eq"]), "7");
@@ -853,13 +940,55 @@ fn an_error_hides_the_pending_state() {
 
 #[test]
 fn del_removes_an_unclosed_paren() {
-    // ( が入力中の 3 を捨てたうえ、閉じていない括弧だけが残る。
-    // その状態を DEL で片付けられるようにする。
-    assert_eq!(main_of(&["3", "lparen", "del"]), "0");
-    assert_eq!(run(&["3", "lparen", "del"]).pending_depth, 0);
+    // 閉じていない括弧を DEL で片付けられる。打ちかけの数のあとの `(` は押せない
+    // (0.9.2 設計書 §3.2)ので、片付けるのは演算子の直後に開いた括弧である。
+    assert_eq!(main_of(&["3", "add", "lparen", "del"]), "3");
+    assert_eq!(run(&["3", "add", "lparen", "del"]).pending_depth, 0);
 
     // 押し間違いが綺麗に戻る。
     assert_eq!(main_of(&["3", "add", "lparen", "del", "4", "eq"]), "7");
+}
+
+#[test]
+fn del_after_a_closed_group_removes_the_unclosed_paren_before_it() {
+    use calcarc_core::CalcError;
+    // 閉じた組のあとの DEL は、その組の前に開いたまま残る `(` を消す(組の中身は残る)。
+    // `( ( 3 ) DEL` は外の `(` が消えて、画面の 3 はそのまま——最後の `)` は開いていない
+    // `)` になる。0.9.2 の値の照合(`engine_values.rs`)がこの形を決める行を必要としたので、
+    // いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
+    assert_eq!(
+        run(&["lparen", "lparen", "3", "rparen", "del"]).pending_depth,
+        0
+    );
+    assert_eq!(
+        main_of(&["lparen", "lparen", "3", "rparen", "del", "eq"]),
+        "3"
+    );
+    assert_eq!(
+        run(&["lparen", "lparen", "3", "rparen", "del", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+    // 演算子が先に積まれていれば、DEL は何も消さない(`3 + ( 4 ) DEL`)。
+    assert_eq!(
+        run(&["3", "add", "lparen", "4", "rparen", "del"]).pending_depth,
+        0
+    );
+    assert_eq!(
+        main_of(&["3", "add", "lparen", "4", "rparen", "del", "eq"]),
+        "7"
+    );
+    // `+/−` で手元にある値の上の `(` も同じく消える(calcarc-1e の検算、2026-09-16)。
+    // `( 3 +/− DEL )` は `(` が消えて最後の `)` が開いていない `)` になり、SyntaxError。
+    // `2 × ( 3 +/− DEL + 1 =` は 2 × (−3) + 1 = −5。いまの振る舞いをそのまま固定する
+    // (履歴の綴りは spell_table の `del_on_a_paren_under_a_value_spells_what_the_engine_computes`)。
+    assert_eq!(
+        run(&["lparen", "3", "neg", "del", "rparen"]).error,
+        Some(CalcError::SyntaxError)
+    );
+    assert_eq!(
+        main_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1", "eq"]),
+        "-5"
+    );
 }
 
 #[test]
@@ -899,20 +1028,57 @@ fn del_returns_to_the_pending_operator() {
 }
 
 #[test]
-fn del_does_not_restore_the_value_a_paren_discarded() {
-    // `(` は入力中の値を捨てて current を 0 にする。DEL は括弧を消すが
-    // 0 は戻さない。したがって押し間違いが綺麗に戻るのは、続けて打つのが
-    // 数字のときと、加法の単位元 0 が答えを変えない `+` `−` のときだけで、
-    // `×` `=` では 0 が残る。DEL は undo ではないという境界（設計書 §4）が
-    // ここに出る。
-    assert_eq!(main_of(&["3", "mul", "lparen", "del", "eq"]), "0");
-    assert_eq!(main_of(&["3", "add", "lparen", "del", "eq"]), "3");
+fn del_on_a_fresh_paren_returns_to_the_operator_before_it() {
+    // `(` を DEL で消すのは訂正であり、`3 × =`・`3 + =` と同じになる(0.9.2 設計書 §9 の 2、
+    // F1 の原則「訂正した列は、最初から正しく打った列と同じ」)。
+    assert_eq!(main_of(&["3", "mul", "lparen", "del", "eq"]), "9");
+    assert_eq!(main_of(&["3", "add", "lparen", "del", "eq"]), "6");
+    // 戻すのは `(` が 0 にした値だけ。`(` のあとに手元の値があれば戻さない——戻すと
+    // √ の答えを黙って捨てる(§9 のあとの詰め)。
+    assert_eq!(
+        main_of(&["3", "add", "lparen", "4", "sqrt", "del", "eq"]),
+        "5"
+    );
+    // `=` のあとの `(` は新しい計算の始まり。DEL で消しても答えは戻らない(§9 の 10)。
+    assert_eq!(
+        main_of(&["2", "add", "3", "eq", "lparen", "del", "eq"]),
+        "0"
+    );
+}
+
+#[test]
+fn the_answer_carries_on_until_a_new_entry_is_committed() {
+    // `=` の答えは、新しい数が確定するまで画面の値として次の計算に入る。0.9.2 の値の照合
+    // (`engine_values.rs`)が決める行を必要としたので、いまの振る舞いをそのまま仕様として
+    // 書いた(2026-09-13)。
+    // 何も新しく打たずに `=` を押しても答えのまま(同じ演算を繰り返さない)。
+    assert_eq!(main_of(&["2", "add", "3", "eq", "eq"]), "5");
+    // 答えに続けて演算子を押せば、答えが左辺になる。
+    assert_eq!(main_of(&["2", "add", "3", "eq", "mul", "4", "eq"]), "20");
+    // `=` のあとに打ち始めた数を DEL で消し切れば、答えに戻る。上の `2 + 3 = ( DEL =` → 0
+    // との違い: **`(` は押した時点で新しい計算を始める**が、**数字は確定するまで始めない**。
+    assert_eq!(
+        main_of(&["2", "add", "3", "eq", "4", "del", "add", "1", "eq"]),
+        "6"
+    );
+}
+
+#[test]
+fn an_operator_right_after_an_open_paren_takes_zero_as_its_left_operand() {
+    // `(` の直後の演算子は 0 を左辺にする(`( + 3 )` は `( 0 + 3 )`)。0.9.2 の値の照合
+    // (`engine_values.rs`)が決める行を必要としたので、いまの振る舞いをそのまま仕様として
+    // 書いた(2026-09-13)。
+    assert_eq!(main_of(&["lparen", "add", "3", "rparen", "eq"]), "3");
 }
 
 #[test]
 fn del_after_a_closing_paren_does_not_fake_a_pending_operator() {
-    // `)` の直後は「演算子の直後」ではない。入力した 5 を DEL で消しても
-    // 戻るのはそこであって、次の `+` は差し替えではなく通常の演算になる。
+    // `)` の直後は「演算子の直後」ではない。**数字は押せない**(0.9.2 設計書 §3.2 の
+    // S4)ので `5` は何も起こさない。DEL も消すものが無い——**組の外で `+` が保留されて
+    // いるから**である(`3 + ( 4 )` は `+` が先頭)。`)` の直後の DEL がいつも何も消さない
+    // のではない: 組の前に開いたままの `(` があれば、DEL はそれを消す
+    // (`del_after_a_closed_group_removes_the_unclosed_paren_before_it`)。
+    // 次の `+` は差し替えではなく通常の演算になる。
     //
     // この形は状態だけを見ると `3 + 4 DEL` と区別がつかない。どちらも
     // バッファが消えて演算子スタックの先頭が `+` になる。だから
@@ -1014,4 +1180,143 @@ fn eng_reaches_the_pending_expression_too() {
     let shown = run(&["1", "0", "0", "0", "eq", "add", "eng"]);
     assert_eq!(shown.main, "1e3");
     assert_eq!(shown.echo, "1e3 +");
+}
+
+#[test]
+fn a_key_that_would_drop_a_number_cannot_be_pressed() {
+    // 0.9.2 設計書 §3.2(外部監査 F5、利用者の裁定「ボタンが押せない」)。
+    // S1 打ちかけ: `(`・`π`・`e` はバッファを確定せずに捨てる。
+    refused_after(&["2"], "lparen");
+    refused_after(&["3"], "pi");
+    refused_after(&["3"], "e");
+    // S4 `)` の直後: 新しい数を始めるキーはどれも 7 を捨てる。
+    for key in ["5", "zeros3", "dot", "exp", "j", "lparen", "pi", "e"] {
+        refused_after(&["lparen", "3", "add", "4", "rparen"], key);
+    }
+    // S5 関数の答え・π・e の直後(§9 の 1)。`+/−` も答えに数える(§9 の 8)。
+    refused_after(&["4", "sqrt"], "5");
+    refused_after(&["pi"], "3");
+    refused_after(&["e"], "lparen");
+    refused_after(&["1", "2", "neg"], "3");
+    refused_after(&["neg"], "5");
+    refused_after(&["3", "add", "neg"], "5");
+    refused_after(&["4", "sqrt"], "j");
+    refused_after(&["lparen", "3", "rparen"], "j");
+    // `j` が打ちかけの Exp・60 進の段を捨てる形(§9 の 11。実測は設計書に)。
+    refused_after(&["exp"], "j");
+    refused_after(&["exp", "2"], "j");
+    refused_after(&["j", "exp"], "j");
+    refused_after(&["1", "dms"], "j");
+    // `on_hand` は DEL と表示トグルでは動かさない(`operator_pending` と同じ、
+    // §3.3)。これが落ちると `4 √ DEL 5` が黙って 2 を捨てる(F5 の再発)。
+    refused_after(&["4", "sqrt", "del"], "5");
+    refused_after(&["pi", "angle_toggle"], "5");
+    refused_after(&["lparen", "3", "rparen", "eng"], "lparen");
+    refused_after(&["pi", "dms"], "5");
+    refused_after(&["4", "sqrt", "polar_toggle"], "dot");
+    // 押せないキーを押した列は、押さなかった列と同じ。
+    assert_eq!(
+        main_of(&["lparen", "3", "add", "4", "rparen", "5", "eq"]),
+        "7"
+    );
+    assert_eq!(main_of(&["4", "sqrt", "5", "eq"]), "2");
+    assert_eq!(main_of(&["3", "add", "4", "sqrt", "5", "eq"]), "5");
+    assert_eq!(main_of(&["1", "2", "neg", "3", "eq"]), "-12");
+    assert_eq!(main_of(&["2", "lparen"]), "2");
+    assert_eq!(echo_of(&["2", "lparen"]), "");
+}
+
+#[test]
+fn keys_that_keep_the_number_stay_pressable() {
+    // 二項演算子はどの状態でも押せる——F1 の訂正(演算子の直後の演算子)も押せる
+    // (calcarc-1e の注記 A)。後置関数・`+/−`・`=`・`)`・DEL・AC・表示トグルも、
+    // 手元の値に掛かるか何も捨てないので押せる(0.9.2 設計書 §3.2)。
+    let states: [&[&str]; 5] = [
+        &["2"],
+        &["lparen", "3", "rparen"],
+        &["4", "sqrt"],
+        &["3", "add"],
+        &["pi"],
+    ];
+    for keys in states {
+        for key in [
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "pow",
+            "n_p_r",
+            "n_c_r",
+            "eq",
+            "rparen",
+            "del",
+            "ac",
+            "sqrt",
+            "neg",
+            "angle_toggle",
+            "polar_toggle",
+            "eng",
+            "dms",
+        ] {
+            accepted_after(keys, key);
+        }
+    }
+    // 指数の符号は打ちかけのまま(S1)。
+    accepted_after(&["1", "dot", "5", "exp"], "neg");
+    assert_eq!(main_of(&["1", "dot", "5", "exp", "neg", "3"]), "1.5e-3");
+    // `j` が何も捨てない形(§9 の 11 の「捨てない」側)。
+    for keys in [
+        &["5"][..],
+        &["j"],
+        &["exp", "del"],
+        &["j", "5"],
+        &["1", "dms", "3"],
+        &["5", "exp", "2"],
+    ] {
+        accepted_after(keys, "j");
+    }
+    // `=` のあとは新しい計算(S6、§9 の 5)。数字も `(`・`π`・`e` も押せる。
+    for key in ["5", "lparen", "pi", "e", "j", "dot"] {
+        accepted_after(&["2", "add", "3", "eq"], key);
+    }
+    assert_eq!(
+        main_of(&["2", "add", "3", "eq", "lparen", "4", "rparen", "eq"]),
+        "4"
+    );
+    // エラー中は押せなくしない(AC 以外が既に何もしない。S7 はいまの見た目のまま)。
+    accepted_after(&["1", "div", "0", "eq"], "5");
+}
+
+#[test]
+fn refused_keys_lists_every_key_that_refuses_in_key_all_order() {
+    // `refused_keys` は `refuses` を `Key::ALL` の順に濾しただけ(mod.rs)。
+    // `4 √` のあとは on_hand(0.9.2 設計書 §3.3)——`Key::ALL` に出る 10 種の
+    // 数字それぞれと、`.`・`000`・`Exp`・`π`・`(`・`j`・`e` が該当する。
+    let mut state = EngineState::initial();
+    for token in ["4", "sqrt"] {
+        let k = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        state = reduce(&state, k).0;
+    }
+    assert_eq!(
+        calcarc_core::engine::refused_keys(&state),
+        vec![
+            Key::Digit(0),
+            Key::Digit(1),
+            Key::Digit(2),
+            Key::Digit(3),
+            Key::Digit(4),
+            Key::Digit(5),
+            Key::Digit(6),
+            Key::Digit(7),
+            Key::Digit(8),
+            Key::Digit(9),
+            Key::Dot,
+            Key::Zeros3,
+            Key::Exp,
+            Key::Pi,
+            Key::LParen,
+            Key::J,
+            Key::E,
+        ]
+    );
 }

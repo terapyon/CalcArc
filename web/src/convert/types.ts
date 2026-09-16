@@ -144,6 +144,9 @@ export type ConvertErrorCode = Extract<
 
 export type ConvertResult = Outcome<{ text: string }, ConvertErrorCode>;
 
+/** `=` の答え(0.9.2 設計書 §4)。有限小数か既約分数 `p/q`、負なら先頭に `-`。丸めない。 */
+export type SettleResult = Outcome<{ text: string }, ConvertErrorCode>;
+
 /** calcarc-wasm の `convert_units()` に対応。**並びは盤面の並びである。** */
 export type ConvertUnitsResult = Outcome<
   { units: ConvertUnitToken[] },
