@@ -70,6 +70,10 @@ def test_the_payments_stay_under_the_cap(boundary_cases):
     assert max(floors) <= loan_boundary.MAX_MONTHLY_YEN
     # 上限の近くも踏む(10 億円の直下まで、設計書 §4.3)。
     assert max(floors) >= loan_boundary.MAX_MONTHLY_YEN // 2
+    # 下側の顎: 上限ちょうどの行(`residual/exact/15/2/987654400/81`)が golden から
+    # 1 件も無くなっていないこと。「両側から挟む」の下側は、この 1 行だけが支えている
+    # (最終レビュー I-2)——ここが緩むと <= の assert は変わらず緑のままになる。
+    assert max(floors) == loan_ref.MAX_VERIFIED_MONTHLY_YEN
 
 
 def test_each_cell_has_enough_cases(boundary_cases):
@@ -164,6 +168,15 @@ def test_the_over_cap_cases_sit_at_least_two_yen_above_the_cap(cases):
         # **ここで理論値を作り直して数える**(生成器の判断を写さない)。
         exceeding = bonus if bonus is not None else monthly
         assert exceeding >= loan_boundary.MAX_MONTHLY_YEN + 2, (case["id"], float(exceeding))
+        # 文書(§4.8)が主張するマージンは +2 円ではなく +1,000 円——libm の違いを吸収する
+        # 余地の話はこの桁でしか成り立たない。実際に置かれているマージン
+        # (`OVER_CAP_MARGINS_YEN` の最小値)を直接アサートする(最終レビュー Minor b。
+        # 主張と検査が別の数を持つと、どちらかが静かに動く)。
+        min_margin = min(loan_boundary.OVER_CAP_MARGINS_YEN)
+        assert exceeding >= loan_boundary.MAX_MONTHLY_YEN + min_margin, (
+            case["id"],
+            float(exceeding),
+        )
         if bonus is not None:
             # 賞与の列だけが超えること。月々の列も超えていたら、この行は賞与の経路を
             # 見張っていない(同じ Overflow が月々の列から返ってしまう)。
@@ -227,7 +240,12 @@ def test_the_cases_committed_at_head_survive_unchanged(cases):
     """
     old = _cases_at_head()
     if old is None:
-        pytest.skip("git の作業ツリーではないので HEAD の golden を取り出せない")
+        # skip にすると、番人が消えたこと自体が緑のまま見えなくなる(最終レビュー Minor c)。
+        # git が使えない環境は珍しいので、静かに素通りするより赤くなる方を選ぶ。
+        pytest.fail(
+            "HEAD の golden を取り出せなかった(git が使えないか、作業ツリーではない)。"
+            "この番人は skip できない——静かに何も見張らなくなる"
+        )
     new = {c["id"]: c for c in cases}
     missing = [c["id"] for c in old if c["id"] not in new]
     changed = [c["id"] for c in old if c["id"] in new and new[c["id"]] != c]

@@ -182,7 +182,7 @@ def test_exactly_the_cap_is_still_an_answer() -> None:
     # 理論値の側——`monthly_payment_exact` の切り捨て——で確かめる(golden もここを見る)。
     num, den = rate_fraction("15")
     exact = monthly_payment_exact(987_654_400, num, den, 2, 81)
-    assert exact.numerator // exact.denominator == 1_000_000_000
+    assert exact.numerator // exact.denominator == loan_ref.MAX_VERIFIED_MONTHLY_YEN
 
 
 def test_zero_rate_is_outside_the_cap() -> None:
