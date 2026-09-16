@@ -1490,6 +1490,11 @@ Finance 用の 10 種を足した。既存 8 種と合わせて 18 変異。**�
 | `periods-for-binary-search` | **1**(修正後。下の節を見よ) | 0.029% | 置いていない(下限は `Math.max(1, …)` に委ねる) |
 | `compound-inverse-ignores-tax-flag` | 272 | 7.77% | 0.038 |
 
+（**注記 2026-09-16**: この 272 は `finance-000.json` だけの数——このときはまだ
+`finance-start-000.json` が無かった。09-11 以降、Finance 系の変異は 2 枚のシャードに
+またがって反応するので、比べるときは「演算子の押し直しシャード」節の警告
+（`finance-000` と `finance-start-000` の合計を、古い節の数と突き合わせる）を見よ。）
+
 **既存 8 変異の検出件数は Task 7 の記録から 1 件も動いていない**
 （`display-digits` の 10 シャード内訳・`precedence-collapse` 1,099・
 `ncr-multiply-first` 10・`eng-exponent-toward-zero` 96・
@@ -2737,6 +2742,9 @@ currency-half-even-becomes-half-up 2 / rounded-zero-keeps-its-sign 2
 `sexagesimal-no-carry` 10 / `complex-multiply-sign` 147 / `polar-angle-flipped` 661 /
 `bonus-half-year-becomes-monthly` 368 / `periods-for-binary-search` 1 /
 `compound-inverse-ignores-tax-flag` 272。
+
+（**注記 2026-09-16**: この 272 も `finance-000.json` だけの数——`finance-start-000.json` は
+まだ無かった。同上、「演算子の押し直しシャード」節の警告を見よ。）
 
 **下限(`minRate`)には手を伸ばしていない。** 確かめ方は
 `git diff origin/main..HEAD -- heavy/scripts/` で、**差分は 0 行**である
