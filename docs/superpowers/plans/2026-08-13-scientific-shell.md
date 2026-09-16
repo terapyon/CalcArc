@@ -941,6 +941,11 @@ test("the board still computes after the rearrangement", async ({ page }) => {
 });
 ```
 
+> **2026-09-16 の訂正。** 上のコード中のコメント「誤爆しても DEL で戻せる
+> 軽さに見合わせている」は誤りだった。DEL は確定前の打鍵を消すだけで、
+> 関数の適用は戻さない。正しい理由は `docs/definition-of-done.md` の表を見よ
+> （このコメント自体は当時計画したテストコードの記録なので書き換えない）。
+
 - [ ] **Step 3: E2E を走らせる**
 
 Run: `cd web && pnpm e2e`

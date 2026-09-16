@@ -38,12 +38,14 @@ calculations.
 - Once it has been opened, it is built to keep working without a network
   (fetching exchange rates is the one thing that needs a network). Working without a
   network has been checked only in Chrome-type browsers, not yet in Safari on iPhone
-- The layout is checked on screens from 360px wide in Chrome on Android and similar browsers,
-  and from 375px wide in Safari on iPhone. Narrower screens (such as 320px) still show the app,
-  but nothing checks that the layout holds there
+- The layout is checked automatically on screens from 360px wide in the Chromium engine (Chrome
+  on Android and similar browsers), and from 375px wide in WebKit, the same rendering engine
+  Safari on iPhone uses. The automated check runs in that browser engine, not on a physical
+  iPhone. Narrower screens (such as 320px) still show the app, but nothing checks that the layout
+  holds there
 - On a short screen (for example in a browser tab) the page may scroll. Every display and key can
-  still be scrolled to and pressed. It is checked to fit on one screen at the height you get when
-  opening it from the home screen
+  still be scrolled to and pressed. It is checked automatically to fit on one screen at the height
+  you get when opening it from the home screen, again via WebKit rather than a physical iPhone
 
 ## 2. The four tabs
 
