@@ -63,11 +63,20 @@ def test_the_shard_carries_exactly_the_built_shapes() -> None:
 def test_every_case_is_display_kind_and_does_not_end_with_eq() -> None:
     # 打鍵の途中を主張するシャードなので、eq で終わるケースが 1 件でも
     # 混じると「確定した表示」を「途中の表示」と偽ることになる。
+    #
+    # **`entry-000033` だけは例外。** +/- の直後の数字キーは製品が拒む
+    # (0.9.2 F5、`engine_table.rs:1200` の
+    # `refused_after(&["1", "2", "neg"], "3")`)ので、その拒否を打てる列の
+    # 中に残すと `crates/calcarc-core/tests/corpus_refused_presses.rs` の
+    # 番人に触れる(押せないキーはコーパスに置かない)。かわりに +/- の答えが
+    # 次の演算の左の被演算子になることを、確定まで打って示す
+    # (計画 2026-09-16-operator-correction-shard R4)。
     shard = build_entry_shard()
     for case in shard["cases"]:
         assert case["kind"] == "display"
         assert case["keys"], f"{case['id']}: empty key sequence"
-        assert case["keys"][-1] != "eq", f"{case['id']}: ends with eq"
+        if case["id"] != "entry-000033":
+            assert case["keys"][-1] != "eq", f"{case['id']}: ends with eq"
         assert "main" in case["expect"]
         assert case["mode"] == "Deg"
 
@@ -149,8 +158,11 @@ def test_exp_format_covers_the_open_exponent_and_its_del_stages() -> None:
     assert ("1", "dot", "5", "exp", "3", "del", "del", "del") in keys_seen
 
 
-def test_sign_toggle_covers_a_fresh_entry_after_negation() -> None:
-    # +/- の直後に打った桁は打ち直しであって、符号付きの続きにはならない。
-    matches = [c for c in sign_toggle_cases() if c["keys"] == ["1", "2", "neg", "3"]]
+def test_sign_toggle_carries_the_negated_value_into_the_next_operation() -> None:
+    # +/- の答えは手元の値になり、次の演算の左の被演算子になる。+/- の直後に
+    # 新しい桁を打つことはできない——製品がそのキーを拒む(0.9.2 F5)ので、
+    # 打ち直しとして始まる姿はもう打鍵で示せない(`entry-000033`、計画
+    # 2026-09-16-operator-correction-shard R4)。
+    matches = [c for c in sign_toggle_cases() if c["keys"] == ["1", "2", "neg", "add", "3", "eq"]]
     assert len(matches) == 1
-    assert matches[0]["expect"]["main"] == "3"
+    assert matches[0]["expect"]["main"] == "-9"
