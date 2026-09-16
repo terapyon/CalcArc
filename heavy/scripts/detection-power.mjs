@@ -650,6 +650,23 @@ export const MUTATIONS = [
     expectShards: ["finance-000.json (calls)", "finance-start-000.json (calls)"],
     minRate: { "finance-000.json (calls)": 0.038, "finance-start-000.json (calls)": 0.254 },
   },
+
+  // **ここから演算子の押し直しの変異(設計書 §3.8、外部監査 F1)。**
+  {
+    id: "operator-correction-revert",
+    what: "演算子の押し直しを、演算子スタックの末尾の差し替えに戻す(修正前の F1)",
+    file: "crates/calcarc-core/src/engine/mod.rs",
+    from: "match state.replace_base.take() {",
+    to: "match None::<ReplaceBase> {",
+    // `Some(base)` の枝に届かなくなり、`None` の枝(演算子の末尾の差し替え
+    // = 修正前の挙動)だけが走る。calcarc-3d(#138)が直した F1 をそのまま
+    // 巻き戻す形。
+    //
+    // **`expectShards`・`minRate` はまだ実測していない。** `heavy:power` を
+    // 回した後、その測定値で埋める(このコミットの時点では未走行)。
+    expectShards: [],
+    minRate: {},
+  },
 ];
 
 function run(command, args, options = {}) {
