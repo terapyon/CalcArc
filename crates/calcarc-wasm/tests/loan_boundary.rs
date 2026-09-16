@@ -156,6 +156,11 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
             let code = get(&out, "code").as_string();
             if want_error.is_some() && code.as_deref() == want_error {
                 tally.errors += 1;
+            } else if let Some(wanted) = want_error {
+                failures.push(format!(
+                    "{id}: {op} returned {}, wanted {wanted}",
+                    render(&out)
+                ));
             } else {
                 failures.push(format!("{id}: {op} returned {}", render(&out)));
             }
