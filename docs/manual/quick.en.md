@@ -122,6 +122,13 @@ base-60 (【°′″】), engineering notation (【ENG】), and switching the an
 Calculations that give an answer with 【=】 are kept in the history. Open it
 with 【Shift】 then 【hist】.
 
+**Input rules (summary):** Keys that would silently drop what's on screen (such as
+【(】 【π】 【e】 in the middle of typing a number) simply cannot be pressed. 【DEL】
+is not an undo, and it does not delete operators. 【=】 fills in an unclosed 【(】, but
+an unmatched 【)】 is "Math ERROR". If you press the wrong operator and immediately
+press the right one, you get the same answer as if you had typed it correctly the
+first time. See the detailed manual's "入力の決まり" (input rules) for more.
+
 ### Convert — unit conversion
 
 Type a number into 【値】 (value), and choose units with 【変換元】 (convert from)
