@@ -193,4 +193,45 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     await press([EQ]);
     expect(echo()).toHaveTextContent("値 0.123456789012");
   });
+
+  // **フェーズ 1(いま): 直す前の赤を撮る。コアには触っていない。**
+  // `web/src/wasm/` は直す前のコアから建っている(Task 6 ブリーフ §4)ので、
+  // この 2 行はこの時点で FAIL する——それが狙いである。
+  it("evaluates an inexact division in currency mode, instead of stranding in Math ERROR", async () => {
+    // **`settle` は式を受けるが、為替の読み手(`parse_decimal`)は受けない**
+    // ——`100/7` は割り切れないので `settle_expression` は `100/7` という
+    // 既約分数のまま値の欄に書き戻すが、`convertCurrency` はその文字列を
+    // 「金額」として読めず `SyntaxError` になる。値の欄は書き換わるのに
+    // 答えの行が Math ERROR の袋小路になる、というのがこの枝が生んだ欠陥
+    // (Task 6 ブリーフ「なぜ」)。**`÷` キーは Entry に `/` を書く**ので、
+    // コアに届く文字列は `100/7` である。
+    vi.mocked(readRates).mockResolvedValue(
+      rateSet({ USD: "1", JPY: "155.23" }, fresh()),
+    );
+    await renderPanel("currency");
+    await screen.findByText("Rate: 2026-08-14");
+
+    await press(["1", "0", "0", "割る", "7"]);
+    await press([EQ]);
+    expect(echo()).toHaveTextContent("値 100/7");
+    // **答えの行も見る。** 既存の 2 つの為替の検査は値の欄しか見ておらず、
+    // だから今回の欠陥(Math ERROR の袋小路)が見えなかった(Task 6 ブリーフ §3)。
+    expect(main()).toHaveTextContent("2,218 JPY");
+  });
+
+  it("shows a live amount before = is pressed too, once the reader can evaluate the expression", async () => {
+    // **`=` を押す前から答えの行が出る**ことの番人(Task 6 ブリーフ §3)。
+    // 単位側は式のまま `shown` を計算するので `=` を待たずに答えが出るが、
+    // 為替は `parse_decimal` が式を受けないせいで、演算子を打った時点で
+    // 答えの行が Math ERROR に落ちる——「前からあった変な動き」である。
+    vi.mocked(readRates).mockResolvedValue(
+      rateSet({ USD: "1", JPY: "155.23" }, fresh()),
+    );
+    await renderPanel("currency");
+    await screen.findByText("Rate: 2026-08-14");
+
+    await press(["1", "0", "0", "割る", "7"]);
+    // **`=` はまだ押していない。**
+    expect(main()).toHaveTextContent("2,218 JPY");
+  });
 });

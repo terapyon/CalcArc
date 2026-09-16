@@ -18,6 +18,7 @@
 //! ありふれたレートでも表示が 1 円ずれる(下の `the_tie_that_tells_f64_from_an_exact_rational`)。
 
 use crate::expr::rational::Rational;
+use crate::expr::{UnitSet, evaluate_to_rational};
 use crate::{CalcError, CalcResult};
 
 /// 通貨。**並びは契約である**——盤面の並び・境界の一覧・golden がこの順で並ぶ
@@ -224,11 +225,13 @@ fn group(integer: &str) -> String {
 
 /// 10 進リテラルを厳密な有理数にする。**受ける形は `-?\d+(\.\d+)?`、ASCII のみ。**
 ///
-/// **値もレートも同じ規則である**(規則を 2 つ持たない)。
+/// **ここを通るのはレートだけになった**(利用者の裁定 2026-09-16、案 2)。値は
+/// `convert_currency` が `evaluate_to_rational` で式として読むので、**「値もレートも
+/// 同じ規則」ではもう無い**——レートは外から来るデータであって式ではないので
+/// (設計書 §3「レートは外から来る」)、こちらだけ変えていない。
 ///
-/// **式は受けない。** U-1 の `convert()` は式を受けるが(§4.3)、こちらの入力は
-/// 「金額」と「レート」であって式ではない——`1e3` も `1+2` も `１２３` も
-/// `SyntaxError` である。**盤面にその打ち方が無い。**
+/// **式は受けない。** `1e3` も `1+2` も `１２３` も `SyntaxError` である。
+/// **盤面にその打ち方が無い。**
 fn parse_decimal(text: &str) -> CalcResult<Rational> {
     let (negative, body) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -266,7 +269,14 @@ fn parse_decimal(text: &str) -> CalcResult<Rational> {
     Rational::from_ratio(if negative { -numerator } else { numerator }, denominator)
 }
 
-/// 入口。**値もレートも 10 進の文字列で受ける**(spec §2.1・§3)。
+/// 入口。**値は式、レートは 10 進の文字列で受ける**(spec §2.1・§3、利用者の裁定
+/// 2026-09-16「案 2」)。
+///
+/// **値だけ `evaluate_to_rational` で式として読む。** U-1 の `convert()` が式を
+/// 受けるのに、為替の値だけリテラルしか受けないのは非対称で、割り切れない式
+/// (`100/7` など)を `settle` が既約分数のまま値の欄へ書き戻すと、ここが
+/// `SyntaxError` で撥ねて Math ERROR の袋小路になっていた(Task 6 ブリーフ)。
+/// **レートは変えない**——外から来るデータであって式ではない(§3)。
 ///
 /// **`f64` を経由する場所が 1 つも無いのがこの関数の要点である。**
 /// 文字列 → `Rational` → 換算 → 表示、で通す。
@@ -281,7 +291,16 @@ pub fn convert_currency(
     from_rate: &str,
     to_rate: &str,
 ) -> CalcResult<String> {
-    let value = parse_decimal(value)?;
+    // 単項マイナスは構文解析器に無い——`convert()` と `settle()` と同じく `0` を
+    // 前置する(`convert/mod.rs` の註)。
+    let owned;
+    let text = if value.starts_with('-') {
+        owned = format!("0{value}");
+        &owned
+    } else {
+        value
+    };
+    let value = evaluate_to_rational(text, UnitSet::None)?;
     let from_rate = parse_decimal(from_rate)?;
     let to_rate = parse_decimal(to_rate)?;
     format_amount(exchange(value, from_rate, to_rate)?, to.decimals())
@@ -522,6 +541,61 @@ mod tests {
         assert_eq!(
             convert_currency("100", Currency::Jpy, "0", "168.5"),
             Err(CalcError::DivisionByZero)
+        );
+    }
+
+    #[test]
+    fn the_value_argument_evaluates_an_inexact_division() {
+        // Task 6 ブリーフ「なぜ」: `100/7` は割り切れないので `settle` は
+        // 既約分数のまま値の欄に書き戻す。ここが式を読まないと、その値を
+        // `=` で書いた直後に Math ERROR の袋小路になっていた。**`÷` キーは
+        // Entry に `/` を書く**ので、コアに届く文字列も `/` である。
+        // 100 ÷ 7 × 155.23 = 15523/7 = 2217.571…→ 半分より上なので切り上げ 2,218。
+        assert_eq!(
+            convert_currency("100/7", Currency::Jpy, "1", "155.23").as_deref(),
+            Ok("2,218")
+        );
+    }
+
+    #[test]
+    fn the_value_argument_still_takes_a_leading_minus() {
+        // `convert()` / `settle()` と同じ扱い——単項マイナスは構文解析器に無いので
+        // `0` を前置して読む(盤面の `negative` state がこの形で渡す)。
+        assert_eq!(
+            convert_currency("-100/7", Currency::Jpy, "1", "155.23").as_deref(),
+            Ok("-2,218")
+        );
+    }
+
+    #[test]
+    fn the_value_argument_still_reports_its_own_errors() {
+        // 式として読むようになっても、エラーはそのまま通る。
+        assert_eq!(
+            convert_currency("1/0", Currency::Jpy, "1", "155.23"),
+            Err(CalcError::DivisionByZero)
+        );
+    }
+
+    #[test]
+    fn the_rate_arguments_still_reject_expressions() {
+        // **「値だけ広げた」ことの番人。** レートに式を渡しても `SyntaxError` の
+        // まま——広げたのは値の引数だけで、レートは `parse_decimal` のままである。
+        assert_eq!(
+            convert_currency("1", Currency::Jpy, "1+1", "155.23"),
+            Err(CalcError::SyntaxError)
+        );
+    }
+
+    #[test]
+    fn the_accepted_spelling_does_not_widen() {
+        // **calcarc-88 の制約: 綴りの受け付け範囲は変えない。** golden の
+        // 「書式が誤り」行 5 本(`1e3` 3 件・全角 2 件)がこれに依存する。
+        // 値の引数は式を読むようになったが、指数表記は式としても
+        // `SyntaxError` のままである(`evaluate_to_rational` は指数表記を
+        // 知らない)。
+        assert_eq!(
+            convert_currency("1e3", Currency::Jpy, "1", "155.23"),
+            Err(CalcError::SyntaxError)
         );
     }
 
