@@ -38,12 +38,14 @@ calculations.
 - Once it has been opened, it is built to keep working without a network
   (fetching exchange rates is the one thing that needs a network). Working without a
   network has been checked only in Chrome-type browsers, not yet in Safari on iPhone
-- The layout is checked on screens from 360px wide in Chrome on Android and similar browsers,
-  and from 375px wide in Safari on iPhone. Narrower screens (such as 320px) still show the app,
-  but nothing checks that the layout holds there
+- The layout is checked automatically on screens from 360px wide in the Chromium engine (Chrome
+  on Android and similar browsers), and from 375px wide in WebKit, the same rendering engine
+  Safari on iPhone uses. The automated check runs in that browser engine, not on a physical
+  iPhone. Narrower screens (such as 320px) still show the app, but nothing checks that the layout
+  holds there
 - On a short screen (for example in a browser tab) the page may scroll. Every display and key can
-  still be scrolled to and pressed. It is checked to fit on one screen at the height you get when
-  opening it from the home screen
+  still be scrolled to and pressed. It is checked automatically to fit on one screen at the height
+  you get when opening it from the home screen, again via WebKit rather than a physical iPhone
 
 ## 2. The four tabs
 
@@ -99,6 +101,9 @@ On these three tabs, choose an item first, then enter its number.
 - Items you have filled in stay on the display, in small type above the answer
 - On Convert and Finance you can type an expression into an item. 【=】 turns the
   expression into its value
+- **On Convert, 【値】 (value) is not rounded by 【=】.** When it doesn't divide evenly it
+  stays a fraction, such as `1/3`, and carries that value into whatever you type next
+  (for example, 【=】 on `1/3*3-1` gives `0`)
 - Keys that cannot be pressed right now look disabled. Some become available when
   you change the item or the kind of calculation; others are not used on that screen
 
@@ -117,13 +122,21 @@ base-60 (【°′″】), engineering notation (【ENG】), and switching the an
 Calculations that give an answer with 【=】 are kept in the history. Open it
 with 【Shift】 then 【hist】.
 
+**Input rules (summary):** Keys that would silently drop what's on screen (such as
+【(】 【π】 【e】 in the middle of typing a number) simply cannot be pressed. 【DEL】
+is not an undo, and it does not delete operators. 【=】 fills in an unclosed 【(】, but
+an unmatched 【)】 is "Math ERROR". If you press the wrong operator and immediately
+press the right one, you get the same answer as if you had typed it correctly the
+first time. See the detailed manual's "入力の決まり" (input rules) for more.
+
 ### Convert — unit conversion
 
 Type a number into 【値】 (value), and choose units with 【変換元】 (convert from)
 and 【変換先】 (convert to). 【⇅】 swaps the two. There are eight categories:
 length, mass, temperature, area, volume, speed, data size, and currency.
 
-Currency is converted with rates fetched from the internet.
+Currency is converted with rates fetched from the internet. 【値】 (value) also takes
+an expression for currency, and the answer appears before you press 【=】.
 
 ### Scale — data-size estimates
 

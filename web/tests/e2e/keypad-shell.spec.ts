@@ -8,8 +8,9 @@ test.beforeEach(async ({ page }) => {
 test("the main grid keeps 44px touch targets", async ({ page }) => {
   // 44px はタッチの推奨最小(base-spec §43)。誤爆が計算そのものを壊す
   // メイングリッドでは守る。関数列は縦だけ割る——設計書 §4 の判断で、
-  // 誤爆しても DEL で戻せる軽さに見合わせている。緩めた理由をここに
-  // 書いておかないと、次に読む人が「うっかり緩めた」と読む。
+  // 誤爆しても数字・演算子の入力は壊れず、関数が 1 回余計にかかるだけ
+  // ——AC からやり直せる軽さに見合わせている(DEL では戻らない)。緩めた
+  // 理由をここに書いておかないと、次に読む人が「うっかり緩めた」と読む。
   const main = page.getByRole("group", { name: "数字と演算のキー" });
   for (const button of await main.getByRole("button").all()) {
     const box = await button.boundingBox();
