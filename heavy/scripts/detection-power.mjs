@@ -48,6 +48,7 @@ export const ALL_SHARDS = [
   "complex-000.json (values)",
   "elementary-000.json (values)",
   "inverse-trig-000.json (values)",
+  "operator-correction-000.json (values)",
   "precedence-000.json (values)",
   "scientific-000.json (values)",
   "typed-000.json (values)",

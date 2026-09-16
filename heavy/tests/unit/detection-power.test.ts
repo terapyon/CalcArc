@@ -316,10 +316,11 @@ describe("the verdict looks at the health of the measurement first", () => {
     //
     // **19 枚目は 2026-08-30**（`combinatorics-display-000.json`）。
     // **20 枚目は 2026-09-11**（`finance-start-000.json (calls)`、期首の
-    // シャード）。枚数を名前で持っているので、1 枚消えて別の 1 枚が現れる
-    // 走行も、枚数が合っているだけでは見逃さない。
-    expect(ALL_SHARDS).toHaveLength(20);
-    expect(new Set(ALL_SHARDS).size).toBe(20);
+    // シャード）。**21 枚目は 2026-09-16**（`operator-correction-000.json
+    // (values)`、押し直しのシャード）。枚数を名前で持っているので、1 枚
+    // 消えて別の 1 枚が現れる走行も、枚数が合っているだけでは見逃さない。
+    expect(ALL_SHARDS).toHaveLength(21);
+    expect(new Set(ALL_SHARDS).size).toBe(21);
   });
 
   it("expects only shards that this run is supposed to load", () => {

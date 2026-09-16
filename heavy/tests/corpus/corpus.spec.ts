@@ -691,8 +691,24 @@ for (const { name, shard, values } of partitions) {
     // 強制している)、全件が必ず踏む。それ以外の値シャードは二項演算を必ず
     // 括弧で囲むので、1 件も踏まない。**どちらも `needsPrecedence` とは
     // 独立に決まっている**ので、ここで突き合わせるのは自己言及ではない。
+    //
+    // **`operator-correction-000.json` は例外の 2 つ目である**(2026-09-16、
+    // 押し直しのコーパス、Task 4)。このシャードは「誤った二項演算子を押して
+    // から押し直す」キー列を持ち、押し直した後の式は他の値シャードと同じく
+    // 括弧で囲まれるとは限らない——混在優先順位の連鎖を意図して含む。件数は
+    // `precedence-000.json` のように生成側の不変条件で 100% にはならないので、
+    // ここで実測値をそのまま固定する: `needsPrecedence(c.keys)` を
+    // `operator-correction-000.json` の 2000 件の value ケースに適用すると
+    // **1185 件**が true になる(このテストを走らせて実測)。この 1185 は
+    // `precedence-000.json` とは独立な、優先順位検証の 2 つ目の出どころである
+    // ——0 ではないことは、このシャードが優先順位を無視すると壊れる木を
+    // 実際に含んでいる証拠になる。
     const expectedPrecedenceCases =
-      name === PRECEDENCE_SHARD ? values.length : 0;
+      name === PRECEDENCE_SHARD
+        ? values.length
+        : name === "operator-correction-000.json"
+          ? 1185
+          : 0;
     expect(
       precedenceCases,
       `${name}: ${precedenceCases} of ${values.length} value case(s) were ` +
