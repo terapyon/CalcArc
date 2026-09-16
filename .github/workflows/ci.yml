@@ -201,6 +201,16 @@ jobs:
         working-directory: heavy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # **`tools/tests/` はこのジョブが回す**(`pnpm test` の include が
+          # `../tools/tests/**`)。その中の `check-manual-freshness` の検査は
+          # **実物のリポジトリ**に当てる——前回のリリースタグを
+          # `git describe --tags --abbrev=0` で引くので、タグを含む全履歴が要る。
+          # 既定の浅いクローンではタグが 1 本も無く、番人は「差分を計算できない」
+          # として NG を返す(それが設計であり、黙って緑にはしない)。
+          # **`web` ジョブの checkout と同じ理由だが、別のジョブなので別に要る**
+          # ——番人を回すのは `web`、番人のテストを回すのはここである。
+          fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - run: pnpm install --frozen-lockfile
       # **型検査より先に wasm が要る。** `heavy` の型検査は `web/src/calc` を
