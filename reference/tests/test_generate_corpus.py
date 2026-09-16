@@ -2985,7 +2985,7 @@ def test_the_correction_record_recomputes_from_its_own_keys() -> None:
 
 
 def test_the_operator_correction_shard_is_deterministic() -> None:
-    """**小さい件数で回す。** 格子(408 セル)の充足はコミット済みの 1,000 件の側で
+    """**小さい件数で回す。** 格子(348 セル)の充足はコミット済みの 1,000 件の側で
     見ており、ここで見たいのは同じ種から同じものが出ることだけである。
     """
     first = generate_corpus.build_operator_correction_shard(seed=20260916, count=40)
