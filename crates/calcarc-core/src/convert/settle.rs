@@ -19,6 +19,8 @@ use crate::CalcResult;
 use crate::expr::{UnitSet, evaluate_to_rational};
 
 /// 値の欄に入る字数の上限(`web/src/convert/entry.ts` の `MAX_VALUE_DIGITS` と同じ数)。
+/// **機械の番人は無い**——この定数は境界を越えて公開されておらず、web 側から
+/// 読めない。揃っているかは `web/src/convert/entry.ts` の同じ定数の註が持つ。
 pub const MAX_VALUE_CHARS: usize = 39;
 
 /// 式を正確な値の文字列にする。有限小数(39 字以内)か既約分数 `p/q`、負なら先頭に `-`。

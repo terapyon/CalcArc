@@ -290,6 +290,11 @@ function convertCurrencyStub(
  * (`convertCurrency`)とは別の口である**——`=` は `settle` だけを呼び、
  * 結果を値の欄に書き戻す(`convert`/`convertCurrency` は表示専用になった)。
  * 「`=` が値を書き換えたか」は、この記録だけが主張できる。
+ *
+ * **最後の 1 件が「直前に押した `=`」とは限らない。** `settled()` は
+ * `=` の disabled 判定(`UnitPanel.tsx` の `keyOff` の `eq`)からも毎描画
+ * 呼ばれる——`settleCalls.at(-1)` は「最後の描画がこの記録に足した値」
+ * であって「最後に押した `=` の入力」ではない。
  */
 const settleCalls: { value: string }[] = [];
 
