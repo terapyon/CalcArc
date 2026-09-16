@@ -87,6 +87,17 @@ jobs:
     timeout-minutes: 85
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # **下の「測る道具そのもの」の段が `tools/tests/` を回す**
+          # (`heavy` の `pnpm test` の include が `../tools/tests/**`)。
+          # その中の `check-manual-freshness` の 2 本は**実物のリポジトリ**に
+          # 当てるので、前回のリリースタグが要る。既定の浅いクローンでは
+          # タグが 1 本も無く、「差分を計算できない」で NG になる。
+          # **`ci.yml` の `heavy` と同じ理由だが、こちらは別の workflow で
+          # あり、リリースではこちらが走る**——`release.yml` はこれを
+          # `workflow_call` で呼ぶので、付け忘れるとタグを打った 40 分後に
+          # 初めて赤くなる。
+          fetch-depth: 0
       - uses: ./.github/actions/setup-web
 
       # Rust(wasm32) + rust-cache + wasm-pack。**版の固定はこの複合アクションに
