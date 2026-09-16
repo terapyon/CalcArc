@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import functools
+import itertools
 import json
 import math
 import pathlib
@@ -67,6 +69,13 @@ from calcarc_reference.corpus_expr import (
     to_keys_minimal,
     to_minimal_key_sequence,
     walk,
+)
+from calcarc_reference.corpus_opcorr import (
+    LEVEL,
+    RIGHT_ASSOCIATIVE,
+    Group,
+    build_tree,
+    chain_keys,
 )
 
 SCHEMA = 1
@@ -2430,6 +2439,523 @@ def _summary_line(total_cases: int, elapsed: float) -> str:
     )
 
 
+# --- 演算子の押し直し(`operator-correction-000.json`、設計書 2026-09-12 §3、
+# 計画 2026-09-16 Task 2)------------------------------------------------------
+#
+# **誤りのキーは期待値に何も寄与しない。** 期待値は「正しい式の木」を mpmath で
+# 評価した値であって、押し直しの手順を写したものではない(設計書 §3.2 の正規化)。
+# 木の組み方は `corpus_opcorr.build_tree`——公開の表(`docs/base-spec.md`:333-343 の
+# `xʸ`/`nPr`/`nCr` の段と右結合、`docs/numerical-policy.md`:673 の `+ −` = 1・
+# `× ÷` = 2)からの優先順位の登りであり、エンジンの演算子スタックの畳み込みとは
+# 別の手順である。
+
+#: 段の名前。**`correction` に書く綴り**で、公開の表(`LEVEL`)の段と 1 対 1。
+OPCORR_LEVEL_NAME = {1: "add-sub", 2: "mul-div", 3: "comb", 4: "pow"}
+#: 名前 → 段。上の逆写像。
+OPCORR_LEVEL_OF = {name: level for level, name in OPCORR_LEVEL_NAME.items()}
+#: 段ごとの演算子。**公開の表から起こす**——ここに写しを置かない。
+OPCORR_OPS_BY_LEVEL = {
+    name: tuple(op for op in sorted(LEVEL) if LEVEL[op] == level)
+    for level, name in OPCORR_LEVEL_NAME.items()
+}
+#: 乱択に使う演算子の並び。**集合を回さない**(同じ種でも出力が揺れる)。
+OPCORR_ALL_OPS = tuple(sorted(LEVEL))
+#: 括弧の外と中で使う四則。段の低いものに絞って値を暴れさせない。
+OPCORR_ARITHMETIC_OPS = ("*", "+", "-", "/")
+OPCORR_COMB_OPS = OPCORR_OPS_BY_LEVEL["comb"]
+OPCORR_PENDINGS = ("none", "add-sub", "mul-div", "comb", "pow")
+OPCORR_CONTEXTS = ("after-close", "flat", "paren")
+#: 格子が数える押し直しの回数。**3 回は格子の外**だが、別に 1 件以上を求める。
+OPCORR_GRID_COUNTS = (1, 2)
+OPCORR_MAX_PRESSES = 3
+#: 対照群の層の名前。**同じシャードに入れる**(設計書 §3.4)。
+OPCORR_CONTROL_STRATUM = "control"
+#: 1 セルを埋めるために引く上限。**超えたら黙って縮まず落ちる。**
+OPCORR_CELL_ATTEMPTS = 3000
+#: 乱択で埋める段の、1 件あたりの抽選の上限。
+OPCORR_FILL_ATTEMPTS = 200
+#: `keys` の中で演算子の位置を数えるための、二項演算子のキー。
+OPCORR_BINARY_TOKENS = frozenset(BINARY_KEYS.values())
+#: 到達可能な組を数える列挙で使う、鎖の長さの上限。**3 で答えが止まる**
+#: (実測 2026-09-16: 3・4・5 が同じ集合を出す)。4 まで見るのは 0.4 秒で済むから
+#: であって、止まっていることを毎回の生成で確かめておくためである。
+OPCORR_SHAPE_MAX_OPS = 4
+#: 列挙で「閉じ括弧の直後」に置く括弧。**1 項の括弧を含める**——組合せの被演算子
+#: は葉でなければならないので、そこは 1 項の括弧でしか組めない。
+OPCORR_SHAPE_GROUPS = (
+    Group(terms=(7,), ops=()),
+    Group(terms=(7, 8), ops=("+",)),
+    Group(terms=(7, 8), ops=("*",)),
+)
+#: 段の代表の演算子。訂正前の読みは**段と結合の向きだけ**で決まるので、同じ段の
+#: どれを置いても組み上がる木は同じである。
+OPCORR_LEVEL_REPRESENTATIVE = {name: ops[0] for name, ops in OPCORR_OPS_BY_LEVEL.items()}
+
+
+def _opcorr_shapes() -> Iterator[tuple]:
+    """鎖の形を全部並べる。**値は見ない**——木の形だけを数える列挙である。
+
+    生むのは `(文脈, 上の項, 上の演算子, 括弧の位置, 訂正する鎖の演算子, 位置)`。
+    """
+    for size in range(1, OPCORR_SHAPE_MAX_OPS + 1):
+        for ops in itertools.product(OPCORR_ALL_OPS, repeat=size):
+            terms = tuple(10 + k for k in range(size + 1))
+            for position in range(size):
+                yield "flat", terms, ops, None, ops, position
+                for group in OPCORR_SHAPE_GROUPS:
+                    replaced: list = list(terms)
+                    replaced[position] = group
+                    yield "after-close", tuple(replaced), ops, None, ops, position
+                inner = Group(terms=terms, ops=ops)
+                yield "paren", (inner, 5), ("+",), 0, ops, position
+                yield "paren", (5, inner), ("*",), 1, ops, position
+
+
+@functools.lru_cache(maxsize=1)
+def opcorr_reachable_triples() -> frozenset[tuple[str, str, str, str]]:
+    """`(保留の段, 誤りの段, 正しい段, 文脈)` のうち、**案件が在りうるもの**。
+
+    **手で並べない。** 鎖の形を全部並べ、2 つの規則で篩う:
+
+    (a) **組合せの被演算子は葉だけ**(設計書 §3.5)。`nCr` の答えをもう一度整数
+        関数に渡すと F4 の DomainError を踏む(実測は `_assoc_leaves` の註)。
+        保留と正しいは同じ深さで隣り合うので、どちらかが組合せで、もう一方も
+        段 3 以上だと、組合せの子が必ず `Bin` になる。**括弧では逃げられない**
+        ——括弧を挟むと、その演算子はもう「同じ深さの左隣」ではない。
+    (b) 段が違うときは、**訂正前の読み(R2)が別の木になれること**。同じ木にしか
+        ならない組では二つの値が必ず一致するので、識別のふるい(1e-3)を 1 件も
+        通せない。R3 も効かない——同じ木なので `OutOfShard` も起きない。
+        同じ段の押し直しにはふるいが無いので、そちらは (a) だけで決まる。
+
+    (b) が効くのは、**`nPr nCr` と `xʸ` のあいだに段が無い**からである。読みを
+    変えて木が変わるには、二つの読みの段のあいだに段を持つ演算子が隣に要る。
+    その役ができるのは組合せか `xʸ` しか無く、それを組合せの隣に置くと (a) に
+    反する。**鎖を伸ばしても増えない**(3・4・5 が同じ答え)。
+
+    実測(2026-09-16): 生きるのは 174 組、死ぬのは 66 組。死ぬ組は 3 文脈とも死ぬ。
+    """
+    live: set[tuple[str, str, str, str]] = set()
+    for context, top_terms, top_ops, group_index, ops, position in _opcorr_shapes():
+        tree = build_tree(top_terms, top_ops)
+        if not _opcorr_comb_operands_are_leaves(tree):
+            continue
+        pending = "none" if position == 0 else OPCORR_LEVEL_NAME[LEVEL[ops[position - 1]]]
+        right = OPCORR_LEVEL_NAME[LEVEL[ops[position]]]
+        path = (position,) if group_index is None else (group_index, position)
+        for wrong in OPCORR_LEVEL_NAME.values():
+            key = (pending, wrong, right, context)
+            if key in live:
+                continue
+            if wrong == right:
+                live.add(key)
+                continue
+            reading = build_tree(top_terms, top_ops, {path: OPCORR_LEVEL_REPRESENTATIVE[wrong]})
+            if reading != tree:
+                live.add(key)
+    return frozenset(live)
+
+
+def opcorr_cells() -> tuple[list[tuple], list[tuple]]:
+    """格子のセルを、**要求するもの**と**除外するもの**に分ける。
+
+    セルは `(保留の段, 誤りの段, 正しい段, 文脈, 押し直しの回数)` で、
+    5 × 4 × 4 × 3 × 2 = 480 通り。**除外は手で並べない**——
+    `opcorr_reachable_triples()` が 2 つの規則から計算する。実測(2026-09-16)では
+    要求 348 / 除外 132 である。押し直しの回数は到達可能性に効かない(訂正前の
+    読みを決めるのは最初の 1 つで、2 つ目以降はどの段にも置ける)。
+    **規則が変わって到達できるようになったセルは、
+    `build_operator_correction_shard` の assert が空のまま通さない。**
+    """
+    live = opcorr_reachable_triples()
+    required: list[tuple] = []
+    excluded: list[tuple] = []
+    for pending in OPCORR_PENDINGS:
+        for wrong in OPCORR_LEVEL_NAME.values():
+            for right in OPCORR_LEVEL_NAME.values():
+                for context in OPCORR_CONTEXTS:
+                    for presses in OPCORR_GRID_COUNTS:
+                        cell = (pending, wrong, right, context, presses)
+                        if (pending, wrong, right, context) in live:
+                            required.append(cell)
+                        else:
+                            excluded.append(cell)
+    return required, excluded
+
+
+def _opcorr_leaf(rng: random.Random, left_op: str | None, right_op: str | None) -> int:
+    """葉の範囲は**隣の演算子**で決まる(設計書 §3.5)。
+
+    組合せの `n` と `r`、`xʸ` の底と指数を、その場所に合う箱から引く。木に
+    組んだあとで役が変わることはありうるが、そのときは `_within_range` が捨てる。
+    """
+    if right_op in OPCORR_COMB_OPS:
+        return rng.randint(4, 20)
+    if left_op in OPCORR_COMB_OPS:
+        return rng.randint(2, 4)
+    if right_op == "^":
+        return rng.randint(2, 9)
+    if left_op == "^":
+        return rng.randint(2, 3)
+    return rng.randint(1, 99)
+
+
+def _opcorr_leaves(rng: random.Random, ops: tuple[str, ...]) -> tuple[int, ...]:
+    return tuple(
+        _opcorr_leaf(rng, ops[j - 1] if j else None, ops[j] if j < len(ops) else None)
+        for j in range(len(ops) + 1)
+    )
+
+
+def _opcorr_group(rng: random.Random, left_op: str | None, right_op: str | None) -> Group:
+    """「閉じ括弧の直後」の文脈で、訂正する演算子の左に置く括弧。
+
+    **1 項だけの括弧も引く。** 正しい演算子が組合せのときは被演算子が葉で
+    なければならない(§3.5)ので、中に演算子を置いた括弧では組めない。
+    """
+    if rng.random() < 0.4:
+        return Group(terms=(_opcorr_leaf(rng, left_op, right_op),), ops=())
+    inner_ops = tuple(rng.choice(OPCORR_ARITHMETIC_OPS) for _ in range(rng.randint(1, 2)))
+    return Group(terms=_opcorr_leaves(rng, inner_ops), ops=inner_ops)
+
+
+def _opcorr_wrong_presses(
+    rng: random.Random, wrong_level: str, correct: str, presses: int
+) -> tuple[str, ...] | None:
+    """誤って押す演算子の列を引く。**隣どうしは違う。**
+
+    正しい演算子と同じにできるのは、**その段に演算子が 1 つしかないときだけ**
+    (裁定 B、2026-09-16)。段 `pow` は `xʸ` 1 つなので、`^` のあとの `^` が
+    そこに当たる——盤面で実際に打てる形で、演算子の差し替えの経路を踏む。
+    ほかの段には 2 つ目の演算子が在るので、退化した押し直しを作る必要が無い。
+    """
+
+    def allowed(op: str, previous: str | None) -> bool:
+        if op == previous:
+            return False
+        return op != correct or len(OPCORR_OPS_BY_LEVEL[OPCORR_LEVEL_NAME[LEVEL[op]]]) == 1
+
+    first = [op for op in OPCORR_OPS_BY_LEVEL[wrong_level] if allowed(op, None)]
+    if not first:
+        return None
+    pressed = [rng.choice(first)]
+    for _ in range(presses - 1):
+        pool = [op for op in OPCORR_ALL_OPS if allowed(op, pressed[-1])]
+        pressed.append(rng.choice(pool))
+    return tuple(pressed)
+
+
+def _opcorr_comb_operands_are_leaves(node: Node) -> bool:
+    """組合せの被演算子が葉だけか(設計書 §3.5)。**`^` には求めない**(裁定 A)。"""
+    if not isinstance(node, Bin):
+        return True
+    if node.op in OPCORR_COMB_OPS and not (
+        isinstance(node.left, Num) and isinstance(node.right, Num)
+    ):
+        return False
+    return _opcorr_comb_operands_are_leaves(node.left) and _opcorr_comb_operands_are_leaves(
+        node.right
+    )
+
+
+def _opcorr_right_steps(node: Node, steps: int = 0) -> list[int]:
+    """中順に二項の節点を並べ、根から**右へ降りた回数**を添えて返す。
+
+    **中順は打鍵の順である**(項・演算子・項…)ので、`k` 番目の要素が `k` 番目に
+    押した演算子の「保留の深さ」になる——その位置の左の被演算子を右の枝に持つ
+    祖先の数と同じものである。
+    """
+    if not isinstance(node, Bin):
+        return []
+    return [
+        *_opcorr_right_steps(node.left, steps),
+        steps,
+        *_opcorr_right_steps(node.right, steps + 1),
+    ]
+
+
+def _opcorr_group_operators(term: object) -> int:
+    if isinstance(term, Group):
+        return len(term.ops) + sum(_opcorr_group_operators(inner) for inner in term.terms)
+    return 0
+
+
+def _opcorr_operator_index(
+    top_terms: tuple, top_ops: tuple[str, ...], group_index: int | None, position: int
+) -> int:
+    """訂正する演算子が、**打鍵の順で何番目の二項演算子か**。"""
+    if group_index is None:
+        return position + sum(_opcorr_group_operators(t) for t in top_terms[: position + 1])
+    before = group_index + sum(_opcorr_group_operators(t) for t in top_terms[:group_index])
+    group = top_terms[group_index]
+    return before + position + sum(_opcorr_group_operators(t) for t in group.terms[: position + 1])
+
+
+def _opcorr_token_index(keys: list[str], index: int) -> int:
+    """キー列の中で、`index` 番目の二項演算子キーが在る位置。"""
+    seen = 0
+    for pos, key in enumerate(keys):
+        if key in OPCORR_BINARY_TOKENS:
+            if seen == index:
+                return pos
+            seen += 1
+    raise RuntimeError(f"operator {index} is not in {keys!r}")
+
+
+def _opcorr_commits(pending: str, first_wrong: str) -> bool:
+    """最初の誤りの押下で、保留の演算子が畳まれるか(`2 + 3 +` の形)。
+
+    段が保留より低ければ畳まれる。同段なら結合の向きで決まり、**右結合の
+    `xʸ` だけは畳まれない**。保留が無ければ畳むものが無い。
+    """
+    if pending == "none":
+        return False
+    if LEVEL[first_wrong] != OPCORR_LEVEL_OF[pending]:
+        return LEVEL[first_wrong] < OPCORR_LEVEL_OF[pending]
+    return first_wrong not in RIGHT_ASSOCIATIVE
+
+
+def _opcorr_stratum(
+    top_terms: tuple,
+    top_ops: tuple[str, ...],
+    path: tuple[int, ...],
+    first_wrong: str,
+    value: mp.mpf,
+    same_level: bool,
+) -> str | None:
+    """層を決める。**識別のふるいに落ちたら `None`**(この候補を捨てる)。
+
+    「訂正前の読み」は、正しい演算子を**最初に押した誤り**の段と結合で読んだ木
+    (R2)。その値と正しい値の相対差が `ASSOC_MIN_RELATIVE_GAP` 以上のものだけを
+    `discriminating` に入れる。**これは合否の許容ではない**——判定の許容は
+    `tolerance` が持つ(CLAUDE.md)。
+    """
+    if same_level:
+        # 同じ段の押し直しは優先順位の読み違いを起こさないので、ふるいを掛けない
+        # (設計書 §3.4)。訂正前の読みは正しい読みと同じ木になる。
+        return "same-level"
+    try:
+        before = evaluate(build_tree(top_terms, top_ops, {path: first_wrong}))
+    except OutOfShard:
+        # R3: 訂正前の読みが定義域の外に出るなら、「読みが違う」として採る。
+        return "discriminating"
+    if not mp.isfinite(before):
+        return "discriminating"
+    if abs(value - before) / max(abs(value), mp.mpf(1)) < ASSOC_MIN_RELATIVE_GAP:
+        return None
+    return "discriminating"
+
+
+def _opcorr_candidate(rng: random.Random, cell: tuple) -> dict | None:
+    """セルに合う候補を 1 つ組む。組めない/ふるいに落ちたら `None`。"""
+    pending, wrong_level, right_level, context, presses = cell
+    correct = rng.choice(OPCORR_OPS_BY_LEVEL[right_level])
+    wrong = _opcorr_wrong_presses(rng, wrong_level, correct, presses)
+    if wrong is None:
+        return None
+    head: list[str] = []
+    if pending != "none":
+        # 保留の手前にもう 1 つ積むことがある——**深さを稼ぐため**である。
+        head = [rng.choice(OPCORR_ALL_OPS) for _ in range(rng.randint(0, 1))]
+        head.append(rng.choice(OPCORR_OPS_BY_LEVEL[pending]))
+    tail = [rng.choice(OPCORR_ALL_OPS) for _ in range(rng.randint(0, 2))]
+    ops = (*head, correct, *tail)
+    position = len(head)
+    terms: tuple = _opcorr_leaves(rng, ops)
+    group_index: int | None = None
+    if context == "after-close":
+        replaced = list(terms)
+        replaced[position] = _opcorr_group(
+            rng, ops[position - 1] if position else None, ops[position]
+        )
+        top_terms, top_ops = tuple(replaced), ops
+    elif context == "paren":
+        inner = Group(terms=terms, ops=ops)
+        outer = rng.choice(OPCORR_ARITHMETIC_OPS)
+        leaf = _opcorr_leaf(rng, outer, None)
+        if rng.random() < 0.5:
+            top_terms, group_index = (inner, leaf), 0
+        else:
+            top_terms, group_index = (leaf, inner), 1
+        top_ops = (outer,)
+    else:
+        top_terms, top_ops = terms, ops
+    tree = build_tree(top_terms, top_ops)
+    if not _opcorr_comb_operands_are_leaves(tree):
+        return None
+    try:
+        if not _within_range(tree):
+            return None
+        value = evaluate(tree)
+    except OutOfShard:
+        return None
+    path = (position,) if group_index is None else (group_index, position)
+    stratum = _opcorr_stratum(top_terms, top_ops, path, wrong[0], value, wrong_level == right_level)
+    if stratum is None:
+        return None
+    keys = chain_keys(top_terms, top_ops)
+    index = _opcorr_operator_index(top_terms, top_ops, group_index, position)
+    at = _opcorr_token_index(keys, index)
+    wrong_keys = [BINARY_KEYS[op] for op in wrong]
+    return {
+        "cell": cell,
+        "keys": [*keys[:at], *wrong_keys, *keys[at:], "eq"],
+        "control_keys": [*keys, "eq"],
+        "expr": to_expr_text(tree),
+        "expect": {"re": float(value), "im": 0.0},
+        "stratum": stratum,
+        "correction": {
+            "at": at + len(wrong_keys),
+            "wrong": wrong_keys,
+            "pending": pending,
+            "wrong_level": wrong_level,
+            "right_level": right_level,
+            "context": context,
+            "depth": _opcorr_right_steps(tree)[index],
+            "count": presses,
+            "commits": _opcorr_commits(pending, wrong[0]),
+        },
+    }
+
+
+def _opcorr_pair(index: int, candidate: dict) -> list[dict]:
+    """1 本の鎖から、**押し直した列とその対照**を作る。
+
+    期待値は同じ木から出るので、二つは必ず同じ値になる。違うのはキー列だけで
+    ある——だから押し直しの処理を壊す変異は、**訂正の側だけ**を赤くする。
+    """
+    shared = {
+        "kind": "value",
+        "mode": "Deg",
+        "expr": candidate["expr"],
+        "expect": candidate["expect"],
+    }
+    return [
+        {
+            **shared,
+            "id": f"opc-{index:06d}",
+            "stratum": candidate["stratum"],
+            "keys": candidate["keys"],
+            "correction": candidate["correction"],
+        },
+        {
+            **shared,
+            "id": f"opc-{index + 1:06d}",
+            "stratum": OPCORR_CONTROL_STRATUM,
+            "keys": candidate["control_keys"],
+        },
+    ]
+
+
+def build_operator_correction_shard(seed: int, count: int) -> dict:
+    """**演算子の押し直し**のシャード(`kind: "value"`、設計書 2026-09-12 §3)。
+
+    独立: 別手順(公開の表からの優先順位の登り。エンジンの演算子スタックの
+    畳み込みとは別)。
+
+    1 本の鎖から**二件**書き出す——誤りを差し込んだ列と、同じ正しい列を訂正
+    なしで打つ対照である。**対照が緑で訂正だけ赤なら、原因は押し直しの処理に
+    絞れる**(設計書 §3.4 の対照実験)。
+
+    格子は「保留の段 × 誤りの段 × 正しい段 × 文脈 × 回数 {1,2}」の 480 セルから、
+    **2 つの規則で死ぬセルを除いた 348 セル**である(`opcorr_cells` と
+    `opcorr_reachable_triples`)。先に 1 セルずつ狙って埋め、残りを乱択で埋める。
+    **乱択は除外のセルも引く**——除外の計算が誤っていて実は到達できるなら、
+    そこで拾われて下の assert が赤くなる。
+    """
+    rng = random.Random(seed)
+    pairs = count // 2
+    required, excluded = opcorr_cells()
+    all_cells = [*required, *excluded]
+    chosen: list[dict] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def take(candidate: dict | None) -> bool:
+        if candidate is None:
+            return False
+        fingerprint = tuple(candidate["keys"])
+        if fingerprint in seen:
+            return False
+        seen.add(fingerprint)
+        chosen.append(candidate)
+        return True
+
+    # 1) 格子を先に狙う。**埋まらなければ黙って縮まず落ちる。**
+    for cell in required[:pairs]:
+        if not any(take(_opcorr_candidate(rng, cell)) for _ in range(OPCORR_CELL_ATTEMPTS)):
+            raise RuntimeError(
+                f"operator-correction: cell {cell} stayed empty after "
+                f"{OPCORR_CELL_ATTEMPTS} draws — the sampling box is too small"
+            )
+
+    # 2) 格子の外で 1 件以上を求めるもの——保留の深さ 1/2/3 と、押し直し 3 回
+    #    (設計書 §3.3 の因子。格子は回数 {1,2} しか数えない)。
+    def demand(predicate, what: str) -> None:
+        if len(chosen) >= pairs or any(predicate(c) for c in chosen):
+            return
+        for _ in range(OPCORR_CELL_ATTEMPTS):
+            cell = rng.choice(required)
+            if rng.random() < 0.3:
+                cell = (*cell[:4], OPCORR_MAX_PRESSES)
+            candidate = _opcorr_candidate(rng, cell)
+            if candidate is not None and predicate(candidate) and take(candidate):
+                return
+        raise RuntimeError(f"operator-correction: no case with {what}")
+
+    for depth in (1, 2, 3):
+        demand(lambda c, d=depth: c["correction"]["depth"] == d, f"depth {depth}")
+    demand(
+        lambda c: c["correction"]["count"] == OPCORR_MAX_PRESSES,
+        f"{OPCORR_MAX_PRESSES} presses",
+    )
+    # 3) 残りを乱択で埋める。
+    attempts = 0
+    while len(chosen) < pairs:
+        attempts += 1
+        if attempts > max(pairs, 1) * OPCORR_FILL_ATTEMPTS:
+            raise RuntimeError(
+                f"operator-correction: gave up after {attempts} attempts with "
+                f"{len(chosen)}/{pairs} chains"
+            )
+        cell = rng.choice(all_cells)
+        if rng.random() < 0.08:
+            cell = (*cell[:4], OPCORR_MAX_PRESSES)
+        take(_opcorr_candidate(rng, cell))
+    del chosen[pairs:]
+
+    # **格子の番人(その 1)。** 除外したセルの案件が 1 つでも拾われていたら、
+    # 除外の計算(`opcorr_reachable_triples`)が誤っている——黙って通さず落ちる。
+    live = opcorr_reachable_triples()
+    assert all(c["cell"][:4] in live for c in chosen), (
+        "a cell that opcorr_cells() excluded produced a case"
+    )
+    covered = {c["cell"] for c in chosen if c["cell"][4] in OPCORR_GRID_COUNTS}
+    if pairs >= len(required) + 4:
+        # **格子の番人(その 2)。要求セルが全部埋まっていること。** 死ぬセルが
+        # 在るのは、**`nPr nCr` と `xʸ` のあいだに段が無い**ので読みを変えても木が
+        # 変わらないことと、組み替えを起こす隣の演算子(組合せか `xʸ`)を組合せの
+        # 隣に置くと §3.5 の葉の規則に反することによる(`opcorr_reachable_triples`)。
+        assert covered == set(required), f"empty cells: {sorted(set(required) - covered)}"
+    else:
+        # 対の数が要求セルより少ないと、格子は**数学的に埋まらない**。
+        # コミットするシャードは既定の 2,000 件(対 1,000)で作るので上を通る。
+        assert covered <= set(required)
+    assert {c["correction"]["depth"] for c in chosen} >= {1, 2, 3} or pairs < len(required)
+
+    entries: list[dict] = []
+    for candidate in chosen:
+        entries.extend(_opcorr_pair(len(entries), candidate))
+    counts: dict[str, int] = {}
+    for entry in entries:
+        counts[entry["stratum"]] = counts.get(entry["stratum"], 0) + 1
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": TOLERANCE,
+        "strata": dict(sorted(counts.items())),
+        "cases": entries,
+    }
+
+
 # finance シャードだけの目標総件数(設計書 §4.7)。他の 14 シャードは CLI 引数
 # `count`(既定 2000)を共有するが、finance は名指し層の下限合計(1,307 件)を
 # 大きく超える件数が要る。ここを `count` に連動させると、他の 14 枚を増やす
@@ -2489,6 +3015,13 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # **組合せの誤入力を体系的に確かめる 1 枚**（2026-08-30 のユーザー裁定）。
     # **表を埋めるためではない**——理由は `corpus_combinatorics` の docstring。
     yield "combinatorics-display-000.json", corpus_combinatorics.build_shard()
+    # **演算子の押し直し**(設計書 2026-09-12 §3)。**最後に足す**——ここより前に
+    # 入れると、他のシャードの乱数は変わらないのに書き出しの順だけが動く。
+    # `count` を半分ずつ使う(訂正と対照の対)。`SCIENCE_SHARDS` には入れない。
+    yield (
+        "operator-correction-000.json",
+        build_operator_correction_shard(seed=20260916, count=count),
+    )
 
 
 #: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。

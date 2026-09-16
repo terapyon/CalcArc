@@ -1794,8 +1794,12 @@ test("the in-progress display item is counted from the corpus, not written by ha
       .map((e) => [e.name, e.sequencesWithoutEq]),
   );
   expect(byShard).toEqual({
-    // 打鍵の途中の表示。全 36 件が `=` に届かない。
-    "entry-000.json (displays)": 36,
+    // 打鍵の途中の表示。36 件中 35 件が `=` に届かない——2026-09-16、Task 3
+    // が `entry-000033` を `1 2 neg 3` から `1 2 neg add 3 eq` に retype し、
+    // その 1 件が `=` に届くようになった(押せないキー列を無くすための修正で、
+    // このシャードが打鍵の途中の表示を数える基準——`=` の不在——には無関係に
+    // 動いた副作用)。
+    "entry-000.json (displays)": 35,
     // 単項関数が `=` を待たずにその場で撥ねるケース(`0 recip` / `0 ln` など)。
     "errors-000.json (displays)": 19,
   });
@@ -1807,7 +1811,7 @@ test("the in-progress display item is counted from the corpus, not written by ha
   expect(line).toContain(`${withoutEq} 本のキー列が`);
   expect(line).not.toContain("全ケースが");
   expect(line).not.toContain("踏んでいない");
-  expect(markdown).toContain("`entry-000` 36 本・`errors-000` 19 本");
+  expect(markdown).toContain("`entry-000` 35 本・`errors-000` 19 本");
   // **数がある項目は但し書きの一覧から外れる**——項目と一覧は同じ述語から出る。
   expect(disclaimerOf(markdown)).not.toContain("入力中の表示");
 
