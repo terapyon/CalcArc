@@ -535,3 +535,108 @@ Chromium の `End-to-end` はどの走行でも通っている。**`d80523c` →
 
 **次に赤を見た人へ**: 上の表に 1 行足してください。**画面写真の日付が仕込みの日付のどれかか、その日の
 日付か**が分かれば、すり抜けの筋を確かめる標本になります。
+
+---
+
+## `finance-layout.spec.ts` — the standing disclaimer stays within 2 lines on the compound face at 360px（**WebKit**、`page.goto` の内部エラー）
+
+| | |
+|---|---|
+| ファイル | `web/tests/e2e/finance-layout.spec.ts:88`（落ちた行は `:93`） |
+| テスト名 | `the standing disclaimer stays within 2 lines on the compound face at 360px (375x812 on WebKit)` |
+| 走行 | CI の `End-to-end (WebKit)`（`pnpm exec playwright test --project webkit`） |
+| 初出 | 2026-09-16 |
+
+### エラーの原文
+
+```
+  1) [webkit] › tests/e2e/finance-layout.spec.ts:88:5 › the standing disclaimer stays within 2 lines
+     on the compound face at 360px (375x812 on WebKit)
+
+    Error: page.goto: WebKit encountered an internal error
+
+    > 93 |       await page.goto("/#finance");
+        at /home/runner/work/CalcArc/CalcArc/web/tests/e2e/finance-layout.spec.ts:93:18
+
+    test-results/finance-layout-the-standin-d466f-at-360px-375x812-on-WebKit--webkit/test-failed-1.png
+    Error Context: test-results/…/error-context.md
+
+  1 failed
+  1 skipped
+  263 passed (1.8m)
+```
+
+**これは「結果が違った」ではない。** 落ちたのは `:93` の `page.goto("/#finance")`
+——**画面を開く前**である。`:94` 以降の `display-main` も `toHaveCount(1)` も
+行数の測定も走っていない。**主張は一度も評価されていない。**
+
+### 走行ごとの結果（**私の実測。走行の印字から取った**）
+
+| 走行 | 枝・先端 | 開始（UTC） | `End-to-end (WebKit)` |
+|---|---|---|---|
+| `35148872809` | `chore/version-0-9-2` `bffd72a` | 2026-09-16 20:49 | **緑** |
+| `35153052145` | `chore/version-0-9-2` `9341ea4` | 2026-09-16 21:33 | **失敗**（上の原文） |
+| `35153139047` | `main` `f1688f6` | 2026-09-16 21:34 | **緑** |
+
+**同じ走行の他の 7 ジョブは全部緑**（`Rust core` / `Python reference` / `WASM boundary` /
+`Web build and unit tests` / `Heavy tooling` / `Manuals` / `End-to-end`）。**落ちたのは
+WebKit だけである。**
+
+### 窓を決めて数えた（2026-09-17）
+
+**直近 30 走行（`ci.yml`、2026-09-12 09:39 〜 09-16 21:34）**のうち、
+**`End-to-end (WebKit)` を持つのは 28 本**（成功 21・失敗 5・cancelled 2。
+残り 2 本はこのジョブを持たない）。
+
+**★ 失敗 5 本のうち 4 本は、同じファイルの別のテストである:**
+
+| 走行 | 先端 | 落ちたテスト | 形 |
+|---|---|---|---|
+| `34686438702` `34686448386` `34689579995` `34689583462`（09-12） | `bdd0436` `3eb46cc` `934dc12` `3a70976` | `finance-layout.spec.ts:185`（`the compound face keeps slack inside the screen`） | **本物の assert 失敗**（`only 5.828125px of slack left on the compound face …`）。`4230a74` 以降は出ていない |
+| `35153052145`（09-16） | `9341ea4` | `finance-layout.spec.ts:88` | **`page.goto` の内部エラー**（この 1 本だけ） |
+
+**★ 同じファイルだが、同じ赤ではない。** 4 本は**数値を伴う assert の失敗**で、
+**直す対象が在った**（決着済み）。今回は**ナビゲーションが失敗していて assert に届いて
+いない**。**「このファイルは前にも赤かった」を、今回の説明に使わないこと。**
+
+**`internal error` の綴りは、この一覧の他の 4 節に 0 件である**（`pwa.spec.ts` の節は
+navigation fallback の別件で、`page.goto` の内部エラーではない）。
+
+### そのとき何が同時に走っていたか
+
+**`main` の走行 `35153139047` が 1 分後（21:34）に始まっており、2 本の走行が重なって
+いた。** ただし **GitHub ホストの runner はジョブごとに別のマシン**なので、この一覧の
+`pnpm heavy` の節（**1 台の作業台での食い合い**）の筋を、そのまま持ち込むことはできない。
+**runner 側の混雑は見ていない。**
+
+### 落ちた変更とは無関係である根拠
+
+- **`bffd72a`（緑）→ `9341ea4`（失敗）の差分は `.github/workflows/` の 2 ファイルだけ**
+  である（`ci.yml` と `heavy-corpus.yml` に `fetch-depth: 0` を足した 21 行）。
+  **E2E の走り方を変える行は 1 行も無い。**
+- 枝全体（`111c056..9341ea4`、17 ファイル）でも **`web/src/` と `web/tests/` は 0 件**。
+  `web/package.json` は**版数 1 行と `scripts` 2 行**だけである
+- **`retries` は `web/playwright.config.ts` に 0 件＝既定 0** なので、
+  **1 回のゆらぎがそのまま赤になる**
+
+### ★ 何が分かっていないか
+
+- **標本は 1 件である**（WebKit ジョブ 28 本中 1 本）。**失敗率は言えない**
+- **WebKit のどの段で落ちたかを特定していない。** 原文は `page.goto` の内部エラーと
+  しか言っていない。**`test-failed-1.png` と `error-context.md` は走行の artifact に
+  在るはずだが、私は見ていない**
+- **★ 再実行でこの 1 件が消えるかどうかを、まだ見ていない。** 2026-09-17 時点で
+  `#144` の再実行は済んでいない。**「ゆらぎ」は、いまのところ読みである**
+- **CI の同時実行の状況を見ていない**（重なっていた事実だけを書いた）
+- **09-12 の 4 本と同じ原因かは分からない。** 症状の形が違う
+- **`convert.spec.ts` の節（WebKit）と同じ原因かも分からない。** あちらは
+  `serviceWorkers: "block"` で決着しており、**こちらは SW を触っていない**
+
+**直しは書かない。** この一覧の冒頭のとおり、**緩めれば緑になる数字を増やすことは、
+ここに載せることの帰結にしない**——`retries` については**番人
+`tools/tests/webkit-gate.test.ts` が止める**（`convert.spec.ts` の節に既出）。
+
+**次に赤を見た人へ**: 上の表に 1 行足してください。**`page.goto` で落ちたのか
+assert で落ちたのか**を原文で書き分けてくださると、この節と 09-12 の 4 本の
+どちらの標本になるかが決まります。**走行の artifact（`test-failed-1.png` /
+`error-context.md`）を落として残してくださると、いちばん効きます。**
