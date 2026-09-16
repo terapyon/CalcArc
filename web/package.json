@@ -25,7 +25,9 @@
     "check:sw": "node scripts/check-sw.mjs",
     "check:version": "node ../tools/check-version.mjs",
     "check:boundary": "node ../tools/check-boundary.mjs",
-    "check:citations": "node ../tools/check-citations.mjs"
+    "check:citations": "node ../tools/check-citations.mjs",
+    "check:conflict-markers": "node ../tools/check-conflict-markers.mjs",
+    "check:manual-freshness": "node ../tools/check-manual-freshness.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

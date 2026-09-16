@@ -139,6 +139,14 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # **`check:manual-freshness` が前回のリリースタグを読む**
+          # (`git describe --tags --abbrev=0`)ので、タグを含む全履歴が要る
+          # ——`release.yml` の `version` ジョブと同じ理由(そちらの
+          # コメント参照)。既定の浅いクローンのままだと、この検査は
+          # タグを 1 本も見つけられず NG になる(それが正しい——「差分が無い」
+          # と「差分を計算できない」は別状態で、後者を黙って緑にしない設計)。
+          fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -166,6 +174,15 @@ jobs:
       # 拾った `2026-09-03-history.md` は別の PR で、**どちらも単独では
       # 緑だった**。合わさって初めて出る誤警報を、ここが見つけた。
       - run: pnpm check:citations
+      # **`docs/` に衝突マーカーが残っていないかを毎回見る。** 番人が置かれた
+      # だけで CI に繋がれていなければ、CLAUDE.md の規律(「規律を書いたら、
+      # 同じコミットで番人を置く」)はその日から偽になる——`tools/check-conflict-markers.mjs`
+      # 自身の docstring 参照。
+      - run: pnpm check:conflict-markers
+      # **マニュアルが実装に追いついているかを毎回見る。** 上の checkout の
+      # `fetch-depth: 0` はこの 1 段のためのもの。番人の中身は
+      # `tools/check-manual-freshness.mjs`。
+      - run: pnpm check:manual-freshness
 
   # **重量級の「道具そのもの」を毎回見る**(2026-08-26、Wave C)。
   # 走らせるのは型検査・lint・ユニットの 3 つだけで、**35 分の本体は載せない**
