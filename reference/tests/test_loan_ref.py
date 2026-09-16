@@ -154,6 +154,69 @@ def test_zero_rate_follows_the_integer_rule() -> None:
     assert monthly_payment_exact(3_000_000, 0, 1200, 12, 600_000) == Fraction(2_400_000, 11)
 
 
+def test_a_monthly_payment_above_the_cap_is_overflow() -> None:
+    # 正の年利・2 回以上で理論月額が上限 + 2 円以上の入力(R2 と同じ線。
+    # closed_form.rs の `a_monthly_payment_above_the_verified_cap_is_an_error`
+    # と同じ入力——理論月額は約 1,001,250,000 円)。
+    num, den = rate_fraction("1")
+    with pytest.raises(LoanError) as caught:
+        monthly_payment(2_000_000_000, num, den, 2, 0)
+    assert caught.value.code == "Overflow"
+
+
+def test_the_boundary_guard_still_applies_below_the_cap() -> None:
+    # 5 億円台の月額は上限(10 億円)の下だが、円境界ガードの相対しきい値
+    # (値 × 1e-9)がこの規模ではもう最大距離 0.5 円を超えるので、上限とは
+    # 別に境界ガードが NearYenBoundaryError で落とす(LoanError ではない)。
+    # 上限を 5 億に下げるとこの入力は Overflow に変わる——赤の確認(Step 5)
+    # で使う境目。
+    num, den = rate_fraction("1")
+    with pytest.raises(ValueError, match="yen boundary"):
+        monthly_payment(1_500_000_000, num, den, 2, 0)
+
+
+def test_exactly_the_cap_is_still_an_answer() -> None:
+    # golden の residual/exact/15/2/987654400/81 と同じ入力(monthly_floor = 1,000,000,000)。
+    # この入力は理論値がちょうど円境界に乗るので、Decimal 50 桁の `monthly_payment` は
+    # `_guard_boundary` に阻まれる(境界ガードの仕事どおり)。ちょうど上限を「通す」side は
+    # 理論値の側——`monthly_payment_exact` の切り捨て——で確かめる(golden もここを見る)。
+    num, den = rate_fraction("15")
+    exact = monthly_payment_exact(987_654_400, num, den, 2, 81)
+    assert exact.numerator // exact.denominator == loan_ref.MAX_VERIFIED_MONTHLY_YEN
+
+
+def test_zero_rate_is_outside_the_cap() -> None:
+    # 金利 0% は上限の前で返る厳密経路(closed_form.rs の `the_exact_paths_are_outside_the_cap`
+    # と同じ入力)。理論月額が上限を大きく超えても掛けない。
+    num, den = rate_fraction("0")
+    assert monthly_payment(loan_ref.U64_MAX, num, den, 600, 0) == 30_744_573_456_182_586
+
+
+def test_one_payment_is_outside_the_cap() -> None:
+    # 1 回払いも上限の前で返る厳密経路。理論月額が上限を超えても値を返す。
+    num, den = rate_fraction("1")
+    payment = monthly_payment(5_000_000_000, num, den, 1, 0)
+    assert payment > loan_ref.MAX_VERIFIED_MONTHLY_YEN
+
+
+def test_a_bonus_payment_above_the_cap_is_overflow() -> None:
+    # bonus_forward はボーナス分も monthly_payment で決めるので、賞与の月額が
+    # 上限を超えれば同じく Overflow になる(calcarc-3d の実測で賞与 1 回あたり
+    # 約 22.8 億円という規模感と同じ桁)。
+    #
+    # ブリーフの例(20,000,000,000 / 9,000,000,000 / 24 回)はそのままでは使えない
+    # ——月々の列(11,000,000,000 を 24 回)がたまたま円境界の近くに落ち、
+    # 賞与の上限とは無関係に `_guard_boundary` が先に鳴る(この節の理由と同じ、
+    # 5 億円級では相対しきい値が最大距離 0.5 円を超えるため)。月々の列が
+    # 境界を踏まない組(6,000,000,000 / 3,000,000,000 / 12 回 → 月々は
+    # 251,356,234 円で安全、賞与列は 2 回で 1,511,259,351 円で上限超え)に
+    # 差し替える。
+    num, den = rate_fraction("1")
+    with pytest.raises(LoanError) as caught:
+        bonus_forward(6_000_000_000, 3_000_000_000, num, den, 12)
+    assert caught.value.code == "Overflow"
+
+
 def test_the_same_inputs_are_refused() -> None:
     num, den = rate_fraction("2")
     bad_inputs = [

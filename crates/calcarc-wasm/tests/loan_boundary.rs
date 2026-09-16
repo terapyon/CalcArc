@@ -12,6 +12,11 @@
 //! 製品側の異常終了であって許容の話ではないので、failures に積んで次のケースへ進む
 //! (レビューでの裁定: エラーは panic ではなく失敗として記録する)。
 //!
+//! **ただし `over_cap` の行はエラーが答えである**(0.9.2 設計書 §5.1、PR D)。
+//! `expect.error` を持つ行は `kind: "error"` かつ `code` がその綴りであることを期待し、
+//! 値が返ったら失敗の 1 件にする。逆に `exempt`(年利 0%・1 回払い)の行は、
+//! **上限を超える値**が返ることを期待する——上限が f64 の経路の外へ広がれば赤くなる。
+//!
 //! Run: wasm-pack test --headless --chrome crates/calcarc-wasm
 
 #![cfg(target_arch = "wasm32")]
@@ -31,7 +36,25 @@ struct Tally {
     low: u32,
     same: u32,
     high: u32,
+    /// 期待どおりのエラーで返った行の数(値の比較は 1 度も起きない)。
+    errors: u32,
 }
+
+/// 空でないことを見るセル。境界の 3 集合 × 3 ラベルに、上限の 2 つを足す。
+/// native 側(`crates/calcarc-core/tests/loan_boundary_golden.rs`)と同じ一覧である。
+const CELLS: &[(&str, &str)] = &[
+    ("plain", "exact"),
+    ("plain", "below"),
+    ("plain", "above"),
+    ("residual", "exact"),
+    ("residual", "below"),
+    ("residual", "above"),
+    ("bonus", "exact"),
+    ("bonus", "below"),
+    ("bonus", "above"),
+    ("over_cap", "over"),
+    ("exempt", "over"),
+];
 
 fn get(value: &JsValue, key: &str) -> JsValue {
     js_sys::Reflect::get(value, &JsValue::from_str(key))
@@ -73,6 +96,9 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
     let within = |got: u64, want: u64| {
         want.saturating_sub(below) <= got && got <= want.saturating_add(above)
     };
+    // 上限もテストコードに書かない——JSON の `max_monthly_yen` から読む
+    // (持ち越し T4: native 側だけが見ていた `want ≤ cap` を wasm32 にも置く)。
+    let cap = yen(&golden["max_monthly_yen"]);
     let cases = golden["cases"].as_array().expect("cases");
     assert!(!cases.is_empty());
 
@@ -87,12 +113,25 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
         let rate = input["rate"].as_str().expect("rate");
         let n = input["n"].as_u64().expect("n") as u32;
         let principal = input["principal"].as_str().expect("principal");
-        let key = format!(
-            "{}/{}",
-            case["set"].as_str().expect("set"),
-            case["boundary"].as_str().expect("boundary")
-        );
+        let set = case["set"].as_str().expect("set");
+        let key = format!("{}/{}", set, case["boundary"].as_str().expect("boundary"));
         let tally = tallies.entry(key).or_default();
+
+        let want_error = case["expect"].get("error").and_then(|v| v.as_str());
+        let want_monthly = case["expect"].get("monthly_floor").map(yen);
+        // **どの行も、値かエラーのどちらか一方だけを期待する。**
+        assert!(
+            want_monthly.is_some() != want_error.is_some(),
+            "{id}: a case expects a value or an error, not both or neither"
+        );
+        if let Some(want) = want_monthly {
+            if set == "exempt" {
+                // 上限を掛けない経路の行。**上限の下に居たら、その行は何も主張していない。**
+                assert!(want > cap, "{id}: an exempt row below the cap");
+            } else {
+                assert!(want <= cap, "{id}: expectation above the cap");
+            }
+        }
 
         let out = match op {
             "loan_forward" => calcarc_wasm::loan_forward(
@@ -112,8 +151,28 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
 
         // **エラーは panic ではなく失敗として記録し、次のケースへ進む**
         // (レビュー条件 1 の修正裁定)。1 件の error で残り全部を見ないままにしない。
+        // **`over_cap` の行だけは、期待した綴りのエラーが答えである。**
         if get(&out, "kind").as_string().as_deref() != Some("ok") {
-            failures.push(format!("{id}: {op} returned {}", render(&out)));
+            let code = get(&out, "code").as_string();
+            if want_error.is_some() && code.as_deref() == want_error {
+                tally.errors += 1;
+            } else if let Some(wanted) = want_error {
+                failures.push(format!(
+                    "{id}: {op} returned {}, wanted {wanted}",
+                    render(&out)
+                ));
+            } else {
+                failures.push(format!("{id}: {op} returned {}", render(&out)));
+            }
+            compared += 1;
+            continue;
+        }
+        // エラーを期待した行が答えを出した = 上限が効いていない。
+        if let Some(wanted) = want_error {
+            failures.push(format!(
+                "{id}: {op} returned {}, wanted {wanted}",
+                render(&out)
+            ));
             compared += 1;
             continue;
         }
@@ -121,7 +180,7 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
         let mut pairs: Vec<(&str, u64, u64)> = vec![(
             "monthly",
             yen_field(&out, "monthlyPayment"),
-            yen(&case["expect"]["monthly_floor"]),
+            want_monthly.expect("a value row carries monthly_floor"),
         )];
         if op == "loan_bonus_forward" {
             pairs.push((
@@ -152,14 +211,14 @@ fn monthly_payments_stay_within_the_allowance_on_yen_boundaries_in_wasm32() {
         failures.join("\n")
     );
     // **比べたことを数えるのはこのセルごとの「空でない」**(記憶 tests-can-assert-nothing)。
-    for set in ["plain", "residual", "bonus"] {
-        for boundary in ["exact", "below", "above"] {
-            let t = tallies.get(&format!("{set}/{boundary}"));
-            assert!(
-                t.is_some_and(|t| t.low + t.same + t.high > 0),
-                "no cases in {set}/{boundary}"
-            );
-        }
+    // 上限の 2 セルも同じ扱いにする——`over_cap` は期待どおりのエラー、`exempt` は
+    // 値の比較で数が立つ。
+    for (set, boundary) in CELLS {
+        let t = tallies.get(&format!("{set}/{boundary}"));
+        assert!(
+            t.is_some_and(|t| t.low + t.same + t.high + t.errors > 0),
+            "no cases in {set}/{boundary}"
+        );
     }
     // `compared` は全件を試みた(走査が途中で抜けていない)ことの番人。比べたことの番人ではない。
     // エラーになったケースも 1 件として数える。

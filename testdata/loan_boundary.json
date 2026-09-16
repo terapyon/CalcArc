@@ -5386,6 +5386,231 @@
       "set": "residual"
     },
     {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999000020"
+      },
+      "id": "residual/exact/0.0001/2/5940000240000000/5940000230999978",
+      "input": {
+        "n": 2,
+        "principal": "5940000240000000",
+        "rate": "0.0001",
+        "residual": "5940000230999978"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "999000018"
+      },
+      "id": "residual/below/0.0001/2/5940000239999999/5940000230999978",
+      "input": {
+        "n": 2,
+        "principal": "5940000239999999",
+        "rate": "0.0001",
+        "residual": "5940000230999978"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "999000021"
+      },
+      "id": "residual/above/0.0001/2/5940000240000001/5940000230999978",
+      "input": {
+        "n": 2,
+        "principal": "5940000240000001",
+        "rate": "0.0001",
+        "residual": "5940000230999978"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "991000022"
+      },
+      "id": "residual/exact/0.0001/2/5700000264000000/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000264000000",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "955000017"
+      },
+      "id": "residual/below/0.0001/2/5700000227999999/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000227999999",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "955000019"
+      },
+      "id": "residual/exact/0.0001/2/5700000228000000/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000228000000",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "955000020"
+      },
+      "id": "residual/above/0.0001/2/5700000228000001/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000228000001",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "967000018"
+      },
+      "id": "residual/below/0.0001/2/5700000239999999/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000239999999",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "967000020"
+      },
+      "id": "residual/exact/0.0001/2/5700000240000000/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000240000000",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "967000021"
+      },
+      "id": "residual/above/0.0001/2/5700000240000001/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000240000001",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "979000019"
+      },
+      "id": "residual/below/0.0001/2/5700000251999999/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000251999999",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "979000021"
+      },
+      "id": "residual/exact/0.0001/2/5700000252000000/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000252000000",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "979000022"
+      },
+      "id": "residual/above/0.0001/2/5700000252000001/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000252000001",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "991000020"
+      },
+      "id": "residual/below/0.0001/2/5700000263999999/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000263999999",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "991000023"
+      },
+      "id": "residual/above/0.0001/2/5700000264000001/5700000222999979",
+      "input": {
+        "n": 2,
+        "principal": "5700000264000001",
+        "rate": "0.0001",
+        "residual": "5700000222999979"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
       "boundary": "above",
       "expect": {
         "monthly_floor": "872000061"
@@ -5681,6 +5906,231 @@
         "principal": "5760001232000000",
         "rate": "0.0001",
         "residual": "5760000720000020"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "940000065"
+      },
+      "id": "residual/above/0.0001/3/7488000943999999/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000943999999",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "940000066"
+      },
+      "id": "residual/above/0.0001/3/7488000944000001/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000944000001",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "948000066"
+      },
+      "id": "residual/above/0.0001/3/7488000959999999/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000959999999",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "948000067"
+      },
+      "id": "residual/above/0.0001/3/7488000960000001/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000960000001",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "956000067"
+      },
+      "id": "residual/above/0.0001/3/7488000975999999/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000975999999",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "956000068"
+      },
+      "id": "residual/above/0.0001/3/7488000976000001/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000976000001",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "980000070"
+      },
+      "id": "residual/above/0.0001/3/7488001023999999/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488001023999999",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "980000071"
+      },
+      "id": "residual/above/0.0001/3/7488001024000001/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488001024000001",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "988000071"
+      },
+      "id": "residual/above/0.0001/3/7488001039999999/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488001039999999",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "above",
+      "expect": {
+        "monthly_floor": "988000072"
+      },
+      "id": "residual/above/0.0001/3/7488001040000001/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488001040000001",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "956000059"
+      },
+      "id": "residual/below/0.0001/3/7488000975999985/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488000975999985",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "992000063"
+      },
+      "id": "residual/below/0.0001/3/7488001047999984/7488000936000026",
+      "input": {
+        "n": 3,
+        "principal": "7488001047999984",
+        "rate": "0.0001",
+        "residual": "7488000936000026"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "904000055"
+      },
+      "id": "residual/below/0.0001/3/7200000907999986/7200000900000025",
+      "input": {
+        "n": 3,
+        "principal": "7200000907999986",
+        "rate": "0.0001",
+        "residual": "7200000900000025"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "940000059"
+      },
+      "id": "residual/below/0.0001/3/7200000979999985/7200000900000025",
+      "input": {
+        "n": 3,
+        "principal": "7200000979999985",
+        "rate": "0.0001",
+        "residual": "7200000900000025"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "below",
+      "expect": {
+        "monthly_floor": "976000063"
+      },
+      "id": "residual/below/0.0001/3/7200001051999984/7200000900000025",
+      "input": {
+        "n": 3,
+        "principal": "7200001051999984",
+        "rate": "0.0001",
+        "residual": "7200000900000025"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -12174,6 +12624,156 @@
     {
       "boundary": "exact",
       "expect": {
+        "monthly_floor": "999997666"
+      },
+      "id": "residual/exact/0.5/2/1188257438400/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188257438400",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990002303"
+      },
+      "id": "residual/exact/0.5/2/1188247447200/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188247447200",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990004704"
+      },
+      "id": "residual/exact/0.5/2/1188247449600/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188247449600",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990007105"
+      },
+      "id": "residual/exact/0.5/2/1188247452000/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188247452000",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999992864"
+      },
+      "id": "residual/exact/0.5/2/1188257433600/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188257433600",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999995265"
+      },
+      "id": "residual/exact/0.5/2/1188257436000/1188247444895",
+      "input": {
+        "n": 2,
+        "principal": "1188257436000",
+        "rate": "0.5",
+        "residual": "1188247444895"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999761"
+      },
+      "id": "residual/exact/0.5/2/1140287426400/1140237447461",
+      "input": {
+        "n": 2,
+        "principal": "1140287426400",
+        "rate": "0.5",
+        "residual": "1140237447461"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950001337"
+      },
+      "id": "residual/exact/0.5/2/1140237448800/1140237447461",
+      "input": {
+        "n": 2,
+        "principal": "1140237448800",
+        "rate": "0.5",
+        "residual": "1140237447461"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950003738"
+      },
+      "id": "residual/exact/0.5/2/1140237451200/1140237447461",
+      "input": {
+        "n": 2,
+        "principal": "1140237451200",
+        "rate": "0.5",
+        "residual": "1140237447461"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950006139"
+      },
+      "id": "residual/exact/0.5/2/1140237453600/1140237447461",
+      "input": {
+        "n": 2,
+        "principal": "1140237453600",
+        "rate": "0.5",
+        "residual": "1140237447461"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
         "monthly_floor": "5769602"
       },
       "id": "residual/exact/0.5/3/23044800/11527201",
@@ -12707,6 +13307,126 @@
         "principal": "1280288431200",
         "rate": "0.5",
         "residual": "1280257051864"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999982301"
+      },
+      "id": "residual/exact/0.5/3/1584341522400/1584321559842",
+      "input": {
+        "n": 3,
+        "principal": "1584341522400",
+        "rate": "0.5",
+        "residual": "1584321559842"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "994217500"
+      },
+      "id": "residual/exact/0.5/3/1584330000000/1584321559842",
+      "input": {
+        "n": 3,
+        "principal": "1584330000000",
+        "rate": "0.5",
+        "residual": "1584321559842"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "996381552"
+      },
+      "id": "residual/exact/0.5/3/1520403724800/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520403724800",
+        "rate": "0.5",
+        "residual": "1520311012689"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950263144"
+      },
+      "id": "residual/exact/0.5/3/1520311545600/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520311545600",
+        "rate": "0.5",
+        "residual": "1520311012689"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "956027945"
+      },
+      "id": "residual/exact/0.5/3/1520323068000/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520323068000",
+        "rate": "0.5",
+        "residual": "1520311012689"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "961792746"
+      },
+      "id": "residual/exact/0.5/3/1520334590400/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520334590400",
+        "rate": "0.5",
+        "residual": "1520311012689"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "984851950"
+      },
+      "id": "residual/exact/0.5/3/1520380680000/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520380680000",
+        "rate": "0.5",
+        "residual": "1520311012689"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990616751"
+      },
+      "id": "residual/exact/0.5/3/1520392202400/1520311012689",
+      "input": {
+        "n": 3,
+        "principal": "1520392202400",
+        "rate": "0.5",
+        "residual": "1520311012689"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -19226,6 +19946,156 @@
     {
       "boundary": "exact",
       "expect": {
+        "monthly_floor": "999999288"
+      },
+      "id": "residual/exact/1/2/594257385600/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594257385600",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000963"
+      },
+      "id": "residual/exact/1/2/594247395600/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594247395600",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990002164"
+      },
+      "id": "residual/exact/1/2/594247396800/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594247396800",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990003365"
+      },
+      "id": "residual/exact/1/2/594247398000/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594247398000",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999996886"
+      },
+      "id": "residual/exact/1/2/594257383200/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594257383200",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999998087"
+      },
+      "id": "residual/exact/1/2/594257384400/594247394634",
+      "input": {
+        "n": 2,
+        "principal": "594257384400",
+        "rate": "1",
+        "residual": "594247394634"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999464"
+      },
+      "id": "residual/exact/1/2/570287356800/570237398964",
+      "input": {
+        "n": 2,
+        "principal": "570287356800",
+        "rate": "1",
+        "residual": "570237398964"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000633"
+      },
+      "id": "residual/exact/1/2/570237399600/570237398964",
+      "input": {
+        "n": 2,
+        "principal": "570237399600",
+        "rate": "1",
+        "residual": "570237398964"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950001834"
+      },
+      "id": "residual/exact/1/2/570237400800/570237398964",
+      "input": {
+        "n": 2,
+        "principal": "570237400800",
+        "rate": "1",
+        "residual": "570237398964"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950003035"
+      },
+      "id": "residual/exact/1/2/570237402000/570237398964",
+      "input": {
+        "n": 2,
+        "principal": "570237402000",
+        "rate": "1",
+        "residual": "570237398964"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
         "monthly_floor": "1444802"
       },
       "id": "residual/exact/1/3/5762400/2883601",
@@ -19609,6 +20479,156 @@
         "principal": "5769599",
         "rate": "1",
         "residual": "5767202"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "998687005"
+      },
+      "id": "residual/exact/1/3/792344406000/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792344406000",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990032599"
+      },
+      "id": "residual/exact/1/3/792327118800/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792327118800",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "991475000"
+      },
+      "id": "residual/exact/1/3/792330000000/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792330000000",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "992917401"
+      },
+      "id": "residual/exact/1/3/792332881200/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792332881200",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "995802203"
+      },
+      "id": "residual/exact/1/3/792338643600/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792338643600",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "997244604"
+      },
+      "id": "residual/exact/1/3/792341524800/792327046770",
+      "input": {
+        "n": 3,
+        "principal": "792341524800",
+        "rate": "1",
+        "residual": "792327046770"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999436722"
+      },
+      "id": "residual/exact/1/3/760412066400/760313308468",
+      "input": {
+        "n": 3,
+        "principal": "760412066400",
+        "rate": "1",
+        "residual": "760313308468"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950395088"
+      },
+      "id": "residual/exact/1/3/760314105600/760313308468",
+      "input": {
+        "n": 3,
+        "principal": "760314105600",
+        "rate": "1",
+        "residual": "760313308468"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "951837489"
+      },
+      "id": "residual/exact/1/3/760316986800/760313308468",
+      "input": {
+        "n": 3,
+        "principal": "760316986800",
+        "rate": "1",
+        "residual": "760313308468"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "953279890"
+      },
+      "id": "residual/exact/1/3/760319868000/760313308468",
+      "input": {
+        "n": 3,
+        "principal": "760319868000",
+        "rate": "1",
+        "residual": "760313308468"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -25980,6 +27000,156 @@
     {
       "boundary": "exact",
       "expect": {
+        "monthly_floor": "999999994"
+      },
+      "id": "residual/exact/2/2/297257276400/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297257276400",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000556"
+      },
+      "id": "residual/exact/2/2/297247293600/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297247293600",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990001157"
+      },
+      "id": "residual/exact/2/2/297247294200/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297247294200",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990001758"
+      },
+      "id": "residual/exact/2/2/297247294800/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297247294800",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999998792"
+      },
+      "id": "residual/exact/2/2/297257275200/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297257275200",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999393"
+      },
+      "id": "residual/exact/2/2/297257275800/297247293042",
+      "input": {
+        "n": 2,
+        "principal": "297257275800",
+        "rate": "2",
+        "residual": "297247293042"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999897"
+      },
+      "id": "residual/exact/2/2/285287218200/285237301495",
+      "input": {
+        "n": 2,
+        "principal": "285287218200",
+        "rate": "2",
+        "residual": "285237301495"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000303"
+      },
+      "id": "residual/exact/2/2/285237301800/285237301495",
+      "input": {
+        "n": 2,
+        "principal": "285237301800",
+        "rate": "2",
+        "residual": "285237301495"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000904"
+      },
+      "id": "residual/exact/2/2/285237302400/285237301495",
+      "input": {
+        "n": 2,
+        "principal": "285237302400",
+        "rate": "2",
+        "residual": "285237301495"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950001505"
+      },
+      "id": "residual/exact/2/2/285237303000/285237301495",
+      "input": {
+        "n": 2,
+        "principal": "285237303000",
+        "rate": "2",
+        "residual": "285237301495"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
         "monthly_floor": "362402"
       },
       "id": "residual/exact/2/3/1441200/721801",
@@ -26348,6 +27518,156 @@
         "principal": "360300000",
         "rate": "2",
         "residual": "1443602"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999700025"
+      },
+      "id": "residual/exact/2/3/396348015000/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396348015000",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990308799"
+      },
+      "id": "residual/exact/2/3/396329279400/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396329279400",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990670000"
+      },
+      "id": "residual/exact/2/3/396330000000/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396330000000",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "991031201"
+      },
+      "id": "residual/exact/2/3/396330720600/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396330720600",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "998977623"
+      },
+      "id": "residual/exact/2/3/396346573800/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396346573800",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999338824"
+      },
+      "id": "residual/exact/2/3/396347294400/396328658483",
+      "input": {
+        "n": 3,
+        "principal": "396347294400",
+        "rate": "2",
+        "residual": "396328658483"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999784714"
+      },
+      "id": "residual/exact/2/3/380414828400/380315503298",
+      "input": {
+        "n": 3,
+        "principal": "380414828400",
+        "rate": "2",
+        "residual": "380315503298"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950300177"
+      },
+      "id": "residual/exact/2/3/380316106200/380315503298",
+      "input": {
+        "n": 3,
+        "principal": "380316106200",
+        "rate": "2",
+        "residual": "380315503298"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950661378"
+      },
+      "id": "residual/exact/2/3/380316826800/380315503298",
+      "input": {
+        "n": 3,
+        "principal": "380316826800",
+        "rate": "2",
+        "residual": "380315503298"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "951022579"
+      },
+      "id": "residual/exact/2/3/380317547400/380315503298",
+      "input": {
+        "n": 3,
+        "principal": "380317547400",
+        "rate": "2",
+        "residual": "380315503298"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -32307,6 +33627,156 @@
     {
       "boundary": "exact",
       "expect": {
+        "monthly_floor": "999999989"
+      },
+      "id": "residual/exact/15/2/39855839120/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39855839120",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000053"
+      },
+      "id": "residual/exact/15/2/39845962640/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39845962640",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000134"
+      },
+      "id": "residual/exact/15/2/39845962720/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39845962720",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000215"
+      },
+      "id": "residual/exact/15/2/39845962800/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39845962800",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999827"
+      },
+      "id": "residual/exact/15/2/39855838960/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39855838960",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999908"
+      },
+      "id": "residual/exact/15/2/39855839040/39845962584",
+      "input": {
+        "n": 2,
+        "principal": "39855839040",
+        "rate": "15",
+        "residual": "39845962584"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999993"
+      },
+      "id": "residual/exact/15/2/38285407440/38236024728",
+      "input": {
+        "n": 2,
+        "principal": "38285407440",
+        "rate": "15",
+        "residual": "38236024728"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000070"
+      },
+      "id": "residual/exact/15/2/38236024800/38236024728",
+      "input": {
+        "n": 2,
+        "principal": "38236024800",
+        "rate": "15",
+        "residual": "38236024728"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000151"
+      },
+      "id": "residual/exact/15/2/38236024880/38236024728",
+      "input": {
+        "n": 2,
+        "principal": "38236024880",
+        "rate": "15",
+        "residual": "38236024728"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000232"
+      },
+      "id": "residual/exact/15/2/38236024960/38236024728",
+      "input": {
+        "n": 2,
+        "principal": "38236024960",
+        "rate": "15",
+        "residual": "38236024728"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
         "monthly_floor": "6722"
       },
       "id": "residual/exact/15/3/25760/13041",
@@ -32675,6 +34145,156 @@
         "principal": "64400",
         "rate": "15",
         "residual": "26082"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999996710"
+      },
+      "id": "residual/exact/15/3/53146872800/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53146872800",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990004307"
+      },
+      "id": "residual/exact/15/3/53127256560/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53127256560",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990010868"
+      },
+      "id": "residual/exact/15/3/53127269440/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53127269440",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990017429"
+      },
+      "id": "residual/exact/15/3/53127282320/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53127282320",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999983588"
+      },
+      "id": "residual/exact/15/3/53146847040/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53146847040",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999990149"
+      },
+      "id": "residual/exact/15/3/53146859920/53127247383",
+      "input": {
+        "n": 3,
+        "principal": "53146859920",
+        "rate": "15",
+        "residual": "53127247383"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999995989"
+      },
+      "id": "residual/exact/15/3/51078847120/50980698783",
+      "input": {
+        "n": 3,
+        "principal": "51078847120",
+        "rate": "15",
+        "residual": "50980698783"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950001169"
+      },
+      "id": "residual/exact/15/3/50980701520/50980698783",
+      "input": {
+        "n": 3,
+        "principal": "50980701520",
+        "rate": "15",
+        "residual": "50980698783"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950007730"
+      },
+      "id": "residual/exact/15/3/50980714400/50980698783",
+      "input": {
+        "n": 3,
+        "principal": "50980714400",
+        "rate": "15",
+        "residual": "50980698783"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950014291"
+      },
+      "id": "residual/exact/15/3/50980727280/50980698783",
+      "input": {
+        "n": 3,
+        "principal": "50980727280",
+        "rate": "15",
+        "residual": "50980698783"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -37433,6 +39053,156 @@
     {
       "boundary": "exact",
       "expect": {
+        "monthly_floor": "999999989"
+      },
+      "id": "residual/exact/100/2/6186830748/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6186830748",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "989999999"
+      },
+      "id": "residual/exact/100/2/6177599988/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6177599988",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000012"
+      },
+      "id": "residual/exact/100/2/6177600000/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6177600000",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000025"
+      },
+      "id": "residual/exact/100/2/6177600012/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6177600012",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999963"
+      },
+      "id": "residual/exact/100/2/6186830724/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6186830724",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999976"
+      },
+      "id": "residual/exact/100/2/6186830736/6177599987",
+      "input": {
+        "n": 2,
+        "principal": "6186830736",
+        "rate": "100",
+        "residual": "6177599987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999988"
+      },
+      "id": "residual/exact/100/2/5974153824/5927999987",
+      "input": {
+        "n": 2,
+        "principal": "5974153824",
+        "rate": "100",
+        "residual": "5927999987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "949999999"
+      },
+      "id": "residual/exact/100/2/5927999988/5927999987",
+      "input": {
+        "n": 2,
+        "principal": "5927999988",
+        "rate": "100",
+        "residual": "5927999987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000012"
+      },
+      "id": "residual/exact/100/2/5928000000/5927999987",
+      "input": {
+        "n": 2,
+        "principal": "5928000000",
+        "rate": "100",
+        "residual": "5927999987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000025"
+      },
+      "id": "residual/exact/100/2/5928000012/5927999987",
+      "input": {
+        "n": 2,
+        "principal": "5928000012",
+        "rate": "100",
+        "residual": "5927999987"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
         "monthly_floor": "194"
       },
       "id": "residual/exact/100/3/600/325",
@@ -37801,6 +39571,156 @@
         "principal": "1500000000",
         "rate": "100",
         "residual": "325"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999999"
+      },
+      "id": "residual/exact/100/3/8250160500/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8250160500",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000100"
+      },
+      "id": "residual/exact/100/3/8232409200/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8232409200",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000269"
+      },
+      "id": "residual/exact/100/3/8232409500/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8232409500",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "990000438"
+      },
+      "id": "residual/exact/100/3/8232409800/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8232409800",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999661"
+      },
+      "id": "residual/exact/100/3/8250159900/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8250159900",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999830"
+      },
+      "id": "residual/exact/100/3/8250160200/8232408925",
+      "input": {
+        "n": 3,
+        "principal": "8250160200",
+        "rate": "100",
+        "residual": "8232408925"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "999999911"
+      },
+      "id": "residual/exact/100/3/7988543700/7899786375",
+      "input": {
+        "n": 3,
+        "principal": "7988543700",
+        "rate": "100",
+        "residual": "7899786375"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000078"
+      },
+      "id": "residual/exact/100/3/7899786600/7899786375",
+      "input": {
+        "n": 3,
+        "principal": "7899786600",
+        "rate": "100",
+        "residual": "7899786375"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000247"
+      },
+      "id": "residual/exact/100/3/7899786900/7899786375",
+      "input": {
+        "n": 3,
+        "principal": "7899786900",
+        "rate": "100",
+        "residual": "7899786375"
+      },
+      "op": "loan_forward",
+      "set": "residual"
+    },
+    {
+      "boundary": "exact",
+      "expect": {
+        "monthly_floor": "950000416"
+      },
+      "id": "residual/exact/100/3/7899787200/7899786375",
+      "input": {
+        "n": 3,
+        "principal": "7899787200",
+        "rate": "100",
+        "residual": "7899786375"
       },
       "op": "loan_forward",
       "set": "residual"
@@ -38716,6 +40636,426 @@
       },
       "op": "loan_bonus_forward",
       "set": "bonus"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/2/2000001750/0",
+      "input": {
+        "n": 2,
+        "principal": "2000001750",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/2/2001999750/0",
+      "input": {
+        "n": 2,
+        "principal": "2001999750",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/2/2000000750/1000000000",
+      "input": {
+        "n": 2,
+        "principal": "2000000750",
+        "rate": "0.0001",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/1200/1199941151945/0",
+      "input": {
+        "n": 1200,
+        "principal": "1199941151945",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/1200/1201139891957/0",
+      "input": {
+        "n": 1200,
+        "principal": "1201139891957",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/1200/1199941150946/1000000000",
+      "input": {
+        "n": 1200,
+        "principal": "1199941150946",
+        "rate": "0.0001",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/12/4000001000/2000000500",
+      "input": {
+        "bonus_principal": "2000000500",
+        "n": 12,
+        "principal": "4000001000",
+        "rate": "0.0001"
+      },
+      "op": "loan_bonus_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/0.0001/1200/399980300658/199990150329",
+      "input": {
+        "bonus_principal": "199990150329",
+        "n": 1200,
+        "principal": "399980300658",
+        "rate": "0.0001"
+      },
+      "op": "loan_bonus_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/2/1775149705/0",
+      "input": {
+        "n": 2,
+        "principal": "1775149705",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/2/1776923077/0",
+      "input": {
+        "n": 2,
+        "principal": "1776923077",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/2/1775148853/1000000000",
+      "input": {
+        "n": 2,
+        "principal": "1775148853",
+        "rate": "100",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/1200/12000012000/0",
+      "input": {
+        "n": 1200,
+        "principal": "12000012000",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/1200/12012000000/0",
+      "input": {
+        "n": 1200,
+        "principal": "12012000000",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/1200/12000012000/1000000000",
+      "input": {
+        "n": 1200,
+        "principal": "12000012000",
+        "rate": "100",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "error": "Overflow"
+      },
+      "id": "over_cap/over/100/12/2222224446/1111112223",
+      "input": {
+        "bonus_principal": "1111112223",
+        "n": 12,
+        "principal": "2222224446",
+        "rate": "100"
+      },
+      "op": "loan_bonus_forward",
+      "set": "over_cap"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000001"
+      },
+      "id": "exempt/over/0/2/2000000003/0",
+      "input": {
+        "n": 2,
+        "principal": "2000000003",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1001000000"
+      },
+      "id": "exempt/over/0/2/2002000001/0",
+      "input": {
+        "n": 2,
+        "principal": "2002000001",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000001"
+      },
+      "id": "exempt/over/0/600/600000001199/0",
+      "input": {
+        "n": 600,
+        "principal": "600000001199",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1001000000"
+      },
+      "id": "exempt/over/0/600/600600000599/0",
+      "input": {
+        "n": 600,
+        "principal": "600600000599",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000001"
+      },
+      "id": "exempt/over/0/1200/1200000002399/0",
+      "input": {
+        "n": 1200,
+        "principal": "1200000002399",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1001000000"
+      },
+      "id": "exempt/over/0/1200/1201200001199/0",
+      "input": {
+        "n": 1200,
+        "principal": "1201200001199",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000001"
+      },
+      "id": "exempt/over/0/2/2000000001/1000000000",
+      "input": {
+        "n": 2,
+        "principal": "2000000001",
+        "rate": "0",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000001"
+      },
+      "id": "exempt/over/0/1200/1200000002397/1000000000",
+      "input": {
+        "n": 1200,
+        "principal": "1200000002397",
+        "rate": "0",
+        "residual": "1000000000"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "30744573456182586"
+      },
+      "id": "exempt/over/0/600/18446744073709551615/0",
+      "input": {
+        "n": 600,
+        "principal": "18446744073709551615",
+        "rate": "0",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1000000084"
+      },
+      "id": "exempt/over/0.0001/1/1000000001/0",
+      "input": {
+        "n": 1,
+        "principal": "1000000001",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1001000083"
+      },
+      "id": "exempt/over/0.0001/1/1001000000/0",
+      "input": {
+        "n": 1,
+        "principal": "1001000000",
+        "rate": "0.0001",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1083333334"
+      },
+      "id": "exempt/over/100/1/1000000001/0",
+      "input": {
+        "n": 1,
+        "principal": "1000000001",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
+    },
+    {
+      "boundary": "over",
+      "expect": {
+        "monthly_floor": "1084416666"
+      },
+      "id": "exempt/over/100/1/1001000000/0",
+      "input": {
+        "n": 1,
+        "principal": "1001000000",
+        "rate": "100",
+        "residual": "0"
+      },
+      "op": "loan_forward",
+      "set": "exempt"
     }
   ],
   "generated_by": "sympy 1.14.0 / mpmath 1.3.0, Python 3.14",
