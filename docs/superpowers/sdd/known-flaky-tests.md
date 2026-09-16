@@ -597,9 +597,13 @@ WebKit だけである。**
 
 > **★ この数は、走行を再実行すると動く。** 2026-09-17 に calcarc-e3 と私で
 > **27 と 28 に食い違った**。原因は **`35149009571`（`d6aaed3`）の再実行**である
-> ——1 回目は `WASM boundary` が binaryen の download に失敗し、**WebKit を含む
-> 残り 7 ジョブが `skipped`** だった。そのあと再実行され（`run_attempt: 2`、
-> `2026-09-16T21:03:04Z` 更新）、**8 ジョブすべて `success`** になった。
+> ——1 回目は `WASM boundary` が binaryen の download に失敗し、**それに依存する
+> 5 ジョブ（`End-to-end`・`Heavy tooling`・`Web build and unit tests`・`Manuals`・
+> `End-to-end (WebKit)`）が `skipped`** だった。**`Rust core` と `Python reference`
+> は 1 回目から `success`** である（`attempts/1/jobs` の集計で
+> **failure 1 / skipped 5 / success 2**）——**「1 回目は全部止まった」ではない。**
+> そのあと再実行され（`run_attempt: 2`、`2026-09-16T21:03:04Z` 更新）、
+> **8 ジョブすべて `success`** になった。
 > **e3 が数えたときは「WebKit の行を持たない走行」、私が数えたときは「持つ走行」**
 > ——**どちらの数もその時点では正しい。**
 > **だから、数を書くときは窓の両端の日時と「いつ数えたか」を添えること。**
@@ -608,7 +612,7 @@ WebKit だけである。**
 
 | 走行 | 先端 | 落ちたテスト | 形 |
 |---|---|---|---|
-| `34686438702` `34686448386` `34689579995` `34689583462`（09-12） | `bdd0436` `3eb46cc` `934dc12` `3a70976` | `finance-layout.spec.ts:185`（`the compound face keeps slack inside the screen`） | **本物の assert 失敗**（`only 5.828125px of slack left on the compound face …`）。`4230a74` 以降は出ていない |
+| `34686438702` `34686448386` `34689579995` `34689583462`（09-12） | `bdd0436` `3eb46cc` `934dc12` `3a70976` | `finance-layout.spec.ts:185`（`the compound face keeps slack inside the screen`。**`:185` は 09-12 当時の座標で、`9341ea4` では `:191`**） | **本物の assert 失敗**（`only 5.828125px of slack left on the compound face …`）。`4230a74` 以降は出ていない |
 | `35153052145`（09-16） | `9341ea4` | `finance-layout.spec.ts:88` | **`page.goto` の内部エラー**（この 1 本だけ） |
 
 **★ 同じファイルだが、同じ赤ではない。** 4 本は**数値を伴う assert の失敗**で、
