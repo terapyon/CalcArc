@@ -851,9 +851,20 @@ I-1・I-2・I-3・M-1〜M-5 はすべて **Addressed**（それぞれの直し�
 
 **All findings addressed。新しい指摘 0。**
 
-- I-2 は**実験で確かめられた**——リポジトリの外に置いた写しから上限ちょうどの行を消すと、月額の下限の最大が
-  999,999,999 に落ち、新しい assert が実際に落ちる。**追跡下の JSON は無変更**
-  （`git status --porcelain testdata/` は空）。
+- I-2 の番人は**生成器を読む**。`test_loan_boundary.py:19` の `boundary_cases` fixture が
+  `loan_boundary.build_cases()` を返すので、`:76` の `max(floors) == MAX_VERIFIED_MONTHLY_YEN` は
+  `testdata/loan_boundary.json` を**読んでいない**。**生成器が上限ちょうどの行を出さなくなると**、この `==` と
+  `test_the_cases_committed_at_head_survive_unchanged` の 2 本が赤くなる。**コミット済みの JSON の側を守るのは
+  CI の再生成の差分**（`ci.yml` の「The committed golden files must match a fresh generation」＝
+  `git diff --exit-code testdata/`）である。番人は 2 段で、読む先が違う。
+
+  **訂正（2026-09-16、calcarc-1e の実測による）。** この節は当初「リポジトリの外に置いた写しから上限ちょうどの
+  行を消すと、新しい assert が実際に落ちる」と書いていた。**これは偽である**——JSON の行を消しても
+  `pytest tests/test_loan_boundary.py` は 12 passed のまま緑で、native の golden も緑のままになる（実測 E1）。
+  赤くなるのは**生成器**の側から行を落としたときである（実測 E2）。限定再レビュー役は JSON の写しに対して
+  集計を**自分で組み直して**「落ちる」と報告し、私はそれを**テストが落ちる話として**書いた。番人の形そのものは
+  正しいが、**何を読む番人かを確かめずに書いた**のが誤りである（発注文の「写しに対して assert を走らせよ」と
+  いう指示自体が、実際のテストの読む先とずれていた）。
 - I-1 の写経は**約束どおりの中身を運んでいた**（§9 に `over_cap` 12 `loan_forward` / 3 `loan_bonus_forward`、
   `exempt` 9 零金利 / 4 一回払い、`u64::MAX` 元本の件を含む）——「曖昧な指し先に差し替えただけ」ではない。
 - 93.60% を独立に再計算して一致（7,488,000,936,000,026 / 約 8.0e15 ≈ 93.6000117%）。
