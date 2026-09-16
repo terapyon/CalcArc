@@ -41,11 +41,13 @@ calculations.
 - The layout is checked automatically on screens from 360px wide in the Chromium engine (Chrome
   on Android and similar browsers), and from 375px wide in WebKit, the same rendering engine
   Safari on iPhone uses. The automated check runs in that browser engine, not on a physical
-  iPhone. Narrower screens (such as 320px) still show the app, but nothing checks that the layout
-  holds there
+  iPhone. A 320px screen still shows the app, but all that is checked there is that the bar at
+  the very bottom does not spill sideways
 - On a short screen (for example in a browser tab) the page may scroll. Every display and key can
-  still be scrolled to and pressed. It is checked automatically to fit on one screen at the height
-  you get when opening it from the home screen, again via WebKit rather than a physical iPhone
+  still be scrolled to and pressed. Fitting on one screen is checked automatically at the height
+  you get when opening it from the home screen, for 11 of the 13 tab-and-category combinations,
+  in both the Chromium and the WebKit engine (the 【LLM のメモリ LLM Memory】 and 【為替 Currency】
+  screens are left out of that check). This too runs in a browser engine, not on a physical iPhone
 
 ## 2. The four tabs
 
@@ -61,7 +63,9 @@ There are four tabs at the top of the screen. Press one to switch screens.
 In 【Convert】 and 【Scale】, choose the kind of calculation in the field just
 below the tabs (for example, 【為替 Currency】).
 
-Each screen has its own URL, so you can bookmark the screens you use often.
+The tabs, and the kind of calculation chosen on 【Convert】 and 【Scale】, appear in
+the URL, so you can bookmark those screens. **The six kinds of calculation inside
+【Finance】, and the history screen, do not appear in the URL.**
 
 ![Screen: Scientific (just opened)](shot:tab-scientific)
 
@@ -119,8 +123,8 @@ It also has complex numbers (【j】), switching to polar form (【▸∠】),
 base-60 (【°′″】), engineering notation (【ENG】), and switching the angle unit
 (【DRG】).
 
-Calculations that give an answer with 【=】 are kept in the history. Open it
-with 【Shift】 then 【hist】.
+Calculations you finish with 【=】 are kept in the history, including ones that end
+in "Math ERROR". Open it with 【Shift】 then 【hist】.
 
 **Input rules (summary):** Keys that would silently drop what's on screen (such as
 【(】 【π】 【e】 in the middle of typing a number) simply cannot be pressed. 【DEL】
@@ -151,7 +155,7 @@ an expression for currency, and the answer appears before you press 【=】.
 
 Choose what to find on the upper row, and the items to enter on the lower row.
 
-- Loans (equal principal and interest): 【返済月額】 (monthly repayment),
+- Level-payment loans（元利均等）: 【返済月額】 (monthly repayment),
   【借入可能額】 (borrowable amount), 【返済期間】 (repayment term)
 - Compound interest: 【複利残高】 (compound balance), 【必要積立額】 (required
   contribution), 【必要年数】 (periods needed)
@@ -170,8 +174,9 @@ CalcArc saves the following in the browser on this device. Nothing is sent out.
 - **Settings**: the angle unit and display form of Scientific, the data type and
   main unit system of the data-size screen, the kind of calculation, method, and
   tax on Finance, and whether to record history
-- **History**: calculations that gave an answer with 【=】 on Scientific
-  (up to 50, newest first)
+- **History**: calculations you finished with 【=】 on Scientific
+  (up to 50, newest first). A calculation that ended in "Math ERROR" is kept too,
+  as a row that cannot be recalled
 - **Exchange rates**: the last rate table that was fetched
 
 Half-typed expressions and the numbers you have entered into items are not saved.
