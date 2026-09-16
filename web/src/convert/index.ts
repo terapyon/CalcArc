@@ -11,11 +11,13 @@ import init, {
   convert,
   convert_currency,
   convert_units,
+  settle_expression,
 } from "../wasm/calcarc_wasm.js";
 import type {
   ConvertCategoryToken,
   ConvertResult,
   ConvertUnitsResult,
+  SettleResult,
 } from "./types";
 
 export type {
@@ -24,6 +26,7 @@ export type {
   ConvertResult,
   ConvertUnitsResult,
   ConvertUnitToken,
+  SettleResult,
 } from "./types";
 export {
   CONVERT_CATEGORY_IDS,
@@ -69,6 +72,11 @@ export interface ConvertCalc {
     fromRate: string,
     toRate: string,
   ): CurrencyConvertResult;
+  /**
+   * `=` で式を値にまとめる(0.9.2 設計書 §4)。**丸めない**——`convert` の表示の 10 桁とは
+   * 別の口で、答えは値の欄にそのまま入り、次の計算で読み直される。
+   */
+  settle(value: string): SettleResult;
 }
 
 let ready: Promise<ConvertCalc> | null = null;
@@ -94,6 +102,7 @@ export function initConvert(): Promise<ConvertCalc> {
             fromRate,
             toRate,
           ) as CurrencyConvertResult,
+        settle: (value) => settle_expression(value) as SettleResult,
       }),
     )
     .catch((cause: unknown) => {

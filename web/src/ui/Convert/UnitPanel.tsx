@@ -7,7 +7,7 @@ import {
   canPushOperator,
   EMPTY,
   type Entry,
-  fromDigits,
+  fromSettled,
   isEmpty,
   type Operator,
   pushCloseParen,
@@ -111,16 +111,6 @@ const DEFAULT_UNITS: Record<
  */
 const NO_DATE = "—";
 
-/**
- * `=` が式を畳むときに通す恒等換算。**カテゴリに依らない**——`1 m → 1 m` は
- * どんな式に対しても「有理数のまま評価して 10 進に落とす」だけである。
- *
- * **為替でここを `convertCurrency` にしない。** あちらは着地通貨の桁で
- * 丸めるので、`=` が打った値を書き換えてしまう(`settled()` の注記)。
- */
-const FOLD_CATEGORY: ConvertCategoryToken = "length";
-const FOLD_UNIT = "m";
-
 export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   const defaults = DEFAULT_UNITS[category];
   const currency = isCurrencyCategory(category);
@@ -182,26 +172,13 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
    */
   const typed = isEmpty(entry) ? "" : `${negative ? "-" : ""}${text(entry)}`;
 
-  /**
-   * `=` の着地。**打った式をその場で評価して値にする**(FinancePanel の
-   * `settle` と同じ)。同じ単位への換算に通すのは、有理数のまま評価して
-   * 10 進に落とす経路がそこしか無いからである——`from → from` は恒等である。
-   *
-   * **打ち直せない形は落とさない。** カンマや指数表記(`1e12`)を Entry に
-   * 入れると、次の評価でコアが読めない文字列になる。
-   */
   function settled(): string | null {
     if (calc === null || typed === "") return null;
-    // **為替でも畳むのは単位の恒等換算である。** `convertCurrency` は
-    // **着地通貨の桁で丸める**(spec §3.1)ので、JPY を選んで `12.5` と
-    // 打つと `13` に化ける——**打った値が `=` で書き換わってはならない。**
-    // 畳むのは「式を数にする」ことだけで、丸めは表示側の仕事である。
-    const folded = currency
-      ? calc.convert(typed, FOLD_CATEGORY, FOLD_UNIT, FOLD_UNIT)
-      : calc.convert(typed, category as ConvertCategoryToken, from, from);
-    if (folded.kind === "error") return null;
-    const plain = folded.text.replace(/,/g, "");
-    return /^-?\d+(\.\d+)?$/.test(plain) ? plain : null;
+    // **`=` は式を値にまとめるだけで、桁を落とさない**(0.9.2 設計書 §4、外部監査 F3)。
+    // 以前は表示用の 10 桁の文字列を書き戻していた——`1/3 =` が 0.3333333333 になり、
+    // 1e10 以上は書き戻せず `=` が効かなかった。為替も同じ口で、着地通貨の桁にも丸めない。
+    const result = calc.settle(typed);
+    return result.kind === "ok" ? result.text : null;
   }
 
   /** いま押せないキー。**DEL はどの面にも居る**ので、単位面では消すものが無い。 */
@@ -326,7 +303,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         if (folded === null) break;
         // 符号は Entry に入らないので、負なら state のほうへ移す。
         setNegative(folded.startsWith("-"));
-        setEntry(fromDigits(folded.replace(/^-/, "")));
+        setEntry(fromSettled(folded.replace(/^-/, "")));
         break;
       }
     }

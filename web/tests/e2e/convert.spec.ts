@@ -412,6 +412,29 @@ test("types the fixed point of the two temperature scales", async ({
   );
 });
 
+test("= keeps the exact value, so 1 ÷ 3 = × 3 − 1 is 0", async ({ page }) => {
+  // 0.9.2 設計書 §4(外部監査 F3)。以前は `=` が 10 桁に丸めて書き戻し、
+  // 答えが 0 でなく -6.213711922e-11 になっていた。
+  await page.goto("/#convert/length");
+  await expect(panel(page)).toBeVisible();
+  await press(page, ["1", "割る", "3", "計算する"]);
+  // 値の欄が「1/3」であることを、既存の検査(types the fixed point ...)が
+  // 値の欄を読むのと同じ locator で見る。
+  await expect(echo(page)).toHaveText("値 1/3");
+  await press(page, ["掛ける", "3", "引く", "1"]);
+  // 単位の選び方は既存の検査(km→mi)に倣う。**単位を選ぶのは打ち終えたあと**
+  // ——「変換元/先の単位を選ぶ」ボタンはいま打っている項目を切り替えるので、
+  // 先に選ぶと数字・演算子キーが素通りする(`UnitPanel.tsx` の
+  // `if (!valueField) return;`)。
+  await press(page, ["変換元の単位を選ぶ", "キロメートル"]);
+  await press(page, ["変換先の単位を選ぶ", "マイル"]);
+  // 換算の答え(`convert-result`)が 0 であることを見る。
+  await expect(main(page)).toHaveText("0 mi");
+  await expect(page.getByTestId("convert-result")).toHaveText(
+    "1/3*3-1 km = 0 mi",
+  );
+});
+
 /**
  * **カテゴリごとに 1 件、値が盤面から core まで往復することだけを見る。**
  * 換算の正しさは golden(`testdata/convert.json`)が持っている——だから
