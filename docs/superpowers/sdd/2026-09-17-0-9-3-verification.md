@@ -264,6 +264,43 @@ Scientific 12 文字／指数 3 桁／Convert 39 桁／Finance の金額 20 桁�
 - `cargo test --workspace` → **ok 行 25**／lint `rc=0`／typecheck `rc=0`
 - **再生成しても差分が増えない**（`generate.py` を回し直して `git status` が同じ 4 本のまま）
 
+## 枝どうしの合流の下見（2026-09-17） — **衝突 0・合流した木も緑**
+
+**各枝 vs main が緑でも、同じ所に追記する枝どうしは衝突する**（09-16 に PR C/D で踏んだ形）。
+**`merge-tree` の「衝突なし」は緑ではない**ので、**使い捨ての作業木で本当に合流して検査を回した**。
+
+- **`test/goto-retry`（13f2b9e）**・**`docs/v0.9.3-design`（0ed76f0）**とも**衝突なし**。
+  **触るファイルが 1 本も重なっていない**（私の 12 本 対 3d の 5 本）。
+  `fix/paren-del` は `main` のままでコミット 0。
+- **合流した木**: `heavy pnpm test` **21 files・369 passed**／lint `rc=0`／typecheck `rc=0`／
+  `check:manual-limits` 13 行＋u64／**`check:conflict-markers` 580 件**（**3d の新しい文書 4 本を、
+  広げた番人がそのまま覆っている**）／`check:citations` 緑。
+- **cargo は回していない**——`git diff --name-only 8d99440..HEAD` に `crates/` も `testdata/` も **0 本**で、
+  **Rust は私の先端から 1 バイトも動いていない**ことを**印字で示してから省いた**
+  （**「回していない」を「確かめていない」にしない**）。
+
+### ★ 測る作業木に `node_modules` を symlink で持ち込まない
+
+**下見の途中で赤が 3 回出た。3 回とも合流とは無関係で、私の測り方が原因だった。**
+（依存を入れる代わりに `ln -s` で借りたため。）
+
+| 出た赤 | 本当の原因 |
+|---|---|
+| `check-boundary.test.ts` が「`web/node_modules` を歩いた」 | **`.gitignore` の `node_modules/` は末尾の `/` でディレクトリを指すので、symlink には当たらない**。`git ls-files --others --exclude-standard` が未追跡として吐く |
+| `webkit-gate.test.ts` が**読み込みで**落ち、テスト数が 369 → **325** に減った | symlink を外したので `@playwright/test` が解決できない。**落ちたのではなく走っていない** |
+| `verified-run.test.ts` の「どこから呼んでも件数が変わらない」 | `heavy/node_modules` だけ symlink のままだった |
+
+**決め手は `git check-ignore -v` で 2 つの作業木を比べたこと**——実体では `.gitignore:2:node_modules/` に当たり、
+**symlink では当たらない**。**`pnpm install --frozen-lockfile` を入れ直したら 369 passed で全部緑**（1 秒以下）。
+
+**対になる事実**: **`web/src/wasm/` は写してよい**。**gitignore の指し方が違い、写しても未追跡として出ない**ので、
+**重い `pnpm wasm` を節約できる**（C-2 の型検査でそうした）。
+**依存は入れる、生成物は写す**——この 2 つは別物である。
+
+**そして**: **赤が出たら、まず「自分が作った差」を疑う。** この 3 件はどれも
+**「合流の問題」として報告する 1 歩手前**だった——報告していれば、**存在しない衝突の裁定**が始まり、
+**3d が自分の枝を探しに行く**ことになった。
+
 ## 次: C-6（D-1 の engine が固まってから）／年利の 2 行（3d の枝 6 待ち）
 
 **先に数えてから広げる。** 設計書 §2.3 の実測では**追跡下の全ファイルで行頭のマーカーは 0 行**だが、
