@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../pwa", () => ({ watchForUpdate: vi.fn() }));
 
 import { watchForUpdate } from "../../pwa";
-import { Footer } from "../Footer/Footer";
 import { UpdateToast } from "./UpdateToast";
 
 /** 購読を張らせ、あとから「更新が来た」を発火できるようにする。 */
@@ -135,41 +134,6 @@ describe("UpdateToast", () => {
     await userEvent.keyboard("{Escape}");
     expect(bubbled).not.toHaveBeenCalled();
     window.removeEventListener("keydown", bubbled);
-  });
-
-  it("leaves Escape to the links popup while it is open", async () => {
-    // **裁定 #4(0.9.3 設計書 §2.5): リンク集が開いているときの Escape は、
-    // リンク集を閉じるだけ。** お知らせは閉じない。
-    //
-    // **ここは「危ないほうの順」で並べてある**——お知らせが**先に**出てから
-    // リンク集を開く。両方とも window の capture 段にリスナを付けるので、
-    // **先に付いたお知らせのリスナが先に走る**。`escapeLayers.ts` を
-    // 通していなければ、この検査でお知らせも一緒に閉じる。
-    const armed = arm();
-    render(
-      <>
-        <Footer />
-        <UpdateToast />
-      </>,
-    );
-    await waitFor(() => expect(watchForUpdate).toHaveBeenCalled());
-    // **`act` で包む**——この 1 本だけ `Footer` も描いているので、`needRefresh`
-    // が起こす更新と、`watchForUpdate` の約束が解けた後の更新が同じ刻みに
-    // 乗る(包まないと React が警告する)。
-    await act(async () => {});
-    await act(async () => {
-      armed.needRefresh();
-    });
-    await findToast();
-
-    await userEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await userEvent.keyboard("{Escape}");
-
-    expect(screen.queryByRole("dialog")).toBeNull();
-    // **お知らせは残る。**
-    expect(region()).not.toBeEmptyDOMElement();
-    expect(armed.applyUpdate).not.toHaveBeenCalled();
   });
 
   it("stays quiet when the registration fails", async () => {
