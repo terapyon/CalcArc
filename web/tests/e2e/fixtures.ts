@@ -1,7 +1,17 @@
+import type { Page } from "@playwright/test";
 import { test as base, expect } from "@playwright/test";
 
 export type { Locator, Page } from "@playwright/test";
 export { expect };
+
+/**
+ * **WebKit がナビゲーションの最中に自分から落ちるときの原文**(0.9.3 §5)。
+ *
+ * 2026-09-16 の走行 35153052145 で `finance-layout.spec.ts:93` の
+ * `page.goto("/#finance")` がこのエラーで落ちた。**判定には 1 度も届いていない**
+ * ——`1 failed / 1 skipped / 263 passed`(`known-flaky-tests.md` の節)。
+ */
+const WEBKIT_GOTO_INTERNAL_ERROR = "WebKit encountered an internal error";
 
 /**
  * レートの取得先。**`web/src/currency/provider.ts` の `PROVIDER_ENDPOINT` と
@@ -58,6 +68,48 @@ const LEAVES_THE_MACHINE = (url: URL) =>
 type AutoFixtures = { providerBlocked: void; strayRequestsBlocked: void };
 
 export const test = base.extend<AutoFixtures>({
+  /**
+   * **ナビゲーションだけを 1 回やり直す `page`**(0.9.3 §5)。
+   *
+   * **緩めるのはここだけである。** `retries` を上げると**判定の失敗まで
+   * 引き直す**ので、WebKit の検査そのものが弱くなる
+   * (`tools/tests/webkit-gate.test.ts` がそれを塞いでいる)。ここが救うのは
+   * **判定に届く前に、ブラウザが自分から落ちた 1 つの壊れ方**だけ:
+   * **WebKit で・`goto` で・あの原文のときだけ・1 回だけ。**
+   *
+   * **自動で掛かる網(下の 2 つ)は増やさない。** 番人がその数を数えており、
+   * **`page` は元から全部の検査が受け取る**ので、増やす必要がない。
+   * (**この註にその綴りを書かないこと**——番人は本文を数えるので、
+   * 註に書くと数が 1 増えて赤くなる。2026-09-17 に実際に踏んだ。)
+   *
+   * **やり直したら走行に残す。** 残さないと、**この直しが効いたのか、
+   * そもそも再現していないのか**を後から言えない(§10)。
+   */
+  page: async ({ page, browserName }, use, testInfo) => {
+    const originalGoto = page.goto.bind(page);
+    page.goto = async (
+      url: string,
+      options?: Parameters<Page["goto"]>[1],
+    ): ReturnType<Page["goto"]> => {
+      try {
+        return await originalGoto(url, options);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (
+          browserName !== "webkit" ||
+          !message.includes(WEBKIT_GOTO_INTERNAL_ERROR)
+        ) {
+          throw error;
+        }
+        testInfo.annotations.push({
+          type: "goto-retried",
+          description: `${url} — ${message}`,
+        });
+        return await originalGoto(url, options);
+      }
+    };
+    await use(page);
+  },
   providerBlocked: [
     async ({ page }, use) => {
       await page.route(PROVIDER_GLOB, (route) => route.abort("failed"));

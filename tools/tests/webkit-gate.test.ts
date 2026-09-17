@@ -424,14 +424,21 @@ describe("WebKit だけ幅が違うのは、理由の書かれた 2 本だけで
     expect(calls).toEqual(["finance-layout.spec.ts", "finance-layout.spec.ts"]);
   });
 
-  it("`browserName` に触れる E2E は、許した 3 つだけである", () => {
+  it("`browserName` に触れる E2E は、許した 4 つだけである", () => {
     // エンジンで分岐する道は `narrowSize`(寸法)と `pwa.spec.ts` の理由つき
     // fixme だけ。**別の spec が `browserName` で期待値を分けた日に赤くする。**
+    //
+    // **`fixtures.ts` は 2026-09-17 に足した(0.9.3 §5)。** あそこの
+    // `browserName` は**期待値を分けていない**——**WebKit の `goto` が内部エラーで
+    // 落ちたときだけ 1 回やり直す**、という**救う範囲を狭めるため**に見ている。
+    // **広いほうへ倒す分岐ではなく、狭いほうへ倒す分岐である**ので許す
+    // (やり直しの 4 条件は、下の「ナビゲーションのやり直し」の番人が固定する)。
     const touching = e2eTexts
       .filter(({ text }) => /\bbrowserName\b/.test(text))
       .map(({ file }) => file);
     expect(touching).toEqual([
       "finance-layout.spec.ts",
+      "fixtures.ts",
       "pwa.spec.ts",
       "widths.ts",
     ]);
@@ -462,5 +469,46 @@ describe("Service Worker を許すのは pwa.spec.ts だけである（門 1）"
     expect(fixtures).toMatch(/strayRequestsBlocked:\s*\[/);
     expect(fixtures).toMatch(/context\.route\(LEAVES_THE_MACHINE/);
     expect([...fixtures.matchAll(/\{ auto: true \}/g)]).toHaveLength(2);
+  });
+});
+
+describe("ナビゲーションのやり直しは、WebKit のあの壊れ方だけを救う（0.9.3 §5）", () => {
+  // **`retries` を上げれば WebKit だけ検査を弱める逃げ道になる**(上の「門 1」の
+  // 番人がそれを塞いでいる)。だから救うのは**ナビゲーションだけ・1 回だけ・
+  // WebKit だけ・あの原文だけ**である。**この 4 つが緩んだら、逃げ道が開く。**
+  const fixtures = () =>
+    e2eTexts.find(({ file }) => file === "fixtures.ts")?.text ?? "";
+
+  it("包むのは `goto` だけである", () => {
+    // 他のメソッドまで包むと、「判定に届く前の失敗だけを救う」という
+    // 理由が崩れる——`click` の失敗は判定の失敗と見分けが付かない。
+    const assigned = [...fixtures().matchAll(/page\.(\w+)\s*=[^=]/g)].map(
+      (m) => m[1],
+    );
+    expect(assigned).toEqual(["goto"]);
+  });
+
+  it("やり直すのは 1 回だけである", () => {
+    const text = fixtures();
+    // ループが在れば「1 回」ではない。
+    expect(text).not.toMatch(/\b(?:for|while)\s*\(/);
+    // 元の `goto` を呼ぶのは 2 か所(1 回目と、やり直しの 1 回)だけ。
+    expect([...text.matchAll(/originalGoto\(/g)]).toHaveLength(2);
+  });
+
+  it("やり直すのは WebKit だけである", () => {
+    expect(fixtures()).toMatch(/browserName !== "webkit"/);
+  });
+
+  it("やり直すのは、あの原文のときだけである", () => {
+    // 原文を緩めると「WebKit のナビゲーションの失敗は全部やり直す」になる。
+    expect(fixtures()).toMatch(/WebKit encountered an internal error/);
+  });
+
+  it("やり直したことを走行に残す", () => {
+    // **これが無いと、標本が増えない。** 直しが効いたのか、そもそも
+    // 再現していないのかを、あとから言えなくなる
+    // (`docs/superpowers/sdd/known-flaky-tests.md` の節に足せない)。
+    expect(fixtures()).toMatch(/annotations\.push/);
   });
 });
