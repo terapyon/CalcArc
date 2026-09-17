@@ -1801,7 +1801,17 @@ test("the in-progress display item is counted from the corpus, not written by ha
     // 動いた副作用)。
     "entry-000.json (displays)": 35,
     // 単項関数が `=` を待たずにその場で撥ねるケース(`0 recip` / `0 ln` など)。
-    "errors-000.json (displays)": 19,
+    // **2026-09-17、19 → 17。** 0.9.3 の C-6 が、対応しない `)` の 2 件
+    // (`)` 単独と `3 + 4)`)をコーパスから退役させた——D-2 が `)` を押せなく
+    // するので、「押すとエラーになる」が主張として成り立たなくなったため。
+    // **この 2 件も `=` を待たずに撥ねる形だったので、ここに数えられていた。**
+    //
+    // **数が動いただけでなく、上の一行が正確になった。** 19 のうち 2 件は
+    // 単項関数ではなく括弧の構文エラーで、**この説明は 19 件中 17 件しか
+    // 説明していなかった**。いまは 17 件すべてが単項関数である
+    // (`recip` / `ln` / `log10` / `sqrt` / `asin` / `acos` / `tan` / `n_fact`、
+    // 2026-09-17 に全件を印字して確かめた)。
+    "errors-000.json (displays)": 17,
   });
 
   const markdown = renderReport(entries, PROVENANCE);
@@ -1811,7 +1821,9 @@ test("the in-progress display item is counted from the corpus, not written by ha
   expect(line).toContain(`${withoutEq} 本のキー列が`);
   expect(line).not.toContain("全ケースが");
   expect(line).not.toContain("踏んでいない");
-  expect(markdown).toContain("`entry-000` 35 本・`errors-000` 19 本");
+  // **2 つ目の 19。** 上の内訳を 17 に直したら、こんどはここが鳴った
+  // ——**同じ数が 2 か所に手で書かれていた**(0.9.3 の C-6、2026-09-17)。
+  expect(markdown).toContain("`entry-000` 35 本・`errors-000` 17 本");
   // **数がある項目は但し書きの一覧から外れる**——項目と一覧は同じ述語から出る。
   expect(disclaimerOf(markdown)).not.toContain("入力中の表示");
 
