@@ -373,16 +373,22 @@ fn del_on_a_paren_under_a_value_spells_what_the_engine_computes() {
         spell_of(&["2", "mul", "lparen", "4", "sqrt", "del", "add", "1"]),
         "2 × 4 √ + 1"
     );
+    // **★ 0.9.3 で変わった 2 行**(利用者の裁定 2026-09-17、設計書 §4.2)。
+    // **閉じた組のあとの DEL は、その `)` を取り消す**ので、綴りからも `)` が消える
+    // ——engine が「`)` を押す直前の状態」へ戻るのと同じ形である
+    // (engine_table: `del_after_a_closed_group_reopens_that_group`)。
     assert_eq!(
         spell_of(&[
             "2", "mul", "lparen", "lparen", "3", "rparen", "del", "add", "1"
         ]),
-        "2 × ( 3 ) + 1"
+        "2 × ( ( 3 + 1"
     );
-    // 演算子が保留されていれば DEL は何も消さない(engine と同じ。`3 + ( 4 ) DEL + 5 =` は 12)。
+    // **値は変わっていない**(`3 + ( 4 ) DEL + 5 =` は 0.9.2 でも 0.9.3 でも 12)。
+    // **変わったのは綴りだけ**である——0.9.2 では「DEL は何も消さない」で `)` が残り、
+    // 0.9.3 では `)` が取り消されて組が開いたままになる。
     assert_eq!(
         spell_of(&["3", "add", "lparen", "4", "rparen", "del", "add", "5"]),
-        "3 + ( 4 ) + 5"
+        "3 + ( 4 + 5"
     );
     // `+/−` で手元にある値の上の `(` も、engine の DEL は消す(calcarc-1e の検算で見つかった族)。
     // 綴りも同じ `(` を消す——`( 3 +/− DEL )` は engine が SyntaxError、綴りも開いていない `)` になる。

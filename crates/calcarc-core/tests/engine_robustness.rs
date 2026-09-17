@@ -193,6 +193,23 @@ mod invariants {
             && state.replace_base.as_ref().is_none_or(|base| {
                 base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
             })
+            // **`closed_groups` も見る**(0.9.3 設計書 §4.2)。**`replace_base` と同じ形の
+            // 隠れ場所である**——`)` を押す直前の状態を積むので、**畳んだ結果が実数でも、
+            // 積みの中に虚数が残っていることがある**。`3 − ( . j ) DEL` がそれで、
+            // `( . j )` は畳むと im=0 の実数になるが、**DEL で戻すと `j` の入力が戻る**。
+            // **この節を書かずに走らせたら、網羅列挙がその列で落ちた**(2026-09-17)
+            // ——**invariant が新しい隠れ場所を見つけた**ので、隠れ場所のほうを足した。
+            && state.closed_groups.iter().all(|group| {
+                group.current.im == 0.0
+                    && group.operands.iter().all(|v| v.im == 0.0)
+                    && group.buffer.as_ref().is_none_or(|b| !b.imaginary)
+                    // **控えた `replace_base` も見る**——積みの中の、さらに奥の隠れ場所。
+                    // **`replace_base` を `ClosedGroup` に足した日に、ここも要る**ことが
+                    // 網羅列挙で分かった(2026-09-17、2 度目の I3)。
+                    && group.replace_base.as_ref().is_none_or(|base| {
+                        base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
+                    })
+            })
     }
 
     /// I3: 実軸は演算で閉じており、虚軸への出口は `j` キーだけ。
@@ -388,6 +405,33 @@ mod invariants {
     fn del_removes_at_most_one_thing(step: &Step<'_>) -> Result<(), String> {
         let (before, after) = (step.before, step.after);
         if step.key != Key::Del || before.error.is_some() {
+            return Ok(());
+        }
+        // **0 段目: 閉じた組を開き直す**(0.9.3 設計書 §4.2)。ここは「1 つだけ消す」段
+        // ではなく「**`)` の押下を 1 つ取り消す**」段なので、下の 3 段とは別に読む。
+        //
+        // **`delete_one` の手順は写さない**(この関数の存在理由がそれである)。
+        // 見るのは「**戻った先が、積んである状態そのものと一致するか**」だけ
+        // ——積みは手順ではなくデータなので、これは独立した検査になる。
+        if let Some(group) = before.closed_groups.last() {
+            if after.closed_groups.len() + 1 != before.closed_groups.len() {
+                return Err(format!(
+                    "I7: DEL left {} closed groups, expected {}",
+                    after.closed_groups.len(),
+                    before.closed_groups.len() - 1
+                ));
+            }
+            if after.buffer != group.buffer
+                || after.current != group.current
+                || after.operands != group.operands
+                || after.operators != group.operators
+                || after.operator_pending != group.operator_pending
+                || after.on_hand != group.on_hand
+            {
+                return Err(
+                    "I7: DEL did not restore the state that the `)` was pressed from".to_string(),
+                );
+            }
             return Ok(());
         }
         let expected_current = current_after_del(before);

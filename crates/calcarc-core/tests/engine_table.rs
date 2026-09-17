@@ -950,28 +950,56 @@ fn del_removes_an_unclosed_paren() {
 }
 
 #[test]
-fn del_after_a_closed_group_removes_the_unclosed_paren_before_it() {
+fn del_after_a_closed_group_reopens_that_group() {
     use calcarc_core::CalcError;
-    // 閉じた組のあとの DEL は、その組の前に開いたまま残る `(` を消す(組の中身は残る)。
-    // `( ( 3 ) DEL` は外の `(` が消えて、画面の 3 はそのまま——最後の `)` は開いていない
-    // `)` になる。0.9.2 の値の照合(`engine_values.rs`)がこの形を決める行を必要としたので、
-    // いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
+    // **閉じた組のあとの DEL は、その `)` を取り消して組を開き直す**(0.9.3 §4.2、
+    // 利用者の裁定 2026-09-17)。**`(` を積み直すのではなく、`)` を押す直前の状態へ戻す**
+    // ——`( 2 + 3 ) DEL × 2 ) =` が示すとおり、`)` は中身を畳んでしまうので、
+    // `(` だけ戻しても畳んだ 5 が残り、答えが変わる(下の行が 8 を固定する)。
+    //
+    // 0.9.2 まではここが「外の `(` を消す」だった(`del_after_a_closed_group_removes_…`)。
+    // **その行は、いまの振る舞いを書き写したものだった**——裁定で覆した。
+
+    // `( ( 3 ) DEL` は内側の `)` が取り消され、打ちかけの 3 が戻る(深さ 2)。
     assert_eq!(
         run(&["lparen", "lparen", "3", "rparen", "del"]).pending_depth,
-        0
+        2
     );
     assert_eq!(
         main_of(&["lparen", "lparen", "3", "rparen", "del", "eq"]),
         "3"
     );
+    // **開き直したので、そのあとの `)` は正当になる**(0.9.2 までは SyntaxError だった)。
     assert_eq!(
         run(&["lparen", "lparen", "3", "rparen", "del", "rparen"]).error,
-        Some(CalcError::SyntaxError)
+        None
     );
-    // 演算子が先に積まれていれば、DEL は何も消さない(`3 + ( 4 ) DEL`)。
+    assert_eq!(
+        run(&["lparen", "lparen", "3", "rparen", "del", "rparen"]).pending_depth,
+        1
+    );
+
+    // **1e の反例**(0.9.3 §4.2): 履歴の綴りでは `( 2 + 3 × 2 )` ＝ 8。
+    // `(` を積み直すだけの実装では、`)` が畳んだ 5 が中身として残って 10 になる。
+    assert_eq!(
+        main_of(&[
+            "lparen", "2", "add", "3", "rparen", "del", "mul", "2", "rparen", "eq"
+        ]),
+        "8"
+    );
+
+    // **空の組でも同じ**——`+ ( ) DEL` は組が開き直る(深さ 1)。
+    // **この列は proptest の網が見つけた**(2026-09-17、`[Add, LParen, RParen, Del]` に縮んだ)。
+    // **種のファイルを残す代わりに、ここに行として置く**——この表が仕様であり、
+    // 名前の付いた行のほうが、次に読む人に何を約束しているかが見える。
+    assert_eq!(run(&["add", "lparen", "rparen", "del"]).pending_depth, 1);
+    assert_eq!(main_of(&["add", "lparen", "rparen", "del", "eq"]), "0");
+
+    // 演算子が先に積まれていても同じ——**`)` を押す直前へ戻る**ので、打ちかけの 4 が戻る。
+    // (0.9.2 までは「何も消さない」だった。)
     assert_eq!(
         run(&["3", "add", "lparen", "4", "rparen", "del"]).pending_depth,
-        0
+        1
     );
     assert_eq!(
         main_of(&["3", "add", "lparen", "4", "rparen", "del", "eq"]),
@@ -989,6 +1017,72 @@ fn del_after_a_closed_group_removes_the_unclosed_paren_before_it() {
         main_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1", "eq"]),
         "-5"
     );
+}
+
+#[test]
+fn a_group_folds_where_it_closes_so_its_error_appears_at_the_paren() {
+    use calcarc_core::CalcError;
+    // **`)` は組をその場で畳む**(`close_paren`)。**畳んで失敗するなら、エラーは
+    // `)` の時点で出る**——`=` まで待たない。
+    //
+    // **この時機は 0.9.2 でも画面に出ていた**(1e が v0.9.2 のタグで実測、2026-09-17)
+    // ——`( ÷ )` は `)` を押した時点で `Math ERROR` になり、続く DEL も数字も効かない。
+    // **既に 2 つの行が別々に固定していた**: 「`)` は組をその場で畳み、失敗はその時点で
+    // 出る」(`:626` 付近の `an_unmatched_closing_paren_folds_the_pending_operations_first`)と
+    // 「エラー中は AC 以外が効かない」(`:229` 付近)。**この行はその 2 つを 1 つの列で
+    // つないだもの**であって、実装から書き起こしたものではない。
+    //
+    // **0.9.3 で見えるようになったのは、評価器のずれのほうである**
+    // ——`engine_values.rs` は `=` まで判定を遅らせていた。DEL が `)` を取り消せる
+    // ようになって、**その緩さが答えの違いとして出た**(`+ ( ÷ ) DEL 3`)。
+    // **直したのは評価器で、engine の時機は 0.9.2 から変わっていない。**
+    //
+    // **この行は、独立評価器がこの時機に従う根拠でもある**——あちらが engine の
+    // 実装に寄ったのではなく、**両方がこの行(と、その元になった 2 行)に従っている**。
+    assert_eq!(
+        run(&["lparen", "div", "rparen"]).error,
+        Some(CalcError::DivisionByZero)
+    );
+    assert_eq!(main_of(&["lparen", "div", "rparen"]), "Math ERROR");
+    // **`)` で止まっているので、そのあとの DEL も数字も効かない。**
+    assert_eq!(
+        main_of(&["lparen", "div", "rparen", "del", "3", "eq"]),
+        "Math ERROR"
+    );
+}
+
+#[test]
+fn del_chains_back_through_a_run_of_closing_parens() {
+    // **連続して閉じた `)` の範囲だけ遡る**(0.9.3 §4.2.1、利用者の裁定 2026-09-17)。
+    // **積みは `)` で伸び、DEL で 1 つ縮み、ほかのキーで捨てられる。**
+    // 遡りが尽きたら、DEL はいつもの 3 段(数字 → `j` → `(`)に戻る。
+
+    // 1 つしか閉じていなければ、2 回目の DEL は戻った 3 を消す。
+    let one = run(&["lparen", "lparen", "3", "rparen", "del", "del"]);
+    assert_eq!(one.pending_depth, 2);
+    assert_eq!(one.main, "0");
+
+    // 2 つ続けて閉じていれば、2 回目の DEL は内側の `)` も取り消す。
+    let two = run(&["lparen", "lparen", "3", "rparen", "rparen", "del", "del"]);
+    assert_eq!(two.pending_depth, 2);
+    assert_eq!(two.main, "3");
+
+    // **3 回目で連鎖は尽きる**——戻った 3 を消す。
+    let three = run(&[
+        "lparen", "lparen", "3", "rparen", "rparen", "del", "del", "del",
+    ]);
+    assert_eq!(three.pending_depth, 2);
+    assert_eq!(three.main, "0");
+
+    // **境目: 間に演算子が挟まると積みは捨てられる。**
+    // `( ( 3 ) + 5 ) DEL DEL` の 2 回目は、内側を開き直さずに 5 を消す。
+    // (**数字では踏めない**——`)` の直後に数字は押せないので `( ( 3 ) 5 )` は
+    // 打てない。0.9.2 の F5。0.9.3 §4.2.1 の註。)
+    let stopped = run(&[
+        "lparen", "lparen", "3", "rparen", "add", "5", "rparen", "del", "del",
+    ]);
+    assert_eq!(stopped.pending_depth, 1);
+    assert_eq!(stopped.main, "3");
 }
 
 #[test]
