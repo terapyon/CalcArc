@@ -19,8 +19,17 @@ use crate::CalcResult;
 use crate::expr::{UnitSet, evaluate_to_rational};
 
 /// 値の欄に入る字数の上限(`web/src/convert/entry.ts` の `MAX_VALUE_DIGITS` と同じ数)。
-/// **機械の番人は無い**——この定数は境界を越えて公開されておらず、web 側から
-/// 読めない。揃っているかは `web/src/convert/entry.ts` の同じ定数の註が持つ。
+///
+/// **番人は在る**——`crates/calcarc-wasm/tests/token_parity.rs` が
+/// `include_str!` で `web/src/convert/entry.ts` を読み、**2 つの数が一致することを
+/// 確かめる**(0.9.3 設計書 §8.2)。
+///
+/// **ここには「機械の番人は無い」と書いてあった。結論が誤りだった**(2026-09-17 に訂正)。
+/// 理由の前半——**この定数は wasm 境界を越えて公開されておらず、web 側が実行時に
+/// 読むことはできない**——は本当である。**誤っていたのは「だから番人を置けない」のほう**で、
+/// **向きを変えれば置ける**: Rust のテストが TS の本文を読めばよい。
+/// **`include_str!` はこの repo の作法である**(`crates/` に 16 呼び出し・4 ファイル、
+/// うち `web/` を読むのが 3 ファイル・8 本の TS/TSX)。
 pub const MAX_VALUE_CHARS: usize = 39;
 
 /// 式を正確な値の文字列にする。有限小数(39 字以内)か既約分数 `p/q`、負なら先頭に `-`。
