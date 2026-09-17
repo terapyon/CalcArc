@@ -5,6 +5,23 @@
 
 use crate::{CalcError, CalcResult};
 
+/// **年利の上限(％)。**
+///
+/// **同じ規則が 2 つの経路に在る**(0.9.3 設計書 §8.2)——こちらは**打った文字列を直接
+/// 受ける側**で、`crate::expr::MAX_ANNUAL_PERCENT` は**式として打った年利を評価してから
+/// 受ける側**である(0.9.2 で「為替と年利に式が打てる」を入れたときに増えた口)。
+/// **綴りをそろえてあるので `git grep MAX_ANNUAL_PERCENT` で 2 つとも出る。**
+/// **片方だけ動かすと、経路によって通る値が変わる。**
+pub const MAX_ANNUAL_PERCENT: u64 = 100;
+
+/// **年利の小数桁数。** `crate::expr::MAX_PERCENT_DECIMALS` と同じ数。
+///
+/// **同じ規則が、経路によって違う綴りになっている**——こちらは**桁数 `4`**、
+/// あちらは**倍率 `10^4`**(`PERCENT_SCALE`、桁数から導いてある)。
+/// **番人が「同じ数」を探しても見つからない**ので、突き合わせるほうは
+/// `4` と `10^4` の関係を知っている必要がある(0.9.3 設計書 §8.1 の条件②)。
+pub const MAX_PERCENT_DECIMALS: usize = 4;
+
 /// 月利。分子/分母の分数。約分しない(生成元が読めるまま保持)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rate {
@@ -39,7 +56,7 @@ impl Rate {
         if int_part.is_empty() && frac_part.is_empty() {
             return Err(CalcError::SyntaxError);
         }
-        if frac_part.len() > 4 {
+        if frac_part.len() > MAX_PERCENT_DECIMALS {
             return Err(CalcError::SyntaxError);
         }
         let all_digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
@@ -63,8 +80,12 @@ impl Rate {
             .checked_mul(scale)
             .and_then(|v| v.checked_add(frac_val))
             .ok_or(CalcError::SyntaxError)?;
-        // 100% 超は拒否: numerator/scale > 100  <=>  numerator > 100·scale
-        if numerator > 100u64.saturating_mul(scale) {
+        // 上限(％)超は拒否: numerator/scale > 上限  <=>  numerator > 上限·scale
+        //
+        // **下の `checked_mul(100)` はここと別物である**——あちらは「パーセント」を
+        // 分数に直すための 100(per cent)で、**上限ではない**。**同じ数だが規則が違う**ので、
+        // 定数にするのはこちらだけにしてある(calcarc-88 の指摘、2026-09-17)。
+        if numerator > MAX_ANNUAL_PERCENT.saturating_mul(scale) {
             return Err(CalcError::SyntaxError);
         }
         let denominator = scale

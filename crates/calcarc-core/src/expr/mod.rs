@@ -14,8 +14,21 @@ pub mod rational;
 use crate::{CalcError, CalcResult};
 use rational::Rational;
 
-/// 年利の小数桁数。`Rate` と同じ線(小数 4 桁まで)。
-const PERCENT_SCALE: i128 = 10_000;
+/// **年利の上限(％)。**
+///
+/// **同じ規則が 2 つの経路に在る**(0.9.3 設計書 §8.2)——こちらは**式として打った年利を
+/// 評価してから受ける側**で、`finance::loan::rate::MAX_ANNUAL_PERCENT` は**打った文字列を
+/// 直接受ける側**である。**綴りをそろえてあるので `git grep MAX_ANNUAL_PERCENT` で 2 つとも出る。**
+/// **片方だけ動かすと、経路によって通る値が変わる。**
+pub const MAX_ANNUAL_PERCENT: i128 = 100;
+
+/// **年利の小数桁数。** `finance::loan::rate::MAX_PERCENT_DECIMALS` と同じ数。
+pub const MAX_PERCENT_DECIMALS: u32 = 4;
+
+/// 年利の倍率。**桁数から導く**——`4` と `10_000` を別々に書くと、
+/// **同じ規則が違う数で 2 か所に在る**ことになり、番人が「同じ数」を探しても見つからない
+/// (0.9.3 設計書 §8.2)。**ここで導いておけば、桁数を変えれば倍率も動く。**
+const PERCENT_SCALE: i128 = 10_i128.pow(MAX_PERCENT_DECIMALS);
 
 /// どの単位表を使うか。**表の中身はここにあり、境界からは名前だけを渡す**
 /// ——表そのものを渡す形にすると、呼ぶ側が scale を持つことになる。
@@ -105,9 +118,9 @@ pub fn evaluate_to_percent(text: &str) -> CalcResult<String> {
     if value.is_negative() {
         return Err(CalcError::SyntaxError);
     }
-    let hundred = Rational::from_i128(100)?;
-    if value.checked_sub(hundred)?.parts().0 > 0 {
-        return Err(CalcError::SyntaxError); // 100% 超
+    let ceiling = Rational::from_i128(MAX_ANNUAL_PERCENT)?;
+    if value.checked_sub(ceiling)?.parts().0 > 0 {
+        return Err(CalcError::SyntaxError); // 上限(％)を超えた
     }
     let scaled = value.checked_mul(Rational::from_i128(PERCENT_SCALE)?)?;
     let (num, den) = scaled.parts();
