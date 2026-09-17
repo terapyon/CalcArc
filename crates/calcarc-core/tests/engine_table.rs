@@ -1020,6 +1020,31 @@ fn del_after_a_closed_group_reopens_that_group() {
 }
 
 #[test]
+fn a_group_folds_where_it_closes_so_its_error_appears_at_the_paren() {
+    use calcarc_core::CalcError;
+    // **`)` は組をその場で畳む**(`close_paren`)。**畳んで失敗するなら、エラーは
+    // `)` の時点で出る**——`=` まで待たない。
+    //
+    // **0.9.3 で、この時機が利用者に見えるようになった。** 0.9.2 までは DEL が
+    // `)` を取り消せなかったので、「`)` で出るか `=` で出るか」は画面に差を作らなかった。
+    // いまは差が出る: **エラーは `)` で確定しているので、あとの DEL は効かない**
+    // (エラー中は AC 以外を受け付けない)。
+    //
+    // **この行は、独立評価器(`engine_values.rs`)がこの時機を真似てよい根拠でもある**
+    // ——あちらが engine の実装に寄ったのではなく、**両方がこの行に従っている**。
+    assert_eq!(
+        run(&["lparen", "div", "rparen"]).error,
+        Some(CalcError::DivisionByZero)
+    );
+    assert_eq!(main_of(&["lparen", "div", "rparen"]), "Math ERROR");
+    // **`)` で止まっているので、そのあとの DEL も数字も効かない。**
+    assert_eq!(
+        main_of(&["lparen", "div", "rparen", "del", "3", "eq"]),
+        "Math ERROR"
+    );
+}
+
+#[test]
 fn del_chains_back_through_a_run_of_closing_parens() {
     // **連続して閉じた `)` の範囲だけ遡る**(0.9.3 §4.2.1、利用者の裁定 2026-09-17)。
     // **積みは `)` で伸び、DEL で 1 つ縮み、ほかのキーで捨てられる。**
