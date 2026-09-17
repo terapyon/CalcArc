@@ -35,7 +35,10 @@ export function watchForUpdate(
     const updateSW = registerSW({
       onNeedRefresh,
       // reload = true。SKIP_WAITING のあと controllerchange で再読み込み。
-      onRegisteredSW: (_swUrl: string, registration?: { update: () => Promise<unknown> }) => {
+      onRegisteredSW: (
+        _swUrl: string,
+        registration?: { update: () => Promise<unknown> },
+      ) => {
         // **アプリ自身が定期的に探す**(0.9.3 設計書 §3.2)。**失敗は黙って
         // 次の周期を待つ**——オフラインで確認できないのは普通のことで、
         // 利用者に見せるものではない。

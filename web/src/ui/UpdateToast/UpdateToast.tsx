@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type ApplyUpdate, watchForUpdate } from "../../pwa";
 import styles from "./UpdateToast.module.css";
 
@@ -49,7 +55,10 @@ export function UpdateToast() {
    * **閉じる経路は 2 つある**(【閉じる】と Escape)——**どちらもここを通す**。
    * 片方だけに再提示を書くと、**もう片方が「閉じたら二度と出ない」経路になる**。
    */
-  function dismiss() {
+  // **`useCallback` で包むのは、下の Escape の effect が依存に挙げるためである。**
+  // 毎描画で作り直すと、**Escape の購読が描画のたびに張り直される**。
+  // 中で触るのは ref と setState だけなので、依存は空でよい。
+  const dismiss = useCallback(() => {
     setWaiting(false);
     if (!pendingRef.current) return;
     if (repromptRef.current !== null) window.clearTimeout(repromptRef.current);
@@ -57,7 +66,7 @@ export function UpdateToast() {
       repromptRef.current = null;
       setWaiting(true);
     }, TOAST_REPROMPT_MS);
-  }
+  }, []);
 
   // 約束は画面が消えるときに捨てる(jsdom の警告と、外れた timer を残さない)。
   useEffect(
@@ -107,7 +116,7 @@ export function UpdateToast() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [waiting]);
+  }, [waiting, dismiss]);
 
   // **お知らせが覆う下の帯のぶん、ページに空きを足す**(2026-09-12、利用者の
   // 裁定 (a)。門 1 の設計書 §1.5)。お知らせは下に固定され(`position: fixed`)、

@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,7 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../pwa", () => ({ watchForUpdate: vi.fn() }));
 
 import { watchForUpdate } from "../../pwa";
-import { UpdateToast } from "./UpdateToast";
+import { TOAST_REPROMPT_MS, UpdateToast } from "./UpdateToast";
 
 /** 購読を張らせ、あとから「更新が来た」を発火できるようにする。 */
 function arm(applyUpdate = vi.fn().mockResolvedValue(undefined)) {
@@ -134,6 +140,66 @@ describe("UpdateToast", () => {
     await userEvent.keyboard("{Escape}");
     expect(bubbled).not.toHaveBeenCalled();
     window.removeEventListener("keydown", bubbled);
+  });
+
+  it("waits an hour before showing the notice again", () => {
+    // **60 分はこの設計書の決めである**(0.9.3 §3.3)。**値をここに綴る**
+    // ——「再提示が在る」だけを見る検査は、**24 時間に変えても緑のまま**になる。
+    expect(TOAST_REPROMPT_MS).toBe(60 * 60 * 1000);
+    expect(TOAST_REPROMPT_MS).toBe(3_600_000);
+  });
+
+  it("shows the notice again after it is closed with the button", async () => {
+    // **裁定は「閉じても再び出す」**(利用者、2026-09-17)。**「閉じられなく
+    // する」は採らなかった**ので【閉じる】は残っている——**残っているが、
+    // 終わりではない。**
+    vi.useFakeTimers();
+    try {
+      const armed = arm();
+      render(<UpdateToast />);
+      // **偽の時計のもとでは `waitFor` も `userEvent` も使えない**(2026-09-17 に
+      // 実際に踏んだ)——どちらも内部で待ちを挟むので、進まない時計の下では
+      // 時間切れになる。購読の解決はマイクロタスクなので `act` で 1 度流し、
+      // 操作は `fireEvent`(同期)で送る。
+      await act(async () => {});
+      act(() => armed.needRefresh());
+      expect(region()).toHaveTextContent("新しいバージョンがあります");
+
+      fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+      expect(region()).toBeEmptyDOMElement();
+
+      // **閉じた直後には出ない。** ここで出ると「消したのにすぐ出る」になる。
+      act(() => void vi.advanceTimersByTime(TOAST_REPROMPT_MS - 1));
+      expect(region()).toBeEmptyDOMElement();
+
+      act(() => void vi.advanceTimersByTime(1));
+      expect(region()).toHaveTextContent("新しいバージョンがあります");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the notice again after it is closed with Escape", async () => {
+    // **閉じる経路は 2 つある。** 片方だけに再提示を書くと、**もう片方が
+    // 「閉じたら二度と出ない」経路として残る**——`same-defect-four-times` の形。
+    vi.useFakeTimers();
+    try {
+      const armed = arm();
+      render(<UpdateToast />);
+      // 上と同じ理由で `fireEvent`(同期)を使う。**capture で受けている**ので、
+      // window へ直接送れば component に届く。
+      await act(async () => {});
+      act(() => armed.needRefresh());
+      expect(region()).toHaveTextContent("新しいバージョンがあります");
+
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(region()).toBeEmptyDOMElement();
+
+      act(() => void vi.advanceTimersByTime(TOAST_REPROMPT_MS));
+      expect(region()).toHaveTextContent("新しいバージョンがあります");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stays quiet when the registration fails", async () => {
