@@ -7,9 +7,15 @@
  * ので、自前で postMessage を書かない(設計書 §3)。
  */
 import { registerSW } from "virtual:pwa-register";
+import { UPDATE_CHECK_INTERVAL_MS } from "./interval";
 
 /** 押されたときに世代を切り替えて再読み込みする。 */
 export type ApplyUpdate = () => Promise<void>;
+
+// **間隔の値は `interval.ts` が持つ。** この `index.ts` は `virtual:pwa-register` を
+// import するので、**jsdom の検査からは読めない**——値を固定する番人を置けるように、
+// 定数だけを別のファイルへ出してある(0.9.3 設計書 §3.2)。
+export { UPDATE_CHECK_INTERVAL_MS } from "./interval";
 
 let ready: Promise<ApplyUpdate> | null = null;
 
@@ -29,7 +35,17 @@ export function watchForUpdate(
     const updateSW = registerSW({
       onNeedRefresh,
       // reload = true。SKIP_WAITING のあと controllerchange で再読み込み。
-      onRegisteredSW: () => resolve(() => updateSW(true)),
+      onRegisteredSW: (_swUrl: string, registration?: { update: () => Promise<unknown> }) => {
+        // **アプリ自身が定期的に探す**(0.9.3 設計書 §3.2)。**失敗は黙って
+        // 次の周期を待つ**——オフラインで確認できないのは普通のことで、
+        // 利用者に見せるものではない。
+        if (registration) {
+          setInterval(() => {
+            void registration.update().catch(() => {});
+          }, UPDATE_CHECK_INTERVAL_MS);
+        }
+        resolve(() => updateSW(true));
+      },
       onRegisterError: (error: unknown) => {
         ready = null;
         reject(error);
