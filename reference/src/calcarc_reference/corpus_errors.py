@@ -228,18 +228,25 @@ def value_range_cases() -> list[dict]:
     ]
 
 
-def unbalanced_parenthesis_cases() -> list[dict]:
-    """構文——対応しない `)` は入力列として不正(`error.rs` の例そのもの)。
-
-    式の文法上、`)` は同じ深さで先に開かれた `(` と対応していなければならない
-    ——対応する `(` が無い `)` は、その時点でどんな数式の文法にも当てはまらない
-    列になる。値の計算に進む前の構文の話なので、`eq` を待たずに即座に
-    エラーになる(`corpus_entry.py` の小数点の 2 つ目と同じ形の主張)。
-    """
-    return [
-        _case(["rparen"], ")", "SyntaxError"),
-        _case(["3", "add", "4", "rparen"], "3 + 4)", "SyntaxError"),
-    ]
+# **退役: 対応しない `)` の 2 件**(`)` 単独と `3 + 4)`。0.9.3 の C-6)。
+#
+# **主張が移った**のであって、消えたのではない。D-2 が**開いていない `)` を
+# 押せなくする**ので、**「押すとエラーになる」は「そもそも押せない」に変わる**。
+# **「押せない」はコーパスには置けない**——`crates/calcarc-core/tests/corpus_refused_presses.rs`
+# が**コミット済みの全コーパスに拒まれる押下が 1 つも無いこと**を要求しているからである。
+#
+# **行き先(予定)**: **D-2 の枝 `fix/unmatched-rparen`** が、
+# `crates/calcarc-core/tests/engine_table.rs` の `refused_after`
+# (今日 22 行がこの形で「押せないこと」を主張している)に、
+# **`refused_after(&[], "rparen")` と `refused_after(&["3", "add", "4"], "rparen")` の
+# 2 行**として足す。**「移した」ではなく「移す予定」である**
+# ——**2026-09-17 時点で、その 2 行が入ったことは確認できていない**
+# (D-2 の先端は赤く、数え直しの最中)。**入ったら、ここを SHA で名指しに書き換える。**
+#
+# **この枝には足せない**——**今日の engine では `)` が拒まれないので、赤くなる。**
+#
+# **したがって、C-6 と D-2 のあいだは、この 2 つの主張がどこにも無い窓が開く。**
+# **順番の裁定(2026-09-17)を承知のうえで開けている**——設計書 §9.3.1・§9.4。
 
 
 def build_errors_shard() -> dict:
@@ -248,6 +255,10 @@ def build_errors_shard() -> dict:
     `random` を使わない——`corpus_entry.py` の `build_entry_shard` と同じ理由
     (設計書 §5.1 の 9 経路を 1 つずつ書き写した固定の列挙であって、乱択で
     サンプリングする集合ではない)。
+
+    **いま並ぶのは 9 経路のうち 8 経路である**——**括弧の 1 経路は 0.9.3 の
+    C-6 で退役した**(上の註)。**設計書 §5.1 が 9 を挙げた事実は動かない**ので、
+    9 を 8 に書き換えるのではなく、**8 である理由をここに書く。**
     """
     shapes: list[list[dict]] = [
         division_by_zero_cases(),
@@ -258,7 +269,7 @@ def build_errors_shard() -> dict:
         factorial_cases(),
         combinatorics_domain_cases(),
         value_range_cases(),
-        unbalanced_parenthesis_cases(),
+        # `unbalanced_parenthesis_cases()` はここに在った。退役の理由は上の註。
     ]
     cases: list[dict] = []
     for shape in shapes:

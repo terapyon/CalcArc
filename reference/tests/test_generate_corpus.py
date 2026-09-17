@@ -1684,13 +1684,19 @@ def test_no_correction_stratum_collapses_to_a_handful() -> None:
     かったケースを `continue` で捨てる。捨てられやすい形は結果として少なく
     なる——**再抽選は標本を偏らせる**（B+C Task 6 で同じ形を踏んだ。均等に
     したい因子はループの外で引くのが正しい直し方）。実測はいま
-    `paren-edit` 790 / `ac-rebuild` 420 / `error-recovery` 418 /
-    `typo-del` 372 で、等分の 500 からは離れているが、どの形も十分にある。
+    `paren-edit` 784 / `ac-rebuild` 427 / `error-recovery` 416 /
+    `typo-del` 373 で、等分の 500 からは離れているが、どの形も十分にある。
+
+    **この 4 つの数は 0.9.3 の C-6 で動いた**（退役前は 790 / 420 / 418 / 372）
+    ——**プールから 2 件抜けると、`error-recovery` が引く乱数の消費がずれ、
+    そのあとの層の当たり方まで動く**。**下限は割合で書いてあるので、この
+    ずれではテストは赤くならない**が、**docstring の数は測り直さないと腐る**。
+    **数を引用する側が、引用のたびに測り直す。**
 
     偏り自体は仕様として許す（設計書も計画も均等を要求していない）。
     ここで見張るのは**崩壊**のほうである——ある形が生成しにくくなって
     数件まで痩せても、`>= 1` のテストは緑のままだからだ。実測の最小
-    (372 = 18.6%) の半分を下限に置く。
+    (373 = 18.7%) の半分を下限に置く。
     """
     shard = generate_corpus.build_corrections_shard(seed=20260825, count=2000)
     counts = shard["strata"]
@@ -1775,27 +1781,35 @@ def test_error_inducing_pool_is_only_genuine_errors() -> None:
     assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) >= 1
 
 
-def test_error_inducing_pool_keeps_the_unbalanced_parenthesis_cases() -> None:
-    """**プールは 9 経路を 1 つも欠かない。**
+def test_error_inducing_pool_no_longer_carries_a_parenthesis_case() -> None:
+    """**プールから括弧の経路が抜けたことを、ここで固定する(0.9.3 の C-6)。**
 
-    実装中、対応の無い `rparen` を持つ経路(`unbalanced_parenthesis_cases`)を
-    プールから除けば `pnpm heavy` が緑になることが分かった——`needsPrecedence`
-    が `right` 全体を 1 本のキー列として括弧の対応を見ており、`ac` が engine を
-    初期状態に戻すことを知らなかったからである。**除いたのは入力のほうでは
-    なく、直すべきは判定のほうだった**(`ac` で組を捨てる)。除いていたら、
-    「括弧の構文エラーから `ac` で復帰する」という形がコーパスから丸ごと
-    抜けていた。
+    **この主張は 2026-09-17 に反転した。** それまでここは「プールは括弧の
+    経路を欠かない」と書いており、**それは正しかった**——当時、この 2 件を
+    除けば `pnpm heavy` が緑になったが、緑になる理由は `needsPrecedence` が
+    `ac` による復帰を知らない判定の欠陥であって、**入力を除くのは直しではなく
+    回避だった**(判定のほうを直した)。
 
-    9 経路のうちアンダーフローの 2 件は `expect.error` を持たない(丸め潰れは
-    値域を外れたことにならない)ので、プールに入るのはエラーになる 28 件。
+    **いま除くのは、回避ではなく前提の変化による。** D-2 が**開いていない `)` を
+    押せなくする**ので、**「押すとエラーになる」という主張自体が成り立たなく
+    なる**。`corpus_refused_presses.rs` が**コミット済みコーパスに拒まれる押下が
+    1 つも無いこと**を要求している以上、この 2 件はコーパスに置けない。
+    **主張の行き先は `engine_table.rs` の `refused_after` 2 行(D-2 の枝
+    `fix/unmatched-rparen`、移す予定)。**
+
+    **1 度目に恐れた損失が今回は起きないことは、数で確かめてある**
+    ——`_error_inducing_key_sequences` の docstring の「2 度目の測定」。
+
+    件数: エラー経路のうちアンダーフローの 2 件は `expect.error` を持たない
+    ので、プールに入るのはエラーになる 26 件(退役前は 28 件)。
     """
     with_parens = [
         keys
         for keys in generate_corpus.ERROR_INDUCING_KEY_SEQUENCES
         if "lparen" in keys or "rparen" in keys
     ]
-    assert len(with_parens) == 2, with_parens
-    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 28
+    assert with_parens == [], with_parens
+    assert len(generate_corpus.ERROR_INDUCING_KEY_SEQUENCES) == 26
 
 
 # --- 結合方向(`associativity-000.json`、計画 Task 4、設計書 §6) -------------
