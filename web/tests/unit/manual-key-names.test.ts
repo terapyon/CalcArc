@@ -13,6 +13,7 @@ import { optionText } from "../../src/ui/Category/CategorySelect";
 import { OPTIONS as CONVERT_OPTIONS } from "../../src/ui/Convert/ConvertPanel";
 import { PRIMARY_BUTTON_LABELS } from "../../src/ui/DataScale/DataScalePanel";
 import { fieldLabel, TIMING_LABELS } from "../../src/ui/Finance/FinancePanel";
+import { LINKS, LINKS_POPUP_CLOSE } from "../../src/ui/Footer/LinksPopup";
 import { HISTORY_LABELS } from "../../src/ui/History/History";
 import {
   CATEGORY_LABELS,
@@ -51,6 +52,7 @@ import {
   TRANSFER_PAD,
 } from "../../src/ui/Keypad/transfer";
 import type { KeypadSection } from "../../src/ui/Keypad/types";
+import { MANUAL_LINK_LABELS } from "../../src/ui/Manual/ManualPage";
 import { MODULES } from "../../src/ui/Nav/Nav";
 import { OPTIONS as SCALE_OPTIONS } from "../../src/ui/Scale/ScalePanel";
 import { UPDATE_TOAST_LABELS } from "../../src/ui/UpdateToast/UpdateToast";
@@ -183,6 +185,16 @@ const SOURCES: Record<string, readonly string[]> = {
   "History/History.tsx": Object.values(HISTORY_LABELS),
   // - 更新のお知らせのボタン
   "UpdateToast/UpdateToast.tsx": Object.values(UPDATE_TOAST_LABELS),
+  // - 下部から開くリンク集の 4 本と、その【閉じる】(0.9.3)。**下部のボタン
+  //   そのものは入れない**——綴りに版数が入る(`aboutLabel`)ので、
+  //   **マニュアルは版数を含む名前で呼ばない**(呼ぶと、版を上げるたびに
+  //   マニュアルのその 1 行が古くなる)。あちらは文で説明してある。
+  "Footer/LinksPopup.tsx": [
+    ...LINKS.map((link) => link.label),
+    LINKS_POPUP_CLOSE,
+  ],
+  // - マニュアルの画面の行き先(0.9.3)
+  "Manual/ManualPage.tsx": MANUAL_LINK_LABELS,
 };
 
 const LABELS: ReadonlySet<string> = new Set(Object.values(SOURCES).flat());

@@ -43,6 +43,18 @@ export const MANUALS = [
   { stem: "quick-en", source: "quick.en.md", title: "CalcArc Quick Guide" },
 ] as const;
 
+/**
+ * この画面の押せるものの名前。**マニュアルのキー名の番人が読む**
+ * （`tests/unit/manual-key-names.test.ts`。`Nav.tsx` の `MODULES` と同じ流儀）。
+ *
+ * **冊子の題は `MANUALS` から取る**ので、ここに写しは無い。
+ */
+export const MANUAL_LINK_LABELS: readonly string[] = [
+  ...MANUALS.map((manual) => manual.title),
+  "この版の Release",
+  "計算機に戻る",
+];
+
 /** その版の Release。**リンク集の「検査結果」と同じ行き先**である。 */
 export const RELEASE_URL = `https://github.com/terapyon/CalcArc/releases/tag/v${__APP_VERSION__}`;
 
