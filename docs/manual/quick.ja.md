@@ -1,6 +1,8 @@
 # CalcArc 簡易マニュアル
 
-最新の PDF（画面写真つき）は GitHub の Releases にあります: https://github.com/terapyon/CalcArc/releases
+最新の PDF（画面写真つき）は、**CalcArc の画面からも開けます**——下部の
+「CalcArc <版数> について」を押して【マニュアル】を選んでください。
+GitHub の Releases にも添付されています: https://github.com/terapyon/CalcArc/releases
 
 ## 1. CalcArc とは
 
