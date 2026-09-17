@@ -104,11 +104,24 @@ rc=1
 - `cd heavy && pnpm test` → **20 files・360 passed**（`tools/tests` を含む）
 - `cd heavy && pnpm lint` → 緑（既存の info 2 件のみ。`report.ts` の `useTemplate`）
 
-**型検査について**: この作業木では `pnpm typecheck` が
-`web/src/calc/index.ts` の 2 件で落ちる——**`web/src/wasm/` がまだ無い**ためで
-（CLAUDE.md「新しいクローンでは先に `cd web && pnpm wasm`」）、**この変更とは関係が無い**
-（`tools/tests/` にはエラーが 1 件も出ていない）。**`pnpm wasm` は重い段なので、
-監視役に一声かけてから回す。**
+**型検査について（訂正つき）**: はじめ、この作業木の `pnpm typecheck` は
+`web/src/calc/index.ts` の 2 件で落ちた——**`web/src/wasm/` がまだ無い**ためである
+（CLAUDE.md「新しいクローンでは先に `cd web && pnpm wasm`」）。
+**そのとき私は「この変更とは関係が無い（`tools/tests/` にはエラーが 1 件も出ていない）」と報告した。偽だった。**
+
+**`web/src/wasm/` をビルド済みの作業木（`wt-092d`）から写して走らせ直すと、
+私の変更に 2 件のエラーが出た**——`tools/tests/check-conflict-markers.test.ts(164,24)`・`(165,25)`、
+`Parameter 'f' implicitly has an 'any' type`。**原因は私の JSDoc**で、戻り値を
+`{files, skipped}` に変えたのに `@returns {SourceFile[]}` のままだった
+（**説明文も「`docs/` の下で追跡されている…」のまま**——**註の直しを 4 か所やって、
+この 1 か所を落としていた**）。直しは `596ddec`。
+
+**教訓（記録に残す）: 検査の rc だけを見て「エラーが無い」と書かない。どこまで走ったかを見る。**
+**型検査は最初のエラーで止まる**ので、**落ちた場所より後ろは「緑」でも「赤」でもなく「走っていない」**。
+**走っていない範囲を、当てた範囲のように書かない。**
+
+**`pnpm wasm` は回さずに済んだ**——**ビルド済みの作業木から写せばよい**（gitignore 済みなので差分に出ない。
+コアの API を変えていない枝なら、写したもので型検査は正しく通る）。**重い段を 1 つ節約できる。**
 
 ## C-1 マニュアルの上限値とコードの定数の突合 — **紐づけの表（番人を書く前に固める）**
 
