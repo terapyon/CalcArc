@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type ApplyUpdate, watchForUpdate } from "../../pwa";
 import styles from "./UpdateToast.module.css";
 
@@ -22,14 +28,64 @@ export const UPDATE_TOAST_LABELS = {
   close: "閉じる",
 } as const;
 
+/**
+ * **閉じたあと、もう一度出すまでの間隔。60 分**(0.9.3 設計書 §3.3)。
+ *
+ * **裁定は「閉じても再び出す」**(利用者、2026-09-17)——**「閉じられなくする」は
+ * 採らなかった**。【閉じる】も Escape もそのまま残る。
+ *
+ * **60 分はこの設計書の決めである。** 確認の間隔が 6 時間(`pwa/index.ts` の
+ * `UPDATE_CHECK_INTERVAL_MS`)なので、**1 回の検知につき 6 時間で最大 5 回**。
+ * **閉じた直後には出ない。** **実測の裏づけは無い**——邪魔かどうかは使ってみるまで
+ * 分からない。**検査がこの値を綴っている**ので、変えれば差分に残る。
+ */
+export const TOAST_REPROMPT_MS = 60 * 60 * 1000;
+
 export function UpdateToast() {
   const [waiting, setWaiting] = useState(previewRequested);
   const [apply, setApply] = useState<ApplyUpdate | null>(null);
+  // **待機している版が在るか。** 閉じても落とさない——**再提示の判断に要る**。
+  // `waiting` は「**いま出しているか**」だけを表す(0.9.3 設計書 §3.3)。
+  const pendingRef = useRef(previewRequested());
+  const repromptRef = useRef<number | null>(null);
+
+  /**
+   * 閉じる。**待機している版が在るなら、60 分後にもう一度出す約束をする。**
+   *
+   * **閉じる経路は 2 つある**(【閉じる】と Escape)——**どちらもここを通す**。
+   * 片方だけに再提示を書くと、**もう片方が「閉じたら二度と出ない」経路になる**。
+   */
+  // **`useCallback` で包むのは、下の Escape の effect が依存に挙げるためである。**
+  // 毎描画で作り直すと、**Escape の購読が描画のたびに張り直される**。
+  // 中で触るのは ref と setState だけなので、依存は空でよい。
+  const dismiss = useCallback(() => {
+    setWaiting(false);
+    if (!pendingRef.current) return;
+    if (repromptRef.current !== null) window.clearTimeout(repromptRef.current);
+    repromptRef.current = window.setTimeout(() => {
+      repromptRef.current = null;
+      setWaiting(true);
+    }, TOAST_REPROMPT_MS);
+  }, []);
+
+  // 約束は画面が消えるときに捨てる(jsdom の警告と、外れた timer を残さない)。
+  useEffect(
+    () => () => {
+      if (repromptRef.current !== null) {
+        window.clearTimeout(repromptRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
     watchForUpdate(() => {
-      if (!cancelled) setWaiting(true);
+      if (!cancelled) {
+        // **待機している版が現れた。** 閉じられても、この事実は残る。
+        pendingRef.current = true;
+        setWaiting(true);
+      }
     }).then(
       (applyUpdate) => {
         // setState に関数を渡すと更新関数と解釈されるので包む。
@@ -56,11 +112,11 @@ export function UpdateToast() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      setWaiting(false);
+      dismiss();
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [waiting]);
+  }, [waiting, dismiss]);
 
   // **お知らせが覆う下の帯のぶん、ページに空きを足す**(2026-09-12、利用者の
   // 裁定 (a)。門 1 の設計書 §1.5)。お知らせは下に固定され(`position: fixed`)、
@@ -148,7 +204,7 @@ export function UpdateToast() {
               >
                 {UPDATE_TOAST_LABELS.reload}
               </button>
-              <button type="button" onClick={() => setWaiting(false)}>
+              <button type="button" onClick={dismiss}>
                 {UPDATE_TOAST_LABELS.close}
               </button>
             </div>
