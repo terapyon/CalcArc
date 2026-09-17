@@ -235,13 +235,14 @@ def value_range_cases() -> list[dict]:
 # **「押せない」はコーパスには置けない**——`crates/calcarc-core/tests/corpus_refused_presses.rs`
 # が**コミット済みの全コーパスに拒まれる押下が 1 つも無いこと**を要求しているからである。
 #
-# **行き先(予定)**: **D-2 の枝 `fix/unmatched-rparen`** が、
-# `crates/calcarc-core/tests/engine_table.rs` の `refused_after`
-# (今日 22 行がこの形で「押せないこと」を主張している)に、
-# **`refused_after(&[], "rparen")` と `refused_after(&["3", "add", "4"], "rparen")` の
-# 2 行**として足す。**「移した」ではなく「移す予定」である**
-# ——**2026-09-17 時点で、その 2 行が入ったことは確認できていない**
-# (D-2 の先端は赤く、数え直しの最中)。**入ったら、ここを SHA で名指しに書き換える。**
+# **行き先**: **D-2 の枝 `fix/unmatched-rparen`** の
+# `crates/calcarc-core/tests/engine_table.rs`、`an_unmatched_closing_paren_cannot_be_pressed`
+# ——**`111e67f` の 1328〜1329 行に、`refused_after(&[], "rparen")` と
+# `refused_after(&["3", "add", "4"], "rparen")` の 2 行が在ることを、
+# その commit を読んで確かめた(2026-09-17)。** 退役させた 2 件と 1 対 1 で対応する。
+#
+# **ただし「D-2 が仕上がった」とは書かない**——**`111e67f` は先端が赤い**
+# (2 行が在ることと、枝が緑であることは別)。**主張の置き場が決まった、までが今日の事実。**
 #
 # **この枝には足せない**——**今日の engine では `)` が拒まれないので、赤くなる。**
 #

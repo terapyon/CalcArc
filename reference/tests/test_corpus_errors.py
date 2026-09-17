@@ -125,7 +125,9 @@ def test_tan_pole_is_not_division_by_zero() -> None:
 # **0.9.3 の C-6 で、主張ごと退役した**——「対応しない `)` は eq を待たずに
 # エラーになる」は、D-2 が `)` を押せなくすると**主張として成り立たなくなる**
 # (押せないものに「押した後」は無い)。**後継は `engine_table.rs` の
-# `refused_after` 2 行**(D-2 の枝 `fix/unmatched-rparen`、移す予定)。
+# `an_unmatched_closing_paren_cannot_be_pressed` の `refused_after` 2 行**
+# ——D-2 の枝 `fix/unmatched-rparen`、**`111e67f` の 1328〜1329 行に在ることを
+# 読んで確かめた**(ただしその先端はまだ赤い)。
 
 
 def test_combinatorics_domain_cases_all_end_with_eq() -> None:

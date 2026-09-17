@@ -1794,8 +1794,10 @@ def test_error_inducing_pool_no_longer_carries_a_parenthesis_case() -> None:
     押せなくする**ので、**「押すとエラーになる」という主張自体が成り立たなく
     なる**。`corpus_refused_presses.rs` が**コミット済みコーパスに拒まれる押下が
     1 つも無いこと**を要求している以上、この 2 件はコーパスに置けない。
-    **主張の行き先は `engine_table.rs` の `refused_after` 2 行(D-2 の枝
-    `fix/unmatched-rparen`、移す予定)。**
+    **主張の行き先は `engine_table.rs` の
+    `an_unmatched_closing_paren_cannot_be_pressed` の `refused_after` 2 行**
+    ——D-2 の枝 `fix/unmatched-rparen`、**`111e67f` の 1328〜1329 行に在ることを
+    読んで確かめた**(ただしその先端はまだ赤い)。
 
     **1 度目に恐れた損失が今回は起きないことは、数で確かめてある**
     ——`_error_inducing_key_sequences` の docstring の「2 度目の測定」。
