@@ -10,7 +10,7 @@ pub use state::{EngineState, MAX_ENTRY_LEN};
 
 use crate::scientific;
 use crate::{CalcError, CalcResult, Value};
-use state::{Backspace, BinOp, Buffer, Notation, OpToken, ReplaceBase};
+use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBase};
 
 /// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
 /// (0.9.2 設計書 §3.2、外部監査 F5。§9 の 1・8・11)。
@@ -133,13 +133,17 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // いないので旗も残す。確定値の符号を変えたときはバッファが
                 // 消えるので、この後判定で自然に落ちる(設計書 §2)。
                 Key::Neg => next.buffer.is_some() && was_pending,
+                // **DEL は 0 段目で状態ごと戻すことがある**(0.9.3 設計書 §4.2)。
+                // 戻したときは `apply` が旗も入れているので、**前の値で上書きしない**。
+                // 戻していないときは `apply` がこの旗に触らないので、
+                // ここの値は `was_pending` と同じである。
+                Key::Del => next.operator_pending,
                 Key::Digit(_)
                 | Key::Zeros3
                 | Key::Dot
                 | Key::Exp
                 | Key::J
                 | Key::LParen
-                | Key::Del
                 | Key::AngleToggle
                 | Key::PolarToggle
                 | Key::EngToggle
@@ -170,9 +174,9 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
                 // 確定値に掛かったならバッファは消えている。指数の符号ならバッファが
                 // 残り、打ちかけのまま(§3.2)。
                 Key::Neg => next.buffer.is_none(),
-                Key::Del | Key::AngleToggle | Key::PolarToggle | Key::EngToggle | Key::Dms => {
-                    was_on_hand
-                }
+                // DEL は上の `operator_pending` と同じ理由(0.9.3 設計書 §4.2)。
+                Key::Del => next.on_hand,
+                Key::AngleToggle | Key::PolarToggle | Key::EngToggle | Key::Dms => was_on_hand,
                 Key::Digit(_)
                 | Key::Zeros3
                 | Key::Dot
@@ -193,6 +197,26 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
         // calcarc-1e の注記 A)。捨てる条件はここ 1 か所。
         if !next.operator_pending {
             next.replace_base = None;
+        }
+        // **閉じた組の積みは `)` で伸び、DEL で縮む**(0.9.3 設計書 §4.2.1)。
+        // **保つのは DEL と表示トグルだけ**で、ほかのキーはすべて捨てる——だから
+        // 遡れるのは「**連続して閉じた `)`**」の範囲に限られる。
+        // **エラーになったら捨てる**(`)` が開いていない組を閉じようとした場合など)。
+        //
+        // **数字・`(`・`π`・`e` をここで捨てる腕に数えるのは規則としてであって、
+        // 例として使わないこと**——`)` の直後にそれらは押せない(0.9.2 の F5)。
+        if next.error.is_some()
+            || !matches!(
+                key,
+                Key::RParen
+                    | Key::Del
+                    | Key::AngleToggle
+                    | Key::PolarToggle
+                    | Key::EngToggle
+                    | Key::Dms
+            )
+        {
+            next.closed_groups.clear();
         }
     }
 
@@ -339,6 +363,27 @@ fn finish(state: &mut EngineState) -> CalcResult<()> {
 /// 生じて undo になる。undo は状態に履歴スタックを要求し、EngineState が
 /// 毎打鍵で WASM 境界を往復する設計（D7）に正面から効く。
 fn delete_one(state: &mut EngineState) {
+    // **0 段目: 閉じた組を開き直す**(0.9.3 設計書 §4.2、利用者の裁定 2026-09-17)。
+    // `)` で積んだ「その `)` を押す直前の状態」を 1 つ降ろす。**積みが空なら、
+    // 下の 3 段(数字 → `j` → `(`)がいつもどおり働く**——**連鎖はそこで終わる。**
+    //
+    // **これは undo ではない。** 戻すのは `)` の押下だけで、演算子も数字も戻さない。
+    // 積みは `)` 以外のキー(DEL と表示トグルを除く)で捨てられるので、遡れるのは
+    // **連続して閉じた `)` の範囲**に限られる(`reduce` の後判定)。
+    if let Some(group) = state.closed_groups.pop() {
+        state.buffer = group.buffer;
+        state.current = group.current;
+        state.operands = group.operands;
+        state.operators = group.operators;
+        // **旗も戻す。** `reduce` の後判定は DEL のとき「`apply` が残した値」を
+        // そのまま採るので(下の `Key::Del` の腕)、ここで入れた値が生きる。
+        state.operator_pending = group.operator_pending;
+        state.on_hand = group.on_hand;
+        // **押し直しの戻り先も戻す。** `operator_pending` を真に戻すなら、これも戻さないと
+        // 「戻り先は `operator_pending` のあいだ生きている」という不変が崩れる(0.9.2 §2.2)。
+        state.replace_base = group.replace_base;
+        return;
+    }
     if let Some(buffer) = &mut state.buffer {
         // 1 段目と 2 段目は Buffer::backspace が担う。
         if buffer.backspace() == Backspace::Exhausted {
@@ -380,6 +425,18 @@ fn open_paren(state: &mut EngineState) {
 
 /// `)` が押されたときの遷移。対応する `(` まで畳む。
 fn close_paren(state: &mut EngineState) -> CalcResult<()> {
+    // **`)` を押す直前の状態を控える**(0.9.3 設計書 §4.2)。DEL が 1 つ降ろして
+    // 組を開き直す。**畳む前に取る**——畳んだあとでは、この組の中身は別の値に
+    // なっている(`( 2 + 3 )` の中身は 5 であって、`2 + 3` ではない)。
+    let before = ClosedGroup {
+        buffer: state.buffer.clone(),
+        current: state.current,
+        operands: state.operands.clone(),
+        operators: state.operators.clone(),
+        operator_pending: state.operator_pending,
+        on_hand: state.on_hand,
+        replace_base: state.replace_base.clone(),
+    };
     commit_entry(state)?;
     state.operands.push(state.current);
     loop {
@@ -394,6 +451,9 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
         }
     }
     state.current = state.operands.pop().ok_or(CalcError::SyntaxError)?;
+    // **積むのは畳み終えたあと**——途中で `SyntaxError` に落ちた `)` は
+    // 「押せなかった `)`」なので、DEL で戻る先を残さない。
+    state.closed_groups.push(before);
     Ok(())
 }
 

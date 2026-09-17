@@ -185,6 +185,9 @@ struct Typed {
     toks: Vec<Tok>,
     base: Q,
     error: Option<CalcError>,
+    /// **ここまでに効いたキー列**(0.9.3 設計書 §4.2)。閉じた組を開き直す DEL が
+    /// 「**`)` の押下を列から抜いて打ち直す**」ために持つ。
+    keys: Vec<Key>,
 }
 
 impl Typed {
@@ -193,13 +196,38 @@ impl Typed {
             toks: Vec::new(),
             base: Q::int(0),
             error: None,
+            keys: Vec::new(),
         }
+    }
+
+    /// キー列を最初から打ち直す。**開き直しの DEL だけがこれを使う。**
+    fn replay(keys: &[Key]) -> Typed {
+        let mut typed = Typed::new();
+        for &key in keys {
+            typed.press(key);
+        }
+        typed
     }
 
     fn press(&mut self, key: Key) {
         // エラー中は AC 以外を受け付けない(engine_table: `keys_other_than_ac_are_ignored_while_in_error`)。
         // AC は網に無い。
         if self.error.is_some() {
+            return;
+        }
+        // **閉じた組のあとの DEL は、その `)` の押下を無かったことにする**
+        // (0.9.3 設計書 §4.2、利用者の裁定 2026-09-17)。
+        //
+        // **engine は「`)` を押す直前の状態」を積んで戻すが、こちらは
+        // 「キー列から `)` を 1 つ抜いて打ち直す」**——**2 つの手順が別物であることに
+        // 意味がある**(CLAUDE.md: 参照実装を移植にしない)。打ち直しなら、
+        // `)` が補った右辺も、畳んだ値も、押し直しの訂正も、**そもそも発生しない**。
+        if key == Key::Del && matches!(self.toks.last(), Some(Tok::Close)) {
+            let mut keys = self.keys.clone();
+            if let Some(at) = keys.iter().rposition(|k| *k == Key::RParen) {
+                keys.remove(at);
+            }
+            *self = Typed::replay(&keys);
             return;
         }
         match key {
@@ -272,6 +300,30 @@ impl Typed {
                     self.error = Some(e);
                     return;
                 }
+                // **`)` はその場で組を畳む**(engine の `close_paren`)。**畳んで失敗するなら、
+                // `)` を押した時点でエラーである**——`+ ( ÷ ) DEL 3` は engine が `)` で
+                // DivisionByZero になり、以後のキーを受け付けない。
+                // **`=` まで遅らせると、あいだの DEL がそのエラーを無かったことにする**
+                // (0.9.3 で DEL が `)` を取り消すようになって初めて見えた。2026-09-17)。
+                let mut depth_from_end = 0usize;
+                let mut matching_open = None;
+                for (i, tok) in self.toks.iter().enumerate().rev() {
+                    match tok {
+                        Tok::Close => depth_from_end += 1,
+                        Tok::Open if depth_from_end > 0 => depth_from_end -= 1,
+                        Tok::Open => {
+                            matching_open = Some(i);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(i) = matching_open
+                    && let Err(e) = eval(&self.toks[i + 1..])
+                {
+                    self.error = Some(e);
+                    return;
+                }
                 self.toks.push(Tok::Close);
             }
             Key::Eq => {
@@ -324,6 +376,15 @@ impl Typed {
             }
             _ => unreachable!("網に無いキー: {key:?}"),
         }
+        // **押せなかったキーは列に残さない**(0.9.3 設計書 §4.2)。上の腕は F5 で拒む
+        // キー(`)` の直後の数字と `(`)を `return` で捨てるので、ここへ来るのは
+        // **実際に効いたキーだけ**である。
+        //
+        // **これが無いと、打ち直しが「押せなかったはずのキー」を打つ。**
+        // `333 × ( ) 3 DEL` の `3` は `)` の直後なので押せない——ところが `)` を
+        // 抜いて打ち直すと押せる位置に変わるので、記録してあると 999 になる
+        // (engine は 0)。**2026-09-17 に実際に落ちた。**
+        self.keys.push(key);
     }
 
     /// 打ちかけの数が無いときに DEL が消す `(` の位置: **いちばん最後の閉じていない `(`** で、
@@ -588,9 +649,19 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
     // 「両方がエラー」にしたあとも同じ 682,651 回(2.89 秒)——評価器がエラーにする所では
     // エンジンもエラーなので、切る枝は変わらなかった。ここまでの秒数は値の照合だけのもの。
     // 2026-09-16 に綴りの読み直し(Task 9)を足してからは、回数は同じ 682,651 回で 3.84 秒(debug)。
+    //
+    // **★ 2026-09-17(0.9.3 の D-1)で 682,651 → 679,821 に下がった。2,830 回の減である。**
+    // **下限を下げるのは「緩めれば緑になる数字」を 1 つ増やす動きなので、理由を書く**:
+    // **評価器が `)` の時点で組を畳むようになった**(engine の `close_paren` と同じ時機。
+    // DEL が `)` を取り消すようになったので、`=` まで遅らせるとエラーが消えてしまう)。
+    // **早くエラーになる枝は、そこで降りるのをやめる**——`両方がエラー` が打ち切りの条件
+    // だからである。**打ち切った枝の先は、engine も評価器もエラーのまま**なので、
+    // **比べる価値のある組み合わせは減っていない。**
+    // **減った分を確かめる手順**: この数を 682_651 に戻すと落ちる。落ちた回数の差が
+    // そのまま「`)` で早く畳むようになった枝」である。
     assert!(
-        counts.values >= 682_651,
-        "比べたのは {} 回(2026-09-13 の実測 682,651 回)",
+        counts.values >= 679_821,
+        "比べたのは {} 回(2026-09-17 の実測 679,821 回)",
         counts.values
     );
     // **綴りを読み直した回数の下限**(Task 9)。実測値そのもの(2026-09-16、338,898 回)。

@@ -169,6 +169,15 @@ pub fn spell(keys: &[Key]) -> String {
     // いないか。`=` は綴りに何も足さないので、語の並びだけでは「閉じた」ことが見えない
     // ——`3 + = × 5` の `+` は訂正の対象ではない(engine の `finish` が演算子を使い切っている)。
     let mut open_operator = false;
+    // **`)` を押す直前の綴り**(0.9.3 設計書 §4.2)。`)` がするのは「打ちかけの数を
+    // 流し込んで `)` を足す」ことだけなので、**控えるのは語の本数と打ちかけの数**で足りる
+    // ——DEL はそこまで切り詰めて数を戻せば、`)` を押す前に戻る。
+    // **engine の `closed_groups` と同じ形**である(綴りは engine の写しであり、
+    // 独立な実装ではない——独立に書き下すのは `engine_values.rs` の評価器のほう)。
+    // **`open_operator` も控える。** engine が `operator_pending` を戻すのと同じ理由で、
+    // ここを戻さないと**押し直しの訂正が効かなくなる**——`33 × ( × ) DEL ×` の綴りが
+    // 「33 × ( × ×」と演算子 2 つになった(2026-09-17 に実際に落ちた)。
+    let mut closed: Vec<(usize, Option<Buffer>, bool)> = Vec::new();
 
     for &key in keys {
         match key {
@@ -186,7 +195,14 @@ pub fn spell(keys: &[Key]) -> String {
                 // 値か `)` のままなので押し直しにならない(engine でも値のあとの演算子は訂正では
                 // ない)。末尾の `(` を消せば、その前の演算子と真偽がそのまま戻る(`(` を消した
                 // 直後の演算子は訂正。spell_table の `3 × ( DEL + 4` →「3 + 4」)。
-                if let Some(buffer) = current.as_mut() {
+                if let Some((len, buffer, was_open)) = closed.pop() {
+                    // **0 段目: 閉じた組を開き直す**(0.9.3 設計書 §4.2)。控えた長さまで
+                    // 切り詰め、打ちかけの数を戻す。**連鎖はここから出る**——`)` ごとに
+                    // 1 つ控えてあるので、`DEL` を続ければ 1 つずつ戻る。
+                    parts.truncate(len);
+                    current = buffer;
+                    open_operator = was_open;
+                } else if let Some(buffer) = current.as_mut() {
                     if buffer.backspace() == Backspace::Exhausted {
                         current = None;
                     }
@@ -266,6 +282,10 @@ pub fn spell(keys: &[Key]) -> String {
             }
             _ => {
                 // 二項演算子・`)`・後置関数。
+                // **`)` は戻り先を控えてから流し込む**(0.9.3 設計書 §4.2)。
+                if key == Key::RParen {
+                    closed.push((parts.len(), current.clone(), open_operator));
+                }
                 commit_into(&mut current, &mut parts);
                 // 演算子の直後の演算子は訂正(engine の `push_binop`)。綴りも最後の 1 つ
                 // だけを残す(0.9.2 設計書 §9 の 9)。バッファがあれば上の行が数を流し込む
@@ -286,6 +306,20 @@ pub fn spell(keys: &[Key]) -> String {
                 // 後置関数と `)` は二項ではないので、フラグを false にする。
                 open_operator = is_binary(key);
             }
+        }
+        // **積みは `)` で伸び、DEL で縮む。保つのは DEL と表示トグルだけ**
+        // (0.9.3 設計書 §4.2.1)——だから遡れるのは「連続して閉じた `)`」の範囲だけ。
+        // **engine の `reduce` の後判定と同じ条件を、同じ順で書く。**
+        if !matches!(
+            key,
+            Key::RParen
+                | Key::Del
+                | Key::AngleToggle
+                | Key::PolarToggle
+                | Key::EngToggle
+                | Key::Dms
+        ) {
+            closed.clear();
         }
     }
     commit_into(&mut current, &mut parts);
