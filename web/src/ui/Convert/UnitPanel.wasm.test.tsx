@@ -129,6 +129,42 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     expect(main()).toHaveTextContent("0 mi");
   });
 
+  it("starts a new value when a digit follows the answer", async () => {
+    // **`=` の答えのあとに打った最初の数字は、新しい入力を始める**
+    // (0.9.3 設計書 §4.5、利用者の裁定 2026-09-17)。
+    //
+    // 0.9.2 までは答えの末尾に足されて **`1/35`** になっていた——`fromSettled` が
+    // digits で終わる Entry を作り、`pushDigit` が末尾の digits に追記するためである。
+    // **関数電卓の「`=` のあとは新しい計算」(engine_table の S6)と同じ形にそろえる。**
+    await renderPanel("length");
+    await press(["1", "割る", "3"]);
+    await press([EQ]);
+    expect(echo()).toHaveTextContent("値 1/3");
+
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+  });
+
+  it("only the keys that would drop the answer start a new value", async () => {
+    // **画面の数を捨てるキーは新しい入力を始め、手元の値に掛かるキーは続く**
+    // (0.9.3 設計書 §4.5 の表)。**0.9.2 の「数を黙って捨てるキーを拒む」と同じ線**である。
+    await renderPanel("length");
+    await press(["1", "割る", "3"]);
+    await press([EQ]);
+
+    // `.` は新しい入力を始める。**`0.` から始まる**——空から始めると
+    // `pushDot` が何も足せない(打ちかけの数が無いと `.` は落ちる)。
+    await press([DOT]);
+    expect(echo()).toHaveTextContent("値 0.");
+
+    // `+/−` は**続き**である。答えの符号を変えるだけで、値を捨てない。
+    await press(["1", "割る", "3"]);
+    await press([EQ]);
+    expect(echo()).toHaveTextContent("値 1/3");
+    await press([SIGN]);
+    expect(echo()).toHaveTextContent("値 -1/3");
+  });
+
   it("settles a negative fraction, sign and all", async () => {
     // `fromSettled` は符号なしの答えしか受けない(`convert/entry.ts`)ので、
     // `UnitPanel.tsx` の `eq` ケースは先頭の `-` を剥がしてから渡し、符号は

@@ -56,6 +56,29 @@ export function pushDot(entry: units.Entry): units.Entry {
  * (0.9.2 設計書 §4)。分数は「数・/・数」の 3 語にする——次に打つ演算子はそのあとに続き、
  * コアが式として読み直す(`/` は `×`・`÷` と同じ段で左から畳むので、`1/3 × 3` は 1)。
  */
+/**
+ * `=` の答えが出ている状態で、**新しい入力を始めるキー**か
+ * (0.9.3 設計書 §4.5、利用者の裁定 2026-09-17)。
+ *
+ * **画面の数を捨てるキーは新しい入力を始め、手元の値に掛かるキーは続く**
+ * ——0.9.2 の「**数を黙って捨てるキーは押せない**」(F5)と同じ線である。
+ * 関数電卓は engine が同じ規則を持っている(`=` のあとの数字は新しい計算。
+ * `crates/calcarc-core/tests/engine_table.rs` の S6)。**Convert だけ別の形にしない。**
+ *
+ * | キー | どうなるか |
+ * |---|---|
+ * | 数字・`.`・`000` | **新しい入力を始める** |
+ * | `+/−` | 続き(答えの符号を変えるだけで、値を捨てない) |
+ * | 二項演算子・`(`・`)` | 続き(答えを左辺にして式を続ける) |
+ * | `DEL`・`AC` | 続き(答えを編集する／捨てる) |
+ *
+ * **0.9.2 まではどのキーも「続き」だった**ので、`1 ÷ 3 = 5` が `1/35` になっていた
+ * ——`fromSettled` が digits で終わる `Entry` を作り、`pushDigit` が末尾に追記するため。
+ */
+export function startsNewValue(token: string): boolean {
+  return token.startsWith("digit:") || token === "dot" || token === "zeros3";
+}
+
 export function fromSettled(value: string): units.Entry {
   const [numerator = "", denominator] = value.split("/");
   if (denominator === undefined) return units.fromDigits(numerator);

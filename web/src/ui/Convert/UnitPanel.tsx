@@ -7,6 +7,7 @@ import {
   canPushOperator,
   EMPTY,
   type Entry,
+  fromDigits,
   fromSettled,
   isEmpty,
   type Operator,
@@ -15,6 +16,7 @@ import {
   pushDot,
   pushOpenParen,
   pushOperator,
+  startsNewValue,
   text,
 } from "../../convert/entry";
 // **カテゴリの綴りと述語は `types.ts` から取る。** ラッパー本体
@@ -118,6 +120,12 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState<ConvertField>("value");
   const [entry, setEntry] = useState<Entry>(EMPTY);
+  // **いま値の欄に出ているのが `=` の答えか**(0.9.3 設計書 §4.5)。真のあいだ、
+  // 数字・`.`・`000` は**新しい入力を始める**——関数電卓の `=` のあとと同じ形。
+  //
+  // **名前は `settled` にしない**——この下に同名の関数(`=` が畳んだ値を作るほう)が
+  // 既に在り、esbuild が「宣言が 2 つある」で落ちる(2026-09-17 に踏んだ)。
+  const [answerShown, setAnswerShown] = useState(false);
   // **符号は値の一部だが、Entry には入らない**(計画の裁定 3)。
   const [negative, setNegative] = useState(false);
   const [from, setFrom] = useState<ConvertFaceUnit>(defaults.from);
@@ -258,30 +266,50 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
       else {
         setEntry(EMPTY);
         setNegative(false);
+        setAnswerShown(false);
       }
       return;
     }
     if (token === "del") {
-      if (valueField) setEntry(backspace(entry));
+      if (valueField) {
+        setEntry(backspace(entry));
+        // **DEL は答えを編集する**ので、そこから先は「答えが出ている」ではない。
+        setAnswerShown(false);
+      }
       return;
     }
     // ここから先は数字面のキーだけ。単位面には無い。
     if (!valueField) return;
+    // **`=` の答えのあと、画面の数を捨てるキーは新しい入力を始める**
+    // (0.9.3 設計書 §4.5)。規則そのものは `convert/entry.ts` が持つ。
+    //
+    // **`.` だけは空から始められない**——`pushDot` は打ちかけの数が無いと何も足さないので、
+    // `0` から始める(画面は `0.`)。
+    const base =
+      answerShown && startsNewValue(token)
+        ? token === "dot"
+          ? fromDigits("0")
+          : EMPTY
+        : entry;
+    // **答えが「手元の値」でなくなるのは、続きを打ち始めたときである。**
+    // `+/−` は符号を変えるだけなので続き、`=` は下で立て直す。
+    if (answerShown && token !== "sign" && token !== "eq")
+      setAnswerShown(false);
     if (token.startsWith("digit:")) {
-      setEntry(pushDigit(entry, token.slice("digit:".length)));
+      setEntry(pushDigit(base, token.slice("digit:".length)));
       return;
     }
     switch (token) {
       case "zeros3": {
         // **ローカルで畳んでから 1 回だけ書く。** 3 回に分けて書くと、同じ
         // イベントの中で 3 回とも同じ値を読み、最後の 1 回しか残らない。
-        let next = entry;
+        let next = base;
         for (const _ of [0, 1, 2]) next = pushDigit(next, "0");
         setEntry(next);
         break;
       }
       case "dot":
-        setEntry(pushDot(entry));
+        setEntry(pushDot(base));
         break;
       case "sign":
         setNegative(!negative);
@@ -304,6 +332,8 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         // 符号は Entry に入らないので、負なら state のほうへ移す。
         setNegative(folded.startsWith("-"));
         setEntry(fromSettled(folded.replace(/^-/, "")));
+        // **ここから「答えが出ている」状態**(0.9.3 §4.5)。次の数字は新しい入力を始める。
+        setAnswerShown(true);
         break;
       }
     }
