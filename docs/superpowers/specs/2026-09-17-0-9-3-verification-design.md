@@ -56,6 +56,17 @@ Rust の `MAX_EXPONENT_LEN`・`MAX_VERIFIED_MONTHLY_YEN` と **TS の 5 本す�
 **「文書の数 == その定数から導いた、利用者に見える値」**である。**導き方（`− 1` など）を番人の中に書き、
 その 1 行が壊れたら赤くなるようにする。**
 
+**ずれ方は 2 種類ある**（2 つ目は calcarc-3d の実測、`2be381d`）:
+
+| 形 | 例 | 番人が要るもの |
+|---|---|---|
+| **値がずれる** | 文書「**7 文字**まで」／定数 `MAX_RATE_LEN = 8`（`pushDot` は `length >= max` で拒む） | `− 1` の 1 行 |
+| **表し方が違う** | 同じ「小数 4 桁まで」が、`rate.rs:42` では**桁数 `4`**（`frac_part.len() > 4`）、`expr/mod.rs:18` では**倍率 `10_000`**（`PERCENT_SCALE`） | **`4` と `10^4` の関係**の 1 行 |
+
+**2 つ目のほうが危ない。** ずれているのではなく**同じ数がどこにも無い**ので、
+**「同じ数を探す」形の番人は、何も見つけられないまま緑になる**——
+**0 件で落ちる床（§1.7 の条件 1）が無ければ、気づけない。**
+
 ### 1.4 仕組みは既に在る。広げるだけである
 
 `crates/calcarc-wasm/tests/token_parity.rs` が、**`include_str!` で `web/src/ui/Finance/FinancePanel.tsx` を読み**、
@@ -71,6 +82,9 @@ Rust の `MAX_EXPONENT_LEN`・`MAX_VERIFIED_MONTHLY_YEN` と **TS の 5 本す�
   **15 か所・3 ファイル**（`token_parity.rs`・`carried_value_parity.rs`・`label_parity.rs`）あり、
   **8 本の TS/TSX**（`calc/types.ts`・`datascale/types.ts`・`convert/types.ts`・`currency/types.ts`・
   `finance/types.ts`・`ui/Finance/FinancePanel.tsx`・`ui/ScientificPanel.tsx`・`ui/Keypad/scientific.ts`）を読む。
+  **`crates/` 全体では 16 呼び出し・4 ファイル**で、4 つ目の `loan_boundary.rs` が読むのは
+  `testdata/loan_boundary.json` である（`git grep -c` は **17** を返すが、
+  **1 件は `token_parity.rs:9` の註**であって呼び出しではない）。
   **「ソースの本文を読んで数や綴りを突き合わせる」ことは、この repo では例外ではなく作法である。**
 - **Rust から `docs/manual/*.md` を読むテストは 1 本も無い。** マニュアルを読んでいるのは
   `manual-widths.test.ts`（TS）だけである。
