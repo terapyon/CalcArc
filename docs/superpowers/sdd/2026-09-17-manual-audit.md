@@ -451,14 +451,22 @@ worked example のうち賞与回りの3数値と、nCr/nPr続き計算の worke
 
 | ガード | 名前が示唆すること | 実際に assert していること |
 |---|---|---|
-| `manual-markdown.test.ts` | Markdown構造 | 3冊の章番号が連番であること(quick=1..7, detail=1..10)、英語版quickの章数・番号が日本語版と一致すること、`shot:` 参照が撮影台本(`SHOTS`)と両方向で一致すること(台本にない`shot:`は無い、`use:"manual"`の写真は必ずどれかのマニュアルから参照される)。**訳文の正確さ・写真が説明に合っているかは明示的に「機械では見られない」と docstring に明記** |
+| `manual-markdown.test.ts` | Markdown構造 | **【訂正 2026-09-17】この行は誤っていた。** 下の `manual-shots.test.ts` の行を見よ。**このテストは出荷するマニュアルを 1 行も読まない**——読むのは **fixture**（`web/tests/unit/fixtures/manual/sample.ja.md`）と CSS で、assert しているのは**抜き出しの純関数と HTML/PDF の組み立て**（キー名の抽出、`shot:` の抽出、章番号の抽出、shot 記号の差し替えと拒否、書体 CSS の書き換え、PDF の題名と言語）である。**`readManuals` を呼ばない。** |
 | `manual-fonts.test.ts` | フォント | PDF/写真の描画に使う固定フォント3つ(Noto Sans JP, Arimo, Noto Sans Symbols 2)の並び順、`package.json`のdevDependenciesが厳密バージョンで固定されていること、フォントCSSが正しい`font-family`を名乗ること、レンダリングHTMLがその順で`font-family`を書くこと、`unpinnedGlyphs`(web-font以外が描いた文字数を数える純関数)の単体テスト。**実際にどのグリフをどのフォントが描いたかはChromiumに聞くしかなく、それは`pnpm manual`/`pnpm shots`実行時のみ判定される——このテストは判定「器」の純関数を見ているだけ** |
-| `manual-shots.test.ts` | 写真参照とREADME写真の区別、章立て | manual-markdown.test.tsと同じテストファイル(実体は1ファイルに両方の`describe`がある)。上記に同じ |
+| `manual-shots.test.ts` | 写真参照とREADME写真の区別、章立て | **【訂正 2026-09-17】** 「`manual-markdown.test.ts` と同じテストファイル」も**誤り**（別ファイルで、`cmp` でも中身が違う）。**出荷する 3 冊を実際に読んでいるのはこちら**（`readManuals`）。assert は 2 群——**`shot:` 参照と撮影台本(`SHOTS`)の双方向一致**（`:55` の `describe`）と、**章立て**（`:76` の `describe`。quick は 1〜7、detail は 1〜10、**日本語 quick の章が英語版にすべて在ること**）。 |
 | `manual-widths.test.ts` | 画面幅の記述 | マニュアル本文中の「幅 (\d+)px 以上」(JA)・「from (\d+)px wide」(EN)の数字が`CHROMIUM_NARROW_WIDTH`・`WEBKIT_NARROW_WIDTH`と一致すること。`viewport-budget.spec.ts`のいちばん狭い幅が`CHROMIUM_NARROW_WIDTH`と一致すること。**高さ(812px)や「iPhone実機ではない」という定性的な文言そのものは検査対象外** |
 | `manual-key-names.test.ts` | キー名の実在性 | マニュアル中の全`【…】`表記が、現在の画面のラベル定義(Keypad各種・FinancePanel・Nav等、計14ソースファイルからimportした文字列集合)のいずれかに一致すること。件数下限(272ラベル、625キー名参照)を主張。**キー名が実在することだけを見る。そのキーを押した結果として書かれている数値や挙動は一切見ない** |
 
 ##### 機械的にガードされている claim の種類
-- 章の数・番号の整合性(markdown)
+
+**【訂正 2026-09-17】この一覧は、番人の名前を 2 か所取り違えていた**（上の表の訂正を参照）。
+**`docs/manual/*.md` を実際に開く番人は 3 本**——`manual-key-names`・`manual-shots`・`manual-widths`
+（すべて `web/tests/unit/manuals.ts` の `readManuals` 経由）。**`manual-markdown` と `manual-fonts` は開かない。**
+**誤りが入った経緯**: 0.9.2 の枝（`e727a0c`）で調べ役が**ファイル名から役割を推し量り**、
+私がそれを表に写した。**この文書の他の節では「名前からではなく中身から書け」と要求しておきながら、
+この表自身が名前から書かれていた。**
+
+- 章の数・番号の整合性（**`manual-shots`**。markdown ではない）
 - 英日quickマニュアルの章の対応(markdown)
 - `shot:`参照と撮影台本の双方向整合性(markdown)
 - 固定フォントのバージョン・名前・埋め込み順序(fonts)
