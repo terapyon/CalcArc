@@ -9,6 +9,52 @@ const fail = (msg) => {
   process.exit(1);
 };
 
+/**
+ * `denylist:[…]` の中身を正規表現として読み出す。
+ *
+ * **文字クラスの中の `/` で切らない。** 除外はいま `/\.[^/]+$/` の形で、
+ * **`[^/]` の中に `/` が在る**——素朴に `/` で分けると、壊れた綴りを
+ * `new RegExp` に渡して例外になる。
+ */
+function denylistPatterns(text) {
+  const head = "denylist:[";
+  const at = text.indexOf(head);
+  if (at < 0) return [];
+  const out = [];
+  let i = at + head.length;
+  while (i < text.length && text[i] !== "]") {
+    if (text[i] !== "/") {
+      i += 1; // 区切りの `,` と空白
+      continue;
+    }
+    let j = i + 1;
+    let inClass = false;
+    let source = "";
+    while (j < text.length) {
+      const c = text[j];
+      if (c === "\\") {
+        source += c + text[j + 1];
+        j += 2;
+        continue;
+      }
+      if (c === "[") inClass = true;
+      else if (c === "]") inClass = false;
+      else if (c === "/" && !inClass) break;
+      source += c;
+      j += 1;
+    }
+    let k = j + 1;
+    let flags = "";
+    while (k < text.length && /[a-z]/.test(text[k])) {
+      flags += text[k];
+      k += 1;
+    }
+    out.push(new RegExp(source, flags));
+    i = k;
+  }
+  return out;
+}
+
 const swPath = resolve(dist, "sw.js");
 if (!existsSync(swPath)) fail("dist/sw.js が無い(SW が生成されていない)");
 const sw = readFileSync(swPath, "utf8");
@@ -39,6 +85,24 @@ if (!/\.wasm/.test(sw)) {
 if (!sw.includes("denylist")) {
   fail(
     "sw.js の navigation fallback に除外が無い(navigateFallbackDenylist を確認。/ogp.png のような実ファイルが index.html にすり替わる)",
+  );
+}
+
+// 3b. **マニュアルの PDF が、その除外に実際に当たること**(0.9.3)。
+//     `#manual` の画面から開く `/manual/calcarc-<版>-<冊>.pdf` は
+//     **navigation リクエスト**(新しいタブで開く)である。除外に当たらないと
+//     **SW が index.html を返し、Cloudflare の Function まで届かない**
+//     ——**実体の無い PDF の 404 も、実体のある PDF そのものも出せなくなる**。
+//     **「denylist という字が在る」では足りない**: 除外の中身が
+//     `/^\/ogp\.png$/` のように狭まった日、上の検査は緑のままである。
+const patterns = denylistPatterns(sw);
+if (patterns.length === 0) {
+  fail("sw.js の denylist から正規表現を 1 つも読み出せない(綴りが変わった)");
+}
+const manualPdf = "/manual/calcarc-0.0.0-quick-ja.pdf";
+if (!patterns.some((re) => re.test(manualPdf))) {
+  fail(
+    `${manualPdf} が navigation fallback の除外に当たらない(SW がアプリの殻を返し、PDF が開けない)`,
   );
 }
 

@@ -18,6 +18,20 @@ import styles from "./ManualPage.module.css";
  * 404 になる**（`functions/manual/[[path]].js` がそう返す）。
  * **だからこの画面は PDF が無くても壊れない作りにしてある**——
  * **同じ中身は Release にも添付されている**ので、その行き先を必ず添える。
+ *
+ * ## Service Worker はこの要求を飲まない
+ *
+ * **PDF を開くのは navigation リクエスト**（新しいタブで開く）なので、
+ * **放っておくと SW の navigation fallback がアプリの殻（`index.html`）を返す**
+ * ——**Cloudflare の Function まで届かず、404 も本物の PDF も出せなくなる**。
+ * **いまは当たらない**: `vite.config.ts` の `navigateFallbackDenylist` が
+ * **拡張子を持つパスを除外している**（`/\.[^/]+$/`。元は `/ogp.png` のため）。
+ *
+ * **除外が狭まった日に気づけるように、番人を 1 段足した**（0.9.3）:
+ * `web/scripts/check-sw.mjs` が**作った `sw.js` から除外を読み出し、
+ * `/manual/calcarc-0.0.0-quick-ja.pdf` が実際に当たること**を見る。
+ * **「denylist という字が在る」だけでは足りない**——中身が
+ * `/^\/ogp\.png$/` に狭まっても、その検査は緑のままである。
  */
 
 /** 版から PDF の名前を作る。**綴りの出どころは `web/scripts/manual/markdown.ts`
