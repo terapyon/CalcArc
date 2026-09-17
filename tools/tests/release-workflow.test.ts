@@ -817,3 +817,86 @@ describe("マニュアルは本番の前に作り、落ちたら本番へ出さ�
     expect(ci).toContain("- run: pnpm manuals");
   });
 });
+
+// ---------------------------------------------------------------------------
+// **配る物に PDF が入っているか**(0.9.3 設計書 §2.3、利用者の裁定 2026-09-17)。
+//
+// **`deploy.yml` の段 1 つが、この裁定の実体である。** 落ちても
+// ワークフローはそのまま動き、**壊れ方は本番に出てからしか見えない**
+// ——`#manual` から開くリンクが 404 を返す。ここで字面を固定する。
+//
+// **位置が意味を持つ**(3 つとも、外すと静かに壊れる):
+//
+// - `vite build` の**後ろ**。あれは `dist` を作り直すので、前に置くと消える
+// - 配る段の**前**。後ろに置けば、入れた PDF は配られない
+// - `if` が `inputs.called_from_release`。緊急経路の走行には artifact が
+//   無いので、外すと**緊急の配信が毎回赤くなる**
+// ---------------------------------------------------------------------------
+
+describe("リリースの走行だけ、PDF を dist に入れてから配る（0.9.3）", () => {
+  const release = read("release.yml");
+  const deploy = jobBlock(read("deploy.yml"), "deploy");
+  const chunks = stepChunks(deploy);
+  const put = chunks.filter((chunk) =>
+    chunk.includes("actions/download-artifact@"),
+  );
+
+  it("PDF を取る段は 1 つで、上げた名前を dist の下に置く", () => {
+    expect(put).toHaveLength(1);
+    expect(put[0]).toMatch(/^ {10}name:\s*manuals\s*$/m);
+    expect(put[0]).toMatch(/^ {10}path:\s*web\/dist\/manual\/\s*$/m);
+    // **上げる側と同じ名前である。** 片方だけ改名すると、`download-artifact` が
+    // 何も見つけられず——**PDF の無い版が本番へ出る。**
+    const upload = stepChunks(jobBlock(release, "manuals")).find((chunk) =>
+      chunk.includes("actions/upload-artifact@"),
+    );
+    expect(upload).toMatch(/^ {10}name:\s*manuals\s*$/m);
+  });
+
+  it("取るのはリリースの走行だけである（緊急経路には artifact が無い）", () => {
+    expect(put[0]).toMatch(
+      /^ {8}if:\s*\$\{\{ inputs\.called_from_release \}\}\s*$/m,
+    );
+  });
+
+  it("PDF は vite build のあと、配る前に入る", () => {
+    const at = (needle: string) =>
+      chunks.findIndex((chunk) => chunk.includes(needle));
+    const build = at("pnpm exec vite build");
+    const ship = at("cloudflare/wrangler-action@");
+    // **段が消えたら -1 になる**。下の 2 つは -1 とも比べられてしまうので、
+    // ここで「在る」ことを先に言う。
+    expect(build).toBeGreaterThanOrEqual(0);
+    expect(ship).toBeGreaterThan(0);
+    const where = chunks.findIndex((chunk) =>
+      chunk.includes("actions/download-artifact@"),
+    );
+    expect(where).toBeGreaterThan(build);
+    expect(where).toBeLessThan(ship);
+  });
+
+  it("PDF を入れた先と、配る先が同じである", () => {
+    // `pages deploy` の引数が動けば、上の `path:` は配られない場所を指す。
+    expect(deploy.join("\n")).toContain("pages deploy web/dist ");
+  });
+
+  it("配った先で、無い PDF が 404 で、配った PDF が届いていることを見る", () => {
+    // **単体テストは作り物の `env.ASSETS` に対してである**——Pages が本当に
+    // `functions/manual/` を拾うかは、配った先でしか分からない。
+    // **取る段も `/manual/` を含む**(`path:`)ので、curl を打つ段だけ数える。
+    const smokes = chunks.filter(
+      (chunk) => chunk.includes("/manual/") && chunk.includes("curl"),
+    );
+    expect(smokes).toHaveLength(2);
+    const [missing, served] = smokes;
+    // **無いものが 404 なのは、両方の経路で真である**(緊急経路も通る)。
+    expect(missing).toContain("calcarc-no-such-manual.pdf");
+    expect(missing).not.toContain("called_from_release");
+    // **配った PDF が届いているかは、PDF を配った走行でしか見られない。**
+    expect(served).toMatch(
+      /^ {8}if:\s*\$\{\{ inputs\.called_from_release \}\}\s*$/m,
+    );
+    // **名前は配った物から取る**——綴ると、上げ忘れた日に緑になる。
+    expect(served).toContain("ls web/dist/manual");
+  });
+});

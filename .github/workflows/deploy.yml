@@ -40,25 +40,29 @@ jobs:
     #   ② `wrangler pages deploy` の最中 —— **未確認**。中断した Direct Upload
     #      が live なデプロイになりうるかは Cloudflare 側の振る舞いで、
     #      ここからは試せない。**確かめていないので、確かめた顔で書かない。**
-    #   ③ `wrangler` の後(スモーク 3 本と `deployed-dist` の保存)
+    #   ③ `wrangler` の後(スモーク 5 本と `deployed-dist` の保存)
     #      —— **本番は既に新しいビルドを配っている。** 失うのは「配った物が
-    #      本当に配信されているか」の検査 3 本と、Release に添える証拠
+    #      本当に配信されているか」の検査 5 本と、Release に添える証拠
     #      (`upload-artifact` に `if: always()` は無い)。**これがいちばん悪い
     #      終わり方**である——出てはいるが、出たことを誰も確かめておらず、
     #      証拠も残っていない。
     #
     # **だから観測最大では決めない。** 実績は 25 本(単独 20・Release 経由 5)で
-    # **最大 87 秒**だが、**このジョブは 6 分の再試行予算を内側に持つ**
-    # ——下のスモーク 3 本がそれぞれ 12 回 × 10 秒待つので、**伝播が遅い日には
-    # 何も壊れていなくても 7 分半**かかる。観測最大の 2 倍(→ 下限の 10 分)だと、
-    # **その日に ③ で殺す。**
+    # **最大 87 秒**だが、**このジョブは 8 分の再試行予算を内側に持つ**
+    # ——下のスモークのうち**再試行を持つ 4 本**がそれぞれ 12 回 × 10 秒待つので、
+    # **伝播が遅い日には何も壊れていなくても 9 分半**かかる(87 秒 + 8 分。
+    # 「無い PDF が 404」の 1 本だけは待たない——**無いものは伝播しない**)。
+    # 観測最大の 2 倍(→ 下限の 10 分)だと、**その日に ③ で殺す。**
     #
-    # `ci.yml` の規則を**再試行予算込みの上限 7.5 分**に当てると 15 分。
-    # そこから **1 段(5 分)緩めて 20 分**にした——**ここだけ規則より緩い**のは、
-    # 失敗の形が非対称だからである。他のジョブを殺すと検査が 1 つ落ちるだけ
-    # だが、**このジョブを ③ で殺すと本番が「出たまま未検査」になる。**
-    # public なリポジトリなので runner 時間は課金されず、緩い側の代償は
-    # 固まった日の wall-clock 5 分だけである。
+    # `ci.yml` の規則を**再試行予算込みの上限 9.5 分**に当てると、2 倍して
+    # 5 分刻みに上げて **20 分**である。**0.9.3 でマニュアルのスモークを 2 本
+    # 足すまでは、予算は 7.5 分・規則は 15 分で、そこから 1 段(5 分)緩めて
+    # 20 分にしていた**——緩めた理由は失敗の形の非対称性だった(他のジョブを
+    # 殺すと検査が 1 つ落ちるだけだが、**このジョブを ③ で殺すと本番が
+    # 「出たまま未検査」になる**)。**いまは規則がそのまま 20 分を出すので、
+    # 値は同じでも「規則より緩い」ではなくなった。**
+    # **これ以上スモークを足すなら、この段の値も上げる**——再試行予算は
+    # 足した本数ぶん伸び、**上限に当たる日は本番が「出たまま未検査」になる。**
     timeout-minutes: 20
     permissions:
       contents: read
@@ -203,9 +207,49 @@ jobs:
           done
           echo "served HTML never referenced $bundle" >&2
           exit 1
+      # **マニュアルの経路を、配った先で 1 度だけ確かめる**(0.9.3 設計書 §2.1.2)。
+      # **単体テストは `env.ASSETS` の作り物に対してである**——Pages が本当に
+      # `functions/manual/[[path]].js` を拾っているか、`_redirects` の
+      # `/* /index.html 200` に先を越されていないかは、**ここでしか分からない。**
+      - name: Smoke — a manual PDF that does not exist is 404, not the app shell
+        run: |
+          set -eu
+          base="https://calc.terapyon.net"
+          # **`-f` を付けない。** 404 で curl が落ちると、番号を読む前に段が死ぬ。
+          miss="$base/manual/calcarc-no-such-manual.pdf"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' "$miss")"
+          # **緊急経路でも同じ答えである**(PDF が 1 冊も無い版でも、無いものは 404)。
+          if [ "$code" != "404" ]; then
+            echo "存在しない PDF が $code を返した(Function が効いていない)" >&2
+            exit 1
+          fi
+          echo "missing PDF is 404"
+      - name: Smoke — the manuals we deployed are being served
+        # **リリースの走行だけ。** 緊急経路の版は PDF を持たない
+        # (`docs/deploy.md` のロールバック)。
+        if: ${{ inputs.called_from_release }}
+        run: |
+          set -eu
+          base="https://calc.terapyon.net"
+          # **配った物から名前を取る**——版数を綴ると、上げ忘れた日に緑になる。
+          pdf="$(ls web/dist/manual | head -1)"
+          [ -n "$pdf" ]
+          # 他のスモークと同じリトライ(ファイル単位の伝播は非アトミック)。
+          for i in $(seq 1 12); do
+            type="$(curl -sS -o /dev/null -w '%{content_type}' "$base/manual/$pdf")"
+            case "$type" in
+              application/pdf*)
+                echo "serving $pdf ($type)"
+                exit 0 ;;
+            esac
+            echo "attempt $i: /manual/$pdf is $type"
+            sleep 10
+          done
+          echo "配った PDF が配信されていない: $pdf" >&2
+          exit 1
 
       # 配った物そのものを Release に添えるため、走行に残す(設計書 §4)。
-      # **スモーク 3 本の後**に置く——「配った物」と呼べるのは、それが実際に
+      # **スモーク 5 本の後**に置く——「配った物」と呼べるのは、それが実際に
       # 配信されていることを確かめた後だけである。`build-info.json`(刻印)を
       # 含む `web/dist/` をそのまま上げる。
       - name: Keep what was deployed
