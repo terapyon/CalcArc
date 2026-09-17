@@ -62,7 +62,55 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 108 filtered out
 
 ---
 
-## 次: C-2 衝突マーカーの検査の範囲を広げる（案 D）
+## C-2 衝突マーカーの検査の範囲を広げる（案 D） — **完了**
+
+**広げる前に数えた**（緑を作りに行かない）: `git ls-files` **582 本**・**読めた 575 本**・
+**行頭のマーカー 0 行**。**広げても今日は緑**と分かってから広げた。
+
+**変えたもの（4 本）**:
+
+- `tools/check-conflict-markers.mjs`——`readTrackedDocs()`（`ls-files docs/`）を
+  **`readTrackedFiles()`（`ls-files` 全部）**に。**2 進（NUL を含む）は飛ばし、飛ばした数を印字**する。
+- 同ファイルの**註 4 か所**——見出し・「`docs/` の外は見ない」・`=======` の説明・「自己違反しないこと」。
+  **範囲を変えたら理由も同じコミットで直す**（今日 `FinancePanel.tsx` で見た「直した文が註に移って生き残る」形を作らない）。
+- `tools/tests/check-conflict-markers.test.ts`——import 名、実物のリポジトリを読む 3 件。
+  **`docs/` の外も読んでいることを主張する行**を足した（`CLAUDE.md` と `.github/` が読めていること、
+  **全部が `docs/` で始まるわけではないこと**）。`docs/` に戻った日に赤くなる。
+- `.github/workflows/ci.yml`——段の註（「`docs/` に…」→「追跡下の全ファイルに…」）。
+
+**床は 2 つ**:
+
+- `MIN_SCANNED_FILES = 100`——**読んだ**数の下限。**今日の数（576）を焼かない**。
+- `MAX_SKIPPED_FILES = 50`——**飛ばした**数の上限（**新設**）。
+  **「読めないので見なかった」を「見て 0 だった」と同じ緑にしない**ため（監視役の指摘）。
+  実測は 7 件。**読み方が壊れて全部飛ばし始めたら、ここで落ちる。**
+
+**赤の確認（新しい覆いを名指しで確かめた）**: **`docs/` の外**にマーカーを置いた——
+リポジトリ根に `zz-redcheck.tmp`（`x` / `<<<<<<< HEAD` / `y`）を作り `git add -N`:
+
+```
+check:conflict-markers NG — 衝突マーカーが残っている(1 行)
+  zz-redcheck.tmp:2: <<<<<<< — <<<<<<< HEAD
+rc=1
+```
+
+**広げる前なら、このファイルは見えていない。** 片付けて再実行し、緑に戻ることも確かめた
+（`git rm --cached` ＋ 削除 → `OK — 追跡ファイル 576 件を読み、7 件を飛ばした…`、木は 3 本の変更だけ）。
+
+**緑の印字**:
+
+- `node tools/check-conflict-markers.mjs` → **576 件を読み、7 件を飛ばし、マーカー 0**
+- `pnpm vitest run ../tools/tests/check-conflict-markers.test.ts` → **14 passed**
+- `cd heavy && pnpm test` → **20 files・360 passed**（`tools/tests` を含む）
+- `cd heavy && pnpm lint` → 緑（既存の info 2 件のみ。`report.ts` の `useTemplate`）
+
+**型検査について**: この作業木では `pnpm typecheck` が
+`web/src/calc/index.ts` の 2 件で落ちる——**`web/src/wasm/` がまだ無い**ためで
+（CLAUDE.md「新しいクローンでは先に `cd web && pnpm wasm`」）、**この変更とは関係が無い**
+（`tools/tests/` にはエラーが 1 件も出ていない）。**`pnpm wasm` は重い段なので、
+監視役に一声かけてから回す。**
+
+## 次: C-1 マニュアルの上限値とコードの定数の突合
 
 **先に数えてから広げる。** 設計書 §2.3 の実測では**追跡下の全ファイルで行頭のマーカーは 0 行**だが、
 **広げた瞬間に赤くなるなら、それは新しい発見**である——**緑を作りに行かない**。
