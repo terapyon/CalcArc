@@ -275,12 +275,16 @@ describe("renderEvidence — 在席と結論の継ぎ目", () => {
 });
 
 // ---------------------------------------------------------------------------
-// マニュアル（2026-09-11、マニュアルの設計書 §5、裁定 §9 #3「本番は止めない」）。
-// **落ちてよいのは `Manuals` の 1 つだけ。** それ以外の赤は今までどおり
+// マニュアル（0.9.3、利用者の裁定 2026-09-17「PDF が落ちたら本番も出さない」）。
+// **落ちてよいジョブは 1 つも無い。** `Manuals` の赤も、他の赤と同じように
 // 証拠を書かずに落ちる。
+//
+// **2026-09-11 の形はこうではなかった**（マニュアルの設計書 §5、裁定 §9 #3
+// 「本番は止めない」）——`Manuals` が本番展開の**あと**に居たので、
+// **落ちてよいのは `Manuals` の 1 つだけ**だった。並べ替えでその前提が消えた。
 // ---------------------------------------------------------------------------
 
-describe("renderEvidence — マニュアルだけは落ちても証拠を書く", () => {
+describe("renderEvidence — マニュアルが落ちた走行は、証拠も書かない", () => {
   const heavyBody = job("Heavy corpus / Corpus vs reference", "success");
   const deploy = job(
     "Deploy / Build and deploy to Cloudflare Pages",
@@ -304,18 +308,33 @@ describe("renderEvidence — マニュアルだけは落ちても証拠を書く
   });
 
   it.each(["failure", "cancelled", "timed_out"])(
-    "Manuals が %s でも証拠を書き、作れなかったと言う",
+    "Manuals が %s なら、証拠を書かずに落ちる",
     (conclusion) => {
-      const out = renderEvidence({ ...base, jobs: withManuals(conclusion) });
-      expect(out).toContain("**マニュアル（PDF）は作れなかった**");
-      expect(out).toContain(`\`Manuals\` = \`${conclusion}\``);
-      expect(out).toContain("本番へ配った物には影響しない");
-      // 表は正直に書き、成功にも進行中にも数えない。
-      expect(out).toContain(`| Manuals | 落ちた(\`${conclusion}\`) |`);
-      expect(out).toMatch(/成功した検査: *2\*\*\n/);
-      expect(out).not.toMatch(/\| Manuals \| 進行中/);
+      // **0.9.3 で裏返った主張である。** 以前は「落ちても証拠を書き、
+      // 作れなかったと言う」だった——`Manuals` が本番の**あと**で走ったので、
+      // 証拠ごと落とすと本番へ出た走行に証拠が付かなかった。
+      // **いまは `Manuals` が本番の前に居る**ので、落ちた走行は本番へ出ておらず、
+      // **`release.yml` の条件でこのジョブ自体が走らない**。ここは
+      // **その前提が崩れたときに鳴る側**である——例外を戻せば、ここが赤くなる。
+      expect(() =>
+        renderEvidence({ ...base, jobs: withManuals(conclusion) }),
+      ).toThrow(new RegExp(`Manuals = ${conclusion}`));
     },
   );
+
+  it("「作れなかった」の文は、もうどこからも出ない", () => {
+    // **出ない文を残すと、読んだ人は「落ちても出る」と信じる**(理由は静かに腐る)。
+    // 走行が持ちうる結論を全部通して、その文が 1 度も出ないことを見る。
+    for (const conclusion of ["success", "failure", "cancelled", "timed_out"]) {
+      let out = "";
+      try {
+        out = renderEvidence({ ...base, jobs: withManuals(conclusion) });
+      } catch {
+        continue;
+      }
+      expect(out).not.toContain("作れなかった");
+    }
+  });
 
   it("Manuals 以外が落ちたら、今までどおり証拠を書かずに落ちる", () => {
     expect(() =>
@@ -334,7 +353,7 @@ describe("renderEvidence — マニュアルだけは落ちても証拠を書く
     ).toThrow(/CI \/ Manuals = failure/);
   });
 
-  it("Manuals と別のジョブが両方落ちたら、落ちる（落ちた別のジョブを名指す）", () => {
+  it("落ちたジョブは全部名指す（例外が空なので、Manuals も挙がる）", () => {
     let message = "";
     try {
       renderEvidence({
@@ -350,8 +369,9 @@ describe("renderEvidence — マニュアルだけは落ちても証拠を書く
     }
     expect(message).toContain("緑でない走行から証拠は作れない");
     expect(message).toContain("CI / Rust core = failure");
-    // 許したほうを落ちた理由として挙げない。
-    expect(message).not.toContain("Manuals = failure");
+    // **0.9.3 まではここが `not.toContain` だった**——`Manuals` を許していたので、
+    // 落ちた理由として挙げなかった。例外が空になった今は、両方が挙がる。
+    expect(message).toContain("Manuals = failure");
   });
 
   it("Manuals の未知の結論は、例外にならず断って落ちる（F-2）", () => {
@@ -389,7 +409,9 @@ describe("renderEvidence — マニュアルだけは落ちても証拠を書く
     expect(out).toContain("マニュアル（PDF）はこの走行で作っていない");
   });
 
-  it("例外はちょうど Manuals の 1 つである", () => {
-    expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
+  it("例外は 1 つも無い", () => {
+    // **`release.yml` 側の番人は `tools/tests/release-workflow.test.ts` にある**
+    // ——あちらは並び(`needs`)と条件式を固定し、ここは読み手の定数を固定する。
+    expect([...MAY_FAIL]).toEqual([]);
   });
 });

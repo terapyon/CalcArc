@@ -743,10 +743,15 @@ describe("マニュアルは本番の前に作り、落ちたら本番へ出さ�
     ).toHaveLength(1);
   });
 
-  it("証拠が許す落ちたジョブは、ちょうど Manuals の 1 つである", () => {
+  it("証拠が許す落ちたジョブは、1 つも無い", () => {
+    // **0.9.3 まではここに `Manuals` が居た**(本番のあとで走っていたので、
+    // 落ちても証拠は書いた)。**並べ替えで前提が消えた**——`Manuals` が落ちれば
+    // `Deploy` が走らず、このジョブの条件も満たされない。**効かない例外を
+    // 残すと、並びを戻した日に黙って効きはじめる。**
+    //
     // **足すたびに「緑でない走行から証拠は作れない」が狭くなる。** 足すなら
     // この行も直すことになる——差分に出る。
-    expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
+    expect([...MAY_FAIL]).toEqual([]);
   });
 
   it("Manuals は Deploy の前に走り、Deploy がそれを待つ", () => {
@@ -763,9 +768,11 @@ describe("マニュアルは本番の前に作り、落ちたら本番へ出さ�
   });
 
   it("Evidence の条件は、止められていないことと Deploy の成功だけである", () => {
-    // - 条件が無い(`success()`)と、Manuals が落ちた日に証拠ごと飛ぶ
     // - `always()` だと、手で止めた走行でも証拠を書き足す
     // - Deploy を名指さないと、本番へ出なかった走行でも証拠のジョブが走って赤くなる
+    // - **0.9.3 の並べ替えで、この式が選ぶ走行は `success()` と同じになった**
+    //   (`deploy` の成功が `manuals` の成功を含意する)。**字面を固定するのは、
+    //   `success()` の意味が `needs` の並びで変わるからである**
     expect(jobKey(evidence, "if")).toBe(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions の式の字面そのものと比べる
       "${{ !cancelled() && needs.deploy.result == 'success' }}",
