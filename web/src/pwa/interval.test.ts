@@ -37,7 +37,9 @@ describe("新しい版を探す間隔（0.9.3 設計書 §3.2）", () => {
     // 配線の側に「緩めれば緑」が残った**ので、ここで本文を当てて塞ぐ。
     // **「在ること」と「効いていること」は別**——この 2 本が並んで初めて揃う。
     expect([...wiring.matchAll(/setInterval\(/g)]).toHaveLength(1);
-    expect(wiring).toMatch(/setInterval\([\s\S]*?UPDATE_CHECK_INTERVAL_MS\s*\)/);
+    expect(wiring).toMatch(
+      /setInterval\([\s\S]*?UPDATE_CHECK_INTERVAL_MS\s*\)/,
+    );
     // 間隔で呼ぶ相手も見る。**間隔だけ正しくて何も探さない**形を残さない。
     expect(wiring).toMatch(/registration\.update\(/);
   });
