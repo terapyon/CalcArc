@@ -40,6 +40,24 @@ fn tokens_in_ts_array(src: &str, marker: &str) -> Vec<String> {
 }
 
 #[test]
+fn the_convert_value_limit_matches_between_typescript_and_rust() {
+    // **同じ数が 2 つ在る**——Rust は「正確な値を小数で見せるか分数で見せるか」の境、
+    // TS は「打鍵の壁」。**役割は違うが、食い違えば前提がずれる**(0.9.3 設計書 §8.2)。
+    //
+    // **`settle.rs` の註は「機械の番人は無い」と書いていた。** 結論が誤りで、
+    // **この向き(Rust が TS の本文を読む)なら置ける**——それがこのテストである。
+    // **助数の道具は既に在った**(`number_in_ts_const`、この下)。**足す前に grep する**
+    // ——同じ物を 2 つ書きかけた(2026-09-17)。
+    let src = include_str!("../../../web/src/convert/entry.ts");
+    let ts = number_in_ts_const(src, "const MAX_VALUE_DIGITS = ") as usize;
+    assert_eq!(
+        ts,
+        calcarc_core::convert::settle::MAX_VALUE_CHARS,
+        "web/src/convert/entry.ts の MAX_VALUE_DIGITS と convert::settle::MAX_VALUE_CHARS が食い違っている"
+    );
+}
+
+#[test]
 fn key_tokens_match_between_typescript_and_rust() {
     let src = include_str!("../../../web/src/calc/types.ts");
     let ts = tokens_in_ts_array(src, "export const KEY_TOKENS = [");
