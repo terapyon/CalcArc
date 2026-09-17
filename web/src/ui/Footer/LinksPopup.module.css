@@ -1,0 +1,80 @@
+/* **更新のお知らせ(`UpdateToast.module.css`)と同じ流儀**——色も角も影も
+   トークンから取り、独自の値を作らない。違うのは「画面全体を覆う」ことだけ。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  /* **お知らせより上**。あちらは z-index: 10 で、リンク集はその上に出る
+     (Escape の順序と同じ向きにしておく)。 */
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 40%);
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--shell-max-width);
+  margin: 12px;
+  /* iOS のホームインジケータを避ける(下部と同形)。 */
+  margin-bottom: max(12px, env(safe-area-inset-bottom));
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--display-status-fg);
+  background: var(--display-bg);
+  color: var(--display-fg);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 25%);
+}
+
+.popup:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--display-size-status);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  /* 44px は base-spec §43 が求めるタッチ標的に対してこのプロジェクトが
+     採った値(`UpdateToast.module.css` と同じ)。**リンクも例外にしない**
+     ——指で押す物である。 */
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-target-min);
+  color: inherit;
+}
+
+.link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.close {
+  min-height: var(--touch-target-min);
+  padding: 8px 12px;
+  border: 1px solid var(--display-status-fg);
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

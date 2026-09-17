@@ -1,4 +1,6 @@
+import { useCallback, useRef, useState } from "react";
 import styles from "./Footer.module.css";
+import { LinksPopup } from "./LinksPopup";
 
 /**
  * シェルのフッタ。**モジュールに属さない**ので、`UpdateToast` と同じく
@@ -7,19 +9,55 @@ import styles from "./Footer.module.css";
  *
  * 版数はビルド時に埋まる(`vite.config.ts` の define)。WASM の
  * `core_version()` は非同期で、シェルは WASM を読まないため使えない。
+ *
+ * **0.9.3 で GitHub のリンクがボタンになった**(利用者の裁定 2026-09-17)。
+ * 下部に置くのは**リンク集を開くボタン 1 つ**だけで、4 本の行き先は
+ * ポップアップの中に入る(`LinksPopup.tsx`)——**4 本を下部に並べると
+ * 横に溢れる**(設計書 §2.4)。
+ * **`@terapyon` は下部から消え、リンク集の GitHub の項目に入った**
+ * ——これも利用者の裁定である。
+ *
+ * **前後を測ってある**(2026-09-17、Chromium、`--project=mobile`):
+ *
+ * | | 下部の要る幅 | 下部の高さ | 複利の面の余白 390×844 / 360×800 |
+ * |---|---|---|---|
+ * | 前(`CalcArc 0.9.2 @terapyon`) | 302px | 33px | 33.31px / 22.28px |
+ * | 後(`CalcArc 0.9.2 について`) | **288px** | 33px | 33.31px / 22.28px |
+ *
+ * **狭くなった**(14px)ので、**320px の画面での余りは 18px から 32px に増えた**。
+ * **縦は 1px も動いていない**——`finance-layout.spec.ts` の 8px の予算は
+ * そのままである。**版数の桁が増えれば幅も増える**が、いまの余り 32px は
+ * 1 桁ぶんの余裕としては足りている(この綴りで 1 文字は最大 12px)。
  */
+
+/** 下部のボタンの文字。**版数は綴りの中に入る**(利用者の裁定 2026-09-17)。 */
+export function aboutLabel(version: string): string {
+  return `CalcArc ${version} について`;
+}
+
 export function Footer() {
+  const [open, setOpen] = useState(false);
+  // **閉じたら、開いたボタンへ焦点を戻す。** 戻さないと、読み上げの位置が
+  // 消えた要素の所に残り、次の Tab が画面の先頭からやり直しになる。
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  }, []);
+
   return (
     <footer className={styles.footer}>
-      <a
-        className={styles.link}
-        href="https://github.com/terapyon/CalcArc"
-        // PWA の standalone 起動でも外のブラウザで開く。
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        ref={buttonRef}
+        type="button"
+        className={styles.about}
+        // **開いている状態を読み上げに出す。** ボタンの文字は変わらないので、
+        // これが無いと「押したが何が起きたか分からない」ままになる。
+        aria-expanded={open}
+        onClick={() => setOpen((shown) => !shown)}
       >
-        CalcArc {__APP_VERSION__} @terapyon
-      </a>
+        {aboutLabel(__APP_VERSION__)}
+      </button>
       {/* **【変更 2026-08-25】文言を縮めて字を大きくした**(8px → **12px**)。
           0.2.1 は逆に「文言は縮めず、フォントを落として 1 行に収める」を
           採っていたが、**8px は実機で読めなかった**(ユーザー報告)。
@@ -44,6 +82,7 @@ export function Footer() {
       <span className={styles.disclaimer} data-testid="footer-disclaimer">
         計算結果は無保証です。
       </span>
+      {open && <LinksPopup onClose={close} />}
     </footer>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type ApplyUpdate, watchForUpdate } from "../../pwa";
+import { ESCAPE_LAYER, escapeTakenAbove } from "../escapeLayers";
 import styles from "./UpdateToast.module.css";
 
 /**
@@ -51,10 +52,16 @@ export function UpdateToast() {
   // `Escape: "ac"` なので、bubble で受けると閉じた瞬間に AC が走って計算が
   // 全部消える。capture は bubble のリスナより必ず先に走るので、開いている
   // あいだだけ Escape を飲み込めば衝突は決定的に消える。
+  //
+  // **上に層があるときは受けない**(0.9.3 設計書 §2.5、裁定 #4
+  // 「リンク集が開いているときの Escape は、リンク集を閉じるだけ」)。
+  // **リンク集も capture 段の window に付く**ので、**リスナの付いた順では
+  // 決まらない**——`escapeLayers.ts` の註にその理由がある。
   useEffect(() => {
     if (!waiting) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (escapeTakenAbove(ESCAPE_LAYER.updateToast)) return;
       event.stopPropagation();
       setWaiting(false);
     };

@@ -40,11 +40,24 @@
   white-space: normal;
 }
 
-.link {
+/* **リンクではなくボタンになった**(0.9.3、利用者の裁定 2026-09-17)。
+   **見た目は変えない**——下部の 1 行は縦の予算の中に居るので、枠や余白を
+   足すと `viewport-budget.spec.ts` と `finance-layout.spec.ts` の余白が削れる
+   (390×844 の複利の面で 33.31px、360×800 で 22.28px。2026-09-17 実測)。
+   **ボタンの既定の見た目を全部落として、文字だけにする。** */
+.about {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: inherit;
+  font: inherit;
+  /* 折り返しは下部ごと許してある(上の註)。 */
+  text-align: inherit;
+  cursor: pointer;
 }
 
-.link:focus-visible {
+.about:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }

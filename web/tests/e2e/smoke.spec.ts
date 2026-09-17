@@ -13,7 +13,10 @@ test("the app version is reported in the footer", async ({ page }) => {
   // 埋まったアプリの版を出す。**版数を直書きしない**——上げるたびにここを
   // 直すことになり、上げ忘れではなくテストの直し忘れで赤くなる。
   await page.goto("/");
+  // **0.9.3 でリンクからボタンになった**(利用者の裁定 2026-09-17。綴りは
+  // 「CalcArc <版> について」で、`@terapyon` はリンク集の中へ移った)。
+  // **版数の所は緩く受ける**のは上と同じ理由である。
   await expect(
-    page.getByRole("link", { name: /^CalcArc \d+\.\d+\.\d+ @terapyon$/ }),
+    page.getByRole("button", { name: /^CalcArc \d+\.\d+\.\d+ について$/ }),
   ).toBeVisible();
 });
