@@ -133,7 +133,8 @@ as 【√】, after 【π】 or 【e】, and after 【+/−】 — where every k
 number, the digits included, stays disabled until you continue with an operator or
 【=】, or clear with 【AC】. (That is why 【+/−】 goes after the digits, not before
 them.) 【DEL】
-is not an undo, and it does not delete operators. 【=】 fills in an unclosed 【(】, but
+is not an undo, and it does not delete operators (though it can take back a closing
+【)】). 【=】 fills in an unclosed 【(】, but
 an unmatched 【)】 is "Math ERROR". If you press the wrong operator and immediately
 press the right one, you get the same answer as if you had typed it correctly the
 first time. See the detailed manual's "入力の決まり" (input rules) for more — the
