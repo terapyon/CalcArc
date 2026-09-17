@@ -179,6 +179,12 @@ jobs:
       # 同じコミットで番人を置く」)はその日から偽になる——`tools/check-conflict-markers.mjs`
       # 自身の docstring 参照。
       - run: pnpm check:conflict-markers
+      # **マニュアルが読者に見せている上限の数を、製品の数と毎回突き合わせる。**
+      # 0.9.2 の監査で、上限の表はどのテストにも覆われていないと分かった
+      # ——マニュアルの数値を見ていたのは画面幅 2 つだけで、実際に誤りが 2 件出た。
+      # **ソースの本文を読んで比べる**ので、製品の可視性は 1 つも広げていない
+      # (`tools/check-manual-limits.mjs` の docstring 参照)。
+      - run: pnpm check:manual-limits
       # **マニュアルが実装に追いついているかを毎回見る。** 上の checkout の
       # `fetch-depth: 0` はこの 1 段のためのもの。番人の中身は
       # `tools/check-manual-freshness.mjs`。

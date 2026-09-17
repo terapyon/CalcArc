@@ -27,6 +27,7 @@
     "check:boundary": "node ../tools/check-boundary.mjs",
     "check:citations": "node ../tools/check-citations.mjs",
     "check:conflict-markers": "node ../tools/check-conflict-markers.mjs",
+    "check:manual-limits": "node ../tools/check-manual-limits.mjs",
     "check:manual-freshness": "node ../tools/check-manual-freshness.mjs"
   },
   "dependencies": {
