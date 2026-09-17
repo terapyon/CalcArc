@@ -282,9 +282,15 @@ fn refused(step: &JsValue) -> Vec<String> {
 #[wasm_bindgen_test]
 fn the_refused_keys_cross_the_boundary() {
     // 0.9.2 設計書 §3.3: 押せないキーは Step に載って盤面へ届く(トークン、`Key::ALL` の順)。
-    assert!(refused(&calcarc_wasm::initial_state()).is_empty());
+    //
+    // **0.9.3 の D-2 で、初期状態でも 1 つ拒む**(利用者の裁定 2026-09-17)。
+    // **開いている組が無いので `)` が押せない**——**0.9.2 までは初期状態の
+    // 拒否は空だった。** 盤面はこの一覧を読んでキーを暗くするので、
+    // **境界を越えて届くことがそのまま「押せない見た目」になる**
+    // (`web/tests/e2e/refused-keys.spec.ts` が実ブラウザで見る)。
+    assert_eq!(refused(&calcarc_wasm::initial_state()), vec!["rparen"]);
     let step = press(calcarc_wasm::initial_state(), &["2"]);
-    assert_eq!(refused(&step), vec!["pi", "lparen", "e"]);
+    assert_eq!(refused(&step), vec!["pi", "lparen", "rparen", "e"]);
     let step = press(calcarc_wasm::initial_state(), &["4", "sqrt"]);
     assert!(refused(&step).contains(&"5".to_string()));
     // 押せないキーは境界を通っても何も変えない。

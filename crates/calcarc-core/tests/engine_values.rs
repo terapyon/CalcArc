@@ -279,21 +279,17 @@ impl Typed {
                 self.toks.push(Tok::Open);
             }
             Key::RParen => {
-                // 開いていない `)` はエラー。**種類は式で決める**: `=` と同じく右辺を補ってから、
-                // 保留の式全体を評価する。評価が失敗すればその種類が先に出る(`÷ )` は 0 ÷ 0 で
-                // DivisionByZero)。成り立てば SyntaxError(engine_table:
-                // `an_unmatched_closing_paren_folds_the_pending_operations_first`・
-                // `an_unmatched_closing_paren_is_a_syntax_error`・`every_error_kind_reaches_the_display`
-                // の `)` 単独)。何も保留が無ければ評価するものが無く、SyntaxError。
+                // **開いていない `)` は押せない**(0.9.3 の D-2、利用者の裁定
+                // 2026-09-17。engine_table: `an_unmatched_closing_paren_cannot_be_pressed`)。
+                // **押せないキーは押されなかったのと同じ**なので、`(` の腕と同じく
+                // 何も変えずに戻る——**この列は記録もされない**(呼び出し側は
+                // 一致を見てからキーを積む)。
+                //
+                // **0.9.2 まではここがエラーだった**: 右辺を補ってから保留の式を
+                // 評価し、失敗すればその種類、成り立てば SyntaxError。
+                // **その形は `src/engine/mod.rs` の単体テストへ移した**
+                // ——`close_paren` を直接呼ぶ側だけが、いまもあの経路を通る。
                 if depth(&self.toks) == 0 {
-                    let failed = if self.toks.is_empty() {
-                        None
-                    } else {
-                        self.fill_the_right_operand()
-                            .and_then(|()| eval(&self.toks))
-                            .err()
-                    };
-                    self.error = Some(failed.unwrap_or(CalcError::SyntaxError));
                     return;
                 }
                 if let Err(e) = self.fill_the_right_operand() {

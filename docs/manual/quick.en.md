@@ -136,8 +136,9 @@ number, the digits included, stays disabled until you continue with an operator 
 【=】, or clear with 【AC】. (That is why 【+/−】 goes after the digits, not before
 them.) 【DEL】
 is not an undo, and it does not delete operators (though it can take back a closing
-【)】). 【=】 fills in an unclosed 【(】, but
-an unmatched 【)】 is "Math ERROR". If you press the wrong operator and immediately
+【)】). 【=】 fills in an unclosed 【(】, and
+**an unmatched 【)】 cannot be pressed at all** (up to 0.9.2 it could, and gave
+"Math ERROR"). If you press the wrong operator and immediately
 press the right one, you get the same answer as if you had typed it correctly the
 first time. See the detailed manual's "入力の決まり" (input rules) for more — the
 detailed manual is in Japanese only.

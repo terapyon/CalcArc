@@ -46,3 +46,35 @@ test("a corrected operator means the right one, through the browser", async ({
   await press(page, ["第2面に切り替え", "履歴"]);
   await expect(page.getByText("2 + 3 × 4")).toBeVisible();
 });
+
+/**
+ * 0.9.3 の D-2（利用者の裁定 2026-09-17）。**開いている組が無いときの `)` は
+ * 押せない**——0.9.2 までは押せて `Math ERROR` になっていた。
+ *
+ * **ここに置くのは、実ブラウザでしか言えないことだけ**である: **盤面が
+ * 押せない見た目になること**と、**キーボードの `)` も入らないこと**。
+ * どの列で拒むかは `engine_table.rs` の
+ * `an_unmatched_closing_paren_cannot_be_pressed` が仕様として持つ。
+ */
+test("an unmatched closing paren cannot be pressed, on the board or the keyboard", async ({
+  page,
+}) => {
+  const rparen = page.getByRole("button", { name: "閉じ括弧", exact: true });
+  // 何も打っていないときから押せない。
+  await expect(rparen).toBeDisabled();
+
+  await press(page, ["3", "足す", "4"]);
+  await expect(rparen).toBeDisabled();
+  // キーボードからも入らない(engine が拒むので、画面は 4 のまま)。
+  await page.keyboard.press(")");
+  await expect(page.getByTestId("display-main")).toHaveText("4");
+
+  // **開いているあいだは押せる**——「いつでも押せない」に退行していないこと。
+  // `3 + 4 × ( 2 ) =` は 11(掛け算が先。`engine_table.rs` の優先順位)。
+  await press(page, ["掛ける", "開き括弧", "2"]);
+  await expect(rparen).toBeEnabled();
+  await press(page, ["閉じ括弧", "計算する"]);
+  await expect(page.getByTestId("display-main")).toHaveText("11");
+  // 閉じ終わったら、また押せない。
+  await expect(rparen).toBeDisabled();
+});

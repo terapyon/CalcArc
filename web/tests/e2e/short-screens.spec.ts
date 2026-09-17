@@ -100,7 +100,13 @@ for (const size of SAFARI_VIEWPORTS) {
     const { checked, problems } = await sweepEverything(page, "");
     // **何本見たかを主張する**——0 本で緑を返さない。下限は 2026-09-12 に
     // 手元の Chromium で数えた実数(426〜427)。
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(426);
+    //
+    // **0.9.3 の D-2 で 1 つ減った(実測 425)。** `sweep` は**押せないキーを
+    // 数えない**ので、**開いていない `)` が拒まれるようになったぶん**である
+    // ——**減ったのは 1 つだけ**で、それは **Scientific の盤面の `)`**。
+    // ほかの盤面(Convert・Scale・Finance)の `(` `)` は**文字を入れるキー**で、
+    // engine の `refused` を読むのは `ScientificPanel` だけである。
+    expect(checked, "keys checked").toBeGreaterThanOrEqual(425);
     expect(problems).toEqual([]);
   });
 }
@@ -121,7 +127,8 @@ for (const size of [
       page,
       "?sw-toast=preview",
     );
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(426);
+    // 上と同じ理由で 425(0.9.3 の D-2)。
+    expect(checked, "keys checked").toBeGreaterThanOrEqual(425);
     expect(problems).toEqual([]);
   });
 }
