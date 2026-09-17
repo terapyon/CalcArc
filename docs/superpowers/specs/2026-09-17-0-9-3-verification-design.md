@@ -67,6 +67,11 @@ Rust の `MAX_EXPONENT_LEN`・`MAX_VERIFIED_MONTHLY_YEN` と **TS の 5 本す�
 - `include_str!` なので**ファイルが動けばコンパイルエラー**になる（静かに死なない）。
 - 取り出しは**宣言の先頭からの完全一致**（`"const MAX_PERIODS = "`）で、接頭辞の衝突を避ける（理由は `:190-192`）。
 - **向きは 1 つだけ**——Rust から TS を読む。`web/`・`heavy/`・`tools/` から Rust の定数を読むものは無い。
+- **そして、これは 1 か所の工夫ではない。** `include_str!` で `web/` を読んでいる Rust のテストは
+  **15 か所・3 ファイル**（`token_parity.rs`・`carried_value_parity.rs`・`label_parity.rs`）あり、
+  **8 本の TS/TSX**（`calc/types.ts`・`datascale/types.ts`・`convert/types.ts`・`currency/types.ts`・
+  `finance/types.ts`・`ui/Finance/FinancePanel.tsx`・`ui/ScientificPanel.tsx`・`ui/Keypad/scientific.ts`）を読む。
+  **「ソースの本文を読んで数や綴りを突き合わせる」ことは、この repo では例外ではなく作法である。**
 - **Rust から `docs/manual/*.md` を読むテストは 1 本も無い。** マニュアルを読んでいるのは
   `manual-widths.test.ts`（TS）だけである。
 
