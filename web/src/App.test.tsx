@@ -22,6 +22,9 @@ vi.mock("./ui/UpdateToast/UpdateToast", () => ({
 vi.mock("./ui/Footer/Footer", () => ({
   Footer: () => <p data-testid="footer" />,
 }));
+vi.mock("./ui/Manual/ManualPage", () => ({
+  ManualPage: () => <p data-testid="manual-page" />,
+}));
 
 import { App } from "./App";
 
@@ -101,6 +104,44 @@ describe("App", () => {
     window.location.hash = "#nope";
     render(<App />);
     expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
+  });
+
+  it("shows the manual page, which is not a tab", () => {
+    // **タブを 5 つにしない**(0.9.3 設計書 §2.2)。`#manual` は
+    // **リンク集から開く読み物**で、盤面は 1 つも出ない。
+    window.location.hash = "#manual";
+    render(<App />);
+    expect(screen.getByTestId("manual-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("scientific-panel")).toBeNull();
+    // **見出しは画面名である**(`document.title` の前半と同じ綴り)。
+    expect(
+      screen.getByRole("heading", { level: 1, name: "マニュアル" }),
+    ).toBeInTheDocument();
+  });
+
+  it("marks no tab as current while the manual is showing", () => {
+    // **`module` は戻り先として残っている**(`route.ts` の `page` の註)ので、
+    // **現在地を出さないのは `App` の仕事**である——出すと、読み上げは
+    // 「Scientific が現在地」と言いながらマニュアルを読むことになる。
+    window.location.hash = "#manual";
+    render(<App />);
+    const tabs = screen.getAllByRole("link");
+    expect(tabs.length).toBeGreaterThan(0);
+    for (const tab of tabs) {
+      expect(tab).not.toHaveAttribute("aria-current");
+    }
+  });
+
+  it("goes back to a tab from the manual", () => {
+    // 「計算機に戻る」も、タブも、**ハッシュを変えるだけ**である
+    // (`App` は `hashchange` を購読しているだけで、経路を持たない)。
+    window.location.hash = "#manual";
+    render(<App />);
+    expect(screen.getByTestId("manual-page")).toBeInTheDocument();
+    window.location.hash = "#finance";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    expect(screen.getByTestId("finance-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("manual-page")).toBeNull();
   });
 
   // **切替の通知(設計書 §5)。ここだけは jsdom で足りる。**

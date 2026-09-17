@@ -7,16 +7,18 @@ import { SCREEN_NAMES, screenName } from "./screenName";
 
 describe("SCREEN_NAMES", () => {
   it("holds one name per screen, counted from the category tables", () => {
-    // **数を導く。`13` と手で書かない**——カテゴリが増えた日に、この検査が
-    // 「13 のまま緑」で通り過ぎてしまわないようにするためである。
-    // 内訳は scientific 1 + convert 8 + scale 3 + finance 1。
+    // **数を導く。`14` と手で書かない**——カテゴリが増えた日に、この検査が
+    // 「14 のまま緑」で通り過ぎてしまわないようにするためである。
+    // 内訳は scientific 1 + convert 8 + scale 3 + finance 1 + manual 1。
+    // **最後の 1 は 0.9.3 で増えた**(タブではない画面。設計書 §2.2)。
     const expected =
-      1 + CONVERT_CATEGORY_IDS.length + SCALE_CATEGORIES.length + 1;
+      1 + CONVERT_CATEGORY_IDS.length + SCALE_CATEGORIES.length + 1 + 1;
     const names = [
       SCREEN_NAMES.scientific,
       ...Object.values(SCREEN_NAMES.convert),
       ...Object.values(SCREEN_NAMES.scale),
       SCREEN_NAMES.finance,
+      SCREEN_NAMES.manual,
     ];
     expect(names).toHaveLength(expected);
   });
@@ -81,6 +83,22 @@ describe("screenName", () => {
 
   it("names the finance screen", () => {
     expect(screenName(routeFromHash("#finance"))).toBe("金融計算");
+  });
+
+  it("names the manual screen, which is not a tab", () => {
+    // **綴りは利用者の裁定である**(2026-09-17)。読み上げは
+    // 「マニュアルに切り替えました」になる。
+    expect(screenName(routeFromHash("#manual"))).toBe("マニュアル");
+  });
+
+  it("names the manual screen even though a module is still carried", () => {
+    // **`module` は戻り先として残る**(`route.ts` の `page` の註)。
+    // **画面名がそれに引きずられない**ことを見る——引きずられると、
+    // `#manual` を開いた瞬間に「関数電卓」と読み上げる。
+    expect(routeFromHash("#manual").module).toBe("scientific");
+    expect(
+      screenName({ module: "finance", category: null, page: "manual" }),
+    ).toBe("マニュアル");
   });
 
   it("falls back to the default category's name when the route has none", () => {

@@ -26,7 +26,12 @@ export const MODULES: Record<ModuleId, { href: string; label: string }> = {
 // ことに乗って保証される。
 const ORDER: readonly ModuleId[] = Object.keys(MODULES) as ModuleId[];
 
-export function Nav({ current }: { current: ModuleId }) {
+/**
+ * @param current いま出ているタブ。**`null` は「タブではない画面を出している」**
+ *   ——`#manual` がそれで、**どのタブにも `aria-current` を付けない**
+ *   (0.9.3 設計書 §2.2)。
+ */
+export function Nav({ current }: { current: ModuleId | null }) {
   return (
     <nav aria-label="計算機の切り替え" className={styles.nav}>
       {ORDER.map((id) => {
