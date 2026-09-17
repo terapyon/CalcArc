@@ -1081,21 +1081,37 @@ def _inject_typo(node: Node, rng: random.Random) -> Node:
 
 
 def _error_inducing_key_sequences() -> tuple[tuple[str, ...], ...]:
-    """`errors-000.json` の 9 経路のうち、実際にエラーになる列だけを取り出す。
+    """`errors-000.json` のエラー経路から、実際にエラーになる列だけを取り出す。
 
     アンダーフローの 2 件(`value_range_cases` の後半)は `expect.error` を
     持たない(丸め潰れは値域を外れたことにならない、`corpus_errors.py` の
     モジュール docstring)ので、ここには入らない。**エラー状態を作るための
     プールなので、実際にエラーになる列だけが要る。**
 
-    **括弧の経路(`unbalanced_parenthesis_cases`)も入れる。** 実装中、
-    この 2 件を除けば `pnpm heavy` が緑になることが分かった——`right` 全体を
-    1 本のキー列として括弧の対応を見るコード(`web/tests/heavy/corpus.ts` の
-    `needsPrecedence` と、その Python の双子)が、`ac` が engine を初期状態に
-    戻すことを知らなかったためである。**engine は `ac` で正しく復帰しており、
-    壊れていたのは判定のほうだった**ので、判定を直した(`ac` でそれまでの
-    括弧の組を捨てる)。入力を除いていたら、「括弧の構文エラーから `ac` で
-    復帰する」という形がコーパスから丸ごと抜けていた。
+    **かつてこのプールは括弧の経路を含んでいた。0.9.3 の C-6 で退役した**
+    ——理由は `corpus_errors.py` の `build_errors_shard` の手前の註。
+    **退役させてよいと判断できた根拠は、下に書く 2 度目の測定である。**
+
+    **1 度目(退役より前)**: この 2 件を除けば `pnpm heavy` が緑になることが
+    分かった——`right` 全体を 1 本のキー列として括弧の対応を見るコード
+    (`web/tests/heavy/corpus.ts` の `needsPrecedence` と、その Python の双子)が、
+    `ac` が engine を初期状態に戻すことを知らなかったためである。
+    **engine は `ac` で正しく復帰しており、壊れていたのは判定のほうだった**
+    ので、判定を直した(`ac` でそれまでの括弧の組を捨てる)。**あのとき入力を
+    除いていたら、それは直しではなく回避だった。**
+
+    **2 度目(退役のとき、2026-09-17 実測)**: **`ac` をまたぐ括弧の判定を
+    踏む場は、このプールの中身と無関係に残る**——**退役後の**
+    `corrections-000.json` で、**`ac` より前に括弧を押す組は 843 件**
+    (`ac-rebuild` 427 件の全部と `error-recovery` 416 件の全部)。
+    **`error-recovery` の全件が踏むのは、`GARBAGE_KEYS` が `lparen` を含み、
+    それが必ず `ac` の手前に来るから**で、**プールの側に括弧があるかどうかには
+    依らない。** したがって**1 度目に恐れた「形が丸ごと抜ける」は、今回は
+    起きない。**
+
+    **この 843 は退役の前後で測り直した数である**——退役前は 838 件
+    (420 + 418)だった。**層の件数は乱択の消費がずれれば動く**ので、
+    **この数を「変わらないもの」として引用しない。**
     """
     cases = build_errors_shard()["cases"]
     return tuple(tuple(case["keys"]) for case in cases if case["expect"].get("error"))
@@ -3011,6 +3027,8 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     yield "entry-000.json", build_entry_shard()
     # エラー種別。**乱択も `count` も持たない**——設計書 §5.1 の 9 経路を
     # 数学の定義域・値域から 1 つずつ書き写した固定の列挙(計画 Task 2)。
+    # **いま並ぶのは 8 経路**——**括弧の 1 経路は 0.9.3 の C-6 で退役した**
+    # (`corpus_errors.py` の `build_errors_shard` の手前の註)。
     yield "errors-000.json", build_errors_shard()
     # **組合せの誤入力を体系的に確かめる 1 枚**（2026-08-30 のユーザー裁定）。
     # **表を埋めるためではない**——理由は `corpus_combinatorics` の docstring。

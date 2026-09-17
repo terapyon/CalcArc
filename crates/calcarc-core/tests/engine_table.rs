@@ -412,6 +412,24 @@ fn combinations_sit_below_the_power_operator() {
 }
 
 #[test]
+fn a_combination_cannot_continue_from_the_answer() {
+    // `docs/manual/detail.ja.md` の「既知の計算制限」が**利用者に見せている打鍵表**。
+    // 見せている以上、番人を置く（0.9.3 検証側の設計書 C-4）。
+    // **答えから続けて nCr・nPr を押すと Math ERROR になる**——数の大きさのせいではない。
+    assert_eq!(main_of(&["2", "9", "n_c_r", "3", "eq"]), "3,654");
+    assert_eq!(
+        main_of(&["2", "9", "n_c_r", "3", "eq", "n_c_r", "1", "eq"]),
+        "Math ERROR"
+    );
+    assert_eq!(
+        main_of(&["2", "9", "n_c_r", "3", "eq", "n_p_r", "1", "eq"]),
+        "Math ERROR"
+    );
+    // **同じ 3,654 でも、打ち直せば通る**——だから「大きすぎる」ではない。
+    assert_eq!(main_of(&["3", "6", "5", "4", "n_c_r", "1", "eq"]), "3,654");
+}
+
+#[test]
 fn the_echo_shows_the_counting_operators() {
     assert_eq!(echo_of(&["5", "n_p_r"]), "5 P");
     assert_eq!(echo_of(&["5", "n_c_r"]), "5 C");

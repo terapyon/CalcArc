@@ -361,6 +361,19 @@ LOAN_INPUTS: list[dict] = [
         "rate": "1.5",
         "n": 420,
     },
+    # **マニュアルが読者に見せている賞与の例**(`docs/manual/detail.ja.md` の賞与の節)。
+    # 0.9.2 の監査で、この例の 4 つの数(月々・賞与回・総支払・差額)を**値として主張している
+    # テストが 1 本も無い**と分かった——この入力を呼ぶテストは 2 本あったが、
+    # `crates/calcarc-wasm/tests/web.rs` は賞与の回数と「文字列が在ること」だけ、
+    # `reference/tests/test_loan_ref.py` は不等式だけを見ていた。
+    # **参照実装が値を裏づけ、`tools/check-manual-limits.mjs` がマニュアルの文と突き合わせる。**
+    {
+        "op": "loan_bonus_forward",
+        "principal": "30000000",
+        "bonus_principal": "6000000",
+        "rate": "1.5",
+        "n": 420,
+    },
     # 50% 超(エラー)と、ボーナス回が 1 度も来ない n<6(エラー)
     {
         "op": "loan_bonus_forward",

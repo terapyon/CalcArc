@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   findConflictMarkers,
-  readTrackedDocs,
+  readTrackedFiles,
 } from "../check-conflict-markers.mjs";
 
 describe("findConflictMarkers", () => {
@@ -122,12 +122,12 @@ describe("findConflictMarkers", () => {
   });
 });
 
-// **実物のリポジトリを読む。** `readTrackedDocs` は git を直接呼ぶので、
+// **実物のリポジトリを読む。** `readTrackedFiles` は git を直接呼ぶので、
 // 文字列だけでは検査できない(`check-citations.mjs`・`check-manual-freshness.mjs`
 // のテストと同じ形)。
 describe("実物のリポジトリ", () => {
-  it("`docs/` の追跡ファイルに衝突マーカーは 1 件も無い", () => {
-    const files = readTrackedDocs();
+  it("追跡下の全ファイルに衝突マーカーは 1 件も無い", () => {
+    const { files } = readTrackedFiles();
     const found = findConflictMarkers(files);
     expect(
       found,
@@ -135,20 +135,40 @@ describe("実物のリポジトリ", () => {
     ).toEqual([]);
   });
 
+  // **「読めないので見なかった」を「見て 0 だった」と同じ緑にしない。**
+  // 飛ばすのは 2 進(画像・フォント)だけのはずで、**読んだ側が大多数**である。
+  it("飛ばしたのはごく一部で、大多数を実際に読んでいる", () => {
+    const { files, skipped } = readTrackedFiles();
+    expect(files.length).toBeGreaterThan(100);
+    expect(skipped.length).toBeLessThan(files.length / 10);
+  });
+
   it("何件見たかを主張する(0 件で緑を返さない)", () => {
-    // **これが本題である。** `git ls-files docs/` の結果が空になった日
+    // **これが本題である。** `git ls-files` の結果が空になった日
     // (根の解決が壊れた、パスが変わった)から、上の「0 件」は何も
     // 意味しなくなる。**下限だけを主張する**——実数はコミットのたびに
-    // 動くので、書けばその日のうちに腐る(今日の実測は 139 件)。
+    // 動くので、書けばその日のうちに腐る。
+    //
+    // **「その日のうちに腐る」は比喩ではない。** 2026-09-17 の 1 日で、
+    // 読めた数は **575 →576 →578** と動いた(`check-conflict-markers.mjs` の
+    // 註が 575 と書いているのは、**同じ日の、ファイルを足す前に測った値**
+    // である——食い違いではなく、**測った時刻が違う**)。
+    // **動いた理由はどれも平凡である**——この枝が追跡ファイルを 4 本足し、
+    // 途中で別の枝を 2 本合流した。**欠陥は 1 つも無いのに 3 回動いた。**
+    // **だからこそ床は 100 であって、今日の数ではない。**
     expect(
-      readTrackedDocs().length,
-      "docs/ の追跡ファイルを 1 件も読めなかった",
+      readTrackedFiles().files.length,
+      "追跡ファイルを 1 件も読めなかった",
     ).toBeGreaterThan(100);
   });
 
-  it("`git ls-files` に `docs/` が実在する(道具立ての確認)", () => {
-    const files = readTrackedDocs();
-    expect(files.every((f) => f.path.startsWith("docs/"))).toBe(true);
+  it("`docs/` の外も読んでいる(広げたことの確認)", () => {
+    // 2026-09-17 に `docs/` だけから全追跡ファイルへ広げた。
+    // **広げたことを主張する**——`docs/` に戻ってしまった日に、ここが赤くなる。
+    const { files } = readTrackedFiles();
     expect(files.some((f) => f.path === "docs/base-spec.md")).toBe(true);
+    expect(files.some((f) => f.path === "CLAUDE.md")).toBe(true);
+    expect(files.some((f) => f.path.startsWith(".github/"))).toBe(true);
+    expect(files.every((f) => f.path.startsWith("docs/"))).toBe(false);
   });
 });
