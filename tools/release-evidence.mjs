@@ -34,8 +34,13 @@ export const HEAVY_BODY_JOB = "Heavy corpus / Corpus vs reference";
 export const HEAVY_REPORT = "heavy-report.md";
 
 /**
- * **本番展開のあとでマニュアルの PDF を作るジョブ**(マニュアルの設計書
+ * **本番展開の前にマニュアルの PDF を作るジョブ**(0.9.3 設計書 §2.3、
+ * 利用者の裁定 2026-09-17「PDF が落ちたら本番も出さない」)。
+ *
+ * **0.9.3 までは本番展開の「あと」だった**(マニュアルの設計書
  * `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、裁定 §9 #3)。
+ * 順が変わったので、**このジョブが落ちた走行は本番へ出ておらず、証拠も書かない**
+ * ——下の `MAY_FAIL` を参照。
  *
  * **`release.yml` 自身のジョブなので、名前は `name:` そのままで出る。**
  * `HEAVY_BODY_JOB` のような「呼び出し元 / 呼ばれた側」の綴りにはならない
@@ -46,18 +51,25 @@ export const HEAVY_REPORT = "heavy-report.md";
 export const MANUALS_JOB = "Manuals";
 
 /**
- * **落ちていても証拠を書いてよいジョブ。ちょうど 1 つである。**
+ * **落ちていても証拠を書いてよいジョブ。いまは 1 つも無い。**
  *
- * 裁定は「マニュアルの失敗で本番を止めない」で、`Manuals` は `Deploy` の
- * **あと**で走る。落ちたときに証拠ごと落とすと、**本番へ出たのに証拠 3 点が
- * 付かない**——止めなかった意味が裏返る。代わりに「作れなかった」と書く。
+ * **0.9.3 まではここに `Manuals` が居た。** 当時 `Manuals` は `Deploy` の
+ * **あと**で走ったので、落ちたときに証拠ごと落とすと**本番へ出たのに証拠 3 点が
+ * 付かない**——「本番を止めない」の意味が裏返る。だから例外にして、
+ * 代わりに「作れなかった」と書いていた。
+ *
+ * **並べ替えでその前提が消えた**(利用者の裁定 2026-09-17)。`Manuals` が
+ * 落ちれば `Deploy` は走らず、証拠のジョブも走らない(`release.yml` の
+ * `evidence` は `needs.deploy.result == 'success'` を条件に持つ)。
+ * **例外は 1 度も効かない**——効かない例外を残すと、**並びを戻した日に
+ * 黙って効きはじめる**。
  *
  * **ここに名前を足さない。** 足すたびに「緑でない走行から証拠は作れない」が
- * 狭くなり、検査の赤が証拠の上で黙る。1 つであることは
- * `tools/tests/release-workflow.test.ts` が固定する——足すなら、その行も直す
- * ことになる(差分に出る)。
+ * 狭くなり、検査の赤が証拠の上で黙る。空であることは
+ * `tools/tests/release-workflow.test.ts` と `tools/tests/release-evidence.test.ts`
+ * が固定する——足すなら、その行も直すことになる(差分に出る)。
  */
-export const MAY_FAIL = Object.freeze([MANUALS_JOB]);
+export const MAY_FAIL = Object.freeze([]);
 
 /** マニュアルの PDF の添付(`calcarc-<版>-<冊>.pdf`、`web/scripts/manual/markdown.ts` の `pdfName`)。 */
 const MANUAL_PDF = /\.pdf$/;
@@ -150,8 +162,9 @@ export function renderEvidence({
     );
   }
   const bad = jobs.filter((job) => BAD_CONCLUSIONS.has(job.conclusion));
-  // **名前の完全一致で 1 つだけ外す。** `CI / Manuals` は普段の CI のジョブで、
-  // 本番の前に居る——あれが落ちたなら本番へは出ていないはずで、証拠は書かない。
+  // **`MAY_FAIL` は空である**(0.9.3)。**仕掛けは残す**——名前の完全一致で
+  // 外す形そのものが、「例外を足すならここに名前を書く」という規律の置き場で
+  // ある。空なので、いまはどのジョブが落ちても証拠を書かない。
   const fatal = bad.filter((job) => !MAY_FAIL.includes(job.name));
   if (fatal.length > 0) {
     throw new Error(
@@ -239,19 +252,16 @@ export function renderEvidence({
       "",
     );
   }
-  // **マニュアルは 3 通りに言い分ける**(マニュアルの設計書 §5)。落ちたことを
+  // **マニュアルは 2 通りに言い分ける**(0.9.3 まではもう 1 通りあった)。
   // 黙って欠けさせない——**PDF が付いていない Release を、付け忘れと読ませない。**
+  //
+  // **消えた 1 通りは「作れなかった」である。** `Manuals` が落ちた走行は
+  // `Deploy` が走らず、証拠のジョブも走らない(`MAY_FAIL` の註)。**この関数まで
+  // 来ないので、その文は二度と出ない**——**出ない文を残すと、読んだ人は
+  // 「落ちても出る」と信じる。**
   const manuals = jobs.find((job) => job.name === MANUALS_JOB);
   const pdfs = attachments.filter((name) => MANUAL_PDF.test(name));
-  if (manuals !== undefined && BAD_CONCLUSIONS.has(manuals.conclusion)) {
-    lines.push(
-      `**マニュアル（PDF）は作れなかった**(\`${MANUALS_JOB}\` = \`${manuals.conclusion}\`)。` +
-        "この Release に PDF は付いていない。",
-      `**本番へ配った物には影響しない**——\`${MANUALS_JOB}\` は本番展開のあとで走り、`,
-      "配信を止めない(マニュアルの設計書 §5、裁定 §9 #3)。",
-      "",
-    );
-  } else if (manuals?.conclusion === "success") {
+  if (manuals?.conclusion === "success") {
     if (pdfs.length === 0) {
       // 重量級の報告書と同じ形(B-2)。作れたのに付いていないなら、
       // 「マニュアルを作った」の裏づけがこの Release に残っていない。

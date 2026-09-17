@@ -155,6 +155,15 @@ Service Worker・フォント・画像のすべての経路を検証する話に
 - ブランチの ref からは起動できない（`v*` タグ以外はガードが落とす）。
   ブランチの先頭を配ると、Release に添える証拠がどのリリースのものか
   言えなくなるためである。
+- **この経路で配った版は、マニュアルの PDF を持たない。** PDF は
+  `release.yml` の `Manuals` が作って走行の artifact に置き、`Deploy` は
+  **`release.yml` から呼ばれたときだけ**それを `dist` に入れる（0.9.3 から。
+  緊急経路の走行には artifact そのものが無い）。**帰結は 1 つで、
+  マニュアルの PDF の URL が 404 を返す**（`functions/manual/[[path]].js`
+  がそう返す。番人は `web/tests/unit/manual-function.test.ts`）。
+  **直し方は「次の通常リリース」だけ**である。緊急経路の走行をもう一度
+  回しても PDF は増えない。**迂回したことを Release に書き足すとき、
+  PDF が落ちていることも 1 行書く。**
 
 **どちらの経路でも、`deploy.yml` は `GITHUB_SHA`（実行時の ref のコミット）を
 刻印に焼き、スモークが実際に配られている `/build-info.json` と突き合わせる。**

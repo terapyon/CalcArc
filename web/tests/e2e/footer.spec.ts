@@ -3,6 +3,11 @@ import { expect, test } from "./fixtures";
 test("the footer shows on every tab, once", async ({ page }) => {
   // **全タブに出す**のが要件である(0.2.0 設計書 §5)。以前は Scientific
   // だけに calcarc-core の版数が出ていた。
+  //
+  // **0.9.3 で、下部の 1 本はリンクからボタンになった**(利用者の裁定
+  // 2026-09-17)。**GitHub へ行く口はリンク集の中に移った**ので、ここで
+  // `href` は見ない——見るのは下のポップアップの検査である。
+  // **版数の所を緩く受ける**のは、上げるたびにここを直さないためである。
   for (const hash of [
     "#scientific",
     "#convert",
@@ -10,16 +15,52 @@ test("the footer shows on every tab, once", async ({ page }) => {
     "#finance",
   ]) {
     await page.goto(`/${hash}`);
-    const link = page.getByRole("link", { name: /^CalcArc .+ @terapyon$/ });
-    await expect(link).toHaveCount(1);
-    await expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/terapyon/CalcArc",
-    );
+    const about = page.getByRole("button", { name: /^CalcArc .+ について$/ });
+    await expect(about).toHaveCount(1);
     await expect(page.getByTestId("footer-disclaimer")).toHaveText(
       "計算結果は無保証です。",
     );
   }
+});
+
+test("the links popup opens from the footer, with the four the user settled", async ({
+  page,
+}) => {
+  // **綴りも並びも利用者の裁定**(2026-09-12 と 2026-09-17)。
+  // **jsdom はアクセシビリティツリーを組み立てない**ので、`role="dialog"` が
+  // 本当に読み上げに出るかは実ブラウザでしか見られない(CLAUDE.md)。
+  await page.goto("/");
+  await page.getByRole("button", { name: /^CalcArc .+ について$/ }).click();
+  const popup = page.getByRole("dialog", { name: "リンク集" });
+  await expect(popup).toBeVisible();
+  await expect(popup.getByRole("link")).toHaveText([
+    "GitHub（@terapyon）",
+    "マニュアル",
+    "ライセンス",
+    "検査結果",
+  ]);
+  await expect(
+    popup.getByRole("link", { name: "GitHub（@terapyon）" }),
+  ).toHaveAttribute("href", "https://github.com/terapyon/CalcArc");
+  await expect(popup.getByRole("link", { name: "マニュアル" })).toHaveAttribute(
+    "href",
+    "#manual",
+  );
+});
+
+test("Escape closes the links popup, and does not clear the calculation", async ({
+  page,
+}) => {
+  // **裁定 #4(設計書 §2.5)**: リンク集が開いているときの Escape は、
+  // リンク集を閉じるだけ。**`ac` は走らせない**——打った数字が残ることで見る。
+  await page.goto("/");
+  await page.getByRole("button", { name: "7" }).click();
+  await expect(page.getByTestId("display-main")).toHaveText("7");
+  await page.getByRole("button", { name: /^CalcArc .+ について$/ }).click();
+  await expect(page.getByRole("dialog", { name: "リンク集" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "リンク集" })).toHaveCount(0);
+  await expect(page.getByTestId("display-main")).toHaveText("7");
 });
 
 test("the old core version line is gone", async ({ page }) => {

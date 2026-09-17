@@ -1,6 +1,8 @@
 # CalcArc 簡易マニュアル
 
-最新の PDF（画面写真つき）は GitHub の Releases にあります: https://github.com/terapyon/CalcArc/releases
+最新の PDF（画面写真つき）は、**CalcArc の画面からも開けます**——下部の
+「CalcArc <版数> について」を押して【マニュアル】を選んでください。
+GitHub の Releases にも添付されています: https://github.com/terapyon/CalcArc/releases
 
 ## 1. CalcArc とは
 
@@ -168,8 +170,16 @@ CalcArc は、次のものをこの端末のブラウザの中に保存します
 
 ## 7. 版の見方と、変更点の在りか
 
-画面のいちばん下に「CalcArc」と版数が出ています。押すと GitHub の
-CalcArc のページが開きます。この PDF の版数は、ファイル名に入っています。
+画面のいちばん下に「CalcArc」と版数の出たボタンがあります。押すと
+リンク集が開き、次の 4 つが並びます。この PDF の版数は、ファイル名にも
+入っています。
+
+- 【GitHub（@terapyon）】: CalcArc のページ
+- 【マニュアル】: このマニュアルの PDF を開く画面（3 冊とも、この版のもの）
+- 【ライセンス】: Apache License 2.0
+- 【検査結果】: この版のリリース（何を確かめて配ったかの記録）
+
+リンク集は、【閉じる】・Escape キー・外側を押す、のどれでも閉じられます。
 
 - 変更点: https://github.com/terapyon/CalcArc/blob/main/CHANGELOG.md
 - リリースごとの記録と、このマニュアルの PDF: https://github.com/terapyon/CalcArc/releases

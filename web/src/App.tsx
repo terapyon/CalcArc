@@ -4,6 +4,7 @@ import styles from "./ui/App.module.css";
 import { ConvertPanel } from "./ui/Convert/ConvertPanel";
 import { FinancePanel } from "./ui/Finance/FinancePanel";
 import { Footer } from "./ui/Footer/Footer";
+import { ManualPage } from "./ui/Manual/ManualPage";
 import { Nav } from "./ui/Nav/Nav";
 import { ScalePanel } from "./ui/Scale/ScalePanel";
 import { ScientificPanel } from "./ui/ScientificPanel";
@@ -77,7 +78,10 @@ export function App() {
   return (
     <>
       <div className={styles.shell}>
-        <Nav current={route.module} />
+        {/* **タブではない画面を出しているときは、現在地を出さない**
+            (`route.ts` の `page` の註)。**`module` は残してある**——
+            リンク集を閉じたあとの戻り先であって、いま出ている画面ではない。 */}
+        <Nav current={route.page === undefined ? route.module : null} />
         {/*
           **画面が変わったことを読み上げに伝える**(設計書 §5)。
 
@@ -133,12 +137,24 @@ export function App() {
             `<h2>`(その中の面)という階層になり、いま飛んでいる段が埋まる。
           */}
           <h1 className="visually-hidden">{screenName(route)}</h1>
-          {route.module === "scientific" && <ScientificPanel />}
-          {route.module === "convert" && (
-            <ConvertPanel category={route.category} />
+          {/* **タブではない画面が先である**(`route.ts` の `routeFromHash` で
+              `#manual` を `isModuleId` の前に見るのと同じ向き)。
+              **`module` で分岐する 4 行に混ぜない**——混ぜると、`page` を
+              1 つ足すたびに 4 行すべてに条件が増える。 */}
+          {route.page === "manual" ? (
+            <ManualPage />
+          ) : (
+            <>
+              {route.module === "scientific" && <ScientificPanel />}
+              {route.module === "convert" && (
+                <ConvertPanel category={route.category} />
+              )}
+              {route.module === "scale" && (
+                <ScalePanel category={route.category} />
+              )}
+              {route.module === "finance" && <FinancePanel />}
+            </>
           )}
-          {route.module === "scale" && <ScalePanel category={route.category} />}
-          {route.module === "finance" && <FinancePanel />}
         </main>
         {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}
         <Footer />

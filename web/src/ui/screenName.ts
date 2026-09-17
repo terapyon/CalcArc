@@ -27,6 +27,7 @@ export const SCREEN_NAMES: {
   finance: string;
   convert: Record<ConvertCategoryId, string>;
   scale: Record<ScaleCategory, string>;
+  manual: string;
 } = {
   scientific: "関数電卓",
   convert: {
@@ -47,6 +48,11 @@ export const SCREEN_NAMES: {
     transfer: "データ転送",
   },
   finance: "金融計算",
+  // **14 個目**(0.9.3、利用者の裁定 2026-09-17)。**タブではない画面**だが、
+  // 画面名は要る——`document.title` と `<h1>` と「〜に切り替えました」が
+  // ここから出る。**綴りはリンク集の項目名・Release の PDF の呼び方と
+  // 同じである**(**同じものを 2 つの名で呼ばない**)。
+  manual: "マニュアル",
 };
 
 /** Convert の既知のカテゴリか。**`ScalePanel` の `isCategory` と同じ形**で受ける
@@ -69,6 +75,8 @@ function isScaleCategory(text: string | null): text is ScaleCategory {
  * 出しているときに、名前だけ別のものになることを避けるためである。
  */
 export function screenName(route: Route): string {
+  // **タブではない画面が先である**(`routeFromHash` と同じ向き)。
+  if (route.page === "manual") return SCREEN_NAMES.manual;
   switch (route.module) {
     case "scientific":
       return SCREEN_NAMES.scientific;

@@ -152,6 +152,26 @@ describe("the URLs promised at 1.0", () => {
     expect(wrong, "promised URLs that open another screen").toEqual([]);
   });
 
+  it("opens the manual as a page, not as a fifth tab", () => {
+    // **`#manual` はタブではない**(0.9.3 設計書 §2.2)。`ModuleId` に足すと
+    // `Nav.tsx` の `MODULES` が `Record<ModuleId, …>` なので**タブが 5 つになる**
+    // ——あれは計算機の切り替えで、マニュアルは**リンク集から開く読み物**である。
+    const route = routeFromHash("#manual");
+    expect(route.page).toBe("manual");
+    // **`module` は残る**——閉じたときの戻り先であり、`null` 許容にすると
+    // タブを読むすべての場所が `null` を扱うことになる。
+    expect(route.module).toBe("scientific");
+  });
+
+  it("leaves every tab route without a page", () => {
+    // **`page` が入るのは `#manual` だけ。** タブの画面で入っていたら、
+    // シェルはパネルの代わりに読み物を描いてしまう。
+    const withPage = PROMISED_URLS.map(({ hash }) => hash)
+      .map((hash) => ({ hash, page: routeFromHash(hash).page }))
+      .filter(({ page }) => page !== undefined);
+    expect(withPage, "tab routes that carry a page").toEqual([]);
+  });
+
   it("lists each promised URL once", () => {
     // 重複があると、下限の 13 を 12 の URL で満たせてしまう。
     const hashes = PROMISED_URLS.map(({ hash }) => hash);

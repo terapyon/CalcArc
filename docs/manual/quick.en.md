@@ -1,6 +1,8 @@
 # CalcArc Quick Guide
 
-The latest PDF (with screenshots) is on the GitHub Releases page: https://github.com/terapyon/CalcArc/releases
+The latest PDF (with screenshots) **opens from CalcArc itself**: press
+"CalcArc <version> について" at the bottom and choose 【マニュアル】("Manual").
+It is also attached to the GitHub release: https://github.com/terapyon/CalcArc/releases
 
 ## Glossary
 
@@ -213,8 +215,17 @@ no warranty."). The Finance screen always shows a note on how it calculates.
 
 ## 7. Finding the version and what changed
 
-The bottom of the screen shows "CalcArc" and the version number. Pressing it opens
-CalcArc's page on GitHub. The version of this PDF is in its file name.
+The bottom of the screen has a button showing "CalcArc" and the version number.
+Pressing it opens a list of links with these four entries. The version of this PDF
+is also in its file name.
+
+- 【GitHub（@terapyon）】: CalcArc's page on GitHub
+- 【マニュアル】("Manual"): a screen with the PDFs for this version (all three)
+- 【ライセンス】("License"): Apache License 2.0
+- 【検査結果】("Check results"): the release for this version, with the record of
+  what was checked before it shipped
+
+Close the list with 【閉じる】("Close"), the Escape key, or by pressing outside it.
 
 - What changed: https://github.com/terapyon/CalcArc/blob/main/CHANGELOG.md
 - The record of each release, and the PDFs of this guide: https://github.com/terapyon/CalcArc/releases

@@ -672,16 +672,20 @@ describe("すべてのジョブに時間制限が在る（2026-09-05）", () => 
 });
 
 // ---------------------------------------------------------------------------
-// **マニュアルは本番のあとで作り、落ちても証拠を書く**(2026-09-11、
-// マニュアルの設計書 `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、
-// 裁定 §9 #3「本番は止めない」)。
+// **マニュアルは本番の前に作る**(0.9.3 設計書 §2.3、利用者の裁定 2026-09-17
+// 「PDF が落ちたら本番も出さない」)。
 //
-//   … → Deploy ─┬→ Manuals ─┐
-//               └───────────┴→ Evidence and GitHub Release
+//   … → Heavy → Manuals → Deploy → Evidence and GitHub Release
+//
+// **0.9.3 で順を入れ替えた。** それまでは `Deploy` → `Manuals` で、この節は
+// 「本番のあとで作り、落ちても証拠を書く」だった(2026-09-11、マニュアルの設計書
+// `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、裁定 §9 #3
+// 「本番は止めない」)。**PDF が `#manual` から開く配信物になった**ので、
+// **PDF の無い版を本番へ出さない**方を採った。
 //
 // **この形は条件式と `needs` の組み合わせだけが持っている。** 1 つ外れても
 // ワークフローはそのまま動き、**壊れ方は Manuals が落ちた日にしか見えない**
-// ——既定の `success()` に戻れば証拠ごと付かず、`always()` にすれば止めた走行でも
+// ——`needs` が戻れば PDF の無い版が本番へ出て、`always()` にすれば止めた走行でも
 // 証拠を書き足す。ここで字面を固定する。
 // ---------------------------------------------------------------------------
 
@@ -724,7 +728,7 @@ const stepChunks = (lines: string[]) =>
     .split(/\n(?= {6}- )/)
     .filter((chunk) => /^ {6}- /.test(chunk));
 
-describe("マニュアルは本番のあとで作り、落ちても証拠を書く（門 4）", () => {
+describe("マニュアルは本番の前に作り、落ちたら本番へ出さない（0.9.3）", () => {
   const release = read("release.yml");
   const manuals = jobBlock(release, "manuals");
   const evidence = jobBlock(release, "evidence");
@@ -739,15 +743,23 @@ describe("マニュアルは本番のあとで作り、落ちても証拠を書�
     ).toHaveLength(1);
   });
 
-  it("証拠が許す落ちたジョブは、ちょうど Manuals の 1 つである", () => {
+  it("証拠が許す落ちたジョブは、1 つも無い", () => {
+    // **0.9.3 まではここに `Manuals` が居た**(本番のあとで走っていたので、
+    // 落ちても証拠は書いた)。**並べ替えで前提が消えた**——`Manuals` が落ちれば
+    // `Deploy` が走らず、このジョブの条件も満たされない。**効かない例外を
+    // 残すと、並びを戻した日に黙って効きはじめる。**
+    //
     // **足すたびに「緑でない走行から証拠は作れない」が狭くなる。** 足すなら
     // この行も直すことになる——差分に出る。
-    expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
+    expect([...MAY_FAIL]).toEqual([]);
   });
 
-  it("Manuals は Deploy のあとで走る", () => {
-    // 本番の前に置けば、マニュアルの失敗で本番が止まる(裁定は「止めない」)。
-    expect(needsOf(manuals)).toEqual(["deploy"]);
+  it("Manuals は Deploy の前に走り、Deploy がそれを待つ", () => {
+    // **この 2 行が「PDF が落ちたら本番も出さない」の全部である**
+    // (利用者の裁定 2026-09-17)。`manuals` を `deploy` の後ろへ戻すと、
+    // **PDF の無い版が本番へ出て、`#manual` のリンクの先が 404 になる**。
+    expect(needsOf(manuals)).toEqual(["heavy"]);
+    expect(needsOf(jobBlock(release, "deploy"))).toEqual(["manuals"]);
   });
 
   it("Evidence は Deploy と Manuals の両方を待つ", () => {
@@ -756,9 +768,11 @@ describe("マニュアルは本番のあとで作り、落ちても証拠を書�
   });
 
   it("Evidence の条件は、止められていないことと Deploy の成功だけである", () => {
-    // - 条件が無い(`success()`)と、Manuals が落ちた日に証拠ごと飛ぶ
     // - `always()` だと、手で止めた走行でも証拠を書き足す
     // - Deploy を名指さないと、本番へ出なかった走行でも証拠のジョブが走って赤くなる
+    // - **0.9.3 の並べ替えで、この式が選ぶ走行は `success()` と同じになった**
+    //   (`deploy` の成功が `manuals` の成功を含意する)。**字面を固定するのは、
+    //   `success()` の意味が `needs` の並びで変わるからである**
     expect(jobKey(evidence, "if")).toBe(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions の式の字面そのものと比べる
       "${{ !cancelled() && needs.deploy.result == 'success' }}",
@@ -801,5 +815,88 @@ describe("マニュアルは本番のあとで作り、落ちても証拠を書�
     expect(keep).toBeGreaterThan(0);
     expect(rel.slice(0, keep)).toEqual(ci);
     expect(ci).toContain("- run: pnpm manuals");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// **配る物に PDF が入っているか**(0.9.3 設計書 §2.3、利用者の裁定 2026-09-17)。
+//
+// **`deploy.yml` の段 1 つが、この裁定の実体である。** 落ちても
+// ワークフローはそのまま動き、**壊れ方は本番に出てからしか見えない**
+// ——`#manual` から開くリンクが 404 を返す。ここで字面を固定する。
+//
+// **位置が意味を持つ**(3 つとも、外すと静かに壊れる):
+//
+// - `vite build` の**後ろ**。あれは `dist` を作り直すので、前に置くと消える
+// - 配る段の**前**。後ろに置けば、入れた PDF は配られない
+// - `if` が `inputs.called_from_release`。緊急経路の走行には artifact が
+//   無いので、外すと**緊急の配信が毎回赤くなる**
+// ---------------------------------------------------------------------------
+
+describe("リリースの走行だけ、PDF を dist に入れてから配る（0.9.3）", () => {
+  const release = read("release.yml");
+  const deploy = jobBlock(read("deploy.yml"), "deploy");
+  const chunks = stepChunks(deploy);
+  const put = chunks.filter((chunk) =>
+    chunk.includes("actions/download-artifact@"),
+  );
+
+  it("PDF を取る段は 1 つで、上げた名前を dist の下に置く", () => {
+    expect(put).toHaveLength(1);
+    expect(put[0]).toMatch(/^ {10}name:\s*manuals\s*$/m);
+    expect(put[0]).toMatch(/^ {10}path:\s*web\/dist\/manual\/\s*$/m);
+    // **上げる側と同じ名前である。** 片方だけ改名すると、`download-artifact` が
+    // 何も見つけられず——**PDF の無い版が本番へ出る。**
+    const upload = stepChunks(jobBlock(release, "manuals")).find((chunk) =>
+      chunk.includes("actions/upload-artifact@"),
+    );
+    expect(upload).toMatch(/^ {10}name:\s*manuals\s*$/m);
+  });
+
+  it("取るのはリリースの走行だけである（緊急経路には artifact が無い）", () => {
+    expect(put[0]).toMatch(
+      /^ {8}if:\s*\$\{\{ inputs\.called_from_release \}\}\s*$/m,
+    );
+  });
+
+  it("PDF は vite build のあと、配る前に入る", () => {
+    const at = (needle: string) =>
+      chunks.findIndex((chunk) => chunk.includes(needle));
+    const build = at("pnpm exec vite build");
+    const ship = at("cloudflare/wrangler-action@");
+    // **段が消えたら -1 になる**。下の 2 つは -1 とも比べられてしまうので、
+    // ここで「在る」ことを先に言う。
+    expect(build).toBeGreaterThanOrEqual(0);
+    expect(ship).toBeGreaterThan(0);
+    const where = chunks.findIndex((chunk) =>
+      chunk.includes("actions/download-artifact@"),
+    );
+    expect(where).toBeGreaterThan(build);
+    expect(where).toBeLessThan(ship);
+  });
+
+  it("PDF を入れた先と、配る先が同じである", () => {
+    // `pages deploy` の引数が動けば、上の `path:` は配られない場所を指す。
+    expect(deploy.join("\n")).toContain("pages deploy web/dist ");
+  });
+
+  it("配った先で、無い PDF が 404 で、配った PDF が届いていることを見る", () => {
+    // **単体テストは作り物の `env.ASSETS` に対してである**——Pages が本当に
+    // `functions/manual/` を拾うかは、配った先でしか分からない。
+    // **取る段も `/manual/` を含む**(`path:`)ので、curl を打つ段だけ数える。
+    const smokes = chunks.filter(
+      (chunk) => chunk.includes("/manual/") && chunk.includes("curl"),
+    );
+    expect(smokes).toHaveLength(2);
+    const [missing, served] = smokes;
+    // **無いものが 404 なのは、両方の経路で真である**(緊急経路も通る)。
+    expect(missing).toContain("calcarc-no-such-manual.pdf");
+    expect(missing).not.toContain("called_from_release");
+    // **配った PDF が届いているかは、PDF を配った走行でしか見られない。**
+    expect(served).toMatch(
+      /^ {8}if:\s*\$\{\{ inputs\.called_from_release \}\}\s*$/m,
+    );
+    // **名前は配った物から取る**——綴ると、上げ忘れた日に緑になる。
+    expect(served).toContain("ls web/dist/manual");
   });
 });
