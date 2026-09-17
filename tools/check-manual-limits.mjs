@@ -217,6 +217,104 @@ export function collectRows() {
   return rows;
 }
 
+/** golden から**ちょうど 1 件**を id で取り出す。 */
+function goldenCase(cases, id) {
+  const found = cases.filter((c) => c.id === id);
+  if (found.length !== 1) {
+    throw new Error(
+      `testdata/finance.json に \`${id}\` が ${found.length} 件見つかった(1 件であること)。` +
+        "golden の id が変わったか、この例が消えている。",
+    );
+  }
+  return found[0];
+}
+
+/**
+ * **マニュアルが読者に見せている賞与の例**（0.9.3 検証側 C-3）。
+ *
+ * **値の裏づけは参照実装が持ち、この番人は「マニュアルの文」と「golden の数」を結ぶ。**
+ * **ここで計算し直さない**——JS で償還を組み直せば、それは 3 つ目の実装になり、
+ * **同じ間違いを 2 か所に書く**ことになる（CLAUDE.md「参照実装を Rust の移植にしない」と同じ形）。
+ *
+ * **差額は 2 つの golden の引き算で出す。** マニュアルは「賞与なしの総支払より 18,279 円多い」と
+ * 書いており、**その 2 つの総支払はどちらも golden に在る**。
+ */
+export function collectWorkedExample() {
+  const manual = read("docs/manual/detail.ja.md");
+  const cases = JSON.parse(read("testdata/finance.json")).cases;
+  const bonus = goldenCase(
+    cases,
+    "loan_bonus_forward/30000000/6000000/1.5/420",
+  );
+  const plain = goldenCase(cases, "loan_forward/30000000/1.5/420/0");
+
+  const written = [
+    ...manual.matchAll(
+      /月々は ([\d,]+) 円、賞与回は ([\d,]+) 円（(\d+) 回）、総支払額は ([\d,]+) 円/g,
+    ),
+  ];
+  if (written.length !== 1) {
+    throw new Error(
+      `マニュアルの賞与の例が ${written.length} 件見つかった(1 件であること)。` +
+        "言い回しが変わったか、この番人の探し方が古い。",
+    );
+  }
+  const diff = [
+    ...manual.matchAll(
+      /賞与を使わないときの総支払額 ([\d,]+) 円より ([\d,]+) 円多くなります/g,
+    ),
+  ];
+  if (diff.length !== 1) {
+    throw new Error(
+      `マニュアルの「賞与なしとの差額」が ${diff.length} 件見つかった(1 件であること)。`,
+    );
+  }
+
+  const n = (s) => Number(s.replace(/,/g, ""));
+  const plainTotal = Number(plain.expect.total_payment);
+  const bonusTotal = Number(bonus.expect.total_payment);
+
+  /** @type {Row[]} */
+  return [
+    {
+      name: "賞与の例: 月々の返済額",
+      manual: n(written[0][1]),
+      source: Number(bonus.expect.monthly_payment),
+      why: "golden `loan_bonus_forward/30000000/6000000/1.5/420` の `monthly_payment`",
+    },
+    {
+      name: "賞与の例: 賞与回の返済額",
+      manual: n(written[0][2]),
+      source: Number(bonus.expect.bonus_payment),
+      why: "同じ golden の `bonus_payment`",
+    },
+    {
+      name: "賞与の例: 賞与回の回数",
+      manual: n(written[0][3]),
+      source: bonus.expect.bonus_rows,
+      why: "同じ golden の `bonus_rows`",
+    },
+    {
+      name: "賞与の例: 総支払額",
+      manual: n(written[0][4]),
+      source: bonusTotal,
+      why: "同じ golden の `total_payment`",
+    },
+    {
+      name: "賞与の例: 賞与を使わないときの総支払額",
+      manual: n(diff[0][1]),
+      source: plainTotal,
+      why: "golden `loan_forward/30000000/1.5/420/0` の `total_payment`",
+    },
+    {
+      name: "賞与の例: 差額",
+      manual: n(diff[0][2]),
+      source: bonusTotal - plainTotal,
+      why: "**2 つの golden の引き算**（マニュアルはこの差を書いている）",
+    },
+  ];
+}
+
 /**
  * **型の上限の行。** `u64` の上限はソースに数として現れないので、**計算して比べる**。
  * `Number` では精度が落ちて**間違った数と一致してしまう**ので `BigInt` で作る。
@@ -248,7 +346,7 @@ export function checkTypeCeiling() {
 function main() {
   let rows;
   try {
-    rows = collectRows();
+    rows = [...collectRows(), ...collectWorkedExample()];
     checkTypeCeiling();
   } catch (error) {
     console.error(`check:manual-limits NG — ${error.message}`);
@@ -269,7 +367,7 @@ function main() {
   }
 
   console.log(
-    `check:manual-limits OK — 上限 ${rows.length} 行と u64 の上限 1 行が一致`,
+    `check:manual-limits OK — 上限と worked example ${rows.length} 行、u64 の上限 1 行が一致`,
   );
 }
 

@@ -459,6 +459,25 @@
     },
     {
       "expect": {
+        "bonus_final_payment": "110524",
+        "bonus_payment": "110487",
+        "bonus_rows": 70,
+        "monthly_final_payment": "73363",
+        "monthly_payment": "73484",
+        "total_interest": "8597286",
+        "total_payment": "38597286"
+      },
+      "id": "loan_bonus_forward/30000000/6000000/1.5/420",
+      "input": {
+        "bonus_principal": "6000000",
+        "n": 420,
+        "principal": "30000000",
+        "rate": "1.5"
+      },
+      "op": "loan_bonus_forward"
+    },
+    {
+      "expect": {
         "error": "SyntaxError"
       },
       "id": "loan_bonus_forward/3000000/1500001/1.5/60",

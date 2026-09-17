@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkTypeCeiling, collectRows } from "../check-manual-limits.mjs";
+import {
+  checkTypeCeiling,
+  collectRows,
+  collectWorkedExample,
+} from "../check-manual-limits.mjs";
 
 /**
  * **マニュアルの上限の数と、製品の数の突き合わせ**（0.9.3 検証側 C-1）。
@@ -25,6 +29,22 @@ describe("マニュアルの上限", () => {
   it("行を 1 つも見ないまま緑にならない", () => {
     const rows = collectRows() as unknown[];
     expect(rows.length).toBeGreaterThanOrEqual(5);
+  });
+
+  // **マニュアルが読者に見せている賞与の例**（C-3）。
+  // **値の裏づけは参照実装が持ち**（`testdata/finance.json` の golden）、
+  // **この番人はマニュアルの文と golden を結ぶだけ**である——JS で計算し直さない。
+  it("賞与の worked example が golden と一致する", () => {
+    const rows = collectWorkedExample() as {
+      name: string;
+      manual: number;
+      source: number;
+      why: string;
+    }[];
+    const wrong = rows.filter((row) => row.manual !== row.source);
+    expect(wrong, `食い違い: ${JSON.stringify(wrong, null, 2)}`).toEqual([]);
+    // 月々・賞与回・回数・総支払・賞与なしの総支払・差額の 6 行。
+    expect(rows.length).toBe(6);
   });
 
   // **型の上限は、ソースに数として現れない。** 計算して比べ、

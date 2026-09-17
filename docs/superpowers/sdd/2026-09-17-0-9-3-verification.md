@@ -215,7 +215,56 @@ Scientific 12 文字／指数 3 桁／Convert 39 桁／Finance の金額 20 桁�
 - **`@ts-expect-error` を足したら「未使用」で赤くなった**——`.mjs` の import は通るので要らなかった。
   **兄弟のテスト（`check-conflict-markers.test.ts`）を先に見ていれば書かずに済んだ。**
 
-## 次: C-3（賞与の worked example）→ C-6（D-1 の engine が固まってから）
+### この番人は、どの段で走るか（現物で確かめた）
+
+**#144 で踏んだ形を避けるため、2 つとも名指しで書く**（番人は `Web build and unit tests` に繋いだのに、
+番人のテストは `Heavy tooling` で走っていた、という食い違い）。
+
+- **番人そのもの**（`pnpm check:manual-limits`）——**`web` のジョブ**（`Web build and unit tests`）。
+  `ci.yml:187`、`check:conflict-markers` の次。
+- **番人のテスト**（`tools/tests/check-manual-limits.test.ts`）——**`heavy` のジョブ**（`Heavy tooling`）の
+  `pnpm test`（`ci.yml:231`）。**`tools/tests/` はこのジョブが回す**と `ci.yml:211` の註にも書いてある。
+- **この番人は git を呼ばない**——`child_process`・`execSync`・`execFileSync`・`spawn` を grep して **0 件**。
+  **したがって `fetch-depth` に依存しない**（`check-manual-freshness` とはそこが違う）。
+
+## C-3 賞与の worked example に番人を置く — **完了**
+
+**両端を置いた**（設計書 §3 の裁定「両方」）:
+
+1. **値の裏づけ**——`reference/src/calcarc_reference/cases.py` に**マニュアルの入力そのもの**を足し、
+   `testdata/finance.json` に golden を生やした（**125 → 126 件**）。
+   **参照実装（Python）が値を出し、Rust の golden テストが製品と突き合わせる。**
+   出た数は**マニュアルの 4 つとぴったり一致**——`monthly_payment 73484`・`bonus_payment 110487`・
+   `bonus_rows 70`・`total_payment 38597286`。
+2. **文との結びつけ**——`tools/check-manual-limits.mjs` に `collectWorkedExample()` を足し、
+   **マニュアルの文と golden の数**を突き合わせる（6 行）。
+
+**JS で計算し直していない。** 償還を組み直せば**3 つ目の実装**になり、**同じ間違いを 2 か所に書く**ことになる。
+**差額 18,279 は 2 つの golden の引き算**で出す——マニュアルは「賞与なしの総支払より 18,279 円多い」と
+書いており、**その 2 つの総支払はどちらも golden に在る**（賞与なしは既存の
+`loan_forward/30000000/1.5/420/0`）。
+
+**この例が「覆われていなかった」ことの確認**（0.9.2 の監査の再掲）: この入力を呼ぶテストは 2 本あったが、
+`crates/calcarc-wasm/tests/web.rs` は **`bonusRows == 70` と「文字列が在ること」だけ**、
+`reference/tests/test_loan_ref.py` は**不等式だけ**を見ていた。**値を主張するものは 1 本も無かった。**
+
+### 赤の確認（3 種類）
+
+| 壊し方 | 出た赤 |
+|---|---|
+| マニュアルの月々（73,484 → 73,485） | `賞与の例: 月々の返済額: マニュアル 73485 / 製品 73484(golden … の monthly_payment)` |
+| **差額**（18,279 → 18,280） | `賞与の例: 差額: マニュアル 18280 / 製品 18279(**2 つの golden の引き算**)` |
+| golden の id が消える | `testdata/finance.json に \`loan_bonus_forward/30000000/6000000/1.5/420\` が 0 件見つかった(1 件であること)` |
+
+### 緑の印字
+
+- `check:manual-limits` → **上限と worked example 13 行、u64 の上限 1 行が一致**
+- `cd heavy && pnpm test` → **21 files・364 passed**（C-1 の時点は 363）
+- `cd reference && uv run --no-config pytest -q` → **548 passed**
+- `cargo test --workspace` → **ok 行 25**／lint `rc=0`／typecheck `rc=0`
+- **再生成しても差分が増えない**（`generate.py` を回し直して `git status` が同じ 4 本のまま）
+
+## 次: C-6（D-1 の engine が固まってから）／年利の 2 行（3d の枝 6 待ち）
 
 **先に数えてから広げる。** 設計書 §2.3 の実測では**追跡下の全ファイルで行頭のマーカーは 0 行**だが、
 **広げた瞬間に赤くなるなら、それは新しい発見**である——**緑を作りに行かない**。
