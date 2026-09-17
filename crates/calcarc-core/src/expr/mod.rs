@@ -212,6 +212,42 @@ mod tests {
     }
 
     #[test]
+    fn the_percent_landing_stops_at_the_ceiling() {
+        // **境目を pin する。** 1e が変異で見つけた穴(2026-09-17)——
+        // **`MAX_ANNUAL_PERCENT` を 100 → 101 にしても、この節は全部緑だった。**
+        // 式の経路を見ていたのは `evaluate_to_percent("3*40")`(120)だけで、
+        // **「100 は通る／100.0001 は断る」を誰も見ていなかった。**
+        //
+        // **定数に名前を付けただけでは、値は守られない**——`rate.rs` には同じ 2 行が
+        // 在ったのに、**式の経路には無かった**。**名前は在処を示すだけである。**
+        assert!(evaluate_to_percent("100").is_ok());
+        assert_eq!(evaluate_to_percent("100.0001"), Err(CalcError::SyntaxError));
+        // **式で組み立てても同じ**——入口の文字列だけを見ているのではない。
+        assert_eq!(
+            evaluate_to_percent("100+0.0001"),
+            Err(CalcError::SyntaxError)
+        );
+    }
+
+    #[test]
+    fn both_paths_carry_the_same_rate_limits() {
+        // **同じ規則が 2 つの経路に在る**(0.9.3 設計書 §8.2)。**綴りはそろえてあるので
+        // `git grep MAX_ANNUAL_PERCENT` で両方出る**が、**綴りが同じでも値はずれうる**
+        // ——ここで止める。どちらも `pub` なので、この検査のために可視性は広がらない。
+        //
+        // **calcarc-88 の番人とは役割が違う**: あちらは**マニュアルの数と本文の数**、
+        // ここは**2 経路の値の一致**である。**あちらが main に入るまでの窓も、ここが塞ぐ。**
+        assert_eq!(
+            crate::finance::loan::rate::MAX_ANNUAL_PERCENT as i128,
+            MAX_ANNUAL_PERCENT
+        );
+        assert_eq!(
+            crate::finance::loan::rate::MAX_PERCENT_DECIMALS as u32,
+            MAX_PERCENT_DECIMALS
+        );
+    }
+
+    #[test]
     fn the_percent_landing_keeps_four_digits() {
         assert_eq!(evaluate_to_percent("1.5+0.25").unwrap(), "1.75");
         assert_eq!(evaluate_to_percent("1/8").unwrap(), "0.125");
