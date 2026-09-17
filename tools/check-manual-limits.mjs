@@ -197,6 +197,61 @@ export function collectRows() {
     why: "そのまま。盤面とコアの 2 つが一致することも上で確かめている",
   });
 
+  // **年利は 2 つの経路を持つ**——打った文字列を直接受ける `loan/rate.rs` と、
+  // **式として打った年利を評価してから受ける** `expr/mod.rs`（0.9.2 で年利と為替が式を受けるようになった）。
+  //
+  // **その 2 つが一致することは、ここでは主張しない。**
+  // `crates/calcarc-core/src/expr/mod.rs` の **`both_paths_carry_the_same_rate_limits`** が
+  // **実際の定数どうしを突き合わせている**（型を跨いで `as i128` / `as u32` で比べる）。
+  // **同じ主張を 2 か所に書かない**——書けば、片方だけ直された日に**どちらが正しいか分からなくなる**。
+  // だからここは **`loan/rate.rs` の側だけ**を読み、**マニュアルとの結びつけに専念する**。
+  const rateRs = read("crates/calcarc-core/src/finance/loan/rate.rs");
+  const percentCeiling = numberInConst(
+    rateRs,
+    "finance/loan/rate.rs",
+    "MAX_ANNUAL_PERCENT",
+  );
+  const percentDecimals = numberInConst(
+    rateRs,
+    "finance/loan/rate.rs",
+    "MAX_PERCENT_DECIMALS",
+  );
+
+  rows.push({
+    name: "Finance の年利の上限（％）",
+    manual: numberInManual(
+      manual,
+      "Finance の年利（… まで）",
+      /Finance の年利[^|]*\|\s*(\d+) まで/g,
+    ),
+    source: percentCeiling,
+    why: "そのまま。式の経路との一致は `both_paths_carry_the_same_rate_limits` が持つ",
+  });
+
+  rows.push({
+    name: "Finance の年利の小数桁数",
+    manual: numberInManual(
+      manual,
+      "小数点以下は … 桁まで",
+      /小数点以下は (\d+) 桁まで/g,
+    ),
+    source: percentDecimals,
+    why: "そのまま。`PERCENT_SCALE` は桁数から導いてあるので、倍率は Rust が保証する",
+  });
+
+  // **導き方が要る行。** マニュアルは「**5 桁以上**は答えが出ない」と書く——
+  // これは「4 桁までは出る」の裏返しである。**`+ 1` を番人の中に書く。**
+  rows.push({
+    name: "答えが出なくなる年利の小数桁数",
+    manual: numberInManual(
+      manual,
+      "小数点以下が … 桁以上の年利は、打てても答えは出ません",
+      /小数点以下が (\d+) 桁以上の年利は/g,
+    ),
+    source: percentDecimals + 1,
+    why: `MAX_PERCENT_DECIMALS(${percentDecimals}) + 1。「4 桁までは出る」の裏返し`,
+  });
+
   // 「10 億円」は億で書いてある。定数は円。
   const cap = numberInConst(
     closedForm,
