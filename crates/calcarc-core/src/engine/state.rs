@@ -11,9 +11,11 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 ///    入った(S-4 設計書 §3.2)。**3 つ目の入力モード**である。
 /// 7: 押し直しの戻り先 `replace_base`(0.9.2 設計書 §2.2)と、手元の値の旗
 ///    `on_hand`(§3.3)が入った。
+/// 8: 閉じた組を開き直すための `closed_groups`(0.9.3 設計書 §4.2)が入った。
+///    **`)` ごとに積み、DEL で 1 つ降ろす列**である。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 7;
+pub const STATE_SCHEMA: u32 = 8;
 
 /// 入力欄に打ち込める最大文字数。
 ///
@@ -128,6 +130,35 @@ pub struct ReplaceBase {
     pub operands: Vec<Value>,
     pub operators: Vec<OpToken>,
     pub current: Value,
+}
+
+/// `)` を押す直前の状態(0.9.3 設計書 §4.2)。
+///
+/// **組を開き直すのは「`(` を積み直すこと」ではない。** `)` は中身を畳んでしまうので、
+/// `(` だけ戻しても畳んだ値が残る——`( 2 + 3 ) DEL × 2 ) =` は、綴りのとおりなら 8 だが、
+/// 積み直すだけの実装では 5 が中身に残って 10 になる(1e の反例)。**だから状態ごと戻す。**
+/// `ReplaceBase` と同じ作りだが、**`buffer` も戻す**——`( ( 3 ) DEL` は打ちかけの `3` が
+/// 戻るのであって、確定した 3 に戻るのではない。
+///
+/// **入れ子にしない。** これは `EngineState` が `Vec` で平らに持つ 1 要素であり、
+/// **前の要素を含まない**。含めると**連続した `)` の数に対して状態が二乗で伸びる**
+/// ——`EngineState` は毎打鍵 WASM 境界を往復する(設計書 D7)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClosedGroup {
+    pub buffer: Option<Buffer>,
+    pub current: Value,
+    pub operands: Vec<Value>,
+    pub operators: Vec<OpToken>,
+    pub operator_pending: bool,
+    pub on_hand: bool,
+    /// **押し直しの戻り先も控える。**
+    ///
+    /// **設計書 §4.2 の一覧には入っていなかったが、要る**(2026-09-17 に実測で分かった)。
+    /// `replace_base` は **`operator_pending` に従属する**(0.9.2 設計書 §2.2)——
+    /// 戻した状態が `operator_pending = true` なのに戻り先が `None` だと、
+    /// **その不変が崩れて押し直しが「到達しないはず」の経路へ落ちる**。
+    /// `( 3 + 3 × ) DEL +` がそれで、engine と独立評価器の答えが食い違った。
+    pub replace_base: Option<ReplaceBase>,
 }
 
 /// 入力中の指数部。`Exp` を押した時点で、桁が無いまま存在する。
@@ -452,6 +483,16 @@ pub struct EngineState {
     /// **`operator_pending` と同じく、DEL と表示トグルでは動かさない。**
     #[serde(default)]
     pub on_hand: bool,
+    /// **閉じた組を開き直すための、`)` を押す直前の状態の列**(0.9.3 設計書 §4.2)。
+    ///
+    /// `)` で 1 つ積み、`DEL` で 1 つ降ろす。**保つのは `DEL` と表示トグルだけ**で、
+    /// **ほかのキーはすべて捨てる**——だから遡れるのは「**連続して閉じた `)`**」の
+    /// 範囲だけである(§4.2.1)。**`DEL` は Undo ではない**: 遡るのは `)` の押下だけで、
+    /// 演算子も数字も戻さない。
+    ///
+    /// **深さは括弧の深さで上から抑えられる**(`)` を押せるのは開いている組があるときだけ)。
+    #[serde(default)]
+    pub closed_groups: Vec<ClosedGroup>,
 }
 
 impl EngineState {
@@ -470,6 +511,7 @@ impl EngineState {
             operator_pending: false,
             replace_base: None,
             on_hand: false,
+            closed_groups: Vec::new(),
         }
     }
 
