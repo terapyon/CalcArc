@@ -100,6 +100,7 @@ const CONFLICT_MID = /^={7}$/;
 
 /**
  * @typedef {{path: string, text: string}} SourceFile
+ * @typedef {{path: string, why: string}} SkippedFile
  * @typedef {{path: string, line: number, marker: string, text: string}} Violation
  */
 
@@ -156,11 +157,13 @@ export function findConflictMarkers(files) {
 }
 
 /**
- * `docs/` の下で追跡されているファイルを読む。**`git ls-files` を使う**
- * ——生成物や未追跡のファイルを歩かないため(`check-citations.mjs` と同じ
- * 理由)。
+ * **追跡下の全ファイル**を読む。**`git ls-files` を使う**——生成物や未追跡の
+ * ファイルを歩かないため(`check-citations.mjs` と同じ理由)。
  *
- * @returns {SourceFile[]}
+ * **読めたものと飛ばしたものを分けて返す。** 飛ばした側を捨てると、
+ * 「読めないので見なかった」が「見て 0 だった」と同じ緑になる。
+ *
+ * @returns {{ files: SourceFile[], skipped: SkippedFile[] }}
  */
 export function readTrackedFiles() {
   // **`URL.pathname` を使わない。** %-encode が戻らないので、パスに空白が
