@@ -107,7 +107,9 @@ On these three tabs, choose an item first, then enter its number.
   expression into its value
 - **On Convert, 【値】 (value) is not rounded by 【=】.** When it doesn't divide evenly it
   stays a fraction, such as `1/3`, and carries that value into whatever you type next
-  (for example, 【=】 on `1/3*3-1` gives `0`)
+  (for example, 【=】 on `1/3*3-1` gives `0`).
+  **Typing a digit after the answer starts a new value** (an operator continues from
+  the answer instead)
 - Keys that cannot be pressed right now look disabled. Some become available when
   you change the item or the kind of calculation; others are not used on that screen
 
