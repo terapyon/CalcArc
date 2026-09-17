@@ -462,6 +462,12 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
                 state.operators.pop();
                 break;
             }
+            // **盤面からは届かない**(0.9.3 の D-2)。`refuses` が、開いている組の
+            // 無い `)` を先に拒む——**`reduce` を通る限り、この腕には入らない。**
+            // **残すのは関数の全域性のため**であり、**届くかどうかは `refuses` の
+            // 分岐 1 つに懸かっている**: あれを外すと 0.9.2 の振る舞い
+            // (押せて `Math ERROR`)に戻る。**番人は下の単体テスト**で、
+            // **`reduce` を通さずにここを直接呼ぶ唯一の使い手**である。
             None => return Err(CalcError::SyntaxError),
         }
     }
@@ -623,4 +629,47 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Ac => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **`reduce` を通さずに `close_paren` を直接呼ぶ**。
+    ///
+    /// **0.9.3 の D-2 で、この 2 つは盤面から届かなくなった**（開いていない `)`
+    /// は `refuses` が拒む）。**それでも関数の契約は残っている**ので、ここで
+    /// 押さえる——**`engine_table.rs` から降ろしてきた 2 行**である
+    /// （あちらは盤面の仕様書なので、盤面で作れない状態を置かない）。
+    fn state_after(tokens: &[&str]) -> EngineState {
+        let mut state = EngineState::initial();
+        for token in tokens {
+            let key = Key::from_token(token).expect("unknown key");
+            state = reduce(&state, key).0;
+        }
+        state
+    }
+
+    #[test]
+    fn close_paren_without_an_open_group_is_a_syntax_error() {
+        let mut state = state_after(&["3", "add", "4"]);
+        assert_eq!(close_paren(&mut state), Err(CalcError::SyntaxError));
+    }
+
+    #[test]
+    fn close_paren_folds_the_pending_operations_before_looking_for_the_group() {
+        // **畳みが先である。** `3 ÷ 0 )` は SyntaxError ではなく
+        // DivisionByZero——**開いている組が無くても、割り算のほうが先に失敗する。**
+        let mut state = state_after(&["3", "div", "0"]);
+        assert_eq!(close_paren(&mut state), Err(CalcError::DivisionByZero));
+    }
+
+    #[test]
+    fn close_paren_succeeds_while_a_group_is_open() {
+        // **対照**——上の 2 つが「開いている組が無いから」落ちていることを言う
+        // (どんな状態でも落ちる関数を見て緑になっていない)。
+        let mut state = state_after(&["lparen", "3", "add", "4"]);
+        assert_eq!(close_paren(&mut state), Ok(()));
+        assert_eq!(state.current, Value::real(7.0));
+    }
 }

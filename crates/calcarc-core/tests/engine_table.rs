@@ -634,28 +634,15 @@ fn equals_closes_unclosed_parentheses() {
     );
 }
 
-#[test]
-fn an_unmatched_closing_paren_is_a_syntax_error() {
-    assert_eq!(main_of(&["rparen"]), "Math ERROR");
-    assert_eq!(main_of(&["3", "add", "4", "rparen"]), "Math ERROR");
-}
-
-#[test]
-fn an_unmatched_closing_paren_folds_the_pending_operations_first() {
-    use calcarc_core::CalcError;
-    // 開いていない `)` は、`(` を探す前に保留の演算を畳む(`close_paren`)。畳みが失敗すれば、
-    // その失敗が先に出る——`3 ÷ 0 )` は SyntaxError ではなく DivisionByZero。どちらも画面は
-    // Math ERROR で、利用者に見える違いは無い。0.9.2 の値の照合(`engine_values.rs`)がこの
-    // 順を決める行を必要としたので、いまの振る舞いをそのまま仕様として書いた(2026-09-13)。
-    assert_eq!(
-        run(&["3", "div", "0", "rparen"]).error,
-        Some(CalcError::DivisionByZero)
-    );
-    assert_eq!(
-        run(&["3", "add", "4", "rparen"]).error,
-        Some(CalcError::SyntaxError)
-    );
-}
+// **ここに 2 行あった**(`an_unmatched_closing_paren_is_a_syntax_error` と
+// `..._folds_the_pending_operations_first`)。**0.9.3 の D-2 で降ろした**
+// ——**開いていない `)` は押せなくなった**ので、**この表では作れない状態**を
+// 語る行になっていた(この表は**盤面の仕様書**である)。
+//
+// - **押せないこと**は `an_unmatched_closing_paren_cannot_be_pressed` が言う
+// - **`close_paren` の契約**(畳みが先・開いている組が無ければ SyntaxError)は
+//   `src/engine/mod.rs` の単体テストへ移した。**あちらは `reduce` を通さずに
+//   直接呼ぶ**ので、`refuses` の外から関数そのものを押さえられる
 
 #[test]
 fn reports_the_parenthesis_depth() {
@@ -824,7 +811,14 @@ fn every_error_kind_reaches_the_display() {
         run(&["4", "neg", "sqrt"]).error,
         Some(CalcError::DomainError)
     );
-    assert_eq!(run(&["rparen"]).error, Some(CalcError::SyntaxError));
+    // **`)` ではなくなった**(0.9.3 の D-2)——開いていない `)` は押せないので、
+    // **あの列はもう SyntaxError を作れない**。**盤面から届く SyntaxError**は
+    // 2 つ目の小数点である(`Buffer::push_dot`)。**この行の仕事は「どの種類の
+    // エラーも画面に出る」を言うこと**なので、種類が同じなら列は替えてよい。
+    assert_eq!(
+        run(&["1", "dot", "dot"]).error,
+        Some(CalcError::SyntaxError)
+    );
     let mut keys = vec!["9"];
     keys.extend(std::iter::repeat_n("sqr", 10));
     assert_eq!(run(&keys).error, Some(CalcError::Overflow));
@@ -969,7 +963,6 @@ fn del_removes_an_unclosed_paren() {
 
 #[test]
 fn del_after_a_closed_group_reopens_that_group() {
-    use calcarc_core::CalcError;
     // **閉じた組のあとの DEL は、その `)` を取り消して組を開き直す**(0.9.3 §4.2、
     // 利用者の裁定 2026-09-17)。**`(` を積み直すのではなく、`)` を押す直前の状態へ戻す**
     // ——`( 2 + 3 ) DEL × 2 ) =` が示すとおり、`)` は中身を畳んでしまうので、
@@ -1024,13 +1017,13 @@ fn del_after_a_closed_group_reopens_that_group() {
         "7"
     );
     // `+/−` で手元にある値の上の `(` も同じく消える(calcarc-1e の検算、2026-09-16)。
-    // `( 3 +/− DEL )` は `(` が消えて最後の `)` が開いていない `)` になり、SyntaxError。
+    // `( 3 +/− DEL` は `(` が消えるので、**そのあとの `)` は押せない**
+    // ——**0.9.2 までは押せて SyntaxError だった**(0.9.3 の D-2 で変わった。
+    // 上の `an_unmatched_closing_paren_cannot_be_pressed` と同じ理由)。
     // `2 × ( 3 +/− DEL + 1 =` は 2 × (−3) + 1 = −5。いまの振る舞いをそのまま固定する
     // (履歴の綴りは spell_table の `del_on_a_paren_under_a_value_spells_what_the_engine_computes`)。
-    assert_eq!(
-        run(&["lparen", "3", "neg", "del", "rparen"]).error,
-        Some(CalcError::SyntaxError)
-    );
+    refused_after(&["lparen", "3", "neg", "del"], "rparen");
+    assert_eq!(run(&["lparen", "3", "neg", "del", "rparen"]).error, None);
     assert_eq!(
         main_of(&["2", "mul", "lparen", "3", "neg", "del", "add", "1", "eq"]),
         "-5"
@@ -1423,6 +1416,10 @@ fn refused_keys_lists_every_key_that_refuses_in_key_all_order() {
     // `refused_keys` は `refuses` を `Key::ALL` の順に濾しただけ(mod.rs)。
     // `4 √` のあとは on_hand(0.9.2 設計書 §3.3)——`Key::ALL` に出る 10 種の
     // 数字それぞれと、`.`・`000`・`Exp`・`π`・`(`・`j`・`e` が該当する。
+    //
+    // **`)` も入る(0.9.3 の D-2)。** ただし**理由が違う**——ほかは
+    // 「手元の値を捨てるから」で、`)` は**開いている組が無いから**である。
+    // **`Key::ALL` の順なので `(` の次に出る。**
     let mut state = EngineState::initial();
     for token in ["4", "sqrt"] {
         let k = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
@@ -1446,6 +1443,7 @@ fn refused_keys_lists_every_key_that_refuses_in_key_all_order() {
             Key::Exp,
             Key::Pi,
             Key::LParen,
+            Key::RParen,
             Key::J,
             Key::E,
         ]
