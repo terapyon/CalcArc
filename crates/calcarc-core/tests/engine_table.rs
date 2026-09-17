@@ -1339,10 +1339,30 @@ fn a_key_that_would_drop_a_number_cannot_be_pressed() {
 }
 
 #[test]
+fn an_unmatched_closing_paren_cannot_be_pressed() {
+    // **開いていない `)` は押せない**(0.9.3 の D-2、利用者の裁定 2026-09-17)。
+    // 0.9.2 までは押せて `Math ERROR` になっていた——**打てる操作が
+    // 「必ず間違い」なら、押せないほうが正しい**(F5 と同じ線)。
+    refused_after(&[], "rparen");
+    refused_after(&["3", "add", "4"], "rparen");
+    // **閉じ終わった組のあとも押せない**(深さ 0 に戻っている)。
+    refused_after(&["lparen", "3", "rparen"], "rparen");
+    // **開いているあいだは押せる。**
+    accepted_after(&["lparen", "3"], "rparen");
+    accepted_after(&["lparen", "lparen", "3", "rparen"], "rparen");
+    // **D-1 で開き直した組も「開いている」**(0.9.3 §4.2)。
+    accepted_after(&["lparen", "lparen", "3", "rparen", "del"], "rparen");
+}
+
+#[test]
 fn keys_that_keep_the_number_stay_pressable() {
     // 二項演算子はどの状態でも押せる——F1 の訂正(演算子の直後の演算子)も押せる
-    // (calcarc-1e の注記 A)。後置関数・`+/−`・`=`・`)`・DEL・AC・表示トグルも、
+    // (calcarc-1e の注記 A)。後置関数・`+/−`・`=`・DEL・AC・表示トグルも、
     // 手元の値に掛かるか何も捨てないので押せる(0.9.2 設計書 §3.2)。
+    //
+    // **`)` はこの一覧から外れた**(0.9.3 の D-2、利用者の裁定 2026-09-17)。
+    // **開いている組が無ければ押せない**ので、「どの状態でも押せる」側では
+    // なくなった——下の `an_unmatched_closing_paren_cannot_be_pressed` が持つ。
     let states: [&[&str]; 5] = [
         &["2"],
         &["lparen", "3", "rparen"],
@@ -1360,7 +1380,6 @@ fn keys_that_keep_the_number_stay_pressable() {
             "n_p_r",
             "n_c_r",
             "eq",
-            "rparen",
             "del",
             "ac",
             "sqrt",

@@ -18,11 +18,26 @@ use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBas
 /// **真なら `reduce` は何も変えない**——押せないキーは押されなかったのと同じ。盤面と
 /// キーボードはこの答え(wasm の `Step.refused`)を読むだけで、規則を持たない。
 /// **二項演算子はどの状態でも拒まない**(F1 の訂正が押せる。calcarc-1e の注記 A)。
-/// 拒む集合は、数字・`000`・`.`・`Exp`・`j`・`(`・`π`・`e` の外に出ない。
+/// 拒む集合は、数字・`000`・`.`・`Exp`・`j`・`(`・`π`・`e`・**`)`** である。
+///
+/// **`)` は 0.9.3 で入った**(D-2、利用者の裁定 2026-09-17)——**開いている組が
+/// 無いときだけ**拒む。0.9.2 までは押せて `Math ERROR` になっていたが、
+/// **打てる操作が「必ず間違い」なら、押せないほうが正しい**(F5 と同じ線)。
+/// **ほかの 8 つと違い、`)` は「手元の値を捨てるから」ではなく「閉じる先が
+/// 無いから」拒む**——だから下の `on_hand` の腕ではなく、独立した分岐である。
 pub fn refuses(state: &EngineState, key: Key) -> bool {
     if state.error.is_some() {
         // エラー中は AC 以外が既に何もしない(`reduce`)。押せなくはしない(S7)。
         return false;
+    }
+    // **開いていない `)` は押せない**(0.9.3 の D-2)。**打ちかけの数が在っても
+    // 同じ**(`( 3` の `)` は押せる、`3` だけの `)` は押せない)ので、
+    // 下のバッファの分岐より先に見る。
+    if key == Key::RParen {
+        return !state
+            .operators
+            .iter()
+            .any(|op| matches!(op, OpToken::OpenParen));
     }
     if let Some(buffer) = &state.buffer {
         // S1 打ちかけ。`(`・`π`・`e` はバッファを確定せずに捨てる(`open_paren`・`Key::Pi`・
