@@ -107,6 +107,12 @@ jobs:
       #   ——**緊急で配った版は PDF を持たず、`#manual` の PDF は 404 になる**
       #   (`functions/manual/[[path]].js`)。**迂回の中身が 1 つ増えた**ことは
       #   `docs/deploy.md` のロールバックの節に書いた
+      # **同じ走行の artifact である**——呼ばれたワークフローのジョブも、
+      # 呼び出し元の走行に属する（`release.yml` の `evidence` が
+      # `heavy-report` と `deployed-dist` を同じ形で取っている）。
+      # **ただし「呼ばれた側から取る」形は、この 1 段が初めてである**
+      # ——**実走で確かめていない。** 取れなければこの段が赤くなり、
+      # **配る段はこの後ろなので本番へは出ない**（失敗の向きは安全側）。
       - name: Put the manuals into what we deploy
         if: ${{ inputs.called_from_release }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
