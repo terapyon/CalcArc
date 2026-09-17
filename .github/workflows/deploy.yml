@@ -91,6 +91,24 @@ jobs:
       - uses: ./.github/actions/setup-web
       - run: pnpm exec vite build
         working-directory: web
+      # **マニュアルの PDF を `dist` に入れてから配る**(0.9.3 設計書 §2.3、
+      # 利用者の裁定 2026-09-17「PDF が落ちたら本番も出さない」)。
+      #
+      # - **`vite build` の後**に置く——あれは `dist` を作り直すので、先に
+      #   入れると消える
+      # - **precache には入らない**(`sw.js` はビルド時に作られ、この後に
+      #   足したファイルを知らない)。**PDF は数百 KB あり、入れる理由も無い**
+      # - **リリースの走行だけ**である。**緊急の `workflow_dispatch` には
+      #   `manuals` の artifact が無い**ので、`called_from_release` で切る
+      #   ——**緊急で配った版は PDF を持たず、`#manual` の PDF は 404 になる**
+      #   (`functions/manual/[[path]].js`)。**迂回の中身が 1 つ増えた**ことは
+      #   `docs/deploy.md` のロールバックの節に書いた
+      - name: Put the manuals into what we deploy
+        if: ${{ inputs.called_from_release }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: manuals
+          path: web/dist/manual/
       # 刻印はビルドの後に書く。public/ に置くと precache に入り、
       # 「いまサーバが何を配っているか」にキャッシュが答えるファイルに
       # なってしまう(設計書 §4)。

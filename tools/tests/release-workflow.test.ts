@@ -672,16 +672,20 @@ describe("すべてのジョブに時間制限が在る（2026-09-05）", () => 
 });
 
 // ---------------------------------------------------------------------------
-// **マニュアルは本番のあとで作り、落ちても証拠を書く**(2026-09-11、
-// マニュアルの設計書 `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、
-// 裁定 §9 #3「本番は止めない」)。
+// **マニュアルは本番の前に作る**(0.9.3 設計書 §2.3、利用者の裁定 2026-09-17
+// 「PDF が落ちたら本番も出さない」)。
 //
-//   … → Deploy ─┬→ Manuals ─┐
-//               └───────────┴→ Evidence and GitHub Release
+//   … → Heavy → Manuals → Deploy → Evidence and GitHub Release
+//
+// **0.9.3 で順を入れ替えた。** それまでは `Deploy` → `Manuals` で、この節は
+// 「本番のあとで作り、落ちても証拠を書く」だった(2026-09-11、マニュアルの設計書
+// `docs/superpowers/specs/2026-09-10-manuals-design.md` §5、裁定 §9 #3
+// 「本番は止めない」)。**PDF が `#manual` から開く配信物になった**ので、
+// **PDF の無い版を本番へ出さない**方を採った。
 //
 // **この形は条件式と `needs` の組み合わせだけが持っている。** 1 つ外れても
 // ワークフローはそのまま動き、**壊れ方は Manuals が落ちた日にしか見えない**
-// ——既定の `success()` に戻れば証拠ごと付かず、`always()` にすれば止めた走行でも
+// ——`needs` が戻れば PDF の無い版が本番へ出て、`always()` にすれば止めた走行でも
 // 証拠を書き足す。ここで字面を固定する。
 // ---------------------------------------------------------------------------
 
@@ -724,7 +728,7 @@ const stepChunks = (lines: string[]) =>
     .split(/\n(?= {6}- )/)
     .filter((chunk) => /^ {6}- /.test(chunk));
 
-describe("マニュアルは本番のあとで作り、落ちても証拠を書く（門 4）", () => {
+describe("マニュアルは本番の前に作り、落ちたら本番へ出さない（0.9.3）", () => {
   const release = read("release.yml");
   const manuals = jobBlock(release, "manuals");
   const evidence = jobBlock(release, "evidence");
@@ -745,9 +749,12 @@ describe("マニュアルは本番のあとで作り、落ちても証拠を書�
     expect([...MAY_FAIL]).toEqual([MANUALS_JOB]);
   });
 
-  it("Manuals は Deploy のあとで走る", () => {
-    // 本番の前に置けば、マニュアルの失敗で本番が止まる(裁定は「止めない」)。
-    expect(needsOf(manuals)).toEqual(["deploy"]);
+  it("Manuals は Deploy の前に走り、Deploy がそれを待つ", () => {
+    // **この 2 行が「PDF が落ちたら本番も出さない」の全部である**
+    // (利用者の裁定 2026-09-17)。`manuals` を `deploy` の後ろへ戻すと、
+    // **PDF の無い版が本番へ出て、`#manual` のリンクの先が 404 になる**。
+    expect(needsOf(manuals)).toEqual(["heavy"]);
+    expect(needsOf(jobBlock(release, "deploy"))).toEqual(["manuals"]);
   });
 
   it("Evidence は Deploy と Manuals の両方を待つ", () => {
