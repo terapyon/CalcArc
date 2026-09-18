@@ -241,9 +241,13 @@ jobs:
           pdf="$(ls web/dist/manual | head -1)"
           [ -n "$pdf" ]
           # 他のスモークと同じリトライ(ファイル単位の伝播は非アトミック)。
-          # **`Content-Disposition: attachment` も見る**(0.9.4、利用者の実測
-          # 2026-09-18)。**ホーム画面のアプリが PDF に乗っ取られる**のを止める
-          # ヘッダで、**付けているのは `functions/manual/` の Function だけ**
+          # **`Content-Disposition: attachment` も見る**(0.9.4)。**0.9.4 の狙い
+          # (ホーム画面のアプリが PDF に乗っ取られるのを止める)は外れた**
+          # ——本番で付いていても iPhone では戻れなかった(2026-09-18 の実測)。
+          # **0.9.5 からリンク集は GitHub の Release を指し、この経路は
+          # 出荷前の夜にリリース経路を動かさないために残っている**(撤去は 0.9.6、
+          # `functions/manual/[[path]].js` の註)。
+          # **付けているのは `functions/manual/` の Function だけ**
           # である——**つまりこの検査は「Function が本番で拾われている」ことの
           # 証拠でもある**(実在の PDF は Function が無くても静的ファイルとして
           # 配られるので、**type だけでは拾われたかどうか分からない**)。

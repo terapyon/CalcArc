@@ -45,21 +45,22 @@ test("the links popup opens from the footer, with the six the user settled", asy
   await expect(
     popup.getByRole("link", { name: "GitHub（@terapyon）" }),
   ).toHaveAttribute("href", "https://github.com/terapyon/CalcArc");
-  // **PDF は `/manual/` の下**——`functions/manual/[[path]].js` が受ける経路で
-  // ある（無い PDF に 404、在る PDF に `Content-Disposition: attachment`）。
+  // **PDF は GitHub の Release を指す**（0.9.5）。**形（添付の直リンクか、
+  // Release のページか）はここでは見ない**——**組むのは `manualPdfUrl` の
+  // 1 か所で、形は `Footer.test.tsx` が `pdfName` と突き合わせている**。
+  // iOS で直リンクが外れてページへ替える日に、**ここは動かない**。
+  // **ここが見るのは「ビルドした画面の PDF がサイトの外へ出る」ことだけ**である。
   await expect(
     popup.getByRole("link", { name: "CalcArc 簡易マニュアル" }),
-  ).toHaveAttribute("href", /^\/manual\/calcarc-.+-quick-ja\.pdf$/);
+  ).toHaveAttribute(
+    "href",
+    /^https:\/\/github\.com\/terapyon\/CalcArc\/releases\//,
+  );
   // **どれもアプリの窓から出る**——0.9.3 は 1 本だけ中へ行っていた（`#manual`）。
   //
-  // **★ 見ているのは属性であって、開き方ではない。** PDF の実際の開き方は
-  // **`Content-Disposition: attachment` が決める**（`functions/manual/` の
-  // Function が付ける）——**保存になり、窓は残る**。**その挙動はここでは
-  // 測れない**: **`vite preview` は Pages Functions を通さない**ので、
-  // **手元の E2E にあのヘッダは出てこない**（1e の判定 2026-09-18）。
-  // **本番で見るのは `deploy.yml` のスモーク**である。
-  // **`target="_blank"` はその上の安全側**——**ヘッダが効かない環境でも、
-  // PC では別の窓に出て、電卓が乗っ取られない。**
+  // **★ 見ているのは属性であって、開き方ではない。** iPhone のホーム画面の
+  // アプリで PDF がどう開くか（戻れるか）は、**利用者の実機でしか分からない**
+  // （`LinksPopup.tsx` の `manualPdfUrl` の註に、実測と推測を分けて書いた）。
   for (const link of await popup.getByRole("link").all()) {
     await expect(link).toHaveAttribute("target", "_blank");
   }

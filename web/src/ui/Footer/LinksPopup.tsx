@@ -28,18 +28,41 @@ import styles from "./LinksPopup.module.css";
  * （`tests/unit/manual-key-names.test.ts` と同じ流儀。`Nav.tsx` の `MODULES`、
  * `UpdateToast.tsx` の `UPDATE_TOAST_LABELS` がその先例）。
  */
+/** このリポジトリの Release。**PDF と【検査結果】が同じ所から組む。** */
+const RELEASES = "https://github.com/terapyon/CalcArc/releases";
+
 /**
- * 版から PDF の道を作る。**綴りの出どころは `web/scripts/manual/markdown.ts`
- * の `pdfName`**（`calcarc-<版>-<冊>.pdf`）。**写しなので検査が繋ぐ**
- * ——`Footer.test.tsx` が、あの関数の出力と 1 冊ずつ突き合わせる。
+ * 版から PDF の行き先を作る。**行き先を組むのはここ 1 か所だけ**である
+ * （0.9.5、利用者の裁定 2026-09-18「PDF のリンクを GitHub Release の URL へ」）。
  *
- * **`/manual/` の下であることが要る**——`functions/manual/[[path]].js` が
- * **その経路だけ**を受け、無い PDF に 404 を返し、在る PDF に
- * `Content-Disposition: attachment` を付ける（**ホーム画面のアプリが PDF に
- * 乗っ取られるのを止める**。利用者の実測 2026-09-18）。
+ * **その版の Release に添えた PDF を直に指す**（`release.yml` の
+ * `Evidence and GitHub Release` が上げる添付。名前は `web/scripts/manual/markdown.ts` の `pdfName` と同じ
+ * `calcarc-<版>-<冊>.pdf`）。**綴りの出どころが 2 つあるので検査が繋ぐ**
+ * ——`Footer.test.tsx` が `pdfName` の出力と 1 冊ずつ突き合わせる。
+ *
+ * **なぜサイト内（`/manual/`）をやめたか**:
+ * - **実測（利用者の iPhone、2026-09-18）**: ホーム画面に追加したアプリから、
+ *   **サイト内の PDF を開くと窓ごと PDF に変わって戻れない**。**GitHub の
+ *   ページを開くと、上にバツの付いた窓で開いて戻れる。**
+ * - **実測（監視役の `curl`、2026-09-18）**: 本番の PDF には
+ *   `content-disposition: attachment` が付いていた。**付いていても、上の
+ *   「戻れない」は起きた**——**0.9.4 の「ヘッダで保存に倒せば止まる」は外れた。**
+ * - **推測（測っていない）**: 窓がアプリの外に出るかは**移る先の生成元**で
+ *   決まり、**GitHub の窓の中なら PDF でも戻れる**。**iOS で直ったかは
+ *   利用者の実機でしか言えない**——**「直った」とはどこにも書かない。**
+ *
+ * **外れたら、ここを 1 行替える**: `/download/v<版>/<名前>` を `/tag/v<版>` に
+ * （その版の Release のページ。**利用者が iPhone で戻れると確かめたのは GitHub のページ**）。
+ * **項目のラベルは変わらないが、3 冊とも【検査結果】と同じ所へ行く**ことになる。
+ *
+ * **404 の窓**: `release.yml` は `Deploy` → `Evidence and GitHub Release` の順
+ * （`evidence` が `needs: [deploy, manuals]`）なので、**本番が新しい版に
+ * 切り替わってから添付が上がるまで**、この URL は 404 である
+ * （v0.9.4 の走行で約 21 秒。監視役の実測）。**`Manuals` が落ちれば `Deploy`
+ * が走らない**ので、PDF の無い版が本番に出ることは無い。
  */
-export function manualPdfPath(stem: string, version: string): string {
-  return `/manual/calcarc-${version}-${stem}.pdf`;
+export function manualPdfUrl(stem: string, version: string): string {
+  return `${RELEASES}/download/v${version}/calcarc-${version}-${stem}.pdf`;
 }
 
 /**
@@ -68,10 +91,11 @@ export const LINKS = [
     group: "site",
   },
   // **PDF 3 冊**（0.9.4、利用者の裁定 2026-09-18）。**`#manual` の画面は無い。**
+  // **行き先は 0.9.5 から GitHub の Release**（`manualPdfUrl`）。
   ...MANUALS.map((manual) => ({
     id: manual.stem,
     label: manual.title,
-    href: manualPdfPath(manual.stem, __APP_VERSION__),
+    href: manualPdfUrl(manual.stem, __APP_VERSION__),
     external: true,
     group: "manual",
   })),
@@ -89,7 +113,7 @@ export const LINKS = [
     // **版数はビルド時に埋まる**ので、古い版の画面は古い Release を指す。
     id: "evidence",
     label: "検査結果",
-    href: `https://github.com/terapyon/CalcArc/releases/tag/v${__APP_VERSION__}`,
+    href: `${RELEASES}/tag/v${__APP_VERSION__}`,
     external: true,
     group: "about",
   },
@@ -193,14 +217,9 @@ export function LinksPopup({ onClose }: { onClose: () => void }) {
                 className={styles.link}
                 href={link.href}
                 // PWA の standalone 起動でも外のブラウザで開く
-                // （`Footer.tsx` に在った註と同じ理由）。
-                //
-                // **★ PDF ではこれだけでは足りない**——**iOS の standalone は
-                // 同じ生成元への navigation をアプリの窓の中で起こす**ので、
-                // **窓ごと PDF に変わって戻れない**（利用者の実測 2026-09-18）。
-                // **止めているのは Function の `Content-Disposition: attachment`**
-                // で、**ここはその上の安全側**（ヘッダが効かない環境でも、
-                // PC では別の窓に出る）である。
+                // （`Footer.tsx` に在った註と同じ理由）。**6 本とも別の生成元
+                // （GitHub）**で、PDF も 0.9.5 から GitHub の Release を指す
+                // （`manualPdfUrl` の註に、実測と推測を分けて書いた）。
                 {...(link.external
                   ? { target: "_blank", rel: "noopener noreferrer" }
                   : {})}
