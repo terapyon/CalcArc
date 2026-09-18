@@ -92,6 +92,11 @@ impl Value {
     /// 削るのでもなく、**中間値を安全な帯へ移すだけ**である。
     /// 寄せたあとの `d` は `[1,4)` に収まり、**溢れも潰れもしない。**
     ///
+    /// **`mul_add`（融合積和）は使わない。** 「融合すれば速くて正確」は一般には
+    /// 真だが、**`ai - ar*t` は桁落ちの列**で、**融合すると丸めの位置が変わる**
+    /// ——**測ったら虚部が 25 ULP ぶん悪化した**（2026-09-18、88 の 572 件で）。
+    /// **一般則を、測らずにこの列へ当てない。**
+    ///
     /// # この註が言えること・言えないこと
     ///
     /// **測ったのは複素除算 1 回**である（calcarc-88 の 572 件。分母の形 5 種 ×
@@ -178,6 +183,61 @@ fn without_negative_zero(x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **F7 の代表だけを置く**（0.9.4、外部報告）。**網羅の表は検査側の持ち物**
+    /// である（calcarc-88 の 572 件：分母の形 5 種 × 符号 4 種 × 大きさ 10 階級）。
+    /// **ここに在るのは、壊れ方 1 つにつき 1 本**——**次に読む人が「何が起きて
+    /// いたか」を 5 行で掴めるように。**
+    #[test]
+    fn division_near_the_ceiling_keeps_a_finite_answer() {
+        // **静かに嘘の答え**だった形: `d = re + im*t` が inf になり、
+        // **有限の分子を inf で割って 0**。`finalize()` は最終値が有限なので
+        // 捕まえない。**0.9.3 は `0` を返していた**（エラーも無く）。
+        let a = f64::MAX;
+        let q = Value::real(a)
+            .checked_div(Value::new(a, a))
+            .expect("有限の答えが在る");
+        assert_eq!((q.re, q.im), (0.5, -0.5));
+    }
+
+    #[test]
+    fn dividing_the_largest_value_by_itself_is_one() {
+        // **偽 Overflow** だった形: 分子も溢れて `inf/inf = NaN` になり、
+        // `finalize()` が Overflow にしていた。**答えは 1 である。**
+        let z = Value::new(f64::MAX, f64::MAX);
+        let q = z.checked_div(z).expect("z/z は 1");
+        assert_eq!((q.re, q.im), (1.0, 0.0));
+    }
+
+    #[test]
+    fn division_in_the_subnormal_range_keeps_its_digits() {
+        // **値違い**だった形（**下端の別口**）: 非正規化数は仮数が 11 ビット
+        // しか無く、`t = im/re` と `im*t` が**非正規化域で丸められて桁が死ぬ**。
+        // **0.9.3 は 0.5001216… を返していた**（真値は `0.5` ちょうど。相対 2.4e-4）。
+        let num = Value::new(1e-320, 1.25e-321);
+        let den = Value::new(2e-320, 2.5e-321);
+        let q = num.checked_div(den).expect("有限の答えが在る");
+        assert_eq!((q.re, q.im), (0.5, 0.0));
+    }
+
+    #[test]
+    fn a_pure_real_divisor_at_the_ceiling_was_never_the_problem() {
+        // **対照**。`im = 0` なら `d = |re| <= MAX` で**決して溢れない**
+        // ——**引き金は「両成分が非零」**である（88 の実測: 純実数・純虚数は
+        // 104/104 健全）。**直しがここを動かしていない**ことを見る。
+        let q = Value::real(f64::MAX)
+            .checked_div(Value::real(f64::MAX))
+            .expect("1 である");
+        assert_eq!((q.re, q.im), (1.0, 0.0));
+    }
+
+    #[test]
+    fn a_genuinely_out_of_range_quotient_still_errors() {
+        // **逆向きを作らない**（**範囲外を通し始めたら、それは新しい不具合**）。
+        // 最小の非正規化数で `MAX` を割れば、真の答えは f64 の外である。
+        let out = Value::real(f64::MAX).checked_div(Value::real(f64::from_bits(1)));
+        assert_eq!(out, Err(CalcError::Overflow));
+    }
 
     #[test]
     fn real_has_zero_imaginary_part() {
