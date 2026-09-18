@@ -104,7 +104,7 @@ jobs:
       #   足したファイルを知らない)。**PDF は数百 KB あり、入れる理由も無い**
       # - **リリースの走行だけ**である。**緊急の `workflow_dispatch` には
       #   `manuals` の artifact が無い**ので、`called_from_release` で切る
-      #   ——**緊急で配った版は PDF を持たず、`#manual` の PDF は 404 になる**
+      #   ——**緊急で配った版は PDF を持たず、リンク集の PDF は 404 になる**
       #   (`functions/manual/[[path]].js`)。**迂回の中身が 1 つ増えた**ことは
       #   `docs/deploy.md` のロールバックの節に書いた
       # **同じ走行の artifact である**——呼ばれたワークフローのジョブも、

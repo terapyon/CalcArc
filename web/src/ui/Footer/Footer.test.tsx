@@ -121,7 +121,13 @@ describe("Footer", () => {
   });
 
   it("closes when the hash takes the reader somewhere else", () => {
-    // `#manual` を選んだら、**新しい画面の上にリンク集を残さない**。
+    // **新しい画面の上にリンク集を残さない。**
+    //
+    // **0.9.3 はこれが要る形だった**——`#manual` がリンク集の中に在り、
+    // **選ぶとアプリの中へ移った**。**0.9.4 で畳んだので、いまは中身が全部
+    // 外向き**であり、**この経路は普段は起きない**。**それでも残す**:
+    // **タブを押して閉じた場合など、ハッシュは別の理由でも変わる**——
+    // **安い保険である**（`LinksPopup.tsx` の同じ註）。
     render(<Footer />);
     fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
     fireEvent(window, new Event("hashchange"));

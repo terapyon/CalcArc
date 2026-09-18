@@ -46,7 +46,7 @@ export function manualPdfPath(stem: string, version: string): string {
  * 冊子 3 つ。**綴りは `docs/manual/*.md` の見出しから取ってある**（写しなので
  * 検査が繋ぐ）。**順は「短い日本語 → 詳しい日本語 → 英語」**。
  *
- * **0.9.3 で `#manual` の画面をやめ、ここへ直接並べた**（利用者の裁定
+ * **0.9.4 で `#manual` の画面をやめ、ここへ直接並べた**（利用者の裁定
  * 2026-09-18）——**画面を 1 つ増やさずに、同じ 3 冊へ届く**。
  */
 export const MANUALS = [
@@ -67,7 +67,7 @@ export const LINKS = [
     external: true,
     group: "site",
   },
-  // **PDF 3 冊**（0.9.3、利用者の裁定 2026-09-18）。**`#manual` の画面は無い。**
+  // **PDF 3 冊**（0.9.4、利用者の裁定 2026-09-18）。**`#manual` の画面は無い。**
   ...MANUALS.map((manual) => ({
     id: manual.stem,
     label: manual.title,
