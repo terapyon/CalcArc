@@ -20,6 +20,23 @@ f64 へ落とす。engine は Smith 法で**成分ごとに丸める**ので、�
 
 **数は十進の文字列で持ち、生成時にビット往復を確かめる**(`_exact`)。
 **端の値は十進の往復で動きうる**ので、**「読み直したら同じ f64 か」を毎回 assert する**。
+
+**0.9.5（F16）で足した 3 族と、0.9.4 の表が F16 を通した理由。**
+0.9.4 の表は**成分間の指数差が最大 3**（形が 1:1 / 8:1 / 1:8 だけ）で、
+**有限の 560 行がすべて恒等式**（分子と分母が同じ z から作られる）だった。
+**結合形は F16 を原理的に隠す**——分子と分母で同じ成分が同じように消え、
+答えが実数に戻る（2026-09-18 に 7 行足して全部厳密一致を実測）。
+**だから 0.9.5 の 3 族は、成分間の指数差を軸にし、分子と分母の尺度を切り離す:**
+
+- `gap/` — 分子の成分間の指数差 g。除数は ±1・2・±j（`t = 0` で成分が混ざらない）
+- `den_gap/` — 分母の成分間の指数差。分子の大きさは分母と別に振る
+- `chain/` — 大きい成分を相殺して小さい成分を取り出す列と、それを拡大する列
+
+**仮数を満たした値を使う（`_M_BIG`・`_M_SMALL`）。2 や 10 の冪を使わない。**
+**仮数が 1〜2 ビットの値は、精度を落とす帯を隠す**——F16 は g ≥ 1023 で精度を失い、
+g ≥ 1076 で 0 になるが、仮数 2 ビットの `1.5 × 2^k` では**1074 まで何も見えない**
+（2026-09-18 実測）。**10^n も同じ**（`1e-20` の仮数は 2 進で満ちていない桁が多い）。
+**次に軸を足す人へ: 値を選ぶときは、まず仮数が満ちているかを見ること。**
 """
 
 from __future__ import annotations
@@ -38,12 +55,30 @@ SCHEMA = 1
 #: **`abs` を置かない。** 期待値が `1e-320` 前後の行に対して `abs` は桁違いに緩く、
 #: **表の下端が丸ごと無検査になる**——**許容を置いた側が無検査の帯を作る**形である。
 #: **0 であるべき成分は「厳密に 0」**で別に見張る(`_ZERO_IS_EXACT`)ので、
-#: 相対が定義できない行はここでは扱わない。
+#: 相対が定義できない行はここでは扱わない（非正規化域は下の `TOLERANCE_ABS_FLOOR`）。
 #:
-#: 値は実測から決めた——**スケーリング後の残差は最大 1 ULP(相対 2.220e-16 = 2^-52)**
-#: で、`1e-15` はその約 4.5 倍。**直した壊れ方(相対 2.4e-4)より 11 桁厳しい**ので、
-#: **あの形はこの許容をすり抜けない**。
+#: 値は実測から決めた——**Smith 法の残差は、ビット一致しない行で最大 1 ULP
+#: (相対 2.220e-16 = 2^-52)**で、`1e-15` はその約 4.5 倍。0.9.4（2 の冪で寄せる方式）でも
+#: 0.9.5（仮数と指数の組で評価する方式）でも同じ 1 ULP だった（2026-09-18 に両方で実測）。
+#: **直した壊れ方(F7 の相対 2.4e-4)より 11 桁厳しい**ので、**あの形はこの許容をすり抜けない**。
 TOLERANCE_REL = 1e-15
+
+#: **非正規化域の許容（0.9.5、F16）。** 判定は**成分ごと**に
+#: `|得た値 − 期待| ≤ max(rel·|期待|, abs_floor)`。
+#:
+#: **`abs_floor` は新しい定数ではなく、相対の規則を非正規化域へ延ばしたもの**である:
+#: `rel × 2^-1022`（正規化数の下端）。正規化域では `rel·|期待|` のほうが必ず大きいので
+#: **効かない**。非正規化域では仮数の桁が減って相対が定義できなくなるので、
+#: **下端での相対の幅をそのまま絶対の幅として使う**。`1e-15 × 2^-1022` は f64 で
+#: `2.5e-323` に丸まり、**実効は最小の非正規化数（`5e-324`）のちょうど 5 個分**である
+#: （2026-09-19 に `2.5e-323 / 5e-324 = 5.0` を印字で確かめた）。
+#:
+#: **0.9.4 の「`abs` を置かない」とは両立する**——あのとき退けたのは `1e-320` の行を
+#: 丸ごと呑む大きさの `abs` で、これは**最小の非正規化数の 5 個分**しかない
+#: （`1e-320` の行なら相対 0.25%。仮数が 11 ビットしか無い値の、最下位の桁 5 つ分）。
+#: **成分が 0 に潰れることは、この幅では通さない**——期待が非零なら、得た値も非零で
+#: 同じ符号であることを別に見る（Rust の比較器）。
+TOLERANCE_ABS_FLOOR = TOLERANCE_REL * 2.2250738585072014e-308
 
 #: **0 であるべき成分は厳密に 0 でなければならない**(許容を当てない)。
 #: `complex-rules.spec.ts` の「a component that should be zero is not allowed to
@@ -123,6 +158,33 @@ def _quotient(num: tuple[float, float], den: tuple[float, float]) -> tuple[str, 
     return "finite", re, im
 
 
+def _component_ok(
+    cid: str, num: tuple[float, float], den: tuple[float, float], re: float, im: float
+) -> bool:
+    """**成分ごとの判定が意味を持つ行か**を、真の値の 2 項から確かめる（0.9.5、F16）。
+
+    商の成分は `re = (ac + bd)/|den|²`、`im = (bc − ad)/|den|²`。**2 項が打ち消し合う成分は、
+    正しい手順でも成分ごとの相対誤差が大きくなる**（`docs/numerical-policy.md` の
+    「成分ごとに見れば桁違いに超える」）。**ここはそういう行を置かない表**なので、
+    条件数 `(|項1| + |項2|) / |和|` が 2 を超えたら**生成を止める**（行を黙って落とさない）。
+
+    **真の値が非零なのに f64 で 0 に落ちる成分**は、期待値の「厳密に 0」と区別できないので
+    **行ごと置かない**（False を返す）。
+    """
+    a, b = mp.mpf(num[0]), mp.mpf(num[1])
+    c, d = mp.mpf(den[0]), mp.mpf(den[1])
+    for name, t1, t2, got in (("re", a * c, b * d, re), ("im", b * c, -a * d, im)):
+        total = t1 + t2
+        if total == 0:
+            continue
+        if got == 0.0:
+            return False
+        kappa = (abs(t1) + abs(t2)) / abs(total)
+        if kappa > 2:
+            raise AssertionError(f"{cid}: 成分 {name} の 2 項が打ち消し合う（条件数 {kappa}）")
+    return True
+
+
 def _case(cid: str, why: str, num: tuple[float, float], den: tuple[float, float]) -> dict | None:
     if den == (0.0, 0.0):
         return None
@@ -132,6 +194,14 @@ def _case(cid: str, why: str, num: tuple[float, float], den: tuple[float, float]
     if not all(math.isfinite(v) for v in (*num, *den)):
         return None
     kind, re, im = _quotient(num, den)
+    # **0.9.4 の行（F7）には当てない**——あの表は 1 バイトも変えない（案 5）。
+    # 実際、`e-320` の `double` 族 8 件は虚部が打ち消しで作られる（条件数 505）。
+    if (
+        kind == "finite"
+        and cid.startswith(NEW_FAMILIES)
+        and not _component_ok(cid, num, den, re, im)
+    ):
+        return None
     case = {
         "id": cid,
         "why": why,
@@ -201,8 +271,186 @@ def build_cases() -> list[dict]:
         ]:
             add(f"genuine/{nname}_over_{dname}", "真に範囲外——エラーが正しい", num, den)
 
+    _add_gap_family(add)
+    _add_den_gap_family(add)
+    cases.extend(_chain_family())
+
     _assert_shape(cases)
     return cases
+
+
+#: 0.9.5 で足した族の id の頭。**これ以外の行は 0.9.4 の表そのまま**
+#: （`test_complex_div_boundary.py` が指紋で見張る）。
+NEW_FAMILIES = ("gap/", "den_gap/", "chain/")
+
+#: **仮数を満たした値**（52 ビットが埋まる）。モジュールの docstring の理由による。
+_M_BIG = 4 / 3
+_M_SMALL = 12 / 7
+_M_OTHER = 10 / 9
+
+#: 成分間の指数差。**1022〜1076 が F16 の帯**（精度を失い始める 1023、0 に潰れる 1076 の両側）、
+#: 0・3・52 は対照（0.9.4 でも壊れない）、1100・2000 は帯の外の奥。
+_GAPS = [0, 3, 52, 1021, 1022, 1023, 1024, 1050, 1074, 1075, 1076, 1100, 2000]
+#: 大きい成分の 2 進指数。**F16 は大きい側を下へ寄せるときだけ起きる**ので、
+#: 1 以下（-500）は対照。
+_TOPS = [1023, 700, 1, -500]
+#: 除数。**実数か純虚数だけ**——`t = 0` で成分が混ざらず、期待値が成分ごとに決まる。
+_UNIT_DIVISORS: list[tuple[str, tuple[float, float]]] = [
+    ("d1", (1.0, 0.0)),
+    ("dm1", (-1.0, 0.0)),
+    ("d2", (2.0, 0.0)),
+    ("dj", (0.0, 1.0)),
+    ("dmj", (0.0, -1.0)),
+]
+
+
+def _wide(top: int, gap: int, m_big: float, m_small: float) -> tuple[float, float] | None:
+    """大きい成分 `m_big·2^top` と小さい成分 `m_small·2^(top−gap)`。表せなければ None。"""
+    big = math.ldexp(m_big, top)
+    small = math.ldexp(m_small, top - gap)
+    if small == 0.0 or not math.isfinite(big):
+        return None
+    return big, small
+
+
+def _add_gap_family(add) -> None:
+    """分子の成分間の指数差 × 大きさ × 実虚入替え × 符号 × 除数（F16 の本体）。
+
+    **符号 4 通りは除数 1 にだけ掛ける**（F16 は符号に依らないことを 1 本で見て、
+    表の大きさを抑える）。ほかの除数は `++` だけ。
+    """
+    for top in _TOPS:
+        for gap in _GAPS:
+            pair = _wide(top, gap, _M_BIG, _M_SMALL)
+            if pair is None:
+                continue
+            for swap in ("re_big", "im_big"):
+                a, b = pair if swap == "re_big" else (pair[1], pair[0])
+                for signame, sre, sim in _SIGNS:
+                    for dname, den in _UNIT_DIVISORS:
+                        if signame != "pp" and dname != "d1":
+                            continue
+                        add(
+                            f"gap/t{top}/g{gap}/{swap}/{signame}/{dname}",
+                            f"分子の成分間の指数差 {gap}（大きい側 2^{top}）",
+                            (sre * a, sim * b),
+                            den,
+                        )
+
+
+#: 分母側の指数差。**`t = 小/大` が非正規化域へ落ちる帯**（0.9.3 の `t` の潰れ、0.9.4 の
+#: `ai·t` の潰れ）の両側と、奥。
+_DEN_GAPS = [52, 1021, 1022, 1023, 1050, 1075, 1076, 1100, 2000]
+_DEN_TOPS = [1023, 500, 1, -500]
+
+
+#: 分子の大きさ（2 進指数）。**分母から切り離して振る**——分母と同じだけだと商が O(1) に固定される。
+#: **1023（f64 の上端）を必ず含める。** 分母が広いとき、商の小さい成分は `b·d/c²` の 1 項で
+#: 決まり、**分子が大きくないと真値そのものが f64 の下へ落ちて行が置けない**
+#: （最初の版は「分母 + 600」までで、分母の大きい側が 500 以上の帯を 1 行も置けていなかった。
+#: 2026-09-18、de50c40 の赤が `t1` にしか出なかったことで気づいた）。
+def _num_exponents(top: int) -> list[int]:
+    return sorted({top, 1023, top - 600} & set(range(-1021, 1024)), reverse=True)
+
+
+def _add_den_gap_family(add) -> None:
+    """分母の成分間の指数差 × 分子の形 × 分子の大きさのずらし（分子と分母の尺度の切り離し）。
+
+    **分子と分母は同じ z から作らない**（0.9.4 の結合形の穴）。分子は分母と別の仮数で作る。
+    """
+    for top in _DEN_TOPS:
+        for gap in _DEN_GAPS:
+            pair = _wide(top, gap, _M_BIG, _M_SMALL)
+            if pair is None:
+                continue
+            for swap in ("re_big", "im_big"):
+                c, d = pair if swap == "re_big" else (pair[1], pair[0])
+                for e in _num_exponents(top):
+                    nums = [
+                        ("real", (math.ldexp(_M_OTHER, e), 0.0)),
+                        ("imag", (0.0, math.ldexp(_M_OTHER, e))),
+                        ("both", (math.ldexp(_M_OTHER, e), math.ldexp(_M_SMALL, e - 1))),
+                    ]
+                    for nname, num in nums:
+                        for signame, sre, sim in _SIGNS:
+                            if signame != "pp" and (nname != "both" or e != top):
+                                continue
+                            add(
+                                f"den_gap/t{top}/g{gap}/{swap}/n{e}/{nname}/{signame}",
+                                f"分母の成分間の指数差 {gap}（大きい側 2^{top}）"
+                                f"・分子の大きさ 2^{e}",
+                                num,
+                                (sre * c, sim * d),
+                            )
+    # **分子と分母の両方が広い**。指数差は両側で**わざと違える**——同じにすると虚部の 2 項が
+    # 打ち消し合い、成分ごとの判定が意味を持たなくなる（`_component_ok` が止める）。
+    for top in (1023, 500):
+        for gn in (1023, 1076):
+            for gd in (1050, 1100):
+                wn = _wide(top, gn, _M_OTHER, _M_SMALL)
+                wd = _wide(top, gd, _M_BIG, _M_OTHER)
+                if wn is None or wd is None:
+                    continue
+                for nswap in ("re_big", "im_big"):
+                    n = wn if nswap == "re_big" else (wn[1], wn[0])
+                    for dswap in ("re_big", "im_big"):
+                        dd = wd if dswap == "re_big" else (wd[1], wd[0])
+                        add(
+                            f"den_gap/both/t{top}/gn{gn}/gd{gd}/{nswap}/{dswap}",
+                            f"分子の指数差 {gn}・分母の指数差 {gd}",
+                            n,
+                            dd,
+                        )
+
+
+def _round_c(z: mp.mpc) -> tuple[float, float]:
+    return float(mp.re(z)), float(mp.im(z))
+
+
+def _chain_family() -> list[dict]:
+    """**相殺して取り出す列と、拡大する列**（engine_table の 4 列と同じ形を値の層で）。
+
+    **各段で f64 に丸める**——電卓は 1 演算ごとに `Value` に落とすので、それが仕様である。
+    期待値は mpmath で段ごとに計算して丸める（engine の手順は写さない）。
+    """
+    out: list[dict] = []
+    # (id, 分子, 除数, 引く値, 掛ける値)。`1e308` などは利用者の報告の列のまま（キーで打つ値）。
+    rows = [
+        ("chain/e308_e-20", (1e308, 1e-20), (1.0, 0.0), (1e308, 0.0), (1e20, 0.0)),
+        ("chain/e200_e-200", (1e200, 1e-200), (1.0, 0.0), (1e200, 0.0), (1e200, 0.0)),
+        ("chain/e-20_e308", (1e-20, 1e308), (1.0, 0.0), (0.0, 1e308), (1e20, 0.0)),
+        ("chain/e308_1_control", (1e308, 1.0), (1.0, 0.0), (1e308, 0.0), (2.0, 0.0)),
+        (
+            "chain/full_e1023",
+            (math.ldexp(_M_BIG, 1023), math.ldexp(_M_SMALL, -60)),
+            (2.0, 0.0),
+            (math.ldexp(_M_BIG, 1022), 0.0),
+            (math.ldexp(1.0, 60), 0.0),
+        ),
+    ]
+    for cid, num, den, sub, mul in rows:
+        q = _round_c(mp.mpc(*num) / mp.mpc(*den))
+        s = _round_c(mp.mpc(*q) - mp.mpc(*sub))
+        variants: list[tuple[str, list[tuple[str, tuple[float, float]]], tuple[float, float]]] = [
+            ("sub", [("sub", sub)], s),
+            ("sub_mul", [("sub", sub), ("mul", mul)], _round_c(mp.mpc(*s) * mp.mpc(*mul))),
+        ]
+        for tag, steps, want in variants:
+            if not all(math.isfinite(v) for v in want):
+                raise AssertionError(f"{cid}/{tag}: 期待値が有限でない")
+            out.append(
+                {
+                    "id": f"{cid}/{tag}",
+                    "why": "大きい成分を相殺して小さい成分を取り出す（F16 の報告の列）",
+                    "num": [_exact(num[0]), _exact(num[1])],
+                    "den": [_exact(den[0]), _exact(den[1])],
+                    "then": [[op, [_exact(v[0]), _exact(v[1])]] for op, v in steps],
+                    "expect": "finite",
+                    "re": _exact(want[0]),
+                    "im": _exact(want[1]),
+                }
+            )
+    return out
 
 
 def _assert_shape(cases: list[dict]) -> None:
@@ -222,3 +470,22 @@ def _assert_shape(cases: list[dict]) -> None:
     # **非正規化域が実在すること。** 下端の別口（0.9.4 で見つけた 8 件）はここにしか出ない。
     if not any(c["id"].startswith("e-320/") for c in cases):
         raise AssertionError("非正規化域の行が 1 件も無い")
+    # **F16 の帯が実在すること（0.9.5）。** 生成の条件を変えて帯の行が消えると、
+    # 表は緑のまま F16 を見なくなる——0.9.4 の表がそうだった。
+    band = [c for c in cases if c["id"].startswith("gap/") and _gap_of(c["id"]) >= 1023]
+    if len({c["id"].split("/")[1] for c in band}) < 3:
+        raise AssertionError("分子の指数差 ≥ 1023 の行が、大きさ 3 階級以上に無い")
+    if not any(c["id"].startswith("den_gap/t") and _gap_of(c["id"]) >= 1023 for c in cases):
+        raise AssertionError("分母の指数差 ≥ 1023 の行が無い")
+    if not any(c["id"].startswith("den_gap/both/") for c in cases):
+        raise AssertionError("分子と分母の両方が広い行が無い")
+    if not any(c["id"].startswith("chain/") for c in cases):
+        raise AssertionError("相殺の列が無い")
+    # **対照: F16 が起きない側**（差が小さい／大きい側が 1 以下）も在ること。
+    if not any(c["id"].startswith("gap/t-500/") for c in cases):
+        raise AssertionError("対照（大きい側が 1 以下）が無い")
+
+
+def _gap_of(cid: str) -> int:
+    """`gap/t…/g1023/…` や `den_gap/t…/g1023/…` から指数差を読む。"""
+    return int(cid.split("/")[2][1:])

@@ -50,10 +50,19 @@ Release に 3 つの証拠と、マニュアルの PDF が添付される。**�
 | `calcarc-<tag>-dist.tar.gz` | **実際に配った物**（刻印 `build-info.json` を含む） |
 | `calcarc-<版>-{detail-ja,quick-en,quick-ja}.pdf` | **マニュアル**（証拠ではない）。`Manuals` が成功したときだけ付く。付かなかった理由は `release-evidence.md` が書く |
 
-**マニュアルが付かなくても、本番は出ている。** `Manuals` は本番展開のあとで
-走るので、落ちても配信を止めない（2026-09-10 の裁定）。付け直すなら、同じ
-コミットで `cd web && pnpm manuals` を回して手で添付し、そのことを Release に
-書き足す。
+**0.9.5 から、画面のリンク集はこの PDF を直に指す**（`manualPdfUrl`）。
+**本番が新しい版に切り替わってから、この添付が上がるまでのあいだ、リンク集の
+PDF は 404 である**——`Evidence and GitHub Release` は `needs: [deploy, manuals]`
+なので、**順は構造で決まっている**（v0.9.4 の走行 `35325982169` では約 21 秒。
+監視役の実測。**次のタグでの長さは測っていない**）。**番人は置いていない**
+——本番の時刻の話で CI からは見えない。**`Deploy` のあとで `Evidence` が
+落ちると、その版の PDF は付き直すまで 404 のまま**になるが、それは Release の
+証拠も欠けることなので、走行の赤として見える。
+
+**マニュアルが作れなければ、本番へは出ない。** `Manuals` は本番展開の**前**に
+走り、`Deploy` はそれを待つ（`release.yml` の `deploy: needs: manuals`。0.9.3 で
+並びを入れ替えた。それまでの「落ちても配信を止めない」は 2026-09-10 の裁定で、
+0.9.3 で撤回した）。落ちたら `Manuals` を直してタグを打ち直す。
 
 証拠が言えるのは「**この一覧の検査を通ってから、このコミットが配信された**」
 までである。検査していない性質については何も言わない。
@@ -158,12 +167,14 @@ Service Worker・フォント・画像のすべての経路を検証する話に
 - **この経路で配った版は、マニュアルの PDF を持たない。** PDF は
   `release.yml` の `Manuals` が作って走行の artifact に置き、`Deploy` は
   **`release.yml` から呼ばれたときだけ**それを `dist` に入れる（0.9.3 から。
-  緊急経路の走行には artifact そのものが無い）。**帰結は 1 つで、
-  マニュアルの PDF の URL が 404 を返す**（`functions/manual/[[path]].js`
+  緊急経路の走行には artifact そのものが無い）。**帰結は、サイト内の
+  `/manual/*.pdf` が 404 を返すこと**（`functions/manual/[[path]].js`
   がそう返す。番人は `web/tests/unit/manual-function.test.ts`）。
-  **直し方は「次の通常リリース」だけ**である。緊急経路の走行をもう一度
-  回しても PDF は増えない。**迂回したことを Release に書き足すとき、
-  PDF が落ちていることも 1 行書く。**
+  **0.9.5 から、リンク集はそこを指さない**——**その版の GitHub Release の
+  添付を指す**（`web/src/ui/Footer/LinksPopup.tsx` の `manualPdfUrl`）ので、
+  **配ったタグの Release に PDF が付いていれば、リンク集からは開ける**。
+  **迂回したことを Release に書き足すとき、サイト内の PDF が無いことも
+  1 行書く。**
 
 **どちらの経路でも、`deploy.yml` は `GITHUB_SHA`（実行時の ref のコミット）を
 刻印に焼き、スモークが実際に配られている `/build-info.json` と突き合わせる。**
