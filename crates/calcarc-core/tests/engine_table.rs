@@ -1345,6 +1345,20 @@ fn an_unmatched_closing_paren_cannot_be_pressed() {
     accepted_after(&["lparen", "lparen", "3", "rparen"], "rparen");
     // **D-1 で開き直した組も「開いている」**(0.9.3 §4.2)。
     accepted_after(&["lparen", "lparen", "3", "rparen", "del"], "rparen");
+    // **AC のあとは、また押せない**(組ごと捨てられる)。
+    //
+    // **これは別の規則ではない**——`cleared()` が `angle` と `form` 以外を
+    // `initial()` から作り直すので、**開いていた組も一緒に消える**。
+    // ここが固定するのは**その観測できる帰結**である: **AC の直後の `)` は、
+    // 初期状態の `)` と同じ**。
+    //
+    // **calcarc-88 の依頼で足した**(2026-09-17)。あちらの `heavy/tests/ui/
+    // reachability.spec.ts` が**盤面で 3 点**(前置きの前は無効・後は有効・
+    // AC のあとまた無効)**を主張する**ようになり、**3 点目だけ engine の
+    // 仕様表に対応する行が無かった**——**あの段は 12.9 分かかり、タグの走行で
+    // しか回らない**。ここに在れば `cargo test` の数秒で鳴る。
+    refused_after(&["lparen", "3", "ac"], "rparen");
+    refused_after(&["lparen", "lparen", "3", "ac"], "rparen");
 }
 
 #[test]
