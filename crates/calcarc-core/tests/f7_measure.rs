@@ -6320,12 +6320,13 @@ fn f7_measure() {
                     }
                 } else {
                     wrong_value += 1;
-                    if examples.len() < 6 {
-                        examples.push(format!(
-                            "value {} -> {}+{}j want {wr}+{wi}j",
-                            c.id, v.re, v.im
-                        ));
-                    }
+                    // **ここは上限を付けない。** 件数は数え、例は 6 件で切る、と
+                    // していたら**印字 6 行を件数と読み違えかけた**（2026-09-18）。
+                    // **残っている差は全部見えるようにする。**
+                    examples.push(format!(
+                        "value {} -> {}+{}j want {wr}+{wi}j",
+                        c.id, v.re, v.im
+                    ));
                 }
             }
             (Want::Finite(_, _), Err(e)) => {
