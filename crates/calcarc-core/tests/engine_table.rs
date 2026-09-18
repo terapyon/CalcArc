@@ -673,6 +673,43 @@ fn parentheses_carry_complex_values() {
 }
 
 #[test]
+fn dividing_keeps_a_component_far_smaller_than_the_other() {
+    // **F16（0.9.4 の後退）。** 分子の 2 成分の桁が 308 桁ほど離れていると、
+    // 0.9.4 の除算は小さい成分を 0 に潰していた（エラーは出ない）。
+    // 大きい成分を引いて小さい成分を取り出すと `0` が見えた。
+    assert_eq!(
+        main_of(&[
+            "lparen", "1", "exp", "3", "0", "8", "add", "1", "exp", "2", "0", "neg", "j", "rparen",
+            "div", "1", "sub", "1", "exp", "3", "0", "8", "eq"
+        ]),
+        "1e-20j"
+    );
+    assert_eq!(
+        main_of(&[
+            "lparen", "1", "exp", "2", "0", "0", "add", "1", "exp", "2", "0", "0", "neg", "j",
+            "rparen", "div", "1", "sub", "1", "exp", "2", "0", "0", "eq"
+        ]),
+        "1e-200j"
+    );
+    // 対照: 桁が離れていなければ 0.9.4 でも壊れなかった。
+    assert_eq!(
+        main_of(&[
+            "lparen", "1", "exp", "3", "0", "8", "add", "1", "j", "rparen", "div", "1", "sub", "1",
+            "exp", "3", "0", "8", "eq"
+        ]),
+        "1j"
+    );
+    // **表示の省略ではなく値が消えていた**ことの確かめ: 拡大しても戻らなかった。
+    assert_eq!(
+        main_of(&[
+            "lparen", "1", "exp", "3", "0", "8", "add", "1", "exp", "2", "0", "neg", "j", "rparen",
+            "div", "1", "sub", "1", "exp", "3", "0", "8", "eq", "mul", "1", "exp", "2", "0", "eq"
+        ]),
+        "1j"
+    );
+}
+
+#[test]
 fn functions_apply_immediately_to_the_displayed_value() {
     // 関数は後置。式には積まれない（設計書 D6）。
     assert_eq!(main_of(&["3", "0", "sin"]), "0.5");

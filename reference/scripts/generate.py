@@ -383,8 +383,9 @@ def build_loan_boundary() -> dict:
 
 
 def build_complex_div_boundary() -> dict:
-    """複素除算の境界専用 golden(F7、0.9.4)。**許容はここにだけ置く**——
-    Rust のテストは `tolerance.rel` を読み、テストコードに `1e-15` を書かない(CLAUDE.md)。
+    """複素除算の境界専用 golden(F7 は 0.9.4、F16 は 0.9.5)。**許容はここにだけ置く**——
+    Rust のテストは `tolerance.rel` と `tolerance.abs_floor` を読み、
+    テストコードに数を書かない(CLAUDE.md)。
 
     **通常のコーパスはこの領域に届かない**(帯を外しても乱択は上端 1 オクターブを踏まない)。
     理由は `complex_div_boundary` のモジュール docstring。
@@ -392,7 +393,10 @@ def build_complex_div_boundary() -> dict:
     return {
         "schema": SCHEMA,
         "generated_by": _provenance(),
-        "tolerance": {"rel": complex_div_boundary.TOLERANCE_REL},
+        "tolerance": {
+            "rel": complex_div_boundary.TOLERANCE_REL,
+            "abs_floor": complex_div_boundary.TOLERANCE_ABS_FLOOR,
+        },
         "cases": complex_div_boundary.build_cases(),
     }
 
