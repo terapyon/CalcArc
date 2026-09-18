@@ -19,9 +19,12 @@ const EXPECTED_INEXACT_F7: usize = 8;
 
 /// **0.9.5 で足した族（`gap/`・`den_gap/`・`chain/`）のうち、ビット一致しない件数。**
 ///
-/// **直しの枝の上で測って埋める。** 0.9.4（de50c40）の上では、この数に着く前に
-/// 成分の判定が落ちる（F16）。
-const EXPECTED_INEXACT_NEW: usize = 0;
+/// **8 件はすべて `den_gap/` で、ずれは正規化域の 1 ULP**（2026-09-18、F16 の直しの上で実測）:
+/// 分母の指数差 1050・分母の大きい側 2^1 で分子が 2^1023 の 4 件（小さい方の成分 ≈ 4e-9）と、
+/// 分子と分母の両方が広い `both/…/gn1023/gd1050` の 4 件（小さい方の成分 ≈ 1.4e-308）。
+/// **`gap/` と `chain/` は全件ビット一致**——除数が実数か純虚数なので成分が混ざらない。
+/// 0.9.4（de50c40）の上では、この数に着く前に成分の判定が落ちる（F16）。
+const EXPECTED_INEXACT_NEW: usize = 8;
 
 /// 0.9.5 で足した族の id の頭（生成器の `NEW_FAMILIES` と同じ）。
 const NEW_FAMILIES: [&str; 3] = ["gap/", "den_gap/", "chain/"];
@@ -215,6 +218,14 @@ fn check_complex_div_boundaries() {
         assert!(
             id.contains("re_heavy") || id.contains("im_heavy"),
             "対称形にも差が出るようになった（いままでは実部優勢・虚部優勢だけ）: {id}"
+        );
+    }
+
+    for id in &inexact_new {
+        assert!(
+            id.starts_with("den_gap/"),
+            "ビット一致しない行が `den_gap/` の外へ出た（`gap/`・`chain/` は成分が混ざらないので \
+             ビット一致するはず）: {id}"
         );
     }
 
