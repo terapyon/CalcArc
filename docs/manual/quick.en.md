@@ -216,8 +216,10 @@ no warranty."). The Finance screen always shows a note on how it calculates.
 ## 7. Finding the version and what changed
 
 The bottom of the screen has a button showing "CalcArc" and the version number.
-Pressing it opens a list of links with these six entries. **Each opens in a new
-tab.** The version of this PDF is also in its file name.
+Pressing it opens a list of links with these six entries. **The calculator stays
+where it is whichever one you press**: GitHub, the licence and the check results
+open in a new tab, and **the PDFs are saved (downloaded)**. The version of this
+PDF is also in its file name.
 
 - 【GitHub（@terapyon）】: CalcArc's page on GitHub
 - **The three PDFs for this version**: 【CalcArc 簡易マニュアル】(quick guide),

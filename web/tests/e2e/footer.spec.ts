@@ -50,7 +50,16 @@ test("the links popup opens from the footer, with the six the user settled", asy
   await expect(
     popup.getByRole("link", { name: "CalcArc 簡易マニュアル" }),
   ).toHaveAttribute("href", /^\/manual\/calcarc-.+-quick-ja\.pdf$/);
-  // **どれも新しいタブで開く**——0.9.3 は 1 本だけアプリの中へ行っていた。
+  // **どれもアプリの窓から出る**——0.9.3 は 1 本だけ中へ行っていた（`#manual`）。
+  //
+  // **★ 見ているのは属性であって、開き方ではない。** PDF の実際の開き方は
+  // **`Content-Disposition: attachment` が決める**（`functions/manual/` の
+  // Function が付ける）——**保存になり、窓は残る**。**その挙動はここでは
+  // 測れない**: **`vite preview` は Pages Functions を通さない**ので、
+  // **手元の E2E にあのヘッダは出てこない**（1e の判定 2026-09-18）。
+  // **本番で見るのは `deploy.yml` のスモーク**である。
+  // **`target="_blank"` はその上の安全側**——**ヘッダが効かない環境でも、
+  // PC では別の窓に出て、電卓が乗っ取られない。**
   for (const link of await popup.getByRole("link").all()) {
     await expect(link).toHaveAttribute("target", "_blank");
   }
