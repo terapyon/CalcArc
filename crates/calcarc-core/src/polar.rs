@@ -78,7 +78,28 @@ mod tests {
     #[test]
     fn magnitude_survives_inputs_that_would_overflow_naive_squaring() {
         // (re² + im²).sqrt() ならここで中間の二乗が inf になり r も inf になる。
-        // hypot は溢れない。これが hypot を選んだ理由そのもの。
+        // **hypot は「中間の二乗では」溢れない**——それが hypot を選んだ理由である。
+        //
+        // **★ 範囲を書く**（0.9.4、F7 の直しと同じ語彙で揃えた）。
+        // **「hypot は溢れない」は偽である**——**真の大きさが f64 に収まる限り
+        // 溢れない**、が正しい。**真に範囲外なら hypot も inf を返す**:
+        //
+        //   hypot(MAX, MAX)         = inf        ← 真の答え √2·MAX は範囲外
+        //   hypot(MAX/√2, MAX/√2)   = 1.797…e308 ← 収まるので溢れない
+        //   hypot(3e200, 4e200)     = 5e200      ← この行が使う値
+        //
+        // （実測 2026-09-18、calcarc-88。**私も同じ 4 つを手元で確かめた**
+        // ——素朴な `sqrt(MAX²+MAX²)` は inf、hypot(MAX,MAX) も inf。）
+        //
+        // **この区別が要る理由**: 「hypot は溢れない」を信じた人は、
+        // **`try_format_polar` の `!p.r.is_finite()` の門を不要と判断しうる**
+        // （`numeric/format.rs:203` がその門で、**`engine/display.rs:37` が
+        // その `None` を読んで極形式を出さないと決めている**。
+        // **同じファイルの `:344` に「hypot(MAX,MAX) なら None」の行も在る**
+        // ——**門が要ることは、既に検査で固定されている**）。
+        // **外すと、画面に `inf ∠ 45` が出る。**
+        // **偽の溢れ（有限の答えを殺す）と、真の溢れ（範囲外を断る）は別物**で、
+        // **hypot が塞ぐのは前者だけ**である。
         let p = Value::new(3e200, 4e200).to_polar();
         assert!(p.r.is_finite(), "magnitude overflowed: {}", p.r);
         // 5e200 との比で見る。絶対誤差はこの桁では意味を持たない。
