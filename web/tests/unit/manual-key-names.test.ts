@@ -13,7 +13,7 @@ import { optionText } from "../../src/ui/Category/CategorySelect";
 import { OPTIONS as CONVERT_OPTIONS } from "../../src/ui/Convert/ConvertPanel";
 import { PRIMARY_BUTTON_LABELS } from "../../src/ui/DataScale/DataScalePanel";
 import { fieldLabel, TIMING_LABELS } from "../../src/ui/Finance/FinancePanel";
-import { LINKS, LINKS_POPUP_CLOSE } from "../../src/ui/Footer/LinksPopup";
+import { LINK_LABELS, LINKS_POPUP_CLOSE } from "../../src/ui/Footer/LinksPopup";
 import { HISTORY_LABELS } from "../../src/ui/History/History";
 import {
   CATEGORY_LABELS,
@@ -52,7 +52,6 @@ import {
   TRANSFER_PAD,
 } from "../../src/ui/Keypad/transfer";
 import type { KeypadSection } from "../../src/ui/Keypad/types";
-import { MANUAL_LINK_LABELS } from "../../src/ui/Manual/ManualPage";
 import { MODULES } from "../../src/ui/Nav/Nav";
 import { OPTIONS as SCALE_OPTIONS } from "../../src/ui/Scale/ScalePanel";
 import { UPDATE_TOAST_LABELS } from "../../src/ui/UpdateToast/UpdateToast";
@@ -189,12 +188,9 @@ const SOURCES: Record<string, readonly string[]> = {
   //   そのものは入れない**——綴りに版数が入る(`aboutLabel`)ので、
   //   **マニュアルは版数を含む名前で呼ばない**(呼ぶと、版を上げるたびに
   //   マニュアルのその 1 行が古くなる)。あちらは文で説明してある。
-  "Footer/LinksPopup.tsx": [
-    ...LINKS.map((link) => link.label),
-    LINKS_POPUP_CLOSE,
-  ],
-  // - マニュアルの画面の行き先(0.9.3)
-  "Manual/ManualPage.tsx": MANUAL_LINK_LABELS,
+  // **PDF 3 冊もここに居る**(0.9.4)——`#manual` の画面を畳んで、
+  // **リンク集に直接並べた**（利用者の裁定 2026-09-18）。
+  "Footer/LinksPopup.tsx": [...LINK_LABELS, LINKS_POPUP_CLOSE],
 };
 
 const LABELS: ReadonlySet<string> = new Set(Object.values(SOURCES).flat());

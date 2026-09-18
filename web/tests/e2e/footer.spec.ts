@@ -23,10 +23,11 @@ test("the footer shows on every tab, once", async ({ page }) => {
   }
 });
 
-test("the links popup opens from the footer, with the four the user settled", async ({
+test("the links popup opens from the footer, with the six the user settled", async ({
   page,
 }) => {
-  // **綴りも並びも利用者の裁定**(2026-09-12 と 2026-09-17)。
+  // **綴りも並びも利用者の裁定**(2026-09-12・2026-09-17・**2026-09-18 で
+  // `#manual` の画面を畳んで PDF 3 冊をここへ**)。
   // **jsdom はアクセシビリティツリーを組み立てない**ので、`role="dialog"` が
   // 本当に読み上げに出るかは実ブラウザでしか見られない(CLAUDE.md)。
   await page.goto("/");
@@ -35,17 +36,33 @@ test("the links popup opens from the footer, with the four the user settled", as
   await expect(popup).toBeVisible();
   await expect(popup.getByRole("link")).toHaveText([
     "GitHub（@terapyon）",
-    "マニュアル",
+    "CalcArc 簡易マニュアル",
+    "CalcArc 詳細マニュアル",
+    "CalcArc Quick Guide",
     "ライセンス",
     "検査結果",
   ]);
   await expect(
     popup.getByRole("link", { name: "GitHub（@terapyon）" }),
   ).toHaveAttribute("href", "https://github.com/terapyon/CalcArc");
-  await expect(popup.getByRole("link", { name: "マニュアル" })).toHaveAttribute(
-    "href",
-    "#manual",
-  );
+  // **PDF は `/manual/` の下**——`functions/manual/[[path]].js` が受ける経路で
+  // ある（無い PDF に 404、在る PDF に `Content-Disposition: attachment`）。
+  await expect(
+    popup.getByRole("link", { name: "CalcArc 簡易マニュアル" }),
+  ).toHaveAttribute("href", /^\/manual\/calcarc-.+-quick-ja\.pdf$/);
+  // **どれもアプリの窓から出る**——0.9.3 は 1 本だけ中へ行っていた（`#manual`）。
+  //
+  // **★ 見ているのは属性であって、開き方ではない。** PDF の実際の開き方は
+  // **`Content-Disposition: attachment` が決める**（`functions/manual/` の
+  // Function が付ける）——**保存になり、窓は残る**。**その挙動はここでは
+  // 測れない**: **`vite preview` は Pages Functions を通さない**ので、
+  // **手元の E2E にあのヘッダは出てこない**（1e の判定 2026-09-18）。
+  // **本番で見るのは `deploy.yml` のスモーク**である。
+  // **`target="_blank"` はその上の安全側**——**ヘッダが効かない環境でも、
+  // PC では別の窓に出て、電卓が乗っ取られない。**
+  for (const link of await popup.getByRole("link").all()) {
+    await expect(link).toHaveAttribute("target", "_blank");
+  }
 });
 
 test("Escape closes the links popup, and does not clear the calculation", async ({

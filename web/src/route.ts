@@ -13,31 +13,9 @@ import { CONVERT_CATEGORY_IDS, type ConvertCategoryId } from "./convert/types";
 
 export type ModuleId = "scientific" | "convert" | "scale" | "finance";
 
-/**
- * タブではない画面（0.9.3 設計書 §2.2）。
- *
- * **`ModuleId` に足さない。** あれは**タブの id** であり、`Nav.tsx` の `MODULES` が
- * `Record<ModuleId, …>` なので、**足すとタブが 5 つになる**——`#manual` は
- * **リンク集から開く読み物**であって、計算機のタブではない。
- */
-export type PageId = "manual";
-
 export type Route = {
   module: ModuleId;
   category: string | null;
-  /**
-   * タブではない画面を出しているとき、その id。
-   *
-   * **`module` は残す**（`null` にしない）——**戻り先**である。`#manual` を
-   * 閉じたときに戻る先があるし、`module` を `null` 許容にすると
-   * **タブを読むすべての場所が `null` を扱うことになる**。
-   * **タブの現在地を出さない**のは `App` の仕事で、`Nav` に `null` を渡す。
-   *
-   * **任意にしてある。** 必須にすると、`tests/promised-urls.ts` の URL の約束や
-   * 画面名の検査まで、**この欄に意味を持たない側が `page: null` を書く**ことになる。
-   * **タブの画面では「無い」で足りる。**
-   */
-  page?: PageId;
 };
 
 const MODULES: readonly ModuleId[] = [
@@ -87,12 +65,6 @@ function isModuleId(text: string): text is ModuleId {
 
 export function routeFromHash(hash: string): Route {
   const [head = "", category] = hash.replace(/^#/, "").split("/");
-  // **タブではない画面を先に見る**(0.9.3 設計書 §2.2)。`isModuleId` の外に
-  // 置くのは、**タブの一覧（`MODULES`）を増やさないため**である。
-  // **`module` は既定のまま残す**——閉じたときの戻り先になる。
-  if (head === "manual") {
-    return { module: "scientific", category: null, page: "manual" };
-  }
   // **知らない先頭は既定へ倒す。** 旧 `#data-scale` も `#loan` もここに
   // 落ちる——互換分岐は作らない(設計書 §1-4)。**これは 1.0 までの方針
   // である。** 1.0 のあとは `web/tests/promised-urls.ts` の URL が同じ画面を

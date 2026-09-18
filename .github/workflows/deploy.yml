@@ -104,7 +104,7 @@ jobs:
       #   足したファイルを知らない)。**PDF は数百 KB あり、入れる理由も無い**
       # - **リリースの走行だけ**である。**緊急の `workflow_dispatch` には
       #   `manuals` の artifact が無い**ので、`called_from_release` で切る
-      #   ——**緊急で配った版は PDF を持たず、`#manual` の PDF は 404 になる**
+      #   ——**緊急で配った版は PDF を持たず、リンク集の PDF は 404 になる**
       #   (`functions/manual/[[path]].js`)。**迂回の中身が 1 つ増えた**ことは
       #   `docs/deploy.md` のロールバックの節に書いた
       # **同じ走行の artifact である**——呼ばれたワークフローのジョブも、
@@ -241,17 +241,40 @@ jobs:
           pdf="$(ls web/dist/manual | head -1)"
           [ -n "$pdf" ]
           # 他のスモークと同じリトライ(ファイル単位の伝播は非アトミック)。
+          # **`Content-Disposition: attachment` も見る**(0.9.4、利用者の実測
+          # 2026-09-18)。**ホーム画面のアプリが PDF に乗っ取られる**のを止める
+          # ヘッダで、**付けているのは `functions/manual/` の Function だけ**
+          # である——**つまりこの検査は「Function が本番で拾われている」ことの
+          # 証拠でもある**(実在の PDF は Function が無くても静的ファイルとして
+          # 配られるので、**type だけでは拾われたかどうか分からない**)。
+          #
+          # **★ 両方を再試行の内側に置く**(1e の指摘 2026-09-18)。
+          # **この段の前提は「ファイル単位の伝播は非アトミック」**である
+          # ——**古い配備の縁が PDF を返す瞬間は Function も古く、
+          # attachment が無いのは「まだ伝播していない」でもありうる**。
+          # **即座に落とすと、伝播待ちを「Function が拾われていない」と
+          # 言い切ってしまう**(今日 Mac の Chrome で出た 404 と同じ筋)。
+          last="(まだ何も見ていない)"
           for i in $(seq 1 12); do
-            type="$(curl -sS -o /dev/null -w '%{content_type}' "$base/manual/$pdf")"
+            head="$(curl -sSI "$base/manual/$pdf")"
+            type="$(printf '%s' "$head" | grep -i '^content-type:' | head -1)"
             case "$type" in
-              application/pdf*)
-                echo "serving $pdf ($type)"
-                exit 0 ;;
+              *application/pdf*)
+                if printf '%s' "$head" | grep -qi '^content-disposition:.*attachment'; then
+                  echo "serving $pdf (pdf + attachment)"
+                  exit 0
+                fi
+                last="pdf は返るが attachment が無い(Function が古いか、拾われていない)" ;;
+              *)
+                last="content-type が ${type:-(無し)}(PDF がまだ届いていない)" ;;
             esac
-            echo "attempt $i: /manual/$pdf is $type"
+            echo "attempt $i: $last"
             sleep 10
           done
-          echo "配った PDF が配信されていない: $pdf" >&2
+          # **最後に見たものを理由として出す。** 「PDF が来ない」と
+          # 「PDF は来るが attachment が無い」は**直す先が違う**——前者は配り方、
+          # 後者は `functions/` が拾われているかである。
+          echo "12 回の再試行のあとも緑にならなかった: $last" >&2
           exit 1
 
       # 配った物そのものを Release に添えるため、走行に残す(設計書 §4)。

@@ -28,20 +28,59 @@ import styles from "./LinksPopup.module.css";
  * （`tests/unit/manual-key-names.test.ts` と同じ流儀。`Nav.tsx` の `MODULES`、
  * `UpdateToast.tsx` の `UPDATE_TOAST_LABELS` がその先例）。
  */
+/**
+ * 版から PDF の道を作る。**綴りの出どころは `web/scripts/manual/markdown.ts`
+ * の `pdfName`**（`calcarc-<版>-<冊>.pdf`）。**写しなので検査が繋ぐ**
+ * ——`Footer.test.tsx` が、あの関数の出力と 1 冊ずつ突き合わせる。
+ *
+ * **`/manual/` の下であることが要る**——`functions/manual/[[path]].js` が
+ * **その経路だけ**を受け、無い PDF に 404 を返し、在る PDF に
+ * `Content-Disposition: attachment` を付ける（**ホーム画面のアプリが PDF に
+ * 乗っ取られるのを止める**。利用者の実測 2026-09-18）。
+ */
+export function manualPdfPath(stem: string, version: string): string {
+  return `/manual/calcarc-${version}-${stem}.pdf`;
+}
+
+/**
+ * 冊子 3 つ。**綴りは `docs/manual/*.md` の見出しから取ってある**（写しなので
+ * 検査が繋ぐ）。**順は「短い日本語 → 詳しい日本語 → 英語」**。
+ *
+ * **0.9.4 で `#manual` の画面をやめ、ここへ直接並べた**（利用者の裁定
+ * 2026-09-18）——**画面を 1 つ増やさずに、同じ 3 冊へ届く**。
+ */
+export const MANUALS = [
+  { stem: "quick-ja", source: "quick.ja.md", title: "CalcArc 簡易マニュアル" },
+  {
+    stem: "detail-ja",
+    source: "detail.ja.md",
+    title: "CalcArc 詳細マニュアル",
+  },
+  { stem: "quick-en", source: "quick.en.md", title: "CalcArc Quick Guide" },
+] as const;
+
 export const LINKS = [
   {
     id: "github",
     label: "GitHub（@terapyon）",
     href: "https://github.com/terapyon/CalcArc",
     external: true,
+    group: "site",
   },
-  // **これだけが外へ出ない。** `#manual` はこのアプリの画面である（§2.2）。
-  { id: "manual", label: "マニュアル", href: "#manual", external: false },
+  // **PDF 3 冊**（0.9.4、利用者の裁定 2026-09-18）。**`#manual` の画面は無い。**
+  ...MANUALS.map((manual) => ({
+    id: manual.stem,
+    label: manual.title,
+    href: manualPdfPath(manual.stem, __APP_VERSION__),
+    external: true,
+    group: "manual",
+  })),
   {
     id: "license",
     label: "ライセンス",
     href: "https://github.com/terapyon/CalcArc/blob/main/LICENSE",
     external: true,
+    group: "about",
   },
   {
     // **その版の Release を指す**——添付されている証拠 3 点（各ジョブの結論・
@@ -52,8 +91,15 @@ export const LINKS = [
     label: "検査結果",
     href: `https://github.com/terapyon/CalcArc/releases/tag/v${__APP_VERSION__}`,
     external: true,
+    group: "about",
   },
 ] as const;
+
+/**
+ * リンク集の項目の綴り。**マニュアルのキー名の番人が読む**
+ * （`tests/unit/manual-key-names.test.ts`）。
+ */
+export const LINK_LABELS: readonly string[] = LINKS.map((link) => link.label);
 
 /** 閉じるボタンの文字。**更新のお知らせと同じ綴りにそろえる**（`UPDATE_TOAST_LABELS.close`）。 */
 export const LINKS_POPUP_CLOSE = "閉じる";
@@ -87,8 +133,9 @@ export function LinksPopup({ onClose }: { onClose: () => void }) {
     };
   }, [onClose]);
 
-  // **`#manual` を選んだら閉じる。** あれだけがアプリの中へ行くので、
-  // 閉じないと**新しい画面の上にリンク集が残る。**
+  // **ハッシュが変わったら閉じる。** いまは中身が全部外向きなので**普段は
+  // 起きない**が、**閉じ忘れたリンク集が新しい画面の上に残る**という壊れ方は
+  // 安い保険で塞いでおく（タブを押して閉じた場合など）。
   useEffect(() => {
     window.addEventListener("hashchange", onClose);
     return () => window.removeEventListener("hashchange", onClose);
@@ -129,15 +176,31 @@ export function LinksPopup({ onClose }: { onClose: () => void }) {
         <h2 id={titleId} className={styles.title}>
           {LINKS_POPUP_LABEL}
         </h2>
+        {/* **群の変わり目に細い線を引く**（0.9.4）。**文字は増やさない**
+            ——**見出しを足すと、利用者が承認していない綴りが 3 つ増える**。
+            **3 冊が 1 つのまとまりだと、線だけで分かる。** */}
         <ul className={styles.list}>
-          {LINKS.map((link) => (
-            <li key={link.id}>
+          {LINKS.map((link, i) => (
+            <li
+              key={link.id}
+              className={
+                i > 0 && LINKS[i - 1]?.group !== link.group
+                  ? styles.newGroup
+                  : undefined
+              }
+            >
               <a
                 className={styles.link}
                 href={link.href}
                 // PWA の standalone 起動でも外のブラウザで開く
-                // （`Footer.tsx` に在った註と同じ理由）。**`#manual` は
-                // アプリの中なので付けない。**
+                // （`Footer.tsx` に在った註と同じ理由）。
+                //
+                // **★ PDF ではこれだけでは足りない**——**iOS の standalone は
+                // 同じ生成元への navigation をアプリの窓の中で起こす**ので、
+                // **窓ごと PDF に変わって戻れない**（利用者の実測 2026-09-18）。
+                // **止めているのは Function の `Content-Disposition: attachment`**
+                // で、**ここはその上の安全側**（ヘッダが効かない環境でも、
+                // PC では別の窓に出る）である。
                 {...(link.external
                   ? { target: "_blank", rel: "noopener noreferrer" }
                   : {})}

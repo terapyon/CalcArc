@@ -37,16 +37,29 @@
 
 .title {
   margin: 0;
+  /* 項目が左揃えなので、見出しも左に置く（中央だと 2 つの軸ができる）。 */
+  text-align: left;
   font-size: var(--display-size-status);
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  /* **隙間で分けない。** 44px の標的が並ぶので、隙間を足すと**間延びして
+     「6 つの浮いた文字」に見える**（0.9.3 の見た目に利用者が「きれいに
+     なっていない」と言った）。**詰めて、群の変わり目だけ線で分ける。** */
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* 群の変わり目（サイト / PDF 3 冊 / ライセンスと検査結果）。**線は 1px、
+   色は既存のトークン**——新しい色を作らない。 */
+.newGroup {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--display-status-fg);
 }
 
 .link {
