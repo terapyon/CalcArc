@@ -282,6 +282,14 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
         // （`1 − 2 = DEL 5` が `-5` になっていた。1e の実測）。
         // **F14 と同じ穴**である——**数は `entry`、符号は `negative`** と
         // 置き場が分かれていて、**片方だけ空にしていた。**
+        //
+        // **いつから在ったか**（`git log -S` で当てた。**最初に書いた
+        // 「0.9.2 から」は偽**で、1e が差分で見つけた）:
+        // **`020485b`（2026-08-20、換算の最初の実装）で `=` が符号を
+        // `negative` へ移したときから**である。**0.9.3 はこの腕に
+        // `setAnswerShown(false)` を足したが、符号には触れていない**
+        // （`v0.9.2..v0.9.3` の差分で確認）。**間違った日付を置くと、
+        // 次に原因を辿る人が間違った差分を読む。**
         if (isEmpty(shorter)) setNegative(false);
         // **DEL は答えを編集する**ので、そこから先は「答えが出ている」ではない。
         setAnswerShown(false);

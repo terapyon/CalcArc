@@ -199,16 +199,26 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
   // **新しい値のキーを押す前に「いまその答えが出ている」と主張する**こと。
   // **後者が、踏んだつもりを赤にする。**
   const ANSWERS = [
-    { name: "正", keys: ["2", "引く", "1"], shown: "値 1" },
-    { name: "ゼロ", keys: ["1", "引く", "1"], shown: "値 0" },
-    { name: "負", keys: ["1", "引く", "2"], shown: "値 -1" },
+    { name: "正", keys: ["2", "引く", "1"], value: "1" },
+    { name: "ゼロ", keys: ["1", "引く", "1"], value: "0" },
+    { name: "負", keys: ["1", "引く", "2"], value: "-1" },
   ] as const;
+
+  /**
+   * 「いまこの答えが出ている」の主張。**末尾を固定する。**
+   *
+   * **`toHaveTextContent("値 -1")` は「値 -1.49」にも一致する**（1e の変異 (c)
+   * で、**負の行だけ素通りした**）。**部分一致では、踏んだつもりを赤にできない**
+   * ——**この仕掛けの効きが 3 行中 2 行だった。** 数字や小数点が続かないことまで見る。
+   */
+  const answerIs = (value: string) =>
+    new RegExp(`値 ${value.replace(/[.\-]/g, "\\$&")}(?![\\d.])`);
 
   for (const answer of ANSWERS) {
     it(`${answer.name}の答えのあと、数字は符号ごと新しい値になる`, async () => {
       await renderPanel("length");
       await press([...answer.keys, EQ]);
-      expect(echo()).toHaveTextContent(answer.shown);
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
 
       await press(["5"]);
       // **入力欄**——前の答えの符号が残らない。
@@ -222,7 +232,7 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
       await renderPanel("length");
       await press([...answer.keys, EQ]);
       // **★ 升を踏んだことを、先に主張する**（下の註）。
-      expect(echo()).toHaveTextContent(answer.shown);
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
 
       await press([DOT, "5"]);
       expect(echo()).toHaveTextContent("値 0.5");
@@ -235,7 +245,7 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
       // 下の註）。**画面を作り直して、升を 1 つだけ踏む。**
       await renderPanel("length");
       await press([...answer.keys, EQ]);
-      expect(echo()).toHaveTextContent(answer.shown);
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
 
       await press([ZEROS3]);
       // **`000` は空から打つと `0` になる**(先頭のゼロは畳まれる。
@@ -272,8 +282,10 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
   it("DEL で欄が空になったら符号も捨てる（見えないものは持たない）", async () => {
     // **利用者の裁定 2026-09-18**。`1 − 2 = DEL 5` が **`-5`** になっていた
     // （1e の実測）——**欄が空でも `negative` だけ残り、次に打った数が
-    // その符号を着る**。**F14 と同じ置き場の穴**で、**0.9.2 で `=` が符号を
-    // 別 state へ移したときから在った**（0.9.3 の副作用ではない）。
+    // その符号を着る**。**F14 と同じ置き場の穴**で、**`020485b`（2026-08-20、
+    // 換算の最初の実装）で `=` が符号を `negative` へ移したときから在った**
+    // （**0.9.3 の副作用ではない**。日付は `git log -S` で当てた
+    // ——最初に書いた「0.9.2 から」は偽で、1e が差分で見つけた）。
     await renderPanel("length");
     await press(["1", "引く", "2", EQ]);
     expect(echo()).toHaveTextContent("値 -1");
