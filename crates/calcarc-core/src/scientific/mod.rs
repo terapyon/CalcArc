@@ -354,6 +354,21 @@ mod tests {
     }
 
     #[test]
+    fn tangent_of_a_large_imaginary_part_is_not_a_false_overflow() {
+        // **`tan` は `sin/cos`** なので、**複素除算の壊れ方をそのまま受け継ぐ**
+        // （F7、0.9.4）。`cos(1 + 710.4j)` は `(9.0e307, -1.40e308)` で、
+        // **大きいほうが `f64::MAX/2` を超える**——**引き金の形そのもの**である。
+        //
+        // **0.9.3 は `Err(Overflow)` を返していた**（実測 2026-09-18）。
+        // **真の答えは `j` に限りなく近い**（虚部が大きい `tan` は `j` へ漸近する）。
+        // **除算の直しがここまで届いていることを、呼び出し元の側から押さえる**
+        // ——**`value.rs` の番人は `checked_div` を直接叩いており、
+        // 「`tan` も直ったか」は別の主張**である。
+        let q = tan(Value::new(1.0, 710.4), AngleMode::Rad).expect("有限の答えが在る");
+        assert_eq!((q.re, q.im), (0.0, 1.0));
+    }
+
+    #[test]
     fn tangent_at_a_pole_is_an_error() {
         // f64 の tan(PI/2) は無限大ではなく 1.6e16 を返すため、
         // Deg モードでは極を明示的に検出する（設計書 §4.6）。
