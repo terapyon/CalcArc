@@ -65,27 +65,109 @@ impl Value {
 
     /// 複素数の除算。
     ///
+    /// # 何が難しいか
+    ///
     /// 素朴な `(rhs.re² + rhs.im²)` を分母にすると、中間の二乗で溢れるか潰れる。
     /// `rhs = (1e-200, 1e-200)` ではゼロでない除数の分母が 0 になって
     /// DivisionByZero を返し、`rhs = (1e200, 0)` では分母が inf になって
     /// 結果が 0 に潰れる。後者は最終値が有限なので `finalize()` も捕まえられない。
     /// base-spec §25 が禁じる「暗黙の overflow」がここで起きる。
     ///
-    /// そこで大きい方の成分で規格化してから割る（Smith 法）。
+    /// # 手当ては 2 段階（**どちらが何を塞ぐか**）
+    ///
+    /// **① Smith 法**（大きい方の成分で規格化してから割る）——**二乗を作らない**ので、
+    /// 上の 2 例は塞がる。**0.9.4 より前はここまでだった。**
+    ///
+    /// **② 2 の冪でのスケーリング**（0.9.4、外部報告 F7）。**①だけでは足りなかった。**
+    /// **残っていたのは、二乗ではなく `d` そのものが溢れる形**である
+    /// ——`|re| >= |im|` の腕の `d = re + im*t` は最大 `2|re|` になるので、
+    /// **`|re| + im²/|re| > f64::MAX` で `d` が inf**。分子が有限なら
+    /// **`有限/inf = 0` に潰れ、エラーも出ない**（**静かに嘘の答え**）。
+    /// **下端にも別口が在った**——非正規化数では `t = im/re` と `im*t` が
+    /// **非正規化域で丸められて桁が死ぬ**（`1e-320` で相対 2.4e-4 の誤差）。
+    ///
+    /// **分子と分母を、それぞれ 2 の冪で `[1,2)` へ寄せてから割り、商を戻す。**
+    /// `(a·2^kn)/(b·2^ks) = (a/b)·2^(kn−ks)` なので、戻す倍率は `2^(ks−kn)`。
+    /// **2 の冪倍は仮数を変えない**ので、**商は倍率に依らない**——精度を足すのでも
+    /// 削るのでもなく、**中間値を安全な帯へ移すだけ**である。
+    /// 寄せたあとの `d` は `[1,4)` に収まり、**溢れも潰れもしない。**
+    ///
+    /// # この註が言えること・言えないこと
+    ///
+    /// **測ったのは複素除算 1 回**である（calcarc-88 の 572 件。分母の形 5 種 ×
+    /// 符号 4 種 × 大きさ 10 階級と、真に範囲外の 12 件）。**直す前は 80 件が壊れ、
+    /// 直したあとは 0 件**、**「範囲外なのに値を返す」は前後とも 0 件**である。
+    ///
+    /// **測っていないもの**（**「塞いだ」と読まないこと**——**①をそう読んだのが
+    /// F7 の出発点だった**）: **`checked_mul` / `checked_add` に同じ形が在るか**、
+    /// **`a/b/c` のように途中の商が端に着地する連鎖**、**除算を内蔵する関数**
+    /// （`tan`・`recip`・極形式）、**表示層**、**wasm 境界の向こう**。
     pub fn checked_div(self, rhs: Value) -> CalcResult<Value> {
         if rhs.re == 0.0 && rhs.im == 0.0 {
             return Err(CalcError::DivisionByZero);
         }
-        if rhs.re.abs() >= rhs.im.abs() {
-            let t = rhs.im / rhs.re;
-            let d = rhs.re + rhs.im * t;
-            Value::new((self.re + self.im * t) / d, (self.im - self.re * t) / d).finalize()
+        // **分子と分母を別々に寄せる。** 同じ倍率で寄せると、片方が端に居るときに
+        // もう片方が溢れるか潰れる（`MAX / 1e-320` のような組み合わせ）。
+        let ks = -binary_exponent(rhs.re.abs().max(rhs.im.abs()));
+        let kn = -binary_exponent(self.re.abs().max(self.im.abs()));
+        let (ar, ai) = (scale_pow2(self.re, kn), scale_pow2(self.im, kn));
+        let (br, bi) = (scale_pow2(rhs.re, ks), scale_pow2(rhs.im, ks));
+        let (qr, qi) = if br.abs() >= bi.abs() {
+            let t = bi / br;
+            let d = br + bi * t;
+            ((ar + ai * t) / d, (ai - ar * t) / d)
         } else {
-            let t = rhs.re / rhs.im;
-            let d = rhs.re * t + rhs.im;
-            Value::new((self.re * t + self.im) / d, (self.im * t - self.re) / d).finalize()
-        }
+            let t = br / bi;
+            let d = br * t + bi;
+            ((ar * t + ai) / d, (ai * t - ar) / d)
+        };
+        // **戻す段で溢れたなら、それは本物の範囲外**である（`finalize()` が見る）。
+        let back = ks - kn;
+        Value::new(scale_pow2(qr, back), scale_pow2(qi, back)).finalize()
     }
+}
+
+/// `x` の 2 進指数（`x` が `2^e` 以上 `2^(e+1)` 未満の `e`）。
+///
+/// **非正規化数も正しく返す**——あそこは指数欄が 0 で、大きさは仮数に入っている。
+/// **0 と非有限には 0 を返す**（寄せない。呼び出し側はそのまま割る）。
+fn binary_exponent(x: f64) -> i32 {
+    if x == 0.0 || !x.is_finite() {
+        return 0;
+    }
+    let bits = x.to_bits();
+    let raw = ((bits >> 52) & 0x7ff) as i32;
+    if raw != 0 {
+        return raw - 1023;
+    }
+    // 非正規化数: 最上位の立っているビットの位置から数える。
+    let mantissa = bits & ((1u64 << 52) - 1);
+    let leading = 63 - mantissa.leading_zeros() as i32;
+    leading - 52 - 1022
+}
+
+/// `x * 2^k`。**2 の冪倍は仮数を変えない**ので、丸めを増やさない。
+///
+/// **倍率を 1 つの `f64` で作らない**——`k` は非正規化数の正規化で ±1000 を
+/// 超えうるので、`2^k` 自体が表せない。**刻んで掛ける。**
+fn scale_pow2(x: f64, k: i32) -> f64 {
+    const CHUNK: i32 = 1000;
+    let mut y = x;
+    let mut k = k;
+    while k > CHUNK {
+        y *= two_pow(CHUNK);
+        k -= CHUNK;
+    }
+    while k < -CHUNK {
+        y *= two_pow(-CHUNK);
+        k += CHUNK;
+    }
+    y * two_pow(k)
+}
+
+/// `2^k`（`-1022 <= k <= 1023`）。指数欄を直に組む。
+fn two_pow(k: i32) -> f64 {
+    f64::from_bits((((k + 1023) as u64) & 0x7ff) << 52)
 }
 
 /// -0.0 を +0.0 に均す。それ以外はそのまま返す。
