@@ -15,6 +15,7 @@ import sympy
 
 from calcarc_reference import (
     cases,
+    complex_div_boundary,
     complex_ref,
     compound_ref,
     convert_ref,
@@ -381,6 +382,21 @@ def build_loan_boundary() -> dict:
     }
 
 
+def build_complex_div_boundary() -> dict:
+    """複素除算の境界専用 golden(F7、0.9.4)。**許容はここにだけ置く**——
+    Rust のテストは `tolerance.rel` を読み、テストコードに `1e-15` を書かない(CLAUDE.md)。
+
+    **通常のコーパスはこの領域に届かない**(帯を外しても乱択は上端 1 オクターブを踏まない)。
+    理由は `complex_div_boundary` のモジュール docstring。
+    """
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "tolerance": {"rel": complex_div_boundary.TOLERANCE_REL},
+        "cases": complex_div_boundary.build_cases(),
+    }
+
+
 def _envelope(entries: list[dict]) -> dict:
     return {
         "schema": SCHEMA,
@@ -414,6 +430,7 @@ def main() -> None:
     write("currency.json", build_currency())
     write("finance.json", build_finance())
     write("loan_boundary.json", build_loan_boundary())
+    write("complex_div_boundary.json", build_complex_div_boundary())
 
 
 if __name__ == "__main__":
