@@ -282,15 +282,26 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     if (!valueField) return;
     // **`=` の答えのあと、画面の数を捨てるキーは新しい入力を始める**
     // (0.9.3 設計書 §4.5)。規則そのものは `convert/entry.ts` が持つ。
-    //
+    const restarting = answerShown && startsNewValue(token);
     // **`.` だけは空から始められない**——`pushDot` は打ちかけの数が無いと何も足さないので、
     // `0` から始める(画面は `0.`)。
-    const base =
-      answerShown && startsNewValue(token)
-        ? token === "dot"
-          ? fromDigits("0")
-          : EMPTY
-        : entry;
+    const base = restarting
+      ? token === "dot"
+        ? fromDigits("0")
+        : EMPTY
+      : entry;
+    // **★ 符号も一緒に捨てる**(F14、利用者の実測 2026-09-18)。
+    //
+    // **数と符号は 1 つの値である**が、**置き場が 2 つに分かれている**
+    // ——数は `entry`、符号は `negative`(`fromSettled` が符号を受けないため。
+    // 計画の裁定 3)。**0.9.3 は `entry` だけを空にしていた**ので、
+    // **`1 − 2 =` の答え −1 のあとに `5` を打つと `-5`** になっていた
+    // (`typed` が `-` を先頭に合成する)。**出荷済みの版で利用者が踏んだ。**
+    //
+    // **一律に消さない**——**新しい値を始めるときだけ**である。
+    // 演算子・`+/−`・`DEL` は「続き」なので符号を保つ(`startsNewValue` の表)。
+    // `AC` は下の `clear()` が両方を戻す。
+    if (restarting) setNegative(false);
     // **答えが「手元の値」でなくなるのは、続きを打ち始めたときである。**
     // `+/−` は符号を変えるだけなので続き、`=` は下で立て直す。
     if (answerShown && token !== "sign" && token !== "eq")
