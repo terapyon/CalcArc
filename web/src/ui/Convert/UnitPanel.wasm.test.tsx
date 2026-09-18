@@ -269,6 +269,35 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     expect(echo()).toHaveTextContent("値 -1");
   });
 
+  it("DEL で欄が空になったら符号も捨てる（見えないものは持たない）", async () => {
+    // **利用者の裁定 2026-09-18**。`1 − 2 = DEL 5` が **`-5`** になっていた
+    // （1e の実測）——**欄が空でも `negative` だけ残り、次に打った数が
+    // その符号を着る**。**F14 と同じ置き場の穴**で、**0.9.2 で `=` が符号を
+    // 別 state へ移したときから在った**（0.9.3 の副作用ではない）。
+    await renderPanel("length");
+    await press(["1", "引く", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+
+    // 1 文字消すと欄は空。**ここで符号も落ちる。**
+    await press([DEL]);
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+    expect(main().textContent ?? "").not.toContain("-");
+  });
+
+  it("DEL は、数が残っているあいだは符号を保つ", async () => {
+    // **一律に消さない**——**空になったときだけ**である（上の裁定の後半）。
+    await renderPanel("length");
+    await press(["1", DOT, "5", SIGN]);
+    expect(echo()).toHaveTextContent("値 -1.5");
+    await press([DEL]);
+    expect(echo()).toHaveTextContent("値 -1.");
+    await press([DEL]);
+    expect(echo()).toHaveTextContent("値 -1");
+    // まだ数が在るので、符号は付いたまま——換算結果も負である。
+    expect(main().textContent ?? "").toContain("-");
+  });
+
   it("AC は符号も一緒に捨てる", async () => {
     await renderPanel("length");
     await press(["1", "引く", "2", EQ]);

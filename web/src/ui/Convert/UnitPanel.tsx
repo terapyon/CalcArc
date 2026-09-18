@@ -272,7 +272,17 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     }
     if (token === "del") {
       if (valueField) {
-        setEntry(backspace(entry));
+        const shorter = backspace(entry);
+        setEntry(shorter);
+        // **★ 欄が空になったら符号も捨てる**(利用者の裁定 2026-09-18
+        // 「見えないものは持たない」)。**数が残っているあいだは保つ**
+        // ——`-1.5` の `DEL` は `-1` である。
+        //
+        // **空の欄に符号だけが残ると、次に打った数がその符号を着る**
+        // （`1 − 2 = DEL 5` が `-5` になっていた。1e の実測）。
+        // **F14 と同じ穴**である——**数は `entry`、符号は `negative`** と
+        // 置き場が分かれていて、**片方だけ空にしていた。**
+        if (isEmpty(shorter)) setNegative(false);
         // **DEL は答えを編集する**ので、そこから先は「答えが出ている」ではない。
         setAnswerShown(false);
       }
