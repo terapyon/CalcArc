@@ -102,6 +102,9 @@ const FIELD = {
 const DOT = "小数点";
 const EQ = "計算する";
 const SIGN = "符号を変える";
+const ZEROS3 = "3桁のゼロ";
+const DEL = "1文字消去";
+const AC = "この項目を消去";
 
 beforeEach(() => {
   vi.mocked(readRates).mockReset().mockResolvedValue(null);
@@ -163,6 +166,172 @@ describe("UnitPanel（実物の wasm、0.9.2 設計書 §4.3の監査例）", ()
     expect(echo()).toHaveTextContent("値 1/3");
     await press([SIGN]);
     expect(echo()).toHaveTextContent("値 -1/3");
+  });
+
+  it("★ 再現: 負の答えのあとの新しい入力に、符号が持ち越される（F14）", async () => {
+    // **利用者の実測 2026-09-18（出荷済みの 0.9.3）**: `1 − 2 =` で −1 を出し、
+    // 続けて `5` を打つと **−5** になる（**正しくは 5**）。
+    //
+    // **D-3（0.9.3 §4.5）の副作用である**——`base` が空にするのは `entry` だけで、
+    // **符号は別の state（`negative`）に居るので残る**。`typed` は
+    // `-` を先頭に合成するので、**新しい値に前の答えの符号が付く**。
+    await renderPanel("length");
+    await press(["1", "引く", "2"]);
+    await press([EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+  });
+
+  // **合格条件は利用者の指定である**(2026-09-18): **正・ゼロ・負の答え ×
+  // 数字・`.`・`000`・演算子・`+/−`・DEL・AC**、**入力欄だけでなく換算結果の行も**、
+  // **為替にも回帰**。**表で回す**——1 本ずつ書くと、組み合わせのどれかが抜ける。
+  //
+  // **★ ただし、表は「踏んだつもり」を作りやすい**（1e の指摘、2026-09-18。
+  // **私の最初の版が実際にそうなっていた**）。**1 つの `it` に 2 つの升を
+  // 詰めたら、前半が残した入力が後半の頭に付き**、`0.52 − 1 =` という
+  // **別の式**になっていた——**3 行とも「負の答えのあと」を測っており、
+  // 正 × `000`・ゼロ × `000` は 1 度も踏まれていなかった。**
+  // **行の名前は、升の中身を保証しない。**
+  //
+  // **だから 2 つ置いた**: **升ごとに画面を作り直す**ことと、
+  // **新しい値のキーを押す前に「いまその答えが出ている」と主張する**こと。
+  // **後者が、踏んだつもりを赤にする。**
+  const ANSWERS = [
+    { name: "正", keys: ["2", "引く", "1"], value: "1" },
+    { name: "ゼロ", keys: ["1", "引く", "1"], value: "0" },
+    { name: "負", keys: ["1", "引く", "2"], value: "-1" },
+  ] as const;
+
+  /**
+   * 「いまこの答えが出ている」の主張。**末尾を固定する。**
+   *
+   * **`toHaveTextContent("値 -1")` は「値 -1.49」にも一致する**（1e の変異 (c)
+   * で、**負の行だけ素通りした**）。**部分一致では、踏んだつもりを赤にできない**
+   * ——**この仕掛けの効きが 3 行中 2 行だった。** 数字や小数点が続かないことまで見る。
+   */
+  const answerIs = (value: string) =>
+    new RegExp(`値 ${value.replace(/[.\-]/g, "\\$&")}(?![\\d.])`);
+
+  for (const answer of ANSWERS) {
+    it(`${answer.name}の答えのあと、数字は符号ごと新しい値になる`, async () => {
+      await renderPanel("length");
+      await press([...answer.keys, EQ]);
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
+
+      await press(["5"]);
+      // **入力欄**——前の答えの符号が残らない。
+      expect(echo()).toHaveTextContent("値 5");
+      // **換算結果の行も見る**(利用者の指定)。`5 km` は正の距離である。
+      expect(main()).toHaveTextContent("3.106855961 mi");
+      expect(main().textContent ?? "").not.toContain("-");
+    });
+
+    it(`${answer.name}の答えのあと、\`.\` は符号ごと新しい値になる`, async () => {
+      await renderPanel("length");
+      await press([...answer.keys, EQ]);
+      // **★ 升を踏んだことを、先に主張する**（下の註）。
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
+
+      await press([DOT, "5"]);
+      expect(echo()).toHaveTextContent("値 0.5");
+      expect(main().textContent ?? "").not.toContain("-");
+    });
+
+    it(`${answer.name}の答えのあと、\`000\` は符号ごと新しい値になる`, async () => {
+      // **`.` と同じ `it` に入れない**——**前半が残した `0.5` が次の列の頭に
+      // 付き、`0.52 − 1 =` のような別の式になる**（1e の実測 2026-09-18。
+      // 下の註）。**画面を作り直して、升を 1 つだけ踏む。**
+      await renderPanel("length");
+      await press([...answer.keys, EQ]);
+      expect(echo()).toHaveTextContent(answerIs(answer.value));
+
+      await press([ZEROS3]);
+      // **`000` は空から打つと `0` になる**(先頭のゼロは畳まれる。
+      // 0.9.3 以前からの振る舞いで、この枝では変えていない)。
+      // **ここで見たいのは符号のほう**——`-0` にならないこと。
+      expect(echo()).toHaveTextContent("値 0");
+      expect(main().textContent ?? "").not.toContain("-");
+    });
+  }
+
+  it("負の答えの続きを打つキーは、符号を捨てない", async () => {
+    // **一律に消さない**——**新しい値を始めるキーだけ**である
+    // (`convert/entry.ts` の `startsNewValue` の表)。
+    await renderPanel("length");
+
+    // 演算子は続き: `-1 + 5 =` は 4。
+    await press(["1", "引く", "2", EQ]);
+    await press(["足す", "5", EQ]);
+    expect(echo()).toHaveTextContent("値 4");
+
+    // `+/−` は続き: 答えの符号を反転するだけ。
+    await press([AC, "1", "引く", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+    await press([SIGN]);
+    expect(echo()).toHaveTextContent("値 1");
+
+    // DEL は続き: 数字を削っても符号は残る。
+    await press([AC, "1", "引く", "1", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -11");
+    await press([DEL]);
+    expect(echo()).toHaveTextContent("値 -1");
+  });
+
+  it("DEL で欄が空になったら符号も捨てる（見えないものは持たない）", async () => {
+    // **利用者の裁定 2026-09-18**。`1 − 2 = DEL 5` が **`-5`** になっていた
+    // （1e の実測）——**欄が空でも `negative` だけ残り、次に打った数が
+    // その符号を着る**。**F14 と同じ置き場の穴**で、**`020485b`（2026-08-20、
+    // 換算の最初の実装）で `=` が符号を `negative` へ移したときから在った**
+    // （**0.9.3 の副作用ではない**。日付は `git log -S` で当てた
+    // ——最初に書いた「0.9.2 から」は偽で、1e が差分で見つけた）。
+    await renderPanel("length");
+    await press(["1", "引く", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+
+    // 1 文字消すと欄は空。**ここで符号も落ちる。**
+    await press([DEL]);
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+    expect(main().textContent ?? "").not.toContain("-");
+  });
+
+  it("DEL は、数が残っているあいだは符号を保つ", async () => {
+    // **一律に消さない**——**空になったときだけ**である（上の裁定の後半）。
+    await renderPanel("length");
+    await press(["1", DOT, "5", SIGN]);
+    expect(echo()).toHaveTextContent("値 -1.5");
+    await press([DEL]);
+    expect(echo()).toHaveTextContent("値 -1.");
+    await press([DEL]);
+    expect(echo()).toHaveTextContent("値 -1");
+    // まだ数が在るので、符号は付いたまま——換算結果も負である。
+    expect(main().textContent ?? "").toContain("-");
+  });
+
+  it("AC は符号も一緒に捨てる", async () => {
+    await renderPanel("length");
+    await press(["1", "引く", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+    await press([AC]);
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+    expect(main().textContent ?? "").not.toContain("-");
+  });
+
+  it("為替でも同じ——負の答えのあとの数字は符号を持ち越さない", async () => {
+    // **同じ `UnitPanel` の同じ state** である(旗が違うだけ)。**それでも
+    // 別に見る**——**共通経路だからこそ、片方でしか踏まない形を見落とす。**
+    vi.mocked(readRates).mockResolvedValue(
+      rateSet({ USD: "1", JPY: "155.23" }, fresh()),
+    );
+    await renderPanel("currency");
+    await press(["1", "引く", "2", EQ]);
+    expect(echo()).toHaveTextContent("値 -1");
+    await press(["5"]);
+    expect(echo()).toHaveTextContent("値 5");
+    expect(main().textContent ?? "").not.toContain("-");
   });
 
   it("settles a negative fraction, sign and all", async () => {

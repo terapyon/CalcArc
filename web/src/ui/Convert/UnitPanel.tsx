@@ -272,7 +272,25 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     }
     if (token === "del") {
       if (valueField) {
-        setEntry(backspace(entry));
+        const shorter = backspace(entry);
+        setEntry(shorter);
+        // **★ 欄が空になったら符号も捨てる**(利用者の裁定 2026-09-18
+        // 「見えないものは持たない」)。**数が残っているあいだは保つ**
+        // ——`-1.5` の `DEL` は `-1` である。
+        //
+        // **空の欄に符号だけが残ると、次に打った数がその符号を着る**
+        // （`1 − 2 = DEL 5` が `-5` になっていた。1e の実測）。
+        // **F14 と同じ穴**である——**数は `entry`、符号は `negative`** と
+        // 置き場が分かれていて、**片方だけ空にしていた。**
+        //
+        // **いつから在ったか**（`git log -S` で当てた。**最初に書いた
+        // 「0.9.2 から」は偽**で、1e が差分で見つけた）:
+        // **`020485b`（2026-08-20、換算の最初の実装）で `=` が符号を
+        // `negative` へ移したときから**である。**0.9.3 はこの腕に
+        // `setAnswerShown(false)` を足したが、符号には触れていない**
+        // （`v0.9.2..v0.9.3` の差分で確認）。**間違った日付を置くと、
+        // 次に原因を辿る人が間違った差分を読む。**
+        if (isEmpty(shorter)) setNegative(false);
         // **DEL は答えを編集する**ので、そこから先は「答えが出ている」ではない。
         setAnswerShown(false);
       }
@@ -282,15 +300,26 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
     if (!valueField) return;
     // **`=` の答えのあと、画面の数を捨てるキーは新しい入力を始める**
     // (0.9.3 設計書 §4.5)。規則そのものは `convert/entry.ts` が持つ。
-    //
+    const restarting = answerShown && startsNewValue(token);
     // **`.` だけは空から始められない**——`pushDot` は打ちかけの数が無いと何も足さないので、
     // `0` から始める(画面は `0.`)。
-    const base =
-      answerShown && startsNewValue(token)
-        ? token === "dot"
-          ? fromDigits("0")
-          : EMPTY
-        : entry;
+    const base = restarting
+      ? token === "dot"
+        ? fromDigits("0")
+        : EMPTY
+      : entry;
+    // **★ 符号も一緒に捨てる**(F14、利用者の実測 2026-09-18)。
+    //
+    // **数と符号は 1 つの値である**が、**置き場が 2 つに分かれている**
+    // ——数は `entry`、符号は `negative`(`fromSettled` が符号を受けないため。
+    // 計画の裁定 3)。**0.9.3 は `entry` だけを空にしていた**ので、
+    // **`1 − 2 =` の答え −1 のあとに `5` を打つと `-5`** になっていた
+    // (`typed` が `-` を先頭に合成する)。**出荷済みの版で利用者が踏んだ。**
+    //
+    // **一律に消さない**——**新しい値を始めるときだけ**である。
+    // 演算子・`+/−`・`DEL` は「続き」なので符号を保つ(`startsNewValue` の表)。
+    // `AC` は下の `clear()` が両方を戻す。
+    if (restarting) setNegative(false);
     // **答えが「手元の値」でなくなるのは、続きを打ち始めたときである。**
     // `+/−` は符号を変えるだけなので続き、`=` は下で立て直す。
     if (answerShown && token !== "sign" && token !== "eq")
