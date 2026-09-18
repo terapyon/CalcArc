@@ -242,13 +242,25 @@ jobs:
           [ -n "$pdf" ]
           # 他のスモークと同じリトライ(ファイル単位の伝播は非アトミック)。
           for i in $(seq 1 12); do
-            type="$(curl -sS -o /dev/null -w '%{content_type}' "$base/manual/$pdf")"
+            head="$(curl -sSI "$base/manual/$pdf")"
+            type="$(printf '%s' "$head" | grep -i '^content-type:' | head -1)"
             case "$type" in
-              application/pdf*)
-                echo "serving $pdf ($type)"
-                exit 0 ;;
+              *application/pdf*)
+                # **`Content-Disposition: attachment` も見る**(0.9.3、利用者の
+                # 実測 2026-09-18)。**ホーム画面のアプリが PDF に乗っ取られる**
+                # のを止めるヘッダで、**付けているのは `functions/manual/` の
+                # Function だけ**である——**つまりこの 1 行は「Function が
+                # 本番で拾われている」ことの証拠でもある**(実在の PDF は
+                # Function が無くても静的ファイルとして配られるので、
+                # **type だけでは拾われたかどうか分からない**)。
+                if printf '%s' "$head" | grep -qi '^content-disposition:.*attachment'; then
+                  echo "serving $pdf (pdf + attachment)"
+                  exit 0
+                fi
+                echo "$pdf は配られているが attachment が付いていない(Function が拾われていない)" >&2
+                exit 1 ;;
             esac
-            echo "attempt $i: /manual/$pdf is $type"
+            echo "attempt $i: /manual/$pdf is ${type:-(no content-type)}"
             sleep 10
           done
           echo "配った PDF が配信されていない: $pdf" >&2

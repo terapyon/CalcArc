@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 // **リポジトリの根の `functions/`** を読む。置き場の理由は関数側の註にある
 // （本番の配信が `pages deploy web/dist` を根から走らせるため）。
-import { onRequest, SERVED_TYPE } from "../../../functions/manual/[[path]].js";
+import {
+  onRequest,
+  PDF_DISPOSITION,
+  SERVED_TYPE,
+} from "../../../functions/manual/[[path]].js";
 
 /** `env.ASSETS` の偽物。**1 つの応答を返すだけ**。 */
 function assetsReturning(response: Response) {
@@ -23,6 +27,42 @@ describe("/manual/ の Function（0.9.3 設計書 §2.1.2）", () => {
     expect(out.status).toBe(200);
     expect(out.headers.get("content-type")).toBe("application/pdf");
     expect(await out.text()).toBe("%PDF-1.7");
+  });
+
+  it("PDF には attachment を付ける（ホーム画面のアプリを乗っ取らせない）", async () => {
+    // **利用者の実測 2026-09-18**: iPhone のホーム画面のアプリから PDF を開くと
+    // **窓ごと PDF に変わり、電卓に戻れない**（`target="_blank"` は効かない）。
+    // **握っている口はこのヘッダだけ**なので、ここで付ける。
+    //
+    // **「直った」はここでは言えない**——iOS はこの機に無い。**ここが言うのは
+    // 「ヘッダを付けた」まで**で、**本番で付いていることは `deploy.yml` の
+    // スモークが、iPhone での結末は利用者が確かめる。**
+    const pdf = new Response("%PDF-1.7", {
+      status: 200,
+      headers: { "content-type": "application/pdf" },
+    });
+    const out = await onRequest({
+      request: request(),
+      env: assetsReturning(pdf),
+    });
+    expect(out.headers.get("content-disposition")).toBe(PDF_DISPOSITION);
+    expect(PDF_DISPOSITION).toBe("attachment");
+    // **元のヘッダを捨てない**（type が消えると、下の 404 の判別が壊れる）。
+    expect(out.headers.get("content-type")).toBe("application/pdf");
+  });
+
+  it("404 の側には disposition を付けない", async () => {
+    // 付けると、**アプリの殻を「保存しますか」と出す**ことになる。
+    const shell = new Response("<!doctype html>", {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+    const out = await onRequest({
+      request: request(),
+      env: assetsReturning(shell),
+    });
+    expect(out.status).toBe(404);
+    expect(out.headers.get("content-disposition")).toBeNull();
   });
 
   it("実体が無いときは 404 にする（`ASSETS` は 200 と殻を返す）", async () => {

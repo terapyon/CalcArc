@@ -88,11 +88,60 @@
 /** 素通しする type。**ここに無いものはすべて 404 に落ちる**（許可側）。 */
 export const SERVED_TYPE = "application/pdf";
 
+/**
+ * PDF に付ける `Content-Disposition`。**ホーム画面のアプリを PDF に
+ * 乗っ取らせないため**（利用者の実測 2026-09-18）。
+ *
+ * ## 何が起きたか
+ *
+ * **iPhone でホーム画面に追加したアプリから PDF を開くと、戻れなくなる。**
+ * **`target="_blank"` は効かない**——**iOS の standalone では、同じ生成元への
+ * navigation がアプリの窓の中で起きる**ので、**窓ごと PDF に切り替わり、
+ * 電卓に戻る手が無い**。
+ *
+ * **これは「おそれがある（未確認）」として 2026-09-12 に書かれ、未確認のまま
+ * 作られた**（0.9.3 設計書 §2.5 の周辺）。**実機で踏まれてから直している。**
+ *
+ * ## なぜ `attachment` か
+ *
+ * **私たちが握っている口は、この応答のヘッダだけ**である。`attachment` にすると
+ * **ブラウザは「表示」ではなく「保存・共有」の扱いに倒れる**ので、
+ * **アプリの窓はそのまま残る**、というのが筋である。
+ *
+ * **代償は測ってある**（PC の Chrome での話）: **PDF はその場で表示されず、
+ * ダウンロードになる**。マニュアルは**読んで手元に置く物**なので、
+ * **1 クリック増えるほうを採った**。
+ *
+ * ## ★ 直ったかどうかは、この機では測れない
+ *
+ * **iOS はこの作業機に無い。** **確かめられるのは利用者だけ**である。
+ * **だから「直った」とは書かない。**「この形にした」までである。
+ *
+ * **確かめ方**（利用者へ）: **ホーム画面に追加したアプリ**を開き、下部の
+ * 「CalcArc … について」→ PDF のどれかを押す。
+ * - **直っていれば**: 共有・保存のシートが出るか、別の窓で開く。
+ *   **閉じると電卓がそのまま残っている**
+ * - **直っていなければ**: 窓が PDF に変わり、電卓に戻れない（いまと同じ）
+ *
+ * **本番の走行も 1 つ見る**: `deploy.yml` のスモークが、配った PDF の応答に
+ * **このヘッダが付いていること**を確かめる。**付いていなければ、`functions/`
+ * が拾われていない**——**その 1 点は、いまも実走でしか分からない。**
+ */
+export const PDF_DISPOSITION = "attachment";
+
 export async function onRequest(context) {
   const asset = await context.env.ASSETS.fetch(context.request);
   const type = asset.headers.get("content-type") ?? "";
   if (type.split(";")[0].trim().toLowerCase() === SERVED_TYPE) {
-    return asset;
+    // **名前は付けない。** ブラウザは URL の末尾から採る——**こちらで組み立てると、
+    // パスの中身がそのままヘッダに入る経路を 1 つ作ることになる。**
+    const headers = new Headers(asset.headers);
+    headers.set("content-disposition", PDF_DISPOSITION);
+    return new Response(asset.body, {
+      status: asset.status,
+      statusText: asset.statusText,
+      headers,
+    });
   }
   return new Response("Not Found", {
     status: 404,
