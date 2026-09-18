@@ -23,10 +23,11 @@ test("the footer shows on every tab, once", async ({ page }) => {
   }
 });
 
-test("the links popup opens from the footer, with the four the user settled", async ({
+test("the links popup opens from the footer, with the six the user settled", async ({
   page,
 }) => {
-  // **綴りも並びも利用者の裁定**(2026-09-12 と 2026-09-17)。
+  // **綴りも並びも利用者の裁定**(2026-09-12・2026-09-17・**2026-09-18 で
+  // `#manual` の画面を畳んで PDF 3 冊をここへ**)。
   // **jsdom はアクセシビリティツリーを組み立てない**ので、`role="dialog"` が
   // 本当に読み上げに出るかは実ブラウザでしか見られない(CLAUDE.md)。
   await page.goto("/");
@@ -35,17 +36,24 @@ test("the links popup opens from the footer, with the four the user settled", as
   await expect(popup).toBeVisible();
   await expect(popup.getByRole("link")).toHaveText([
     "GitHub（@terapyon）",
-    "マニュアル",
+    "CalcArc 簡易マニュアル",
+    "CalcArc 詳細マニュアル",
+    "CalcArc Quick Guide",
     "ライセンス",
     "検査結果",
   ]);
   await expect(
     popup.getByRole("link", { name: "GitHub（@terapyon）" }),
   ).toHaveAttribute("href", "https://github.com/terapyon/CalcArc");
-  await expect(popup.getByRole("link", { name: "マニュアル" })).toHaveAttribute(
-    "href",
-    "#manual",
-  );
+  // **PDF は `/manual/` の下**——`functions/manual/[[path]].js` が受ける経路で
+  // ある（無い PDF に 404、在る PDF に `Content-Disposition: attachment`）。
+  await expect(
+    popup.getByRole("link", { name: "CalcArc 簡易マニュアル" }),
+  ).toHaveAttribute("href", /^\/manual\/calcarc-.+-quick-ja\.pdf$/);
+  // **どれも新しいタブで開く**——0.9.3 は 1 本だけアプリの中へ行っていた。
+  for (const link of await popup.getByRole("link").all()) {
+    await expect(link).toHaveAttribute("target", "_blank");
+  }
 });
 
 test("Escape closes the links popup, and does not clear the calculation", async ({

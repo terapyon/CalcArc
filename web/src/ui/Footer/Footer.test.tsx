@@ -44,20 +44,19 @@ describe("Footer", () => {
       .map((link) => link.textContent ?? "");
     expect(names).toEqual([
       "GitHub（@terapyon）",
-      "マニュアル",
+      "CalcArc 簡易マニュアル",
+      "CalcArc 詳細マニュアル",
+      "CalcArc Quick Guide",
       "ライセンス",
       "検査結果",
     ]);
   });
 
-  it("sends the manual link into the app, and the rest out of it", () => {
+  it("sends every link out of the app, PDFs included", () => {
+    // **0.9.3 には 1 本だけアプリの中へ行くもの（`#manual`）が在った。**
+    // **0.9.4 で畳んだ**ので、**6 本とも外向き**である。
     render(<Footer />);
     fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
-    const manual = screen.getByRole("link", { name: "マニュアル" });
-    expect(manual).toHaveAttribute("href", "#manual");
-    // **アプリの中へ行くものに `target="_blank"` を付けない**——付けると、
-    // 同じアプリがもう 1 枚開く。
-    expect(manual).not.toHaveAttribute("target");
     for (const link of LINKS.filter((entry) => entry.external)) {
       const anchor = screen.getByRole("link", { name: link.label });
       expect(anchor).toHaveAttribute("href", link.href);
@@ -66,7 +65,7 @@ describe("Footer", () => {
       expect(anchor).toHaveAttribute("rel", "noopener noreferrer");
     }
     // **1 度も比較しなかった格子で緑にならない**ように、数を先に言う。
-    expect(LINKS.filter((entry) => entry.external)).toHaveLength(3);
+    expect(LINKS.filter((entry) => entry.external)).toHaveLength(6);
   });
 
   it("points the evidence link at this version's release", () => {

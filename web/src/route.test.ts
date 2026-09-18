@@ -152,24 +152,18 @@ describe("the URLs promised at 1.0", () => {
     expect(wrong, "promised URLs that open another screen").toEqual([]);
   });
 
-  it("opens the manual as a page, not as a fifth tab", () => {
-    // **`#manual` はタブではない**(0.9.3 設計書 §2.2)。`ModuleId` に足すと
-    // `Nav.tsx` の `MODULES` が `Record<ModuleId, …>` なので**タブが 5 つになる**
-    // ——あれは計算機の切り替えで、マニュアルは**リンク集から開く読み物**である。
+  it("has no route that is not a tab", () => {
+    // **0.9.3 には `#manual` という「タブではない画面」が在った。**
+    // **0.9.4 で畳んだ**（利用者の裁定 2026-09-18）——**PDF 3 冊はリンク集に
+    // 直接並ぶ**ので、**画面を 1 つ持つ理由が無くなった**。
+    //
+    // **`#manual` は、いまは知らないハッシュ**である。**既定へ倒れる**
+    // ——`route.ts` の「互換分岐は作らない」の裁定どおりで、**0.9.3 の URL を
+    // 開いた人は電卓に着く**（**404 でも空白でもない**）。
     const route = routeFromHash("#manual");
-    expect(route.page).toBe("manual");
-    // **`module` は残る**——閉じたときの戻り先であり、`null` 許容にすると
-    // タブを読むすべての場所が `null` を扱うことになる。
     expect(route.module).toBe("scientific");
-  });
-
-  it("leaves every tab route without a page", () => {
-    // **`page` が入るのは `#manual` だけ。** タブの画面で入っていたら、
-    // シェルはパネルの代わりに読み物を描いてしまう。
-    const withPage = PROMISED_URLS.map(({ hash }) => hash)
-      .map((hash) => ({ hash, page: routeFromHash(hash).page }))
-      .filter(({ page }) => page !== undefined);
-    expect(withPage, "tab routes that carry a page").toEqual([]);
+    expect(route.category).toBeNull();
+    expect(Object.keys(route).sort()).toEqual(["category", "module"]);
   });
 
   it("lists each promised URL once", () => {
