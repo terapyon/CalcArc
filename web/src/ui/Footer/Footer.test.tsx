@@ -1,7 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { pdfName } from "../../../scripts/manual/markdown.ts";
 import { Footer } from "./Footer";
-import { LINKS, LINKS_POPUP_CLOSE, LINKS_POPUP_LABEL } from "./LinksPopup";
+import {
+  LINKS,
+  LINKS_POPUP_CLOSE,
+  LINKS_POPUP_LABEL,
+  MANUALS,
+  manualPdfUrl,
+} from "./LinksPopup";
 
 describe("Footer", () => {
   it("names the app and its version on the button that opens the links", () => {
@@ -66,6 +73,32 @@ describe("Footer", () => {
     }
     // **1 度も比較しなかった格子で緑にならない**ように、数を先に言う。
     expect(LINKS.filter((entry) => entry.external)).toHaveLength(6);
+  });
+
+  it("sends each manual to this version's PDF on the GitHub release", () => {
+    // **0.9.5（利用者の裁定 2026-09-18）: サイト内の `/manual/*.pdf` をやめ、
+    // GitHub Release の添付を指す。** iOS のホーム画面アプリでは、サイト内の
+    // PDF を開くと窓ごと PDF に変わって戻れなかった（利用者の実機）。
+    //
+    // **行き先を組むのは `manualPdfUrl` の 1 か所だけ**で、項目の href は
+    // そこから来る（下の 1 本目）。**その 1 か所が Release に上がる名前と
+    // 同じ綴りを組むこと**を、PDF を作る側の `pdfName` と突き合わせて見る
+    // （2 本目）——**綴りの出どころは 2 つあり、繋いでいるのはここだけ**である。
+    // **(b) 直リンクが iOS で外れて (a) Release のページへ替える日は、
+    // 2 本目の期待を 1 行替える**（関数も 1 行）。
+    render(<Footer />);
+    fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
+    for (const manual of MANUALS) {
+      expect(screen.getByRole("link", { name: manual.title })).toHaveAttribute(
+        "href",
+        manualPdfUrl(manual.stem, __APP_VERSION__),
+      );
+      expect(manualPdfUrl(manual.stem, __APP_VERSION__)).toBe(
+        `https://github.com/terapyon/CalcArc/releases/download/v${__APP_VERSION__}/${pdfName(manual.source, __APP_VERSION__)}`,
+      );
+    }
+    // **何も比べずに緑にならない**ように、冊数を先に言う。
+    expect(MANUALS).toHaveLength(3);
   });
 
   it("points the evidence link at this version's release", () => {

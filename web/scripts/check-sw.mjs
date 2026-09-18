@@ -89,8 +89,9 @@ if (!sw.includes("denylist")) {
 }
 
 // 3b. **マニュアルの PDF が、その除外に実際に当たること**(0.9.3)。
-//     リンク集から開く `/manual/calcarc-<版>-<冊>.pdf` は
-//     **navigation リクエスト**(新しいタブで開く)である。除外に当たらないと
+//     `/manual/calcarc-<版>-<冊>.pdf` を開くのは **navigation リクエスト**
+//     である(**0.9.5 からリンク集はここを指さず GitHub の Release を指すが、
+//     配信は 0.9.6 まで残る**——`functions/manual/[[path]].js` の註)。除外に当たらないと
 //     **SW が index.html を返し、Cloudflare の Function まで届かない**
 //     ——**実体の無い PDF の 404 も、実体のある PDF そのものも出せなくなる**。
 //     **「denylist という字が在る」では足りない**: 除外の中身が
