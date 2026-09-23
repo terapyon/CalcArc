@@ -4,6 +4,7 @@ import styles from "./ui/App.module.css";
 import { ConvertPanel } from "./ui/Convert/ConvertPanel";
 import { FinancePanel } from "./ui/Finance/FinancePanel";
 import { Footer } from "./ui/Footer/Footer";
+import { ManualPage } from "./ui/Manual/ManualPage";
 import { Nav } from "./ui/Nav/Nav";
 import { ScalePanel } from "./ui/Scale/ScalePanel";
 import { ScientificPanel } from "./ui/ScientificPanel";
@@ -77,7 +78,11 @@ export function App() {
   return (
     <>
       <div className={styles.shell}>
-        <Nav current={route.module} />
+        {/* **タブではない画面を出しているあいだ、現在地は出さない**
+            （`route.ts` の `page` の註）。**`module` は戻り先として残っている**
+            ——出すと、読み上げは「Scientific が現在地」と言いながら
+            マニュアルを読むことになる。 */}
+        <Nav current={route.page === undefined ? route.module : null} />
         {/*
           **画面が変わったことを読み上げに伝える**(設計書 §5)。
 
@@ -133,12 +138,21 @@ export function App() {
             `<h2>`(その中の面)という階層になり、いま飛んでいる段が埋まる。
           */}
           <h1 className="visually-hidden">{screenName(route)}</h1>
-          {route.module === "scientific" && <ScientificPanel />}
-          {route.module === "convert" && (
+          {/* **タブではない画面は、`module` の 4 行に混ぜない**
+              ——混ぜると、`page` を足した日に 2 つ同時に出る形ができる。 */}
+          {route.page === "manual" && <ManualPage />}
+          {route.page === undefined && route.module === "scientific" && (
+            <ScientificPanel />
+          )}
+          {route.page === undefined && route.module === "convert" && (
             <ConvertPanel category={route.category} />
           )}
-          {route.module === "scale" && <ScalePanel category={route.category} />}
-          {route.module === "finance" && <FinancePanel />}
+          {route.page === undefined && route.module === "scale" && (
+            <ScalePanel category={route.category} />
+          )}
+          {route.page === undefined && route.module === "finance" && (
+            <FinancePanel />
+          )}
         </main>
         {/* 版数・リンク・免責もモジュールに属さない。シェルが 1 つだけ持つ。 */}
         <Footer />

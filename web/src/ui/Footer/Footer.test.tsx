@@ -1,14 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { pdfName } from "../../../scripts/manual/markdown.ts";
 import { Footer } from "./Footer";
-import {
-  LINKS,
-  LINKS_POPUP_CLOSE,
-  LINKS_POPUP_LABEL,
-  MANUALS,
-  manualPdfUrl,
-} from "./LinksPopup";
+import { LINKS, LINKS_POPUP_CLOSE, LINKS_POPUP_LABEL } from "./LinksPopup";
 
 describe("Footer", () => {
   it("names the app and its version on the button that opens the links", () => {
@@ -42,8 +35,9 @@ describe("Footer", () => {
   });
 
   it("shows the four links the user settled, in that order", () => {
-    // **並びも綴りも利用者の裁定**(2026-09-12 と 2026-09-17)。**表から
-    // 組み立てない**——組み立てると、表と期待値が同時に間違っても緑になる。
+    // **並びも綴りも利用者の裁定**（2026-09-12・2026-09-17・2026-09-23）。
+    // **0.9.3 の 4 本に戻った**——0.9.4 で PDF 3 冊をここへ並べ、
+    // **0.9.6 で PDF はマニュアルの画面の中へ移った**（保存・印刷用の副経路）。
     render(<Footer />);
     fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
     const names = screen
@@ -51,17 +45,15 @@ describe("Footer", () => {
       .map((link) => link.textContent ?? "");
     expect(names).toEqual([
       "GitHub（@terapyon）",
-      "CalcArc 簡易マニュアル",
-      "CalcArc 詳細マニュアル",
-      "CalcArc Quick Guide",
+      "マニュアル",
       "ライセンス",
       "検査結果",
     ]);
   });
 
-  it("sends every link out of the app, PDFs included", () => {
-    // **0.9.3 には 1 本だけアプリの中へ行くもの（`#manual`）が在った。**
-    // **0.9.4 で畳んだ**ので、**6 本とも外向き**である。
+  it("sends the outward links out, and keeps the manual inside", () => {
+    // **外へ出るのは 3 本、アプリの中へ行くのは「マニュアル」の 1 本**である。
+    // **0.9.4〜0.9.5 は 6 本すべてが外向き**だった（PDF 3 冊がここに在った）。
     render(<Footer />);
     fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
     for (const link of LINKS.filter((entry) => entry.external)) {
@@ -71,35 +63,18 @@ describe("Footer", () => {
       expect(anchor).toHaveAttribute("target", "_blank");
       expect(anchor).toHaveAttribute("rel", "noopener noreferrer");
     }
+    const manual = screen.getByRole("link", { name: "マニュアル" });
+    expect(manual).toHaveAttribute("href", "#manual");
+    // **アプリの中の画面なので、別の窓では開かない**——**開けば戻る道が
+    // 私たちの画面の外に出る**。0.9.6 が直しているのは、まさにそれである。
+    expect(manual).not.toHaveAttribute("target");
     // **1 度も比較しなかった格子で緑にならない**ように、数を先に言う。
-    expect(LINKS.filter((entry) => entry.external)).toHaveLength(6);
+    expect(LINKS.filter((entry) => entry.external)).toHaveLength(3);
+    expect(LINKS.filter((entry) => !entry.external)).toHaveLength(1);
   });
 
-  it("sends each manual to this version's PDF on the GitHub release", () => {
-    // **0.9.5（利用者の裁定 2026-09-18）: サイト内の `/manual/*.pdf` をやめ、
-    // GitHub Release の添付を指す。** iOS のホーム画面アプリでは、サイト内の
-    // PDF を開くと窓ごと PDF に変わって戻れなかった（利用者の実機）。
-    //
-    // **行き先を組むのは `manualPdfUrl` の 1 か所だけ**で、項目の href は
-    // そこから来る（下の 1 本目）。**その 1 か所が Release に上がる名前と
-    // 同じ綴りを組むこと**を、PDF を作る側の `pdfName` と突き合わせて見る
-    // （2 本目）——**綴りの出どころは 2 つあり、繋いでいるのはここだけ**である。
-    // **(b) 直リンクが iOS で外れて (a) Release のページへ替える日は、
-    // 2 本目の期待を 1 行替える**（関数も 1 行）。
-    render(<Footer />);
-    fireEvent.click(screen.getByRole("button", { name: /CalcArc/ }));
-    for (const manual of MANUALS) {
-      expect(screen.getByRole("link", { name: manual.title })).toHaveAttribute(
-        "href",
-        manualPdfUrl(manual.stem, __APP_VERSION__),
-      );
-      expect(manualPdfUrl(manual.stem, __APP_VERSION__)).toBe(
-        `https://github.com/terapyon/CalcArc/releases/download/v${__APP_VERSION__}/${pdfName(manual.source, __APP_VERSION__)}`,
-      );
-    }
-    // **何も比べずに緑にならない**ように、冊数を先に言う。
-    expect(MANUALS).toHaveLength(3);
-  });
+  // **PDF の綴りを `pdfName` と突き合わせる番人は、`ManualPage.test.tsx` に在る**
+  // ——**PDF がこの画面からあちらへ移った**ので、一緒に連れていった（0.9.6）。
 
   it("points the evidence link at this version's release", () => {
     // **版数はビルド時に埋まる**ので、古い版の画面は古い Release を指す。

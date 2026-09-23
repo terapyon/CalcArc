@@ -1,0 +1,105 @@
+/* **読み物の面である。** 盤面と違って高さの予算を持たない
+   (`viewport-budget.spec.ts` はタブの 11 route を測る)——ここは縦に伸びてよく、
+   足りなければスクロールする。**0.9.3 の面と同じ性質**で、あのときの註を引き継ぐ。 */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  color: var(--display-fg);
+}
+
+/* 冊を選ぶ行。**横に 3 つ並べる**——360px でも収まるように文字を詰める。 */
+.books {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.book {
+  /* 44px は base-spec §43 が求めるタッチ標的に対してこのプロジェクトが採った値。 */
+  min-height: var(--touch-target-min);
+  padding: 0 12px;
+  border: 1px solid var(--key-border);
+  border-radius: var(--key-radius);
+  background: var(--key-bg);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* **いま読んでいる冊**。`aria-pressed` と同じことを目でも言う
+   ——**色だけに頼らない**ように枠も変える。 */
+.book[aria-pressed="true"] {
+  border-color: var(--display-fg);
+  background: var(--key-active-bg, var(--key-bg));
+  font-weight: 700;
+}
+
+.book:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* 本文。**幅に流す**——紙面の固定幅は持たない。 */
+.body {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.body :where(h1, h2, h3) {
+  line-height: 1.4;
+}
+
+.body :where(table) {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.body :where(th, td) {
+  padding: 4px 8px;
+  border: 1px solid var(--key-border);
+  text-align: left;
+}
+
+.body :where(code, pre) {
+  overflow-x: auto;
+  font-family: monospace;
+}
+
+/* 写真の説明の文（`screen.ts` が `shot:` から残す 1 行）。
+   **写真そのものは出さない**(0.9.6 設計書 §4.4)。 */
+.body :where(.shot-note) {
+  color: var(--display-status-fg);
+  font-size: var(--display-size-status);
+}
+
+.state {
+  margin: 0;
+  font-size: var(--display-size-status);
+  color: var(--display-status-fg);
+}
+
+.pdfs,
+.back {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+}
+
+.pdf,
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target-min);
+  color: inherit;
+}
+
+.pdf:focus-visible,
+.link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
