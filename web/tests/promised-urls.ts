@@ -20,7 +20,7 @@ import type { Route } from "../src/route";
  * (「組み立てると、表と期待値が同時に間違っても緑になる」)。
  * **型だけは `route.ts` から借りる**——型は縮めば赤くなる向きにしか効かない。
  *
- * **件数の下限 13 はここに書かない。** `web/src/route.test.ts` が字面で持つ
+ * **件数の下限（いま 14）はここに書かない。** `web/src/route.test.ts` が字面で持つ
  * ——ここに定数で置くと、行を消した人が同じ diff で下げられる。
  *
  * **読むのは 2 か所である**(設計書 §2.4「表は 1 か所に置き、単体テストと
@@ -52,4 +52,7 @@ export const PROMISED_URLS: readonly PromisedUrl[] = [
   { hash: "#scale/llm", module: "scale", category: "llm" },
   { hash: "#scale/transfer", module: "scale", category: "transfer" },
   { hash: "#finance", module: "finance", category: null },
+  // **タブではない画面**（0.9.6、利用者の裁定 2026-09-23）。**約束に入れる**
+  // 理由は「**マニュアルの URL は人に渡したくなる種類のページ**だから」。
+  { hash: "#manual", module: "scientific", category: null, page: "manual" },
 ];

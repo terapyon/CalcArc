@@ -90,8 +90,8 @@ if (!sw.includes("denylist")) {
 
 // 3b. **マニュアルの PDF が、その除外に実際に当たること**(0.9.3)。
 //     `/manual/calcarc-<版>-<冊>.pdf` を開くのは **navigation リクエスト**
-//     である(**0.9.5 からリンク集はここを指さず GitHub の Release を指すが、
-//     配信は 0.9.6 まで残る**——`functions/manual/[[path]].js` の註)。除外に当たらないと
+//     である(**0.9.6 からリンク集の PDF はまたここを指す**——0.9.5 のあいだ
+//     だけ GitHub の Release を指していた)。除外に当たらないと
 //     **SW が index.html を返し、Cloudflare の Function まで届かない**
 //     ——**実体の無い PDF の 404 も、実体のある PDF そのものも出せなくなる**。
 //     **「denylist という字が在る」では足りない**: 除外の中身が
@@ -105,6 +105,22 @@ if (!patterns.some((re) => re.test(manualPdf))) {
   fail(
     `${manualPdf} が navigation fallback の除外に当たらない(SW がアプリの殻を返し、PDF が開けない)`,
   );
+}
+
+// 3c. **マニュアルの本文が precache に在ること**(0.9.6)。**本文は別の塊**
+//     (`virtual:manuals`。動的 import なので本体とは別ファイル)で、**そこに
+//     入っていなければ「オフラインでは読めないマニュアル」になる**——
+//     **オフラインで読めることは、塊を分ける判断の条件だった**(監視役の裁定
+//     2026-09-23)。**塊の名前は内容ハッシュ付き**なので、綴りで探さず
+//     **`_virtual_manuals` を含む precache の行**を見る。
+const manualChunk = /"(assets\/[^"]*_virtual_manuals[^"]*\.js)"/.exec(sw);
+if (manualChunk === null) {
+  fail(
+    "マニュアルの本文の塊が precache に無い(オフラインでマニュアルが読めない。vite.config.ts の manualsPlugin と ManualPage の動的 import を確認)",
+  );
+}
+if (manualChunk !== null && !existsSync(resolve(dist, manualChunk[1]))) {
+  fail(`${manualChunk[1]} が dist に無い(precache が実在しないファイルを指す)`);
 }
 
 // 4. manifest の中身。

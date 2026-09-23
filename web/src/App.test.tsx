@@ -16,6 +16,9 @@ vi.mock("./ui/Convert/ConvertPanel", () => ({
 vi.mock("./ui/Finance/FinancePanel", () => ({
   FinancePanel: () => <p data-testid="finance-panel" />,
 }));
+vi.mock("./ui/Manual/ManualPage", () => ({
+  ManualPage: () => <p data-testid="manual-page" />,
+}));
 vi.mock("./ui/UpdateToast/UpdateToast", () => ({
   UpdateToast: () => <p data-testid="update-toast" />,
 }));
@@ -95,6 +98,45 @@ describe("App", () => {
     window.location.hash = "#loan";
     render(<App />);
     expect(screen.getByTestId("scientific-panel")).toBeInTheDocument();
+  });
+
+  it("shows the manual page, which is not a tab", () => {
+    // **タブを 5 つにしない**（0.9.6 設計書 Q1、利用者の裁定 2026-09-23。
+    // 0.9.3 の §2.2 と同じ形）。`#manual` は**リンク集から開く読み物**で、
+    // 盤面は 1 つも出ない。
+    window.location.hash = "#manual";
+    render(<App />);
+    expect(screen.getByTestId("manual-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("scientific-panel")).toBeNull();
+    // **見出しは画面名である**（`document.title` の前半と同じ綴り）。
+    expect(
+      screen.getByRole("heading", { level: 1, name: "マニュアル" }),
+    ).toBeInTheDocument();
+  });
+
+  it("marks no tab as current while the manual is showing", () => {
+    // **`module` は戻り先として残っている**（`route.ts` の `page` の註）ので、
+    // **現在地を出さないのは `App` の仕事**である——出すと、読み上げは
+    // 「Scientific が現在地」と言いながらマニュアルを読むことになる。
+    window.location.hash = "#manual";
+    render(<App />);
+    const tabs = screen.getAllByRole("link");
+    expect(tabs.length).toBeGreaterThan(0);
+    for (const tab of tabs) {
+      expect(tab).not.toHaveAttribute("aria-current");
+    }
+  });
+
+  it("goes back to a tab from the manual", () => {
+    // 「計算機に戻る」も、タブも、**ハッシュを変えるだけ**である
+    // （`App` は `hashchange` を購読しているだけで、経路を持たない）。
+    window.location.hash = "#manual";
+    render(<App />);
+    expect(screen.getByTestId("manual-page")).toBeInTheDocument();
+    window.location.hash = "#finance";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    expect(screen.getByTestId("finance-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("manual-page")).toBeNull();
   });
 
   it("falls back to Scientific for a hash it does not know", () => {

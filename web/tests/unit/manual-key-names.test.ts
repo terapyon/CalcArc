@@ -52,6 +52,7 @@ import {
   TRANSFER_PAD,
 } from "../../src/ui/Keypad/transfer";
 import type { KeypadSection } from "../../src/ui/Keypad/types";
+import { MANUAL_PAGE_LABELS } from "../../src/ui/Manual/ManualPage";
 import { MODULES } from "../../src/ui/Nav/Nav";
 import { OPTIONS as SCALE_OPTIONS } from "../../src/ui/Scale/ScalePanel";
 import { UPDATE_TOAST_LABELS } from "../../src/ui/UpdateToast/UpdateToast";
@@ -188,9 +189,13 @@ const SOURCES: Record<string, readonly string[]> = {
   //   そのものは入れない**——綴りに版数が入る(`aboutLabel`)ので、
   //   **マニュアルは版数を含む名前で呼ばない**(呼ぶと、版を上げるたびに
   //   マニュアルのその 1 行が古くなる)。あちらは文で説明してある。
-  // **PDF 3 冊もここに居る**(0.9.4)——`#manual` の画面を畳んで、
-  // **リンク集に直接並べた**（利用者の裁定 2026-09-18）。
+  // **0.9.6 で 4 本に戻った**——**PDF 3 冊はマニュアルの画面の中へ移った**
+  // （利用者の裁定 2026-09-23）。0.9.4〜0.9.5 はここに 3 冊が並んでいた。
   "Footer/LinksPopup.tsx": [...LINK_LABELS, LINKS_POPUP_CLOSE],
+  // - マニュアルを読む画面の綴り（0.9.6）。**冊の題は `MANUALS` から
+  //   `LINK_LABELS` には入らなくなった**ので、**題そのものは上の行には無い**
+  //   ——**マニュアルの本文が冊を【…】で呼ぶなら、ここに足す。**
+  "Manual/ManualPage.tsx": [...MANUAL_PAGE_LABELS],
 };
 
 const LABELS: ReadonlySet<string> = new Set(Object.values(SOURCES).flat());

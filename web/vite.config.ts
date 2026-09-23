@@ -5,6 +5,39 @@ import { VitePWA } from "vite-plugin-pwa";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import pkg from "./package.json";
+import {
+  MANUAL_DIR,
+  manualBooks,
+  manualSources,
+} from "./scripts/manual/books.ts";
+
+/**
+ * マニュアルの本文を**ビルド時に**作り、`virtual:manuals` として渡すプラグイン
+ * （0.9.6 設計書 §4.3・§4.5）。
+ *
+ * **実行時に Markdown を変換しない**——`marked` は devDependency のままで、
+ * アプリのバンドルには入らない。**画面はここが作った HTML を読むだけ**である。
+ *
+ * **この仮想モジュールは動的 import でしか読まない**ので、**本体とは別の塊**に
+ * なる（監視役の裁定 2026-09-23）。**電卓を開くだけの人は読み込まない**が、
+ * **precache には入る**ので**オフラインでも読める**（番人は `scripts/check-sw.mjs`）。
+ */
+function manualsPlugin() {
+  const id = "virtual:manuals";
+  const resolved = `\0${id}`;
+  return {
+    name: "calcarc-manuals",
+    resolveId(source: string) {
+      return source === id ? resolved : null;
+    },
+    load(this: { addWatchFile: (file: string) => void }, target: string) {
+      if (target !== resolved) return null;
+      // **素材を触ったら作り直す**（dev の `pnpm dev` で効く）。
+      for (const file of manualSources(MANUAL_DIR)) this.addWatchFile(file);
+      return `export default ${JSON.stringify(manualBooks(MANUAL_DIR))};`;
+    },
+  };
+}
 
 export default defineConfig({
   // **版数はビルド時に埋める**(0.2.0 設計書 §4)。フッタはシェルが持ち、
@@ -14,6 +47,7 @@ export default defineConfig({
   // Cloudflare Pages はルート配信なので base はそのまま。
   base: "/",
   plugins: [
+    manualsPlugin(),
     react(),
     wasm(),
     topLevelAwait(),

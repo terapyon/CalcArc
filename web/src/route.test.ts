@@ -108,8 +108,9 @@ describe("routeFromHash", () => {
  * 2026-09-10)。表は `web/tests/promised-urls.ts` が字面で持つ。
  */
 describe("the URLs promised at 1.0", () => {
-  it("keeps at least the 13 URLs promised at 1.0", () => {
-    // **`13` を字面で書く。** 表の隣に定数を置くと、行を消した人が同じ
+  it("keeps at least the 14 URLs promised at 1.0", () => {
+    // **`14` を字面で書く。**（0.9.6 で `#manual` が入って 13 → 14。
+    // **利用者の裁定 2026-09-23**。「マニュアルの URL は人に渡したくなる」） 表の隣に定数を置くと、行を消した人が同じ
     // diff で下げられる。**表は増やしてよいが減らせない**ので下限である
     // ——画面を足した日にここを直す必要は無い。
     //
@@ -118,7 +119,7 @@ describe("the URLs promised at 1.0", () => {
     expect(
       PROMISED_URLS.length,
       `the promise lists ${PROMISED_URLS.length}: ${PROMISED_URLS.map(({ hash }) => hash).join(" ")}`,
-    ).toBeGreaterThanOrEqual(13);
+    ).toBeGreaterThanOrEqual(14);
   });
 
   it("opens each promised URL on its own screen", () => {
@@ -145,25 +146,47 @@ describe("the URLs promised at 1.0", () => {
     // **ここが見ないのは画面の中身である。** その 3 行が本当にその画面を
     // 描くかは、`screen-identity.spec.ts` の巡回がタブの名前と `<h1>` で見る
     // (E2E。上の変異では走らせていない)。
-    const wrong = PROMISED_URLS.filter(({ hash, module, category }) => {
+    // **`page` まで見る**（0.9.6）——**見ないと、`#manual` が電卓に倒れても
+    // `module`・`category` は一致したまま**で、**約束が破れたのに緑になる。**
+    const wrong = PROMISED_URLS.filter(({ hash, module, category, page }) => {
       const route = routeFromHash(hash);
-      return route.module !== module || route.category !== category;
+      return (
+        route.module !== module ||
+        route.category !== category ||
+        route.page !== page
+      );
     }).map(({ hash }) => `${hash} → ${JSON.stringify(routeFromHash(hash))}`);
     expect(wrong, "promised URLs that open another screen").toEqual([]);
   });
 
-  it("has no route that is not a tab", () => {
-    // **0.9.3 には `#manual` という「タブではない画面」が在った。**
-    // **0.9.4 で畳んだ**（利用者の裁定 2026-09-18）——**PDF 3 冊はリンク集に
-    // 直接並ぶ**ので、**画面を 1 つ持つ理由が無くなった**。
+  it("opens the manual as a page, not as a fifth tab", () => {
+    // **0.9.3 に在り、0.9.4 で畳み、0.9.6 で戻す。** 0.9.4 が畳んだ理由は
+    // 「**PDF 3 冊がリンク集に直接並ぶので、画面を 1 つ持つ理由が無くなった**」
+    // だった（`54adfd2`）。**今度の画面は本文を読ませる**ので、理由が変わる
+    // ——**リンク集は PDF を開くだけで、本文は読めない**（0.9.6 設計書 §0.1）。
     //
-    // **`#manual` は、いまは知らないハッシュ**である。**既定へ倒れる**
-    // ——`route.ts` の「互換分岐は作らない」の裁定どおりで、**0.9.3 の URL を
-    // 開いた人は電卓に着く**（**404 でも空白でもない**）。
+    // **タブにはしない**（利用者の裁定 2026-09-23、設計書 Q1）。だから
+    // `module` は 4 つのまま増やさず、**`page` という別の欄**で表す。
+    // **`module` も一緒に返す**——**リンク集や画面から戻る先**であって、
+    // いま出ている画面ではない（`App` が `Nav` に現在地を渡さない根拠）。
     const route = routeFromHash("#manual");
+    expect(route.page).toBe("manual");
     expect(route.module).toBe("scientific");
     expect(route.category).toBeNull();
-    expect(Object.keys(route).sort()).toEqual(["category", "module"]);
+  });
+
+  it("leaves every tab route without a page", () => {
+    // **`page` が付くのは `#manual` だけ。** タブの route に紛れ込むと、
+    // `App` が電卓の代わりにマニュアルを出す。
+    for (const hash of [
+      "#scientific",
+      "#convert/mass",
+      "#scale/llm",
+      "#finance",
+      "#nope",
+    ]) {
+      expect(routeFromHash(hash).page, hash).toBeUndefined();
+    }
   });
 
   it("lists each promised URL once", () => {

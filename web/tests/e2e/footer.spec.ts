@@ -23,11 +23,11 @@ test("the footer shows on every tab, once", async ({ page }) => {
   }
 });
 
-test("the links popup opens from the footer, with the six the user settled", async ({
+test("the links popup opens from the footer, with the four the user settled", async ({
   page,
 }) => {
-  // **綴りも並びも利用者の裁定**(2026-09-12・2026-09-17・**2026-09-18 で
-  // `#manual` の画面を畳んで PDF 3 冊をここへ**)。
+  // **綴りも並びも利用者の裁定**（2026-09-12・2026-09-17・**2026-09-23 で
+  // PDF 3 冊をマニュアルの画面の中へ移し、0.9.3 の 4 本に戻した**）。
   // **jsdom はアクセシビリティツリーを組み立てない**ので、`role="dialog"` が
   // 本当に読み上げに出るかは実ブラウザでしか見られない(CLAUDE.md)。
   await page.goto("/");
@@ -36,33 +36,24 @@ test("the links popup opens from the footer, with the six the user settled", asy
   await expect(popup).toBeVisible();
   await expect(popup.getByRole("link")).toHaveText([
     "GitHub（@terapyon）",
-    "CalcArc 簡易マニュアル",
-    "CalcArc 詳細マニュアル",
-    "CalcArc Quick Guide",
+    "マニュアル",
     "ライセンス",
     "検査結果",
   ]);
   await expect(
     popup.getByRole("link", { name: "GitHub（@terapyon）" }),
   ).toHaveAttribute("href", "https://github.com/terapyon/CalcArc");
-  // **PDF は GitHub の Release を指す**（0.9.5）。**形（添付の直リンクか、
-  // Release のページか）はここでは見ない**——**組むのは `manualPdfUrl` の
-  // 1 か所で、形は `Footer.test.tsx` が `pdfName` と突き合わせている**。
-  // iOS で直リンクが外れてページへ替える日に、**ここは動かない**。
-  // **ここが見るのは「ビルドした画面の PDF がサイトの外へ出る」ことだけ**である。
-  await expect(
-    popup.getByRole("link", { name: "CalcArc 簡易マニュアル" }),
-  ).toHaveAttribute(
-    "href",
-    /^https:\/\/github\.com\/terapyon\/CalcArc\/releases\//,
-  );
-  // **どれもアプリの窓から出る**——0.9.3 は 1 本だけ中へ行っていた（`#manual`）。
-  //
-  // **★ 見ているのは属性であって、開き方ではない。** iPhone のホーム画面の
-  // アプリで PDF がどう開くか（戻れるか）は、**利用者の実機でしか分からない**
-  // （`LinksPopup.tsx` の `manualPdfUrl` の註に、実測と推測を分けて書いた）。
-  for (const link of await popup.getByRole("link").all()) {
-    await expect(link).toHaveAttribute("target", "_blank");
+  // **「マニュアル」だけがアプリの中へ行く**（`#manual`）。**残り 3 本は外**
+  // ——**外へ出るものには `target="_blank"`**、**中へ行くものには付けない**。
+  // **付ければ、戻る道が私たちの画面の外に出る**（0.9.6 が直しているもの）。
+  const manual = popup.getByRole("link", { name: "マニュアル" });
+  await expect(manual).toHaveAttribute("href", "#manual");
+  await expect(manual).not.toHaveAttribute("target", /.*/);
+  for (const name of ["GitHub（@terapyon）", "ライセンス", "検査結果"]) {
+    await expect(popup.getByRole("link", { name })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
   }
 });
 

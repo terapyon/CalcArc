@@ -53,7 +53,9 @@ Release に 3 つの証拠と、マニュアルの PDF が添付される。**�
 | `calcarc-<tag>-dist.tar.gz` | **実際に配った物**（刻印 `build-info.json` を含む） |
 | `calcarc-<版>-{detail-ja,quick-en,quick-ja}.pdf` | **マニュアル**（証拠ではない）。`Manuals` が成功したときだけ付く。付かなかった理由は `release-evidence.md` が書く |
 
-**0.9.5 から、画面のリンク集はこの PDF を直に指す**（`manualPdfUrl`）。
+**0.9.5 のあいだ、画面のリンク集はこの添付を直に指していた**（`manualPdfUrl`）。
+**0.9.6 でサイト内の配信へ戻した**ので、**いまリンク集が指すのは `/manual/…` である**
+——以下の「404 の窓」は、**0.9.5 のあいだの話**として残す。
 **本番が新しい版に切り替わってから、この添付が上がるまでのあいだ、リンク集の
 PDF は 404 である**——`Evidence and GitHub Release` は `needs: [deploy, manuals]`
 なので、**順は構造で決まっている**（v0.9.4 の走行 `35325982169` では約 21 秒。
@@ -173,9 +175,11 @@ Service Worker・フォント・画像のすべての経路を検証する話に
   緊急経路の走行には artifact そのものが無い）。**帰結は、サイト内の
   `/manual/*.pdf` が 404 を返すこと**（`functions/manual/[[path]].js`
   がそう返す。番人は `web/tests/unit/manual-function.test.ts`）。
-  **0.9.5 から、リンク集はそこを指さない**——**その版の GitHub Release の
-  添付を指す**（`web/src/ui/Footer/LinksPopup.tsx` の `manualPdfUrl`）ので、
-  **配ったタグの Release に PDF が付いていれば、リンク集からは開ける**。
+  **0.9.6 から、リンク集の PDF はまたここを指す**（`web/src/ui/Footer/LinksPopup.tsx`
+  の `manualPdfUrl`。0.9.5 のあいだだけ GitHub の Release を指していた）ので、
+  **緊急経路で配った版では、マニュアルの画面から PDF を開くと 404 になる**。
+  **本文そのものはアプリの中の画面で読める**（PDF ではなく、ビルドに同梱している）
+  ので、**読めなくなるのは PDF だけ**である。
   **迂回したことを Release に書き足すとき、サイト内の PDF が無いことも
   1 行書く。**
 

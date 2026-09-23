@@ -1,5 +1,5 @@
 import { CONVERT_CATEGORY_IDS } from "../../src/convert/types";
-import { SCALE_CATEGORIES } from "../../src/route";
+import { PAGES, SCALE_CATEGORIES } from "../../src/route";
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
 
@@ -38,10 +38,10 @@ import { expect, test } from "./fixtures";
  * 書き忘れたら、件数が合わずに赤くなる。**導いた件数は、カテゴリを消した
  * 日には一緒に減る**——カテゴリとこの一覧の行を両方消すと、緑のまま通って
  * いた。**そこは約束の表(`web/tests/promised-urls.ts`)が塞ぐ**——下の
- * 2 本目が、字面で書いた 13 の URL がすべてこの一覧に在ることを見る
+ * 2 本目が、字面で書いた 14 の URL がすべてこの一覧に在ることを見る
  * (1.0 の門の設計書 §2.4)。
  *
- * **13 全部を入れる。** `#convert/currency` と `#scale/llm` は
+ * **14 全部を入れる。** `#convert/currency` と `#scale/llm` は
  * `viewport-budget.spec.ts` の巡回からは外れているが、**あれは寸法の話**
  * (レートの状態と、ユーザーが許容した縦の溢れ)であって、
  * **タブの名前には効かない**。
@@ -60,16 +60,25 @@ const SCREENS = [
   ["#scale/llm", "LLM のメモリ | CalcArc", "LLM のメモリ"],
   ["#scale/transfer", "データ転送 | CalcArc", "データ転送"],
   ["#finance", "金融計算 | CalcArc", "金融計算"],
+  // **タブではない画面**（0.9.6）。**画面名は 13 → 14 に戻った**
+  // （0.9.3 で 14、0.9.4 で 13、0.9.6 でまた 14）。
+  ["#manual", "マニュアル | CalcArc", "マニュアル"],
 ] as const;
 
 test("the tour covers every route there is", () => {
   // **網羅だけを機械から導く。** scientific 1 + convert 8 + scale 3 +
-  // finance 1。**手で `13` と書かない**——カテゴリが増えた日に、この数だけが
-  // 古いまま残る。
+  // finance 1 + タブではない画面 1（0.9.6 の `#manual`）。**手で `14` と
+  // 書かない**——カテゴリが増えた日に、この数だけが古いまま残る。
   expect(
     SCREENS.length,
     `the tour lists ${SCREENS.length} screens: ${SCREENS.map(([hash]) => hash).join(" ")}`,
-  ).toBe(1 + CONVERT_CATEGORY_IDS.length + SCALE_CATEGORIES.length + 1);
+  ).toBe(
+    1 +
+      CONVERT_CATEGORY_IDS.length +
+      SCALE_CATEGORIES.length +
+      1 +
+      PAGES.length,
+  );
 });
 
 test("the tour covers every URL promised at 1.0", () => {
