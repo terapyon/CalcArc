@@ -13,28 +13,22 @@ import { describe, expect, it } from "vitest";
 import { renderForScreen } from "../../scripts/manual/screen.ts";
 
 describe("画面で読むマニュアルの変換", () => {
-  it("写真は出さないが、説明の文は残す", () => {
-    // **alt は意味を持つ文である**——「画面: Convert（長さ。10 km を換算した
-    // ところ）」は、本文がその前後で指している物の説明になっている。
-    // **写真が無いからといって黙って落とすと、本文の流れが切れる。**
-    // **これは実行役の選択で、利用者の裁定ではない**（0.9.6 設計書 §4.4）
-    // ——**出荷の前に、利用者が実物で見て決める。**
+  it("写真も、その説明の行も出さない", () => {
+    // **利用者の裁定 2026-09-23**（実物を見て決めた）。実行役は最初
+    // 「説明の 1 行は残す」を選び、**差し戻せる 1 か所**にしてあったが、
+    // **簡易マニュアルの 2 章で「画面: …」が 4 行続く所**を見て、
+    // 「**写真が無い以上、説明だけ残っても読み手には空振り**」と決まった。
     const html = renderForScreen(
-      "![画面: Convert（10 km）](shot:tab-convert)\n",
+      "前の文\n\n![画面: Convert（10 km）](shot:tab-convert)\n\n次の文\n",
     );
     expect(html).not.toContain("<img");
     expect(html).not.toContain("shot:");
-    expect(html).toContain("画面: Convert（10 km）");
-  });
-
-  it("冊の題（最上位の見出し）は出さない", () => {
-    // **画面の `<h1>` は画面名（「マニュアル」）で、`App` が 1 つだけ持つ**
-    // ——本文にもう 1 つ入ると**ページに `<h1>` が 2 つ**になり、
-    // `screen-identity.spec.ts` の「ちょうど 1 つ」が赤くなる（**実際に赤くなった**。
-    // 2026-09-23、実ブラウザで発見）。**冊の題は、選んでいるボタンが言う。**
-    const html = renderForScreen("# CalcArc 簡易マニュアル\n\n本文\n");
-    expect(html).not.toContain("<h1");
-    expect(html).toContain("<p>本文</p>");
+    expect(html).not.toContain("画面: Convert（10 km）");
+    // **空の段落も残さない**——**読み手には理由の無い空きに見える。**
+    expect(html).not.toContain("<p></p>");
+    // **前後の本文は残る**（落とすのは写真の行だけである）。
+    expect(html).toContain("前の文");
+    expect(html).toContain("次の文");
   });
 
   it("shot: でない画像は投げる（PDF 側と同じ規律）", () => {

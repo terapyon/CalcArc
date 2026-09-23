@@ -75,6 +75,19 @@ export function ManualPage() {
 
   return (
     <section className={styles.page} aria-label="マニュアル">
+      {/* **戻る道は、読んでいる途中でも画面に在る**（利用者の裁定 2026-09-23）。
+          **タブは貼り付かない**——`position: static` で、詳細マニュアル
+          （390×844 でページ全体 32,869px）を少し下へ送ると**画面の外に出る**
+          （2026-09-23 実測）。**利用者が 0.9.4・0.9.5 で困ったのは
+          「閉じる・戻るのボタンが見当たらない」こと**なので、**下まで
+          読まないと戻れない形にしない。**
+          **代償は本文の上 44px**（390×844 で 5.2%）。**読み物の面は縦の予算を
+          持たない**ので、電卓の 11 画面の検査には触れない。 */}
+      <p className={styles.backBar}>
+        <a className={styles.link} href="#scientific">
+          {MANUAL_PAGE_LABELS[0]}
+        </a>
+      </p>
       {/* **冊を選ぶ。** タブの見た目にはするが、`role="tab"` は名乗らない
           ——**あれは中身を差し替える面の約束**（`aria-controls` と焦点の移動）で、
           **ここはそこまで作っていない**。**押せるボタンとして正しく読まれる**
@@ -123,14 +136,6 @@ export function ManualPage() {
             {book.title}の PDF
           </a>
         ))}
-      </p>
-
-      <p className={styles.back}>
-        {/* **戻る道は画面の中に在る**（この版の目的）。ブラウザの戻るでも戻れるが、
-         **画面の中に見える道が要る**——利用者が探したのはボタンだった。 */}
-        <a className={styles.link} href="#scientific">
-          {MANUAL_PAGE_LABELS[0]}
-        </a>
       </p>
     </section>
   );

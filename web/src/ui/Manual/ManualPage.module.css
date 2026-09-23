@@ -10,6 +10,22 @@
   color: var(--display-fg);
 }
 
+/* **戻る道は、読んでいる途中でも画面に在る**（利用者の裁定 2026-09-23）。
+   **タブは貼り付かない**（`position: static`）ので、下へ送ると画面から消える
+   ——**詳細マニュアルは 390×844 でページ全体 32,869px**（約 39 画面。2026-09-23 実測）。
+   **背景を敷く**——敷かないと本文が透けて重なる。
+   **代償は本文の上 44px**（390×844 で 5.2%）。**読み物の面は縦の予算を持たない**
+   ので、電卓の 11 画面の検査には触れない。番人は `manual.spec.ts` の
+   「the way back stays on screen while the reader scrolls」。 */
+.backBar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0 4px;
+  background: var(--surface-bg);
+}
+
 /* 冊を選ぶ行。**横に 3 つ並べる**——360px でも収まるように文字を詰める。 */
 .books {
   display: flex;
@@ -20,6 +36,12 @@
 .book {
   /* 44px は base-spec §43 が求めるタッチ標的に対してこのプロジェクトが採った値。 */
   min-height: var(--touch-target-min);
+  /* **貼り付く 1 行の下に隠れないように、上端へ送るときの余白を持つ。**
+     **`short-screens.spec.ts` が見つけた**——低い画面でお知らせが出ていると、
+     `scrollIntoView({ block: "nearest" })` が**ボタンを `.backBar` の真下に
+     置き**、`elementFromPoint` が `<a>`（戻る道）を返していた
+     （2026-09-23。「covered by <a>」）。**利用者の指でも同じことが起きる。** */
+  scroll-margin-top: calc(var(--touch-target-min) + 8px);
   padding: 0 12px;
   border: 1px solid var(--key-border);
   border-radius: var(--key-radius);
@@ -52,6 +74,9 @@
   line-height: 1.4;
 }
 
+/* **表は横に送る**（縦に潰さない）。**1 列目を潰すと語の途中で折れる**
+   ——390px で「【Conv／ert】」と割れていた（2026-09-23、写真で発見。
+   **全段緑のまま出ていた**）。 */
 .body :where(table) {
   display: block;
   overflow-x: auto;
@@ -62,18 +87,19 @@
   padding: 4px 8px;
   border: 1px solid var(--key-border);
   text-align: left;
+  /* **語の途中で折らない。** 折り返すのは空白と約物の所だけにする。 */
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+/* 1 列目（見出しの列）は、**キー名がそのまま入る幅**を確保する。 */
+.body :where(th:first-child, td:first-child) {
+  min-width: 7em;
 }
 
 .body :where(code, pre) {
   overflow-x: auto;
   font-family: monospace;
-}
-
-/* 写真の説明の文（`screen.ts` が `shot:` から残す 1 行）。
-   **写真そのものは出さない**(0.9.6 設計書 §4.4)。 */
-.body :where(.shot-note) {
-  color: var(--display-status-fg);
-  font-size: var(--display-size-status);
 }
 
 .state {
@@ -82,8 +108,7 @@
   color: var(--display-status-fg);
 }
 
-.pdfs,
-.back {
+.pdfs {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -92,6 +117,7 @@
 
 .pdf,
 .link {
+  scroll-margin-top: calc(var(--touch-target-min) + 8px);
   display: inline-flex;
   align-items: center;
   min-height: var(--touch-target-min);

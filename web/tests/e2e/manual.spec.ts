@@ -57,6 +57,37 @@ test("the reader can switch books and go back to the calculator", async ({
   await expect(page.getByTestId("display-main")).toHaveText("0");
 });
 
+test("the way back stays on screen while the reader scrolls", async ({
+  page,
+}) => {
+  // **利用者が 0.9.4・0.9.5 で困ったのは「閉じる・戻るのボタンが見当たらない」**
+  // ことだった。**詳細マニュアルは 390×844 でページ全体 32,869px**（約 39 画面）で、
+  // **タブは貼り付かない**（`position: static`。2026-09-23 実測）——だから
+  // **戻る道が画面の中に在り続ける**ことを、ここで見る（利用者の裁定 2026-09-23）。
+  //
+  // **箱の座標で見る。`isVisible()` では見ない。** あれは**DOM に在って
+  // `display:none` でない**ことしか言わない——**実測で、3000px スクロールした
+  // あとのタブも `isVisible()` は true を返した**（箱は `y = -3000`、
+  // つまり画面の外）。**取り違えをそのまま番人にしない。**
+  await page.goto("/#manual");
+  await page.getByRole("button", { name: "CalcArc 詳細マニュアル" }).click();
+  const back = page.getByRole("link", { name: "計算機に戻る" });
+  await expect(back).toBeVisible();
+  await page.evaluate(() => window.scrollBy(0, 3000));
+  await page.waitForTimeout(100);
+  const box = await back.boundingBox();
+  expect(box, "the way back has no box after scrolling").not.toBeNull();
+  const height = page.viewportSize()?.height ?? 0;
+  expect(height).toBeGreaterThan(0);
+  expect(
+    box?.y ?? -1,
+    "the way back is above the viewport",
+  ).toBeGreaterThanOrEqual(0);
+  expect(box?.y ?? height, "the way back is below the viewport").toBeLessThan(
+    height,
+  );
+});
+
 test("the manual screen offers the PDFs, pointing inside the site", async ({
   page,
 }) => {

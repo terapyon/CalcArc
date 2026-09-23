@@ -37,8 +37,9 @@ describe("画面が読む 3 冊", () => {
       expect(book.html, book.source).not.toContain("<h1");
       expect(book.html, book.source).not.toContain("<img");
       expect(book.html, book.source).not.toContain("shot:");
-      // **写真の説明の文は残る**（設計書 §4.4。実行役の選択）。
-      expect(book.html, book.source).toContain("shot-note");
+      // **写真の説明の行も出さない**（利用者の裁定 2026-09-23）。
+      expect(book.html, book.source).not.toContain("画面: Scientific");
+      expect(book.html, book.source).not.toContain("<p></p>");
     }
   });
 
