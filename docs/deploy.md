@@ -12,24 +12,27 @@
 1. `v*` タグを push すると `.github/workflows/release.yml` が起動し、
    **版数ゲート → CI 全部 → 重量級コーパス**の順に通す。ここで 1 つでも
    落ちれば、**本番へは出ない**。実測でタグから本番まで 40 分強かかる。
-2. 通ったら `deploy.yml` が呼ばれ、wasm-pack → `vite build` → ビルド刻印
+2. 次に `manuals` ジョブ（名前は `Manuals`）が**マニュアルの PDF**を作る
+   （`pnpm manuals`。普段の CI の `Manuals` と同じ手順）。**ここが落ちれば本番へは
+   出ない**——`Deploy` がこのジョブを待つ（`release.yml` の `deploy: needs: manuals`）。
+3. 通ったら `deploy.yml` が呼ばれ、wasm-pack → `vite build` → ビルド刻印
    （`dist/build-info.json`）→ `check:sw` の順にビルドと自前検査を行い、
    `web/dist` を `wrangler-action` が Cloudflare Pages に Direct Upload する
    （`--branch=main` で本番に配る）。
-3. デプロイ直後にスモークが実 URL（calc.terapyon.net）へ `curl` を打ち、
+4. デプロイ直後にスモークが実 URL（calc.terapyon.net）へ `curl` を打ち、
    配信物が期待どおりかを機械検証する。
-4. 本番展開のあとで `manuals` ジョブ（名前は `Manuals`）が**マニュアルの PDF**を
-   作る（`pnpm manuals`。普段の CI の `Manuals` と同じ手順）。**落ちても本番は
-   止まらない**——本番は既に出ている（[マニュアルの設計書 §5](superpowers/specs/2026-09-10-manuals-design.md)、
-   2026-09-10 の裁定）。
 5. 最後に `evidence` ジョブが**リリースの証拠**を作り、GitHub Release に
-   添付する（下記「リリースの証拠」）。`Manuals` の結論を待つが、**`Manuals` が
-   落ちても `Deploy` が成功していれば走る**。
+   添付する（下記「リリースの証拠」）。`Deploy` と `Manuals` の両方を待つ。
 
 ```
-版数ゲート → CI → 重量級コーパス → 本番展開 ─┬→ Manuals ─┐
-                                             └───────────┴→ 証拠と GitHub Release
+版数ゲート → CI → 重量級コーパス → Manuals → 本番展開 → 証拠と GitHub Release
 ```
+
+**この並びは 0.9.3 で入れ替えた。** それより前は `Manuals` が本番展開の**あと**に走り、
+「落ちても本番は止まらない」（2026-09-10 の裁定）だった。**0.9.3 でその裁定を撤回し**、
+**マニュアルの無い版を出さない**形にしている（下の「マニュアルが作れなければ、本番へは
+出ない」と同じことを、ここでも言っている）。**この一覧と下の図は、0.9.5 まで古い並びの
+ままだった**——**並びを変えた日に、並びを書いた場所を全部直すこと。**
 
 **不変条件が変わった。** 「main の先頭 = 配信物」ではなく、
 **「最新の `v*` タグ = 配信物」**である。
