@@ -431,3 +431,74 @@ test("an empty slot does not borrow the border that means pressable", async ({
     ).toBeGreaterThan(5);
   }
 });
+
+/**
+ * **暗テーマにも機械の検査を置く**（0.9.6）。
+ *
+ * **ここは 2026-09-02 から画だけだった**——`llm-dark.png` / `transfer-dark.png` は
+ * 撮ってあるが、**撮った画を読むのは人であって、機械ではない**。
+ * `tokens.css` の暗テーマの `--key-empty-bg` を書き換えても、**検査は 1 つも赤く
+ * ならなかった**（0.9.6 の棚卸しで数えた: `web/tests` に `prefers-color-scheme` も
+ * `colorScheme` も 0 件）。
+ *
+ * **何を主張するか。** 暗テーマの註（`tokens.css`）が言っているのは値ではなく**向き**である
+ * ——**空きは面より明るく、生きたキーより暗い**（「沈んでいる」の向きを保つ）。
+ * **値で固定しない**——色を調整するたびに赤くなる検査は、調整する人が消す。
+ */
+test("in the dark theme an empty slot still sits between the surface and a live key", async ({
+  page,
+}) => {
+  // **★ この 1 行が消えると、検査は明テーマで走る。** そのとき下の
+  // 「面が暗い」が先に落ちる——**黙って明テーマで緑になるのが、いちばん悪い壊れ方**
+  // である（上の高コントラストの検査と同じ形）。
+  await page.emulateMedia({ colorScheme: "dark" });
+
+  await page.goto("/#scale/transfer");
+  await expect(page.getByTestId("display-main")).toBeVisible();
+
+  const channels = (color: string) =>
+    (color.match(/\d+/g) ?? []).slice(0, 3).map(Number);
+  // **明るさは 3 色の平均で足りる。** ここで見るのは順序だけで、色の差ではない。
+  const lightness = (color: string) => {
+    const [r, g, b] = channels(color);
+    return ((r ?? 0) + (g ?? 0) + (b ?? 0)) / 3;
+  };
+
+  const surface = await page.evaluate(
+    () => getComputedStyle(document.body).backgroundColor,
+  );
+  // **1. 本当に暗テーマで走っているか。** 明テーマの面は白に近い。
+  expect(
+    lightness(surface),
+    "the surface is light — this test is running in the light theme",
+  ).toBeLessThan(64);
+
+  const live = await page
+    .getByRole("group", { name: "数字と演算のキー" })
+    .getByRole("button", { name: "7", exact: true })
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  const slots = await page
+    .locator(".keypad, [class*='keypad']")
+    .first()
+    .locator("button:not([data-token])")
+    .evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).backgroundColor),
+    );
+  // 実測 2026-09-02: データ転送の数字面に 5 つ（上の検査と同じ数）。
+  expect(slots, "no reserved slot was found").toHaveLength(5);
+
+  for (const slot of slots) {
+    // **2. 面より明るい。** 同じなら、空きは面に溶けて箱が見えない。
+    expect(
+      lightness(slot) - lightness(surface),
+      "an empty slot melted into the surface in the dark theme",
+    ).toBeGreaterThan(2);
+    // **3. 生きたキーより暗い。** 逆になると「沈んでいる」が「浮いている」になり、
+    // **押せるキーのほうが引っ込んで見える。**
+    expect(
+      lightness(live) - lightness(slot),
+      "an empty slot is no darker than a live key in the dark theme",
+    ).toBeGreaterThan(2);
+  }
+});
