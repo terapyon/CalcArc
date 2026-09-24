@@ -40,6 +40,28 @@
 （`web/tests/unit/manual-key-names.test.ts` と `tools/check-manual-limits.mjs`）。
 **9 組の「数 ↔ 配列」を足すときに、置き場をまとめて決める。**
 
+## 0.6 ★ 「総数」と「要求された場所すべて」は別の問い（2026-09-24、1.0 の門 3 で）
+
+**私は門 3 を「満たされている」と答えた。誤りだった。** 数えたのが**宣言の総数**で、
+**門の問いは「規律が要求する場所すべてに在るか」**だったからである。
+
+**現物**（`origin/main = 884f324`、2026-09-24 に数え直した）:
+
+| 見方 | 数 |
+|---|---|
+| `reference/` の `独立:` の宣言（総数） | **44**（別手順 17・不可能 22・一部 5・**未確認 0**） |
+| `*_ref.py` と `loan_boundary.py` の**公開 `def`** | **74** |
+| そのうち `独立:` を docstring に持つもの | **31** |
+| **持たないもの** | **43**（`scientific_ref` 15・`real_ref` 7・`complex_ref` 6・`convert_ref` 5・`data_scale_ref` 3・`currency_ref` 2・`eng_ref` `llm_ref` `sexagesimal_ref` `transfer_ref` 各 1） |
+
+**モジュールの冒頭に別の綴りで書いてあるものが 3 つある**（`convert_ref` `llm_ref`
+`transfer_ref` の「**Rust の実装は見ていない**」）。**規律が求める綴りではない**
+（`CONTRIBUTING.md:86-91` の 4 語）。
+
+**教訓**: **「44 件ある」は真で、「要求された場所に在る」は偽だった。**
+**同じ数を 2 人が数えて割れたら、まず『何を数えれば門の問いに答えるか』を言い直す。**
+数え直しても直らない（[[plan-inventories-need-grep]] と同じ形）。
+
 ## 1. 取り消し——前提が変わった（2026-09-23）
 
 **サイト内 PDF 配信（`functions/manual/`）の撤去は取り消す。** 利用者の実機で 0.9.5 の応急（Release の添付へ
@@ -111,8 +133,8 @@
 | 証明書への変異の影響は 2 種だけ | `heavy/scripts/detection-power.mjs` の変異は **20 本**、証明書の語は **0 件** | 中 |
 | `loan_principal` の縮退 17 件に境界の証明が無い | `certificates.ts:211` が除外、`heavy/tests/corpus/calls.spec.ts` が 431 中 17 を固定 | 中 |
 | 盤面から打てない入力（1,201 か月ほか） | 盤面は `FinancePanel.tsx:94` の `MAX_PERIODS = 1200`、逆算は `loan/inverse.rs:21` の `MAX_TERM_MONTHS = 1_200`、**前進の償還表に上限は無い**。件数を数える仕掛けは無い | 中（製品の裁定） |
-| a11y: axe を入れるか／キーボードの展開範囲 | `web` に axe 系は **0 件**、`useKeyboard` は Scientific だけ | 中〜大 |
-| a11y: 切替の読み上げが長い／通知が消えない | `web/src/App.tsx` に `setAnnouncement("")` は無い。設計書が「**実機で聞いて決める**」と指定 | 小〜中 |
+| ~~a11y: axe を入れるか／キーボードの展開範囲~~ **閉じた（利用者、2026-09-24）** | **入れない／広げない。理由は [`a11y-review-2026-09-03.md`](a11y-review-2026-09-03.md) の「4 と 5 の裁定」**（同じ理由をここに写さない） | — |
+| a11y: 切替の読み上げが長い／通知が消えない | `web/src/App.tsx` に `setAnnouncement("")` は無い。設計書が「**実機で聞いて決める**」と指定。**こちらは開いたまま**——§6 の「人にしか閉じられないもの」 | 小〜中 |
 | `mapAnswerToKeys` が虚数・極形式・60 進を写せない | `web/src/ui/ScientificPanel.tsx:185` | 中〜大 |
 | lockfile 2 本・pnpm workspace 無し／`heavy` から `web` への深い相対 import | `web/pnpm-lock.yaml`・`heavy/pnpm-lock.yaml`、`heavy/tests/ui/*.ts` の `../../../web/src/calc` | 中 |
 | mypy の範囲が `*_ref.py` だけ | `reference/pyproject.toml:43`「絞ったのは『あとで広げる』ため」 | 中 |
