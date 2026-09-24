@@ -63,7 +63,11 @@ test("Escape closes the links popup, and does not clear the calculation", async 
   // **裁定 #4(設計書 §2.5)**: リンク集が開いているときの Escape は、
   // リンク集を閉じるだけ。**`ac` は走らせない**——打った数字が残ることで見る。
   await page.goto("/");
-  await page.getByRole("button", { name: "7" }).click();
+  // **`exact: true`。** 既定の部分一致では、**下部の「CalcArc <版> について」が
+  // 版数に 7 を含む版で一緒に当たる**（**0.9.7 で実際に落ちた**——
+  // `strict mode violation: … resolved to 2 elements`）。**版数で赤が出たり
+  // 出なかったりする検査にしない。**
+  await page.getByRole("button", { name: "7", exact: true }).click();
   await expect(page.getByTestId("display-main")).toHaveText("7");
   await page.getByRole("button", { name: /^CalcArc .+ について$/ }).click();
   await expect(page.getByRole("dialog", { name: "リンク集" })).toBeVisible();
