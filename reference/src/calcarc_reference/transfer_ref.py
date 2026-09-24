@@ -6,8 +6,10 @@
 
 **Rust の実装は見ていない。** 式は spec §3.5 から書き起こしている。
 
-独立: 不可能（式は spec §3.5 が固定し、評価は両側とも厳密な整数
-——Rust は u128 の checked_mul（`data_scale/transfer.rs:112`）、こちらは int）
+独立: 不可能（式は spec §3.5 の契約で同じ／評価はどちらも厳密な整数／**上限の当て方も
+同じ**——Rust は左から順に `checked_mul`（`data_scale/transfer.rs:112`）、こちらも
+1 段ごとに `U128_MAX` と比べる（`:33-37`）。**別解が無い。**
+**`data_scale_ref` が `一部` なのは、あちらが最後に 1 度だけ当てるからである**）
 """
 
 from __future__ import annotations
