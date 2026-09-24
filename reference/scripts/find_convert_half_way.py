@@ -28,6 +28,9 @@ cd reference && uv run --no-config python scripts/find_convert_half_way.py
 ```
 
 **終了コードは常に 0。** 合否ではなく、**探索の記録**である。
+
+独立: 不可能（`convert_ref.format_rational` を呼んで丸めの半端を探す。
+**探索であって期待値ではない**）
 """
 
 from __future__ import annotations

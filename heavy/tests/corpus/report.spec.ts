@@ -38,8 +38,8 @@ import {
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
-  CERTIFICATE_PROBES,
   CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  certificateProbes,
   comparisonOf,
   corpusDigest,
   type DetectionPower,
@@ -2071,19 +2071,54 @@ function measurementsDoc(): string {
   );
 }
 
-test("the certificate figures in the report are pinned to the measurement they came from", () => {
-  const doc = measurementsDoc();
-  // 「対象件数と、実際に発行した wasm 呼び出し回数(実測)」の表の合計行。
-  const totals = /^\| 合計 \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/m.exec(doc);
-  const probes = totals?.[1];
-  if (probes === undefined) {
-    throw new Error(
-      "docs/corpus-measurements.md no longer has the certificate probe table's " +
-        "total row — the report's probe count has lost its primary source",
-    );
-  }
-  expect(Number(probes.replace(/,/g, ""))).toBe(CERTIFICATE_PROBES);
+test("the certificate probe count is counted, not remembered", () => {
+  // **2026-08-20 の実測 70,115 を定数で持っていた。** 2026-09-24 に数え直すと
+  // **147,737** で、**コーパスが育っても数が動いていなかった**——一次資料の表と
+  // 定数を突き合わせる番人は、**両方が同じだけ古いあいだ緑**だった。
+  //
+  // **いまは走行のコーパスから数える。** ここが見るのは「数えている」ことで、
+  // **数そのものではない**（数を書けば、また腐る）。
+  expect(certificateProbes()).toBeGreaterThan(0);
 
+  // **見るのは数ではなく「対応」である。** 合計との一致は、**両側が同じ
+  // `loadCallShards()` を使うぶんだけ盲点を持つ**——loader が 1 枚落とせば、
+  // 数えた側も比べる側も同じだけ減って一致する。
+  //
+  // **証明書の op を持つケースが在るシャードは寄与が正、無いシャードは 0。**
+  // **この述語はディスクの中身が変わっても意味が変わらない**（1e の指摘、0.9.7）。
+  // **証明書ごとに見る。** シャード単位で合計すると、**1 本が黙っても
+  // 他の 3 本が埋めて緑になる**（2026-09-24 に実際に試して鳴らなかった）。
+  let checked = 0;
+  for (const { name, shard } of loadCallShards()) {
+    for (const { op, build } of CERTIFICATES) {
+      const hasCases = shard.cases.some(
+        (c) => c.op === op && !("error" in c.expect),
+      );
+      const probes = build(shard.cases).length;
+      checked += 1;
+      if (hasCases) {
+        expect(
+          probes,
+          `${name}: ${op} のケースが在るのに、その証明書が 1 本も発行していない` +
+            "（build 側にはもう 1 つ除外が在る——`loan_principal` の縮退" +
+            "（`rows_paid < n`）は `certificates.ts` の " +
+            "`isDegenerateLoanPrincipal` が外す。**縮退だけのシャードなら、" +
+            "これは偽の赤である**）",
+        ).toBeGreaterThan(0);
+      } else {
+        expect(
+          probes,
+          `${name}: ${op} のケースが無いのに、その証明書がプローブを出した`,
+        ).toBe(0);
+      }
+    }
+  }
+  // **組を 1 つも見ずに緑にならない。** シャード × 証明書の全組を見る。
+  expect(checked).toBe(loadCallShards().length * CERTIFICATES.length);
+});
+
+test("the certificate example in the report is pinned to the measurement it came from", () => {
+  const doc = measurementsDoc();
   const broken = /合わせて (\d+) 個のプローブが赤くなった/.exec(doc);
   const count = broken?.[1];
   if (count === undefined) {
@@ -2122,8 +2157,10 @@ test("the detection-power table says the certificates are not in its counts", ()
   for (const { op } of CERTIFICATES) {
     expect(markdown).toContain(`\`${op}\``);
   }
+  // **数えた数がそのまま出ていること。** ここで固定の数を書くと、
+  // **報告書と検査が同じだけ古くなる**——それが 2026-09-24 まで起きていた形である。
   expect(markdown).toContain(
-    `${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブ`,
+    `${certificateProbes().toLocaleString("en-US")} プローブ`,
   );
   expect(markdown).toContain(
     `${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちている`,

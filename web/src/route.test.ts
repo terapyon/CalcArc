@@ -190,7 +190,8 @@ describe("the URLs promised at 1.0", () => {
   });
 
   it("lists each promised URL once", () => {
-    // 重複があると、下限の 13 を 12 の URL で満たせてしまう。
+    // 重複があると、**下限の 14 を 13 の URL で満たせてしまう**
+    // （0.9.6 で `#manual` が入って 13 → 14。**この註の数も一緒に動かす**）。
     const hashes = PROMISED_URLS.map(({ hash }) => hash);
     const repeated = hashes.filter((hash, i) => hashes.indexOf(hash) !== i);
     expect(repeated, "promised URLs listed twice").toEqual([]);
