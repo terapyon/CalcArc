@@ -2,6 +2,10 @@
 
 Rust は libm の f64 実装を使う。ここでは mpmath の任意精度実装を
 50 桁で評価してから f64 に落とす。
+
+独立: 別手順（Rust は libm の f64 実装を呼ぶ。こちらは mpmath を 50 桁で評価して
+から f64 に落とす。**例外は `pow_real` 1 本**——あそこは `0^(y<0)` の規約を
+直に書いており、その関数の docstring に `独立: 一部` が在る）
 """
 
 from __future__ import annotations

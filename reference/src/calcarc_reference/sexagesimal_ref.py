@@ -4,6 +4,9 @@ Rust は f64 の trunc と乗算で桁を割り出す。ここは **Fraction の
 やる——`3.75 = 15/4` から `3 + 45/60` を厳密に出せるので、**f64 の割り算を
 1 度も通らない**。アルゴリズムが同型でないことがこの層の価値である
 （CONTRIBUTING: 参照実装を Rust の移植にしない）。
+
+独立: 別手順（Rust は f64 の trunc と乗算で桁を割り出す。こちらは Fraction の
+厳密有理数で、f64 の割り算を 1 度も通らない）
 """
 
 from __future__ import annotations

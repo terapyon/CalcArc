@@ -5,6 +5,9 @@
 アルゴリズムではない(spec §3.6、§3.4)。
 
 **Rust の実装は見ていない。** 式は spec §3 から書き起こしている。
+
+独立: 不可能（式は spec §3 が固定した整数の契約で、評価は両側とも厳密な整数
+——Rust は u128 の checked 演算（`data_scale/llm.rs:4`）、こちらは int。別解が無い）
 """
 
 from __future__ import annotations

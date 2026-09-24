@@ -5,6 +5,9 @@
 **入力は bit、表示は byte** で、切り上げはここで実際に発火する。
 
 **Rust の実装は見ていない。** 式は spec §3.5 から書き起こしている。
+
+独立: 不可能（式は spec §3.5 が固定し、評価は両側とも厳密な整数
+——Rust は u128 の checked_mul（`data_scale/transfer.rs:112`）、こちらは int）
 """
 
 from __future__ import annotations
