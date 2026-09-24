@@ -106,7 +106,16 @@ for (const size of SAFARI_VIEWPORTS) {
     // ——**減ったのは 1 つだけ**で、それは **Scientific の盤面の `)`**。
     // ほかの盤面(Convert・Scale・Finance)の `(` `)` は**文字を入れるキー**で、
     // engine の `refused` を読むのは `ScientificPanel` だけである。
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(425);
+    //
+    // **★ 0.9.6 で 428 になった(実測)。** **この巡回は `PROMISED_URLS` を回す**ので、
+    // **`#manual` を約束の表に入れた時点で対象が 13 → 14 画面**になり、
+    // **マニュアルの冊を選ぶボタン 3 つ**が増えた。
+    // **この数は「押せるものを何個見たか」であって、盤面のキーの数ではない**
+    // ——**床が「以上」なので、対象が増えても赤くならない**。**増えた日に
+    // 数を据え直さないと、何を数えた数か分からなくなる**（2026-09-23 の教訓。
+    // **`#manual` を巡回に入れていたから、貼り付く 1 行がボタンを隠す不具合が
+    // 出た**——`covered by <a>` で 4 本赤。**外せばその番人を失う。**）
+    expect(checked, "keys checked").toBeGreaterThanOrEqual(428);
     expect(problems).toEqual([]);
   });
 }
@@ -127,8 +136,8 @@ for (const size of [
       page,
       "?sw-toast=preview",
     );
-    // 上と同じ理由で 425(0.9.3 の D-2)。
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(425);
+    // 上と同じ理由で 428(0.9.3 の D-2 と、0.9.6 の `#manual`)。
+    expect(checked, "keys checked").toBeGreaterThanOrEqual(428);
     expect(problems).toEqual([]);
   });
 }

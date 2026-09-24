@@ -24,11 +24,15 @@ import { type Route, SCALE_CATEGORIES, type ScaleCategory } from "../route";
  */
 export const SCREEN_NAMES: {
   scientific: string;
+  manual: string;
   finance: string;
   convert: Record<ConvertCategoryId, string>;
   scale: Record<ScaleCategory, string>;
 } = {
   scientific: "関数電卓",
+  // **タブではない画面**（0.9.6）。**綴りはリンク集の項目と同じ**
+  // ——**同じものを 2 つの名で呼ばない。**
+  manual: "マニュアル",
   convert: {
     length: "長さの換算",
     mass: "質量の換算",
@@ -69,6 +73,9 @@ function isScaleCategory(text: string | null): text is ScaleCategory {
  * 出しているときに、名前だけ別のものになることを避けるためである。
  */
 export function screenName(route: Route): string {
+  // **タブではない画面が先**。`module` は戻る先として残っているので、
+  // **`module` で分岐する 4 行に混ぜると、マニュアルが「関数電卓」と名乗る。**
+  if (route.page === "manual") return SCREEN_NAMES.manual;
   switch (route.module) {
     case "scientific":
       return SCREEN_NAMES.scientific;

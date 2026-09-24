@@ -12,24 +12,27 @@
 1. `v*` タグを push すると `.github/workflows/release.yml` が起動し、
    **版数ゲート → CI 全部 → 重量級コーパス**の順に通す。ここで 1 つでも
    落ちれば、**本番へは出ない**。実測でタグから本番まで 40 分強かかる。
-2. 通ったら `deploy.yml` が呼ばれ、wasm-pack → `vite build` → ビルド刻印
+2. 次に `manuals` ジョブ（名前は `Manuals`）が**マニュアルの PDF**を作る
+   （`pnpm manuals`。普段の CI の `Manuals` と同じ手順）。**ここが落ちれば本番へは
+   出ない**——`Deploy` がこのジョブを待つ（`release.yml` の `deploy: needs: manuals`）。
+3. 通ったら `deploy.yml` が呼ばれ、wasm-pack → `vite build` → ビルド刻印
    （`dist/build-info.json`）→ `check:sw` の順にビルドと自前検査を行い、
    `web/dist` を `wrangler-action` が Cloudflare Pages に Direct Upload する
    （`--branch=main` で本番に配る）。
-3. デプロイ直後にスモークが実 URL（calc.terapyon.net）へ `curl` を打ち、
+4. デプロイ直後にスモークが実 URL（calc.terapyon.net）へ `curl` を打ち、
    配信物が期待どおりかを機械検証する。
-4. 本番展開のあとで `manuals` ジョブ（名前は `Manuals`）が**マニュアルの PDF**を
-   作る（`pnpm manuals`。普段の CI の `Manuals` と同じ手順）。**落ちても本番は
-   止まらない**——本番は既に出ている（[マニュアルの設計書 §5](superpowers/specs/2026-09-10-manuals-design.md)、
-   2026-09-10 の裁定）。
 5. 最後に `evidence` ジョブが**リリースの証拠**を作り、GitHub Release に
-   添付する（下記「リリースの証拠」）。`Manuals` の結論を待つが、**`Manuals` が
-   落ちても `Deploy` が成功していれば走る**。
+   添付する（下記「リリースの証拠」）。`Deploy` と `Manuals` の両方を待つ。
 
 ```
-版数ゲート → CI → 重量級コーパス → 本番展開 ─┬→ Manuals ─┐
-                                             └───────────┴→ 証拠と GitHub Release
+版数ゲート → CI → 重量級コーパス → Manuals → 本番展開 → 証拠と GitHub Release
 ```
+
+**この並びは 0.9.3 で入れ替えた。** それより前は `Manuals` が本番展開の**あと**に走り、
+「落ちても本番は止まらない」（2026-09-10 の裁定）だった。**0.9.3 でその裁定を撤回し**、
+**マニュアルの無い版を出さない**形にしている（下の「マニュアルが作れなければ、本番へは
+出ない」と同じことを、ここでも言っている）。**この一覧と下の図は、0.9.5 まで古い並びの
+ままだった**——**並びを変えた日に、並びを書いた場所を全部直すこと。**
 
 **不変条件が変わった。** 「main の先頭 = 配信物」ではなく、
 **「最新の `v*` タグ = 配信物」**である。
@@ -50,7 +53,9 @@ Release に 3 つの証拠と、マニュアルの PDF が添付される。**�
 | `calcarc-<tag>-dist.tar.gz` | **実際に配った物**（刻印 `build-info.json` を含む） |
 | `calcarc-<版>-{detail-ja,quick-en,quick-ja}.pdf` | **マニュアル**（証拠ではない）。`Manuals` が成功したときだけ付く。付かなかった理由は `release-evidence.md` が書く |
 
-**0.9.5 から、画面のリンク集はこの PDF を直に指す**（`manualPdfUrl`）。
+**0.9.5 のあいだ、画面のリンク集はこの添付を直に指していた**（`manualPdfUrl`）。
+**0.9.6 でサイト内の配信へ戻した**ので、**いまリンク集が指すのは `/manual/…` である**
+——以下の「404 の窓」は、**0.9.5 のあいだの話**として残す。
 **本番が新しい版に切り替わってから、この添付が上がるまでのあいだ、リンク集の
 PDF は 404 である**——`Evidence and GitHub Release` は `needs: [deploy, manuals]`
 なので、**順は構造で決まっている**（v0.9.4 の走行 `35325982169` では約 21 秒。
@@ -170,9 +175,11 @@ Service Worker・フォント・画像のすべての経路を検証する話に
   緊急経路の走行には artifact そのものが無い）。**帰結は、サイト内の
   `/manual/*.pdf` が 404 を返すこと**（`functions/manual/[[path]].js`
   がそう返す。番人は `web/tests/unit/manual-function.test.ts`）。
-  **0.9.5 から、リンク集はそこを指さない**——**その版の GitHub Release の
-  添付を指す**（`web/src/ui/Footer/LinksPopup.tsx` の `manualPdfUrl`）ので、
-  **配ったタグの Release に PDF が付いていれば、リンク集からは開ける**。
+  **0.9.6 から、リンク集の PDF はまたここを指す**（`web/src/ui/Footer/LinksPopup.tsx`
+  の `manualPdfUrl`。0.9.5 のあいだだけ GitHub の Release を指していた）ので、
+  **緊急経路で配った版では、マニュアルの画面から PDF を開くと 404 になる**。
+  **本文そのものはアプリの中の画面で読める**（PDF ではなく、ビルドに同梱している）
+  ので、**読めなくなるのは PDF だけ**である。
   **迂回したことを Release に書き足すとき、サイト内の PDF が無いことも
   1 行書く。**
 
@@ -182,8 +189,16 @@ Service Worker・フォント・画像のすべての経路を検証する話に
 
 ## スモークが赤のときの読み方
 
-デプロイ後スモークは 3 ステップで、赤になったステップがそのままどの前提が
-破れたかを示す。
+デプロイ後スモークは **5 ステップ**で、赤になったステップがそのままどの前提が
+破れたかを示す（`deploy.yml` の `name: Smoke` が 5 本。**4 と 5 はマニュアルの
+経路**で、0.9.3 で足した）。
+
+**★ この「5」に番人は無い**（2026-09-24 に数えた）。`tools/tests/release-workflow.test.ts`
+が数えるのは**マニュアル経路の 2 本だけ**（`toHaveLength(2)`）で、**総数を見る検査は
+0 件**である——**だからこの行は、ステップを足した人が手で直すしかない**
+（**3 のまま腐っていたのがその証拠**）。**総数の番人は 0.9.7 の宿題**にした
+（`docs/superpowers/sdd/2026-09-23-v0.9.6-implementation.md`）。**出荷の直前に
+`release.yml` を読む検査を増やさない**、という判断である。
 
 1. **刻印照合**（`/build-info.json` の `commit` と `GITHUB_SHA` の一致、
    リトライつき）が赤 → ビルドは成功しデプロイもキックされているが、
@@ -205,7 +220,14 @@ Service Worker・フォント・画像のすべての経路を検証する話に
    `_redirects` の `/* → 200` により HTTP 404 は起きない——スモークの
    失敗はすべて grep 不一致として現れる（`curl -f` は事実上効かない）。
 
-3 ステップとも形は同じ（`curl -fsSI` または `curl -fsS` → `grep` →
+4. **無い PDF は 404**（`/manual/calcarc-no-such-manual.pdf`）が赤 →
+   `functions/manual/[[path]].js` が本番で拾われていない（`_redirects` の
+   `/* /index.html 200` に先を越され、アプリの殻が 200 で返る）。
+5. **配った PDF が届いている**（`content-type: application/pdf` と
+   `content-disposition: attachment`。リトライつき）が赤 → 配信そのものか、
+   Function が古い。**リリースの走行だけ**で、緊急経路の版は PDF を持たない。
+
+上の 1〜3 は形が同じ（`curl -fsSI` または `curl -fsS` → `grep` →
 非 0 exit でジョブを赤にする）。ローカルの `vite preview` で 3 つとも
 同時に試すと、`preview` は全レスポンスに一律 `Cache-Control: no-cache` を
 返すため no-cache 系の 2 脚（sw.js / manifest）は偶然緑になり、赤は

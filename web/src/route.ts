@@ -13,9 +13,30 @@ import { CONVERT_CATEGORY_IDS, type ConvertCategoryId } from "./convert/types";
 
 export type ModuleId = "scientific" | "convert" | "scale" | "finance";
 
+/**
+ * タブではない画面。**いまは 1 つ**（マニュアル。0.9.6 設計書 Q1、利用者の裁定 2026-09-23）。
+ *
+ * **`ModuleId` に足さない。** あれは**タブの id** で、4 つであることを
+ * `Nav.test.tsx` と `loan.spec.ts` が見張っている。**タブを増やす話ではない。**
+ */
+export type PageId = "manual";
+
+/** タブではない画面の一覧。**件数を数える側が機械から導けるように出してある**
+ * （`screen-identity.spec.ts` の網羅の数。**手で `14` と書かせない**）。 */
+export const PAGES: readonly PageId[] = ["manual"];
+
 export type Route = {
   module: ModuleId;
   category: string | null;
+  /**
+   * タブではない画面を出しているときだけ付く。
+   *
+   * **省略可にしてある**——**タブの route には無い欄**である
+   * （`route.test.ts` の「`page` が付くのは `#manual` だけ」）。
+   * **`page` が付いていても `module` は残す**: あれは**戻る先**であって、
+   * いま出ている画面ではない（`App` が `Nav` に現在地を渡さない根拠）。
+   */
+  page?: PageId;
 };
 
 const MODULES: readonly ModuleId[] = [
@@ -71,6 +92,11 @@ export function routeFromHash(hash: string): Route {
   // 開き続ける約束なので(1.0 の門の設計書 §2.3、利用者の裁定 2026-09-10)、
   // そのどれかを消す・綴りを変えるなら、**古い URL を新しい画面へ向ける
   // 分岐をここに足す。**
+  // **`#manual` はタブではない画面**（0.9.3 に在り、0.9.4 で畳み、0.9.6 で戻した）。
+  // **綴りは 0.9.3 と同じ**にしてある——**あの版の URL を開いた人が、同じ物に着く。**
+  if (head === "manual") {
+    return { module: "scientific", category: null, page: "manual" };
+  }
   if (!isModuleId(head)) return { module: "scientific", category: null };
   const known = category !== undefined && CATEGORIES[head].includes(category);
   return { module: head, category: known ? category : DEFAULT_CATEGORY[head] };

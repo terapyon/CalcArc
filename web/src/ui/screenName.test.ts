@@ -106,4 +106,13 @@ describe("screenName", () => {
       "データ量の規模",
     );
   });
+
+  it("names the manual page", () => {
+    // **画面名が要る**——`document.title` と `<h1>` と「〜に切り替えました」が
+    // ここから出る（0.9.3 と同じ理由。0.9.4 で消し、0.9.6 で戻す）。
+    // **綴りはリンク集の項目と同じ「マニュアル」**——**同じものを 2 つの名で呼ばない。**
+    expect(
+      screenName({ module: "scientific", category: null, page: "manual" }),
+    ).toBe("マニュアル");
+  });
 });

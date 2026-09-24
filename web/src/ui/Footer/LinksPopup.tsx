@@ -32,37 +32,30 @@ import styles from "./LinksPopup.module.css";
 const RELEASES = "https://github.com/terapyon/CalcArc/releases";
 
 /**
- * 版から PDF の行き先を作る。**行き先を組むのはここ 1 か所だけ**である
- * （0.9.5、利用者の裁定 2026-09-18「PDF のリンクを GitHub Release の URL へ」）。
+ * 版から PDF の行き先を作る。**行き先を組むのはここ 1 か所だけ**である。
  *
- * **その版の Release に添えた PDF を直に指す**（`release.yml` の
- * `Evidence and GitHub Release` が上げる添付。名前は `web/scripts/manual/markdown.ts` の `pdfName` と同じ
- * `calcarc-<版>-<冊>.pdf`）。**綴りの出どころが 2 つあるので検査が繋ぐ**
- * ——`Footer.test.tsx` が `pdfName` の出力と 1 冊ずつ突き合わせる。
+ * **サイトの中を指す**（`functions/manual/[[path]].js` が配り、実体の無い
+ * `.pdf` には 404 を返す）。**0.9.5 は GitHub Release の添付を指していたが、
+ * 0.9.6 で戻した**（利用者の裁定 2026-09-23）。
  *
- * **なぜサイト内（`/manual/`）をやめたか**:
- * - **実測（利用者の iPhone、2026-09-18）**: ホーム画面に追加したアプリから、
- *   **サイト内の PDF を開くと窓ごと PDF に変わって戻れない**。**GitHub の
- *   ページを開くと、上にバツの付いた窓で開いて戻れる。**
- * - **実測（監視役の `curl`、2026-09-18）**: 本番の PDF には
- *   `content-disposition: attachment` が付いていた。**付いていても、上の
- *   「戻れない」は起きた**——**0.9.4 の「ヘッダで保存に倒せば止まる」は外れた。**
- * - **推測（測っていない）**: 窓がアプリの外に出るかは**移る先の生成元**で
- *   決まり、**GitHub の窓の中なら PDF でも戻れる**。**iOS で直ったかは
- *   利用者の実機でしか言えない**——**「直った」とはどこにも書かない。**
+ * # なぜ戻したか（**実測 2 件。推測は 1 つも要らなくなった**）
  *
- * **外れたら、ここを 1 行替える**: `/download/v<版>/<名前>` を `/tag/v<版>` に
- * （その版の Release のページ。**利用者が iPhone で戻れると確かめたのは GitHub のページ**）。
- * **項目のラベルは変わらないが、3 冊とも【検査結果】と同じ所へ行く**ことになる。
+ * - **0.9.4**（サイト内＋`Content-Disposition: attachment`）: iPhone の
+ *   ホーム画面アプリから開くと**窓ごと PDF に変わって戻れない**
+ * - **0.9.5**（GitHub Release の添付＝別の生成元）: **内部のブラウザ表示から
+ *   戻れない**。利用者の言葉は「**PDF が開くが、閉じる・戻るのボタンが
+ *   見当たらない**」
  *
- * **404 の窓**: `release.yml` は `Deploy` → `Evidence and GitHub Release` の順
- * （`evidence` が `needs: [deploy, manuals]`）なので、**本番が新しい版に
- * 切り替わってから添付が上がるまで**、この URL は 404 である
- * （v0.9.4 の走行で約 21 秒。監視役の実測）。**`Manuals` が落ちれば `Deploy`
- * が走らない**ので、PDF の無い版が本番に出ることは無い。
+ * **どちらも「端末が PDF をどう扱うか」に賭けていて、2 回とも外れた。**
+ * **0.9.6 は賭けをやめた**——**本文はアプリの中の画面（`#manual`）で読む**。
+ * **PDF はそこから開く保存・印刷用の副経路**であり、**既定の読み口ではない。**
+ *
+ * **綴りは `web/scripts/manual/markdown.ts` の `pdfName` と同じ**
+ * （`calcarc-<版>-<冊>.pdf`）。**写しなので検査が繋ぐ**——`Footer.test.tsx` が
+ * `pdfName` の出力と 1 冊ずつ突き合わせる。
  */
 export function manualPdfUrl(stem: string, version: string): string {
-  return `${RELEASES}/download/v${version}/calcarc-${version}-${stem}.pdf`;
+  return `/manual/calcarc-${version}-${stem}.pdf`;
 }
 
 /**
@@ -88,23 +81,19 @@ export const LINKS = [
     label: "GitHub（@terapyon）",
     href: "https://github.com/terapyon/CalcArc",
     external: true,
-    group: "site",
   },
-  // **PDF 3 冊**（0.9.4、利用者の裁定 2026-09-18）。**`#manual` の画面は無い。**
-  // **行き先は 0.9.5 から GitHub の Release**（`manualPdfUrl`）。
-  ...MANUALS.map((manual) => ({
-    id: manual.stem,
-    label: manual.title,
-    href: manualPdfUrl(manual.stem, __APP_VERSION__),
-    external: true,
-    group: "manual",
-  })),
+  // **これだけが外へ出ない。** `#manual` はこのアプリの画面である。
+  //
+  // **0.9.3 の綴りと並びに戻した**（利用者の裁定 2026-09-23。綴りは
+  // `git show 54adfd2^:web/src/ui/Footer/LinksPopup.tsx` の印字から写した）。
+  // **0.9.4 は PDF 3 冊をここに並べていた**が、**0.9.6 で PDF はマニュアルの
+  // 画面の中へ移った**（保存・印刷用の副経路）。**行き先の無い 3 行を残さない。**
+  { id: "manual", label: "マニュアル", href: "#manual", external: false },
   {
     id: "license",
     label: "ライセンス",
     href: "https://github.com/terapyon/CalcArc/blob/main/LICENSE",
     external: true,
-    group: "about",
   },
   {
     // **その版の Release を指す**——添付されている証拠 3 点（各ジョブの結論・
@@ -115,7 +104,6 @@ export const LINKS = [
     label: "検査結果",
     href: `${RELEASES}/tag/v${__APP_VERSION__}`,
     external: true,
-    group: "about",
   },
 ] as const;
 
@@ -200,26 +188,20 @@ export function LinksPopup({ onClose }: { onClose: () => void }) {
         <h2 id={titleId} className={styles.title}>
           {LINKS_POPUP_LABEL}
         </h2>
-        {/* **群の変わり目に細い線を引く**（0.9.4）。**文字は増やさない**
-            ——**見出しを足すと、利用者が承認していない綴りが 3 つ増える**。
-            **3 冊が 1 つのまとまりだと、線だけで分かる。** */}
+        {/* **群の区切り線は落とした**（0.9.6）——**あれは PDF 3 冊を
+            1 つのまとまりに見せるため**で、**3 冊が画面の中へ移った**いま、
+            分ける群が無い。 */}
         <ul className={styles.list}>
-          {LINKS.map((link, i) => (
-            <li
-              key={link.id}
-              className={
-                i > 0 && LINKS[i - 1]?.group !== link.group
-                  ? styles.newGroup
-                  : undefined
-              }
-            >
+          {LINKS.map((link) => (
+            <li key={link.id}>
               <a
                 className={styles.link}
                 href={link.href}
                 // PWA の standalone 起動でも外のブラウザで開く
-                // （`Footer.tsx` に在った註と同じ理由）。**6 本とも別の生成元
-                // （GitHub）**で、PDF も 0.9.5 から GitHub の Release を指す
-                // （`manualPdfUrl` の註に、実測と推測を分けて書いた）。
+                // （`Footer.tsx` に在った註と同じ理由）。**外へ出るのは 3 本**
+                // （GitHub・ライセンス・検査結果）で、**【マニュアル】だけは
+                // アプリの中の画面**（`#manual`。`external: false`）なので付けない
+                // ——**付ければ、戻る道が私たちの画面の外に出る。**
                 {...(link.external
                   ? { target: "_blank", rel: "noopener noreferrer" }
                   : {})}

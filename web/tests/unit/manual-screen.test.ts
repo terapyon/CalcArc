@@ -1,0 +1,59 @@
+/**
+ * 画面で読むマニュアルの変換（0.9.6 設計書 §4.3・§4.4）。
+ *
+ * **PDF 用の `renderManual` は使えない**——あれの `image` renderer は `shot:` を
+ * **追跡外の写真の URL** に差し替え、写真が無ければ投げる（`markdown.ts:330-345`）。
+ * **画面には写真を出さない**（利用者の裁定ではなく監視役の裁定 Q3。
+ * 「写真はリポジトリに置かない」という裁定 #1 を動かさないため）。
+ *
+ * **出荷するマニュアルの本文はここでは読まない**——読むのは `manual-markdown.test.ts`
+ * と同じ流儀で、**fixture と、性質を言う短い入力**である。
+ */
+import { describe, expect, it } from "vitest";
+import { renderForScreen } from "../../scripts/manual/screen.ts";
+
+describe("画面で読むマニュアルの変換", () => {
+  it("写真も、その説明の行も出さない", () => {
+    // **利用者の裁定 2026-09-23**（実物を見て決めた）。実行役は最初
+    // 「説明の 1 行は残す」を選び、**差し戻せる 1 か所**にしてあったが、
+    // **簡易マニュアルの 2 章で「画面: …」が 4 行続く所**を見て、
+    // 「**写真が無い以上、説明だけ残っても読み手には空振り**」と決まった。
+    const html = renderForScreen(
+      "前の文\n\n![画面: Convert（10 km）](shot:tab-convert)\n\n次の文\n",
+    );
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("shot:");
+    expect(html).not.toContain("画面: Convert（10 km）");
+    // **空の段落も残さない**——**読み手には理由の無い空きに見える。**
+    expect(html).not.toContain("<p></p>");
+    // **前後の本文は残る**（落とすのは写真の行だけである）。
+    expect(html).toContain("前の文");
+    expect(html).toContain("次の文");
+  });
+
+  it("shot: でない画像は投げる（PDF 側と同じ規律）", () => {
+    // **`markdown.ts` の `image` renderer と同じ向き**。画面用に緩めない
+    // ——**緩めた日に、外の URL を読みに行く画像が本文に入る。**
+    expect(() =>
+      renderForScreen("![x](https://example.invalid/a.png)"),
+    ).toThrow();
+  });
+
+  it("見出しと本文を HTML にする", () => {
+    const html = renderForScreen("## 1. 章\n\n本文\n");
+    expect(html).toContain("<h2");
+    expect(html).toContain("1. 章");
+    expect(html).toContain("<p>本文</p>");
+  });
+
+  it("和文の途中の改行は詰める（PDF と同じ見え方）", () => {
+    // `markdown.ts` の `joinCjkLines` を**共有する**——写すと、直した日に片方だけ直る。
+    expect(renderForScreen("あいう\nえお\n")).toContain("あいうえお");
+  });
+
+  it("生の HTML は素通しせず、文字として出す", () => {
+    // **素材は私たちが書いているが、変換器が素通しする経路は作らない。**
+    const html = renderForScreen("<script>alert(1)</script>\n");
+    expect(html).not.toContain("<script>");
+  });
+});

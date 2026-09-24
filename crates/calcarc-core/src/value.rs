@@ -375,11 +375,16 @@ mod tests {
             Value::imag(1.0),
         ];
         let mut compared = 0;
+        let mut both_zero = 0;
         for big in [1, 300, 700, 1023] {
             for gap in 1000..=1080 {
                 for (sr, si) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
                     let large = sr * FULL_MANTISSA * two_pow(big.min(1023) - 1);
                     let small = si * scale_pow2(FULL_MANTISSA, big - gap);
+                    // **小さい方が入力の時点で 0 の升は数えない。** そこは 0 と 0 を
+                    // 比べており、**壊れても赤くならない**——数に入れると、床が
+                    // 「失敗しうる比較の回数」でなくなる（calcarc-1e の注記、0.9.6）。
+                    let discriminating = small != 0.0;
                     for z in [Value::new(large, small), Value::new(small, large)] {
                         for d in divisors {
                             let want = if d.im != 0.0 {
@@ -397,14 +402,27 @@ mod tests {
                                 d.re,
                                 d.im
                             );
-                            compared += 1;
+                            if discriminating {
+                                compared += 1;
+                            } else {
+                                both_zero += 1;
+                            }
                         }
                     }
                 }
             }
         }
-        // **何も比べずに緑にならない**ための床（4 × 81 × 4 × 2 × 4）。
-        assert_eq!(compared, 10_368);
+        // **何も比べずに緑にならない**ための床。**これは「失敗しうる比較の回数」で
+        // あって、判別力の数ではない。**
+        //
+        // 格子は 4 × 81 × 4 × 2 × 4 = 10,368 升だが、**`big = 1` で `gap` が
+        // 1077〜1080 の 4 升（128 回）は `small` が入力の時点で 0 に丸まっており**、
+        // **0 と 0 を比べている**（`ldexp(FULL_MANTISSA, 1 − gap)` が 0 になる）。
+        // **その 128 回を数から外す**ので床は 10,240 である。
+        // **外した数も主張する**——黙って外すと、次に格子を変えた人が
+        // 「全部比べた」と読む（`tools/verified-run.mjs` の教訓と同じ形）。
+        assert_eq!(compared, 10_240, "失敗しうる比較の回数");
+        assert_eq!(both_zero, 128, "0 と 0 を比べている升の回数");
     }
 
     #[test]

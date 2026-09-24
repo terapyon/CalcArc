@@ -86,6 +86,66 @@ function spellingAppearsOnce(text, path, spelling) {
   }
 }
 
+/**
+ * 読み上げの章が並べる**画面の名前**を、`SCREEN_NAMES` の現物と突き合わせる（0.9.6）。
+ *
+ * **なぜ要るか（実測、仮定ではない）**: **0.9.4 で画面を 1 つ畳んだとき、この一覧は
+ * 14 のままだった**（0.9.5 で直した）。**0.9.6 で画面を戻したとき、今度は 13 のまま
+ * だった**——**同じ行が、逆向きに 2 回腐った**。**実行役・検証役・レビュー役の 3 人が
+ * 見て、誰も気づかなかった**（気づいたのは利用者である）。
+ *
+ * **数だけでなく、名前そのものも見る**——**数が合ったまま 1 つ入れ替わる**ことがある。
+ */
+function screenNames() {
+  const path = "web/src/ui/screenName.ts";
+  const source = read(path);
+  const literal = /export const SCREEN_NAMES[^=]*=\s*\{([\s\S]*?)\n\};/.exec(
+    source,
+  );
+  if (literal === null) {
+    throw new Error(`${path} の SCREEN_NAMES の表が読めない(綴りが変わった)。`);
+  }
+  // **`: "…"` で値を拾う。** **文字列でない値や、註の中の `: "` が入る日に数が狂う**
+  // ——**その日は下の「行の突き合わせ」（数 vs 一覧）が鳴る**（レビュー役の注記）。
+  const names = [...literal[1].matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
+  if (names.length === 0) {
+    throw new Error(`${path} の SCREEN_NAMES から名前を 1 つも読めない。`);
+  }
+  return names;
+}
+
+/**
+ * **画面の名前を並べているその一覧の中に**、名前が**ちょうど 1 回ずつ**在ること。
+ *
+ * **文書全体を見ない。** **「在ること」と「あるべき場所に在ること」は別**である
+ * ——**`detail.ja.md` に「データ転送」は 5 回出る**（章の表・Scale の説明・見出し・
+ * 一覧）。**一覧から名前が 1 つ外れても、本文のどこかに残っているだけで緑になる**
+ * （実行役が `grep -n` で数えた。検証役 calcarc-be の同じ実測が
+ * `docs/superpowers/sdd/2026-09-23-backlog-inventory.md` §0.5 に在る）。
+ * **だから一覧の箇条書きだけを切り出す。**
+ */
+function checkScreenNamesListed(manual, names) {
+  const start = manual.indexOf("名前は次の");
+  if (start < 0) {
+    throw new Error(
+      "マニュアルに「名前は次の … 個です」の一覧が無い(言い回しが変わった)。",
+    );
+  }
+  // 一覧は `  - 「…」` の箇条書きで、**次の `- **` で終わる**（読み上げの章の次の項目）。
+  const rest = manual.slice(start);
+  const end = rest.indexOf("\n- **");
+  const list = end < 0 ? rest : rest.slice(0, end);
+  const missing = names.filter(
+    (name) => list.split(`「${name}」`).length - 1 !== 1,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `マニュアルの読み上げの章に、画面の名前が 1 回ずつ現れていない: ${missing.join("・")}。` +
+        "画面を足した／畳んだのに一覧を直していないか、言い回しが変わった。",
+    );
+  }
+}
+
 export function collectRows() {
   const manual = read("docs/manual/detail.ja.md");
   const state = read("crates/calcarc-core/src/engine/state.rs");
@@ -99,6 +159,20 @@ export function collectRows() {
 
   /** @type {Row[]} */
   const rows = [];
+
+  // ## 読み上げが読む画面の名前（0.9.6）
+  const names = screenNames();
+  checkScreenNamesListed(manual, names);
+  rows.push({
+    name: "読み上げが読む画面の名前の数",
+    manual: numberInManual(
+      manual,
+      "名前は次の … 個です",
+      /名前は次の (\d+) 個です/g,
+    ),
+    source: names.length,
+    why: "SCREEN_NAMES の値の数（関数電卓 1 ＋ マニュアル 1 ＋ 換算 8 ＋ 規模 3 ＋ 金融 1）",
+  });
 
   // ## 打鍵で止まる(打てなくなる)
   rows.push({

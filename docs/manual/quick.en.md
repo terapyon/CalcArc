@@ -66,8 +66,9 @@ In 【Convert】 and 【Scale】, choose the kind of calculation in the field ju
 below the tabs (for example, 【為替 Currency】).
 
 The tabs, and the kind of calculation chosen on 【Convert】 and 【Scale】, appear in
-the URL, so you can bookmark those screens. **The six kinds of calculation inside
-【Finance】, and the history screen, do not appear in the URL.**
+the URL, so you can bookmark those screens. **The manual screen has a URL too**
+(the one you reach with 【マニュアル】 in the list of links). **The six kinds of
+calculation inside 【Finance】, and the history screen, do not appear in the URL.**
 
 ![Screen: Scientific (just opened)](shot:tab-scientific)
 
@@ -216,17 +217,23 @@ no warranty."). The Finance screen always shows a note on how it calculates.
 ## 7. Finding the version and what changed
 
 The bottom of the screen has a button showing "CalcArc" and the version number.
-Pressing it opens a list of links with these six entries. GitHub, the licence and
-the check results open in a new tab. **The PDFs open from this version's release
-on GitHub** (whether they are saved or shown depends on your device). The version
-of this PDF is also in its file name.
+Pressing it opens a list of links with these four entries.
 
-- 【GitHub（@terapyon）】: CalcArc's page on GitHub
-- **The three PDFs for this version**: 【CalcArc 簡易マニュアル】(quick guide),
-  【CalcArc 詳細マニュアル】(detailed manual), 【CalcArc Quick Guide】(this one)
-- 【ライセンス】("License"): Apache License 2.0
+- 【GitHub（@terapyon）】: CalcArc's page on GitHub (opens in a new tab)
+- 【マニュアル】("Manual"): **the screen that shows the manuals** — the
+  calculator stays where it is
+- 【ライセンス】("License"): Apache License 2.0 (new tab)
 - 【検査結果】("Check results"): the release for this version, with the record of
-  what was checked before it shipped. **If a PDF will not open, take it from here**
+  what was checked before it shipped (new tab)
+
+**On the manual screen** you can switch between the three books (quick guide,
+detailed manual, and this English one) and read them there. 【計算機に戻る】
+("Back to the calculator") returns you to the keypad. **The screen works without
+an internet connection.**
+
+**The PDFs with screenshots** open from that screen as well. Depending on your
+device they are saved (downloaded) or shown in another window. The version of
+this PDF is also in its file name.
 
 Close the list with 【閉じる】("Close"), the Escape key, or by pressing outside it.
 
