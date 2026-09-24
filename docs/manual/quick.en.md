@@ -239,7 +239,11 @@ browser on the development machine, **not in Safari on an iPhone or in an app
 added to its home screen**.
 
 **The PDFs with screenshots** open from that screen as well. Depending on your
-device they are saved (downloaded) or shown in another window. The version of
+device they are saved (downloaded) or shown in another window.
+**On an iPhone, opening a PDF from an app added to the home screen can leave you
+with no way back to the calculator. There, read the manual on the screen instead**
+(it has no screenshots, but the text is the same). **In a desktop browser the PDFs
+open normally.** The version of
 this PDF is also in its file name.
 
 Close the list with 【閉じる】("Close"), the Escape key, or by pressing outside it.
