@@ -198,9 +198,10 @@ export function LinksPopup({ onClose }: { onClose: () => void }) {
                 className={styles.link}
                 href={link.href}
                 // PWA の standalone 起動でも外のブラウザで開く
-                // （`Footer.tsx` に在った註と同じ理由）。**6 本とも別の生成元
-                // （GitHub）**で、PDF も 0.9.5 から GitHub の Release を指す
-                // （`manualPdfUrl` の註に、実測と推測を分けて書いた）。
+                // （`Footer.tsx` に在った註と同じ理由）。**外へ出るのは 3 本**
+                // （GitHub・ライセンス・検査結果）で、**【マニュアル】だけは
+                // アプリの中の画面**（`#manual`。`external: false`）なので付けない
+                // ——**付ければ、戻る道が私たちの画面の外に出る。**
                 {...(link.external
                   ? { target: "_blank", rel: "noopener noreferrer" }
                   : {})}

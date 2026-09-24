@@ -189,8 +189,9 @@ Service Worker・フォント・画像のすべての経路を検証する話に
 
 ## スモークが赤のときの読み方
 
-デプロイ後スモークは 3 ステップで、赤になったステップがそのままどの前提が
-破れたかを示す。
+デプロイ後スモークは **5 ステップ**で、赤になったステップがそのままどの前提が
+破れたかを示す（`deploy.yml` の `name: Smoke` が 5 本。**4 と 5 はマニュアルの
+経路**で、0.9.3 で足した）。
 
 1. **刻印照合**（`/build-info.json` の `commit` と `GITHUB_SHA` の一致、
    リトライつき）が赤 → ビルドは成功しデプロイもキックされているが、
@@ -212,7 +213,14 @@ Service Worker・フォント・画像のすべての経路を検証する話に
    `_redirects` の `/* → 200` により HTTP 404 は起きない——スモークの
    失敗はすべて grep 不一致として現れる（`curl -f` は事実上効かない）。
 
-3 ステップとも形は同じ（`curl -fsSI` または `curl -fsS` → `grep` →
+4. **無い PDF は 404**（`/manual/calcarc-no-such-manual.pdf`）が赤 →
+   `functions/manual/[[path]].js` が本番で拾われていない（`_redirects` の
+   `/* /index.html 200` に先を越され、アプリの殻が 200 で返る）。
+5. **配った PDF が届いている**（`content-type: application/pdf` と
+   `content-disposition: attachment`。リトライつき）が赤 → 配信そのものか、
+   Function が古い。**リリースの走行だけ**で、緊急経路の版は PDF を持たない。
+
+上の 1〜3 は形が同じ（`curl -fsSI` または `curl -fsS` → `grep` →
 非 0 exit でジョブを赤にする）。ローカルの `vite preview` で 3 つとも
 同時に試すと、`preview` は全レスポンスに一律 `Cache-Control: no-cache` を
 返すため no-cache 系の 2 脚（sw.js / manifest）は偶然緑になり、赤は
