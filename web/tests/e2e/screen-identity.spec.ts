@@ -84,7 +84,7 @@ test("the tour covers every route there is", () => {
 test("the tour covers every URL promised at 1.0", () => {
   // **上の 1 本は、カテゴリと巡回の行を両方消すと緑のまま通る**——導いた
   // 件数も一緒に減るからである。**約束の表は字面で書かれていて、減らない**
-  // (下限 13 は `web/src/route.test.ts` が持つ)。その URL が 1 つでも
+  // (下限 14 は `web/src/route.test.ts` が持つ。0.9.6 で 13 → 14)。その URL が 1 つでも
   // 巡回から消えたら、ここが赤くなる(1.0 の門の設計書 §2.4)。
   const toured = new Set<string>(SCREENS.map(([hash]) => hash));
   const missing = PROMISED_URLS.map(({ hash }) => hash).filter(
