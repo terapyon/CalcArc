@@ -109,6 +109,11 @@ def pow_real(x: float, y: float) -> dict:
     ZeroDivisionError を投げるが、設計書 §4 の表はここを DomainError と
     定めている（`1/x` の 0 が DivisionByZero なのとは別の裁定）。
     数学からは導けないので、規約として書く。
+
+    独立: 一部（**定義域の判定は別手順**——mpmath に計算させ、複素数が返れば
+    「実数の答が無い」と読む。Rust は `y.fract() == 0.0` で整数指数を先に見る。
+    **共有しているのは `0^(y<0)` の 1 点だけ**で、そこは設計書 §4 の表が定めた
+    規約であり、数学からは導けない）
     """
     if x == 0.0 and y < 0.0:
         return {"error": "DomainError"}
