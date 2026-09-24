@@ -62,6 +62,12 @@ compound_periods_for のケースが在るのに、その証明書が 1 本も�
 無いのに…`）／**loader が 1 枚落とす → 赤**（別の番人「`### finance-start-000.json (calls)`
 の見出しが 1 本ではない」が拾う）／戻して **135 passed**。
 
+**偽の赤への備えを 1 句**（1e の注記、2026-09-25）: 述語の `hasCases` は「op が一致し
+`expect` に error が無い」で決めるが、**build 側にはもう 1 つ除外が在る**——
+`loan_principal` の**縮退**（`rows_paid < n`）を `certificates.ts` の
+`isDegenerateLoanPrincipal` が外す。**縮退だけのシャードが現れた日には偽の赤になる**ので、
+**失敗の文にその一句を入れた**（**赤は読めなければ意味がない**。撃って印字に出ることも確かめた）。
+
 **走行そのものは exit 1 で終わる**——**部分走行では teardown の門が
 「`report: no shard summary survived the run — refusing to write a report at all`」と言って
 報告書を書かない**（`report.ts`）。**「既知の仕様」と書かず、門の言葉を印字ごと見せること。**

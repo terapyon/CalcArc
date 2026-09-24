@@ -2099,7 +2099,11 @@ test("the certificate probe count is counted, not remembered", () => {
       if (hasCases) {
         expect(
           probes,
-          `${name}: ${op} のケースが在るのに、その証明書が 1 本も発行していない`,
+          `${name}: ${op} のケースが在るのに、その証明書が 1 本も発行していない` +
+            "（build 側にはもう 1 つ除外が在る——`loan_principal` の縮退" +
+            "（`rows_paid < n`）は `certificates.ts` の " +
+            "`isDegenerateLoanPrincipal` が外す。**縮退だけのシャードなら、" +
+            "これは偽の赤である**）",
         ).toBeGreaterThan(0);
       } else {
         expect(
