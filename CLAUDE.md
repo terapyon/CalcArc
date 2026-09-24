@@ -107,7 +107,11 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
 - **コミット前に `cargo fmt` を実行する。** `--check` は直してくれない。
 - **`reference` は `ruff check` と `ruff format` の 2 つを回す。**
   `check` が緑でも `format --check` は赤いことがある——**別物であり、
-  CI は 2 つとも見る**（`ci.yml:150,152`）。2026-08-30 に実際に落ちた。
+  CI は 2 つとも見る**（`ci.yml` の `Python reference` のジョブ。
+  `uv run ruff check .` と `uv run ruff format --check .` の 2 段）。
+  2026-08-30 に実際に落ちた。**行番号で指していたのを、ジョブ名と段の綴りに
+  替えた**（2026-09-24）——**書いた日の `ci.yml:150,152` は、その後 `setup-web` の
+  行になっていた**。**行番号は動くたびに腐るので、この文書では綴りで指す。**
 - **`heavy` の `pnpm lint` は 2 つの場所を見る。** `heavy/package.json` の
   `lint` が `biome check . && cd ../tools && biome check .` である。
   **`tools/` を触ったら `cd heavy && pnpm lint`**——**`heavy/` だけ緑でも
