@@ -2078,18 +2078,39 @@ test("the certificate probe count is counted, not remembered", () => {
   //
   // **いまは走行のコーパスから数える。** ここが見るのは「数えている」ことで、
   // **数そのものではない**（数を書けば、また腐る）。
-  const counted = certificateProbes();
-  expect(counted).toBeGreaterThan(0);
+  expect(certificateProbes()).toBeGreaterThan(0);
 
-  // **各シャードの寄与の合計と一致すること。** 1 枚でも数え落としたら赤くなる。
-  const perShard = loadCallShards().map(({ shard }) =>
-    CERTIFICATES.reduce(
-      (total, { build }) => total + build(shard.cases).length,
-      0,
-    ),
-  );
-  expect(perShard.reduce((a, b) => a + b, 0)).toBe(counted);
-  expect(perShard.filter((n) => n > 0).length).toBeGreaterThan(1);
+  // **見るのは数ではなく「対応」である。** 合計との一致は、**両側が同じ
+  // `loadCallShards()` を使うぶんだけ盲点を持つ**——loader が 1 枚落とせば、
+  // 数えた側も比べる側も同じだけ減って一致する。
+  //
+  // **証明書の op を持つケースが在るシャードは寄与が正、無いシャードは 0。**
+  // **この述語はディスクの中身が変わっても意味が変わらない**（1e の指摘、0.9.7）。
+  // **証明書ごとに見る。** シャード単位で合計すると、**1 本が黙っても
+  // 他の 3 本が埋めて緑になる**（2026-09-24 に実際に試して鳴らなかった）。
+  let checked = 0;
+  for (const { name, shard } of loadCallShards()) {
+    for (const { op, build } of CERTIFICATES) {
+      const hasCases = shard.cases.some(
+        (c) => c.op === op && !("error" in c.expect),
+      );
+      const probes = build(shard.cases).length;
+      checked += 1;
+      if (hasCases) {
+        expect(
+          probes,
+          `${name}: ${op} のケースが在るのに、その証明書が 1 本も発行していない`,
+        ).toBeGreaterThan(0);
+      } else {
+        expect(
+          probes,
+          `${name}: ${op} のケースが無いのに、その証明書がプローブを出した`,
+        ).toBe(0);
+      }
+    }
+  }
+  // **組を 1 つも見ずに緑にならない。** シャード × 証明書の全組を見る。
+  expect(checked).toBe(loadCallShards().length * CERTIFICATES.length);
 });
 
 test("the certificate example in the report is pinned to the measurement it came from", () => {
