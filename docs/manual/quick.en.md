@@ -124,6 +124,11 @@ Besides arithmetic and parentheses, it has 【sin】 【cos】 【tan】, 【ln�
 【√】 【x²】 【xʸ】 【1/x】 【eˣ】. Press 【Shift】 to switch some keys to their
 second function (【asin】 【acos】 【atan】 【n!】 【nPr】 【nCr】 and others).
 
+**【nCr】 and 【nPr】 are sometimes refused when used on the answer of another
+calculation** (for example 【(】【2】【9】【nCr】【4】【)】【nCr】【2】【=】 gives
+Math ERROR). **Type the answer again and they work**: 【2】【3】【7】【5】【1】
+【nCr】【2】【=】 gives an answer (the detailed manual's 「既知の計算制限」 says more).
+
 It also has complex numbers (【j】), switching to polar form (【▸∠】),
 base-60 (【°′″】), engineering notation (【ENG】), and switching the angle unit
 (【DRG】).
@@ -229,10 +234,16 @@ Pressing it opens a list of links with these four entries.
 **On the manual screen** you can switch between the three books (quick guide,
 detailed manual, and this English one) and read them there. 【計算機に戻る】
 ("Back to the calculator") returns you to the keypad. **The screen works without
-an internet connection.**
+an internet connection** — though this has only been checked in a Chrome-family
+browser on the development machine, **not in Safari on an iPhone or in an app
+added to its home screen**.
 
 **The PDFs with screenshots** open from that screen as well. Depending on your
-device they are saved (downloaded) or shown in another window. The version of
+device they are saved (downloaded) or shown in another window.
+**On an iPhone, opening a PDF from an app added to the home screen can leave you
+with no way back to the calculator. There, read the manual on the screen instead**
+(it has no screenshots, but the text is the same). **On a desktop browser this has
+not been reported.** The version of
 this PDF is also in its file name.
 
 Close the list with 【閉じる】("Close"), the Escape key, or by pressing outside it.
