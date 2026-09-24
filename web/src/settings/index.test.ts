@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   defaultSettings,
@@ -190,5 +192,50 @@ describe("writeSettings", () => {
     );
     expect(usedKey).toBe(SETTINGS_KEY);
     expect(storage.saved).toBeNull();
+  });
+
+  it("saves exactly these nine fields, and the spec says nine", () => {
+    // **保存する欄の集合を字面で持つ**（0.9.6）。**`toEqual({ ...defaultSettings() })`
+    // の形は、10 個目を足しても緑**である——**この形の検査は 0 件だった**
+    // （検証役 calcarc-be が `Object.keys`・`depositTiming`・`withholding` で探した、
+    // 2026-09-24）。**実際に `base-spec.md` の「保存しているのは 7 項目」は
+    // 2 つぶん古くなっていた**（`depositTiming` と `history.enabled` が足されたのに
+    // 動かなかった）。**同じ腐り方をもう一度させない。**
+    //
+    // **欄を足す・消すのは正しい変更である。** ここが赤くなったら、
+    // **この表と `docs/base-spec.md` の数を一緒に直す**——**直すことを
+    // 忘れないための番人**であって、増やすなと言っているのではない。
+    const saved = new Set<string>();
+    for (const [section, fields] of Object.entries(defaultSettings())) {
+      for (const field of Object.keys(fields as Record<string, unknown>)) {
+        saved.add(`${section}.${field}`);
+      }
+    }
+    expect([...saved].sort()).toEqual([
+      "dataScale.dtype",
+      "dataScale.primary",
+      "finance.depositTiming",
+      "finance.mode",
+      "finance.periodsPerYear",
+      "finance.withholding",
+      "history.enabled",
+      "scientific.angle",
+      "scientific.form",
+    ]);
+
+    // **文書の数と、コードの形を結ぶ**（`tools/check-manual-limits.mjs` と同じ型）。
+    // **数が 2 か所にあるなら、機械が突き合わせる。**
+    // `readFileSync(new URL(相対, import.meta.url))` は vitest で
+    // 「The URL must be of scheme file」で落ちる（`manual-widths.test.ts:42` の
+    // 註と同じ罠。**踏んだので同じ形にした**）。
+    const spec = readFileSync(
+      join(import.meta.dirname, "../../../docs/base-spec.md"),
+      "utf8",
+    );
+    const written = [...spec.matchAll(/いま保存しているのは (\d+) 項目/g)];
+    expect(written, "base-spec の「いま保存しているのは … 項目」").toHaveLength(
+      1,
+    );
+    expect(Number(written[0]?.[1])).toBe(saved.size);
   });
 });
