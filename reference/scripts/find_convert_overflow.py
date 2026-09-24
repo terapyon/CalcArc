@@ -34,6 +34,9 @@ cd reference && uv run --no-config python scripts/find_convert_overflow.py
 ```
 
 **終了コードは常に 0。** 探索の記録である。
+
+独立: 不可能（`convert_ref` の式をそのまま呼んで、溢れる入力が在るかを探す。
+**探索であって期待値ではない**——ここが出した値は golden に入らない）
 """
 
 from __future__ import annotations

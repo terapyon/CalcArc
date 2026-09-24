@@ -2,6 +2,10 @@
 
 Rust は libm の f64 実装を使う。ここでは mpmath の任意精度実装を
 50 桁で評価してから f64 に落とす。
+
+独立: 別手順（Rust は libm の f64 実装を呼ぶ。こちらは mpmath を 50 桁で評価して
+から f64 に落とす。**例外は `pow_real` 1 本**——あそこは `0^(y<0)` の規約を
+直に書いており、その関数の docstring に `独立: 一部` が在る）
 """
 
 from __future__ import annotations
@@ -105,6 +109,13 @@ def pow_real(x: float, y: float) -> dict:
     ZeroDivisionError を投げるが、設計書 §4 の表はここを DomainError と
     定めている（`1/x` の 0 が DivisionByZero なのとは別の裁定）。
     数学からは導けないので、規約として書く。
+
+    独立: 一部（**定義域の判定は別手順**——mpmath に計算させ、複素数が返れば
+    「実数の答が無い」と読む。Rust は `y.fract() == 0.0` で整数指数を先に見る。
+    **一致する規約は 2 点**——`0^(y<0)` は設計書 §4 の表が定めており**両側が明示**、
+    `0^0 = 1` は Rust が明示し（`scientific/mod.rs:176`「電卓の慣行に従う」）、
+    **こちらは mpmath の既定に任せている**（実測でも `1.0` を返す）。
+    **数学からは導けない点が 2 つある、と数えること**）
     """
     if x == 0.0 and y < 0.0:
         return {"error": "DomainError"}

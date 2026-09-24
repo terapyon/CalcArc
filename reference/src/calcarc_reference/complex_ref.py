@@ -3,6 +3,9 @@
 Rust は f64 の hypot と atan2 を直接呼ぶ。ここでは SymPy で厳密式を
 組み立て、50 桁で評価してから f64 に落とす。同じ手順を踏まないことで、
 同一の実装バグが両方に入る確率を下げる(base-spec §30)。
+
+独立: 別手順（Rust は f64 の hypot と atan2 を直接呼ぶ。こちらは SymPy で
+厳密式を組み、50 桁で評価してから f64 に落とす）
 """
 
 from __future__ import annotations

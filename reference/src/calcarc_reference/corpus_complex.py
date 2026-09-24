@@ -26,6 +26,9 @@ engine の `sin`/`cos`/`tan` は**複素数を受け付ける**（`scientific/mo
 ——約束が食い違うと突き合わせ自体が成立しない。計算そのもの
 （SymPy の `sin(a + b*I)` と Rust の `sin(a)cosh(b) + i cos(a)sinh(b)`）は
 共有していない。
+
+独立: 別手順（式木を数として評価する。engine のキー列の意味論は見ない
+——見れば移植になる）
 """
 
 from __future__ import annotations
