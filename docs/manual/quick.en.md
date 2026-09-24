@@ -66,8 +66,9 @@ In 【Convert】 and 【Scale】, choose the kind of calculation in the field ju
 below the tabs (for example, 【為替 Currency】).
 
 The tabs, and the kind of calculation chosen on 【Convert】 and 【Scale】, appear in
-the URL, so you can bookmark those screens. **The six kinds of calculation inside
-【Finance】, and the history screen, do not appear in the URL.**
+the URL, so you can bookmark those screens. **The manual screen has a URL too**
+(the one you reach with 【マニュアル】 in the list of links). **The six kinds of
+calculation inside 【Finance】, and the history screen, do not appear in the URL.**
 
 ![Screen: Scientific (just opened)](shot:tab-scientific)
 
