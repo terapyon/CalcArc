@@ -488,19 +488,29 @@ export const ASSOCIATIVITY_SHARD = "associativity-000.json";
 export const PRECEDENCE_CHANGES_MEANING = 1101;
 
 /**
- * **逆算の境界証明書が発行するプローブの総数**(2026-08-20 実測)。
+ * **逆算の境界証明書が発行するプローブの総数**——**コミット済みのコーパスから数える。**
  *
- * この走行が数えている数ではない——証明書は `pnpm heavy` の別のテストが
- * 走らせ、集計を記録しない。数の出どころは
- * `docs/corpus-measurements.md` の「Heavy の逆算証明書」節の表で、
- * `calls.spec.ts` に `probes.length` を一時的に出力させて測ったものである。
+ * **手で書かない。** 2026-08-20 に測った **70,115** を定数として置いていたが、
+ * **2026-09-24 に数え直したら 147,737 だった**——**コーパスが育っても数が動かず、
+ * 報告書は 2 倍古い数を出し続けていた**(`finance-start-000.json` の 1,200 件が
+ * 足された分などが入っていない)。**番人は一次資料の表と突き合わせていたので、
+ * 表と定数が同じだけ古いあいだ、緑のままだった。**
  *
- * **手書きの数を報告書に置くときは、一次資料に釘で留める。**
- * `report.spec.ts` の "the certificate figures are pinned to the measurement
- * they came from" がその表を実際に読み出して照合する。どちらか一方だけを
- * 直しても赤くなる(`PRECEDENCE_CHANGES_MEANING` と同じ仕掛け)。
+ * **これは「数を書かなければ腐らない」の形である**(0.9.6 の `base-spec` の
+ * URL の数と同じ)。**`CERTIFICATES` の `build()` を、いまディスクに在る
+ * 呼び出しシャードに当てて数える。**
  */
-export const CERTIFICATE_PROBES = 70115;
+export function certificateProbes(): number {
+  return loadCallShards().reduce(
+    (total, { shard }) =>
+      total +
+      CERTIFICATES.reduce(
+        (perShard, { build }) => perShard + build(shard.cases).length,
+        0,
+      ),
+    0,
+  );
+}
 
 /**
  * **`tax-combined-rate` の変異で赤くなった証明書のプローブ数**(同上、実測)。
@@ -1249,7 +1259,8 @@ function renderCertificateStanding(): string[] {
     `${CERTIFICATES.map((c) => `\`${c.op}\``).join(" / ")} の答が`,
     "**参照実装と同じ値である**ことは上の表が見ているが、**その答が境界そのもの",
     "である**(1 円・1 期ずらすと条件が破れる)ことは、正算だけを使う別の検査が",
-    `見ている。実測 ${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブある。`,
+    `見ている。**この走行のコーパスで ${certificateProbes().toLocaleString("en-US")} プローブ**ある`,
+    "(コミット済みのシャードから数えた。**手で書いた数ではない**)。",
     "",
     "**その検査は集計を記録しない**(`record()` を呼ばない)ので、**証明書が",
     "何本落ちても上の「件数」列は 1 も動かない。** 実測: 税率を合算にする変異",
@@ -1260,6 +1271,10 @@ function renderCertificateStanding(): string[] {
     "終わることで**測定の失敗**として報告される(`detection-power.mjs` の",
     "`verdictFor`)。上の件数は「壊れた検査の全部」ではなく、**コーパスの照合が",
     "数えた分**だと読むこと。",
+    "",
+    "**検出力の数字も、証明書のぶんを含まない。** 変異ごとにどれだけ低く出ているかは",
+    "**変異によって違う**ので、1 つの数では言えない——**上の実例 1 本がその大きさの目安**",
+    "である。**「含まない」と知って読むこと**が、ここで言えることの全部である。",
   ];
 }
 

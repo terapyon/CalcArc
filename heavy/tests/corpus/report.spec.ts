@@ -38,8 +38,8 @@ import {
   ASSOCIATIVITY_SHARD,
   areaOfShard,
   buildRun,
-  CERTIFICATE_PROBES,
   CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION,
+  certificateProbes,
   comparisonOf,
   corpusDigest,
   type DetectionPower,
@@ -2071,19 +2071,29 @@ function measurementsDoc(): string {
   );
 }
 
-test("the certificate figures in the report are pinned to the measurement they came from", () => {
-  const doc = measurementsDoc();
-  // 「対象件数と、実際に発行した wasm 呼び出し回数(実測)」の表の合計行。
-  const totals = /^\| 合計 \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/m.exec(doc);
-  const probes = totals?.[1];
-  if (probes === undefined) {
-    throw new Error(
-      "docs/corpus-measurements.md no longer has the certificate probe table's " +
-        "total row — the report's probe count has lost its primary source",
-    );
-  }
-  expect(Number(probes.replace(/,/g, ""))).toBe(CERTIFICATE_PROBES);
+test("the certificate probe count is counted, not remembered", () => {
+  // **2026-08-20 の実測 70,115 を定数で持っていた。** 2026-09-24 に数え直すと
+  // **147,737** で、**コーパスが育っても数が動いていなかった**——一次資料の表と
+  // 定数を突き合わせる番人は、**両方が同じだけ古いあいだ緑**だった。
+  //
+  // **いまは走行のコーパスから数える。** ここが見るのは「数えている」ことで、
+  // **数そのものではない**（数を書けば、また腐る）。
+  const counted = certificateProbes();
+  expect(counted).toBeGreaterThan(0);
 
+  // **各シャードの寄与の合計と一致すること。** 1 枚でも数え落としたら赤くなる。
+  const perShard = loadCallShards().map(({ shard }) =>
+    CERTIFICATES.reduce(
+      (total, { build }) => total + build(shard.cases).length,
+      0,
+    ),
+  );
+  expect(perShard.reduce((a, b) => a + b, 0)).toBe(counted);
+  expect(perShard.filter((n) => n > 0).length).toBeGreaterThan(1);
+});
+
+test("the certificate example in the report is pinned to the measurement it came from", () => {
+  const doc = measurementsDoc();
   const broken = /合わせて (\d+) 個のプローブが赤くなった/.exec(doc);
   const count = broken?.[1];
   if (count === undefined) {
@@ -2122,8 +2132,10 @@ test("the detection-power table says the certificates are not in its counts", ()
   for (const { op } of CERTIFICATES) {
     expect(markdown).toContain(`\`${op}\``);
   }
+  // **数えた数がそのまま出ていること。** ここで固定の数を書くと、
+  // **報告書と検査が同じだけ古くなる**——それが 2026-09-24 まで起きていた形である。
   expect(markdown).toContain(
-    `${CERTIFICATE_PROBES.toLocaleString("en-US")} プローブ`,
+    `${certificateProbes().toLocaleString("en-US")} プローブ`,
   );
   expect(markdown).toContain(
     `${CERTIFICATE_PROBES_BROKEN_BY_TAX_MUTATION} プローブ落ちている`,
