@@ -13,12 +13,31 @@ No installation needed. Add it to your home screen to launch it like an app — 
 
 ## Current version
 
-**0.9.8 (beta)** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
+**1.0.0** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
 each release is in [Releases](https://github.com/terapyon/CalcArc/releases).
 
-**It is a beta.** Very few people are using it yet. Calculation results come with no
-warranty and should not be relied on for decisions that matter. If you notice anything, it
-would help to hear about it via [Issue](https://github.com/terapyon/CalcArc/issues).
+**What 1.0 promises:**
+
+- **Screen URLs do not change.** A bookmarked URL opens the same screen in later versions
+- **Calculations complete entirely on-device; nothing is sent to a server.**
+- **Short screens do not break the layout.** On a short screen (for example in a browser
+  tab) the page may scroll, but every display and key can still be scrolled to and pressed
+
+**What it does not promise:**
+
+- **Correct results.** Calculation results come with no warranty and should not be relied
+  on for decisions that matter
+- **Saved settings and history may be lost when the version changes**
+- The look of the screens or the layout of the keys
+- Exchange-rate values (the source's values are used as they are)
+- **Screen widths that are checked**: Chrome on Android and similar browsers from 360px
+  wide, Safari on iPhone from 375px wide. Narrower screens (such as 320px) still show the
+  app, but nothing checks that the layout holds there
+- **Fitting on one screen.** It is checked to fit at the height you get when opening it
+  from the home screen
+
+If you notice anything, it would help to hear about it via
+[Issue](https://github.com/terapyon/CalcArc/issues).
 
 ## Screens
 
@@ -95,8 +114,8 @@ This project has a table mapping key sequences to display output as its test sui
 
 > **Note on language.** The detailed specifications under `docs/` — the numerical
 > policy, the base specification, and the design documents — are written in
-> Japanese only, and translating them is not planned while the project is in
-> beta. Issues and pull requests are welcome in either language.
+> Japanese only, and there is no plan to translate them. Issues and pull requests
+> are welcome in either language.
 
 ## Numerical Policy
 
