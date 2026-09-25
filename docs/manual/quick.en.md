@@ -1,8 +1,9 @@
 # CalcArc Quick Guide
 
-The latest PDF (with screenshots) **opens from CalcArc itself**: press
-"CalcArc <version> について" at the bottom and the list of links holds all three.
-It is also attached to the GitHub release: https://github.com/terapyon/CalcArc/releases
+This manual **can be read inside CalcArc**: press "CalcArc <version> について"
+at the bottom and choose 【マニュアル】("Manual"). The PDFs with screenshots open
+from that screen.
+They are also attached to the GitHub release: https://github.com/terapyon/CalcArc/releases
 
 ## Glossary
 
