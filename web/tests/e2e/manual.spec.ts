@@ -104,6 +104,30 @@ test("the manual screen offers the PDFs, pointing inside the site", async ({
   }
 });
 
+test("the note about PDFs sits above the PDF links", async ({ page }) => {
+  // **押す直前に読める所に在ること**（0.9.8 設計書 §3.1）——**読者が「画面で読むか、
+  // PDF を開くか」を選ぶのはその場所**である。**リンクの下に置くと、押したあとに読む。**
+  //
+  // **箱の座標で見る。** `isVisible()` は**置き場を言えない**（0.9.6 の「戻る道」と同じ）。
+  // **DOM の順（`compareDocumentPosition`）でも書けるが、CSS の `order` で見た目が
+  // 入れ替わった日に鳴らない**——**座標なら「読者が見る順」を言える**。
+  // **`<=` にするのは、同じ `y` に並んだものを「上」と読まないため。**
+  await page.goto("/#manual");
+  const note = page.getByTestId("pdf-note");
+  await expect(note).toBeVisible();
+  const firstPdf = page.getByRole("link", { name: /PDF$/ }).first();
+  await firstPdf.scrollIntoViewIfNeeded();
+  const noteBox = await note.boundingBox();
+  const pdfBox = await firstPdf.boundingBox();
+  expect(noteBox, "the note has no box").not.toBeNull();
+  expect(pdfBox, "the first PDF link has no box").not.toBeNull();
+  expect(noteBox?.y ?? 0).toBeGreaterThan(0);
+  expect(
+    (noteBox?.y ?? 0) + (noteBox?.height ?? 0),
+    "the note's bottom is not above the first PDF link's top",
+  ).toBeLessThanOrEqual(pdfBox?.y ?? 0);
+});
+
 test("the manual does not spill sideways on a narrow screen", async ({
   page,
 }) => {

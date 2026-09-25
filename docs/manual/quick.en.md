@@ -1,8 +1,9 @@
 # CalcArc Quick Guide
 
-The latest PDF (with screenshots) **opens from CalcArc itself**: press
-"CalcArc <version> について" at the bottom and the list of links holds all three.
-It is also attached to the GitHub release: https://github.com/terapyon/CalcArc/releases
+This manual **can be read inside CalcArc**: press "CalcArc <version> について"
+at the bottom and choose 【マニュアル】("Manual"). The PDFs with screenshots open
+from that screen.
+They are also attached to the GitHub release: https://github.com/terapyon/CalcArc/releases
 
 ## Glossary
 
@@ -37,8 +38,9 @@ calculations.
 - Open it at https://calc.terapyon.net/
 - No installation is needed. It works in the browser
 - Add it to your home screen to open it like an app
-- Once it has been opened, it is built to keep working without a network
-  (fetching exchange rates is the one thing that needs a network). Working without a
+- Once it has been opened, **the calculations work without a network**, and so does
+  the manual's text on the screen (fetching exchange rates, the manual PDFs, the
+  outward links and checking for a new version all need one). Working without a
   network has been checked only in Chrome-type browsers, not yet in Safari on iPhone
 - The layout is checked automatically on screens from 360px wide in the Chromium engine (Chrome
   on Android and similar browsers), and from 375px wide in WebKit, the same rendering engine
