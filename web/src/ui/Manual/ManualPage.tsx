@@ -42,6 +42,33 @@ import styles from "./ManualPage.module.css";
  */
 export const MANUAL_PAGE_LABELS = ["計算機に戻る"] as const;
 
+/**
+ * PDF の前に出す注記（0.9.8、利用者の裁定 2026-09-25）。
+ *
+ * **押す直前に読める所へ置く**——**マニュアル 3 冊にも書いてあるが、押す人は
+ * そのときマニュアルを読んでいない。**
+ *
+ * **端末は判定しない。** 全端末に同じ 1 行を出し、**「iPhone では」と文で言う**
+ * ——`display-mode: standalone` を見る案は採らなかった（**手元で素直に測れない**
+ * ＝**0.9.4 の `attachment`・0.9.5 の生成元と同じ「端末に賭ける手」**。設計書 §2）。
+ *
+ * **事実の断片を定数で持つ**のは、**マニュアル 3 冊と食い違わせないため**である
+ * ——**言い換えは機械で照合できないが、断片は照合できる**（`manual-pdf-note.test.ts`）。
+ * **今日、CHANGELOG がマニュアルの古い文（「戻れなくなることがあります」）を
+ * 引いたまま残っていた**——**その形をここで塞ぐ。**
+ */
+export const PDF_NOTE_FACTS = {
+  /** 利用者が実機で確かめた日。**1 台で 1 回の確認**である。 */
+  date: "2026-09-25",
+  /** 判定。**「ことがあります」ではない**（実測で確かめた）。 */
+  verdict: "戻れません",
+  /** 代わりにどうするか。**次の一手を 1 文で渡す**（案 A の理由）。 */
+  instead: "画面のマニュアル",
+} as const;
+
+/** 画面に出す 1 行。**綴りは利用者の裁定**（案 A）。 */
+export const PDF_NOTE = `iPhone では、PDF を開くと電卓に${PDF_NOTE_FACTS.verdict}（${PDF_NOTE_FACTS.date} に確認）。${PDF_NOTE_FACTS.instead}で読んでください。`;
+
 export function ManualPage() {
   const [books, setBooks] = useState<readonly ManualBook[] | null>(null);
   const [stem, setStem] = useState<string | null>(null);
@@ -121,6 +148,12 @@ export function ManualPage() {
           dangerouslySetInnerHTML={{ __html: current.html }}
         />
       )}
+
+      {/* **PDF を押す直前に読める所**（設計書 §3.1）。**警告色は使わない**
+          ——**禁止ではなく案内**である。 */}
+      <p className={styles.state} data-testid="pdf-note">
+        {PDF_NOTE}
+      </p>
 
       <p className={styles.pdfs}>
         {ordered.map((book) => (
