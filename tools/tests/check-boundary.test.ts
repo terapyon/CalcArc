@@ -197,6 +197,99 @@ describe("findTouchTargetOutsideTokens", () => {
   });
 });
 
+describe("findTouchTargetOutsideTokens（天井 88px。1.1 で足した）", () => {
+  // **88 を選んだのは利用者である**（2026-09-29「横幅はそこまで大きくしなくて良い」）。
+  // **床と同じ理由で 1 か所にだけ置く**——値を選んだ理由が註にしか無い状態は、
+  // 2026-09-04 に `44px` で塞いだ穴と同じ形である。
+
+  it("tokens.css の外で値として書いていたら見つける", () => {
+    expect(
+      findTouchTargetOutsideTokens(
+        [
+          {
+            path: "web/src/ui/Keypad/Keypad.module.css",
+            text: "  max-width: 88px;\n",
+          },
+        ],
+        "88px",
+      ),
+    ).toEqual([
+      {
+        path: "web/src/ui/Keypad/Keypad.module.css",
+        line: 1,
+        text: "max-width: 88px;",
+      },
+    ]);
+  });
+
+  it("tokens.css 自身は通す（そこが置き場である）", () => {
+    expect(
+      findTouchTargetOutsideTokens(
+        [
+          {
+            path: "web/src/ui/tokens.css",
+            text: "  --touch-target-max: 88px;",
+          },
+        ],
+        "88px",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("註の中の 88px は違反にしない（理由を書いた行を赤くしない）", () => {
+    expect(
+      findTouchTargetOutsideTokens(
+        [
+          {
+            path: "web/src/ui/Keypad/Keypad.module.css",
+            text: [
+              "  /* 天井で止めて中央に寄せる。88px を超えると間延びする。 */",
+              "/* 560px の枠では、天井が無いと 100.8px になる（88px の根拠）。 */",
+            ].join("\n"),
+          },
+        ],
+        "88px",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("188px を 88px と読み違えない（語の境界で切る）", () => {
+    // **`\\b` が無いと `188px` の末尾 3 文字に一致する。** 実物には
+    // 3 桁の px 値が在る（`--shell-max-width: 480px` など）ので、
+    // **部分一致を拾う検査は、無関係な行を赤くする。**
+    expect(
+      findTouchTargetOutsideTokens(
+        [
+          {
+            path: "web/src/ui/Readout/Readout.module.css",
+            text: "  max-width: 188px;\n  min-width: 288px;",
+          },
+        ],
+        "88px",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("床と天井を混同しない（44px を撃つと 88px は 0 件）", () => {
+    // **どちらが破られたかが報告の文で分かる**ための性質である
+    // （`main()` は値ごとに分けて呼ぶ）。
+    const files = [
+      { path: "web/src/ui/Key/Key.module.css", text: "  min-width: 44px;" },
+    ];
+    expect(findTouchTargetOutsideTokens(files, "44px")).toHaveLength(1);
+    expect(findTouchTargetOutsideTokens(files, "88px")).toHaveLength(0);
+  });
+
+  it("いまの web は 1 件も無い（実物で確かめる）", () => {
+    const files = readWebFiles();
+    expect(
+      files.filter((file) => file.path.endsWith(".css")).length,
+      "read no css files at all",
+    ).toBeGreaterThan(5);
+    expect(findTouchTargetOutsideTokens(files, "88px")).toEqual([]);
+  });
+});
+
 describe("findVisuallyHiddenOutsideTokens", () => {
   // **読み上げにだけ届かせる隠し方は 1 つしかない。** `display: none` も
   // `visibility: hidden` もアクセシビリティツリーから要素を消すので、
