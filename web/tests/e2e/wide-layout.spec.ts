@@ -62,3 +62,40 @@ for (const size of TABLET_VIEWPORTS) {
     expect(Math.round(board?.width ?? 0), "盤面の幅").toBe(472);
   });
 }
+
+/**
+ * **読み物の幅は、盤面の幅とは別に止まる**（設計 §2.5）。
+ *
+ * **盤面は指が決め、読み物は 1 行の文字数が決める**ので、上限は
+ * `--reading-max-width`（`tokens.css`。**和文の字は 1em 幅なので 36em は
+ * 「1 行 36 字」そのもの**）である。
+ *
+ * **期待値はこの検査が自分で持つ**（`36`）——**トークンを読んで突き合わせると、
+ * 両方が同時に間違っても緑になる**（`check-boundary.mjs` の 4 本目と同じ理由）。
+ * **px ではなく `36 × 字の大きさ` で照合する**のは、**上限が `em` で書かれている**
+ * ためで、**字の大きさを変えても文字数は動かない**という主張そのものである。
+ */
+for (const size of TABLET_VIEWPORTS) {
+  test(`the manual stops at a readable width at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto("/#manual");
+    const body = page.locator("main article").first();
+    await body.waitFor();
+    const measured = await body.evaluate((el) => {
+      const page = el.closest("section");
+      return {
+        width: (page ?? el).getBoundingClientRect().width,
+        fontSize: Number.parseFloat(getComputedStyle(page ?? el).fontSize),
+      };
+    });
+    // **1 行が 36 字を超えない。** 画面の幅（768〜1180px）より十分に狭い。
+    expect(
+      measured.width,
+      `本文の幅 ${measured.width}px（字の大きさ ${measured.fontSize}px）`,
+    ).toBeLessThanOrEqual(36 * measured.fontSize);
+    // **0 件で緑にしない**——本文が読み込めていなければ幅は 0 になる。
+    expect(measured.width, "本文の幅").toBeGreaterThan(300);
+  });
+}
