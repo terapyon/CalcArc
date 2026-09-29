@@ -48,9 +48,10 @@
 
 **② キーの天井は、枠を広げるまで何も主張しない。**
 天井 88px は、`--shell-max-width` が 480px のままだと**一度も触らない**
-（480px でキーは 84.8px）。**560px にして初めて、天井が無ければ 100.8px になる**
-（`(560−24−32)÷5`）。**だから天井と枠の拡大は 1 つのタスクにする**
+（480px でキーは 84.8px）。**だから天井と枠の拡大は 1 つのタスクにする**
 ——**別々に入れると、天井の番人が「何も主張しないテスト」になる。**
+**赤を撮るために、4-3 でいったん素の `560px` を置く**（`(560−24−32)÷5 = 100.8px > 88`）。
+**4-4 でそれを天井から導く式に差し替える**と、キーはちょうど 88px に着地する。
 
 ---
 
@@ -59,9 +60,8 @@
 | ファイル | 役割 |
 |---|---|
 | `web/src/ui/tokens.css` | `--touch-target-max` 新設／段の `@media` で `--shell-max-width` |
-| `web/src/ui/Keypad/Keypad.module.css` | `minmax()` と `justify-content: center` |
-| `web/src/ui/Key/Key.module.css` | 短い画面での `scroll-margin-top` |
-| `web/src/ui/Readout/Readout.module.css` | 短い画面での `position: sticky` |
+| `web/src/ui/Key/Key.module.css` | `.key` の `scroll-margin-top`（貼り付いた表示欄の下に隠れないため） |
+| `web/src/ui/Readout/Readout.module.css` | `position: sticky`（条件を付けるかは実測で決める） |
 | `web/src/ui/App.module.css` | 左右の安全域 |
 | `web/src/ui/Manual/ManualPage.module.css` | 本文の読み幅 |
 | `web/tests/e2e/widths.ts` | 横持ち・タブレットの寸法（**定数を足すだけ。`narrowSize` は触らない**） |
