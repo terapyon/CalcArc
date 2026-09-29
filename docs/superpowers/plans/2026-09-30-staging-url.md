@@ -30,27 +30,30 @@
 
 ---
 
-## ★ レビュー役の条件 B2(a) に、監視役から反対案
+## noindex の見張り——結論（2026-09-30）
 
-**B2(a) は「`deploy.yml` の『_headers are respected』スモークに
-『`X-Robots-Tag` が無いこと』を 1 行足す」。** **狙い（本番が検索から消える事故そのものを見る）は正しい。**
+**レビュー役の条件 B2(a)（`deploy.yml` のスモークに 1 行足す）に監視役が反対し、
+レビュー役が置き場を変えて再提案した。それを採る。**
 
-**採らない。** 理由は**失敗の向き**である。
+**`deploy.yml` には足さない。** **あのスモークは `wrangler` の後**で、
+**同ファイルが「いちばん悪い終わり方」と呼ぶ区間**にある——**そこを増やさない。**
 
-- **`deploy.yml` のスモークは `wrangler` の**後**に走る**——同ファイルの註が区間 ③ と呼び、
-  「**いちばん悪い終わり方**」と書いている所（**出てはいるが、出たことを誰も確かめておらず、
-  証拠も残っていない**）。
-- **足した 1 行の綴りを間違えると、次の Release がそこで落ちる。**
-  **そしてその 1 行は本番配信でしか走らない**ので、**間違いは本番配信の最中に初めて出る。**
-- **守りたい事故（検索から消える）は、遅いが静か**である。**引き換えに置くリスク
-  （リリースが区間 ③ で落ちる）は、速くて騒がしい。** **交換が釣り合わない。**
+**代わりに `staging.yml` の「本番の刻印を控える」段に 1 行**:
+```bash
+curl -sSI https://calc.terapyon.net/ | grep -qi x-robots-tag && exit 1
+```
+**main への push ごとに走るので設定画面の経路も日の単位で見つかり、`deploy.yml` を触らず、
+赤くなっても本番は 1 バイトも動いていない。**
 
-**代わりに、静的な番人の範囲を広げる**（番人 #4）:
-**`web/public/_headers` と `functions/` の両方に `X-Robots-Tag` が無いこと。**
-**リポジトリから入る経路はこれで塞がる。** **Cloudflare の設定画面から入る経路は、
-リポジトリからは見えない**ので、**§6 の未確認に 1 行残す。**
+**基線は実測済み**——**2026-09-30 に `calc.terapyon.net` の応答に `X-Robots-Tag` は 0 件。**
 
-**レビュー役に再判定を求める。** 反対案が弱ければ B2(a) を採る。
+**★ 監視役の反対案の理由の 1 つは成り立っていなかった**——「間違いは本番配信の最中に
+初めて出る」。**公開 URL への読み取りは手元で試せる**（上の実測がそれ）。
+**置き場の判断は変わらないが、根拠の 1 本は落ちた。**
+
+**静的な番人の範囲も広げる**（#4b）——`web/public/_headers`・`functions/`・
+**`web/index.html` の `<meta name="robots">`**・**`deploy.yml` の本文**
+（**staging の追記段が写されて本番に入る形を止める**）。
 
 ---
 
@@ -119,18 +122,24 @@ command: pages deploy web/dist --project-name=calcarc --branch=staging
   配った後に同じ値**（**`≠ $GITHUB_SHA` にしない**。リリース直後は一致するので偽の赤になる）／
   **③配った PDF が開く**（`ls web/dist/manual` から名前を取る）／
   **④`X-Robots-Tag: noindex` が在る**。
+  **⑤本番に `X-Robots-Tag` が無い**——②と同じ段に
+  `curl -sSI https://calc.terapyon.net/ | grep -qi x-robots-tag && exit 1`
+  （**基線は 2026-09-30 に実測、0 件**）。
 - [ ] **1-6** `tools/tests/staging-workflow.test.ts` に番人 4 本。
   **#1**: `command:` が `pages deploy web/dist --project-name=calcarc --branch=staging` に
   **等しい**（`${{` を含まない・`--branch=` がちょうど 1 回）。
   **#2**: `uses: ./.github/workflows/ci.yml` が在る。
-  **#4**: `web/public/_headers` と `functions/` に `X-Robots-Tag` が **0 件**。
+  **#4b**: **`noindex` の綴りが 0 件**——`web/public/_headers`・`functions/`・
+  **`web/index.html`**（`<meta name="robots">`）・**`deploy.yml` の本文**。
+  **#4c**: **`staging.yml` の追記先が `web/dist/_headers` である**（肯定形）。
   **#5**: ビルド段の `run:` 列が `deploy.yml` の該当区間と**同じ**。
 - [ ] **1-7 赤確認を 5 通り**（**一時コミット → 変異 → 走行 → 再編集で戻す**）:
   **(a) `--branch=staging` を消す**（省略）→ **#1 赤**／
   **(b) `--branch=main` にする** → **#1 赤**／
   **(c) `--branch=${{ github.ref_name }}` にする** → **#1 赤**（`${{` を含む）／
   **(d) `uses: ./.github/workflows/ci.yml` を消す** → **#2 赤**／
-  **(e) `web/public/_headers` に `X-Robots-Tag: noindex` を書く** → **#4 赤**。
+  **(e) `web/public/_headers` に `X-Robots-Tag: noindex` を書く** → **#4b 赤**／
+  **(e2) `web/index.html` に `<meta name="robots" content="noindex">` を書く** → **#4b 赤**。
   **(f) ビルド段の 1 行を入れ替える** → **#5 赤**。
 - [ ] **1-8** `cd web && pnpm test`・lint・`tsc`／**`cd heavy && pnpm lint`**／
   `node tools/check-conflict-markers.mjs` → コミット。
@@ -168,7 +177,7 @@ command: pages deploy web/dist --project-name=calcarc --branch=staging
 
 ## レビュー役への発注
 
-1. **反対案（B2(a) を採らず、静的番人の範囲を広げる）の再判定。**
+1. **noindex の置き場（`staging.yml` の #3b と同じ段）が、狙いどおり機能するか。**
 2. **番人 #1 が、赤確認 (a)(b)(c) の 3 通りで本当に鳴るか**——**ご自分の変異で。**
 3. **番人 #5（段の一致）が、入れ替え・削除・追加の 3 通りで鳴るか。**
 4. **スモーク ②（本番が動いていない）が、偽の赤を出さない形か**

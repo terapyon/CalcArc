@@ -166,10 +166,33 @@ pages deploy web/dist --project-name=calcarc --branch=staging
 ——**staging の配信の段でだけ足す**（`dist/_headers` に追記してから配る）。
 **本番の `_headers` を汚さない。**
 
-**★ 両側で見る**（2026-09-30、レビュー役の条件 B2）。**「本番の `_headers` に書かれていない」
-だけでは、`_headers` を汚した形しか止まらない**——**設定画面や Function 経由で入っても
-本番は検索から消える。** **`deploy.yml` の「_headers are respected」スモークに
-「`X-Robots-Tag` が無いこと」を 1 行足す**——**事故そのものを見る形にする。**
+**★ 本番に `X-Robots-Tag` が無いことも見る。置き場は `staging.yml`**
+（2026-09-30、レビュー役の条件 B2 と監視役の反対案を突き合わせた結論）。
+
+**「本番の `_headers` に書かれていない」だけでは足りない**——**Cloudflare の設定画面
+（Transform Rules など）から入った `noindex` は、リポジトリの検査では誰も見ない。**
+**守りたい事故は遅くて静か**なので、**気づく仕組みは頻繁に走る場所に要る。**
+
+**`deploy.yml` には足さない**（監視役の反対案）——**あのスモークは `wrangler` の後**で、
+**同ファイルが「いちばん悪い終わり方」と呼ぶ区間**にある。**そこを増やさない。**
+
+**代わりに `staging.yml` の「本番が動いていないことを控える」段に 1 行**:
+```bash
+curl -sSI https://calc.terapyon.net/ | grep -qi x-robots-tag && exit 1
+```
+**この置き場が優れている理由が 4 つ**:
+- **main への push ごとに走る**ので、**設定画面の経路も日の単位で見つかる**（Release 時より早い）
+- **`deploy.yml` を触らない**
+- **赤くなっても本番は 1 バイトも動いていない**（staging の走行が止まるだけ。
+  **「出たまま未検査」にならない**）
+- **本番を読む `curl` が 1 か所に集まる**（番人 #3b と同じ段）
+
+**基線は確かめた**——**2026-09-30 の実測で、`calc.terapyon.net` の応答に `X-Robots-Tag` は
+0 件**（`curl -sSI … | grep -ci x-robots-tag` → `0`）。
+
+**★ 監視役の反対案には、言い過ぎが 1 つあった**——「**間違いは本番配信の最中に初めて出る**」。
+**公開 URL への読み取りは手元で試せる**（上の実測がそれである）。**置き場の判断は変わらないが、
+理由の 1 つは成り立っていなかった。**
 
 ### 2.6 `docs/deploy.md` を書き換える
 
@@ -207,7 +230,9 @@ pages deploy web/dist --project-name=calcarc --branch=staging
 | 3b | **本番が動いていない**（配る前後で `build-info.json` の commit が同じ） | 同上 |
 | 3c | **配った PDF が staging で開く** | 同上 |
 | 3d | **staging に `X-Robots-Tag: noindex` が在る** | 同上 |
-| 4 | **本番に `X-Robots-Tag` が無い**（`deploy.yml` のスモークに 1 行） | `deploy.yml` |
+| 4 | **本番に `X-Robots-Tag` が無い** | `staging.yml` の #3b と同じ段 |
+| 4b | **`noindex` の綴りがリポジトリの配信物に 0 件**（`web/public/_headers`・`functions/`・`web/index.html` の `<meta name="robots">`・`deploy.yml` の本文） | `tools/tests/` の静的テスト |
+| 4c | **`staging.yml` の追記先が `web/dist/_headers` である**（肯定形） | 同上 |
 | 5 | **`staging.yml` のビルド段の `run:` 列が `deploy.yml` と同じ** | `tools/tests/` の静的テスト |
 
 **#1・#3b・#4 は「本番を壊さない」側の番人である**——**#1 が破れると本番に配り、
