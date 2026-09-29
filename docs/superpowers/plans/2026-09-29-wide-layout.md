@@ -22,9 +22,14 @@
 - **`narrowSize()` を新しい検査から呼ばない**（`webkit-gate.test.ts:417-424` が
   `finance-layout.spec.ts` の 2 か所ちょうどで固定）。
 - **新しい検査で `browserName` を使わない**（同 `:426-441` が 4 ファイルちょうどで固定）。
-- **段の条件は `@media (min-width: 700px) and (min-height: 700px)`**（＝短辺 700px 以上）。
-- **短い画面の条件は `@media (max-height: 500px)`。**
-- **キーの天井は `--touch-target-max: 88px`**、**タブレットの `--shell-max-width` は 560px`**。
+- **段の条件は `@media (min-width: 600px) and (min-height: 600px)`**（＝短辺 600px 以上。
+  **2026-09-29 に 700 から下げた**——当たるのは画面の短辺ではなく viewport で、
+  **Safari のタブではツールバーの分だけ横持ちの高さが小さい**。レビュー役の阻止 A1）。
+- **キーの天井は `--touch-target-max: 88px`**、**タブレットの `--shell-max-width` は
+  そこから導く**（`calc(5 * 88 + 4 * 8 + 24) = 496px`）。**選ぶ数ではない。**
+- **貼り付きに条件を付けるかは実測で決める**（阻止 A4。第 1 候補は条件なし）。
+- **新しい spec に `browserName` の綴りを書かない——註の中にも**
+  （`webkit-gate.test.ts:436` が本文全体に `\bbrowserName\b` を当てる。レビュー役の条件 B5）。
 - **コミット前に 3 つ揃える**（`pnpm test`・lint・`tsc`）。**`cargo fmt` は不要**（Rust を触らない）。
 - **重い段（E2E）は監視役の枠で 1 人ずつ。** 取る前に声をかける。
 
@@ -81,8 +86,14 @@
 - [ ] **1-1** `manual-widths.test.ts` に `describe("README の画面幅は E2E の幅と同じである")` を足す。
   **README の読み方は `readme-images.test.ts:17-22` に倣う**
   （`const REPO = join(import.meta.dirname, "..", "..", "..")`、`["README.md", "README.en.md"]`）。
-  **正規表現は既存の `JA` / `EN` をそのまま使う**（README も「幅 (\d+)px 以上」
-  「from (\d+)px wide」と書いている——`README.md:33-34`・`README.en.md:33-34` で確認済み）。
+  **★ 正規表現はそのままでは足りない**（**2026-09-29、検証役が実測。この計画の誤り**）。
+  `README.en.md:33-34` は **`from 360px` と `wide` のあいだで行が折り返している**ので、
+  既存の `EN = /from (\d+)px wide/g` は **360 を落として `[375]` だけを拾う**。
+  **`/from (\d+)px\s+wide/g` に広げる**——**マニュアル 3 冊は 1 行に収まっているので、
+  広げても拾う数は変わらない**（実測で確認済み）。**理由を註に書く。**
+  日本語側（`README.md:33-34`）は「幅 (\d+)px 以上」が 1 行に収まっており、そのままでよい。
+  **計画を書いた監視役は本文を読んだだけで、正規表現を当てていなかった**
+  ——**「確かめた範囲」と「書いた範囲」がずれていた実例。**
   **主張は `toEqual([CHROMIUM_NARROW_WIDTH, WEBKIT_NARROW_WIDTH])`。**
 - [ ] **1-2** `cd web && pnpm test manual-widths` → **緑であること**（いまの README は 360/375）。
 - [ ] **1-3 赤確認。** **一時コミットしてから** `README.md` の `360px` を `361px` に書き換え、
@@ -163,16 +174,20 @@ for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
 ```css
 /* **低い画面では、答えが上に残る。** 押すためにスクロールすると表示欄が流れていき、
    **押せても答えが見えない**状態になっていた（2026-09-29 に E2E で実測）。
-   **高さで切る**——タブレットの横持ちは高さが足りるので貼り付ける必要がない。
-   **縦持ち（844px）は影響を受けない。** */
-@media (max-height: 500px) {
-  .readout {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
+   **条件を付けない**——縦持ち（390×844）はそもそもスクロールしないので、
+   貼り付けても何も起きない。**腐る数を 1 つ増やさない。** */
+.readout {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 ```
+**★ 条件は決め打ちしない**（レビュー役の阻止 A4）。**初稿の `@media (max-height: 500px)` では
+`SAFARI_VIEWPORTS`（高さ 629〜667）に効かず、3-2 でそこが赤なら 3-5 の「両方緑」に届かない**
+——`widths.ts` の註が「**タブで開くとどの機種でも 127〜165px スクロールする**」と言っている。
+**まず条件なしで入れ、`panel-sizing`・`viewport-budget`・`display-stability` が緑のままかを見る。**
+**緑なら条件は要らない**（それが「縦持ちは 1px も変わらない」の証拠になる）。
+**赤なら、3-2 の実測から高さの条件を決め、その数と測り方を註に書く。**
 - [ ] **3-4**【実行役】`Key.module.css` に足す。**これが無いと `short-screens.spec.ts` が
   「covered by」で赤くなる**——**2026-09-23 に `.backBar` で実際に起きた**
   （`ManualPage.module.css:39-44`）。**巡回は `block: "nearest"` をわざと使っている。**
@@ -181,10 +196,13 @@ for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
    **`ManualPage.module.css:44` と同じ手当て**——あちらは戻る道の 1 行で、
    2026-09-23 に `short-screens.spec.ts` が「covered by <a>」で見つけた。
    **値は実測で決める**（下の註に、何 px で緑になったかを書くこと）。 */
-@media (max-height: 500px) {
-  button { scroll-margin-top: <実測で決めた値>; }
-}
+.key { scroll-margin-top: <実測で決めた値>; }
 ```
+**★ セレクタは `.key`**（レビュー役の条件 B3）——**`button` の型セレクタは CSS Modules でも
+全域に効き、マニュアルや履歴のボタンにまで掛かる。**
+**★ 表示欄の高さは幅で変わる**（`tokens.css:44` の `--display-size-main: clamp(1.75rem, 8vw, 2.5rem)`）。
+**375px で足りる値が 844px 幅で足りないことがある**——ループが両方を回すので
+「**両方緑になる最小**」で取れるが、**註に「どの幅の表示欄の高さに対応する数か」を書く。**
 **★ 値は当てずっぽうで書かない。** `readout-visibility.spec.ts` と
 `short-screens.spec.ts` の両方が緑になる最小の値を**測って**決め、**その数と測り方を註に書く。**
 - [ ] **3-5** 両方の spec を走らせて緑 → `pnpm test`・lint・tsc → コミット。
@@ -234,44 +252,55 @@ for (const size of TABLET_VIEWPORTS) {
     );
     // **0 件で緑にしない。** Scientific は 7 + 7 + 25 = 39（viewport-budget.spec.ts:241 と同じ数え方）。
     expect(boxes.length, "見たキーの数").toBeGreaterThanOrEqual(39);
-    expect(boxes.filter((b) => b.w < 44 || b.h < 44), "44px を割ったキー").toEqual([]);
+    // **★ 幅だけを見る**（レビュー役の阻止 A2）。**関数列 14 本は高さ 34px** である
+    // （`Keypad.module.css:48-50` の `.half > button { height: var(--function-row-height) }`、
+    // `tokens.css:60` で 34px）。**高さも見ると、天井が在っても無くても常に赤**になり、
+    // **4-3 で撮る赤が「天井の赤」なのか「関数列の赤」なのか見分けが付かなくなる。**
+    // `viewport-budget.spec.ts:246` も幅だけを見ている——**同じ数え方に揃える。**
+    expect(boxes.filter((b) => b.w < 44), "44px を割ったキー").toEqual([]);
     // **天井。** これが無いと 560px の枠で 100.8px になる（(560−24−32)÷5）。
     expect(boxes.filter((b) => b.w > 88), "88px を超えたキー").toEqual([]);
   });
 }
 ```
-- [ ] **4-3** `tokens.css` に段を足す:
-```css
-/* **短辺が 700px 以上ならタブレットである**（設計 §2.2）。**幅だけで切ると
-   スマホの横持ちも入ってしまい、正方キーが縦に伸びてさらに収まらなくなる。**
-   700 にしたのは iPad mini（第 6 世代）の縦の幅を測っていないからで、
-   **700 ならその不確かさに答えが依存しない。** */
-@media (min-width: 700px) and (min-height: 700px) {
-  :root {
-    --shell-max-width: 560px;
-  }
-}
-```
-**ここで 4-2 の spec を走らせ、「88px を超えたキー」で赤を撮る。**
-- [ ] **4-4** `tokens.css` の `--touch-target-min` の隣に天井を足す:
+- [ ] **4-3** `tokens.css` の `--touch-target-min` の隣に天井を足し、**段を「素の 560px」で入れる**
+  （**この 560px は赤を撮るための仮の値**。4-4 で式に差し替える）:
 ```css
   /* **床と対になる天井。** 44px は指の下限で、88px は「間延びしない上限」である
      （利用者の裁定 2026-09-29「横幅はそこまで大きくしなくて良い」）。
      **いまの実質最大は 84.8px**（480px 幅のとき）なので、そのすぐ上に置いた。
      **88px を CSS の値として書いてよいのはこの 1 行だけ**——`tools/check-boundary.mjs`
-     が見張る（Task 5）。 */
+     が見張る（Task 5 で入れた）。 */
   --touch-target-max: 88px;
 ```
-- [ ] **4-5** `Keypad.module.css` の `.section` を直す:
 ```css
-  /* **板の幅は、画面からではなく「列数 × キー」から決まる。** 1fr のままだと
-     広い枠でキーが際限なく伸びる（560px の枠で 100.8px）。**天井で止めて中央に寄せる。**
-     **狭い画面では何も変わらない**——390px でキーは 66.8px で、天井に触らない。
-     **1.2 で列を増やすと、板の幅はこの式から自動で出る**（10 列なら 952px）。 */
-  grid-template-columns:
-    repeat(var(--keypad-columns), minmax(var(--touch-target-min), var(--touch-target-max)));
-  justify-content: center;
+/* **短辺が 600px 以上ならタブレットである**（設計 §2.2）。 */
+@media (min-width: 600px) and (min-height: 600px) {
+  :root {
+    --shell-max-width: 560px; /* ← 仮。4-4 で式にする */
+  }
+}
 ```
+**ここで 4-2 の spec を走らせ、「88px を超えたキー」で赤を撮る**——
+**`(560 − 24 − 32) ÷ 5 = 100.8px`。この赤が、天井が効いたことの唯一の証拠である。**
+- [ ] **4-4** **仮の 560px を、天井から導く式に差し替える**（設計 §2.3）:
+```css
+@media (min-width: 600px) and (min-height: 600px) {
+  :root {
+    /* **枠の幅は選ぶものではなく、キーの天井から出てくる数である。**
+       5 列 × 88px ＋ 隙間 4 × 8px ＋ パネルの padding 12px × 2 = 496px。
+       **1.2 で 10 列にするときは、この `5` を変えるだけでよい**（976px になる）。 */
+    --shell-max-width: calc(5 * var(--touch-target-max) + 4 * var(--key-gap) + 24px);
+  }
+}
+```
+**4-2 の spec が緑になる**（キーはちょうど 88px）。
+- [ ] **4-5** **`Keypad.module.css` は触らない。**
+  **★ 初稿の `minmax()` ＋ `justify-content: center` は採らない**（レビュー役の条件 B1）。
+  **あれは区画ごとに効くので段差ができる**——560px の枠（内側 536）では
+  **正方の区画（5 列）は 472px に縮んで中央へ寄り、関数列（7 列）は
+  `(536−48)÷7 = 69.7px` で 536px いっぱいに広がる**。**数字の板だけが左右 32px 内側に入る。**
+  **枠の幅そのものを天井から導けば、区画はすべて同じ幅のまま揃う。**
 - [ ] **4-6** 4-2 の spec が緑になることを確認。
 - [ ] **4-7 いちばん大事な確認**: **`panel-sizing.spec.ts` と `viewport-budget.spec.ts` を
   走らせ、緑のままであること**（**スマホ縦持ちを 1px も変えていない証拠**）。
