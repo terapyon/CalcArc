@@ -130,7 +130,7 @@ for (const size of [
   { device: "iPhone 13 landscape", width: 844, height: 390 },
   ...TABLET_VIEWPORTS,
 ]) {
-  test(`the readout never grows past 154px at ${size.width}x${size.height}`, async ({
+  test(`the readout never grows past 155px at ${size.width}x${size.height}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height });
