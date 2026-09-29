@@ -87,7 +87,13 @@ cd heavy && pnpm heavy:power   # 変異の検出力（11 分）
   （「未リリース」でない）**ことまで見る。これは Release のワークフローが
   タグから走ったときに最初のジョブとして自動で回すので、**リリース前に手で
   打つ必要はない**。画面に出る版数は `web/package.json` からビルド時に埋まる。
-- **本番へ出る扉は `v*` タグだけである。** main への push はどこにも配らない。
+- **本番へ出る扉は `v*` タグだけである。** **main への push は staging に配る**
+  （`staging.yml` → `https://staging.calcarc.pages.dev`。2026-09-30 に足した。
+  **配る枝名は `staging` で固定**——**`wrangler pages deploy` は `--branch` を省くと
+  git の現在の枝名を使い、main への push ではそれが `main`、つまり本番配信になる**。
+  **`tools/tests/staging-workflow.test.ts` が命令の綴りを等値で見張る**）。
+  **本番 `calc.terapyon.net` には届かない**——**staging の走行は、配る前と後で
+  本番の刻印が同じままであることも見る**。
   タグを打つと `release.yml` が
   **版数ゲート → CI 全部 → 重量級コーパス → マニュアル（PDF）→ 本番展開 → 証拠と GitHub Release**
   の順に回す（**並べ替え後の初実走は `v0.9.3`——14 ジョブ全部緑で 43 分 34 秒**。走行 `35301127843`）。
