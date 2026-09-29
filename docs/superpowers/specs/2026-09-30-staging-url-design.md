@@ -294,6 +294,13 @@ curl -sSI https://calc.terapyon.net/ | grep -qi x-robots-tag && exit 1
   別の `run:` 段で `npx wrangler` を打っても通った**（レビュー役の変異 G1d・G1e）。
   **`pages deploy` の綴りが 1 回だけで、それが `command:` の行**であること、
   **`preCommands` / `postCommands` の鍵が無い**ことも見る。
+- **枝の門は `deploy` ジョブの 1 段目に在る**（2026-09-30、レビュー役の注記）。
+  **作業枝から手で起動すると、`ci`（4 分）と `manuals`（PDF）を回してから落ちる。**
+  **上載は起きないので無害**だが、**runner を 5 分ほど無駄にする。**
+  **速く落としたければ、門を単独の最初のジョブにして `ci` が `needs` する形にする**
+  ——**急がないので、そのときが来たら。**
+  （`deploy.yml` の門は**唯一のジョブの 1 段目**なので同じ形に見えるが、
+  **こちらは 2 ジョブ手前がある。**）
 - **`workflow_dispatch` は main からしか受けない。** **どの枝からでも起動できると、
   作業枝のビルドが `staging.calcarc.pages.dev` に乗り、「main にマージしたものを見る URL」
   という約束が黙って破れる**（レビュー役の条件 B2）。
