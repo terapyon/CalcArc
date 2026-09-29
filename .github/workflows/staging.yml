@@ -73,6 +73,16 @@ jobs:
     permissions:
       contents: read
     steps:
+      # **staging に出せるのは main だけである**（レビュー役の条件 B2、2026-09-30）。
+      # **`workflow_dispatch` はどの枝からでも起動できる**ので、この段が無いと
+      # **作業枝のビルドが `staging.calcarc.pages.dev` に乗る**——**本番には届かないが、
+      # 「main にマージしたものを見る URL」という約束が黙って破れる。**
+      # **形は `deploy.yml` の 1 段目と同じ**（あちらは「v* タグからのみ」）。
+      - name: Guard — staging is deployed from main only
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "staging に出せるのは main だけ(いまの ref: $GITHUB_REF)。手動起動も main から打つ" >&2
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # **配る前に、本番がいま何を配っているかを控える**(設計書 §2.4 ②b)。
       # **最後に効く番人はこれである**——どんな経路で枝名が壊れても、

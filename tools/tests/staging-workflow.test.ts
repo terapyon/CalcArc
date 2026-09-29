@@ -73,9 +73,45 @@ describe("番人 #1 — 配る先は staging である", () => {
     }
   });
 
-  it("本番の配信は、いまも main のままである（こちらを書き換えていない）", () => {
+  it("`pages deploy` の綴りは、この 1 行にしかない", () => {
+    // **★ 等値だけでは足りない**（レビュー役の変異 2026-09-30）——
+    // **`wrangler-action` に `preCommands:` を足しても、別の段に
+    // `- run: npx wrangler pages deploy … --branch=main` を足しても、
+    // `command:` の行は正しいまま**である。**どちらも 15 本とも緑だった。**
+    // **#1 の目的は「`staging.yml` から本番へ出る道が無い」**ことなので、
+    // **綴りの出現そのものを数える。**
+    const hits = declarations(read("staging.yml")).filter((line) =>
+      line.includes("pages deploy"),
+    );
+    expect(hits).toEqual([`command: ${COMMAND}`]);
+  });
+
+  it("`preCommands` / `postCommands` を持たない", () => {
+    // **`wrangler-action` はこの 2 つで任意のコマンドを走らせる。**
+    // **`command:` の等値は、その脇道を見ない。**
+    for (const key of ["preCommands", "postCommands"]) {
+      expect(
+        declarations(read("staging.yml")).filter((line) =>
+          line.startsWith(`${key}:`),
+        ),
+        `${key} が在る`,
+      ).toEqual([]);
+    }
+  });
+
+  it("staging に出せるのは main だけである", () => {
+    // **`workflow_dispatch` はどの枝からでも起動できる**（レビュー役の条件 B2）。
+    // **止めないと、作業枝のビルドが staging に乗る。**
+    expect(jobBody(read("staging.yml"), "deploy")).toContain(
+      "if: ${{ github.ref != 'refs/heads/main' }}",
+    );
+  });
+
+  it("本番へ配る命令は、いまも main のままである", () => {
     // **`deploy.yml` は触らない**——あの段は本番配信でしか走らないので、
-    // **触ると次の Release で初めて試される。** ここは「触っていない」の番人。
+    // **触ると次の Release で初めて試される。**
+    // **★ ただし、ここが見ているのは `command:` の 1 行だけ**である
+    // （レビュー役の注記 C1）——**「`deploy.yml` を触っていない」ではない。**
     const production = declarations(read("deploy.yml"))
       .filter((line) => line.startsWith("command:"))
       .map((line) => line.slice("command:".length).trim());
@@ -139,9 +175,12 @@ describe("番人 #4b — 本番は検索から消えない（リポジトリか�
     expect(repoFile("web/index.html")).not.toMatch(NOINDEX);
   });
 
-  it("`deploy.yml` の本文に、検索から消す綴りが無い", () => {
+  it("`deploy.yml` の宣言に、検索から消す綴りが無い", () => {
     // **staging の追記段を写して本番に入れる形を止める。**
-    expect(read("deploy.yml")).not.toMatch(NOINDEX);
+    // **註は読まない**（レビュー役の注記 C2）——**`deploy.yml` の註に
+    // 「noindex」と書いた日に偽の赤になる。** `_headers`・`index.html`・
+    // `functions/` は本文だけのファイルなのでそのまま読む。
+    expect(declarations(read("deploy.yml")).join("\n")).not.toMatch(NOINDEX);
   });
 
   it("`functions/` のどれにも、検索から消す綴りが無い", () => {
@@ -197,6 +236,9 @@ describe("番人 #5 — ビルドの段は本番と同じ順である", () => {
       .filter((line) => !line.startsWith("name:"));
   };
 
+  // **★ 比べているのは各段の 1 行目だけである**（レビュー役の注記 C3、2026-09-30）
+  // ——**`with:` の `path:`、`working-directory:`、`uses:` の SHA は見ていない。**
+  // **artifact の `path:` を変える変異は、この番人では鳴らない**（実測）。
   it("`wasm-pack` から `check:sw` までが、`deploy.yml` と同じ並びである", () => {
     const staging = buildSteps(read("staging.yml"), "deploy");
     const production = buildSteps(read("deploy.yml"), "deploy");
