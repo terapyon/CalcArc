@@ -52,6 +52,10 @@ calculations.
   you get when opening it from the home screen, for 11 of the 13 tab-and-category combinations,
   in both the Chromium and the WebKit engine (the 【LLM のメモリ LLM Memory】 and 【為替 Currency】
   screens are left out of that check). This too runs in a browser engine, not on a physical iPhone
+- **The answer stays on screen while you scroll.** Before 1.1, holding a phone sideways and
+  reaching the lower keys pushed the answer off the top of the screen
+- **On a tablet the board grows a little** (keys stop at 88px a side). **A phone held
+  sideways is not widened** — there is not enough height for square keys
 
 ## 2. The four tabs
 

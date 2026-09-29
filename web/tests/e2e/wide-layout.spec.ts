@@ -1,3 +1,4 @@
+import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
 import { TABLET_VIEWPORTS } from "./widths";
 
@@ -97,5 +98,46 @@ for (const size of TABLET_VIEWPORTS) {
     ).toBeLessThanOrEqual(36 * measured.fontSize);
     // **0 件で緑にしない**——本文が読み込めていなければ幅は 0 になる。
     expect(measured.width, "本文の幅").toBeGreaterThan(300);
+  });
+}
+
+/**
+ * **貼り付く表示欄は 154px より高くならない。**
+ *
+ * `Key.module.css` の `scroll-margin-top: 154px` は**この上限に依っている**
+ * ——**表示欄がこれより高くなった日、キーはその下に隠れる**。
+ * **上限が私の説明の中にしか無いなら、それは根拠が註にしかない数である**
+ * （監視役の条件 2026-09-29）。**ここが、その数を主張にする。**
+ *
+ * **上限の理由**: 主表示の字は `clamp(1.75rem, 8vw, 2.5rem)` で、
+ * **幅 500px 以上では 2.5rem に張り付く**——だから**幅を広げても高さは増えない**。
+ * 実測（2026-09-29）は **390 幅で 144px、667/844 幅で 154px**。
+ */
+for (const size of [
+  { device: "iPhone 13 landscape", width: 844, height: 390 },
+  ...TABLET_VIEWPORTS,
+]) {
+  test(`the readout never grows past 154px at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    let measured = 0;
+    for (const url of PROMISED_URLS) {
+      await page.goto(`/${url.hash}`);
+      await page.locator("main button").first().waitFor();
+      const heights = await page.evaluate(() =>
+        [...document.querySelectorAll("*")]
+          .filter((el) => getComputedStyle(el).position === "sticky")
+          .map((el) => el.getBoundingClientRect().height),
+      );
+      for (const height of heights) {
+        expect(height, `${url.hash} の貼り付く箱の高さ`).toBeLessThanOrEqual(
+          154,
+        );
+        measured += 1;
+      }
+    }
+    // **0 件で緑にしない。** 13 画面それぞれに 1 つ在る。
+    expect(measured, "測った箱の数").toBeGreaterThanOrEqual(13);
   });
 }
