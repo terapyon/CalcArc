@@ -54,6 +54,15 @@ export const SAFARI_VIEWPORTS = [
   { device: "iPhone 13 mini", width: 375, height: 629 },
 ] as const;
 
+/**
+ * **スマホの横持ち**。高さが幅より小さい組み合わせは、2026-09-29 まで E2E に
+ * 0 件だった。844×390 は iPhone 13/14 を、667×375 は SE を横にした寸法である。
+ */
+export const LANDSCAPE_VIEWPORTS = [
+  { device: "iPhone 13", width: 844, height: 390 },
+  { device: "iPhone SE", width: 667, height: 375 },
+] as const;
+
 /** 360×800 の検査を、WebKit では 375×812 で測る。Chromium は 360×800 のまま。 */
 export function narrowSize(browserName: string): {
   width: number;

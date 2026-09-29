@@ -1,6 +1,6 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, type Page, test } from "./fixtures";
-import { SAFARI_VIEWPORTS } from "./widths";
+import { LANDSCAPE_VIEWPORTS, SAFARI_VIEWPORTS } from "./widths";
 
 /**
  * **画面が低くても崩れない**(2026-09-12、利用者の裁定「崩れないことだけ約束する」。
@@ -92,7 +92,7 @@ async function sweepEverything(page: Page, query: string) {
   return { checked, problems };
 }
 
-for (const size of SAFARI_VIEWPORTS) {
+for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
   test(`every screen scrolls to all its keys at ${size.width}x${size.height} (${size.device} Safari)`, async ({
     page,
   }) => {
@@ -115,6 +115,13 @@ for (const size of SAFARI_VIEWPORTS) {
     // 数を据え直さないと、何を数えた数か分からなくなる**（2026-09-23 の教訓。
     // **`#manual` を巡回に入れていたから、貼り付く 1 行がボタンを隠す不具合が
     // 出た**——`covered by <a>` で 4 本赤。**外せばその番人を失う。**）
+    //
+    // **★ 2026-09-29、横持ち 2 つ（844×390・667×375）を回す寸法に足した**
+    // （広い配置の計画 Task 2）。**足したのは寸法であって、画面でもキーでもない**
+    // ——**1 寸法あたりの `checked` は変わらない**ので、**床の 428 は据え置く**
+    // （「以上」なので、同じ巡回をもう 2 回まわしても赤くならない）。
+    // **横持ちは 2026-09-29 まで E2E に 0 件だった**——高さが幅より小さい
+    // 組み合わせを、この盤面は 1 度も測っていない。
     expect(checked, "keys checked").toBeGreaterThanOrEqual(428);
     expect(problems).toEqual([]);
   });
