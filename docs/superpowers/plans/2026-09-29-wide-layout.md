@@ -268,12 +268,20 @@ for (const size of TABLET_VIEWPORTS) {
     expect(boxes.filter((b) => b.w < 44), "44px を割ったキー").toEqual([]);
     // **★ 天井は「等しい」で主張する**（レビュー役の条件 D1）。
     // **`> 88` が空、という形では「広げすぎていない」しか言っていない**
-    // ——**段を丸ごと消して 480 に戻しても・閾値を 800 に上げても・式の `5` が
-    // `columns: 5` とずれてキーが縮んでも、全部緑**になる（1e が変異で実測）。
-    // **`panel-sizing.spec.ts` の `toBe(366)` / `toBe(67)` と同じ形にする。**
-    const widths = [...new Set(boxes.map((b) => Math.round(b.w)))].sort((x, y) => x - y);
-    expect(widths, "正方のキーの幅（丸めて）").toContain(88);
-    const board = await page.locator("main fieldset").last().boundingBox();
+    // ——**段を丸ごと消して 480 に戻しても（84.8）・閾値を 800 に上げても
+    // （段に入らず 84.8）・式の `5` が `columns: 5` とずれても・仮の 560 のままでも
+    // （100.8）緑**になる。**1e が数で示した。変異で当てるのは実装が上がってから。**
+    // **`panel-sizing.spec.ts:70-95` と同じ形にする**——**`main button` 全体では
+    // 「どこかに 1 本 88 が在る」しか言えない**ので、**正方の区画のボタンだけを取る。**
+    const squares = await page
+      .getByRole("group", { name: "数字と演算のキー" })
+      .getByRole("button")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    expect(squares.length, "正方のキーの数").toBe(25);
+    expect(new Set(squares), "正方のキーの幅（丸めて）").toEqual(new Set([88]));
+    const board = await page
+      .getByRole("group", { name: "数字と演算のキー" })
+      .boundingBox();
     expect(Math.round(board?.width ?? 0), "盤面の幅").toBe(472);
   });
 }
