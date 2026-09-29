@@ -51,14 +51,68 @@ fn to_rad(v: Value, mode: AngleMode) -> Value {
     Value::new(mode.radians_of(v.re), mode.radians_of(v.im))
 }
 
+/// 度数法の 90° ごとの角の、**厳密な** `(sin x, cos x)`。表に無い角は `None`。
+///
+/// **`180` は f64 で厳密に表せる**——**ずれを持ち込んでいるのは `to_rad`** である
+/// （`f64` の π は本当の π より小さく、`sin(180°)` が `1.2246467991473532e-16` に
+/// なっていた）。**利用者が打ったのは「180 度」そのもの**なので、**答えも厳密に返す。**
+///
+/// **`% 360` は IEEE の `fmod` で厳密**なので、**周回した角でも象限は正確に決まる**
+/// （`540 % 360 = 180`、`(1e10 + 180) % 360 = 100`）。
+/// **`-360` は `-0.0` になるが `-0.0 == 0.0` は真**なので表に着く
+/// ——**符号で分けてはならない。**
+///
+/// **表は `|r|` の 4 行**で、**`sin` は奇関数なので `r` の符号を掛ける**。
+/// `cos` は偶関数なので `|r|` だけで決まる。
+///
+/// **RAD には広げない。** あちらは**入力そのものが厳密でない**ので、
+/// 厳密な答えを返すと嘘になる（1.0.0 の設計書 §3.1）。
+fn quadrant_exact(x: f64) -> Option<(f64, f64)> {
+    let r = x % 360.0;
+    let a = r.abs();
+    let (sin_at_a, cos_at_a) = if a == 0.0 {
+        (0.0, 1.0)
+    } else if a == 90.0 {
+        (1.0, 0.0)
+    } else if a == 180.0 {
+        (0.0, -1.0)
+    } else if a == 270.0 {
+        (-1.0, 0.0)
+    } else {
+        return None;
+    };
+    let sine = if r < 0.0 { -sin_at_a } else { sin_at_a };
+    Some((sine, cos_at_a))
+}
+
+/// `sin x` と `cos x`——**表に在ればそこから、無ければ f64 から**。
+///
+/// **1 つの経路である。** **実数は `im == 0` の特別な場合**で、
+/// **別の分岐を持たない**（設計書 §3.2、裁定 (a)）。**実数だけ表を引くと、
+/// `im == 0` と `im == 1e-300` の間に段差が生まれる**
+/// ——`sin(180° + 1e-300j)` の実部は `sin x · cosh y` で、
+/// **`cosh(1.7e-302)` は `1.0`** だから**虚部を足しても実部は動かない。**
+fn circular(v: Value, mode: AngleMode, z: Value) -> (f64, f64) {
+    if mode == AngleMode::Deg {
+        if let Some(exact) = quadrant_exact(v.re) {
+            return exact;
+        }
+    }
+    (z.re.sin(), z.re.cos())
+}
+
 pub fn sin(v: Value, mode: AngleMode) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    Value::new(z.re.sin() * z.im.cosh(), z.re.cos() * z.im.sinh()).finalize()
+    let (sine, cosine) = circular(v, mode, z);
+    Value::new(sine * z.im.cosh(), cosine * z.im.sinh()).finalize()
 }
 
 pub fn cos(v: Value, mode: AngleMode) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    Value::new(z.re.cos() * z.im.cosh(), -z.re.sin() * z.im.sinh()).finalize()
+    let (sine, cosine) = circular(v, mode, z);
+    // `sine` が 0 の行では `-0.0 * sinh y` が `-0.0` になりうる。
+    // **`finalize` が均す**ので値は在るべき所に来る（`without_negative_zero`）。
+    Value::new(cosine * z.im.cosh(), -sine * z.im.sinh()).finalize()
 }
 
 /// tan は sin / cos として求める。
@@ -386,6 +440,138 @@ mod tests {
         );
         // 極でない値は通る。
         assert!(tan(Value::real(89.0), AngleMode::Deg).is_ok());
+    }
+
+    #[test]
+    fn degree_quadrant_angles_are_exact() {
+        // **`180` は f64 で厳密に表せる**ので、**ずれを持ち込んでいるのは
+        // `to_rad`** である（1.0.0 の設計書 §3）。**入力が厳密なら、答えも厳密に。**
+        // **`close` ではなく `assert_eq!` で撃つ**——**主張は「近い」ではなく
+        // 「厳密に 0・±1」**である。
+        for (deg, s, c) in [
+            (0.0, 0.0, 1.0),
+            (90.0, 1.0, 0.0),
+            (180.0, 0.0, -1.0),
+            (270.0, -1.0, 0.0),
+            (-90.0, -1.0, 0.0),
+            (-180.0, 0.0, -1.0),
+            (-270.0, 1.0, 0.0),
+            // **周回した角も同じ**（`% 360` は IEEE の `fmod` で厳密）。
+            (360.0, 0.0, 1.0),
+            (540.0, 0.0, -1.0),
+            (-360.0, 0.0, 1.0),
+            (810.0, 1.0, 0.0),
+        ] {
+            let sine = sin(Value::real(deg), AngleMode::Deg).expect("有限");
+            let cosine = cos(Value::real(deg), AngleMode::Deg).expect("有限");
+            assert_eq!((sine.re, sine.im), (s, 0.0), "sin({deg}°)");
+            assert_eq!((cosine.re, cosine.im), (c, 0.0), "cos({deg}°)");
+        }
+        // `tan` は `sin / cos` のまま。0°・180° では `0 / ±1`。
+        assert_eq!(
+            tan(Value::real(180.0), AngleMode::Deg).expect("有限").re,
+            0.0
+        );
+        assert_eq!(
+            tan(Value::real(360.0), AngleMode::Deg).expect("有限").re,
+            0.0
+        );
+    }
+
+    #[test]
+    fn the_quadrant_table_reaches_the_complex_formula() {
+        // **表は複素の公式の `sin x`・`cos x` に入る**（設計書 §3.2、裁定 (a)）。
+        // **実数だけ表を引くと、`im == 0` と `im == 1e-300` の間に段差が生まれる**
+        // ——**直す前の実測**: `sin(180 + 1e-300j)` の実部は
+        // `1.2246467991473532e-16` で、**虚部を足しても動かなかった**
+        // （真値は `4.1e-43` の側）。
+        // **この 1 本が、この段差の唯一の番人である**——**コーパスには永久に出ない**
+        // （検証役の実測、`92adf99`: **複素の三角は 95 件で全部 DEG、引数に `j` を
+        // 含む 59 か所は全部純虚数**。**`a + jb` の形は 0 件**で、**その 0 は
+        // 「試したが該当なし」ではなく「生成器がその形を作っていない」**。
+        // **同じ正規表現で実数側は 3,962 件・90 の倍数 19 件を拾えている**ので、
+        // 当て方が空振りだったのではない）。
+        let s = sin(Value::new(180.0, 1e-300), AngleMode::Deg).expect("有限");
+        assert_eq!(s.re, 0.0, "sin(180° + 1e-300j) の実部");
+        // **負の角も**。**表の 0 に `r` の符号が掛かって `-0.0` になりうる**ので、
+        // **`0.0` と比べる**（**ビット比較にはしない**。`-0.0 == 0.0` は真、
+        // そして `finalize` が均す）。
+        let n = sin(Value::new(-180.0, 1e-300), AngleMode::Deg).expect("有限");
+        assert_eq!(n.re, 0.0, "sin(-180° + 1e-300j) の実部");
+        // **極のすぐ近く**。**実部は `cos(90°)` の `6.12e-17` が作っていた幻**で、
+        // 表を引けば消える。**虚部は残る**（極に近いことは変わらない）。
+        let t = tan(Value::new(90.0, 1e-8), AngleMode::Deg).expect("有限");
+        assert_eq!(t.re, 0.0, "tan(90° + 1e-8j) の実部");
+        close(t.im, 1.0 / 1e-8_f64.to_radians().sinh());
+    }
+
+    #[test]
+    fn complex_arguments_on_the_imaginary_axis_do_not_move() {
+        // **0.9.8 のマニュアルに出ている 3 つの値**（`1.175201194j`・
+        // `1.543080635`・`0.761594156j`）**を守る床**である。
+        // **`x = 0` は表でも `sin 0 = 0`・`cos 0 = 1`** で、
+        // **f64 の `sin`/`cos` の答えと同じ**——だから動かない。
+        let s = sin(Value::imag(1.0), AngleMode::Rad).expect("有限");
+        assert_eq!((s.re, s.im), (0.0, 1.175_201_193_643_801_4));
+        let c = cos(Value::imag(1.0), AngleMode::Rad).expect("有限");
+        assert_eq!((c.re, c.im), (1.543_080_634_815_243_7, 0.0));
+        let t = tan(Value::imag(1.0), AngleMode::Rad).expect("有限");
+        assert_eq!((t.re, t.im), (0.0, 0.761_594_155_955_764_9));
+    }
+
+    #[test]
+    fn radian_mode_keeps_the_answer_for_the_f64_pi() {
+        // **RAD は触らない**（設計書 §3.1）。**【π】で入るのは本当の π ではない**
+        // ので、**その `sin` は厳密に `1.2246467991473532e-16`** である
+        // ——**0 を返すのは「入力が厳密な π だった」という嘘**になる。
+        assert_eq!(
+            sin(Value::real(PI), AngleMode::Rad).expect("有限").re,
+            1.224_646_799_147_353_2e-16
+        );
+        assert_eq!(
+            cos(Value::real(PI / 2.0), AngleMode::Rad).expect("有限").re,
+            6.123_233_995_736_766e-17
+        );
+        // **★ 上の 2 行だけでは、表を RAD に広げても赤くならない**
+        // （2026-09-29、実行役が変異させて確かめた——**`π` は 90 の倍数ではない**ので、
+        // 広げても表が発火しない）。**RAD で「数として 90 の倍数」を撃つ**のが番人である:
+        // **`180` ラジアンは `-0.8011526357338304`**、**`90` ラジアンの `cos` は
+        // `-0.4480736161291701`**。**表を引いたら 0 や ±1 になって赤くなる。**
+        assert_eq!(
+            sin(Value::real(180.0), AngleMode::Rad).expect("有限").re,
+            -0.801_152_635_733_830_4
+        );
+        assert_eq!(
+            cos(Value::real(90.0), AngleMode::Rad).expect("有限").re,
+            -0.448_073_616_129_170_1
+        );
+    }
+
+    #[test]
+    fn the_quadrant_table_and_the_pole_guard_agree() {
+        // **同じ条件が 2 か所に在る**（表と `is_tan_pole`）。**片方だけ直した日に
+        // 赤くなる番人**である（レビュー役 calcarc-1e の注記）。
+        // **`cos` が厳密に 0 になる角** ⇔ **極**。
+        //
+        // **刻みは `i as f64 * 0.5` で作る**——`x += 0.5` の累算だと
+        // **格子そのものがずれる**（`retry-biases-the-sample` の族）。
+        let mut compared = 0_usize;
+        let mut poles = 0_usize;
+        for i in -720..=720 {
+            let x = f64::from(i) * 0.5;
+            let from_table = quadrant_exact(x).is_some_and(|(_, c)| c == 0.0);
+            let from_guard = is_tan_pole(Value::real(x), AngleMode::Deg);
+            assert_eq!(from_table, from_guard, "{x}° で表と極の判定が食い違う");
+            compared += 1;
+            if from_guard {
+                poles += 1;
+            }
+        }
+        // **比較の回数を数える**——**1 度も比較しない格子を作らないため**
+        // （`tests-can-assert-nothing`）。
+        assert_eq!(compared, 1441);
+        // **−360〜360 の極は ±90・±270 の 4 点。**
+        assert_eq!(poles, 4);
     }
 
     #[test]
