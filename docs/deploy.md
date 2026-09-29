@@ -3,9 +3,21 @@
 **`v*` タグ**が calc.terapyon.net に届くまでの経路と、届いたことを確認する手順。
 
 > **2026-08-25 に契機が変わった。** それまでは main への push が即本番だった。
-> いまは**タグだけが本番への扉**で、main への push はどこにも配らない
-> （プレビューも作らない）。裁定と理由は
+> いまは**タグだけが本番への扉**である。裁定と理由は
 > [release-gate-design.md](superpowers/specs/2026-08-25-release-gate-design.md)。
+>
+> **【2026-09-30】main への push は staging に配る**
+> （`https://staging.calcarc.pages.dev`、`.github/workflows/staging.yml`）。
+> **本番 `calc.terapyon.net` はタグだけのまま**で、そこは 1 バイトも変えていない。
+> **2026-08-25 に「プレビューも作らない」と決めた懸念は「main の先頭が本番になる」
+> ことだった**——**`staging` という別の枝名なら、本番には届かない。**
+> 設計は [2026-09-30-staging-url-design.md](superpowers/specs/2026-09-30-staging-url-design.md)。
+>
+> **★ 本番枝の名は `main` である**（`deploy.yml` の
+> `--branch=main`）。**`staging.yml` の枝名（`staging`）と一致させてはならない**
+> ——**一致した日、main への push が本番配信になる。**
+> **`wrangler pages deploy` は `--branch` を省くと git の現在の枝名を使う**ので、
+> **省略も同じ事故である**（`tools/tests/staging-workflow.test.ts` が等値で見張る）。
 
 ## 仕組み要約
 

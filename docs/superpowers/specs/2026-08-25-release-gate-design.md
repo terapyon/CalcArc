@@ -101,6 +101,12 @@ push が配信しなくなるので、**この手順は成立しなくなる**�
 - 重量級の内容・所要時間を変えない。
 - デプロイ先（Cloudflare Pages・`--branch=main`）とスモーク 3 本を変えない。
 - プレビュー環境を作らない（main への push は**どこにも配らない**）。
+  **【一部撤回 2026-09-30】main への push は staging に配るようになった**
+  （`https://staging.calcarc.pages.dev`、`.github/workflows/staging.yml`）。
+  **撤回したのは「どこにも配らない」だけ**で、**「本番はタグだけ」は動いていない**
+  ——**ここの懸念は「main の先頭が本番になる」ことだった**が、**`staging` という
+  別の枝名なら本番には届かない**（設計
+  [2026-09-30-staging-url-design.md](2026-09-30-staging-url-design.md)）。
 - 証拠に検査していない性質の主張を書かない。
 
 ## 7. 影響を受ける文書

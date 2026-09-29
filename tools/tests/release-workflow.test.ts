@@ -571,7 +571,16 @@ const jobsOf = (yaml: string) => {
 };
 
 /** 時間制限を要求するワークフロー。**いまは全部である。** */
-const TIMED = ["ci.yml", "deploy.yml", "heavy-corpus.yml", "release.yml"];
+const TIMED = [
+  "ci.yml",
+  "deploy.yml",
+  "heavy-corpus.yml",
+  "release.yml",
+  // **2026-09-30 に足した**——`staging.yml`（main への push で staging に配る）。
+  // **この番人が「一覧に載せろ」と鳴ったので足した**のであって、
+  // 気づいて足したのではない。
+  "staging.yml",
+];
 
 /**
  * 要求しないもの——**理由つきで名指しする**。
