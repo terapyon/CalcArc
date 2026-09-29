@@ -1,16 +1,19 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
-import { TABLET_VIEWPORTS } from "./widths";
+import { LANDSCAPE_VIEWPORTS, TABLET_VIEWPORTS } from "./widths";
 
 /**
  * **広い画面で、盤面が使える形のまま広がる**（1.1、設計 §2.2・§2.3）。
  *
- * 1.0 までの枠は 480px 止まりで、**844px の幅でも盤面は中央の 470px しか
- * 使っていなかった**。1.1 はタブレット（短辺 600px 以上）で枠を広げる。
+ * 1.0 までの枠は 480px 止まりで、**768×1024 でも正方のキーは 85px だった**
+ * （この検査の最初の赤。2026-09-29）。1.1 はタブレット（短辺 600px 以上）で枠を広げる。
  *
- * **広げると、今度は際限なく伸びる。** だから**キーには天井が在る**
- * ——`--touch-target-max`（`tokens.css`）。**この検査の「88px を超えたキー」が、
- * 天井が効いていることの証拠である**（天井が無いと、枠 560px で 100.8px になる）。
+ * **キーに上限は掛かっていない**（検証役の指摘 2026-09-29）——**盤面の格子は
+ * `repeat(var(--keypad-columns), 1fr)` のまま**である。**`--touch-target-max` は
+ * 枠の幅を導く数**で、**キーが 88px になるのは枠がそう導かれているから**
+ * （**仮に枠を 560px と書いたらキーは 100.8px になった**——**天井がキーに掛かって
+ * いれば、そこで止まっていたはず**）。**だからこの検査は「88px を超えたキーが 0 件」
+ * ではなく、「キーの幅が 88 に等しい／盤面が 472 に等しい」で撃つ。**
  *
  * **44px の検査は幅だけを見る。** **半高の関数列は高さ 34px** である
  * （`Keypad.module.css:49-50` の `.half > button` が `--function-row-height` を
@@ -50,9 +53,12 @@ for (const size of TABLET_VIEWPORTS) {
 
     // **「等しい」で主張する**（レビュー役の条件 D1、`panel-sizing.spec.ts:61` の
     // `toBe(366)` と同じ形）。**「88px を超えたキーが 0 件」では足りない**
-    // ——**段を丸ごと消して 480px に戻しても、閾値を 800px に上げても、
-    // 式の `5` が列数とずれてキーが縮んでも、その形なら緑のまま**である
-    // （レビュー役が変異で実測）。**「広がっていない」を 1 本も見ていない。**
+    // ——**段を丸ごと消して 480px に戻しても、式の `5` が列数とずれてキーが縮んでも、
+    // その形なら緑のまま**である（**レビュー役が変異で実測、2026-09-29**）。
+    // **「広がっていない」を 1 本も見ていない。**
+    // **閾値を 800px に上げる変異は、768 と 1024 の 2 寸法で赤くなる**
+    // ——**`1180×820` は両辺が 800 以上なので段に残る**（この註の初稿は
+    // 「800 でも緑」と書いていたが、不正確だった）。
     const square = boxes.filter((b) => Math.round(b.h) === Math.round(b.w));
     expect(square.length, "正方のキーの数").toBeGreaterThanOrEqual(25);
     const sides = [...new Set(square.map((b) => Math.round(b.w)))];
@@ -102,7 +108,7 @@ for (const size of TABLET_VIEWPORTS) {
 }
 
 /**
- * **貼り付く表示欄は 154px より高くならない。**
+ * **貼り付く表示欄は 155px より高くならない。**
  *
  * `Key.module.css` の `scroll-margin-top: 154px` は**この上限に依っている**
  * ——**表示欄がこれより高くなった日、キーはその下に隠れる**。
@@ -111,7 +117,14 @@ for (const size of TABLET_VIEWPORTS) {
  *
  * **上限の理由**: 主表示の字は `clamp(1.75rem, 8vw, 2.5rem)` で、
  * **幅 500px 以上では 2.5rem に張り付く**——だから**幅を広げても高さは増えない**。
- * 実測（2026-09-29）は **390 幅で 144px、667/844 幅で 154px**。
+ * **実測（検証役の掃引 2026-09-29）**: `320→139.8` / `375→142.2` / `390→143.6` /
+ * `480→152.3` / **`500 以上はすべて 154.2`**。
+ *
+ * **`154` ではなく `155` で撃つ。** **`scroll-margin-top` の 154 は 154.19 の切り捨て**で、
+ * **`844×390` と `667×375` の実測は 154.19px**——**`154` で撃つと、いま正しい寸法が赤くなる。**
+ * **番人の数は、測った数に合わせる**（**最初の私の `154` は、probe が `Math.round` した数を
+ * そのまま上限に使ったもので、偽だった**）。
+ * **0.19px の不足が害にならないのは、判定がキーの中心を見るから**である（余裕 17px）。
  */
 for (const size of [
   { device: "iPhone 13 landscape", width: 844, height: 390 },
@@ -132,12 +145,53 @@ for (const size of [
       );
       for (const height of heights) {
         expect(height, `${url.hash} の貼り付く箱の高さ`).toBeLessThanOrEqual(
-          154,
+          155,
         );
         measured += 1;
       }
     }
     // **0 件で緑にしない。** 13 画面それぞれに 1 つ在る。
     expect(measured, "測った箱の数").toBeGreaterThanOrEqual(13);
+  });
+}
+
+/**
+ * **スマホを横にしても、盤面は広がらない。**
+ *
+ * **段は `(min-width: 600px) and (min-height: 600px)`** で、**横持ちは高さが足りない**
+ * ——**広げると正方のキーが縦に伸びて収まらなくなる**（設計 §2.2）。
+ * **CHANGELOG とマニュアル 3 冊がそう約束している**が、**機械は 1 つも見ていなかった**
+ * （レビュー役の条件 B1、2026-09-29）——**閾値を 600 → 300 に下げると `844×390` が段に
+ * 入って盤面が 496px になるのに、当時の検査は 1 本も鳴らなかった**
+ * （巡回は届けば緑、表示欄の番人は表示欄しか見ず、上の検査は全部段の中）。
+ *
+ * **だから「等しい」で撃つ**（`panel-sizing.spec.ts:61` の `toBe(366)` と同じ形）
+ * ——**正方のキーは 85px、盤面は 456px**（`--shell-max-width: 480px` から
+ * `480 − 24 = 456`、`(456 − 32) ÷ 5 = 84.8`）。
+ */
+for (const size of LANDSCAPE_VIEWPORTS) {
+  test(`a phone held sideways is not widened at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto("/#scientific");
+    await expect(page.locator("main button").first()).toBeVisible();
+
+    const boxes = await page
+      .locator("main button")
+      .evaluateAll((els) =>
+        els
+          .map((el) => el.getBoundingClientRect())
+          .map((r) => ({ w: r.width, h: r.height })),
+      );
+    expect(boxes.length, "見たキーの数").toBeGreaterThanOrEqual(39);
+
+    const square = boxes.filter((b) => Math.round(b.h) === Math.round(b.w));
+    expect(square.length, "正方のキーの数").toBeGreaterThanOrEqual(25);
+    const sides = [...new Set(square.map((b) => Math.round(b.w)))];
+    expect(sides, `正方のキーの幅: ${JSON.stringify(sides)}`).toEqual([85]);
+
+    const board = await page.locator("main fieldset").first().boundingBox();
+    expect(Math.round(board?.width ?? 0), "盤面の幅").toBe(456);
   });
 }
