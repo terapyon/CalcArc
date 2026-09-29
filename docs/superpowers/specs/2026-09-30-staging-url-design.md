@@ -276,7 +276,31 @@ curl -sSI https://calc.terapyon.net/ | grep -qi x-robots-tag && exit 1
 
 ---
 
-## 7. 群と、CI が 2 回走ること
+## 7. 読み方（走行が赤いとき）と、番人の限界
+
+**2026-09-30、レビュー役の実装レビューで分かったこと。**
+
+- **本番が落ちている日は、staging も赤くなる。** 配る前に `calc.terapyon.net/build-info.json` を
+  `curl -fsS` で読むので、**本番が 5xx なら staging の走行が止まる。** **無害だが、
+  「staging が壊れた」と読まないこと。**
+- **スモーク ②（本番が動いていない）が偽の赤を出しうる形は 1 つだけ**——
+  **配る前後の数分の窓に Release が本番を動かした場合。** **読み方は印字の
+  「本番が動いた: 旧 → 新」で、新がタグの SHA なら無実である。**
+- **番人 #5（段の一致）が比べているのは、各段の 1 行目だけ**
+  （`- uses:` / `- run:` / `- name:`）。**`with:` の `path:`・`working-directory:`・
+  `uses:` の SHA は比べていない**（レビュー役の変異 G5d が緑だった）。
+- **番人 #1 は、`staging.yml` の中の「本番へ出る道」を塞ぐ。**
+  **綴りの等値だけでは足りなかった**——**`wrangler-action` の `preCommands` に書いても、
+  別の `run:` 段で `npx wrangler` を打っても通った**（レビュー役の変異 G1d・G1e）。
+  **`pages deploy` の綴りが 1 回だけで、それが `command:` の行**であること、
+  **`preCommands` / `postCommands` の鍵が無い**ことも見る。
+- **`workflow_dispatch` は main からしか受けない。** **どの枝からでも起動できると、
+  作業枝のビルドが `staging.calcarc.pages.dev` に乗り、「main にマージしたものを見る URL」
+  という約束が黙って破れる**（レビュー役の条件 B2）。
+
+---
+
+## 8. 群と、CI が 2 回走ること
 
 **群は衝突しない**（2026-09-30、レビュー役が静的に確認）。`ci.yml` の群は
 `ci-${{ github.workflow }}-${{ github.ref }}` なので、**Staging から呼ばれると
