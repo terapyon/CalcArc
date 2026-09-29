@@ -224,12 +224,12 @@ for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
 **天井と拡大を分けない**——上の「先に読むべき 2 つの実測 ②」のとおり、
 **分けると天井の番人が何も主張しない。**
 
-**Files**: Modify `web/src/ui/tokens.css`, `web/src/ui/Keypad/Keypad.module.css`;
+**Files**: Modify `web/src/ui/tokens.css`;
 Create `web/tests/e2e/wide-layout.spec.ts`; Modify `web/tests/e2e/widths.ts`
 
 - [ ] **4-1** `widths.ts` に足す:
 ```ts
-/** **タブレット**。短辺が 700px 以上ある寸法だけを並べる（設計 §2.2）。
+/** **タブレット**。短辺が 600px 以上ある寸法だけを並べる（設計 §2.2）。
     768×1024 は旧 iPad の縦、1024×768 はその横、1180×820 は iPad Air の横である。 */
 export const TABLET_VIEWPORTS = [
   { device: "iPad portrait", width: 768, height: 1024 },
@@ -278,7 +278,7 @@ for (const size of TABLET_VIEWPORTS) {
      （利用者の裁定 2026-09-29「横幅はそこまで大きくしなくて良い」）。
      **いまの実質最大は 84.8px**（480px 幅のとき）なので、そのすぐ上に置いた。
      **88px を CSS の値として書いてよいのはこの 1 行だけ**——`tools/check-boundary.mjs`
-     が見張る（Task 5 で入れた）。 */
+     が見張る（Task 5。**この計画では Task 5 が先に済んでいる**）。 */
   --touch-target-max: 88px;
 ```
 ```css
