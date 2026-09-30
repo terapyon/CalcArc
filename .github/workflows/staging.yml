@@ -140,7 +140,14 @@ jobs:
       # **★ 先頭の改行を落とさない。** **`_headers` の末尾に改行が無いと
       # `/*` が前の行に繋がり、規則が黙って別物になる**(設計書 §2.4 ②d)。
       - name: Keep staging out of search results
-        run: printf '\n/*\n  X-Robots-Tag: noindex\n' >> web/dist/_headers
+        # **★ ブロックスカラー(`|`)にする。** **引用符なしの 1 行に書くと YAML が
+        # 壊れる**——`X-Robots-Tag: noindex` の**コロン＋空白**でそこが鍵と値に
+        # 読まれ、**GitHub はファイルを解析できず、トリガも読めないまま
+        # 「失敗の走行」を作る**(2026-09-30 に実際に起きた。走行 36648277882、
+        # ジョブ 0 本、名前がファイルパスで表示された)。
+        # **番人は `tools/tests/workflow-yaml.test.ts`。**
+        run: |
+          printf '\n/*\n  X-Robots-Tag: noindex\n' >> web/dist/_headers
       - uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
