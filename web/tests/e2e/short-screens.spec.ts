@@ -1,6 +1,10 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, type Page, test } from "./fixtures";
-import { LANDSCAPE_VIEWPORTS, SAFARI_VIEWPORTS } from "./widths";
+import {
+  LANDSCAPE_TAB_VIEWPORTS,
+  LANDSCAPE_VIEWPORTS,
+  SAFARI_VIEWPORTS,
+} from "./widths";
 
 /**
  * **画面が低くても崩れない**(2026-09-12、利用者の裁定「崩れないことだけ約束する」。
@@ -118,7 +122,17 @@ async function sweepEverything(page: Page, query: string) {
   return { checked, problems, skipped };
 }
 
-for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
+// **★ 2026-09-30、タブで横にした寸法を足した**（横向きの配置の番人 #8）。
+// **ホーム画面の高さ（844×390・667×375）とは別**で、**こちらは 1 画面に収まらない**
+// ——`750×342` では床を守ったまま 35px スクロールする（設計書 §2.2.1）。
+// **約束は「スクロールすれば全部に届く」**で、それがこの巡回の主張である。
+// **`568×320` は横向きの段にすら入らない**（幅 660px 未満）——**積んだ配置のまま**で、
+// **そこも「届く」ことを見る。**
+for (const size of [
+  ...SAFARI_VIEWPORTS,
+  ...LANDSCAPE_VIEWPORTS,
+  ...LANDSCAPE_TAB_VIEWPORTS,
+]) {
   test(`every screen scrolls to all its keys at ${size.width}x${size.height} (${size.device} Safari)`, async ({
     page,
   }) => {

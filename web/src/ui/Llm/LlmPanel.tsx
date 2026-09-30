@@ -420,7 +420,7 @@ export function LlmPanel() {
   })).filter((entry) => entry.active || entry.value !== "");
 
   return (
-    <section className={styles.panel} aria-label="LLM のメモリ計算">
+    <section className={styles.panel} data-board aria-label="LLM のメモリ計算">
       <Readout
         entries={entries}
         main={answer}

@@ -202,3 +202,27 @@ describe("Scientific のキー集合", () => {
     });
   });
 });
+
+describe("横向きの配置が動かしてはいけないもの（1.1.0）", () => {
+  // **利用者の条件**（2026-09-30）: **`j` や `Exp` を表から消さない。**
+  // **いまの設計では構造上そうなる**（横向きでも 5×5 はそのまま右へ動くだけ）
+  // **が、「構造上そうだ」は将来の変更を止めない**——**機械に言わせる**
+  // （設計書 `2026-09-30-landscape-layout-design.md` の番人 #4）。
+  it("j と Exp は 5×5 の区画に在る", () => {
+    const digits = section("数字と演算のキー");
+    const tokens = digits.keys.map((key) =>
+      key.kind === "shift" ? "shift" : key.token,
+    );
+    expect(tokens, "j が 5×5 から消えた").toContain("j");
+    expect(tokens, "Exp が 5×5 から消えた").toContain("exp");
+  });
+
+  it("5×5 は 5 列 25 キーのままである", () => {
+    // **横向きの格子は「5 行」を前提に天井を掛ける**
+    // （`tokens.css` の `max-height: calc(5 * var(--touch-target-max) + …)`）。
+    // **列や個数が変わったら、あの式も直す。**
+    const digits = section("数字と演算のキー");
+    expect(digits.columns).toBe(5);
+    expect(digits.keys).toHaveLength(25);
+  });
+});
