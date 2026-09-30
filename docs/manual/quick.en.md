@@ -54,8 +54,11 @@ calculations.
   screens are left out of that check). This too runs in a browser engine, not on a physical iPhone
 - **The answer stays on screen while you scroll.** Before 1.1, holding a phone sideways and
   reaching the lower keys pushed the answer off the top of the screen
-- **On a tablet the board grows a little** (keys stop at 88px a side). **A phone held
-  sideways is not widened** — there is not enough height for square keys
+- **On a tablet the board grows a little** (keys stop at 88px a side)
+- **Held sideways, the keys rearrange left and right and fit on one screen** — the display,
+  the input fields and the function keys on the left, the ten digit keys on the right.
+  **In a browser tab, and on smaller screens, a little scrolling is still needed.**
+  **The 【LLM のメモリ LLM Memory】 screen has no ten-key block, so it does not rearrange**
 
 ## 2. The four tabs
 

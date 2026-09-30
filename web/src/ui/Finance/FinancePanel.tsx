@@ -1027,7 +1027,7 @@ export function FinancePanel() {
   }
 
   return (
-    <section className={styles.panel} aria-label="金融計算">
+    <section className={styles.panel} data-board aria-label="金融計算">
       <Readout
         entries={entries}
         main={error ? "Math ERROR" : answer}

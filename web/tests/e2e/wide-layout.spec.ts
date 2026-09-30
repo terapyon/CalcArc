@@ -1,6 +1,6 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
-import { LANDSCAPE_VIEWPORTS, TABLET_VIEWPORTS } from "./widths";
+import { TABLET_VIEWPORTS } from "./widths";
 
 /**
  * **広い画面で、盤面が使える形のまま広がる**（1.1、設計 §2.2・§2.3）。
@@ -22,7 +22,18 @@ import { LANDSCAPE_VIEWPORTS, TABLET_VIEWPORTS } from "./widths";
  * **「天井の赤」と「関数列の赤」が見分けられなくなる。**
  * `viewport-budget.spec.ts` の 44px の検査も幅だけを見ている。
  */
-for (const size of TABLET_VIEWPORTS) {
+/**
+ * **【2026-09-30】この 3 本は、縦のタブレットだけを回す。**
+ * **`1024×768` と `1180×820` は横向きの段に入った**ので（幅 ≥ 660・高さ ≤ 840）、
+ * **盤面は 2 列になり、`main fieldset` の 1 つ目は関数列（356px）になる**
+ * ——ここの `toBe(472)` は**その寸法では意味を失った**（実測で赤くなった）。
+ * **天井 88px は `landscape-layout.spec.ts` の #2b が、同じ「等しい」で撃つ。**
+ */
+const TABLET_PORTRAIT = TABLET_VIEWPORTS.filter(
+  (size) => size.height > size.width,
+);
+
+for (const size of TABLET_PORTRAIT) {
   test(`the board stays usable at ${size.width}x${size.height}`, async ({
     page,
   }) => {
@@ -156,42 +167,12 @@ for (const size of [
 }
 
 /**
- * **スマホを横にしても、盤面は広がらない。**
+ * **【1.1.0 で撤回 2026-09-30】「スマホを横にしても、盤面は広がらない」の 2 本は、
+ * ここから移した。**
  *
- * **段は `(min-width: 600px) and (min-height: 600px)`** で、**横持ちは高さが足りない**
- * ——**広げると正方のキーが縦に伸びて収まらなくなる**（設計 §2.2）。
- * **CHANGELOG とマニュアル 3 冊がそう約束している**が、**機械は 1 つも見ていなかった**
- * （レビュー役の条件 B1、2026-09-29）——**閾値を 600 → 300 に下げると `844×390` が段に
- * 入って盤面が 496px になるのに、当時の検査は 1 本も鳴らなかった**
- * （巡回は届けば緑、表示欄の番人は表示欄しか見ず、上の検査は全部段の中）。
- *
- * **だから「等しい」で撃つ**（`panel-sizing.spec.ts:61` の `toBe(366)` と同じ形）
- * ——**正方のキーは 85px、盤面は 456px**（`--shell-max-width: 480px` から
- * `480 − 24 = 456`、`(456 − 32) ÷ 5 = 84.8`）。
+ * **約束そのものが変わった**——**横向きは 2 列になり、ホーム画面の高さでは
+ * 1 画面に収まる**（設計書 `2026-09-30-landscape-layout-design.md`）。
+ * **床を下げたのではない。主張を入れ替えた**（レビュー役の条件 B3）。
+ * **行き先は `landscape-layout.spec.ts`**——あちらが**はみ出さないこと・
+ * 44px の床・左右の並び・ロールで引けること**を撃つ。
  */
-for (const size of LANDSCAPE_VIEWPORTS) {
-  test(`a phone held sideways is not widened at ${size.width}x${size.height}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: size.width, height: size.height });
-    await page.goto("/#scientific");
-    await expect(page.locator("main button").first()).toBeVisible();
-
-    const boxes = await page
-      .locator("main button")
-      .evaluateAll((els) =>
-        els
-          .map((el) => el.getBoundingClientRect())
-          .map((r) => ({ w: r.width, h: r.height })),
-      );
-    expect(boxes.length, "見たキーの数").toBeGreaterThanOrEqual(39);
-
-    const square = boxes.filter((b) => Math.round(b.h) === Math.round(b.w));
-    expect(square.length, "正方のキーの数").toBeGreaterThanOrEqual(25);
-    const sides = [...new Set(square.map((b) => Math.round(b.w)))];
-    expect(sides, `正方のキーの幅: ${JSON.stringify(sides)}`).toEqual([85]);
-
-    const board = await page.locator("main fieldset").first().boundingBox();
-    expect(Math.round(board?.width ?? 0), "盤面の幅").toBe(456);
-  });
-}

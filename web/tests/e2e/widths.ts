@@ -86,3 +86,20 @@ export const TABLET_VIEWPORTS = [
   { device: "iPad landscape", width: 1024, height: 768 },
   { device: "iPad Air landscape", width: 1180, height: 820 },
 ] as const;
+
+/**
+ * **ブラウザのタブで横にしたときの viewport**（Playwright 1.62.1 の端末定義から、
+ * 2026-09-30 にレビュー役が印字）。**ホーム画面の高さとは別物**である
+ * ——`iPhone 13 landscape` は **750×342** で、**844×390 ではない。**
+ *
+ * **ここは「1 画面に収まる」側ではない**（設計書
+ * `2026-09-30-landscape-layout-design.md` §2.2.1）——**床の 44px を守ったまま
+ * `5×44 + 32 + 68 + 33 + 24 = 377 > 342`** で、**35px スクロールする。**
+ * **約束は「スクロールすれば、すべての表示とキーが見えて押せる」**であり、
+ * **その番人は `short-screens.spec.ts`** である。
+ */
+export const LANDSCAPE_TAB_VIEWPORTS = [
+  { device: "iPhone 13 tab", width: 750, height: 342 },
+  { device: "iPhone 14 Pro Max tab", width: 814, height: 380 },
+  { device: "iPhone SE tab", width: 568, height: 320 },
+] as const;

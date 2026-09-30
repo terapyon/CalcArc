@@ -271,7 +271,7 @@ export function TransferPanel() {
   })).filter((item) => item.active || item.value !== "");
 
   return (
-    <section className={styles.panel} aria-label="データ転送量計算">
+    <section className={styles.panel} data-board aria-label="データ転送量計算">
       <Readout
         entries={entries}
         main={answer}

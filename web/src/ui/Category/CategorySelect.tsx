@@ -44,7 +44,10 @@ export function CategorySelect({
     // **矢印は器の `::after` が描く。** `appearance: none` を当てると素の
     // 三角が消えるので、`currentColor` で描き直す——data URI の SVG では
     // 配色トークンに追従できない(明暗と高コントラストで 3 通りある)。
-    <div className={styles.field}>
+    // **`data-category` は横向きの配置の印**（1.1.0）。**横にすると、この帯は
+    // Nav と同じ段へ上がる**（`tokens.css` の横向きの段）——**縦の帯を 1 つ減らすため**。
+    // **DOM は動かさない**ので、**縦持ちは 1px も変わらない。**
+    <div className={styles.field} data-category>
       <select
         className={styles.select}
         aria-label="計算の種類"
