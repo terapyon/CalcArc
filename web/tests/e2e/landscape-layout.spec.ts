@@ -261,6 +261,22 @@ for (const size of LANDSCAPE_VIEWPORTS) {
               Math.max(...left.map((el) => el.getBoundingClientRect().right)),
           ),
           shortest: Math.round(Math.min(...keys.map((r) => r.height))),
+          // **左の段の余り**——**器の中身の高さから、左の項目と隙間を引いた残り。**
+          // **余りが残っていれば、関数の行はまだ伸びられる**ということである。
+          slack: (() => {
+            const style = getComputedStyle(board);
+            const pad = Number.parseFloat(style.paddingTop);
+            const gap = Number.parseFloat(style.rowGap);
+            const used =
+              left.reduce(
+                (sum, el) => sum + el.getBoundingClientRect().height,
+                0,
+              ) +
+              (left.length - 1) * gap;
+            return Math.round(
+              board.getBoundingClientRect().height - pad * 2 - used,
+            );
+          })(),
           leftOf: left.every(
             (el) => el.getBoundingClientRect().left < right.right,
           ),
@@ -282,6 +298,18 @@ for (const size of LANDSCAPE_VIEWPORTS) {
         seen.shortest,
         `${hash} でいちばん低いキー`,
       ).toBeGreaterThanOrEqual(44);
+      // **利用者の ③ の番人**（2026-09-30）——**どのキーも床より高い。**
+      // **床ちょうど（44）で止まっていたら、伸びる仕組みが外れている。**
+      //
+      // **★ 「余りを使い切った」では撃てなかった**（実測: 余りは 29px 残る）
+      // ——**器の空の行にも余りが配られる**ためで、**それは捨てているのではなく、
+      // 行の数を中身より多く取っている副作用**である。
+      // **関数の行の高さは面ごとに違ってよい**——**利用者が求めたのは 10 キーの
+      // 揃い**であって、関数キーの高さではない（実測 844×390: 50.3 / 50.3 / 49）。
+      expect(
+        seen.shortest,
+        `${hash} でいちばん低いキー（伸びたか）`,
+      ).toBeGreaterThan(44);
     }
     // **利用者の ①**: **10 キーの大きさが、タブによって違わない。**
     expect(
