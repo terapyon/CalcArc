@@ -55,11 +55,10 @@ calculations.
 - **The answer stays on screen while you scroll.** Before 1.1, holding a phone sideways and
   reaching the lower keys pushed the answer off the top of the screen
 - **On a tablet the board grows a little** (keys stop at 88px a side)
-- **Held sideways, the scientific calculator splits into two columns** — the display and the
-  function keys on the left, the 5×5 of digits and operators on the right. **Opened from the
-  home screen it then fits on one screen.** **Only the scientific calculator splits**; the unit
-  converter, the scale calculators and the finance calculator still stack, so you scroll to
-  reach the lower keys
+- **Held sideways, the keys rearrange left and right and fit on one screen** — the display,
+  the input fields and the function keys on the left, the ten digit keys on the right.
+  **In a browser tab, and on smaller screens, a little scrolling is still needed.**
+  **The 【LLM のメモリ LLM Memory】 screen has no ten-key block, so it does not rearrange**
 
 ## 2. The four tabs
 
