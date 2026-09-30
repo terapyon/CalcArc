@@ -500,14 +500,20 @@ body {
     min-height: var(--touch-target-min);
   }
 
-  /* **区画の中の行も伸びる**（2026-09-30）。**当てるのは 2 列になる器の中だけ**
-     ——**`#scale/llm` は 10 キーを持たず積んだまま**で、そこへ当てると
-     **候補キーの行が天井 88px に潰れて重なる**（実測: `short-screens` が
-     `covered by <button>` で 4 本赤）。**器の行を伸ばしても、区画の中の行が
-     中身なりだとボタンは 44px のまま**だった——**9 通り測って、ここが壁**と分かった。
+  /* **区画は器の行いっぱいに伸びる**（2026-09-30）。**これがボタンを大きくする**
+     ——**区画は格子の項目なので、`align-self: stretch` で行の高さを受け取り、
+     中のボタンは既定で区画いっぱいに伸びる**（ボタンの `height` は上の段で
+     `auto` にしてある）。
+     **★ はじめ「区画の中の行（`grid-auto-rows`）も `1fr` にしないとボタンは
+     44px のまま」と書いていたが、それは誤りだった**——**`auto` に戻しても
+     50.3px のまま**である（2026-09-30 に変異させて実測。**番人が緑のままだったので
+     気づいた**）。**効いているのは `align-self: stretch` と、器の
+     `align-content: stretch` の 2 つ**である。
+     **当てるのは 2 列になる器の中だけ**——**`#scale/llm` は 10 キーを持たず
+     積んだまま**で、そこへ当てると**候補キーの行が天井 88px に潰れて重なる**
+     （実測: `short-screens` が `covered by <button>` で 4 本赤）。
      **天井は 10 キーと同じ `--touch-target-max`**（数を 1 つ増やさない）。 */
   [data-board]:has([data-square]) [data-keypad] > fieldset:not([data-square]) {
-    grid-auto-rows: 1fr;
     align-self: stretch;
     max-height: var(--touch-target-max);
   }

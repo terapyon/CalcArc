@@ -224,6 +224,18 @@ for (const size of LANDSCAPE_VIEWPORTS) {
       if (hash === "#manual") continue;
       await page.goto(`/${hash}`);
       await expect(page.locator("main button").first()).toBeVisible();
+      if (hash === "#convert/currency") {
+        // **★ 用意したレートが届いたことを、状態で待つ**（2026-09-30）。
+        // **待たないと、この番人は `serveRates` を外しても緑のまま**である
+        // ——**「為替レートがありません」の段落は、取得の失敗が決まってから出る**ので、
+        // **`toBeVisible()` の直後だとまだ出ていない**（実測: 待ち 0ms で `over=0`、
+        // 200ms で `over=14`）。**用意したつもりのものが届いたかを見ない番人は、
+        // 何も主張していない。**
+        // **日付は `SERVED_RATES` の `time_last_update_utc` から出る。**
+        await expect(page.getByTestId("currency-rate-date")).toHaveText(
+          "Rate: 2026-08-14",
+        );
+      }
       const seen = await page.evaluate(() => {
         const square = document.querySelector("[data-square]");
         if (square === null) return null;
@@ -261,6 +273,13 @@ for (const size of LANDSCAPE_VIEWPORTS) {
               Math.max(...left.map((el) => el.getBoundingClientRect().right)),
           ),
           shortest: Math.round(Math.min(...keys.map((r) => r.height))),
+          functionHeight: Math.round(
+            document
+              .querySelector(
+                "[data-keypad] > fieldset:not([data-square]) button",
+              )
+              ?.getBoundingClientRect().height ?? -1,
+          ),
           // **左の段の余り**——**器の中身の高さから、左の項目と隙間を引いた残り。**
           // **余りが残っていれば、関数の行はまだ伸びられる**ということである。
           slack: (() => {
@@ -310,6 +329,13 @@ for (const size of LANDSCAPE_VIEWPORTS) {
         seen.shortest,
         `${hash} でいちばん低いキー（伸びたか）`,
       ).toBeGreaterThan(44);
+      // **★ `> 44` だけでは弱い**（レビュー役 2026-09-30）——**余りの配り方が
+      // 変わっても通る**（U8 の 49/49/47.2 でも真）。**関数電卓の関数行を
+      // `844×390` で釘で留める**（`panel-sizing.spec.ts` の 366/67 と同じ形。
+      // **配り方を変える日は、この数を据え直す**）。
+      if (hash === "#scientific" && size.width === 844) {
+        expect(seen.functionHeight, "関数キーの高さ").toBe(50);
+      }
     }
     // **利用者の ①**: **10 キーの大きさが、タブによって違わない。**
     expect(
@@ -407,6 +433,9 @@ for (const size of [
         document.documentElement.clientHeight,
     );
     // **収まらないことを、そのまま主張する**（**実測 2026-09-30: 14 / 29 / 16**）。
+    // **★ 為替を直した日、この 3 本は赤くなる**——**それが意図である。**
+    // **そのときは、この番人と、マニュアル 3 冊・CHANGELOG の「レートが無いときは
+    // 収まらない」の 4 か所を、同じコミットで消すこと。**
     expect(over, "レートが無いのに収まっている").toBeGreaterThan(0);
     // **黙って悪化しない上限。** **等値にしない**——**関数キーの高さを変える日に
     // 数 px 動く**。
