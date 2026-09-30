@@ -213,3 +213,49 @@ test("every board with a 5x5 splits, and fits at 844x390", async ({ page }) => {
   expect(split, "2 列になった面の数").toBe(12);
   expect(stacked, "積んだままの面の数").toBe(1);
 });
+
+/**
+ * **カテゴリの帯は、タブに重ならない。**
+ *
+ * **横向きでは帯が Nav と同じ段へ上がる**（`tokens.css` の `[data-category]` が
+ * `position: fixed`）——**縦の帯を 1 つ減らすため**である。**そのとき Nav を
+ * 左へ寄せないと、667px では帯がタブに 62px 重なる**（2026-09-30 実測。
+ * **Nav の中央寄せは `margin: 0 auto`** なので、横向きだけ左の余白を 0 にしている）。
+ *
+ * **重なりは `short-screens.spec.ts` では見えない**——**あちらが見るのは
+ * `main` の中のボタン**で、**Nav のタブは `nav a`** である（レビュー役の指摘）。
+ * **だからここで見る。** **判定は `sweep` と同じ**——**タブの中心を
+ * `elementFromPoint` で引き、そのタブ（か中身）が返ること。**
+ */
+for (const size of LANDSCAPE_VIEWPORTS) {
+  test(`the category band does not cover the tabs at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    // **帯を持つ画面で見る**——Scientific には帯が無い。
+    await page.goto("/#convert/length");
+    await expect(page.locator("main button").first()).toBeVisible();
+    await expect(page.locator("[data-category]")).toBeVisible();
+
+    const covered = await page.evaluate(() => {
+      const tabs = [...document.querySelectorAll("nav a")];
+      const out: string[] = [];
+      for (const tab of tabs) {
+        const r = tab.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          r.left + r.width / 2,
+          r.top + r.height / 2,
+        );
+        if (hit === null || !(hit === tab || tab.contains(hit))) {
+          out.push(
+            `${tab.textContent ?? "?"}: covered by <${hit?.tagName.toLowerCase() ?? "nothing"}>`,
+          );
+        }
+      }
+      return { covered: out, tabs: tabs.length };
+    });
+    // **0 件で緑にしない。** タブは 4 つ（Scientific・Convert・Scale・Finance）。
+    expect(covered.tabs, "見たタブの数").toBe(4);
+    expect(covered.covered, "帯に隠れたタブ").toEqual([]);
+  });
+}

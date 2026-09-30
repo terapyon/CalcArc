@@ -54,15 +54,31 @@ describe("横向きの格子の印", () => {
     ]);
   });
 
-  it("器の印は値を持たない（面ごとに分けない）", () => {
+  it("印は値を持たない（面ごとに分けない）", () => {
     // **2026-09-30 に一度 `data-board="split"` を使い、関数電卓だけを 2 列に
     // した**が、**利用者の裁定で全面に広げた**ので値は要らなくなった。
     // **値を残すと「この面だけ違う」が黙って復活する。**
-    for (const path of boards()) {
-      expect(read(path), `${path} が印に値を持っている`).not.toMatch(
-        /data-board="/,
-      );
+    //
+    // **★ `=` そのものを禁じる**（レビュー役の条件 B2、2026-09-30）。
+    // **`/data-board="/` は JSX の式 `data-board={"x"}` を通す**——
+    // **主張は「値を持たない」なのだから、引用符ではなく `=` を見る。**
+    for (const path of filesUnder(".tsx").filter(
+      (file) => !file.endsWith(".test.tsx"),
+    )) {
+      const text = read(path);
+      // **`data-board` と `data-category` は素の属性**である。
+      for (const mark of ["data-board", "data-category"]) {
+        expect(text, `${path} の ${mark} が値を持っている`).not.toMatch(
+          new RegExp(`${mark}\\s*=`),
+        );
+      }
     }
+    // **`data-square` だけは式で付ける**（区画の正体を見て決めるので）。
+    // **付くときは値を持たない**——`"" : undefined` の形であることを見る。
+    const keypad = read(join(UI, "Keypad", "Keypad.tsx"));
+    expect(keypad, "印が値を持つ形になっている").toMatch(
+      /data-square=\{[\s\S]*\?\s*""\s*:\s*undefined[\s\S]*\}/,
+    );
   });
 
   it("10 キー部の印は Keypad.tsx が 1 か所で付ける", () => {
@@ -75,9 +91,16 @@ describe("横向きの格子の印", () => {
     expect(marks.map((path) => path.slice(UI.length + 1))).toEqual([
       "Keypad/Keypad.tsx",
     ]);
-    expect(read(join(UI, "Keypad", "Keypad.tsx"))).toContain(
+    // **判定の 3 つとも見る**（レビュー役の注記 C4）——**`height === "square"` だけ
+    // 見ていると、`keys.length === 25` を外す変異が単体では止まらない。**
+    const keypad = read(join(UI, "Keypad", "Keypad.tsx"));
+    for (const part of [
       'section.height === "square"',
-    );
+      "section.columns === 5",
+      "section.keys.length === 25",
+    ]) {
+      expect(keypad, `印の判定から ${part} が消えた`).toContain(part);
+    }
   });
 
   it("カテゴリの帯の印は CategorySelect だけが持つ", () => {
