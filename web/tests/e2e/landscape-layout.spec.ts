@@ -167,59 +167,102 @@ for (const size of TABLET_LANDSCAPE) {
 }
 
 /**
- * **10 キー部を持つ面は、どれも横向きで 2 列になる**（**利用者の裁定 2026-09-30**
- * ——「**横にしたときには基本的に、10 キー部の 5×5 だけが右側に来るのが良い**」）。
+ * **10 キー部を持つ面は、どれも横向きで 2 列になり、どの面でも同じ姿になる**
+ * （**利用者の裁定 2026-09-30**——「**横にしたときには基本的に、10 キー部の 5×5 だけが
+ * 右側に来るのが良い**」／**実機の指摘**「**10 キーの大きさが、タブによって違う**」
+ * 「**左の表示およびファンクションと 10 キーの間に、少しスペースが欲しい。固定で良い。
+ * 10 キー内部のスペースよりも大きく**」「**ファンクションキーの横幅が小さくて押しにくい。
+ * 縦に余裕があるので縦幅を大きくすること**」）。
  *
- * **`844×390` では、どの面も 1 画面に収まる**（2026-09-30 実測）。
- * **`667×375`（SE の横）は別**——**単位換算とスケールが 6px、金融が 15px
- * スクロールする**ので、**そちらは `short-screens.spec.ts` が
- * 「スクロールすれば全部に届く」側で見る。** **この番人は `844×390` を撃つ。**
+ * **★ この 1 本が、実機の指摘 3 件の番人である**（レビュー役の阻止 2026-09-30）。
+ * **それまでは「12 面すべて 85.6×49」「隙間 16」「行 44」は実測の記録でしかなく、
+ * 4 つの直しを 1 つずつ戻しても 13 本が緑のままだった**——**1 回きりの手作業で
+ * 確かめた直しは、見張りが無い点で元の欠陥と同型**である。
  *
- * **5×5 を持たない面は積んだまま**である（`#scale/llm`。候補キーが 5 列 25 キー
- * ではない）——**右が空の 2 列にしない**、という裁定の裏返しである。
+ * **5×5 を持たない面は積んだまま**（`#scale/llm`。候補キーが 5 列 25 キーではない）
+ * ——**右が空の 2 列にしない**、という裁定の裏返しである。
  */
-test("every board with a 5x5 splits, and fits at 844x390", async ({ page }) => {
-  await page.setViewportSize({ width: 844, height: 390 });
-  let split = 0;
-  let stacked = 0;
-  for (const { hash } of PROMISED_URLS) {
-    if (hash === "#manual") continue;
-    await page.goto(`/${hash}`);
-    await expect(page.locator("main button").first()).toBeVisible();
-    const seen = await page.evaluate(() => {
-      const square = document.querySelector("[data-square]");
-      if (square === null) return { square: false, over: 0, leftOf: true };
-      const right = square.getBoundingClientRect();
-      const others = [...document.querySelectorAll("[data-board] *")].filter(
-        (el) =>
-          el !== square &&
-          !square.contains(el) &&
-          el.getBoundingClientRect().width > 0 &&
-          getComputedStyle(el).position !== "fixed",
-      );
-      return {
-        square: true,
-        over:
-          document.documentElement.scrollHeight -
-          document.documentElement.clientHeight,
-        // **箱の座標で見る**——CSS の綴りで確かめると、段が当たっていない日も緑になる。
-        leftOf: others.every(
-          (el) => el.getBoundingClientRect().left < right.right,
-        ),
-      };
-    });
-    if (seen.square) {
+for (const size of LANDSCAPE_VIEWPORTS) {
+  test(`every board with a 5x5 splits the same way at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    let split = 0;
+    let stacked = 0;
+    const keySizes = new Set<string>();
+    for (const { hash } of PROMISED_URLS) {
+      if (hash === "#manual") continue;
+      await page.goto(`/${hash}`);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const seen = await page.evaluate(() => {
+        const square = document.querySelector("[data-square]");
+        if (square === null) return null;
+        const board = document.querySelector("[data-board]") as HTMLElement;
+        const right = square.getBoundingClientRect();
+        // **左の段＝器の中身のうち、5×5 でも流れの外でもないもの。**
+        const left = [...board.children]
+          .flatMap((el) =>
+            el.hasAttribute("data-keypad") ? [...el.children] : [el],
+          )
+          .filter((el) => {
+            const style = getComputedStyle(el);
+            return (
+              el !== square &&
+              style.position !== "absolute" &&
+              style.position !== "fixed" &&
+              el.getBoundingClientRect().width > 0
+            );
+          });
+        const key = square.querySelector("button")?.getBoundingClientRect();
+        const keys = [...document.querySelectorAll("[data-keypad] button")].map(
+          (el) => el.getBoundingClientRect(),
+        );
+        return {
+          over:
+            document.documentElement.scrollHeight -
+            document.documentElement.clientHeight,
+          key:
+            key === undefined
+              ? "-"
+              : `${Math.round(key.width)}x${Math.round(key.height)}`,
+          // **左の段と 10 キーのあいだ**——**器の `column-gap`** がそのまま出る。
+          gap: Math.round(
+            right.left -
+              Math.max(...left.map((el) => el.getBoundingClientRect().right)),
+          ),
+          shortest: Math.round(Math.min(...keys.map((r) => r.height))),
+          leftOf: left.every(
+            (el) => el.getBoundingClientRect().left < right.right,
+          ),
+        };
+      });
+      if (seen === null) {
+        stacked += 1;
+        continue;
+      }
       split += 1;
+      keySizes.add(seen.key);
       expect(seen.over, `${hash} が縦にはみ出す量`).toBeLessThanOrEqual(0);
       expect(seen.leftOf, `${hash} で 5×5 より右に何かが在る`).toBe(true);
-    } else {
-      stacked += 1;
+      // **利用者の ②**: **固定の隙間。10 キーの内側（4px）より大きく。**
+      expect(seen.gap, `${hash} の左の段と 10 キーのあいだ`).toBe(16);
+      // **利用者の ③**: **キーパッドのどのキーも、指で押せる高さ**
+      // （**横向きでは半高の行も 44px に育てた**ので、**5×5 だけでなく全キー**を見る）。
+      expect(
+        seen.shortest,
+        `${hash} でいちばん低いキー`,
+      ).toBeGreaterThanOrEqual(44);
     }
-  }
-  // **0 件で緑にしない。** 13 画面のうち 12 が 5×5 を持ち、`#scale/llm` だけ持たない。
-  expect(split, "2 列になった面の数").toBe(12);
-  expect(stacked, "積んだままの面の数").toBe(1);
-});
+    // **利用者の ①**: **10 キーの大きさが、タブによって違わない。**
+    expect(
+      [...keySizes],
+      `10 キーの寸法が面でそろっていない: ${JSON.stringify([...keySizes])}`,
+    ).toHaveLength(1);
+    // **0 件で緑にしない。** 13 画面のうち 12 が 5×5 を持ち、`#scale/llm` だけ持たない。
+    expect(split, "2 列になった面の数").toBe(12);
+    expect(stacked, "積んだままの面の数").toBe(1);
+  });
+}
 
 /**
  * **カテゴリの帯は、タブに重ならない。**
