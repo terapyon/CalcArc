@@ -19,7 +19,11 @@ import { LANDSCAPE_VIEWPORTS, SAFARI_VIEWPORTS } from "./widths";
  * **Chromium と WebKit で同じ検査である**(エンジンで分岐しない)。
  */
 const sweep = () => {
-  const out = { checked: 0, problems: [] as string[] };
+  // **`skipped` は主張ではなく、診断である**（2026-09-30）。**無効なキーは
+  // `problems` にも `checked` にも入らない**ので、**床が足りないのに
+  // `problems` が空**という結末がありうる——**そのとき「何が飛んだか」を
+  // 印字できないと、走行を 1 回無駄にする。**
+  const out = { checked: 0, problems: [] as string[], skipped: [] as string[] };
   const root = document.documentElement;
   if (root.scrollWidth > root.clientWidth) {
     out.problems.push(
@@ -29,7 +33,12 @@ const sweep = () => {
   const main = document.querySelector("main");
   for (const el of Array.from(main?.querySelectorAll("button") ?? [])) {
     const key = el as HTMLButtonElement;
-    if (key.disabled || key.getAttribute("aria-disabled") === "true") continue;
+    if (key.disabled || key.getAttribute("aria-disabled") === "true") {
+      out.skipped.push(
+        key.getAttribute("aria-label") ?? key.textContent ?? "?",
+      );
+      continue;
+    }
     // **利用者と同じく、見えるところまでだけ動かす**(`nearest`)。真ん中へ
     // 寄せると、端に固定された物の下に隠れたキーを見逃す。
     key.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -56,10 +65,25 @@ const sweep = () => {
   return out;
 };
 
+/**
+ * 飛ばしたキーを**画面ごとの数に畳む**。**名前を全部出すと 187 行になり**、
+ * **読む人は差分を目で数えることになる**（2026-09-30 に実測して畳んだ）。
+ * **エンジンをまたいで比べたいのは「どの画面で何個飛んだか」**である。
+ */
+const tally = (skipped: string[]) => {
+  const perScreen: Record<string, number> = {};
+  for (const entry of skipped) {
+    const screen = entry.split(" ")[0] ?? "?";
+    perScreen[screen] = (perScreen[screen] ?? 0) + 1;
+  }
+  return JSON.stringify(perScreen);
+};
+
 /** 13 画面と金融の 6 モードを回す。`query` は URL の検索部(お知らせを出すとき)。 */
 async function sweepEverything(page: Page, query: string) {
   let checked = 0;
   const problems: string[] = [];
+  const skipped: string[] = [];
   const ready = async () => {
     await expect(page.locator("main button").first()).toBeVisible();
     if (query !== "") {
@@ -74,6 +98,7 @@ async function sweepEverything(page: Page, query: string) {
     const found = await page.evaluate(sweep);
     checked += found.checked;
     problems.push(...found.problems.map((p) => `${hash} ${p}`));
+    skipped.push(...found.skipped.map((name) => `${hash} ${name}`));
   }
   // 金融は 6 モードで盤面が変わる。**`#finance` の既定(ローン)だけを見ると、
   // 複利の面を見張っていない**(finance-layout.spec.ts と同じ理由)。
@@ -88,8 +113,9 @@ async function sweepEverything(page: Page, query: string) {
     const found = await page.evaluate(sweep);
     checked += found.checked;
     problems.push(...found.problems.map((p) => `#finance mode ${i} ${p}`));
+    skipped.push(...found.skipped.map((name) => `#finance mode ${i} ${name}`));
   }
-  return { checked, problems };
+  return { checked, problems, skipped };
 }
 
 for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
@@ -97,7 +123,7 @@ for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
     page,
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height });
-    const { checked, problems } = await sweepEverything(page, "");
+    const { checked, problems, skipped } = await sweepEverything(page, "");
     // **何本見たかを主張する**——0 本で緑を返さない。下限は 2026-09-12 に
     // 手元の Chromium で数えた実数(426〜427)。
     //
@@ -122,8 +148,17 @@ for (const size of [...SAFARI_VIEWPORTS, ...LANDSCAPE_VIEWPORTS]) {
     // （「以上」なので、同じ巡回をもう 2 回まわしても赤くならない）。
     // **横持ちは 2026-09-29 まで E2E に 0 件だった**——高さが幅より小さい
     // 組み合わせを、この盤面は 1 度も測っていない。
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(428);
+    // **★ `problems` を先に落とす**（2026-09-30、WebKit の赤で分かった）。
+    // **`sweep()` は、引っかかったキーを `problems` に積んで `checked` を
+    // 増やさない**——**床を先に撃つと、3 つ足りない理由が `problems` に入って
+    // いても印字されないまま段が死ぬ**（走行 36649080955 で実際にそうなった:
+    // `checked` が 425 で落ち、`problems` の行は実行されていない）。
+    // **説明を持つほうを先に。**
     expect(problems).toEqual([]);
+    expect(
+      checked,
+      `keys checked（押せないので飛ばした ${skipped.length} 個: ${tally(skipped)}）`,
+    ).toBeGreaterThanOrEqual(428);
   });
 }
 
@@ -139,12 +174,21 @@ for (const size of [
     page,
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height });
-    const { checked, problems } = await sweepEverything(
+    const { checked, problems, skipped } = await sweepEverything(
       page,
       "?sw-toast=preview",
     );
     // 上と同じ理由で 428(0.9.3 の D-2 と、0.9.6 の `#manual`)。
-    expect(checked, "keys checked").toBeGreaterThanOrEqual(428);
+    // **★ `problems` を先に落とす**（2026-09-30、WebKit の赤で分かった）。
+    // **`sweep()` は、引っかかったキーを `problems` に積んで `checked` を
+    // 増やさない**——**床を先に撃つと、3 つ足りない理由が `problems` に入って
+    // いても印字されないまま段が死ぬ**（走行 36649080955 で実際にそうなった:
+    // `checked` が 425 で落ち、`problems` の行は実行されていない）。
+    // **説明を持つほうを先に。**
     expect(problems).toEqual([]);
+    expect(
+      checked,
+      `keys checked（押せないので飛ばした ${skipped.length} 個: ${tally(skipped)}）`,
+    ).toBeGreaterThanOrEqual(428);
   });
 }
