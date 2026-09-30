@@ -152,10 +152,17 @@ for (const size of TABLET_LANDSCAPE) {
     // 横向きで消える。** **1.1 と同じ「等しい」で撃つ。**
     const boxes = await keyBoxes(page);
     expect(boxes.length, "見たキーの数").toBeGreaterThanOrEqual(39);
-    const square = boxes.filter((b) => Math.round(b.h) === Math.round(b.w));
-    expect(square.length, "正方のキーの数").toBeGreaterThanOrEqual(25);
-    const sides = [...new Set(square.map((b) => Math.round(b.w)))];
-    expect(sides, `正方のキーの幅: ${JSON.stringify(sides)}`).toEqual([88]);
+    // **★ 形で選ぶ番人は、形が変わると黙って別のものを数える**
+    // （2026-09-30 の教訓）。**区画で選ぶ。「正方のキー」で選ばない。**
+    // **仕上げで関数の行も 44px の高さになり、44×44 の正方になった**ので、
+    // **形で選ぶと関数キーまで数える**（実測: `[44, 88]` で赤）。
+    // **天井が掛かるのは 10 キーの区画**である。
+    const tenKey = boxes.filter((b) => b.section === "数字と演算のキー");
+    expect(tenKey.length, "10 キーの数").toBe(25);
+    const sides = [...new Set(tenKey.map((b) => Math.round(b.w)))];
+    expect(sides, `10 キーの幅: ${JSON.stringify(sides)}`).toEqual([88]);
+    const heights = [...new Set(tenKey.map((b) => Math.round(b.h)))];
+    expect(heights, `10 キーの高さ: ${JSON.stringify(heights)}`).toEqual([88]);
   });
 }
 
