@@ -1,0 +1,234 @@
+name: Staging
+
+# **main にマージしたものを 1 本の固定 URL で見るためのワークフロー**
+# (設計書 `docs/superpowers/specs/2026-09-30-staging-url-design.md`)。
+# 出す先は `https://staging.calcarc.pages.dev`。
+#
+# **本番 `calc.terapyon.net` は `v*` タグだけである。そこは 1 バイトも変えない**
+# (裁定 2026-08-25、`docs/deploy.md`)。**このファイルは `deploy.yml` を
+# 1 行も触らない**——あちらの段は**本番配信でしか走らない**ので、触ると
+# **次の Release で初めて試される**(`deploy.yml` 自身の註)。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # **固定名。** `github.workflow` を混ぜない理由は `deploy.yml` と同じである。
+  group: staging-deploy
+  # **`true` にしない。** 続く push が `wrangler` の上載中を殺しうる
+  # ——**中断した Direct Upload が live になりうるかは未確認**である
+  # (`deploy.yml` の註 ②)。**確かめていないものを前提にしない。**
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    # **写さずに呼ぶ**(`release.yml:79` と同じ形)。**赤いものを staging に
+    # 出すと「直したつもりが出ていない」を生む**ので、4 分を払って通す
+    # (利用者の裁定 2026-09-29、設計書 §2.2)。
+    uses: ./.github/workflows/ci.yml
+
+  manuals:
+    name: Manuals
+    needs: ci
+    runs-on: ubuntu-latest
+    # **`release.yml` の `Manuals` と同じ 25 分を借りる**——同じ段
+    # (Chromium を `--with-deps` で入れ、`vite build` → `preview`)を持つ。
+    # **値を写したのではなく、同じ実績に同じ規則を当てている。**
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-web
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wasm-pkg
+          path: web/src/wasm/
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm manuals
+      - name: Keep the manuals
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: manuals
+          path: web/manual-dist/*.pdf
+          # **`warn` にしない**(`release.yml` と同じ理由)。
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    name: Deploy to staging
+    needs: manuals
+    runs-on: ubuntu-latest
+    # **仮の値である。** 本番の 20 分は**あちらの再試行予算(8 分)から出た数**で、
+    # こちらはスモークが 4 本(再試行を持つのは 3 本 = 6 分)なので、同じ規則を
+    # 当てるには**この走行の実績が要る**(設計書 §2.4c)。
+    # **初回の走行を測ってから据え直す**——それまでは、本番の 20 分に
+    # 「スモークが 1 本多い」ぶんを足した 25 分を置く。
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      # **staging に出せるのは main だけである**（レビュー役の条件 B2、2026-09-30）。
+      # **`workflow_dispatch` はどの枝からでも起動できる**ので、この段が無いと
+      # **作業枝のビルドが `staging.calcarc.pages.dev` に乗る**——**本番には届かないが、
+      # 「main にマージしたものを見る URL」という約束が黙って破れる。**
+      # **形は `deploy.yml` の 1 段目と同じ**（あちらは「v* タグからのみ」）。
+      - name: Guard — staging is deployed from main only
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "staging に出せるのは main だけ(いまの ref: $GITHUB_REF)。手動起動も main から打つ" >&2
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # **配る前に、本番がいま何を配っているかを控える**(設計書 §2.4 ②b)。
+      # **最後に効く番人はこれである**——どんな経路で枝名が壊れても、
+      # **本番が動いていないことをこの 1 本が見る。**
+      #
+      # **★ `≠ $GITHUB_SHA` にしない。** **リリース直後は main の先頭とタグの
+      # SHA が一致する**ので、**何も壊れていないのに赤くなる。**
+      # **「配る前と同じ」で見る。**
+      - name: Note what production is serving before we deploy
+        id: before
+        run: |
+          set -eu
+          commit="$(curl -fsS "https://calc.terapyon.net/build-info.json" \
+            | grep -o '"commit":"[^"]*"' | head -1)"
+          [ -n "$commit" ]
+          echo "production=$commit" >> "$GITHUB_OUTPUT"
+          echo "production is serving $commit"
+          # **本番が検索から消えていないこと**（設計書 §2.5、レビュー役の条件 B2）。
+          # **置き場はここである**——**main への push ごとに走る**ので設定画面から
+          # 入った経路も日の単位で見つかり、**`deploy.yml` を触らずに済み**、
+          # **赤くなっても本番は 1 バイトも動いていない**（staging の走行が止まるだけ）。
+          # **基線は 2026-09-30 の実測で 0 件。**
+          if curl -sSI "https://calc.terapyon.net/" | grep -qi x-robots-tag; then
+            echo "本番に X-Robots-Tag が付いている(検索から消える)" >&2
+            exit 1
+          fi
+      - uses: ./.github/actions/setup-wasm-pack
+      - run: wasm-pack build crates/calcarc-wasm --target web --out-dir ../../web/src/wasm
+      - uses: ./.github/actions/setup-web
+      - run: pnpm exec vite build
+        working-directory: web
+      # **`vite build` の後に入れる**——あれは `dist` を作り直すので、
+      # 先に入れると消える(`deploy.yml` の同じ段の註)。
+      - name: Put the manuals into what we deploy
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: manuals
+          path: web/dist/manual/
+      # **刻印に `"channel":"staging"` を足す**(設計書 §2.4b)。
+      # **本番と同じ形だと、人も番人も見分けに commit しか使えない。**
+      # **本番の刻印は触らない**——`deploy.yml` を触ると次の Release で初めて試される。
+      - name: Stamp the build
+        run: |
+          printf '{"commit":"%s","builtAt":"%s","channel":"staging"}\n' \
+            "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > web/dist/build-info.json
+      - run: pnpm check:sw
+        working-directory: web
+      # **検索に載せない**(設計書 §2.5)。**プレビュー URL は公開される**ので、
+      # **本番と同じ中身が 2 つの URL で引けると、利用者が staging に迷い込む。**
+      #
+      # **`web/public/_headers` には書かない**——あれは本番と共用である。
+      # **配る物にだけ足す。**
+      #
+      # **★ 先頭の改行を落とさない。** **`_headers` の末尾に改行が無いと
+      # `/*` が前の行に繋がり、規則が黙って別物になる**(設計書 §2.4 ②d)。
+      - name: Keep staging out of search results
+        # **★ ブロックスカラー(`|`)にする。** **引用符なしの 1 行に書くと YAML が
+        # 壊れる**——`X-Robots-Tag: noindex` の**コロン＋空白**でそこが鍵と値に
+        # 読まれ、**GitHub はファイルを解析できず、トリガも読めないまま
+        # 「失敗の走行」を作る**(2026-09-30 に実際に起きた。走行 36648277882、
+        # ジョブ 0 本、名前がファイルパスで表示された)。
+        # **番人は `tools/tests/workflow-yaml.test.ts`。**
+        run: |
+          printf '\n/*\n  X-Robots-Tag: noindex\n' >> web/dist/_headers
+      - uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "3.90.0"
+          # **★ `--branch` を省いてはいけない。** **省くと `wrangler` は git の
+          # 現在の枝名を使う**——**main への push で checkout した runner では
+          # HEAD が `main`** なので、**省略はそのまま本番配信である**
+          # (設計書 §1.3)。**変数も混ぜない**——`${{ }}` が入ると、
+          # 何が渡るかはこのファイルを読んでも分からなくなる。
+          # **この 1 行は `tools/tests/staging-workflow.test.ts` が等値で見張る。**
+          command: pages deploy web/dist --project-name=calcarc --branch=staging
+      # **刻印が一致するまで待つ**(`deploy.yml` の 1 本目と同じ形・同じ再試行)。
+      # **無いと「出たつもり」で終わる。**
+      - name: Smoke — staging is serving this build
+        run: |
+          set -eu
+          base="https://staging.calcarc.pages.dev"
+          for i in $(seq 1 12); do
+            served="$(curl -fsS "$base/build-info.json" | head -c 200)" || served=""
+            case "$served" in
+              *"$GITHUB_SHA"*)
+                echo "serving $GITHUB_SHA"
+                exit 0 ;;
+            esac
+            echo "attempt $i: not yet ($served)"
+            sleep 10
+          done
+          echo "staging did not converge to $GITHUB_SHA" >&2
+          exit 1
+      # **本番が動いていないこと**(設計書 §2.4 ②b)。**配る前に控えた値と同じ**
+      # であることを見る。**再試行しない**——**動いていないことの主張なので、
+      # 待つほど本物の事故を見逃す時間が延びるだけである。**
+      - name: Smoke — production did not move
+        env:
+          BEFORE: ${{ steps.before.outputs.production }}
+        run: |
+          set -eu
+          now="$(curl -fsS "https://calc.terapyon.net/build-info.json" \
+            | grep -o '"commit":"[^"]*"' | head -1)"
+          if [ "$now" != "$BEFORE" ]; then
+            echo "本番が動いた: $BEFORE → $now(staging の配信が本番に届いている)" >&2
+            exit 1
+          fi
+          echo "production is unchanged ($now)"
+      # **配った PDF が届いていること**(設計書 §2.4 ②c)。**§2.3 が PDF を作る
+      # 理由は「404 にしない」**なので、**検査しなければ裁定の当のものが未検査になる。**
+      # **名前は配った物から取る**——版数を綴ると、上げ忘れた日に緑になる。
+      - name: Smoke — the manuals we deployed are being served
+        run: |
+          set -eu
+          base="https://staging.calcarc.pages.dev"
+          pdf="$(ls web/dist/manual | head -1)"
+          [ -n "$pdf" ]
+          last="(まだ何も見ていない)"
+          for i in $(seq 1 12); do
+            type="$(curl -sSI "$base/manual/$pdf" | grep -i '^content-type:' | head -1)"
+            case "$type" in
+              *application/pdf*)
+                echo "serving $pdf"
+                exit 0 ;;
+            esac
+            last="content-type が ${type:-(無し)}"
+            echo "attempt $i: $last"
+            sleep 10
+          done
+          echo "12 回の再試行のあとも PDF が届かなかった: $last" >&2
+          exit 1
+      # **`noindex` が在ること**(設計書 §2.4 ②d)。**`dist/_headers` への追記は
+      # 黙って失敗しうる**ので、**配った先で在ることを見る。**
+      - name: Smoke — staging is marked noindex
+        run: |
+          set -eu
+          base="https://staging.calcarc.pages.dev"
+          for i in $(seq 1 12); do
+            if curl -fsSI "$base/" | grep -qi '^x-robots-tag:.*noindex'; then
+              echo "noindex is set (attempt $i)"
+              exit 0
+            fi
+            echo "attempt $i: no noindex yet"
+            sleep 10
+          done
+          echo "staging is not marked noindex" >&2
+          exit 1
