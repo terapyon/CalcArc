@@ -292,7 +292,11 @@ export function DataScalePanel() {
       : (first ?? second ?? (ok ? `${ok.bytesGrouped} bytes` : ""));
 
   return (
-    <section className={styles.panel} aria-label="データスケール計算">
+    <section
+      className={styles.panel}
+      data-board
+      aria-label="データスケール計算"
+    >
       <Readout
         entries={entries}
         main={answer}

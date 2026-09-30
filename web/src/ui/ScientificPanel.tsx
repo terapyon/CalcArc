@@ -670,7 +670,7 @@ export function ScientificPanel() {
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-board>
       {showingHistory ? (
         // **盤面が丸ごと隠れる**(設計書 §9)。`Display` も含めて置き換える
         // ——`History.module.css` が Readout と同じ表示色を器の地色に

@@ -403,7 +403,7 @@ export function UnitPanel({ category }: { category: ConvertCategoryId }) {
   })).filter((item) => item.active || item.value !== "");
 
   return (
-    <section className={styles.panel} aria-label="単位変換">
+    <section className={styles.panel} data-board aria-label="単位変換">
       <Readout
         entries={entries}
         main={answer}

@@ -54,8 +54,12 @@ calculations.
   screens are left out of that check). This too runs in a browser engine, not on a physical iPhone
 - **The answer stays on screen while you scroll.** Before 1.1, holding a phone sideways and
   reaching the lower keys pushed the answer off the top of the screen
-- **On a tablet the board grows a little** (keys stop at 88px a side). **A phone held
-  sideways is not widened** — there is not enough height for square keys
+- **On a tablet the board grows a little** (keys stop at 88px a side)
+- **Held sideways, the scientific calculator splits into two columns** — the display and the
+  function keys on the left, the 5×5 of digits and operators on the right. **Opened from the
+  home screen it then fits on one screen.** **Only the scientific calculator splits**; the unit
+  converter, the scale calculators and the finance calculator still stack, so you scroll to
+  reach the lower keys
 
 ## 2. The four tabs
 

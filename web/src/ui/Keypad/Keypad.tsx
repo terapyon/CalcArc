@@ -48,7 +48,7 @@ export function Keypad<T>({
   const [shifted, setShifted] = useState(false);
 
   return (
-    <div className={styles.keypad}>
+    <div className={styles.keypad} data-keypad>
       {/* **読み上げにだけ届く説明。** 画面には出さない——形（破線）が
           見える側の手がかりで、こちらは見えない側の手がかりである。
           **`hidden` を使わない**——`hidden` な要素を指す `aria-describedby` は
@@ -61,6 +61,17 @@ export function Keypad<T>({
           key={section.ariaLabel}
           className={`${styles.section} ${styles[section.height]}`}
           aria-label={section.ariaLabel}
+          // **横向きで右の段へ送る区画の印**（1.1.0）。**CSS Modules のクラスは
+          // ハッシュ化されるので、`tokens.css`（グローバル）からは狙えない。**
+          // **「正方のキーの区画」＝ 10 キー部**で、**どの電卓にも同時に 1 つだけ在る**
+          // （2026-09-30 に 13 画面で実測）。
+          data-square={
+            section.height === "square" &&
+            section.columns === 5 &&
+            section.keys.length === 25
+              ? ""
+              : undefined
+          }
           style={{ "--keypad-columns": section.columns } as CSSProperties}
         >
           {section.keys.map((key, index) => {
