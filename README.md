@@ -13,7 +13,7 @@
 
 ## 現在の版
 
-**1.0.0（正式版）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
+**1.1.0（正式版）** — 変更点は [CHANGELOG.md](CHANGELOG.md) に、
 リリースごとの記録は [Releases](https://github.com/terapyon/CalcArc/releases) にある。
 
 **正式版として約束すること:**

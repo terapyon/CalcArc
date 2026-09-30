@@ -155,11 +155,23 @@ export function findDisabledPropComingBack(files) {
   return found;
 }
 
-/** 値としての `44px` を書いてよい唯一の場所。 */
+/** 値としての `44px`・`88px` を書いてよい唯一の場所。 */
 const TOUCH_TARGET_HOME = "web/src/ui/tokens.css";
 
 /**
- * `44px` を CSS の**値**として書いている行を、`tokens.css` の外から拾う。
+ * タッチ標的の**床と天井**。どちらも**このプロジェクトが選んだ値**である
+ * ——`44px` は指の下限(base-spec §43 が求めるのは "Touch target size" までで、
+ * 44 を選んだのはこちら)、`88px` は「間延びしない上限」(**利用者の裁定
+ * 2026-09-29「横幅はそこまで大きくしなくて良い」**)。
+ *
+ * **2 つを 1 つの見張りで見る。** 片方だけ見張ると、**もう片方は註に書かれた
+ * 規律のまま番人を持たない**——それが 2026-09-04 に `44px` で塞いだ穴の形で
+ * ある(このファイルの 4 本目)。
+ */
+const TOUCH_TARGET_VALUES = ["44px", "88px"];
+
+/**
+ * `44px`（既定）などを CSS の**値**として書いている行を、`tokens.css` の外から拾う。
  *
  * **宣言だけを見る。** `min-width: 44px` は違反だが、コメントの中の `44px`
  * は違反にしない——**理由を書いた行が規則違反になる**のは検査の側の誤りで
@@ -170,18 +182,30 @@ const TOUCH_TARGET_HOME = "web/src/ui/tokens.css";
  * 直に書いているが、**テストが期待値を自分で持つのは正しい**——トークンを
  * 読んで突き合わせたら、両方が同時に間違っても緑になる。
  *
+ * **値は引数で受ける。** `44` を直書きしていたのを 1.1 で一般化した
+ * ——**天井 `88px` も同じ罠を持つ**(値を選んだ理由が註にしか無い状態)。
+ * **呼ぶ側が値ごとに分けて呼ぶ**のは、**報告の文で「どちらが破られたか」が
+ * 分かるようにするため**である(まとめて返すと、直す人が註を読み直すことになる)。
+ *
  * @param {SourceFile[]} files
+ * @param {string} value 見張る値。既定は床の `44px`
  * @returns {Violation[]}
  */
-export function findTouchTargetOutsideTokens(files) {
+export function findTouchTargetOutsideTokens(files, value = "44px") {
   /** @type {Violation[]} */
   const found = [];
+  // **数字は正規表現のリテラルではなく値から組む。** `\b` を付けるので
+  // **`188px` は `88px` に一致しない**(語の境界が無い)——実物の
+  // `--display-size-status` のような値を巻き込まないための形である。
+  const declaration = new RegExp(
+    `^\\s*[-a-zA-Z]+\\s*:\\s*[^;{]*\\b${value.replace(".", "\\.")}\\b`,
+  );
   for (const file of files) {
     if (!file.path.endsWith(".css") || file.path === TOUCH_TARGET_HOME) {
       continue;
     }
     file.text.split("\n").forEach((text, index) => {
-      if (/^\s*[-a-zA-Z]+\s*:\s*[^;{]*\b44px\b/.test(text)) {
+      if (declaration.test(text)) {
         found.push({ path: file.path, line: index + 1, text: text.trim() });
       }
     });
@@ -342,7 +366,13 @@ function main() {
   const heavy = findBoundaryViolations(files);
   const ui = findUiLeakIntoCalc(files);
   const back = findDisabledPropComingBack(files);
-  const touch = findTouchTargetOutsideTokens(files);
+  // **値ごとに分けて呼ぶ。** まとめて返すと、報告の文が「どちらが破られたか」を
+  // 言えない(上の註)。
+  const touch = TOUCH_TARGET_VALUES.map((value) => ({
+    value,
+    found: findTouchTargetOutsideTokens(files, value),
+  }));
+  const touchBroken = touch.filter((one) => one.found.length > 0);
   const hidden = findVisuallyHiddenOutsideTokens(files);
   // **全部を印字してから落ちる。** 1 つ目で `exit` すると、2 つ壊れている日に
   // 1 つしか見えず、直して回し直して初めてもう 1 つが出る。
@@ -350,8 +380,9 @@ function main() {
   if (ui.length > 0) report("web/src/calc が UI Framework を知っている", ui);
   if (back.length > 0)
     report("Key / Keypad に disabled の口が戻っている", back);
-  if (touch.length > 0)
-    report(`44px が ${TOUCH_TARGET_HOME} の外に書かれている`, touch);
+  for (const { value, found } of touchBroken) {
+    report(`${value} が ${TOUCH_TARGET_HOME} の外に書かれている`, found);
+  }
   if (hidden.length > 0)
     report(
       `視覚的に隠す綴りが ${VISUALLY_HIDDEN_HOME} の外に書かれている`,
@@ -361,13 +392,13 @@ function main() {
     heavy.length > 0 ||
     ui.length > 0 ||
     back.length > 0 ||
-    touch.length > 0 ||
+    touchBroken.length > 0 ||
     hidden.length > 0
   ) {
     process.exit(1);
   }
   console.log(
-    "check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件 / tokens.css の外の 44px 0 件 / tokens.css の外の visually-hidden 0 件",
+    `check:boundary OK — web から重量級への参照 0 件 / calc から UI への参照 0 件 / Key・Keypad に disabled の口 0 件 / tokens.css の外の ${TOUCH_TARGET_VALUES.join("・")} 0 件 / tokens.css の外の visually-hidden 0 件`,
   );
 }
 

@@ -13,7 +13,7 @@ No installation needed. Add it to your home screen to launch it like an app — 
 
 ## Current version
 
-**1.0.0** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
+**1.1.0** — Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the record of
 each release is in [Releases](https://github.com/terapyon/CalcArc/releases).
 
 **What 1.0 promises:**

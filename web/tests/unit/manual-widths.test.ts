@@ -13,7 +13,14 @@ import { readManuals } from "./manuals";
  * (`manual-key-names.test.ts`)と同じ考え方で、**文の中の数字を定数と突き合わせる。**
  */
 const JA = /幅 (\d+)px 以上/g;
-const EN = /from (\d+)px wide/g;
+/**
+ * `px` と `wide` のあいだは `\s+` である。**README.en.md は
+ * 「from 360px」で行が折り返しており**(`README.en.md:33-34`)、1 つの空白を
+ * 綴った正規表現では**360 を落として 375 だけを拾う**——2026-09-29、README を
+ * この番人に足すときに実測した(厳密: `[375]` / 空白許容: `[360, 375]`)。
+ * マニュアル 3 冊は 1 行に収まっているので、**広げても拾う数は変わらない。**
+ */
+const EN = /from (\d+)px\s+wide/g;
 
 const widthsIn = (text: string, pattern: RegExp) =>
   [...text.matchAll(pattern)].map((m) => Number(m[1]));
@@ -51,5 +58,31 @@ describe("マニュアルの画面幅は E2E の幅と同じである", () => {
     );
     expect(widths.length).toBeGreaterThan(0);
     expect(Math.min(...widths)).toBe(CHROMIUM_NARROW_WIDTH);
+  });
+});
+
+/**
+ * **README 2 冊も、同じ幅を書いている**(`README.md:33-34`・`README.en.md:33-34`)。
+ *
+ * **1.0 の時点で、この 2 冊だけ誰も見ていなかった**——幅の数はマニュアル 3 冊・
+ * `widths.ts`・README 2 冊の 3 か所に在り、**上の番人が見るのは前の 2 つだけ**で、
+ * README は「番人が無い」と裁定して持ち越した穴だった(2026-09-24)。
+ *
+ * **幅を触る前に置く。** あとから置くと、**番人は「変えた結果」を追認するだけ**に
+ * なる——1.1 で広い配置に入るので、その前にここを塞ぐ(計画 Task 1)。
+ */
+const REPO = join(import.meta.dirname, "..", "..", "..");
+const READMES = ["README.md", "README.en.md"];
+
+describe("README の画面幅は E2E の幅と同じである", () => {
+  it("2 冊とも、2 つのエンジンの幅を書いている", () => {
+    for (const readme of READMES) {
+      const text = readFileSync(join(REPO, readme), "utf8");
+      const found = widthsIn(text, readme.endsWith(".en.md") ? EN : JA);
+      expect(found, `${readme} の画面幅`).toEqual([
+        CHROMIUM_NARROW_WIDTH,
+        WEBKIT_NARROW_WIDTH,
+      ]);
+    }
   });
 });

@@ -54,6 +54,15 @@ export const SAFARI_VIEWPORTS = [
   { device: "iPhone 13 mini", width: 375, height: 629 },
 ] as const;
 
+/**
+ * **スマホの横持ち**。高さが幅より小さい組み合わせは、2026-09-29 まで E2E に
+ * 0 件だった。844×390 は iPhone 13/14 を、667×375 は SE を横にした寸法である。
+ */
+export const LANDSCAPE_VIEWPORTS = [
+  { device: "iPhone 13", width: 844, height: 390 },
+  { device: "iPhone SE", width: 667, height: 375 },
+] as const;
+
 /** 360×800 の検査を、WebKit では 375×812 で測る。Chromium は 360×800 のまま。 */
 export function narrowSize(browserName: string): {
   width: number;
@@ -63,3 +72,17 @@ export function narrowSize(browserName: string): {
     ? { width: WEBKIT_NARROW_WIDTH, height: WEBKIT_NARROW_HEIGHT }
     : { width: CHROMIUM_NARROW_WIDTH, height: 800 };
 }
+
+/**
+ * **タブレット**。**短辺が 600px 以上ある寸法**だけを並べる（設計 §2.2）。
+ * 768×1024 は旧 iPad の縦、1024×768 はその横、1180×820 は iPad Air の横である。
+ *
+ * **600 で切るのは、当たる相手が画面ではなく viewport だから**である
+ * ——**タブで開くとツールバーのぶん高さが小さく**、700 では iPad mini（短辺 744）で
+ * 余裕が 44px しか残らない。**600 なら 144px あり、スマホの短辺 440px はなお入らない。**
+ */
+export const TABLET_VIEWPORTS = [
+  { device: "iPad portrait", width: 768, height: 1024 },
+  { device: "iPad landscape", width: 1024, height: 768 },
+  { device: "iPad Air landscape", width: 1180, height: 820 },
+] as const;
