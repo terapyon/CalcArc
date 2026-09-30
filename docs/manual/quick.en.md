@@ -59,6 +59,8 @@ calculations.
   the input fields and the function keys on the left, the ten digit keys on the right.
   **In a browser tab, a little scrolling is still needed.**
   **The 【LLM のメモリ LLM Memory】 screen has no ten-key block, so it does not rearrange**
+- **The 【為替 Currency】 screen needs a little scrolling while it has no rates** (the same
+  holds in portrait)
 
 ## 2. The four tabs
 
