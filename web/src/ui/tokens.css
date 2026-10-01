@@ -325,8 +325,15 @@ body {
        ——**これが「10 キーの大きさが面で違う」の 2 つ目の原因**である）。
        **左の中身はいまのところ最大 4 つ**（表示欄・モード行・項目行・免責）
        なので、**4 行 ＋ 余りを吸う 1 行**を明示する。 */
-    grid-template-rows: auto auto auto auto 1fr;
-    align-content: start;
+    /* **★ 余りの吸い口（`1fr`）を置かず、`align-content: stretch` で行に配る**
+       （2026-09-30、U4。**利用者の指摘「ファンクションキーが押しにくい」**）。
+       **`1fr` の吸い口が在ると、余りは全部そこへ行き、関数の行は 44px のまま**
+       だった。**行に配ると、関数の区画が余りを受け取って育つ**
+       （実測 844×390: 44 → 50.3。**面ごとに違う高さになるが、それは構わない**
+       ——**利用者が求めたのは 10 キーの揃い**である）。
+       **行は左の中身の数より多く取る**（下の註）。 */
+    grid-template-rows: auto auto auto auto;
+    align-content: stretch;
     /* **隙間は 4px に詰める**（横向きだけ）。**8px は縦持ちの値**で、
        **横向きで 4 にするのは「縦が足りないから」**である——**実測（2026-09-30）:
        4px に詰めると 844×390 で金融の残り 10px が埋まり、全画面が 0 になる。**
@@ -485,8 +492,29 @@ body {
      だが、**あそこはモード行が倍高 68px なので、44px に落とすと逆に空く**）。
      **`.half > button` は `(0,1,1)`**、こちらは属性＋`:not()`＋型で **`(0,2,1)`**
      なので勝つ（**このリポジトリで 6 度目の詳細度**）。 */
-  [data-keypad] > fieldset:not([data-square]) > button {
+  [data-board]:has([data-square])
+    [data-keypad]
+    > fieldset:not([data-square])
+    > button {
     height: auto;
     min-height: var(--touch-target-min);
+  }
+
+  /* **区画は器の行いっぱいに伸びる**（2026-09-30）。**これがボタンを大きくする**
+     ——**区画は格子の項目なので、`align-self: stretch` で行の高さを受け取り、
+     中のボタンは既定で区画いっぱいに伸びる**（ボタンの `height` は上の段で
+     `auto` にしてある）。
+     **★ はじめ「区画の中の行（`grid-auto-rows`）も `1fr` にしないとボタンは
+     44px のまま」と書いていたが、それは誤りだった**——**`auto` に戻しても
+     50.3px のまま**である（2026-09-30 に変異させて実測。**番人が緑のままだったので
+     気づいた**）。**効いているのは `align-self: stretch` と、器の
+     `align-content: stretch` の 2 つ**である。
+     **当てるのは 2 列になる器の中だけ**——**`#scale/llm` は 10 キーを持たず
+     積んだまま**で、そこへ当てると**候補キーの行が天井 88px に潰れて重なる**
+     （実測: `short-screens` が `covered by <button>` で 4 本赤）。
+     **天井は 10 キーと同じ `--touch-target-max`**（数を 1 つ増やさない）。 */
+  [data-board]:has([data-square]) [data-keypad] > fieldset:not([data-square]) {
+    align-self: stretch;
+    max-height: var(--touch-target-max);
   }
 }

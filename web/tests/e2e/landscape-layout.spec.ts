@@ -1,5 +1,31 @@
 import { PROMISED_URLS } from "../promised-urls";
-import { expect, type Page, test } from "./fixtures";
+import { expect, type Page, PROVIDER_GLOB, test } from "./fixtures";
+
+/**
+ * **為替のレートを用意する。**
+ *
+ * **既定ではプロバイダが塞がれている**（`fixtures.ts`）ので、**`#convert/currency` は
+ * 「為替レートがありません。インターネットに接続して取得してください。」の 72px の
+ * 段落を出す**——**そのぶん画面が伸びる**（2026-09-30 実測: `844×390` で 14px、
+ * `667×375` で 29px、**縦持ちの `390×844` でも 16px**）。
+ *
+ * **★ 段落は「取得が失敗した」と決まってから出る。** **`toBeVisible()` の直後に
+ * 測ると、まだ出ていない**——**巡回が「収まっている」と答えていたのはそのため**
+ * である（実測: 待ち 0ms で `over=0`、200ms で `over=14`）。**待つのは時間ではなく
+ * 状態**にする（下の 2 本）。
+ */
+const SERVED_RATES = `{"result":"success","provider":"https://open.er-api.com","time_last_update_utc":"Fri, 14 Aug 2026 00:02:31 +0000","base_code":"USD","rates":{"USD":1,"JPY":155.23,"EUR":0.92}}`;
+
+async function serveRates(page: Page) {
+  await page.route(PROVIDER_GLOB, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: SERVED_RATES,
+    });
+  });
+}
+
 import { LANDSCAPE_VIEWPORTS } from "./widths";
 
 /**
@@ -187,6 +213,10 @@ for (const size of LANDSCAPE_VIEWPORTS) {
     page,
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height });
+    // **レートが在る状態で測る**（2026-09-30）。**無い状態の `#convert/currency` は
+    // 段落のぶん伸びる**ので、**そちらは下の「レートが無い状態」の番人が釘で留める。**
+    // **文書が乗っているのは、この「レートが在る状態で 12 面すべて収まる」**である。
+    await serveRates(page);
     let split = 0;
     let stacked = 0;
     const keySizes = new Set<string>();
@@ -194,6 +224,18 @@ for (const size of LANDSCAPE_VIEWPORTS) {
       if (hash === "#manual") continue;
       await page.goto(`/${hash}`);
       await expect(page.locator("main button").first()).toBeVisible();
+      if (hash === "#convert/currency") {
+        // **★ 用意したレートが届いたことを、状態で待つ**（2026-09-30）。
+        // **待たないと、この番人は `serveRates` を外しても緑のまま**である
+        // ——**「為替レートがありません」の段落は、取得の失敗が決まってから出る**ので、
+        // **`toBeVisible()` の直後だとまだ出ていない**（実測: 待ち 0ms で `over=0`、
+        // 200ms で `over=14`）。**用意したつもりのものが届いたかを見ない番人は、
+        // 何も主張していない。**
+        // **日付は `SERVED_RATES` の `time_last_update_utc` から出る。**
+        await expect(page.getByTestId("currency-rate-date")).toHaveText(
+          "Rate: 2026-08-14",
+        );
+      }
       const seen = await page.evaluate(() => {
         const square = document.querySelector("[data-square]");
         if (square === null) return null;
@@ -231,6 +273,29 @@ for (const size of LANDSCAPE_VIEWPORTS) {
               Math.max(...left.map((el) => el.getBoundingClientRect().right)),
           ),
           shortest: Math.round(Math.min(...keys.map((r) => r.height))),
+          functionHeight: Math.round(
+            document
+              .querySelector(
+                "[data-keypad] > fieldset:not([data-square]) button",
+              )
+              ?.getBoundingClientRect().height ?? -1,
+          ),
+          // **左の段の余り**——**器の中身の高さから、左の項目と隙間を引いた残り。**
+          // **余りが残っていれば、関数の行はまだ伸びられる**ということである。
+          slack: (() => {
+            const style = getComputedStyle(board);
+            const pad = Number.parseFloat(style.paddingTop);
+            const gap = Number.parseFloat(style.rowGap);
+            const used =
+              left.reduce(
+                (sum, el) => sum + el.getBoundingClientRect().height,
+                0,
+              ) +
+              (left.length - 1) * gap;
+            return Math.round(
+              board.getBoundingClientRect().height - pad * 2 - used,
+            );
+          })(),
           leftOf: left.every(
             (el) => el.getBoundingClientRect().left < right.right,
           ),
@@ -252,6 +317,25 @@ for (const size of LANDSCAPE_VIEWPORTS) {
         seen.shortest,
         `${hash} でいちばん低いキー`,
       ).toBeGreaterThanOrEqual(44);
+      // **利用者の ③ の番人**（2026-09-30）——**どのキーも床より高い。**
+      // **床ちょうど（44）で止まっていたら、伸びる仕組みが外れている。**
+      //
+      // **★ 「余りを使い切った」では撃てなかった**（実測: 余りは 29px 残る）
+      // ——**器の空の行にも余りが配られる**ためで、**それは捨てているのではなく、
+      // 行の数を中身より多く取っている副作用**である。
+      // **関数の行の高さは面ごとに違ってよい**——**利用者が求めたのは 10 キーの
+      // 揃い**であって、関数キーの高さではない（実測 844×390: 50.3 / 50.3 / 49）。
+      expect(
+        seen.shortest,
+        `${hash} でいちばん低いキー（伸びたか）`,
+      ).toBeGreaterThan(44);
+      // **★ `> 44` だけでは弱い**（レビュー役 2026-09-30）——**余りの配り方が
+      // 変わっても通る**（U8 の 49/49/47.2 でも真）。**関数電卓の関数行を
+      // `844×390` で釘で留める**（`panel-sizing.spec.ts` の 366/67 と同じ形。
+      // **配り方を変える日は、この数を据え直す**）。
+      if (hash === "#scientific" && size.width === 844) {
+        expect(seen.functionHeight, "関数キーの高さ").toBe(50);
+      }
     }
     // **利用者の ①**: **10 キーの大きさが、タブによって違わない。**
     expect(
@@ -307,5 +391,66 @@ for (const size of LANDSCAPE_VIEWPORTS) {
     // **0 件で緑にしない。** タブは 4 つ（Scientific・Convert・Scale・Finance）。
     expect(covered.tabs, "見たタブの数").toBe(4);
     expect(covered.covered, "帯に隠れたタブ").toEqual([]);
+  });
+}
+
+/**
+ * **レートが無いときの為替の画面**（**既知の状態。直さない**——利用者への報告を経た
+ * 裁定 2026-09-30）。
+ *
+ * **★ 主張は「溢れること」ではない**（2026-10-01 に直した）。**手元では溢れるが、
+ * CI では溢れない**——**走行 36799445040 で `Expected: > 0 / Received: 0`**（Chromium も
+ * WebKit も）。**あの段落の高さは字で決まる**（手元: `system-ui` が解決した書体で
+ * **2 行・72px**、幅 356px、`font-size: 16px`、`line-height: normal`）ので、
+ * **書体の違う機械では折り返しが変わり、収まってしまう。**
+ *
+ * **★ 「手元の緑は CI の緑ではない」の裏返しである**——**手元の赤も、CI の赤ではない。**
+ * **次に「手元で溢れた」を根拠に何かを書く人へ**: **字で決まる高さは機械で変わる。**
+ *
+ * **だからここが主張するのは 2 つ**: **その状態に居ること**（案内が出ている）と、
+ * **黙って悪化しないこと**（上限）。**溢れる量そのものは環境で変わるので、
+ * 下限では留めない。**
+ *
+ * **実測（手元、2026-10-01）**: `844×390` で 10px、`667×375` で 25px、
+ * **縦持ち `390×844` でも 16px**——**横向き固有ではない**（縦持ちは私たちが
+ * 触っていない所である）。
+ */
+for (const size of [
+  { device: "iPhone 13 landscape", width: 844, height: 390 },
+  { device: "iPhone SE landscape", width: 667, height: 375 },
+  { device: "iPhone 13 portrait", width: 390, height: 844 },
+]) {
+  test(`the currency screen stays bounded without rates at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    // **レートは用意しない**（`fixtures.ts` の既定でプロバイダは塞がれている）。
+    await page.goto("/#convert/currency");
+    await expect(page.locator("main button").first()).toBeVisible();
+    // **★ この状態に居ることの証拠**——**段落が出るのは「取得が失敗した」と
+    // 決まってから**なので、**待たずに測ると、まだ出ていない状態を測る**
+    // （実測: 待ち 0ms で `over=0`、200ms で `over=14`）。
+    await expect(
+      page.getByText("為替レートがありません", { exact: false }),
+    ).toBeVisible();
+
+    const seen = await page.evaluate(() => {
+      const notice = [...document.querySelectorAll("[data-board] p")].find(
+        (el) => (el.textContent ?? "").includes("為替レートがありません"),
+      );
+      return {
+        over:
+          document.documentElement.scrollHeight -
+          document.documentElement.clientHeight,
+        notice: Math.round(notice?.getBoundingClientRect().height ?? -1),
+      };
+    });
+    // **走行に数を残す**——**環境で変わる数なので、赤くなった日に「どの機械で
+    // 何 px だったか」が要る。**
+    console.log(
+      `[currency] ${size.width}x${size.height} 溢れ=${seen.over} 案内の高さ=${seen.notice}`,
+    );
+    // **黙って悪化しない上限。** **下限では留めない**（上の註）。
+    expect(seen.over, "レートが無いときの溢れが増えた").toBeLessThanOrEqual(40);
   });
 }
