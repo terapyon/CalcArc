@@ -38,7 +38,6 @@
    指定しないと面を入れ替えるたびに画面が伸び縮みする(DataScale で実測済みの
    事故、19px)。**綴りが 1 文字でも違うと、その面だけ枠が崩れる**ので、
    aria-label は `web/src/ui/Keypad/transfer.ts` の実物と突き合わせること。 */
-.panel :global(fieldset[aria-label="数字と演算のキー"]),
 .panel :global(fieldset[aria-label="帯域幅の単位のキー"]),
 .panel :global(fieldset[aria-label="時間の単位のキー"]) {
   grid-template-rows: repeat(5, 1fr);

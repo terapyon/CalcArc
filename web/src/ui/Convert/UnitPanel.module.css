@@ -44,7 +44,6 @@
    **綴りが 1 文字でも違うと、その面だけ枠が崩れる**ので、aria-label は
    `web/src/ui/Keypad/convert.ts` の実物と突き合わせること。**単位面の名前は
    カテゴリで変えない**(変換元と変換先で同じ面が出る)。 */
-.panel :global(fieldset[aria-label="数字と演算のキー"]),
 .panel :global(fieldset[aria-label="単位のキー"]) {
   grid-template-rows: repeat(5, 1fr);
   aspect-ratio: 1 / 1;

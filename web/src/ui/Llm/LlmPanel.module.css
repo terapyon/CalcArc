@@ -71,7 +71,6 @@
    7 つ(数字面 1 + 候補面 6)である。1 つでも漏らすと、その面だけ中身の
    行数ぶんに枠が伸び縮みする(DataScalePanel.module.css で実測済みの事故、
    19px)。 */
-.panel :global(fieldset[aria-label="数字と演算のキー"]),
 .panel :global(fieldset[aria-label="パラメータ数の候補キー"]),
 .panel :global(fieldset[aria-label="重みの精度のキー"]),
 .panel :global(fieldset[aria-label="KVヘッド数の候補キー"]),
