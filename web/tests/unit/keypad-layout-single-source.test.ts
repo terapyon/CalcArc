@@ -8,9 +8,12 @@ import { describe, expect, it } from "vitest";
  *
  * **利用者が実機で問うた**——「**10 キーの実装が二重化されているのでしょうか?
  * 表示する中身は別ですが、配置は同じだと思います**」。**数えたら実在した**:
- * **行（`grid-template-rows: repeat(5, 1fr)`）が 4 か所**、
- * **区画の正方（`aspect-ratio: 1 / 1`）が 3 か所**——**そして正方のほうは
- * Convert・Data Scale・Transfer にだけ在り、関数電卓と金融電卓には無かった。**
+ * **行（`grid-template-rows: repeat(5, 1fr)`）が 5 か所**、
+ * **区画の正方（`aspect-ratio: 1 / 1`）が 4 か所**——**そして正方のほうは
+ * Convert・Data Scale・Transfer・LLM にだけ在り、関数電卓と金融電卓には
+ * 無かった**（**LLM は最初 3 か所と数えて落としていた**——**`grep -B3` で
+ * 選択子の後ろしか見ておらず、同じ規則の先頭に綴りが在った。この番人を
+ * 走らせた赤で気づいた**）。
  * **利用者の「2 個はうまくいかず、2 個で問題ない」と同じ割れ方**である。
  *
  * **直すだけでは、また増える**（[[same-defect-four-times]]）。**だからここが数える。**
@@ -28,6 +31,15 @@ import { describe, expect, it } from "vitest";
  * **数えないもの**: **横向きの段の上書き**（`tokens.css` の `aspect-ratio: auto`）。
  * **あれは「同じことの写し」ではなく、段を出入りするための上書き**である
  * ——**下の最後の主張が、その 1 か所だけであることを見る。**
+ *
+ * **★ この番人が言えるのは「10 キーを名指しする規則は 1 か所」であって、
+ * 「10 キーに効く規則は 1 か所」ではない**（レビュー役の変異 U7、2026-10-03）。
+ * **印を持たない一般の選択子**（`.section`、`[data-keypad] > fieldset` など）
+ * **に行や正方を書けば、10 キーに効くのにここは数えない。**
+ * **いまそれは 0 件である**——**`web/src/ui` の CSS で行か正方を宣言している
+ * 規則は 10 件、うち印つきが 4 件、印なしが 6 件**で、**6 件はすべて別の区画
+ * （単位・データ型・候補キー・帯域幅/時間）か、10 キーの祖先（`main` と器）を
+ * 指している**（2026-10-03 に数えた）。**10 キーに効きうる無印の宣言は 0 件。**
  */
 const UI = join(import.meta.dirname, "..", "..", "src", "ui");
 
@@ -123,17 +135,17 @@ describe("10 キーの配置は 1 か所が決める", () => {
   });
 
   it("区画の正方（`aspect-ratio: 1 / 1`）は 1 か所だけである", () => {
-    // **2026-10-03 まで 3 か所に在った**（`Convert/UnitPanel`・
-    // `DataScale/DataScalePanel`・`Transfer/TransferPanel`）——**そして
-    // `Keypad.module.css` には無かった**ので、**関数電卓と金融電卓だけ
-    // 箱の高さが中身なり**だった。
+    // **2026-10-03 まで 4 か所に在った**（`Convert/UnitPanel`・
+    // `DataScale/DataScalePanel`・`Transfer/TransferPanel`・`Llm/LlmPanel`）
+    // ——**そして `Keypad.module.css` には無かった**ので、**関数電卓と
+    // 金融電卓だけ箱の高さが中身なり**だった。
     expect(declaringFiles(/aspect-ratio:\s*1\s*\/\s*1/)).toEqual([
       join("Keypad", "Keypad.module.css"),
     ]);
   });
 
   it("区画の行（`grid-template-rows`）は 1 か所だけである", () => {
-    // **2026-10-03 まで 4 か所**（上の 3 つ ＋ `Keypad.module.css`）。
+    // **2026-10-03 まで 5 か所**（上の 4 つ ＋ `Keypad.module.css`）。
     expect(declaringFiles(/grid-template-rows:/)).toEqual([
       join("Keypad", "Keypad.module.css"),
     ]);
