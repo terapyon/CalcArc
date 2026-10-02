@@ -85,6 +85,11 @@ export const TABLET_VIEWPORTS = [
   { device: "iPad portrait", width: 768, height: 1024 },
   { device: "iPad landscape", width: 1024, height: 768 },
   { device: "iPad Air landscape", width: 1180, height: 820 },
+  // **★ 利用者が実機で見ているのはこれである**（2026-10-02——
+  // 「**iPad mini は横向きで見ていますよ**」）。**iPad mini 6 の横**。
+  // **ここに足すと `landscape-layout.spec.ts` のタブレット横向きの番人も
+  // この寸法を回る**（あちらは幅 > 高さで絞る）。
+  { device: "iPad mini landscape", width: 1133, height: 744 },
 ] as const;
 
 /**
