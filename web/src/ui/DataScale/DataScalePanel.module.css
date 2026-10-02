@@ -79,7 +79,6 @@
    **5 列 × 5 行の正方キーの格子は、それ自体が正方形である**——列数と行数が
    同じで、キーが正方で、間隔が一様だからである。だから縦横比で押さえる。
    中身の行数に依存しないので、型面のキーが増えても減っても枠は動かない。 */
-.panel :global(fieldset[aria-label="数字と演算のキー"]),
 .panel :global(fieldset[aria-label="データ型のキー"]),
 .panel :global(fieldset[aria-label="次元数の候補キー"]) {
   grid-template-rows: repeat(5, 1fr);

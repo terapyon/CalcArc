@@ -80,6 +80,13 @@ for (const hash of TABS) {
             // `aspect-ratio: 1 / 1`、横向きは `auto` である**。**戻ったときに
             // `1 / 1` が当たり直っていなければ、キーは「幅は縦持ち・高さは横向き」に
             // なりうる**（それが「縦のスペースが詰まる」の形である）。
+            // **★ `aspectRatio` の `"1 / 1"` は綴りである**（2026-10-03）。
+            // **いまは両方の engine が同じ綴りを返す**（**裏は CI の WebKit が
+            // `panel-sizing` で吐いた印字——比のほうは綴りのまま届いていた**）。
+            // **崩れたら座標（幅 ＝ 高さ）に替える。**
+            // **ここは往復の前後を同じ engine で突き合わせる**ので、
+            // **綴りが変わっても主張は壊れない**——**下の `toBe("1 / 1")` だけが
+            // 綴りに依っている。**
             keyAspect: keyNode ? getComputedStyle(keyNode).aspectRatio : "-",
             keyHeight: keyNode ? getComputedStyle(keyNode).height : "-",
             square: size(el("[data-square]")),
@@ -155,9 +162,11 @@ for (const hash of TABS) {
         const keys = [...square.querySelectorAll("button")].map((el) =>
           el.getBoundingClientRect(),
         );
-        // **行は座標から起こす。** **`<fieldset>` の `gridTemplateRows` は
-        // 指定の綴りのまま返る**ので（2026-10-02 実測: `none` /
-        // `repeat(5, 1fr)`）、**計算値としては使えない。**
+        // **行は座標から起こす。** **`gridTemplateRows` は engine で返るものが
+        // 違う**——**Chromium は指定の綴りのまま**（2026-10-02 実測: `none` /
+        // `repeat(5, 1fr)`）、**WebKit は使用値の px**（2026-10-03、CI の
+        // WebKit だけが `panel-sizing` を赤くして分かった）。**綴りは
+        // 期待値にできない。**
         const tops = [
           ...new Set(keys.map((r) => Math.round(r.top * 10) / 10)),
         ].sort((a, b) => a - b);

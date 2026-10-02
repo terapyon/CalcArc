@@ -92,6 +92,103 @@ test("the keys of every calculator hold the same size", async ({ page }) => {
   expect(seen[0]?.side).toBe(67);
 });
 
+/**
+ * **10 キーの区画は、どの電卓でも同じ決まり方をする**（2026-10-03）。
+ *
+ * **利用者が実機で問うた**——「**10 キーの実装が二重化されているのでしょうか?
+ * 表示する中身は別ですが、配置は同じだと思います**」。**そのとおりだった**:
+ * **行の綴りは 4 か所、区画の正方は 3 か所に写されており**、
+ * **正方のほうは Convert・Data Scale・Transfer にだけ在って、
+ * 【Scientific】と【Finance】には無かった**——**箱の高さが確定していたのは
+ * 3 面だけ**で、**残り 2 面の行は結局ボタンの `aspect-ratio` から決まっていた。**
+ * **利用者が実機で「2 面だけ直っていない」と言った組と一致する**
+ * （2026-10-03 に本人が確認——「**2 面は【Scientific】と【Finance】のはずです**」）。
+ *
+ * **上の 2 本は「寸法」を突き合わせる**が、**寸法が同じでも決まり方は違いうる**
+ * ——**それがこの件だった。** **だからここは計算値（`aspect-ratio` と行の綴り）を
+ * 突き合わせる。** **綴りが 1 か所であることは `tests/unit/keypad-layout-single-source.test.ts`
+ * が別に数える**（**あちらは CSS を読む静的な番人、ここは効いた結果を見る**）。
+ */
+test("the ten-key block is decided the same way on every calculator", async ({
+  page,
+}) => {
+  const seen: { name: string; decided: string; key: string }[] = [];
+  // **【LLM のメモリ】は外す**——**あの面は既定が候補面で、10 キーの区画が
+  // 出ていない**（2026-10-03 実測: `fieldset[aria-label="数字と演算のキー"]` が
+  // `null`）。**あちらの CSS も写しを持っていた**ので同じ日に外したが、
+  // **見張るのは静的な番人**（`tests/unit/keypad-layout-single-source.test.ts`）である。
+  for (const [hash, name] of ROUTES.filter(
+    ([route]) => route !== "#scale/llm",
+  )) {
+    await page.goto(`/${hash}`);
+    await expect(page.getByTestId("display-main")).toBeVisible();
+    const got = await page.evaluate(() => {
+      const square = document.querySelector(
+        'fieldset[aria-label="数字と演算のキー"]',
+      ) as HTMLElement | null;
+      if (square === null) return null;
+      const style = getComputedStyle(square);
+      const round = (x: number) => Math.round(x * 10) / 10;
+      // **★ 行は座標から起こす**（`rotation.spec.ts` と同じ形）。
+      // **`gridTemplateRows` の綴りは engine で違う**——**Chromium は
+      // 書いたまま（`repeat(5, 1fr)`）、WebKit は使用値の px（`66.796875px` ×5）**
+      // を返す（2026-10-03、CI の WebKit だけが赤くなって分かった）。
+      // **主張は「5 行が等間隔」であって、綴りではない。**
+      const keys = [...square.querySelectorAll("button")].map((el) =>
+        el.getBoundingClientRect(),
+      );
+      const tops = [
+        ...new Set(keys.map((r) => Math.round(r.top * 10) / 10)),
+      ].sort((a, b) => a - b);
+      // **★ 見るのは「行の間隔」である**（**キーの高さではない**）。
+      // **キーには `aspect-ratio: 1 / 1` が効いている**ので、**行の高さを変えても
+      // キーの箱は正方のまま**——**`grid-template-rows: 80px repeat(4, 1fr)` の
+      // 変異で緑のままだった**（2026-10-03。**最初はキーの高さを数えていた**）。
+      const pitches = tops
+        .slice(1)
+        .map((top, index) => round(top - (tops[index] ?? 0)));
+      const spread =
+        pitches.length === 0
+          ? 0
+          : round(Math.max(...pitches) - Math.min(...pitches));
+      const key = keys[0];
+      return {
+        // **`aspect-ratio` の綴りは両方の engine で `1 / 1`**（2026-10-03 実測）。
+        // **★ これも綴りである**——**裏は CI の WebKit が吐いた赤の印字で、
+        // `aspect=1 / 1 rows=66.796875px …` と、比のほうは綴りのまま届いていた。**
+        // **崩れたら座標（幅 ＝ 高さ）に替える。**
+        decided: `aspect=${style.aspectRatio} rows=${tops.length}行 ${
+          spread <= 0.5 ? "等間隔" : `不揃い(${spread}px)`
+        }`,
+        key: `${round(key?.width ?? -1)}x${round(key?.height ?? -1)}`,
+      };
+    });
+    // **0 件で緑にしない。** 残り 5 route はどれも 10 キーの区画を持つ。
+    expect(got, `${name} に 10 キーの区画が無い`).not.toBeNull();
+    if (got !== null) seen.push({ name, ...got });
+  }
+  expect(seen, "見た面の数").toHaveLength(5);
+  // **決まり方が 1 つの集合**——**直す前は `["aspect=auto …", "aspect=1 / 1 …"]`
+  // の 2 つに割れていた**（2026-10-03 の赤）。
+  //
+  // **★ 計算値を期待値にするときは、engine と書体でどう変わりうるかを先に言う**
+  // （2026-10-03 の教訓。**同じ形で 2 度落ちた**——**1 度目は書体**（通貨の案内が
+  // 手元 72px / CI 66px）、**2 度目は engine**（`gridTemplateRows` の綴り）。
+  // **変わりうるなら、意味に正規化してから撃つ。**
+  expect(
+    [...new Set(seen.map((s) => s.decided))],
+    `決まり方が面でそろっていない: ${JSON.stringify(seen)}`,
+  ).toHaveLength(1);
+  // **正方であること**（**`auto` に揃っても「1 つの集合」は真**になるので、
+  // **何に揃っているかまで言う**）。
+  expect(seen[0]?.decided).toBe("aspect=1 / 1 rows=5行 等間隔");
+  // **キーの寸法も 1 つの集合**（**上の 2 本は 4 route だけを見ている**）。
+  expect(
+    [...new Set(seen.map((s) => s.key))],
+    `キーの寸法が面でそろっていない: ${JSON.stringify(seen)}`,
+  ).toHaveLength(1);
+});
+
 for (const [hash, name] of WITH_SELECT) {
   test(`${name} の カテゴリは盤面と同じ幅で、画面幅では伸びない`, async ({
     page,

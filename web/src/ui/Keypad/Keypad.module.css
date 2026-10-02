@@ -66,6 +66,7 @@
    タブレット 88×88）。 */
 .square {
   grid-template-rows: repeat(5, 1fr);
+  aspect-ratio: 1 / 1;
 }
 
 /* 正方のキー(メイングリッド)。44px はここで守る。 */
