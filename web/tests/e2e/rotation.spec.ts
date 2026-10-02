@@ -136,6 +136,71 @@ for (const hash of TABS) {
       expect(remounted, `${hash} が、面を移って戻っても元に戻らない`).toEqual(
         before,
       );
+
+      // **★ 利用者の 3 度目の言葉（2026-10-02）**:
+      // 「**ボタンは正常で、縦方向のスペースが無くなって、少しだけボタンが重なる**」。
+      // **寸法の等値では、これは捕まらない**——**ボタンは正しい大きさだから**である。
+      // **古いまま残るのは行の高さ**で、**ボタンが自分の行からはみ出して下の行に重なる。**
+      //
+      // **実測（2026-10-02、縦持ちで行だけ横向きの値 49px に固定して再現）**:
+      // **重なり 9.8px**、**区画の箱は 366 → 277**（**ただし箱が縮むのは
+      // `#scientific` と `#finance` だけ**——**Convert と Scale は面の CSS が
+      // 区画に `aspect-ratio: 1 / 1` を当てているので箱は 366 のまま**。
+      // **利用者が「この 2 つだけ」と言ったのと同じ組である**）。
+      await page.setViewportSize(trip.portrait);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const grid = await page.evaluate(() => {
+        const round = (x: number) => Math.round(x * 10) / 10;
+        const square = document.querySelector("[data-square]") as HTMLElement;
+        const keys = [...square.querySelectorAll("button")].map((el) =>
+          el.getBoundingClientRect(),
+        );
+        // **行は座標から起こす。** **`<fieldset>` の `gridTemplateRows` は
+        // 指定の綴りのまま返る**ので（2026-10-02 実測: `none` /
+        // `repeat(5, 1fr)`）、**計算値としては使えない。**
+        const tops = [
+          ...new Set(keys.map((r) => Math.round(r.top * 10) / 10)),
+        ].sort((a, b) => a - b);
+        const rows = tops.map((top) => {
+          const inRow = keys.filter((r) => Math.round(r.top * 10) / 10 === top);
+          return {
+            bottom: Math.max(...inRow.map((r) => r.bottom)),
+            height: Math.max(...inRow.map((r) => r.height)),
+          };
+        });
+        let overlap = 0;
+        for (let i = 1; i < rows.length; i += 1) {
+          const upper = rows[i - 1];
+          const lower = tops[i];
+          if (upper !== undefined && lower !== undefined) {
+            overlap = Math.max(overlap, round(upper.bottom - lower));
+          }
+        }
+        const gap = Number.parseFloat(getComputedStyle(square).rowGap);
+        return {
+          rows: rows.length,
+          overlap,
+          sum: round(
+            rows.reduce((total, r) => total + r.height, 0) +
+              (rows.length - 1) * gap,
+          ),
+          box: round(square.getBoundingClientRect().height),
+        };
+      });
+      // **0 件で緑にしない。** 5×5 なので行は 5 つである。
+      expect(grid.rows, "10 キーの行の数").toBe(5);
+      // **① 重なっていない**（**利用者が見ているものそのもの**）。
+      // **床は 0**——**1px でも重なれば、下のキーの上端が隠れる。**
+      expect(
+        grid.overlap,
+        `${hash} でキーが下の行に重なる量`,
+      ).toBeLessThanOrEqual(0);
+      // **② 区画の箱 ＝ 行の和 ＋ 隙間の和**（**行が古いままなら、ここがずれる**）。
+      // **±1px は小数の丸めのぶん**（実測の差は 0.1px）。
+      expect(
+        Math.abs(grid.box - grid.sum),
+        `${hash} の区画の箱（${grid.box}）と行の和（${grid.sum}）が合わない`,
+      ).toBeLessThanOrEqual(1);
     });
   }
 }
