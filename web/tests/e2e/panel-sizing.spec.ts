@@ -128,10 +128,35 @@ test("the ten-key block is decided the same way on every calculator", async ({
       ) as HTMLElement | null;
       if (square === null) return null;
       const style = getComputedStyle(square);
-      const key = square.querySelector("button")?.getBoundingClientRect();
       const round = (x: number) => Math.round(x * 10) / 10;
+      // **★ 行は座標から起こす**（`rotation.spec.ts` と同じ形）。
+      // **`gridTemplateRows` の綴りは engine で違う**——**Chromium は
+      // 書いたまま（`repeat(5, 1fr)`）、WebKit は使用値の px（`66.796875px` ×5）**
+      // を返す（2026-10-03、CI の WebKit だけが赤くなって分かった）。
+      // **主張は「5 行が等間隔」であって、綴りではない。**
+      const keys = [...square.querySelectorAll("button")].map((el) =>
+        el.getBoundingClientRect(),
+      );
+      const tops = [
+        ...new Set(keys.map((r) => Math.round(r.top * 10) / 10)),
+      ].sort((a, b) => a - b);
+      // **★ 見るのは「行の間隔」である**（**キーの高さではない**）。
+      // **キーには `aspect-ratio: 1 / 1` が効いている**ので、**行の高さを変えても
+      // キーの箱は正方のまま**——**`grid-template-rows: 80px repeat(4, 1fr)` の
+      // 変異で緑のままだった**（2026-10-03。**最初はキーの高さを数えていた**）。
+      const pitches = tops
+        .slice(1)
+        .map((top, index) => round(top - (tops[index] ?? 0)));
+      const spread =
+        pitches.length === 0
+          ? 0
+          : round(Math.max(...pitches) - Math.min(...pitches));
+      const key = keys[0];
       return {
-        decided: `aspect=${style.aspectRatio} rows=${style.gridTemplateRows}`,
+        // **`aspect-ratio` の綴りは両方の engine で `1 / 1`**（2026-10-03 実測）。
+        decided: `aspect=${style.aspectRatio} rows=${tops.length}行 ${
+          spread <= 0.5 ? "等間隔" : `不揃い(${spread}px)`
+        }`,
         key: `${round(key?.width ?? -1)}x${round(key?.height ?? -1)}`,
       };
     });
@@ -142,13 +167,18 @@ test("the ten-key block is decided the same way on every calculator", async ({
   expect(seen, "見た面の数").toHaveLength(5);
   // **決まり方が 1 つの集合**——**直す前は `["aspect=auto …", "aspect=1 / 1 …"]`
   // の 2 つに割れていた**（2026-10-03 の赤）。
+  //
+  // **★ 計算値を期待値にするときは、engine と書体でどう変わりうるかを先に言う**
+  // （2026-10-03 の教訓。**同じ形で 2 度落ちた**——**1 度目は書体**（通貨の案内が
+  // 手元 72px / CI 66px）、**2 度目は engine**（`gridTemplateRows` の綴り）。
+  // **変わりうるなら、意味に正規化してから撃つ。**
   expect(
     [...new Set(seen.map((s) => s.decided))],
     `決まり方が面でそろっていない: ${JSON.stringify(seen)}`,
   ).toHaveLength(1);
   // **正方であること**（**`auto` に揃っても「1 つの集合」は真**になるので、
   // **何に揃っているかまで言う**）。
-  expect(seen[0]?.decided).toBe("aspect=1 / 1 rows=repeat(5, 1fr)");
+  expect(seen[0]?.decided).toBe("aspect=1 / 1 rows=5行 等間隔");
   // **キーの寸法も 1 つの集合**（**上の 2 本は 4 route だけを見ている**）。
   expect(
     [...new Set(seen.map((s) => s.key))],

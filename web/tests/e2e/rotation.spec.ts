@@ -155,9 +155,11 @@ for (const hash of TABS) {
         const keys = [...square.querySelectorAll("button")].map((el) =>
           el.getBoundingClientRect(),
         );
-        // **行は座標から起こす。** **`<fieldset>` の `gridTemplateRows` は
-        // 指定の綴りのまま返る**ので（2026-10-02 実測: `none` /
-        // `repeat(5, 1fr)`）、**計算値としては使えない。**
+        // **行は座標から起こす。** **`gridTemplateRows` は engine で返るものが
+        // 違う**——**Chromium は指定の綴りのまま**（2026-10-02 実測: `none` /
+        // `repeat(5, 1fr)`）、**WebKit は使用値の px**（2026-10-03、CI の
+        // WebKit だけが `panel-sizing` を赤くして分かった）。**綴りは
+        // 期待値にできない。**
         const tops = [
           ...new Set(keys.map((r) => Math.round(r.top * 10) / 10)),
         ].sort((a, b) => a - b);
