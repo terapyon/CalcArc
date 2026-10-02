@@ -8,65 +8,134 @@ import { expect, test } from "./fixtures";
  * ——**利用者の観察**で、**これがいちばん強い手がかり**である（あの 2 つの違いは
  * 器の入れ子で、それは「10 キーの大きさが面で違う」原因と同じ所にある）。
  *
- * **★ この番人の立場**: **Chromium では赤にならない。これは iOS の証言のための
- * 記録である。** **直したあとに「同じままだ」と言える場所**として置いてある。
- * **`390×844` / `375×667` / `390×664` / `430×932` の 4 つで、行きと帰りが
- * 1px も違わなかった**（キーも器も）。**だから、いまの証拠は実機の証言だけ**である。
- * **それでも置くのは、直しのあとに「同じままだ」と言える場所が要るから**であり、
- * **iOS でだけ起きるなら、ここは緑のまま**——**そのときは実機で確かめ直す。**
+ * **★ 2 度目の報告（2026-10-02、iPhone・staging の `a1f43d0`）**:
+ * 「**横から縦に戻すと、10 キーの縦のスペースが詰まってしまってボタンが押しにくい。
+ * ただ、別のメニューに行ってから戻ってくると正常になる。これは、関数電卓と
+ * 金融電卓だけで発生します。また iPad mini では発生しません**」。
+ *
+ * **手がかりが 3 つ増えた**ので、この番人を**その形に広げた**:
+ * **4 つのタブすべて**（**関数電卓・金融電卓は器が `main` の直下、Convert と
+ * Scale はカテゴリ選択の器を挟む**——**実測 2026-10-02 の `boardParent`:
+ * `main` / `div` / `div` / `main`）、**ホーム画面の寸法とブラウザのタブの寸法の
+ * 2 つの道**、**そして「別の面へ移って戻る」と直るかどうか**。
+ * **利用者の言う「直る」は、作り直されると消えるということ**なので、
+ * **壊れたまま残るのか、作り直しで戻るのかを分けて撃つ。**
+ *
+ * **★ この番人の立場**: **Chromium では赤にならない**（2026-09-30 と
+ * **2026-10-02 に 2 度目の実測**——**4 つのタブ × 2 つの道で、
+ * `aspect-ratio`・`height`・10 キーと器の箱・`display` が 1px も違わなかった**）。
+ * **これは iOS の証言のための記録である。** **CI は同じ spec を WebKit でも回す**
+ * （`playwright.config.ts` の `webkit` project。**`a1f43d0` の走行では、
+ * 広げる前のこの番人が緑だった**）——**WebKit でも鳴らないなら、
+ * それは「iOS Safari だけで起きる」ことの証拠**であり、**そのときの判定者は
+ * 利用者の実機だけである。**
  */
-for (const hash of ["#scientific", "#convert/length"]) {
-  test(`${hash} looks the same after a round trip through landscape`, async ({
-    page,
-  }) => {
-    const read = async () =>
-      await page.evaluate(() => {
-        const round = (x: number) => Math.round(x * 10) / 10;
-        const key = document
-          .querySelector("[data-square] button")
-          ?.getBoundingClientRect();
-        const square = document
-          .querySelector("[data-square]")
-          ?.getBoundingClientRect();
-        const board = document
-          .querySelector("[data-board]")
-          ?.getBoundingClientRect();
-        const main = document.querySelector("main")?.getBoundingClientRect();
-        const size = (r: DOMRect | undefined) =>
-          r === undefined ? "-" : `${round(r.width)}x${round(r.height)}`;
-        return {
-          key: size(key),
-          square: size(square),
-          board: size(board),
-          main: size(main),
-        };
-      });
+const TABS = [
+  // **器が `main` の直下**（利用者が「起きる」と言った 2 面）。
+  "#scientific",
+  "#finance",
+  // **カテゴリ選択の器を挟む**（「起きない」と言った側）。
+  "#convert/length",
+  "#scale/data-scale",
+] as const;
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/${hash}`);
-    await expect(page.locator("main button").first()).toBeVisible();
-    const before = await read();
-    // **0 件で緑にしない。** 盤面が読めていなければ、下の比較は何も言わない。
-    expect(before.key, "縦持ちで 10 キーが読めない").not.toBe("-");
+/**
+ * **往復の道。** **ホーム画面から開いたときと、ブラウザのタブで開いたときでは、
+ * 横にしたときの寸法が違う**（`widths.ts` の `LANDSCAPE_VIEWPORTS` と
+ * `LANDSCAPE_TAB_VIEWPORTS`）——**利用者がどちらで見たかは分からない**ので、
+ * **両方を回る。**
+ */
+const TRIPS = [
+  {
+    name: "ホーム画面",
+    portrait: { width: 390, height: 844 },
+    landscape: { width: 844, height: 390 },
+  },
+  {
+    name: "ブラウザのタブ",
+    portrait: { width: 390, height: 664 },
+    landscape: { width: 750, height: 342 },
+  },
+] as const;
 
-    await page.setViewportSize({ width: 844, height: 390 });
-    await expect(page.locator("main button").first()).toBeVisible();
-    const landscape = await read();
-    // **横では別の姿になる。** **★ 「前と違う」では足りない**
-    // （レビュー役の注記 2026-09-30）——**積んだままでも幅が違えばキーの幅は変わる**
-    // ので、**段の閾値を 900 にしても「違う」は真**だった。
-    // **段が当たったことを言うには、横向き特有の形を撃つ**
-    // ——**10 キーは正方でなくなる**（縦持ちは `aspect-ratio: 1 / 1`）。
-    const [w, h] = landscape.key.split("x").map(Number);
-    expect(
-      w === h,
-      `横向きで 10 キーが正方のまま（${landscape.key}）——段が当たっていない`,
-    ).toBe(false);
+for (const hash of TABS) {
+  for (const trip of TRIPS) {
+    test(`${hash} looks the same after a round trip through landscape (${trip.name})`, async ({
+      page,
+    }) => {
+      const read = async () =>
+        await page.evaluate(() => {
+          const round = (x: number) => Math.round(x * 10) / 10;
+          const el = (selector: string) =>
+            document.querySelector(selector) as HTMLElement | null;
+          const size = (node: HTMLElement | null) => {
+            if (node === null) return "-";
+            const r = node.getBoundingClientRect();
+            return `${round(r.width)}x${round(r.height)}`;
+          };
+          const keyNode = el("[data-square] button");
+          return {
+            key: size(keyNode),
+            // **箱だけでなく、計算値も見る**（2026-10-02）——**縦持ちのキーは
+            // `aspect-ratio: 1 / 1`、横向きは `auto` である**。**戻ったときに
+            // `1 / 1` が当たり直っていなければ、キーは「幅は縦持ち・高さは横向き」に
+            // なりうる**（それが「縦のスペースが詰まる」の形である）。
+            keyAspect: keyNode ? getComputedStyle(keyNode).aspectRatio : "-",
+            keyHeight: keyNode ? getComputedStyle(keyNode).height : "-",
+            square: size(el("[data-square]")),
+            board: size(el("[data-board]")),
+            // **器と `main` の `display` も見る**——**段は `flex` と `grid` を
+            // 往復する**ので、**戻し損ねればここに出る。**
+            boardDisplay: el("[data-board]")
+              ? getComputedStyle(el("[data-board]") as HTMLElement).display
+              : "-",
+            mainDisplay: el("main")
+              ? getComputedStyle(el("main") as HTMLElement).display
+              : "-",
+            main: size(el("main")),
+          };
+        });
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.locator("main button").first()).toBeVisible();
-    const after = await read();
+      await page.setViewportSize(trip.portrait);
+      await page.goto(`/${hash}`);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const before = await read();
+      // **0 件で緑にしない。** 盤面が読めていなければ、下の比較は何も言わない。
+      expect(before.key, "縦持ちで 10 キーが読めない").not.toBe("-");
+      expect(before.keyAspect, "縦持ちのキーが正方の指定を持たない").toBe(
+        "1 / 1",
+      );
 
-    expect(after, `${hash} の縦持ちが、横を経て変わった`).toEqual(before);
-  });
+      await page.setViewportSize(trip.landscape);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const landscape = await read();
+      // **横では別の姿になる。** **★ 「前と違う」では足りない**
+      // （レビュー役の注記 2026-09-30）——**積んだままでも幅が違えばキーの幅は変わる**
+      // ので、**段の閾値を 900 にしても「違う」は真**だった。
+      // **段が当たったことを言うには、横向き特有の形を撃つ**
+      // ——**10 キーは正方でなくなる**（縦持ちは `aspect-ratio: 1 / 1`）。
+      const [w, h] = landscape.key.split("x").map(Number);
+      expect(
+        w === h,
+        `横向きで 10 キーが正方のまま（${landscape.key}）——段が当たっていない`,
+      ).toBe(false);
+
+      await page.setViewportSize(trip.portrait);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const after = await read();
+      expect(after, `${hash} の縦持ちが、横を経て変わった`).toEqual(before);
+
+      // **★ 利用者の「別のメニューに行ってから戻ってくると正常になる」**
+      // （2026-10-02）。**作り直されると消えるなら、壊れているのは状態である。**
+      // **上の比較が赤でここが緑なら、それが分かる**ので、**2 つを分けて撃つ。**
+      await page.goto("/#scale/llm");
+      await expect(page.locator("main button").first()).toBeVisible();
+      await page.goto(`/${hash}`);
+      await expect(page.locator("main button").first()).toBeVisible();
+      const remounted = await read();
+      expect(remounted, `${hash} が、面を移って戻っても元に戻らない`).toEqual(
+        before,
+      );
+    });
+  }
 }
