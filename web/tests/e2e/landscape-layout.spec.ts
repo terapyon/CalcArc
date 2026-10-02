@@ -26,7 +26,7 @@ async function serveRates(page: Page) {
   });
 }
 
-import { LANDSCAPE_VIEWPORTS } from "./widths";
+import { LANDSCAPE_VIEWPORTS, TABLET_VIEWPORTS } from "./widths";
 
 /**
  * **横向きでは、表示欄と関数が左・5×5 が右に並ぶ**（1.1.0、設計書
@@ -41,11 +41,16 @@ import { LANDSCAPE_VIEWPORTS } from "./widths";
  * `377 > 342`** ——**35px スクロールする。** **タブの寸法は
  * `short-screens.spec.ts` が「スクロールすれば全部に届く」側で見る。**
  */
-/** タブレットを横にした寸法。**ここも横向きの段に入る**（幅 ≥ 660・高さ ≤ 840）。 */
-const TABLET_LANDSCAPE = [
-  { device: "iPad landscape", width: 1024, height: 768 },
-  { device: "iPad Air landscape", width: 1180, height: 820 },
-] as const;
+/**
+ * タブレットを横にした寸法。**ここも横向きの段に入る**（幅 ≥ 660・高さ ≤ 840）。
+ *
+ * **★ 表は `widths.ts` の `TABLET_VIEWPORTS` が 1 つだけ持つ**（2026-10-02 に
+ * 写しを畳んだ）——**写しのままだと、`1133×744`（iPad mini 横）を足した日に
+ * 片方だけに入る。** **横向きかどうかは寸法そのものから決める**（幅 > 高さ）。
+ */
+const TABLET_LANDSCAPE = TABLET_VIEWPORTS.filter(
+  (size) => size.width > size.height,
+);
 
 /** `main` の中のキーの箱を、区画のラベルつきで取る。 */
 const keyBoxes = (page: Page) =>
@@ -193,6 +198,149 @@ for (const size of TABLET_LANDSCAPE) {
 }
 
 /**
+ * **タブレットを横にしたとき、左の段は枠いっぱいを取る**（**利用者の実機の指摘
+ * 2026-09-30**——「**iPad mini は横向きで見ていますよ**」「**ファンクションキーの
+ * 横幅が小さい**」「**ファンクションキーの上下のマージンが気になる**」）。
+ *
+ * **★ ここまで、左の段の幅を主張している行は 1 本も無かった**（2026-10-02 に
+ * `grep` で数えた——`gridTemplateColumns` を読む `.spec.ts` は 0 件）。
+ * **タブレット横向きを通っていたのは上の「天井 88px」1 本だけ**で、
+ * **あれは 10 キーの寸法しか見ない**——**だから `#scientific` が `1024×768` でも
+ * 左 356px・関数キー 44px のまま緑だった**（**実測。`[856, 1133]` で赤くなる**）。
+ * **主張が無ければ、直しても次に黙って戻る**（[[fixes-inherit-the-defects-shape]]）。
+ *
+ * **原因は `margin: 0 auto`**（器 6 面すべてが持つ。`ScientificPanel.module.css` ほか）
+ * ——**左右が `auto` の格子項目は伸びない**ので、**器は fit-content になる**。
+ * **12 面のうち 2 面（`#scientific`・`#finance`）だけ狭かったのは、
+ * ほかの 10 面は単位名が長くて fit-content が枠を超えていたから**である
+ * ——**たまたま全幅だった。** 直しは `tokens.css` の `margin-inline: 0`。
+ *
+ * **関数キーの幅は寸法ごとに釘で留める**（**`> 44` のような、いまでも通る形に
+ * しない**。監視役の条件 2026-10-02）。**幅は書体に依らない**——左の段の幅から
+ * 隙間を引いて 7 で割った数である。
+ */
+const FUNCTION_KEY_WIDTH: Record<number, number> = {
+  // **`#scientific` の関数キーの幅**（2026-10-02 実測。`margin-inline: 0` の後）。
+  // **直す前はどの寸法でも 44（床ちょうど）だった。**
+  1024: 68,
+  1133: 84,
+  1180: 90,
+};
+
+for (const size of TABLET_LANDSCAPE) {
+  test(`the left column takes the whole frame at ${size.width}x${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await serveRates(page);
+    const boardWidths = new Set<number>();
+    const boardHeights = new Set<number>();
+    let worstGap = 0;
+    let worstGapAt = "(まだ測っていない)";
+    let functionWidth = -1;
+    let measured = 0;
+    for (const { hash } of PROMISED_URLS) {
+      if (hash === "#manual") continue;
+      await page.goto(`/${hash}`);
+      await expect(page.locator("main button").first()).toBeVisible();
+      if (hash === "#convert/currency") {
+        await expect(page.getByTestId("currency-rate-date")).toHaveText(
+          "Rate: 2026-08-14",
+        );
+      }
+      const seen = await page.evaluate(() => {
+        const square = document.querySelector("[data-square]");
+        if (square === null) return null;
+        const board = document.querySelector("[data-board]") as HTMLElement;
+        // **区画の下に残る余り**——**行が天井 88px より高いと、
+        // ボタンの下に行の余りが残る**（それが「上下のマージン」である）。
+        const sets = [
+          ...document.querySelectorAll(
+            "[data-keypad] > fieldset:not([data-square])",
+          ),
+        ].map((el) => el.getBoundingClientRect());
+        let gap = 0;
+        let previous = sets[0];
+        for (const box of sets.slice(1)) {
+          if (previous !== undefined)
+            gap = Math.max(gap, box.top - previous.bottom);
+          previous = box;
+        }
+        const main = document.querySelector("main") as HTMLElement;
+        const box = board.getBoundingClientRect();
+        return {
+          board: Math.round(box.width),
+          // **器の高さ**——**10 キーが育てる限界で止まる**（下の等値）。
+          boardHeight: Math.round(box.height),
+          // **器は `main` の上端から始まる**（**空きは下に 1 か所だけ**。
+          // **利用者の裁定 2026-10-02**——「**中央寄せにすると半端な帯が 2 本になる**」）。
+          topOffset:
+            Math.round((box.top - main.getBoundingClientRect().top) * 10) / 10,
+          gap: Math.round(gap * 10) / 10,
+          functionWidth: Math.round(
+            document
+              .querySelector(
+                "[data-keypad] > fieldset:not([data-square]) button",
+              )
+              ?.getBoundingClientRect().width ?? -1,
+          ),
+        };
+      });
+      if (seen === null) continue;
+      measured += 1;
+      boardWidths.add(seen.board);
+      boardHeights.add(seen.boardHeight);
+      expect(
+        seen.topOffset,
+        `${hash} の器が main の上端から下がっている量`,
+      ).toBe(0);
+      if (seen.gap > worstGap) {
+        worstGap = seen.gap;
+        worstGapAt = hash;
+      }
+      if (hash === "#scientific") {
+        functionWidth = seen.functionWidth;
+      }
+    }
+    // **0 件で緑にしない。** 13 画面のうち 12 が 5×5 を持つ。
+    expect(measured, "2 列になった面の数").toBe(12);
+    // **器の幅は 1 つの集合**（**10 キーの寸法の番人と同じ書き方**）。
+    expect(
+      [...boardWidths],
+      `器の幅: ${JSON.stringify([...boardWidths])}`,
+    ).toEqual([size.width]);
+    // **★ 器の高さは等値で留める**（**レビュー役の条件 B1、2026-10-02**）。
+    // **「余り ≤ 20」だけでは、天井を `+20px` 広げる変異が通る**（余りが 20 に収まる）。
+    // **`--square-max-height` で綴りを 1 つにしたことは番人ではない**
+    // ——**同じ値を 2 か所に literal で書いても緑**である。
+    //
+    // **期待値はこの検査が自分で持つ**（トークンを読んで突き合わせると、
+    // **両方が同時に間違っても緑**になる）。**内訳は 5 × 88（10 キーの天井）＋
+    // 4 × 8（10 キーの内側の隙間）＋ 12（器の余白 6 × 2）= 484。**
+    // **書体に依らない**ので等値で撃てる——**10 キーの `[88]` と対になる。**
+    expect(
+      [...boardHeights],
+      `器の高さ: ${JSON.stringify([...boardHeights])}`,
+    ).toEqual([484]);
+    // **関数キーの幅は寸法ごとに等値で留める**（上の表）。
+    expect(functionWidth, "#scientific の関数キーの幅").toBe(
+      FUNCTION_KEY_WIDTH[size.width],
+    );
+    // **行の余りの上限。** **直す前は `1133×744` で 54.8、`1194×834` で 77.3**
+    // （2026-10-02 実測）。**直した後はどの寸法でも 15**
+    // ——**内訳は「行 99 − 天井 88 ＋ 隙間 4」**である。
+    //
+    // **★ 15 で撃たない。** **行の余りの配り方は、表示欄の高さに依る**
+    // （4 つの `auto` 行への配分）——**表示欄の高さは書体で変わる**
+    // （2026-09-30 に CI だけが赤くなった件と同じ仕組み。**手元の赤も CI の赤ではない**）。
+    // **20 で撃っても、直す前の 54.8 / 77.3 は捕まる。**
+    expect(worstGap, `${worstGapAt} の区画の下に残る余り`).toBeLessThanOrEqual(
+      20,
+    );
+  });
+}
+
+/**
  * **10 キー部を持つ面は、どれも横向きで 2 列になり、どの面でも同じ姿になる**
  * （**利用者の裁定 2026-09-30**——「**横にしたときには基本的に、10 キー部の 5×5 だけが
  * 右側に来るのが良い**」／**実機の指摘**「**10 キーの大きさが、タブによって違う**」
@@ -208,7 +356,7 @@ for (const size of TABLET_LANDSCAPE) {
  * **5×5 を持たない面は積んだまま**（`#scale/llm`。候補キーが 5 列 25 キーではない）
  * ——**右が空の 2 列にしない**、という裁定の裏返しである。
  */
-for (const size of LANDSCAPE_VIEWPORTS) {
+for (const size of [...LANDSCAPE_VIEWPORTS, ...TABLET_LANDSCAPE]) {
   test(`every board with a 5x5 splits the same way at ${size.width}x${size.height}`, async ({
     page,
   }) => {
