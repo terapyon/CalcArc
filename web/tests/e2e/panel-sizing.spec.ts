@@ -154,6 +154,9 @@ test("the ten-key block is decided the same way on every calculator", async ({
       const key = keys[0];
       return {
         // **`aspect-ratio` の綴りは両方の engine で `1 / 1`**（2026-10-03 実測）。
+        // **★ これも綴りである**——**裏は CI の WebKit が吐いた赤の印字で、
+        // `aspect=1 / 1 rows=66.796875px …` と、比のほうは綴りのまま届いていた。**
+        // **崩れたら座標（幅 ＝ 高さ）に替える。**
         decided: `aspect=${style.aspectRatio} rows=${tops.length}行 ${
           spread <= 0.5 ? "等間隔" : `不揃い(${spread}px)`
         }`,
