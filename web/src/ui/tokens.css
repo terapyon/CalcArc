@@ -492,14 +492,18 @@ body {
      で `(0,2,1)`**、**こちらの `[data-square][data-square]` は `(0,2,0)`** なので、
      **面の規則が勝って正方のまま**だった——**5×5 が幅と同じ 464px に育ち、
      Convert 系が 247px 溢れていた**（2026-09-30 実測。**「高さの鎖が切れている」と
-     見立てたが、それは外れ**）。**器を 1 つ足して `(0,3,0)` にする。** */
+     見立てたが、それは外れ**）。**器を 1 つ足して `(0,3,0)` にする。**
+
+     **★ `grid-auto-rows` は置かない**（2026-10-02 に消した）。**行は
+     `Keypad.module.css` の `.square` が `repeat(5, 1fr)` で明示する**ので、
+     **暗黙の行は作られず、ここに書いても効かない**（**消して全走 332 本が緑**）。
+     **死文を残すと、次に読む人が「横向きの行はここで決まる」と読む。** */
   [data-board] [data-square][data-square] {
     aspect-ratio: auto;
     grid-template-columns: repeat(
         var(--keypad-columns),
         minmax(var(--touch-target-min), 1fr)
       );
-    grid-auto-rows: minmax(var(--touch-target-min), 1fr);
     max-width: calc(
       var(--keypad-columns) *
       var(--touch-target-max) +
