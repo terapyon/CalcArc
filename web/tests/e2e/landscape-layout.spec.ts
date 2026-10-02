@@ -234,6 +234,7 @@ for (const size of TABLET_LANDSCAPE) {
     await page.setViewportSize({ width: size.width, height: size.height });
     await serveRates(page);
     const boardWidths = new Set<number>();
+    const boardHeights = new Set<number>();
     let worstGap = 0;
     let worstGapAt = "(まだ測っていない)";
     let functionWidth = -1;
@@ -265,8 +266,16 @@ for (const size of TABLET_LANDSCAPE) {
             gap = Math.max(gap, box.top - previous.bottom);
           previous = box;
         }
+        const main = document.querySelector("main") as HTMLElement;
+        const box = board.getBoundingClientRect();
         return {
-          board: Math.round(board.getBoundingClientRect().width),
+          board: Math.round(box.width),
+          // **器の高さ**——**10 キーが育てる限界で止まる**（下の等値）。
+          boardHeight: Math.round(box.height),
+          // **器は `main` の上端から始まる**（**空きは下に 1 か所だけ**。
+          // **利用者の裁定 2026-10-02**——「**中央寄せにすると半端な帯が 2 本になる**」）。
+          topOffset:
+            Math.round((box.top - main.getBoundingClientRect().top) * 10) / 10,
           gap: Math.round(gap * 10) / 10,
           functionWidth: Math.round(
             document
@@ -280,6 +289,11 @@ for (const size of TABLET_LANDSCAPE) {
       if (seen === null) continue;
       measured += 1;
       boardWidths.add(seen.board);
+      boardHeights.add(seen.boardHeight);
+      expect(
+        seen.topOffset,
+        `${hash} の器が main の上端から下がっている量`,
+      ).toBe(0);
       if (seen.gap > worstGap) {
         worstGap = seen.gap;
         worstGapAt = hash;
@@ -295,6 +309,19 @@ for (const size of TABLET_LANDSCAPE) {
       [...boardWidths],
       `器の幅: ${JSON.stringify([...boardWidths])}`,
     ).toEqual([size.width]);
+    // **★ 器の高さは等値で留める**（**レビュー役の条件 B1、2026-10-02**）。
+    // **「余り ≤ 20」だけでは、天井を `+20px` 広げる変異が通る**（余りが 20 に収まる）。
+    // **`--square-max-height` で綴りを 1 つにしたことは番人ではない**
+    // ——**同じ値を 2 か所に literal で書いても緑**である。
+    //
+    // **期待値はこの検査が自分で持つ**（トークンを読んで突き合わせると、
+    // **両方が同時に間違っても緑**になる）。**内訳は 5 × 88（10 キーの天井）＋
+    // 4 × 8（10 キーの内側の隙間）＋ 12（器の余白 6 × 2）= 484。**
+    // **書体に依らない**ので等値で撃てる——**10 キーの `[88]` と対になる。**
+    expect(
+      [...boardHeights],
+      `器の高さ: ${JSON.stringify([...boardHeights])}`,
+    ).toEqual([484]);
     // **関数キーの幅は寸法ごとに等値で留める**（上の表）。
     expect(functionWidth, "#scientific の関数キーの幅").toBe(
       FUNCTION_KEY_WIDTH[size.width],

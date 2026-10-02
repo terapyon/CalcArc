@@ -271,7 +271,8 @@ max-content が枠を超えていたから**である——**たまたま全幅�
 **`--shell-max-width` の計算値は `1133×744` で `none`**（印字）で、
 **器から `body` までの 5 段の `max-width` は全部 `none`** だった。
 
-**★ `getComputedStyle` は、この `auto` を `0px/0px` と印字する。**
+**★ `getComputedStyle` は、この `auto` を `0px/0px` と印字する**（**Chromium で実測。
+2026-10-02 に実行役とレビュー役が別々に見た**。**ほかのエンジンがどう返すかは未確認**）。
 **計算値の margin では確かめられない**（**実行役はそれで 1 度取り違えた**）。
 **確かめるのは宣言のほう**（`grep "margin: 0 auto" src/ui`）**か、`margin-inline: 0` を
 当てて幅が動くか**である。**同じ罠を `nav` で 1 度踏んでおり**（`tokens.css` の
