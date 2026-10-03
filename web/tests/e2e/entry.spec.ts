@@ -155,3 +155,33 @@ test("the line stops at the equals sign and never carries the answer", async ({
   expect(answer?.length ?? 0).toBeGreaterThan(5);
   expect(await echo.textContent()).not.toContain(answer);
 });
+
+test("the mark names the mode that drew the line, not the mode at the equals", async ({
+  page,
+}) => {
+  // **レビュー役が見つけた欠陥**（2026-10-03、条件 B1）。**`=` の瞬間のモードを
+  // 読んでいたので、行のあいだに【DRG】を押すと印が嘘になった。**
+  //
+  // **`30 sin` を DEG で計算してから RAD に切り替え、`× 2 =`**:
+  // **答えは 1**（`sin 30° = 0.5` で計算済み——**切り替えは画面の数を変えない**）、
+  // **状況の行は RAD**（いまのモードだから正しい）、
+  // **しかし行の印は DEG でなければならない**——**その `sin` を描いたのは DEG である。**
+  const echo = page.getByTestId("display-echo");
+
+  await press(page, [
+    "3",
+    "0",
+    "サイン",
+    "角度の単位を切り替え",
+    "掛ける",
+    "2",
+  ]);
+  // **打鍵中から DEG である**（切り替えても、既に描かれた `sin` は DEG のまま）。
+  await expect(echo).toHaveText("DEG 30 sin × 2");
+  // **状況の行は、いまのモードを出す**——**2 つは別のことを言っている。**
+  await expect(page.getByTestId("display-angle")).toHaveText("RAD");
+
+  await press(page, ["計算する"]);
+  await expect(echo).toHaveText("DEG 30 sin × 2 =");
+  await expect(page.getByTestId("display-main")).toHaveText("1");
+});

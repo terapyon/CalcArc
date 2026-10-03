@@ -15,6 +15,7 @@ import type { Calc, DisplayState, EngineState, KeyToken, Step } from "../calc";
 import { initCalc } from "../calc";
 import {
   angleMarkOf,
+  angleThatDrewIt,
   closedLineOf,
   lineOf,
   ScientificPanel,
@@ -1417,16 +1418,35 @@ describe("行の組み立て", () => {
     const radPolar = { angle: "Rad", form: "Polar" } as const;
 
     // **(a) 三角キーを使った行**——直交形式でも付く。
-    expect(angleMarkOf(true, deg)).toBe("DEG");
-    expect(angleMarkOf(true, rad)).toBe("RAD");
+    expect(angleMarkOf("Deg", deg)).toBe("DEG");
+    expect(angleMarkOf("Rad", rad)).toBe("RAD");
     // **(b) 極形式の行**——キーを押していなくても付く(偏角がモードで読まれる)。
-    expect(angleMarkOf(false, degPolar)).toBe("DEG");
-    expect(angleMarkOf(false, radPolar)).toBe("RAD");
+    expect(angleMarkOf(null, degPolar)).toBe("DEG");
+    expect(angleMarkOf(null, radPolar)).toBe("RAD");
     // **両方**。
-    expect(angleMarkOf(true, degPolar)).toBe("DEG");
-    expect(angleMarkOf(true, radPolar)).toBe("RAD");
+    expect(angleMarkOf("Deg", degPolar)).toBe("DEG");
+    expect(angleMarkOf("Rad", radPolar)).toBe("RAD");
     // **どちらでもない行には付かない**——**モードが答えを変えていない。**
-    expect(angleMarkOf(false, deg)).toBe("");
-    expect(angleMarkOf(false, rad)).toBe("");
+    expect(angleMarkOf(null, deg)).toBe("");
+    expect(angleMarkOf(null, rad)).toBe("");
+  });
+
+  it("名乗るのは、描いたときのモードである（`=` の瞬間ではない）", () => {
+    // **レビュー役が盤面で見つけた欠陥**（2026-10-03、条件 B1）。
+    // **`30 sin` を DEG で計算してから RAD に切り替えて `× 2 =`** と打つと、
+    // **`=` の瞬間のモードは RAD だが、その `sin` を描いたのは DEG である。**
+    const nowRad = { angle: "Rad", form: "Rect" } as const;
+    const nowDeg = { angle: "Deg", form: "Rect" } as const;
+
+    // **押した時点のモードが勝つ**——**これが直しの中身。**
+    expect(angleMarkOf("Deg", nowRad)).toBe("DEG");
+    expect(angleMarkOf("Rad", nowDeg)).toBe("RAD");
+    // **履歴の件も同じ規則から出る**（設計書 §2——規則を 2 か所に書かない）。
+    expect(angleThatDrewIt("Deg", nowRad)).toBe("Deg");
+    expect(angleThatDrewIt("Rad", nowDeg)).toBe("Rad");
+    // **三角キーを押していない計算は、いまのモード**
+    // ——**極形式の偏角は `=` の瞬間のモードで描かれる。**
+    expect(angleThatDrewIt(null, nowRad)).toBe("Rad");
+    expect(angleThatDrewIt(null, nowDeg)).toBe("Deg");
   });
 });

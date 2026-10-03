@@ -159,6 +159,33 @@ export function lineOf(carry: string | null, spelled: string): string {
 }
 
 /**
+ * **その計算を描いた角度のモード。** **行の印と履歴の件は、どちらもここから出る**
+ * （設計書 §2——**規則を 2 か所に書かない**）。
+ *
+ * **`trigAngle` は「この区間で最初に三角キーを押した時点のモード」**
+ * （押していなければ `null`）。**`display.angle` ではない**:
+ *
+ * **`30 sin` を DEG で計算してから【DRG】で RAD にして `× 2 =` と打つと、
+ * 答えは 1（`sin 30° = 0.5` で計算済み）だが、`=` の瞬間のモードは RAD である。**
+ * **`=` の瞬間を読むと、その計算を描いていないモードを名乗る**
+ * ——**レビュー役が盤面で見つけた**（2026-10-03、条件 B1）。
+ * **履歴にも同じ欠陥が在った**（出荷済み）。
+ *
+ * **三角キーを押していない計算は、いまのモードを返す**——**極形式の偏角は
+ * `=` の瞬間のモードで描かれる**ので、そちらはこれで正しい。
+ *
+ * **★ 決まっていないこと**: **1 つの行に、別のモードで押した三角キーが 2 つ
+ * 在るとき**（`30 sin 【DRG】 + 30 sin =`）。**「最初の 1 つ」を名乗る**
+ * （裁定 2026-10-03）——**1 つの欄に 2 つのモードは書けない。**
+ */
+export function angleThatDrewIt(
+  trigAngle: AngleMode | null,
+  display: { angle: AngleMode },
+): AngleMode {
+  return trigAngle ?? display.angle;
+}
+
+/**
  * **その行に付ける角度の印**（1.2、入力経歴の設計書 §4.1.2）。
  *
  * **出すのは「モードで描いた行」**——**(a) 三角キーを使った行**か、
@@ -169,11 +196,11 @@ export function lineOf(carry: string | null, spelled: string): string {
  * **ふだんは出ない**——四則だけで使う人には一生出ない。
  */
 export function angleMarkOf(
-  usedAngleKey: boolean,
+  trigAngle: AngleMode | null,
   display: { angle: AngleMode; form: DisplayForm },
 ): string {
-  if (!usedAngleKey && display.form !== "Polar") return "";
-  return display.angle === "Deg" ? "DEG" : "RAD";
+  if (trigAngle === null && display.form !== "Polar") return "";
+  return angleThatDrewIt(trigAngle, display) === "Deg" ? "DEG" : "RAD";
 }
 
 /**
@@ -454,11 +481,14 @@ export function ScientificPanel() {
    */
   const [trailAngle, setTrailAngle] = useState("");
   /**
-   * **この区間は三角キーを使ったか**（1.2、入力経歴の設計書 §4.1.2 の (a)）。
-   * **`=` と `AC` で戻す。**
+   * **この区間で最初に三角キーを押した時点の角度のモード**（押していなければ
+   * `null`。1.2、入力経歴の設計書 §4.1.2 の (a)）。**`=` と `AC` で戻す。**
+   *
+   * **真偽ではなくモードを持つ**——**`=` の瞬間のモードは、その計算を描いた
+   * モードとは別物**だからである（`angleThatDrewIt` の註）。
    */
-  const usedAngleRef = useRef(false);
-  const pendingUsedAngleRef = useRef(false);
+  const trigAngleRef = useRef<AngleMode | null>(null);
+  const pendingTrigAngleRef = useRef<AngleMode | null>(null);
   const carryAtDecisionRef = useRef<string | null>(null);
   const decidedRef = useRef<boolean>(false);
   /**
@@ -551,8 +581,11 @@ export function ScientificPanel() {
     if (ready && previous && !(inError && token !== "ac")) {
       // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
       // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
-      if (ANGLE_KEYS.has(token)) {
-        usedAngleRef.current = true;
+      // **最初の三角キーのときだけ写す**（`angleThatDrewIt` の★）。
+      // **読むのは打鍵前の姿**——`sin` はモードを変えないので同じ値だが、
+      // **`previous` から読む形を崩さない**（この区間の判断は全部そこから出る）。
+      if (ANGLE_KEYS.has(token) && trigAngleRef.current === null) {
+        trigAngleRef.current = previous.display.angle;
       }
       if (!decidedRef.current && CARRIED_VALUE_TOKENS.has(token)) {
         decidedRef.current = true;
@@ -569,10 +602,10 @@ export function ScientificPanel() {
         keysRef.current = [];
         // **前置値を区間と一緒に渡してから、未決に戻す。**
         pendingCarryRef.current = carryAtDecisionRef.current;
-        pendingUsedAngleRef.current = usedAngleRef.current;
+        pendingTrigAngleRef.current = trigAngleRef.current;
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
-        usedAngleRef.current = false;
+        trigAngleRef.current = null;
       } else if (token === "ac") {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
@@ -585,12 +618,12 @@ export function ScientificPanel() {
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
         pendingCarryRef.current = null;
-        pendingUsedAngleRef.current = false;
+        pendingTrigAngleRef.current = null;
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
         // あとに来る二項演算子は前回の続きではない。
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
-        usedAngleRef.current = false;
+        trigAngleRef.current = null;
       }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
@@ -621,9 +654,9 @@ export function ScientificPanel() {
         // （2026-10-03 に実測。**閉じた行だけを撃っていたので緑だった**）:
         // **打鍵中の `30 sin` に印が付かない**（三角キーを使った行なのに）、
         // **そして前の行の印が残る**（`DEG 30 sin =` の次に `3 + 4` を打つと
-        // `DEG 3 + 4` になった）。**生きている行は `usedAngleRef`**
-        // ——`pendingUsedAngleRef` は `=` が閉じた行のぶんである。
-        setTrailAngle(angleMarkOf(usedAngleRef.current, step.display));
+        // `DEG 3 + 4` になった）。**生きている行は `trigAngleRef`**
+        // ——`pendingTrigAngleRef` は `=` が閉じた行のぶんである。
+        setTrailAngle(angleMarkOf(trigAngleRef.current, step.display));
       }
       return;
     }
@@ -662,7 +695,7 @@ export function ScientificPanel() {
     // **履歴に積む `expression` は変えない**——**あちらは式と答えを
     // 別の欄で見せている**ので、式に `=` を足す理由が無い。
     setTrail(closedLineOf(expression));
-    setTrailAngle(angleMarkOf(pendingUsedAngleRef.current, step.display));
+    setTrailAngle(angleMarkOf(pendingTrigAngleRef.current, step.display));
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -678,7 +711,10 @@ export function ScientificPanel() {
     const entry: HistoryEntry = {
       expression,
       answer: step.display.main,
-      angle: step.display.angle,
+      // **行の印と同じ規則から出す**（設計書 §2）——**`=` の瞬間のモードを
+      // 読むと、その計算を描いていないモードを記録する**（`angleThatDrewIt` の註。
+      // **出荷済みの欠陥で、レビュー役が盤面で見つけた**）。
+      angle: angleThatDrewIt(pendingTrigAngleRef.current, step.display),
       error: step.display.error !== null,
     };
     const updated = pushEntry(entriesRef.current, entry);

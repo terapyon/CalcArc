@@ -840,6 +840,14 @@ fn the_angle_mode_toggles() {
 #[test]
 fn trig_follows_the_angle_mode() {
     assert_eq!(main_of(&["angle_toggle", "pi", "cos"]), "-1");
+    // **同じ `30 sin` が、モードで別の答えになる。** **この 2 つの数を
+    // `docs/manual/detail.ja.md` が引いている**（打ったキーの行に角度の印が
+    // 付く理由として。1.2、入力経歴の設計書 §4.1.2）——**釘はここである。**
+    // **マニュアルの数は実物の印字から写すが、印字は腐る**ので、
+    // **変わったらこの行が赤くなるようにしておく**
+    // （レビュー役の注記 C1、2026-10-03）。
+    assert_eq!(main_of(&["3", "0", "sin"]), "0.5");
+    assert_eq!(main_of(&["3", "0", "angle_toggle", "sin"]), "-0.9880316241");
 }
 
 #[test]
