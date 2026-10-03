@@ -63,6 +63,7 @@ function fakeCalc(): Calc {
     notation: "Normal",
     pendingOp: null,
     pendingDepth: 0,
+    answerOnScreen: true,
     error: null,
   };
   /** 表示を 1 つの state に結び付けて返す。state は毎回新しい物である。 */
@@ -112,6 +113,10 @@ function fakeCalc(): Calc {
           {
             ...from,
             main: from.main === "0" ? key : `${from.main}${key}`,
+            // **新しい数を打ち始めたら、画面はもう「前の答え」ではない。**
+            // **偽物もこれを持つ**——持たないと、連鎖の判定（engine に聞く形。
+            // 2026-10-03）がこの偽物の上で常に真になり、**何を書いても緑**になる。
+            answerOnScreen: false,
           },
           ["lparen", "pi", "e"],
         );
@@ -129,6 +134,7 @@ function fakeCalc(): Calc {
         return stepOf({
           ...from,
           main: from.main === "0" ? "0." : `${from.main}.`,
+          answerOnScreen: false,
         });
       }
       if (key === "neg") {
@@ -151,6 +157,7 @@ function fakeCalc(): Calc {
               main: from.main.startsWith("-")
                 ? from.main.slice(1)
                 : `-${from.main}`,
+              answerOnScreen: false,
             },
             [
               "0",
@@ -181,7 +188,11 @@ function fakeCalc(): Calc {
         return stepOf({ ...from, main: `${head}${toggled}` });
       }
       if (key === "exp") {
-        return stepOf({ ...from, main: `${from.main}e` });
+        return stepOf({
+          ...from,
+          main: `${from.main}e`,
+          answerOnScreen: false,
+        });
       }
       if (key === "eq") {
         // **指数の付いた値は確定のときに初めて溢れる**(`engine/mod.rs` の
@@ -191,12 +202,20 @@ function fakeCalc(): Calc {
         if (from.main.includes("e") && !Number.isFinite(Number(from.main))) {
           return stepOf({ ...from, main: "Math ERROR", error: "Overflow" });
         }
+        // **`=` のあとは、画面に出ているのが答えである**（本物の
+        // `answer_on_screen`。`engine_table.rs` の
+        // `the_screen_says_whether_the_answer_is_still_there` が固定している）。
+        return stepOf({ ...from, answerOnScreen: true });
       }
       // **`j` は写せない答の見本(Fix round 1 finding 1)。** 虚数・極形式・
       // 60 進の代わりに、この偽物では一番軽い「数字キーの列で表せない形」
       // として使う。
       if (key === "j") {
-        return stepOf({ ...from, main: `${from.main}j` });
+        return stepOf({
+          ...from,
+          main: `${from.main}j`,
+          answerOnScreen: false,
+        });
       }
       return stepOf(from);
     },
@@ -892,7 +911,8 @@ describe("履歴", () => {
     await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
 
     // ここでの連鎖が「32」を左辺として使えば、記録が切れていたあいだも
-    // 連鎖の左辺(carriedAnswerRef)が正しく更新され続けていた証拠になる。
+    // 連鎖の左辺が正しく決まり続けていた証拠になる(2026-10-03 以降は
+    // `carryAtDecisionRef`——`=` のあとに答えを覚えておく形はやめた)。
     await userEvent.click(screen.getByRole("button", { name: "足す" }));
     await userEvent.click(screen.getByRole("button", { name: "5" }));
     await userEvent.click(screen.getByRole("button", { name: "計算する" }));
@@ -907,10 +927,17 @@ describe("履歴", () => {
     expect(screen.getByText("325")).toBeInTheDocument();
   });
 
-  it("does not prefix a chain-shaped = right after AC", async () => {
+  it("prefixes the zero that AC left, not the answer before it", async () => {
     // **`AC` は連鎖を終える**(Fix round 3 finding 11)。`AC` のあとに
-    // 来る二項演算子は、`3=` の続きではない——0 に対する操作であって、
-    // 前回の答を左辺として補ってはいけない。
+    // 来る二項演算子は、`3=` の続きではない——**0 に対する操作である。**
+    //
+    // **★ 2026-10-03 に期待値を替えた。** **前回の答（`3`）を補わない**のは
+    // そのままだが、**いまは「その押下が使う値」＝ `AC` が残した `0` を前置する**
+    // （入力経歴の設計書 §4）。**行が自分の答えを説明するようになる**
+    // ——engine は `0 × 2` を計算して 0 を出しているので、式もそう書く。
+    // **例外を作らない**: 「0 のときは前置しない」にすると、`3 − 3 = × 2 =`
+    // （前の答えが 0）でも前置が消え、**いま直している欠陥が値 0 のときだけ残る**
+    // （監視役の裁定 2026-10-03）。
     render(<ScientificPanel />);
     await screen.findByText("DEG");
     await userEvent.click(screen.getByRole("button", { name: "3" }));
@@ -928,10 +955,10 @@ describe("履歴", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "履歴" }));
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
-    // 左辺の補いが無い、綴っただけの "2"(数字だけをつなぐ偽 `spell`)。
-    // "3" が式にも答にも混ざっていれば、この aria-label は存在しない。
+    // **`AC` が残した 0 が頭に付く**（偽 `spell` は数字だけをつなぐので "0 2"）。
+    // **前回の答 "3" は混ざらない**——混ざっていれば、この aria-label は存在しない。
     expect(
-      screen.getByRole("button", { name: "2 = 2 を入力に入れる" }),
+      screen.getByRole("button", { name: "0 2 = 2 を入力に入れる" }),
     ).toBeInTheDocument();
   });
 

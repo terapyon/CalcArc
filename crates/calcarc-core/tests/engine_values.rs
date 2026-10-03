@@ -19,7 +19,7 @@
 
 use calcarc_core::engine::{refuses, spell::spell};
 use calcarc_core::numeric::format::format_real;
-use calcarc_core::{CalcError, DisplayState, EngineState, Key, reduce};
+use calcarc_core::{CalcError, DisplayState, EngineState, Key, reduce, render};
 
 /// 既約の有理数。分母は正。
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,6 +62,30 @@ impl Q {
     }
     fn to_f64(self) -> f64 {
         self.n as f64 / self.d as f64
+    }
+    /// **表示の文字列を、そのまま有理数として読む**(2026-10-03、`=` をまたぐ列のため)。
+    ///
+    /// **読むのは `format_real` が出す形だけ**——桁区切りの `,`、ASCII の `-`、小数点の `.`。
+    /// **ASCII の `-` である**(U+2212 の `−` は綴りの減算のほうで、表示には出ない。実測)。
+    /// **指数表記(`1e-7`)や `∠` の付いた極形式は読まない**——`None` を返し、呼ぶ側が数えない。
+    fn from_decimal(text: &str) -> Option<Q> {
+        let plain = text.replace(',', "");
+        let (sign, digits) = match plain.strip_prefix('-') {
+            Some(rest) => (-1i128, rest),
+            None => (1i128, plain.as_str()),
+        };
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
+            return None;
+        }
+        let mut parts = digits.splitn(2, '.');
+        let whole = parts.next().unwrap_or("");
+        let frac = parts.next().unwrap_or("");
+        if frac.contains('.') {
+            return None;
+        }
+        let n: i128 = format!("{whole}{frac}").parse().ok()?;
+        let d = 10i128.checked_pow(u32::try_from(frac.len()).ok()?)?;
+        Some(Q::new(sign * n, d))
     }
 }
 
@@ -192,9 +216,16 @@ struct Typed {
 
 impl Typed {
     fn new() -> Typed {
+        Typed::starting_from(Q::int(0))
+    }
+
+    /// **画面に出ている値から始める。** `=` をまたいだ行を読み直すときに使う
+    /// ——**行の頭に在るのは「前の答えの表示」**なので、**その値を `base` に置いて
+    /// 続きの綴りを打ち直す**(2026-10-03)。
+    fn starting_from(base: Q) -> Typed {
         Typed {
             toks: Vec::new(),
-            base: Q::int(0),
+            base,
             error: None,
             keys: Vec::new(),
         }
@@ -457,6 +488,16 @@ const PAREN_NET: [Key; 6] = [
 /// 782,703 回)。予算の 15 秒に収まるので、`× ( ( 3 ) DEL + 3 =` の形に届く 9 を下げない。
 const PAREN_LENGTH: usize = 9;
 
+/// **行の頭に置く値と、その判定**(2026-10-03)。**web の `carryAtDecisionRef` と
+/// `decidedRef` の写し**である——**決めた時点で画面に出ていた値**を持つ。
+#[derive(Clone, Copy)]
+struct Prefix<'a> {
+    /// 表示の文字列と、評価器が持っている厳密な値。**`None` は前置しない。**
+    value: Option<(&'a str, Q)>,
+    /// **まだ決めていなければ `None`。**
+    decided: Option<bool>,
+}
+
 /// 網の歩き方を 1 つにまとめる。
 struct Net {
     keys: &'static [Key],
@@ -471,6 +512,27 @@ struct Counts {
     values: usize,
     /// 綴りを読み直した値の照合。
     spellings: usize,
+    /// **頭に値を前置した行**(2026-10-03)。**`=` をまたいだ行はここに入る**
+    /// ——ほかに「`+` から打ち始めた列」（画面の 0 を左辺に取る）も入る。
+    /// **`spellings` の内数である。**
+    prefixed: usize,
+    /// **前の答えの表示が丸められていて、読み直せなかった回数**(同)。
+    /// **`4 ÷ 3 =` の答えは `1.333333333` で、内部の値とは別物**——
+    /// **その行を読み直すと 3.999999999 になり、engine の `4` と一致しない。**
+    /// **不具合ではない**(engine は内部の f64 で続き、表示は丸める)ので、**数えて飛ばす。**
+    /// **2026-10-03 の実測では 176 件**。**うち、飛ばさなければ不一致になるのは 71 件**
+    /// ——**残り 105 件は丸めていても続きの表示が一致する**(レビュー役の測り)。
+    /// **除外は必要な分より少し広い。知ったうえで広いままにしている**
+    /// ——**狭めるには「丸めたが結果は一致する」を先に判定することになり、
+    /// それは engine の計算をもう 1 度なぞる形**である。
+    rounded_away: usize,
+    /// **一致しなかった行**(2026-10-03 の調べ。**数えてから裁定する**ので、
+    /// その場で panic せずに溜める)。**先頭の数件だけ綴りを残す。**
+    mismatches: usize,
+    samples: Vec<String>,
+    /// **形ごとの件数**(2026-10-03 の数え上げ)。**鳴った形は穴の標本にすぎない**ので、
+    /// **全件を形に畳んで数える**([[count-before-you-fix]])。
+    shapes: std::collections::BTreeMap<String, usize>,
 }
 
 /// engine の答え `shown` と、`=` で閉じた評価器 `closed` を比べる。値ならその表示、エラーなら
@@ -547,32 +609,94 @@ fn spelling_reads_back(
     state: &EngineState,
     shown: &DisplayState,
     trail: &[Key],
-    recorded: &[Key],
+    segment: &[Key],
+    carried: Option<(&str, Q)>,
+    continues: bool,
     counts: &mut Counts,
 ) {
-    // 途中に `=` がある列は数えない。web は `=` で列を切り、前の答えは綴りの外から自分で
-    // 頭に足す(`ScientificPanel` の `pendingSpellRef` と `carriedAnswerRef`)。
-    if trail.contains(&Key::Eq) {
-        return;
-    }
     // `=` の前に engine がもうエラーなら数えない。エラー中の web は `AC` 以外を列に積まず
     // (`ScientificPanel` の `press`、H-3)、その `=` も積まれないので、履歴の行ができない。
     // エラーは `AC` でしか解けない(網に無い)ので、ここを通る列は途中でも一度もエラーに
-    // なっておらず、`recorded` はエラーの門で 1 つも落ちていない。
+    // なっておらず、`segment` はエラーの門で 1 つも落ちていない。
     if state.error.is_some() {
         return;
     }
-    let spelled = spell(recorded);
-    let mut read = Typed::new();
+    let spelled = spell(segment);
+    // **綴りが空の区間は、web が行を作らない**(`history/index.ts`——空の式は積まない)。
+    // **`( DEL` のような区間がこれ**で、engine は新しい計算を始めている。
+    if spelled.is_empty() {
+        return;
+    }
+    // **前の答えを頭に足すかは、区間の中で最初に「画面の値を使うキー」を押した時点の
+    // `answer_on_screen` で決まる**(2026-10-03 に替えた。入力経歴の設計書 §4)。
+    // **web がそうしている**——`ScientificPanel` の `carryAtDecisionRef` は
+    // **engine が前の Step に載せた `answerOnScreen` を見て、そのときの `main` を
+    // 写すだけ**である。
+    // **キー列から推測しない**(推測していた版は `DEL` で消えた数字を
+    // 「新しい計算の始まり」と読み、364 件の行が答えを生まなかった)。
+    // **判定そのものは `walk` が降りながら決める**ので、ここは受け取るだけ。
+    // **行の頭に置くのは「決めた時点で画面に出ていた値」の表示**(2026-10-03)。
+    // web がそうしている(`ScientificPanel` の `carryAtDecisionRef`)
+    // ——**置くのは表示の文字列**である。
+    //
+    // **読み直せるのは、その表示が丸められていないときだけ。**
+    // **`format_real` は 10 桁で丸める**ので、`4 ÷ 3 =` の `1.333333333` は内部の値と別物で、
+    // **その行を読み直すと 3.999999999 になる**(engine は `4`)。**不具合ではない**
+    // ——**engine は内部の f64 で続き、表示は丸める**。**数えて飛ばす。**
+    //
+    // **判定は推測ではなく計算である**: **表示を有理数として読み戻した値が、評価器が
+    // 持っている厳密な値と等しいか。** `agree` が毎回 `format_real(base) == shown.main` を
+    // 主張しているので、**この 2 つが食い違うときは「表示が丸めた」ときに限る。**
+    let (base, across) = match carried.filter(|_| continues) {
+        None => (Q::int(0), false),
+        Some((display, exact)) => {
+            // **表示を有理数として読み戻し、評価器が持っている厳密な値と比べる。**
+            // **等しくなければ、その表示は丸めた値である**——数えて飛ばす。
+            // **指数表記・極形式は読めない**(`None`)ので、同じく飛ばす。
+            match Q::from_decimal(display) {
+                Some(written) if written == exact => (written, true),
+                _ => {
+                    counts.rounded_away += 1;
+                    return;
+                }
+            }
+        }
+    };
+    let mut read = Typed::starting_from(base);
     for key in keys_of_spelling(&spelled) {
         read.press(key);
     }
     read.press(Key::Eq);
-    agree(shown, &read, &|| {
-        let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
-        format!("綴りを読み直した値: {tokens:?} + eq、綴り {spelled:?}")
-    });
-    counts.spellings += 1;
+    // **数えてから裁定する**ので、その場で panic しない(2026-10-03 の調べ)。
+    let agreed = match (&shown.error, &read.error) {
+        (Some(engine), Some(oracle)) => engine == oracle,
+        (None, None) => shown.main == format_real(read.base.to_f64()),
+        _ => false,
+    };
+    if agreed {
+        counts.spellings += 1;
+        if across {
+            counts.prefixed += 1;
+        }
+    } else {
+        counts.mismatches += 1;
+        // **形**: 最後の `=` から後ろの打鍵（＝この行を作った区間）。
+        let shape: Vec<&str> = segment.iter().map(|k| k.token()).collect();
+        *counts.shapes.entry(shape.join(" ")).or_insert(0) += 1;
+        if counts.samples.len() < 12 {
+            let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
+            let head = if across {
+                carried.map(|(display, _)| display).unwrap_or("")
+            } else {
+                ""
+            };
+            counts.samples.push(format!(
+                "{tokens:?} 行={head:?}+{spelled:?} engine={:?} 読み直し={:?}",
+                shown.main,
+                format_real(read.base.to_f64())
+            ));
+        }
+    }
 }
 
 /// `trail` を打った状態から `=` で閉じた値を比べ、1 キー足して降りる。`recorded` は web が
@@ -582,7 +706,11 @@ fn walk(
     state: &EngineState,
     typed: &Typed,
     trail: &mut Vec<Key>,
-    recorded: &mut Vec<Key>,
+    // `segment` は **`=` からこちらに web が記録した列**(2026-10-03。前は列の全体だった)
+    // ——**web は `=` で列を切る**(`ScientificPanel` の `pendingSpellRef`)。
+    // `carried` は **直前の `=` の答え**で、**表示の文字列と、評価器が持つ厳密な値の対**。
+    segment: &mut Vec<Key>,
+    prefix: Prefix,
     counts: &mut Counts,
 ) {
     let (_, shown) = reduce(state, Key::Eq);
@@ -593,7 +721,15 @@ fn walk(
         format!("{tokens:?} + eq(評価器の式 {:?})", typed.toks)
     });
     counts.values += 1;
-    spelling_reads_back(state, &shown, trail, recorded, counts);
+    spelling_reads_back(
+        state,
+        &shown,
+        trail,
+        segment,
+        prefix.value,
+        prefix.decided == Some(true),
+        counts,
+    );
     // 降りるのをやめるのは、**評価器とエンジンの両方が**もうエラーのときだけ。片方だけなら
     // 先の列でもう片方が値を出すかもしれないので、比べ続ける。
     if trail.len() + 1 >= net.length || (typed.error.is_some() && state.error.is_some()) {
@@ -602,16 +738,68 @@ fn walk(
     for &key in net.keys {
         // エンジンと評価器には全キーを渡す(値の照合)。web の記録だけが拒まれたキーを落とす。
         let web_records = !refuses(state, key);
-        let (next, _) = reduce(state, key);
+        let (next, _after) = reduce(state, key);
         let mut t = typed.clone();
         t.press(key);
         trail.push(key);
-        if web_records {
-            recorded.push(key);
-        }
-        walk(net, &next, &t, trail, recorded, counts);
-        if web_records {
-            recorded.pop();
+        // **`=` で区間を切る**(web と同じ)。**切ったあとの区間は空**で、
+        // **次の行の頭には「いまの答えの表示」と「評価器の厳密な値」が付く。**
+        // **web と同じ時点で決める**——**この押下の直前の表示**を見る。
+        // **web の `CARRIED_VALUE_TOKENS` の、網に在る部分**である
+        // (あちらは後置関数 14 個も含む。網に無いので、ここには出てこない)。
+        // **網を広げる日は、あちらと突き合わせて増やす**——**片方だけ直すと、
+        // 広げた先で判定がずれる。**
+        let uses_the_screen_value = matches!(
+            key,
+            Key::Add | Key::Sub | Key::Mul | Key::Div | Key::Eq | Key::RParen
+        );
+        // **前置する値は「決めた時点で画面に出ていた値」である**(2026-10-03)。
+        // **その押下が使う値そのもの**なので、`( DEL` のように画面が 0 に戻った列でも
+        // ずれない(前の `=` の答えを覚えておく形だと、`33 = ( DEL +` に `33` を
+        // 前置してしまい、engine の 0 と食い違った。170 件)。
+        let decide = web_records && prefix.decided.is_none() && uses_the_screen_value;
+        let next_decided = if decide {
+            Some(render(state).answer_on_screen)
+        } else {
+            prefix.decided
+        };
+        let closing = key == Key::Eq && web_records;
+        let saved: Option<Vec<Key>> = if closing {
+            Some(std::mem::take(segment))
+        } else {
+            if web_records {
+                segment.push(key);
+            }
+            None
+        };
+        let next_value = if closing {
+            None
+        } else if decide && next_decided == Some(true) {
+            // **この押下の直前の表示と、評価器が持っている厳密な値。**
+            Some((render(state).main, typed.base))
+        } else {
+            prefix
+                .value
+                .map(|(display, exact)| (display.to_string(), exact))
+        };
+        walk(
+            net,
+            &next,
+            &t,
+            trail,
+            segment,
+            Prefix {
+                value: next_value
+                    .as_ref()
+                    .map(|(display, exact)| (display.as_str(), *exact)),
+                decided: if closing { None } else { next_decided },
+            },
+            counts,
+        );
+        if let Some(old) = saved {
+            *segment = old;
+        } else if web_records {
+            segment.pop();
         }
         trail.pop();
     }
@@ -625,6 +813,10 @@ fn walk_from_the_start(net: &Net) -> Counts {
         &Typed::new(),
         &mut Vec::new(),
         &mut Vec::new(),
+        Prefix {
+            value: None,
+            decided: None,
+        },
         &mut counts,
     );
     counts
@@ -637,9 +829,15 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
         length: LENGTH,
     });
     println!(
-        "比べた回数: 値 {} / 綴りの読み直し {}",
-        counts.values, counts.spellings
+        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {}",
+        counts.values, counts.spellings, counts.prefixed, counts.rounded_away, counts.mismatches
     );
+    for sample in &counts.samples {
+        println!("不一致: {sample}");
+    }
+    for (shape, n) in &counts.shapes {
+        println!("形: {n:>4} 件  {shape}");
+    }
     // **比べた回数の下限**(0 本で緑にしない)。網羅は決定的なので下限は実測値そのもの
     // (2026-09-13、LENGTH = 7 で実測 682,651 回、2.83 秒(debug))。降りるのをやめる条件を
     // 「両方がエラー」にしたあとも同じ 682,651 回(2.89 秒)——評価器がエラーにする所では
@@ -664,9 +862,22 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
     // 値の照合より少ないのは、途中に `=` がある列と、`=` の前に engine がエラーの列を
     // 数えないため(`spelling_reads_back`)。
     assert!(
-        counts.spellings >= 338_898,
-        "綴りを読み直したのは {} 回(2026-09-16 の実測 338,898 回)",
+        counts.spellings >= 919_493,
+        "綴りを読み直したのは {} 回(2026-10-03 の実測 919,493 回。2026-09-16 は 338,898 回で、         `=` をまたぐ列を数えるようになって増えた)",
         counts.spellings
+    );
+    // **頭に値を前置した行の下限**(2026-10-03)。**除外条件が強すぎると、前置する行を
+    // 1 本も比べないまま緑になる**([[tests-can-assert-nothing]])ので、**その回数そのものを撃つ。**
+    assert!(
+        counts.prefixed >= 555_020,
+        "頭に値を前置して読み直したのは {} 回(2026-10-03 の実測 555,020 回)",
+        counts.prefixed
+    );
+    // **行が engine の答えを生むこと。** **飛ばすのは「表示が丸めた行」だけ**(上の註)。
+    assert_eq!(
+        counts.mismatches, 0,
+        "綴りが答えを生まない行が {} 件(形は上の印字)",
+        counts.mismatches
     );
 }
 
@@ -677,9 +888,12 @@ fn spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer() {
         length: PAREN_LENGTH,
     });
     println!(
-        "比べた回数: 値 {} / 綴りの読み直し {}",
-        counts.values, counts.spellings
+        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {}",
+        counts.values, counts.spellings, counts.prefixed, counts.rounded_away, counts.mismatches
     );
+    for sample in counts.samples.iter().take(4) {
+        println!("不一致: {sample}");
+    }
     // **比べた回数の下限**(0 本で緑にしない)。網羅は決定的なので下限は実測値そのもの
     // (2026-09-16、PAREN_LENGTH = 9 で値の照合 856,681 回・綴りの読み直し 782,703 回、
     // 合わせて 7.91 秒(debug))。
@@ -689,8 +903,22 @@ fn spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer() {
         counts.values
     );
     assert!(
-        counts.spellings >= 782_703,
-        "綴りを読み直したのは {} 回(2026-09-16 の実測 782,703 回)",
+        counts.spellings >= 2_002_863,
+        "綴りを読み直したのは {} 回(2026-10-03 の実測 2,002,863 回。2026-09-16 は 782,703 回)",
         counts.spellings
+    );
+    // **ここで前置を守っているのは、この床のほうである**(2026-10-03、レビュー役の実測)。
+    // **括弧網には `=` が無い**(上の `PAREN_NET`)ので、**前置される値はいつも画面の 0**で、
+    // **評価器の既定の左辺と同じ**になる——**前置をやめても不一致は 0 のままである。**
+    // **つまり下の「不一致 0」は、この網では前置について何も言っていない。**
+    assert!(
+        counts.prefixed >= 1_124_996,
+        "頭に値を前置して読み直したのは {} 回(2026-10-03 の実測 1,124,996 回)",
+        counts.prefixed
+    );
+    assert_eq!(
+        counts.mismatches, 0,
+        "綴りが答えを生まない行が {} 件(形は上の印字)",
+        counts.mismatches
     );
 }

@@ -298,6 +298,56 @@ test("a chain continued by a postfix function or the sign key records the carrie
  * **こちらは実 WASM を通す**ので、`1 . 5 .` が本当にエラーで終わること・
  * 呼び戻した `2` が本当に engine の入力に入ることまで込みで見る。
  */
+test("a digit undone by DEL still leaves the chain on the carried answer", async ({
+  page,
+}) => {
+  // **2026-10-03、`engine_values.rs` の読み直しが 364 件で見つけた形。**
+  // **`33 =` のあと数字を打って `DEL` で消すと、engine は前の答えに戻る**
+  // （打ちかけの数が消えるので `current` は 33 のまま）——**`+ =` は 66 を出す。**
+  // **ところが履歴の式は `+` だけだった**（`isContinuation` が「列の先頭の無音でない
+  // キー」を見ており、それが消された数字だったため）。**式が答えを生まない。**
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  await press(page, ["3", "3", "計算する"]);
+  await expect(display).toHaveText("33");
+  // 数字を 1 つ打って、すぐ消す。**engine は前の答えに戻る。**
+  await press(page, ["3", "1文字消去"]);
+  await expect(display).toHaveText("33");
+  await press(page, ["足す", "計算する"]);
+  await expect(display).toHaveText("66");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  // **式に前の答えが入っていること。**
+  await expect(page.getByText("33 +")).toBeVisible();
+  // **直す前は「+」だけだった。**
+  await expect(page.getByText("+", { exact: true })).toHaveCount(0);
+});
+
+test("a chain that starts from a zero answer still explains itself", async ({
+  page,
+}) => {
+  // **前の答えが 0 でも、式は答えを説明する**（2026-10-03、監視役の裁定）。
+  // **「0 のときは前置しない」という例外を置くと、`3 − 3 = × 2 =` の行が
+  // `× 2`／答え 0 になり、いま直している欠陥が値 0 のときだけ残る。**
+  // **不変条件は、この形では黙る**（評価器の既定の左辺が 0 なので読み直せる）
+  // ——**だからここで撃つ。**
+  const display = page.getByTestId("display-main");
+  await page.goto("/");
+  await expect(display).toHaveText("0");
+
+  await press(page, ["3", "引く", "3", "計算する"]);
+  await expect(display).toHaveText("0");
+  await press(page, ["掛ける", "2", "計算する"]);
+  await expect(display).toHaveText("0");
+
+  await press(page, ["第2面に切り替え", "履歴"]);
+  await expect(page.getByText("0 × 2")).toBeVisible();
+  // **前置を落とすと、この行は `× 2` になる。**
+  await expect(page.getByText("× 2", { exact: true })).toHaveCount(0);
+});
+
 test("a recall made while the display was in an error state still becomes part of the expression", async ({
   page,
 }) => {

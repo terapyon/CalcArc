@@ -68,8 +68,9 @@ function digitToken(ch: string): KeyToken | null {
  *   新しいキーは足さない。
  *
  * **`current` に触れないキー:** `del`(`delete_one`)・`ac`・`angle_toggle`・
- * `polar_toggle`・`eng`。前 4 つのうち `del` と 3 つのトグルは
- * `SILENT_CONTINUATION_KEYS` が先に読み飛ばす。
+ * `polar_toggle`・`eng`。**これらは `answerOnScreen` を変えない**ので、
+ * **読み飛ばす仕掛けは要らない**(2026-10-03 に `SILENT_CONTINUATION_KEYS` を消した
+ * ——判定の時点を engine に聞く形にしたので、集合で読み飛ばす必要が無くなった)。
  *
  * **註 1: `neg`。** `apply()` の `Key::Neg` は、指数入力中なら `Buffer` 側
  * (`toggle_exponent_sign`)へ行き `apply_unary` を呼ばない。しかし**この判定
@@ -122,28 +123,6 @@ const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
   "asin",
   "acos",
   "atan",
-]);
-
-/**
- * **連鎖の判定で読み飛ばすキー。** `spell()` の「七つの無音キー」から
- * `eq`・`ac` を除いたもの——この 2 つは `press` の設計上、この列の先頭に
- * 来ることが無い(`eq` は必ず列を終えて `pendingSpellRef` に渡り、`ac` は
- * 積んだ直後に列を空にする)。
- *
- * **Fix round 4 finding B。** 答を ENG や極形式で確認してから続きを打つ
- * のは、ごく普通の操作である——極形式は設計書自身が動機として挙げている
- * 例そのもの。`del`(押しても何も消えない——直前の `=` の直後は buffer が
- * 無いので、`delete_one` は何もしない)も同様に、続きの判定を壊してはい
- * けない。**「列の先頭キー」だけを見ていた版は、これらのキーが 1 つでも
- * 挟まると連鎖を見失い、`3 = ENG × 2 =` や `3 = ▸∠ × 2 =` を「新しい計算」
- * として `× 2` のまま記録していた。**
- */
-const SILENT_CONTINUATION_KEYS: ReadonlySet<KeyToken> = new Set([
-  "del",
-  "angle_toggle",
-  "eng",
-  "polar_toggle",
-  "dms",
 ]);
 
 /**
@@ -374,7 +353,30 @@ export function ScientificPanel() {
   // 始める操作であり、そのあとに来る二項演算子は前回の続きではない
   // ——空にしないと、`AC` のあと `× 2 =`(0 に 2 を掛けるだけの、
   // 前回とは無関係な計算)が古い答を左辺として誤って記録する。
-  const carriedAnswerRef = useRef<string | null>(null);
+  /**
+   * **この区間の頭に前置する値**（1.2、入力経歴の設計書 §4）。
+   *
+   * **決めるのは engine である**——**区間の中で最初に「画面の値を使うキー」を
+   * 押したとき、その直前の `display.answerOnScreen` が真なら、そのときの
+   * `display.main` をここに写す。** **偽なら `null`**（前置しない）。
+   * **`decidedRef` が真になるまでが未決**で、**`=` と `AC` で未決に戻す。**
+   *
+   * **前置するのは「その押下が使う値」であって「前回の答え」ではない**
+   * （2026-10-03 に替えた）——**`33 = ( DEL +` は画面が 0 に戻っている**ので、
+   * **`33` を前置すると engine の答え 0 と食い違う**（170 件）。
+   *
+   * **キー列から推測しない**。**推測していた版は `DEL` で消えた数字を
+   * 「新しい計算の始まり」と読み、`33 = 3 DEL + =` の式が `+` だけになって
+   * 答え 66 を生まなかった**（364 件。`engine_values.rs` の読み直しが見つけた）。
+   */
+  const carryAtDecisionRef = useRef<string | null>(null);
+  const decidedRef = useRef<boolean>(false);
+  /**
+   * **`=` で切り出した区間の前置値**（`pendingSpellRef` と対になる）。
+   * **`press` が `=` で写し、下の effect が読む**——**`press` の中で未決に戻すので、
+   * 写さないと effect が読む前に消える**（2026-10-03 に実装で踏んだ）。
+   */
+  const pendingCarryRef = useRef<string | null>(null);
 
   // **engine の状態そのもの。`press` の門番はここから読む。**(H-3 / H-5)
   //
@@ -457,6 +459,14 @@ export function ScientificPanel() {
     if (previous?.refused.includes(token)) return;
     const inError = previous !== null && previous.display.error !== null;
     if (ready && previous && !(inError && token !== "ac")) {
+      // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
+      // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
+      if (!decidedRef.current && CARRIED_VALUE_TOKENS.has(token)) {
+        decidedRef.current = true;
+        carryAtDecisionRef.current = previous.display.answerOnScreen
+          ? previous.display.main
+          : null;
+      }
       keysRef.current.push(token);
       if (token === "eq") {
         // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
@@ -464,6 +474,10 @@ export function ScientificPanel() {
         // 綴りも `""` になり `pushEntry` が積まない(ブリーフ「組み立て方」2)。
         pendingSpellRef.current = keysRef.current;
         keysRef.current = [];
+        // **前置値を区間と一緒に渡してから、未決に戻す。**
+        pendingCarryRef.current = carryAtDecisionRef.current;
+        carryAtDecisionRef.current = null;
+        decidedRef.current = false;
       } else if (token === "ac") {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
@@ -475,9 +489,11 @@ export function ScientificPanel() {
         // 変化(次の計算の完了)にこの古い列が消費されて、`ac` で捨てた
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
+        pendingCarryRef.current = null;
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
         // あとに来る二項演算子は前回の続きではない。
-        carriedAnswerRef.current = null;
+        carryAtDecisionRef.current = null;
+        decidedRef.current = false;
       }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
@@ -505,17 +521,19 @@ export function ScientificPanel() {
     // (Task 10 ブリーフ ★ Step 0)。判断は綴った後に効く。
     const spelled = ready.spell(pendingKeys);
     // **連鎖なら直前の答を左辺として前に足す**(Fix round 3 finding 11)。
-    // 「無音キーを読み飛ばした先頭が、前回の答を引き継ぐキーか」で決める——綴った文字列
-    // を見て推測しない(`spelled` の頭が `×` のような記号になっているかを
-    // 見るのではなく、キーそのものを見る)。**無音キーを読み飛ばすのが
-    // 重要**(Fix round 4 finding B)——答を ENG や極形式・角度モードで
-    // 確認してから続きを打つのは普通の操作で、`del`(直前の `=` の直後は
-    // 何も消さない)もこの判定を壊してはいけない。先頭キーだけを見ると
-    // `3 = ENG × 2 =` のような列で連鎖を見失う。
-    const first = pendingKeys.find((key) => !SILENT_CONTINUATION_KEYS.has(key));
-    const isContinuation =
-      first !== undefined && CARRIED_VALUE_TOKENS.has(first);
-    const carried = carriedAnswerRef.current;
+    //
+    // **決めたのは engine である**(2026-10-03 に替えた)——**区間の中で最初に
+    // 「画面の値を使うキー」を押したとき、その直前の `display.answerOnScreen`** を
+    // `press` が写している。**キー列から推測しない。**
+    //
+    // **前の版は「無音キーを読み飛ばした先頭が、前回の答を引き継ぐキーか」で決めていた**
+    // ——**`DEL` で消えた数字を「新しい計算の始まり」と読み**、
+    // **`33 = 3 DEL + =` の式が `+` だけになって答え 66 を生まなかった**
+    // (`engine_values.rs` の読み直しが 364 件で見つけた。うち 12 件は無音キーが
+    // 先に挟まる形)。**無音キーの読み飛ばしも要らなくなった**——
+    // **`answerOnScreen` は無音キーで変わらない**ので、`3 = ENG × 2 =` のような列も
+    // そのまま連鎖になる。
+    const carried = pendingCarryRef.current;
     // **綴りが空なら左辺も付けない。** `=` の 2 度押しは空の列を綴るので
     // `spelled` が `""` になり、`pushEntry` がその行を捨てる——という約束
     // (`web/src/history/index.ts`)に乗っている。ここで `${carried} ` を
@@ -524,26 +542,11 @@ export function ScientificPanel() {
     // `CARRIED_VALUE_TOKENS` に居り(`finish`、mod.rs:195)、この 1 条件が
     // 無いと集合を engine から導いた途端にその行が生まれる。
     const expression =
-      isContinuation && carried !== null && spelled !== ""
-        ? `${carried} ${spelled}`
-        : spelled;
-    // **次の連鎖のために、いま確定した答を持っておく。** 記録の on/off に
-    // 関わらず更新する——連鎖の継ぎ目は engine 側の値であって、記録するか
-    // どうかとは無関係(このあとの `enabled` チェックより前に置く理由)。
-    //
-    // **エラーで終わった答は左辺にしない**(H-3)。`"Math ERROR"` は数では
-    // ないので、`Math ERROR × 2` のような行を作ってしまう。エラーは連鎖を
-    // 終わらせる——`AC` と同じ扱いで空にする。
-    //
-    // **これに番人は置けない。** 上の `press` の門番があるかぎり、エラーの
-    // あとに来る二項演算子は engine にも `keysRef` にも届かず、`AC`(唯一の
-    // 出口)は `carriedAnswerRef` を自分で空にするので、**この行の有無は
-    // 外から観測できない**。代わりに守っているのは `press` の門番のほうで、
-    // その番人は上の 2 つの検査(「does not record keys the engine threw
-    // away…」「records nothing at all when the error was raised…」)である。
-    // ここはその門番が将来狭められた日のための二重化として置く。
-    carriedAnswerRef.current =
-      step.display.error === null ? step.display.main : null;
+      carried !== null && spelled !== "" ? `${carried} ${spelled}` : spelled;
+    // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
+    // **前置する値は `press` が決めた時点で写している**ので、
+    // **`=` のあとに答えを覚えておく必要が無くなった**
+    // ——**覚えておく形は `33 = ( DEL +` で食い違った**（設計書 §4）。
     // **`enabled` が false なら記録しない。消さない**(設計書 §7)——
     // ここで止まるのは「これから」記録する分だけで、既に貯まった `entries`
     // には触らない。

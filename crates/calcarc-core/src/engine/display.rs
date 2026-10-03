@@ -20,6 +20,20 @@ pub struct DisplayState {
     pub notation: Notation,
     pub pending_op: Option<BinOp>,
     pub pending_depth: usize,
+    /// **画面の値は、前の計算の答えのままか**(1.2、入力経歴の設計書 §4)。
+    ///
+    /// **真なら、いま二項演算子や後置関数を押すと、この値がその左辺になる**
+    /// ——**新しい数の入力はまだ始まっていない。**
+    /// **打ちかけの数を `DEL` で消したあとも真に戻る**(engine は前の答えに戻るので。
+    /// 2026-10-03 実測: `33 = 3 DEL` の `main` は `33`)。
+    ///
+    /// **何も打っていないときも真**である(画面の `0` がその「答え」)。
+    ///
+    /// **導出である**——`EngineState` には何も足していない(`STATE_SCHEMA` は 8 のまま)。
+    /// **web はこれを読んで、履歴と経歴の式に前の答えを前置するかを決める**
+    /// ——**キー列から推測しない**(あの推測が、`DEL` で消えた数字を「新しい計算の始まり」と
+    /// 読み、式が答えを生まない行を作っていた。364 件。`engine_values.rs` の読み直しが見つけた)。
+    pub answer_on_screen: bool,
     pub error: Option<CalcError>,
 }
 
@@ -75,6 +89,13 @@ pub fn render(state: &EngineState) -> DisplayState {
         angle: state.angle,
         form: state.form,
         notation: state.notation,
+        // **打ちかけの数も、保留の演算子も、手元の値も無ければ、画面に出ているのは
+        // 前の答えである。** エラー中は偽(次に押せるのは `AC` だけ)。
+        answer_on_screen: !has_error
+            && state.buffer.is_none()
+            && state.operands.is_empty()
+            && state.operators.is_empty()
+            && !state.on_hand,
         // エラー中は保留状態を伏せる。スタックには途中の演算子が
         // 残っているが、それを見せても利用者にできることはない。
         pending_op: if has_error {

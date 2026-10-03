@@ -93,6 +93,16 @@ export interface DisplayState {
   notation: Notation;
   pendingOp: BinOpName | null;
   pendingDepth: number;
+  /**
+   * **画面の値は、前の計算の答えのままか**（1.2、入力経歴の設計書 §4）。
+   *
+   * **真なら、いま二項演算子や後置関数を押すと、この値がその左辺になる。**
+   * **打ちかけの数を `DEL` で消したあとも真に戻る**（engine が前の答えに戻るので）。
+   * **履歴と経歴の式に前の答えを前置するかは、これで決める**
+   * ——**キー列から推測しない**（推測していた版は、`DEL` で消えた数字を
+   * 「新しい計算の始まり」と読み、式が答えを生まない行を作っていた）。
+   */
+  answerOnScreen: boolean;
   error: CalcErrorCode | null;
 }
 
