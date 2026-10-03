@@ -425,3 +425,83 @@ test("a negative mantissa with an exponent is recorded but offers no recall butt
     page.getByRole("button", { name: /を入力に入れる/ }),
   ).toHaveCount(0);
 });
+
+test("the history entry names the mode that drew it, on the real WASM core", async ({
+  page,
+}) => {
+  // **同じ欠陥が履歴にも在った**（**出荷済み**。2026-10-03、レビュー役の条件 B1）。
+  // **履歴も `=` の瞬間の `display.angle` を読んでいた**ので、
+  // **行のあいだに【DRG】を押すと、記録されるモードが計算に使ったものと違った。**
+  //
+  // **経歴の行と履歴の件は 1 つの規則から出す**（設計書 §2）——**でなければ、
+  // 同じ計算について 2 つの画面が違うことを言う**（経歴は `DEG`、履歴は `Rad`）。
+  await page.goto("/");
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await press(page, [
+    "3",
+    "0",
+    "サイン",
+    "角度の単位を切り替え",
+    "掛ける",
+    "2",
+    "計算する",
+  ]);
+  await expect(page.getByTestId("display-main")).toHaveText("1");
+
+  await page
+    .getByRole("button", { name: "第2面に切り替え", exact: true })
+    .click();
+  await page.getByRole("button", { name: "履歴", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "履歴" })).toBeVisible();
+
+  const entry = page.getByTestId("history-entry").first();
+  // **式は打ったキーのまま**（印は履歴には出ない——**モードは専用の欄が持つ**）。
+  await expect(entry).toContainText("30 sin × 2");
+  // **その `sin` を描いたのは DEG である。**
+  await expect(entry).toContainText("Deg");
+});
+
+test("a history entry that used both modes keeps both, and survives a reload", async ({
+  page,
+}) => {
+  // **裁定 2026-10-03。** **行と履歴は 1 つの規則から出る**ので、
+  // **混在の行は履歴にも混在のまま残る。**
+  //
+  // **★ 読み戻しまで撃つ理由**: **`angle` は白リストで検証されている**
+  // （`history/types.ts` の `ALLOWED.angle`）——**範囲外の値を入れると、
+  // その件は読み戻しで黙って消える**（2026-10-03 に実測。2 件書いて 1 件）。
+  // **欄に書けたことは、残ったことではない。**
+  await page.goto("/");
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await press(page, [
+    "3",
+    "0",
+    "サイン",
+    "角度の単位を切り替え",
+    "足す",
+    "3",
+    "0",
+    "サイン",
+    "計算する",
+  ]);
+
+  const open = async () => {
+    await page
+      .getByRole("button", { name: "第2面に切り替え", exact: true })
+      .click();
+    await page.getByRole("button", { name: "履歴", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "履歴" })).toBeVisible();
+  };
+  await open();
+  await expect(page.getByTestId("history-entry").first()).toContainText(
+    "Deg/Rad",
+  );
+
+  // **読み込み直しても残る**（白リストが落とさない）。
+  await page.reload();
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await open();
+  await expect(page.getByTestId("history-entry").first()).toContainText(
+    "Deg/Rad",
+  );
+});

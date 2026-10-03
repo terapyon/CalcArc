@@ -5,7 +5,7 @@
  * ——掴むのは呼び出し側(`web/src/ui/storage.ts`)だけである。
  */
 
-import { ANGLE_MODES, type AngleMode } from "../calc";
+import { ANGLE_MODES } from "../calc";
 
 /**
  * 1 件の履歴。**打鍵中の値は含まない**——`=` で確定した後の 1 件だけを積む。
@@ -15,8 +15,15 @@ export interface HistoryEntry {
   expression: string;
   /** 表示文字列の答。 */
   answer: string;
-  /** その計算のときの角度モード。**いまのモードではない。** */
-  angle: AngleMode;
+  /**
+   * **その計算を描いた角度モード。** **いまのモードではない**し、
+   * **`=` の瞬間のモードでもない**（2026-10-03 に直した。出荷済みの欠陥）。
+   *
+   * **1 つの計算が両方のモードを使えるので、組み合わせも入る**
+   * ——`30 sin`【DRG】`+ 30 sin =` は **`"Deg/Rad"`**（**使った順、重複は畳む**。
+   * 利用者の裁定 2026-10-03）。**取り得る値は `ALLOWED.angle` の 4 つだけ。**
+   */
+  angle: EntryAngle;
   /**
    * エラーで終わったか。**一覧の行の色(`data-error`)だけに効く**——押せる
    * かどうかは `History` コンポーネントの `canRecall` prop が別に判定する
@@ -40,7 +47,25 @@ export interface HistoryStorage {
   setItem(key: string, value: string): void;
 }
 
+/**
+ * **1 件が持てる角度モードの綴り。** **単独の 2 つと、混在の 2 つ**
+ * （**使った順**なので `"Deg/Rad"` と `"Rad/Deg"` は別物）。
+ *
+ * **ここを広げずに混在を書くと、その件は読み戻しで黙って消える**
+ * ——`parseEntry` が白リストで落とすからである（**2026-10-03 に実測**:
+ * `angle: "Deg/Rad"` を含む 2 件を書いて、読み戻せたのは 1 件）。
+ * **欄に書けたことは、残ったことではない。**
+ */
+export const ENTRY_ANGLES = [
+  ...ANGLE_MODES,
+  "Deg/Rad",
+  "Rad/Deg",
+] as const satisfies readonly string[];
+
+/** 1 件の `angle` 欄が取り得る綴り。 */
+export type EntryAngle = (typeof ENTRY_ANGLES)[number];
+
 /** 検証に使う白リスト。**型ではなく取り得る値**で見る(settings と同じ考え方)。 */
 export const ALLOWED = {
-  angle: ANGLE_MODES,
+  angle: ENTRY_ANGLES,
 } as const;

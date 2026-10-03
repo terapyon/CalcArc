@@ -26,7 +26,13 @@ test("a key that would drop the number on screen cannot be pressed", async ({
   // キーボードからも入らない(engine が拒む)。
   await page.keyboard.press("(");
   await expect(page.getByTestId("display-main")).toHaveText("2");
-  await expect(page.getByTestId("display-echo")).toHaveText("");
+  // **拒まれたキーは行に入らない**（1.2 の入力経歴、設計書 §4.1.1）。
+  // **前は `""` を期待していた**——**engine の `echo` は演算子が待って
+  // いなければ空**だったからである。**いまこの欄は打鍵の綴りを見せる**ので、
+  // **押せた `2` だけが残る。** **`"2 ("` になったら赤**で、
+  // **それが「拒んだキーを綴った」ことの印である**——**`""` では
+  // どちらも区別できなかった。**
+  await expect(page.getByTestId("display-echo")).toHaveText("2");
 });
 
 /**

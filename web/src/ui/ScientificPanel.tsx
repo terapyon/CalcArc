@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AngleMode, DisplayForm } from "../calc";
 import { type Calc, initCalc, type KeyToken, type Step } from "../calc";
-import { clearAll, type HistoryEntry, pushEntry, removeAt } from "../history";
+import {
+  clearAll,
+  type EntryAngle,
+  type HistoryEntry,
+  pushEntry,
+  removeAt,
+} from "../history";
 import { Display } from "./Display/Display";
 import { History } from "./History/History";
 import { Keypad } from "./Keypad/Keypad";
@@ -124,6 +131,123 @@ const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
   "acos",
   "atan",
 ]);
+
+/**
+ * **行を 1 つ作る**（1.2、入力経歴の設計書 §2）。
+ *
+ * **履歴の 1 件も、表示に出る経歴も、ここから派生する**——**`carry`（決めた時点で
+ * 画面に出ていた値）と `spelled`（その区間の綴り）を繋ぐ規則を 1 か所に置く。**
+ * **2 か所に書くと、片方だけ直る日が来る**（利用者が CSS で指摘した「二重化」と
+ * 同じ形。2026-10-03）。
+ *
+ * **綴りが空なら carry も付けない**——`=` の 2 度押しは空の列を綴るので、
+ * ここで `${carry} ` を足すと式が `"2 "` になって空でなくなり、
+ * **`pushEntry` がその行を捨てられなくなる**（`web/src/history/index.ts`）。
+ */
+/**
+ * **角度モードを読むキー**（1.2、入力経歴の設計書 §4.1.2）。
+ *
+ * **core の `engine/mod.rs` で `state.angle` を読む腕は、この 6 つだけ**である
+ * （2026-10-03 に `grep` で数えた）。**ほかに読むのは表示の 3 か所で、
+ * どれも極形式の綴り**——そちらは `display.form` が答える。
+ */
+const ANGLE_KEYS: ReadonlySet<KeyToken> = new Set([
+  "sin",
+  "cos",
+  "tan",
+  "asin",
+  "acos",
+  "atan",
+]);
+
+export function lineOf(carry: string | null, spelled: string): string {
+  return carry !== null && spelled !== "" ? `${carry} ${spelled}` : spelled;
+}
+
+/**
+ * **その計算を描いた角度のモード。** **行の印と履歴の件は、どちらもここから出る**
+ * （設計書 §2——**規則を 2 か所に書かない**）。
+ *
+ * **`trigAngle` は「この区間で最初に三角キーを押した時点のモード」**
+ * （押していなければ `null`）。**`display.angle` ではない**:
+ *
+ * **`30 sin` を DEG で計算してから【DRG】で RAD にして `× 2 =` と打つと、
+ * 答えは 1（`sin 30° = 0.5` で計算済み）だが、`=` の瞬間のモードは RAD である。**
+ * **`=` の瞬間を読むと、その計算を描いていないモードを名乗る**
+ * ——**レビュー役が盤面で見つけた**（2026-10-03、条件 B1）。
+ * **履歴にも同じ欠陥が在った**（出荷済み）。
+ *
+ * **三角キーを押していない計算は、いまのモードを返す**——**極形式の偏角は
+ * `=` の瞬間のモードで描かれる**ので、そちらはこれで正しい。
+ *
+ * **1 つの行が両方のモードを使ったときは、両方を名乗る**
+ * ——**使った順、重複は畳む**（`30 sin 【DRG】 + 30 sin =` は `"Deg/Rad"`。
+ * 利用者の裁定 2026-10-03）。**「最初の 1 つ」は後半の `sin` について嘘になる**し、
+ * **「名乗らない」は「印の無い行はモードに依らない」という約束を崩す**
+ * （設計書 §4.1.2）。**綴りは `ENTRY_ANGLES` の 4 つだけ**
+ * ——**そこから外れると、履歴の件が読み戻しで黙って消える**
+ * （`history/types.ts` の `ALLOWED.angle`。**2026-10-03 に実測**）。
+ *
+ * **★ この註は 1 度腐った**（レビュー役が見つけた、2026-10-03）。
+ * **混在が決まる前に「★ 決まっていないこと: 最初の 1 つを名乗る」と書いてあり、
+ * 本体が両方を繋ぐようになった日に、註だけ逆のことを言っていた。**
+ * **決まっていないことを註に書いたら、決まった日に消す**
+ * ——**裁定の日付を書いた註は、裁定が動いた日に腐る。**
+ */
+export function angleThatDrewIt(
+  trigAngles: readonly AngleMode[],
+  display: { angle: AngleMode },
+): EntryAngle {
+  if (trigAngles.length === 0) return display.angle;
+  // **使った順のまま、重複だけ畳む**（`Set` は挿入順を保つ）。
+  const spelled = [...new Set(trigAngles)].join("/");
+  // **`ENTRY_ANGLES` の 4 つ以外は作れない**——`AngleMode` は 2 つなので、
+  // 畳んだあとの並びは `Deg` / `Rad` / `Deg/Rad` / `Rad/Deg` のどれかである。
+  return spelled as EntryAngle;
+}
+
+/**
+ * **その行に付ける角度の印**（1.2、入力経歴の設計書 §4.1.2）。
+ *
+ * **出すのは「モードで描いた行」**——**(a) 三角キーを使った行**か、
+ * **(b) 答えを極形式で見せている行**。**「モードが答えを変えた行」ではない**:
+ * 極形式の `3 + 4 =` は `7 ∠ 0` で、**θ = 0 ならどのモードでも同じ答え**だが、
+ * **印は付く**（保守的に出す。偽の精密さを避ける）。
+ *
+ * **ふだんは出ない**——四則だけで使う人には一生出ない。
+ */
+export function angleMarkOf(
+  trigAngles: readonly AngleMode[],
+  display: { angle: AngleMode; form: DisplayForm },
+): string {
+  if (trigAngles.length === 0 && display.form !== "Polar") return "";
+  // **大文字にするのは画面の行だけ**——**履歴の欄は `Deg` の綴りのまま**
+  // （既にそう保存されている。`history/types.ts` の `ENTRY_ANGLES`）。
+  return angleThatDrewIt(trigAngles, display).toUpperCase();
+}
+
+/**
+ * **`=` で閉じた行の綴り。** **押した `=` までを見せ、答えは足さない**
+ * （利用者の裁定 2026-10-03）。
+ *
+ * **初稿は `30 sin × 2 ＝ 1` まで出す形だった**（利用者の最初の例がその形）
+ * ——**実装の途中で「答えは出さず `=` まで」に変わった。** **理由は、
+ * 答えの欄（`display-main`）と役割が重なるから**である。
+ *
+ * **記号はキーの面の `=`**（半角）。**`spell.rs` の綴りはすべてキーの面であり**
+ * （`+ − × ÷ xʸ nPr n!`）、**`=` キーの面も `=` である**
+ * ——**行は「打ったキーの並び」なので、綴りの出どころを 1 つにする。**
+ *
+ * **core の `spell` は触らない**——**`Key::Eq` は綴りに何も足さない**
+ * （`spell.rs:68`）。**ここで足すのは画面の行だけで、履歴に残る式は
+ * 変えない**（履歴は式と答えを別の欄で見せている）。
+ *
+ * **空の行には足さない**——`=` の 2 度押しは空の列を綴るので、
+ * **`" ="` という行が生まれてはいけない。**
+ */
+export function closedLineOf(expression: string): string {
+  return expression === "" ? "" : `${expression} =`;
+}
 
 /**
  * 履歴の答(表示文字列)を、呼び戻すためのキー列に写す。
@@ -369,6 +493,27 @@ export function ScientificPanel() {
    * 「新しい計算の始まり」と読み、`33 = 3 DEL + =` の式が `+` だけになって
    * 答え 66 を生まなかった**（364 件。`engine_values.rs` の読み直しが見つけた）。
    */
+  /**
+   * **表示に出る 1 行**（1.2、入力経歴）。**打つたびに作り直し、`=` のあとも残る**
+   * ——**消えるのは `AC` と、次のキーで新しい行に替わるとき**だけである。
+   */
+  const [trail, setTrail] = useState("");
+  /**
+   * **その行に付ける角度の印**（`"DEG"` / `"RAD"` / 付けないときは `""`）。
+   * **モードで描いた行にだけ付く**（設計書 §4.1.2）。
+   */
+  const [trailAngle, setTrailAngle] = useState("");
+  /**
+   * **この区間で三角キーを押したときのモードを、押した順に**（押していなければ
+   * 空。1.2、入力経歴の設計書 §4.1.2 の (a)）。**`=` と `AC` で空にする。**
+   *
+   * **真偽ではなくモードを持つ**——**`=` の瞬間のモードは、その計算を描いた
+   * モードとは別物**だからである（`angleThatDrewIt` の註）。
+   * **1 つではなく並びを持つ**——**1 つの行が両方のモードを使える**
+   * （利用者の裁定 2026-10-03。**「最初の 1 つ」は後半の `sin` について嘘になる**）。
+   */
+  const trigAnglesRef = useRef<AngleMode[]>([]);
+  const pendingTrigAnglesRef = useRef<AngleMode[]>([]);
   const carryAtDecisionRef = useRef<string | null>(null);
   const decidedRef = useRef<boolean>(false);
   /**
@@ -461,6 +606,12 @@ export function ScientificPanel() {
     if (ready && previous && !(inError && token !== "ac")) {
       // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
       // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
+      // **三角キーを押すたびに、そのときのモードを積む**（畳むのは綴る側）。
+      // **読むのは打鍵前の姿**——`sin` はモードを変えないので同じ値だが、
+      // **`previous` から読む形を崩さない**（この区間の判断は全部そこから出る）。
+      if (ANGLE_KEYS.has(token)) {
+        trigAnglesRef.current.push(previous.display.angle);
+      }
       if (!decidedRef.current && CARRIED_VALUE_TOKENS.has(token)) {
         decidedRef.current = true;
         carryAtDecisionRef.current = previous.display.answerOnScreen
@@ -476,8 +627,10 @@ export function ScientificPanel() {
         keysRef.current = [];
         // **前置値を区間と一緒に渡してから、未決に戻す。**
         pendingCarryRef.current = carryAtDecisionRef.current;
+        pendingTrigAnglesRef.current = trigAnglesRef.current;
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
+        trigAnglesRef.current = [];
       } else if (token === "ac") {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
@@ -490,10 +643,12 @@ export function ScientificPanel() {
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
         pendingCarryRef.current = null;
+        pendingTrigAnglesRef.current = [];
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
         // あとに来る二項演算子は前回の続きではない。
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
+        trigAnglesRef.current = [];
       }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
@@ -512,7 +667,24 @@ export function ScientificPanel() {
   useEffect(() => {
     if (!step) return;
     const pendingKeys = pendingSpellRef.current;
-    if (pendingKeys === null) return;
+    const live = calcRef.current;
+    if (pendingKeys === null) {
+      // **打っている最中の行。** **`=` を押していないあいだは、貯めている列を綴る。**
+      // **`=` の直後はここに来ない**（下で閉じた行を作る）ので、**その行は次のキーまで残る。**
+      if (live) {
+        setTrail(
+          lineOf(carryAtDecisionRef.current, live.spell(keysRef.current)),
+        );
+        // **印も毎回決め直す。** **置き忘れると 2 つの形で狂う**
+        // （2026-10-03 に実測。**閉じた行だけを撃っていたので緑だった**）:
+        // **打鍵中の `30 sin` に印が付かない**（三角キーを使った行なのに）、
+        // **そして前の行の印が残る**（`DEG 30 sin =` の次に `3 + 4` を打つと
+        // `DEG 3 + 4` になった）。**生きている行は `trigAnglesRef`**
+        // ——`pendingTrigAnglesRef` は `=` が閉じた行のぶんである。
+        setTrailAngle(angleMarkOf(trigAnglesRef.current, step.display));
+      }
+      return;
+    }
     pendingSpellRef.current = null;
     const ready = calcRef.current;
     if (!ready) return;
@@ -541,8 +713,14 @@ export function ScientificPanel() {
     // **2 度押しが行を作ってしまう**。`eq` は前回の答を読むキーなので
     // `CARRIED_VALUE_TOKENS` に居り(`finish`、mod.rs:195)、この 1 条件が
     // 無いと集合を engine から導いた途端にその行が生まれる。
-    const expression =
-      carried !== null && spelled !== "" ? `${carried} ${spelled}` : spelled;
+    // **同じ builder から 2 つを派生させる**（設計書 §2）——**履歴の 1 件と、
+    // 表示に出る行。** **規則を 2 か所に書かない。**
+    const expression = lineOf(carried, spelled);
+    // **画面の行は `=` まで見せる**（答えは足さない。裁定 2026-10-03）。
+    // **履歴に積む `expression` は変えない**——**あちらは式と答えを
+    // 別の欄で見せている**ので、式に `=` を足す理由が無い。
+    setTrail(closedLineOf(expression));
+    setTrailAngle(angleMarkOf(pendingTrigAnglesRef.current, step.display));
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -558,7 +736,10 @@ export function ScientificPanel() {
     const entry: HistoryEntry = {
       expression,
       answer: step.display.main,
-      angle: step.display.angle,
+      // **行の印と同じ規則から出す**（設計書 §2）——**`=` の瞬間のモードを
+      // 読むと、その計算を描いていないモードを記録する**（`angleThatDrewIt` の註。
+      // **出荷済みの欠陥で、レビュー役が盤面で見つけた**）。
+      angle: angleThatDrewIt(pendingTrigAnglesRef.current, step.display),
       error: step.display.error !== null,
     };
     const updated = pushEntry(entriesRef.current, entry);
@@ -698,7 +879,11 @@ export function ScientificPanel() {
         />
       ) : (
         <>
-          <Display display={step.display} />
+          <Display
+            display={step.display}
+            trail={trail}
+            trailAngle={trailAngle}
+          />
           <Keypad
             sections={SCIENTIFIC_SECTIONS}
             onPress={press}

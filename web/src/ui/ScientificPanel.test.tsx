@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ENTRY_ANGLES } from "../history";
 
 // jsdom では WASM を読み込めないので、initCalc だけ差し替える。
 // ここで確かめたいのは ScientificPanel の分岐であって計算ではない。
@@ -13,7 +14,13 @@ vi.mock("../calc", async (importOriginal) => {
 
 import type { Calc, DisplayState, EngineState, KeyToken, Step } from "../calc";
 import { initCalc } from "../calc";
-import { ScientificPanel } from "./ScientificPanel";
+import {
+  angleMarkOf,
+  angleThatDrewIt,
+  closedLineOf,
+  lineOf,
+  ScientificPanel,
+} from "./ScientificPanel";
 
 /**
  * ../calc をモジュールごと差し替えているので、実 WASM の代わりに角度・
@@ -34,6 +41,14 @@ import { ScientificPanel } from "./ScientificPanel";
 // 数取り——履歴を主張するテストのそれぞれで `spellCallCount` を確かめる。
 // `fakeCalc()` はテストごとに作り直すので、数える側はここで毎回リセットする。
 let spellCallCount = 0;
+/**
+ * **`=` で区間を閉じたときの綴りだけを数える**（1.2、入力経歴）。
+ *
+ * **`spellCallCount` は打鍵のたびに増えるようになった**——**表示に出る行を
+ * 打つたびに作り直すから**である（設計書 §2）。**「2 度目の `=` は列を渡していない」
+ * を見るには、閉じた綴りだけを数える必要がある**（列の末尾が `eq`）。
+ */
+let closingSpellCount = 0;
 
 /**
  * **偽 `spell` が字面を持つ非数字キー。**
@@ -226,6 +241,9 @@ function fakeCalc(): Calc {
     // 「`=` の 2 度押しは何も綴らない」(空の列 → 空文字列)も再現できる。
     spell: (keys: KeyToken[]) => {
       spellCallCount += 1;
+      if (keys.at(-1) === "eq") {
+        closingSpellCount += 1;
+      }
       return keys
         .map((key) => (/^[0-9]$/.test(key) ? key : FAKE_GLYPHS[key]))
         .filter((part): part is string => part !== undefined)
@@ -366,6 +384,7 @@ describe("履歴", () => {
     // いるので、成功する実装に戻す。
     vi.mocked(initCalc).mockImplementation(() => Promise.resolve(fakeCalc()));
     spellCallCount = 0;
+    closingSpellCount = 0;
   });
 
   it("records one entry when = is pressed", async () => {
@@ -710,10 +729,12 @@ describe("履歴", () => {
     // ここから先は engine が 1 打鍵も受け取らない。
     await pressKeys(["7", "足す", "8", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
-    // **綴りが呼ばれた回数で見る**(ブリーフ ★ Step 0 と同じ形)。1 なら
+    // **閉じた綴りの回数で見る**(ブリーフ ★ Step 0 と同じ形)。1 なら
     // 2 度目の `=` は列を渡していない。0 だったなら「そもそも打鍵が届いて
     // いない」ことになり、この検査は何も主張していない。
-    expect(spellCallCount).toBe(1);
+    // **`spellCallCount` では見られない**——**1.2 から、打鍵のたびに綴る**
+    // (表示に出る行を作るため)。
+    expect(closingSpellCount).toBe(1);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
@@ -736,7 +757,7 @@ describe("履歴", () => {
 
     await pressKeys(["7", "足す", "8", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
-    expect(spellCallCount).toBe(0);
+    expect(closingSpellCount).toBe(0);
 
     await openHistory();
     expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
@@ -758,7 +779,7 @@ describe("履歴", () => {
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
 
     await pressKeys(["全消去", "2", "計算する"]);
-    expect(spellCallCount).toBe(1);
+    expect(closingSpellCount).toBe(1);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
@@ -795,7 +816,7 @@ describe("履歴", () => {
 
     await pressKeys(["3", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("23");
-    expect(spellCallCount).toBe(2);
+    expect(closingSpellCount).toBe(2);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
@@ -1359,5 +1380,103 @@ describe("履歴", () => {
     const typed = screen.getByTestId("display-main").textContent;
 
     expect(recalled).toBe(typed);
+  });
+});
+
+/**
+ * **行を組み立てる 2 つの規則を、直に撃つ。**
+ *
+ * **盤面を通す本（上）は「打ったらこう出る」を見るが、組み合わせを全部は
+ * 回れない**——**`angleMarkOf` は 2 つの入力（三角キーを使ったか・極形式か）の
+ * 4 通り × 2 つのモードで 8 通り在る。** **E2E はそのうち 3 通りを
+ * 実ブラウザで撃っている**（`tests/e2e/entry.spec.ts`）。**残りはここが数える。**
+ *
+ * **この 2 つを `export` しているのはここで撃つためである**——
+ * **export したまま誰も呼ばなければ、それは死んだ口である。**
+ */
+describe("行の組み立て", () => {
+  it("前置する値が無ければ、綴りだけが行になる", () => {
+    expect(lineOf(null, "3 + 4")).toBe("3 + 4");
+    expect(lineOf("21", "× 3")).toBe("21 × 3");
+    // **綴りが空なら前置しない**——`=` の 2 度押しが行を作らないための 1 条件
+    // （`""` でなく `"2 "` になると `pushEntry` が捨てない）。
+    expect(lineOf("2", "")).toBe("");
+    expect(lineOf(null, "")).toBe("");
+  });
+
+  it("`=` で閉じた行は記号までで、答えは入らない", () => {
+    // **利用者の裁定 2026-10-03。** **答えの欄と役割が重なるので落とした。**
+    expect(closedLineOf("30 sin × 2")).toBe("30 sin × 2 =");
+    expect(closedLineOf("21 × 3")).toBe("21 × 3 =");
+    // **空の行には足さない**——`=` の 2 度押しが `" ="` を作ってはいけない。
+    expect(closedLineOf("")).toBe("");
+  });
+
+  it("印が付くのは、モードがその行を描いたときだけである", () => {
+    const deg = { angle: "Deg", form: "Rect" } as const;
+    const rad = { angle: "Rad", form: "Rect" } as const;
+    const degPolar = { angle: "Deg", form: "Polar" } as const;
+    const radPolar = { angle: "Rad", form: "Polar" } as const;
+
+    // **(a) 三角キーを使った行**——直交形式でも付く。
+    expect(angleMarkOf(["Deg"], deg)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], rad)).toBe("RAD");
+    // **(b) 極形式の行**——キーを押していなくても付く(偏角がモードで読まれる)。
+    expect(angleMarkOf([], degPolar)).toBe("DEG");
+    expect(angleMarkOf([], radPolar)).toBe("RAD");
+    // **両方**。
+    expect(angleMarkOf(["Deg"], degPolar)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], radPolar)).toBe("RAD");
+    // **どちらでもない行には付かない**——**モードが答えを変えていない。**
+    expect(angleMarkOf([], deg)).toBe("");
+    expect(angleMarkOf([], rad)).toBe("");
+  });
+
+  it("名乗るのは、描いたときのモードである（`=` の瞬間ではない）", () => {
+    // **レビュー役が盤面で見つけた欠陥**（2026-10-03、条件 B1）。
+    // **`30 sin` を DEG で計算してから RAD に切り替えて `× 2 =`** と打つと、
+    // **`=` の瞬間のモードは RAD だが、その `sin` を描いたのは DEG である。**
+    const nowRad = { angle: "Rad", form: "Rect" } as const;
+    const nowDeg = { angle: "Deg", form: "Rect" } as const;
+
+    // **押した時点のモードが勝つ**——**これが直しの中身。**
+    expect(angleMarkOf(["Deg"], nowRad)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], nowDeg)).toBe("RAD");
+    // **履歴の件も同じ規則から出る**（設計書 §2——規則を 2 か所に書かない）。
+    expect(angleThatDrewIt(["Deg"], nowRad)).toBe("Deg");
+    expect(angleThatDrewIt(["Rad"], nowDeg)).toBe("Rad");
+    // **三角キーを押していない計算は、いまのモード**
+    // ——**極形式の偏角は `=` の瞬間のモードで描かれる。**
+    expect(angleThatDrewIt([], nowRad)).toBe("Rad");
+    expect(angleThatDrewIt([], nowDeg)).toBe("Deg");
+  });
+
+  it("1 つの行が両方のモードを使ったら、使った順に両方名乗る", () => {
+    // **裁定 2026-10-03**（監視役経由）。**「最初の 1 つ」は後半の `sin` に
+    // ついて嘘になる**し、**「印を出さない」は「印の無い行はモードに依らない」
+    // という約束を崩す**（設計書 §4.1.2）。**残るのは両方書くことだけ。**
+    const nowRad = { angle: "Rad", form: "Rect" } as const;
+
+    // **同じモードを 2 回 → 1 つに畳む。**
+    expect(angleThatDrewIt(["Deg", "Deg"], nowRad)).toBe("Deg");
+    expect(angleMarkOf(["Rad", "Rad", "Rad"], nowRad)).toBe("RAD");
+    // **違うモード → 使った順に両方。**
+    expect(angleThatDrewIt(["Deg", "Rad"], nowRad)).toBe("Deg/Rad");
+    expect(angleThatDrewIt(["Rad", "Deg"], nowRad)).toBe("Rad/Deg");
+    expect(angleMarkOf(["Deg", "Rad"], nowRad)).toBe("DEG/RAD");
+    // **並びが長くても、綴りは 4 つのうちのどれかである。**
+    expect(angleThatDrewIt(["Deg", "Rad", "Deg", "Rad"], nowRad)).toBe(
+      "Deg/Rad",
+    );
+    // **★ 綴りは履歴の白リストの中に在る**——**外れると、その件は
+    // 読み戻しで黙って消える**（2026-10-03 実測）。
+    for (const trig of [
+      ["Deg"],
+      ["Rad"],
+      ["Deg", "Rad"],
+      ["Rad", "Deg"],
+    ] as const) {
+      expect(ENTRY_ANGLES).toContain(angleThatDrewIt(trig, nowRad));
+    }
   });
 });
