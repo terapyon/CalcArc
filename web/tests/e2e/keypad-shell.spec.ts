@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -265,6 +266,7 @@ test("shows both kinds of unpressable key as the same kind of unpressable", asyn
     "#finance",
   ]) {
     await page.goto(`/${route}`);
+    await onScreen(page, route);
     await expect(page.getByTestId("display-main")).toBeVisible();
     seen.push(
       ...(await page

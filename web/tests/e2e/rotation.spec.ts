@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 /**
  * **横にして戻したとき、縦持ちの見え方が元どおりであること。**
@@ -136,8 +137,10 @@ for (const hash of TABS) {
       // （2026-10-02）。**作り直されると消えるなら、壊れているのは状態である。**
       // **上の比較が赤でここが緑なら、それが分かる**ので、**2 つを分けて撃つ。**
       await page.goto("/#scale/llm");
+      await onScreen(page, "#scale/llm");
       await expect(page.locator("main button").first()).toBeVisible();
       await page.goto(`/${hash}`);
+      await onScreen(page, hash);
       await expect(page.locator("main button").first()).toBeVisible();
       const remounted = await read();
       expect(remounted, `${hash} が、面を移って戻っても元に戻らない`).toEqual(

@@ -1,5 +1,6 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, type Page, PROVIDER_GLOB, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 /**
  * **為替のレートを用意する。**
@@ -242,6 +243,7 @@ for (const size of TABLET_LANDSCAPE) {
     for (const { hash } of PROMISED_URLS) {
       if (hash === "#manual") continue;
       await page.goto(`/${hash}`);
+      await onScreen(page, hash);
       await expect(page.locator("main button").first()).toBeVisible();
       if (hash === "#convert/currency") {
         await expect(page.getByTestId("currency-rate-date")).toHaveText(
@@ -371,6 +373,7 @@ for (const size of [...LANDSCAPE_VIEWPORTS, ...TABLET_LANDSCAPE]) {
     for (const { hash } of PROMISED_URLS) {
       if (hash === "#manual") continue;
       await page.goto(`/${hash}`);
+      await onScreen(page, hash);
       await expect(page.locator("main button").first()).toBeVisible();
       if (hash === "#convert/currency") {
         // **★ 用意したレートが届いたことを、状態で待つ**（2026-09-30）。

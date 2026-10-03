@@ -1,5 +1,6 @@
 import { PROMISED_URLS } from "../promised-urls";
 import { expect, test } from "./fixtures";
+import { onScreen } from "./screens";
 import { TABLET_VIEWPORTS } from "./widths";
 
 /**
@@ -148,6 +149,7 @@ for (const size of [
     let measured = 0;
     for (const url of PROMISED_URLS) {
       await page.goto(`/${url.hash}`);
+      await onScreen(page, url.hash);
       await page.locator("main button").first().waitFor();
       const heights = await page.evaluate(() =>
         [...document.querySelectorAll("*")]
