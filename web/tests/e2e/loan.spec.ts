@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 const nav = (
   page: Page,
@@ -280,6 +281,20 @@ test("the old #loan hash is no longer a route", async ({ page }) => {
   // 「効かなくなった」ではなく「そう決めた」と読めるよう仕様として固定する。
   // 第三者が使い始めたら互換分岐を足す——そのときは判断の誤りではなく
   // 状況の変化への対応である(設計書 §3)。
+  // **★ 金融を経由する**(2026-10-03)。**`beforeEach` が開くのは関数電卓で、
+  // `#loan` の行き先も関数電卓**なので、**この遷移は画面の名前が変わらない**
+  // ——**`onScreen` では待てない**(あれは `<h1>` を見る)。そして
+  // **`toHaveCount(0)` も `display-main` も、関数電卓の上でその場で真**なので、
+  // **互換分岐が生きていても、切り替わる前に見れば緑になる。**
+  //
+  // **先に金融へ寄ると、`toHaveCount(0)` が「金融の面が消えるまで待つ」向きに
+  // なる**——**互換分岐が生きていれば、消えないので赤になる。**
+  await page.goto("/#finance");
+  await onScreen(page, "#finance");
+  // **寄れたことを主張する。** これが無いと、下の「消えるまで待つ」は
+  // **最初から無いものを待つ**ことになり、何も言わない。
+  await expect(panel(page)).toHaveCount(1);
+
   await page.goto("/#loan");
   // **先に「金融計算が出ていない」を見る。** 互換分岐が生きていると
   // ここで落ちる——後段の「Scientific が見える」だけだと、読み込み中の

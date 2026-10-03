@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -137,6 +138,7 @@ test("shows an empty slot as a box that no key would be mistaken for", async ({
   page,
 }) => {
   await page.goto("/#scale/transfer");
+  await onScreen(page, "#scale/transfer");
   await expect(page.getByTestId("display-main")).toBeVisible();
 
   /** `rgb(...)` を 3 つの数にする。 */
@@ -265,6 +267,7 @@ test("shows both kinds of unpressable key as the same kind of unpressable", asyn
     "#finance",
   ]) {
     await page.goto(`/${route}`);
+    await onScreen(page, route);
     await expect(page.getByTestId("display-main")).toBeVisible();
     seen.push(
       ...(await page
@@ -371,6 +374,7 @@ test("an empty slot does not borrow the border that means pressable", async ({
   await page.emulateMedia({ contrast: "more" });
 
   await page.goto("/#scale/transfer");
+  await onScreen(page, "#scale/transfer");
   await expect(page.getByTestId("display-main")).toBeVisible();
 
   const paintOf = (el: Element) => {
@@ -454,6 +458,7 @@ test("in the dark theme an empty slot still sits between the surface and a live 
   await page.emulateMedia({ colorScheme: "dark" });
 
   await page.goto("/#scale/transfer");
+  await onScreen(page, "#scale/transfer");
   await expect(page.getByTestId("display-main")).toBeVisible();
 
   const channels = (color: string) =>

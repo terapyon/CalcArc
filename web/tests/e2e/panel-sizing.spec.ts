@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 /**
  * **盤面の横幅と、カテゴリの器の横幅。**
@@ -40,6 +41,7 @@ const WITH_SELECT = [
 
 async function widthOfBoard(page: Page, hash: string) {
   await page.goto(`/${hash}`);
+  await onScreen(page, hash);
   await expect(page.getByTestId("display-main")).toBeVisible();
   const box = await page.locator("main fieldset").first().boundingBox();
   return Math.round(box?.width ?? -1);
@@ -72,6 +74,7 @@ test("the keys of every calculator hold the same size", async ({ page }) => {
     ["#finance", "Finance"],
   ] as const) {
     await page.goto(`/${hash}`);
+    await onScreen(page, hash);
     await expect(page.getByTestId("display-main")).toBeVisible();
     const box = await page
       .getByRole("group", { name: "数字と演算のキー" })
@@ -121,6 +124,7 @@ test("the ten-key block is decided the same way on every calculator", async ({
     ([route]) => route !== "#scale/llm",
   )) {
     await page.goto(`/${hash}`);
+    await onScreen(page, hash);
     await expect(page.getByTestId("display-main")).toBeVisible();
     const got = await page.evaluate(() => {
       const square = document.querySelector(

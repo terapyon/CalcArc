@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 test("the footer shows on every tab, once", async ({ page }) => {
   // **全タブに出す**のが要件である(0.2.0 設計書 §5)。以前は Scientific
@@ -15,6 +16,7 @@ test("the footer shows on every tab, once", async ({ page }) => {
     "#finance",
   ]) {
     await page.goto(`/${hash}`);
+    await onScreen(page, hash);
     const about = page.getByRole("button", { name: /^CalcArc .+ について$/ });
     await expect(about).toHaveCount(1);
     await expect(page.getByTestId("footer-disclaimer")).toHaveText(

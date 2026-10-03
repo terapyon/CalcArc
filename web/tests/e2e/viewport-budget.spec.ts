@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 // **0.2.0 で縦に足したものが 1 画面に収まり、かつタブで揺れないこと。**
 // 盤面の高さはタブごとに違う(Finance がいちばん高い)ので、何もしないと
@@ -109,6 +110,7 @@ test("the footer sits at the same place on every tab", async ({ page }) => {
   const seen: { name: string; y: number }[] = [];
   for (const [hash, name] of TABS) {
     await page.goto(`/${hash}`);
+    await onScreen(page, hash);
     // **パネルが出てから測る。** フッタは WASM と無関係に即描画されるので、
     // これが無いと Scientific は `Loading…` のままの空のページを測って緑になる。
     await waitForPanel(page);

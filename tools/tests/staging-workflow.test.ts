@@ -103,6 +103,14 @@ describe("番人 #1 — 配る先は staging である", () => {
     // **`workflow_dispatch` はどの枝からでも起動できる**（レビュー役の条件 B2）。
     // **止めないと、作業枝のビルドが staging に乗る。**
     expect(jobBody(read("staging.yml"), "deploy")).toContain(
+      // **ワークフローに書いてある綴りを、そのまま持つ検査である。**
+      // テンプレートリテラルにすると JavaScript 側が評価してしまい、
+      // **見張る対象の文字列ではなくなる。**
+      //
+      // **★ 指示は対象行の「直前の行」でなければ効かない**——間に註を 1 行でも
+      // 挟むと `suppressions/unused` が鳴る（2026-10-03 に実測）。だから理由は
+      // この行に詰め、説明は上に置く。
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: ワークフローの綴りをそのまま持つので、テンプレートリテラルにできない
       "if: ${{ github.ref != 'refs/heads/main' }}",
     );
   });

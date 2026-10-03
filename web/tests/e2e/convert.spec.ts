@@ -1,4 +1,5 @@
 import { expect, type Page, PROVIDER_GLOB, test } from "./fixtures";
+import { onScreen } from "./screens";
 
 const panel = (page: Page) => page.getByRole("region", { name: "単位変換" });
 const echo = (page: Page) => page.getByTestId("display-entry-active");
@@ -85,6 +86,7 @@ test("every face keeps 44px touch targets", async ({ page }) => {
   let measured = 0;
   for (const [category, faceName, field, expectedCount] of FACES) {
     await page.goto(`/#convert/${category}`);
+    await onScreen(page, `#convert/${category}`);
     await expect(panel(page)).toBeVisible();
     await press(page, [field]);
     const buttons = await face_(page, faceName).getByRole("button").all();
@@ -193,6 +195,7 @@ test("keeps every key label inside its key, within the 8px the fonts move it", a
   let measured = 0;
   for (const [category, faceName, field, expectedCount] of FACES) {
     await page.goto(`/#convert/${category}`);
+    await onScreen(page, `#convert/${category}`);
     await expect(panel(page)).toBeVisible();
     await press(page, [field]);
     const buttons = await face_(page, faceName).getByRole("button").all();
@@ -310,6 +313,7 @@ test("swapping faces moves neither the frame nor DEL and AC", async ({
   }[] = [];
   for (const category of CATEGORIES) {
     await page.goto(`/#convert/${category}`);
+    await onScreen(page, `#convert/${category}`);
     await expect(panel(page)).toBeVisible();
     for (const [field, faceName] of [
       ["値を入力", "数字と演算のキー"],
@@ -887,6 +891,7 @@ test("guides without breaking the other seven categories when there is no cache"
   for (const category of CATEGORIES) {
     if (category === "currency") continue;
     await page.goto(`/#convert/${category}`);
+    await onScreen(page, `#convert/${category}`);
     await expect(panel(page)).toBeVisible();
     await press(page, ["1"]);
     await expect(page.getByTestId("convert-result")).toContainText("=");
