@@ -14,8 +14,8 @@ import {
   type HistoryStorage,
 } from "./types";
 
-export type { HistoryEntry, HistoryStorage } from "./types";
-export { HISTORY_KEY, HISTORY_LIMIT } from "./types";
+export type { EntryAngle, HistoryEntry, HistoryStorage } from "./types";
+export { ENTRY_ANGLES, HISTORY_KEY, HISTORY_LIMIT } from "./types";
 
 /** 白リストに載っているかどうかだけを見る(型を絞り込む)。 */
 function isAllowed<T>(allowed: readonly T[], value: unknown): value is T {

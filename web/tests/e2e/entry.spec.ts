@@ -185,3 +185,33 @@ test("the mark names the mode that drew the line, not the mode at the equals", a
   await expect(echo).toHaveText("DEG 30 sin × 2 =");
   await expect(page.getByTestId("display-main")).toHaveText("1");
 });
+
+test("a line that used both modes names both, in the order they were used", async ({
+  page,
+}) => {
+  // **裁定 2026-10-03**（監視役経由）。**「最初の 1 つ」は偽だった**
+  // ——**`30 sin 【DRG】 + 30 sin =` の行に `DEG` とだけ出すと、後半の `sin`
+  // について嘘になる。** **「印を出さない」も採れない**: **「印の無い行は
+  // モードに依らない」を約束している**（設計書 §4.1.2、(iv) が 3 案に
+  // 勝った理由の 4 つ目）。**残るのは両方書くことだけ**で、
+  // **それが唯一の正直な形**である。
+  const echo = page.getByTestId("display-echo");
+
+  await press(page, [
+    "3",
+    "0",
+    "サイン",
+    "角度の単位を切り替え",
+    "足す",
+    "3",
+    "0",
+    "サイン",
+  ]);
+  await expect(echo).toHaveText("DEG/RAD 30 sin + 30 sin");
+  await press(page, ["計算する"]);
+  await expect(echo).toHaveText("DEG/RAD 30 sin + 30 sin =");
+
+  // **同じモードを 2 回使った行は、1 つに畳む。**
+  await press(page, ["全消去", "3", "0", "サイン", "足す", "6", "0", "サイン"]);
+  await expect(echo).toHaveText("RAD 30 sin + 60 sin");
+});

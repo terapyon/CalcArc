@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AngleMode, DisplayForm } from "../calc";
 import { type Calc, initCalc, type KeyToken, type Step } from "../calc";
-import { clearAll, type HistoryEntry, pushEntry, removeAt } from "../history";
+import {
+  clearAll,
+  type EntryAngle,
+  type HistoryEntry,
+  pushEntry,
+  removeAt,
+} from "../history";
 import { Display } from "./Display/Display";
 import { History } from "./History/History";
 import { Keypad } from "./Keypad/Keypad";
@@ -179,10 +185,15 @@ export function lineOf(carry: string | null, spelled: string): string {
  * （裁定 2026-10-03）——**1 つの欄に 2 つのモードは書けない。**
  */
 export function angleThatDrewIt(
-  trigAngle: AngleMode | null,
+  trigAngles: readonly AngleMode[],
   display: { angle: AngleMode },
-): AngleMode {
-  return trigAngle ?? display.angle;
+): EntryAngle {
+  if (trigAngles.length === 0) return display.angle;
+  // **使った順のまま、重複だけ畳む**（`Set` は挿入順を保つ）。
+  const spelled = [...new Set(trigAngles)].join("/");
+  // **`ENTRY_ANGLES` の 4 つ以外は作れない**——`AngleMode` は 2 つなので、
+  // 畳んだあとの並びは `Deg` / `Rad` / `Deg/Rad` / `Rad/Deg` のどれかである。
+  return spelled as EntryAngle;
 }
 
 /**
@@ -196,11 +207,13 @@ export function angleThatDrewIt(
  * **ふだんは出ない**——四則だけで使う人には一生出ない。
  */
 export function angleMarkOf(
-  trigAngle: AngleMode | null,
+  trigAngles: readonly AngleMode[],
   display: { angle: AngleMode; form: DisplayForm },
 ): string {
-  if (trigAngle === null && display.form !== "Polar") return "";
-  return angleThatDrewIt(trigAngle, display) === "Deg" ? "DEG" : "RAD";
+  if (trigAngles.length === 0 && display.form !== "Polar") return "";
+  // **大文字にするのは画面の行だけ**——**履歴の欄は `Deg` の綴りのまま**
+  // （既にそう保存されている。`history/types.ts` の `ENTRY_ANGLES`）。
+  return angleThatDrewIt(trigAngles, display).toUpperCase();
 }
 
 /**
@@ -481,14 +494,16 @@ export function ScientificPanel() {
    */
   const [trailAngle, setTrailAngle] = useState("");
   /**
-   * **この区間で最初に三角キーを押した時点の角度のモード**（押していなければ
-   * `null`。1.2、入力経歴の設計書 §4.1.2 の (a)）。**`=` と `AC` で戻す。**
+   * **この区間で三角キーを押したときのモードを、押した順に**（押していなければ
+   * 空。1.2、入力経歴の設計書 §4.1.2 の (a)）。**`=` と `AC` で空にする。**
    *
    * **真偽ではなくモードを持つ**——**`=` の瞬間のモードは、その計算を描いた
    * モードとは別物**だからである（`angleThatDrewIt` の註）。
+   * **1 つではなく並びを持つ**——**1 つの行が両方のモードを使える**
+   * （利用者の裁定 2026-10-03。**「最初の 1 つ」は後半の `sin` について嘘になる**）。
    */
-  const trigAngleRef = useRef<AngleMode | null>(null);
-  const pendingTrigAngleRef = useRef<AngleMode | null>(null);
+  const trigAnglesRef = useRef<AngleMode[]>([]);
+  const pendingTrigAnglesRef = useRef<AngleMode[]>([]);
   const carryAtDecisionRef = useRef<string | null>(null);
   const decidedRef = useRef<boolean>(false);
   /**
@@ -581,11 +596,11 @@ export function ScientificPanel() {
     if (ready && previous && !(inError && token !== "ac")) {
       // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
       // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
-      // **最初の三角キーのときだけ写す**（`angleThatDrewIt` の★）。
+      // **三角キーを押すたびに、そのときのモードを積む**（畳むのは綴る側）。
       // **読むのは打鍵前の姿**——`sin` はモードを変えないので同じ値だが、
       // **`previous` から読む形を崩さない**（この区間の判断は全部そこから出る）。
-      if (ANGLE_KEYS.has(token) && trigAngleRef.current === null) {
-        trigAngleRef.current = previous.display.angle;
+      if (ANGLE_KEYS.has(token)) {
+        trigAnglesRef.current.push(previous.display.angle);
       }
       if (!decidedRef.current && CARRIED_VALUE_TOKENS.has(token)) {
         decidedRef.current = true;
@@ -602,10 +617,10 @@ export function ScientificPanel() {
         keysRef.current = [];
         // **前置値を区間と一緒に渡してから、未決に戻す。**
         pendingCarryRef.current = carryAtDecisionRef.current;
-        pendingTrigAngleRef.current = trigAngleRef.current;
+        pendingTrigAnglesRef.current = trigAnglesRef.current;
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
-        trigAngleRef.current = null;
+        trigAnglesRef.current = [];
       } else if (token === "ac") {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
@@ -618,12 +633,12 @@ export function ScientificPanel() {
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
         pendingCarryRef.current = null;
-        pendingTrigAngleRef.current = null;
+        pendingTrigAnglesRef.current = [];
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
         // あとに来る二項演算子は前回の続きではない。
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
-        trigAngleRef.current = null;
+        trigAnglesRef.current = [];
       }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
@@ -654,9 +669,9 @@ export function ScientificPanel() {
         // （2026-10-03 に実測。**閉じた行だけを撃っていたので緑だった**）:
         // **打鍵中の `30 sin` に印が付かない**（三角キーを使った行なのに）、
         // **そして前の行の印が残る**（`DEG 30 sin =` の次に `3 + 4` を打つと
-        // `DEG 3 + 4` になった）。**生きている行は `trigAngleRef`**
-        // ——`pendingTrigAngleRef` は `=` が閉じた行のぶんである。
-        setTrailAngle(angleMarkOf(trigAngleRef.current, step.display));
+        // `DEG 3 + 4` になった）。**生きている行は `trigAnglesRef`**
+        // ——`pendingTrigAnglesRef` は `=` が閉じた行のぶんである。
+        setTrailAngle(angleMarkOf(trigAnglesRef.current, step.display));
       }
       return;
     }
@@ -695,7 +710,7 @@ export function ScientificPanel() {
     // **履歴に積む `expression` は変えない**——**あちらは式と答えを
     // 別の欄で見せている**ので、式に `=` を足す理由が無い。
     setTrail(closedLineOf(expression));
-    setTrailAngle(angleMarkOf(pendingTrigAngleRef.current, step.display));
+    setTrailAngle(angleMarkOf(pendingTrigAnglesRef.current, step.display));
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -714,7 +729,7 @@ export function ScientificPanel() {
       // **行の印と同じ規則から出す**（設計書 §2）——**`=` の瞬間のモードを
       // 読むと、その計算を描いていないモードを記録する**（`angleThatDrewIt` の註。
       // **出荷済みの欠陥で、レビュー役が盤面で見つけた**）。
-      angle: angleThatDrewIt(pendingTrigAngleRef.current, step.display),
+      angle: angleThatDrewIt(pendingTrigAnglesRef.current, step.display),
       error: step.display.error !== null,
     };
     const updated = pushEntry(entriesRef.current, entry);

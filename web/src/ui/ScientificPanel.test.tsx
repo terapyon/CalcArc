@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ENTRY_ANGLES } from "../history";
 
 // jsdom では WASM を読み込めないので、initCalc だけ差し替える。
 // ここで確かめたいのは ScientificPanel の分岐であって計算ではない。
@@ -1418,17 +1419,17 @@ describe("行の組み立て", () => {
     const radPolar = { angle: "Rad", form: "Polar" } as const;
 
     // **(a) 三角キーを使った行**——直交形式でも付く。
-    expect(angleMarkOf("Deg", deg)).toBe("DEG");
-    expect(angleMarkOf("Rad", rad)).toBe("RAD");
+    expect(angleMarkOf(["Deg"], deg)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], rad)).toBe("RAD");
     // **(b) 極形式の行**——キーを押していなくても付く(偏角がモードで読まれる)。
-    expect(angleMarkOf(null, degPolar)).toBe("DEG");
-    expect(angleMarkOf(null, radPolar)).toBe("RAD");
+    expect(angleMarkOf([], degPolar)).toBe("DEG");
+    expect(angleMarkOf([], radPolar)).toBe("RAD");
     // **両方**。
-    expect(angleMarkOf("Deg", degPolar)).toBe("DEG");
-    expect(angleMarkOf("Rad", radPolar)).toBe("RAD");
+    expect(angleMarkOf(["Deg"], degPolar)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], radPolar)).toBe("RAD");
     // **どちらでもない行には付かない**——**モードが答えを変えていない。**
-    expect(angleMarkOf(null, deg)).toBe("");
-    expect(angleMarkOf(null, rad)).toBe("");
+    expect(angleMarkOf([], deg)).toBe("");
+    expect(angleMarkOf([], rad)).toBe("");
   });
 
   it("名乗るのは、描いたときのモードである（`=` の瞬間ではない）", () => {
@@ -1439,14 +1440,43 @@ describe("行の組み立て", () => {
     const nowDeg = { angle: "Deg", form: "Rect" } as const;
 
     // **押した時点のモードが勝つ**——**これが直しの中身。**
-    expect(angleMarkOf("Deg", nowRad)).toBe("DEG");
-    expect(angleMarkOf("Rad", nowDeg)).toBe("RAD");
+    expect(angleMarkOf(["Deg"], nowRad)).toBe("DEG");
+    expect(angleMarkOf(["Rad"], nowDeg)).toBe("RAD");
     // **履歴の件も同じ規則から出る**（設計書 §2——規則を 2 か所に書かない）。
-    expect(angleThatDrewIt("Deg", nowRad)).toBe("Deg");
-    expect(angleThatDrewIt("Rad", nowDeg)).toBe("Rad");
+    expect(angleThatDrewIt(["Deg"], nowRad)).toBe("Deg");
+    expect(angleThatDrewIt(["Rad"], nowDeg)).toBe("Rad");
     // **三角キーを押していない計算は、いまのモード**
     // ——**極形式の偏角は `=` の瞬間のモードで描かれる。**
-    expect(angleThatDrewIt(null, nowRad)).toBe("Rad");
-    expect(angleThatDrewIt(null, nowDeg)).toBe("Deg");
+    expect(angleThatDrewIt([], nowRad)).toBe("Rad");
+    expect(angleThatDrewIt([], nowDeg)).toBe("Deg");
+  });
+
+  it("1 つの行が両方のモードを使ったら、使った順に両方名乗る", () => {
+    // **裁定 2026-10-03**（監視役経由）。**「最初の 1 つ」は後半の `sin` に
+    // ついて嘘になる**し、**「印を出さない」は「印の無い行はモードに依らない」
+    // という約束を崩す**（設計書 §4.1.2）。**残るのは両方書くことだけ。**
+    const nowRad = { angle: "Rad", form: "Rect" } as const;
+
+    // **同じモードを 2 回 → 1 つに畳む。**
+    expect(angleThatDrewIt(["Deg", "Deg"], nowRad)).toBe("Deg");
+    expect(angleMarkOf(["Rad", "Rad", "Rad"], nowRad)).toBe("RAD");
+    // **違うモード → 使った順に両方。**
+    expect(angleThatDrewIt(["Deg", "Rad"], nowRad)).toBe("Deg/Rad");
+    expect(angleThatDrewIt(["Rad", "Deg"], nowRad)).toBe("Rad/Deg");
+    expect(angleMarkOf(["Deg", "Rad"], nowRad)).toBe("DEG/RAD");
+    // **並びが長くても、綴りは 4 つのうちのどれかである。**
+    expect(angleThatDrewIt(["Deg", "Rad", "Deg", "Rad"], nowRad)).toBe(
+      "Deg/Rad",
+    );
+    // **★ 綴りは履歴の白リストの中に在る**——**外れると、その件は
+    // 読み戻しで黙って消える**（2026-10-03 実測）。
+    for (const trig of [
+      ["Deg"],
+      ["Rad"],
+      ["Deg", "Rad"],
+      ["Rad", "Deg"],
+    ] as const) {
+      expect(ENTRY_ANGLES).toContain(angleThatDrewIt(trig, nowRad));
+    }
   });
 });
