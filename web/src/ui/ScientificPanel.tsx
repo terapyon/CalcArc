@@ -126,6 +126,22 @@ const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
 ]);
 
 /**
+ * **行を 1 つ作る**（1.2、入力経歴の設計書 §2）。
+ *
+ * **履歴の 1 件も、表示に出る経歴も、ここから派生する**——**`carry`（決めた時点で
+ * 画面に出ていた値）と `spelled`（その区間の綴り）を繋ぐ規則を 1 か所に置く。**
+ * **2 か所に書くと、片方だけ直る日が来る**（利用者が CSS で指摘した「二重化」と
+ * 同じ形。2026-10-03）。
+ *
+ * **綴りが空なら carry も付けない**——`=` の 2 度押しは空の列を綴るので、
+ * ここで `${carry} ` を足すと式が `"2 "` になって空でなくなり、
+ * **`pushEntry` がその行を捨てられなくなる**（`web/src/history/index.ts`）。
+ */
+export function lineOf(carry: string | null, spelled: string): string {
+  return carry !== null && spelled !== "" ? `${carry} ${spelled}` : spelled;
+}
+
+/**
  * 履歴の答(表示文字列)を、呼び戻すためのキー列に写す。
  *
  * **答は表示文字列であって、打鍵の記録ではない。** 桁区切りのカンマ・
@@ -369,6 +385,11 @@ export function ScientificPanel() {
    * 「新しい計算の始まり」と読み、`33 = 3 DEL + =` の式が `+` だけになって
    * 答え 66 を生まなかった**（364 件。`engine_values.rs` の読み直しが見つけた）。
    */
+  /**
+   * **表示に出る 1 行**（1.2、入力経歴）。**打つたびに作り直し、`=` のあとも残る**
+   * ——**消えるのは `AC` と、次のキーで新しい行に替わるとき**だけである。
+   */
+  const [trail, setTrail] = useState("");
   const carryAtDecisionRef = useRef<string | null>(null);
   const decidedRef = useRef<boolean>(false);
   /**
@@ -512,7 +533,17 @@ export function ScientificPanel() {
   useEffect(() => {
     if (!step) return;
     const pendingKeys = pendingSpellRef.current;
-    if (pendingKeys === null) return;
+    const live = calcRef.current;
+    if (pendingKeys === null) {
+      // **打っている最中の行。** **`=` を押していないあいだは、貯めている列を綴る。**
+      // **`=` の直後はここに来ない**（下で閉じた行を作る）ので、**その行は次のキーまで残る。**
+      if (live) {
+        setTrail(
+          lineOf(carryAtDecisionRef.current, live.spell(keysRef.current)),
+        );
+      }
+      return;
+    }
     pendingSpellRef.current = null;
     const ready = calcRef.current;
     if (!ready) return;
@@ -541,8 +572,10 @@ export function ScientificPanel() {
     // **2 度押しが行を作ってしまう**。`eq` は前回の答を読むキーなので
     // `CARRIED_VALUE_TOKENS` に居り(`finish`、mod.rs:195)、この 1 条件が
     // 無いと集合を engine から導いた途端にその行が生まれる。
-    const expression =
-      carried !== null && spelled !== "" ? `${carried} ${spelled}` : spelled;
+    // **同じ builder から 2 つを派生させる**（設計書 §2）——**履歴の 1 件と、
+    // 表示に出る行。** **規則を 2 か所に書かない。**
+    const expression = lineOf(carried, spelled);
+    setTrail(expression);
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -698,7 +731,7 @@ export function ScientificPanel() {
         />
       ) : (
         <>
-          <Display display={step.display} />
+          <Display display={step.display} trail={trail} />
           <Keypad
             sections={SCIENTIFIC_SECTIONS}
             onPress={press}

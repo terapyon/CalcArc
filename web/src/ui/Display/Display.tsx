@@ -13,13 +13,24 @@ const OP_SYMBOL: Record<BinOpName, string> = {
 
 export interface DisplayProps {
   display: DisplayState;
+  /**
+   * **打鍵の綴り**（1.2、入力経歴の設計書 §2）。**渡されたらこれを出す。**
+   *
+   * **engine の `display.echo` は「畳んだスタックの形」**で（`30 sin × 2` は
+   * `0.5 × 2`）、**`=` で空になる**。**利用者が見たいのは打った通りで、
+   * `=` のあとも残ること**なので、**表示が読む先をこちらへ替えた。**
+   * **engine の挙動は変えていない**——`echo` はいまも同じものを返す。
+   */
+  trail?: string;
 }
 
 /**
  * Scientific の表示。`DisplayState` を `Readout` の文字列に写すだけの層で、
  * 記号の選び方など Scientific 固有の意味はここに残る(設計書 §6)。
  */
-export function Display({ display }: DisplayProps) {
+export function Display({ display, trail }: DisplayProps) {
+  // **渡されなければ、いままでどおり engine の `echo`**（ほかの面はこちら）。
+  const line = trail ?? display.echo;
   const pending = `${"(".repeat(display.pendingDepth)}${
     display.pendingOp ? OP_SYMBOL[display.pendingOp] : ""
   }`;
@@ -29,11 +40,7 @@ export function Display({ display }: DisplayProps) {
       // Scientific は式を**名前なしの 1 件**で渡す。名前が無いので見た目は
       // 変わらない(設計書 §2)。空のときは 1 件も渡さない——行の場所は
       // Readout 側が確保する。
-      entries={
-        display.echo === ""
-          ? []
-          : [{ label: "", value: display.echo, active: true }]
-      }
+      entries={line === "" ? [] : [{ label: "", value: line, active: true }]}
       main={display.main}
       error={display.error}
       status={[

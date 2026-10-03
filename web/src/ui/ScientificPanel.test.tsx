@@ -34,6 +34,14 @@ import { ScientificPanel } from "./ScientificPanel";
 // 数取り——履歴を主張するテストのそれぞれで `spellCallCount` を確かめる。
 // `fakeCalc()` はテストごとに作り直すので、数える側はここで毎回リセットする。
 let spellCallCount = 0;
+/**
+ * **`=` で区間を閉じたときの綴りだけを数える**（1.2、入力経歴）。
+ *
+ * **`spellCallCount` は打鍵のたびに増えるようになった**——**表示に出る行を
+ * 打つたびに作り直すから**である（設計書 §2）。**「2 度目の `=` は列を渡していない」
+ * を見るには、閉じた綴りだけを数える必要がある**（列の末尾が `eq`）。
+ */
+let closingSpellCount = 0;
 
 /**
  * **偽 `spell` が字面を持つ非数字キー。**
@@ -226,6 +234,9 @@ function fakeCalc(): Calc {
     // 「`=` の 2 度押しは何も綴らない」(空の列 → 空文字列)も再現できる。
     spell: (keys: KeyToken[]) => {
       spellCallCount += 1;
+      if (keys.at(-1) === "eq") {
+        closingSpellCount += 1;
+      }
       return keys
         .map((key) => (/^[0-9]$/.test(key) ? key : FAKE_GLYPHS[key]))
         .filter((part): part is string => part !== undefined)
@@ -366,6 +377,7 @@ describe("履歴", () => {
     // いるので、成功する実装に戻す。
     vi.mocked(initCalc).mockImplementation(() => Promise.resolve(fakeCalc()));
     spellCallCount = 0;
+    closingSpellCount = 0;
   });
 
   it("records one entry when = is pressed", async () => {
@@ -710,10 +722,12 @@ describe("履歴", () => {
     // ここから先は engine が 1 打鍵も受け取らない。
     await pressKeys(["7", "足す", "8", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
-    // **綴りが呼ばれた回数で見る**(ブリーフ ★ Step 0 と同じ形)。1 なら
+    // **閉じた綴りの回数で見る**(ブリーフ ★ Step 0 と同じ形)。1 なら
     // 2 度目の `=` は列を渡していない。0 だったなら「そもそも打鍵が届いて
     // いない」ことになり、この検査は何も主張していない。
-    expect(spellCallCount).toBe(1);
+    // **`spellCallCount` では見られない**——**1.2 から、打鍵のたびに綴る**
+    // (表示に出る行を作るため)。
+    expect(closingSpellCount).toBe(1);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
@@ -736,7 +750,7 @@ describe("履歴", () => {
 
     await pressKeys(["7", "足す", "8", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
-    expect(spellCallCount).toBe(0);
+    expect(closingSpellCount).toBe(0);
 
     await openHistory();
     expect(screen.getByText("まだ履歴はありません")).toBeInTheDocument();
@@ -758,7 +772,7 @@ describe("履歴", () => {
     expect(screen.getByTestId("display-main")).toHaveTextContent("Math ERROR");
 
     await pressKeys(["全消去", "2", "計算する"]);
-    expect(spellCallCount).toBe(1);
+    expect(closingSpellCount).toBe(1);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
@@ -795,7 +809,7 @@ describe("履歴", () => {
 
     await pressKeys(["3", "計算する"]);
     expect(screen.getByTestId("display-main")).toHaveTextContent("23");
-    expect(spellCallCount).toBe(2);
+    expect(closingSpellCount).toBe(2);
 
     await openHistory();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);

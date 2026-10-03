@@ -38,9 +38,59 @@ test("j after digits turns the entry imaginary", async ({ page }) => {
   await expect(page.getByTestId("display-main")).toHaveText("3");
 });
 
-test("the echo line shows the pending expression", async ({ page }) => {
+test("the echo line shows what was typed, and keeps it after =", async ({
+  page,
+}) => {
+  // **1.2 で、この行は engine の `echo`（畳んだスタック）ではなく、
+  // 打鍵の綴りを見せる**（入力経歴の設計書 §2）。**`=` のあとも消えない。**
   await press(page, ["3", "足す", "4", "掛ける"]);
   await expect(page.getByTestId("display-echo")).toHaveText("3 + 4 ×");
   await press(page, ["計算する"]);
+  // **直す前はここが空になっていた**（engine の `echo` は `=` で空になる——
+  // その挙動は変えていない。`engine_table.rs` の
+  // `the_echo_shows_the_pending_expression` がいまも固定している）。
+  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4 ×");
+  // **`3 + 4 × =` は 3 + 4×4 = 19**（`=` が右辺を補う。`engine_table.rs` の
+  // `an_equals_with_a_dangling_operator_repeats_the_right_operand` の形）。
+  await expect(page.getByTestId("display-main")).toHaveText("19");
+  // **次のキーで、前の答えから始まる新しい行に替わる。**
+  await press(page, ["掛ける"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("19 ×");
+  // **AC で空になる。**
+  await press(page, ["全消去"]);
   await expect(page.getByTestId("display-echo")).toBeEmpty();
+});
+
+test("the typed trail is not announced on every key", async ({ page }) => {
+  // **読み上げは `off` のまま**（1.2、入力経歴の設計書 §4.2 の裁定）。
+  // **打鍵ごとに式全体を読み上げると、読み上げが追いつかない**
+  // ——`30` → `30 sin` → `30 sin ×` → `30 sin × 2` で 4 回、前の内容ごと読み直す。
+  // **答えの欄（`display-main`）は `polite` のまま。**
+  // **jsdom では見えない**ので、ここで実ブラウザに当てる。
+  await press(page, ["3", "0", "サイン"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("30 sin");
+  // **属性そのものが付いていない**（付いていない ＝ `off`）。
+  // **`polite` を足したら赤くなる形**で撃つ。
+  expect(
+    await page.getByTestId("display-echo").getAttribute("aria-live"),
+  ).toBeNull();
+  expect(
+    await page.getByTestId("display-entry-active").getAttribute("aria-live"),
+  ).toBeNull();
+  await expect(page.getByTestId("display-main")).toHaveAttribute(
+    "aria-live",
+    "polite",
+  );
+});
+
+test("the typed trail folds nothing, unlike the engine's echo", async ({
+  page,
+}) => {
+  // **利用者の例**（2026-10-03）: 「**`30 sin × 2 =` と打ったら
+  // `30 sin × 2 = 1` と残る**」。**engine の `echo` は `0.5 × 2` と畳む。**
+  await press(page, ["3", "0", "サイン", "掛ける", "2"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("30 sin × 2");
+  await press(page, ["計算する"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("30 sin × 2");
+  await expect(page.getByTestId("display-main")).toHaveText("1");
 });
