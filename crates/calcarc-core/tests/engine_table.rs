@@ -3,6 +3,7 @@
 //! このファイルの各行が仕様そのものである。挙動を変えるときは
 //! まずここを変えること。
 
+use calcarc_core::engine::{refuses, spell::spell};
 use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 
 /// キー列を打鍵した結果の表示を返す。
@@ -22,6 +23,56 @@ fn main_of(keys: &[&str]) -> String {
 /// 上部のエコー行。保留中の式を見せる(設計書 §4)。
 fn echo_of(keys: &[&str]) -> String {
     run(keys).echo
+}
+
+/// **web が記録する列の綴り**(1.2、入力経歴の設計書 §1.2.1)。
+///
+/// **engine が拒んだキーは積まない**——`ScientificPanel` の `press` がそうしている
+/// (`Step.refused` を読む)。**だから `1 ( 2 + 3 )` の綴りは `( 2 + 3 )` ではなく
+/// `12 + 3` である**: 値の上に `(` は押せないので、**あの打鍵は起こりえない。**
+///
+/// **前置はここでは撃たない**——**前の答えを頭に足すのは web の仕事**で
+/// (`carryAtDecisionRef`)、**`engine_table` が持っているのはキー列と engine の出力だけ**
+/// である。**綴りと答えを別々に撃つ。**
+fn spell_of(keys: &[&str]) -> String {
+    let mut state = EngineState::initial();
+    let mut recorded: Vec<Key> = Vec::new();
+    for token in keys {
+        let key = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
+        if refuses(&state, key) {
+            continue;
+        }
+        recorded.push(key);
+        state = reduce(&state, key).0;
+    }
+    spell(&recorded)
+}
+
+/// **`=` のあとも、打った式の綴りは残る**(1.2、入力経歴)。
+///
+/// **engine の挙動は変わっていない**——**`echo` は `=` で空になるまま**(下の
+/// `the_echo_shows_the_pending_expression`)。**変わるのは、表示欄が何を読むか**である。
+#[test]
+fn the_spelling_survives_the_equals() {
+    // **打った通りが残る**(利用者の要望 2026-10-01「`=` で消えるのはやめたい」)。
+    assert_eq!(spell_of(&["3", "add", "4", "eq"]), "3 + 4");
+    // **後置関数も、畳まずに残る**(`echo` は `0.5 × 2` と畳む)。
+    assert_eq!(spell_of(&["3", "0", "sin", "mul", "2", "eq"]), "30 sin × 2");
+    // **`=` のあとの区間は、その区間だけを綴る**(web は `=` で列を切る)。
+    assert_eq!(spell_of(&["mul", "3", "eq"]), "× 3");
+    // **その区間の答えは、前の計算から続く**(前置は web が足す)。
+    assert_eq!(main_of(&["3", "add", "4", "eq", "mul", "3", "eq"]), "21");
+    // **拒まれたキーは綴りに出ない**(値の上の `(` は押せない)。
+    assert_eq!(
+        spell_of(&["1", "lparen", "2", "add", "3", "rparen"]),
+        "12 + 3"
+    );
+    assert_eq!(
+        main_of(&["1", "lparen", "2", "add", "3", "rparen", "eq"]),
+        "15"
+    );
+    // **`AC` は綴りを空にする。**
+    assert_eq!(spell_of(&["5", "add", "3", "ac"]), "");
 }
 
 /// 打ったあと、画面の値が前の答えのままか(1.2、入力経歴)。
