@@ -911,7 +911,8 @@ describe("履歴", () => {
     await userEvent.click(screen.getByRole("button", { name: "< 戻る" }));
 
     // ここでの連鎖が「32」を左辺として使えば、記録が切れていたあいだも
-    // 連鎖の左辺(carriedAnswerRef)が正しく更新され続けていた証拠になる。
+    // 連鎖の左辺が正しく決まり続けていた証拠になる(2026-10-03 以降は
+    // `carryAtDecisionRef`——`=` のあとに答えを覚えておく形はやめた)。
     await userEvent.click(screen.getByRole("button", { name: "足す" }));
     await userEvent.click(screen.getByRole("button", { name: "5" }));
     await userEvent.click(screen.getByRole("button", { name: "計算する" }));
