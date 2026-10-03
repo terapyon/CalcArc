@@ -13,7 +13,12 @@ vi.mock("../calc", async (importOriginal) => {
 
 import type { Calc, DisplayState, EngineState, KeyToken, Step } from "../calc";
 import { initCalc } from "../calc";
-import { angleMarkOf, lineOf, ScientificPanel } from "./ScientificPanel";
+import {
+  angleMarkOf,
+  closedLineOf,
+  lineOf,
+  ScientificPanel,
+} from "./ScientificPanel";
 
 /**
  * ../calc をモジュールごと差し替えているので、実 WASM の代わりに角度・
@@ -1395,6 +1400,14 @@ describe("行の組み立て", () => {
     // （`""` でなく `"2 "` になると `pushEntry` が捨てない）。
     expect(lineOf("2", "")).toBe("");
     expect(lineOf(null, "")).toBe("");
+  });
+
+  it("`=` で閉じた行は記号までで、答えは入らない", () => {
+    // **利用者の裁定 2026-10-03。** **答えの欄と役割が重なるので落とした。**
+    expect(closedLineOf("30 sin × 2")).toBe("30 sin × 2 =");
+    expect(closedLineOf("21 × 3")).toBe("21 × 3 =");
+    // **空の行には足さない**——`=` の 2 度押しが `" ="` を作ってはいけない。
+    expect(closedLineOf("")).toBe("");
   });
 
   it("印が付くのは、モードがその行を描いたときだけである", () => {

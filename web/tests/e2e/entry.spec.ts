@@ -49,7 +49,8 @@ test("the echo line shows what was typed, and keeps it after =", async ({
   // **直す前はここが空になっていた**（engine の `echo` は `=` で空になる——
   // その挙動は変えていない。`engine_table.rs` の
   // `the_echo_shows_the_pending_expression` がいまも固定している）。
-  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4 ×");
+  // **`=` まで出す**（利用者の裁定 2026-10-03。**答えは足さない**）。
+  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4 × =");
   // **`3 + 4 × =` は 3 + 4×4 = 19**（`=` が右辺を補う。`engine_table.rs` の
   // `an_equals_with_a_dangling_operator_repeats_the_right_operand` の形）。
   await expect(page.getByTestId("display-main")).toHaveText("19");
@@ -99,20 +100,20 @@ test("the trail marks the lines that the angle mode drew", async ({ page }) => {
   await press(page, ["3", "0", "サイン"]);
   await expect(echo).toHaveText("DEG 30 sin");
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("DEG 30 sin");
+  await expect(echo).toHaveText("DEG 30 sin =");
   await expect(page.getByTestId("display-main")).toHaveText("0.5");
 
   // **四則だけの行には出ない——前の行の印も残らない。**
   await press(page, ["全消去", "3", "足す", "4"]);
   await expect(echo).toHaveText("3 + 4");
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("3 + 4");
+  await expect(echo).toHaveText("3 + 4 =");
 
   // **極形式に切り替えた次の行には出る**（答えの見え方がモードに依るので）。
   await press(page, ["全消去", "極形式と直交形式を切り替え", "3", "足す", "4"]);
   await expect(echo).toHaveText("DEG 3 + 4");
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("DEG 3 + 4");
+  await expect(echo).toHaveText("DEG 3 + 4 =");
 });
 
 test("the typed trail folds nothing, unlike the engine's echo", async ({
@@ -123,6 +124,34 @@ test("the typed trail folds nothing, unlike the engine's echo", async ({
   await press(page, ["3", "0", "サイン", "掛ける", "2"]);
   await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2");
   await press(page, ["計算する"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2");
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2 =");
   await expect(page.getByTestId("display-main")).toHaveText("1");
+});
+
+test("the line stops at the equals sign and never carries the answer", async ({
+  page,
+}) => {
+  // **利用者の裁定（2026-10-03）**: 「**`30 sin × 2 ＝ 1` ですが、答えは出さずに
+  // `=` 記号までを表示しましょう**」。**答えの欄と役割が重なる**ためである。
+  //
+  // **肯定形と否定形の両方で撃つ**——**「答えを足す」実装は 1 行で戻せるので、
+  // 黙って戻る**（[[fixes-inherit-the-defects-shape]]）。
+  const echo = page.getByTestId("display-echo");
+
+  // **① `=` で終わる**（等値で）。
+  await press(page, ["3", "0", "サイン", "掛ける", "2", "計算する"]);
+  await expect(echo).toHaveText("DEG 30 sin × 2 =");
+  await expect(page.getByTestId("display-main")).toHaveText("1");
+
+  // **② 行の中に答えが現れない。** **`1` のような 1 文字では弱い**ので、
+  // **答えが長い列で撃つ**——`4 ÷ 3 =` は `1.333333333`。
+  // **答えは画面から読む**（**期待値に書き写すと、桁数の約束が変わった日に
+  // 「答えが出ていない」の主張ごと腐る**）。
+  await press(page, ["全消去", "4", "割る", "3", "計算する"]);
+  await expect(echo).toHaveText("4 ÷ 3 =");
+  const answer = await page.getByTestId("display-main").textContent();
+  // **0 件で緑にしない**——答えが読めていなければ、下の `not.toContain` は
+  // 空文字を探して必ず緑になる。
+  expect(answer?.length ?? 0).toBeGreaterThan(5);
+  expect(await echo.textContent()).not.toContain(answer);
 });
