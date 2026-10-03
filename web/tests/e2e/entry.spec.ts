@@ -68,7 +68,9 @@ test("the typed trail is not announced on every key", async ({ page }) => {
   // **答えの欄（`display-main`）は `polite` のまま。**
   // **jsdom では見えない**ので、ここで実ブラウザに当てる。
   await press(page, ["3", "0", "サイン"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("30 sin");
+  // **印が頭に付く**（三角キーを使った行。この本の主題ではないが、
+  // **綴りを厳密一致で撃っているので印も書く**）。
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin");
   // **属性そのものが付いていない**（付いていない ＝ `off`）。
   // **`polite` を足したら赤くなる形**で撃つ。
   expect(
@@ -88,24 +90,29 @@ test("the trail marks the lines that the angle mode drew", async ({ page }) => {
   // **(a) その行が三角キーを使ったか、(b) その行の答えを極形式で見せているか。**
   // **「モードが答えを変えた場所」ではない**——極形式の `3 + 4 =` は `7 ∠ 0` で、
   // θ = 0 なのでどのモードでも同じ答えだが、印は付く（保守的に出る）。
-  await press(page, ["3", "0", "サイン", "計算する"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin");
+  // **★ 打っている最中の行も、閉じた行と同じ規則で撃つ**（2026-10-03）。
+  // **穴が 2 つ在った**——**打鍵中は印を付けておらず**（`30 sin` のまま）、
+  // **前の行の印が残っていた**（三角の行の次に `3 + 4` を打つと `DEG 3 + 4`）。
+  // **閉じた行だけを見ていたので、どちらも緑を通り抜けていた。**
+  const echo = page.getByTestId("display-echo");
+
+  await press(page, ["3", "0", "サイン"]);
+  await expect(echo).toHaveText("DEG 30 sin");
+  await press(page, ["計算する"]);
+  await expect(echo).toHaveText("DEG 30 sin");
   await expect(page.getByTestId("display-main")).toHaveText("0.5");
 
-  // **四則だけの行には出ない。**
-  await press(page, ["全消去", "3", "足す", "4", "計算する"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4");
+  // **四則だけの行には出ない——前の行の印も残らない。**
+  await press(page, ["全消去", "3", "足す", "4"]);
+  await expect(echo).toHaveText("3 + 4");
+  await press(page, ["計算する"]);
+  await expect(echo).toHaveText("3 + 4");
 
   // **極形式に切り替えた次の行には出る**（答えの見え方がモードに依るので）。
-  await press(page, [
-    "全消去",
-    "極形式と直交形式を切り替え",
-    "3",
-    "足す",
-    "4",
-    "計算する",
-  ]);
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 3 + 4");
+  await press(page, ["全消去", "極形式と直交形式を切り替え", "3", "足す", "4"]);
+  await expect(echo).toHaveText("DEG 3 + 4");
+  await press(page, ["計算する"]);
+  await expect(echo).toHaveText("DEG 3 + 4");
 });
 
 test("the typed trail folds nothing, unlike the engine's echo", async ({
@@ -114,8 +121,8 @@ test("the typed trail folds nothing, unlike the engine's echo", async ({
   // **利用者の例**（2026-10-03）: 「**`30 sin × 2 =` と打ったら
   // `30 sin × 2 = 1` と残る**」。**engine の `echo` は `0.5 × 2` と畳む。**
   await press(page, ["3", "0", "サイン", "掛ける", "2"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("30 sin × 2");
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2");
   await press(page, ["計算する"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("30 sin × 2");
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2");
   await expect(page.getByTestId("display-main")).toHaveText("1");
 });

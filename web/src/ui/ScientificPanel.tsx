@@ -594,6 +594,13 @@ export function ScientificPanel() {
         setTrail(
           lineOf(carryAtDecisionRef.current, live.spell(keysRef.current)),
         );
+        // **印も毎回決め直す。** **置き忘れると 2 つの形で狂う**
+        // （2026-10-03 に実測。**閉じた行だけを撃っていたので緑だった**）:
+        // **打鍵中の `30 sin` に印が付かない**（三角キーを使った行なのに）、
+        // **そして前の行の印が残る**（`DEG 30 sin =` の次に `3 + 4` を打つと
+        // `DEG 3 + 4` になった）。**生きている行は `usedAngleRef`**
+        // ——`pendingUsedAngleRef` は `=` が閉じた行のぶんである。
+        setTrailAngle(angleMarkOf(usedAngleRef.current, step.display));
       }
       return;
     }

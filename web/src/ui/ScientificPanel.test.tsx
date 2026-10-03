@@ -13,7 +13,7 @@ vi.mock("../calc", async (importOriginal) => {
 
 import type { Calc, DisplayState, EngineState, KeyToken, Step } from "../calc";
 import { initCalc } from "../calc";
-import { ScientificPanel } from "./ScientificPanel";
+import { angleMarkOf, lineOf, ScientificPanel } from "./ScientificPanel";
 
 /**
  * ../calc をモジュールごと差し替えているので、実 WASM の代わりに角度・
@@ -1373,5 +1373,47 @@ describe("履歴", () => {
     const typed = screen.getByTestId("display-main").textContent;
 
     expect(recalled).toBe(typed);
+  });
+});
+
+/**
+ * **行を組み立てる 2 つの規則を、直に撃つ。**
+ *
+ * **盤面を通す本（上）は「打ったらこう出る」を見るが、組み合わせを全部は
+ * 回れない**——**`angleMarkOf` は 2 つの入力（三角キーを使ったか・極形式か）の
+ * 4 通り × 2 つのモードで 8 通り在る。** **E2E はそのうち 3 通りを
+ * 実ブラウザで撃っている**（`tests/e2e/entry.spec.ts`）。**残りはここが数える。**
+ *
+ * **この 2 つを `export` しているのはここで撃つためである**——
+ * **export したまま誰も呼ばなければ、それは死んだ口である。**
+ */
+describe("行の組み立て", () => {
+  it("前置する値が無ければ、綴りだけが行になる", () => {
+    expect(lineOf(null, "3 + 4")).toBe("3 + 4");
+    expect(lineOf("21", "× 3")).toBe("21 × 3");
+    // **綴りが空なら前置しない**——`=` の 2 度押しが行を作らないための 1 条件
+    // （`""` でなく `"2 "` になると `pushEntry` が捨てない）。
+    expect(lineOf("2", "")).toBe("");
+    expect(lineOf(null, "")).toBe("");
+  });
+
+  it("印が付くのは、モードがその行を描いたときだけである", () => {
+    const deg = { angle: "Deg", form: "Rect" } as const;
+    const rad = { angle: "Rad", form: "Rect" } as const;
+    const degPolar = { angle: "Deg", form: "Polar" } as const;
+    const radPolar = { angle: "Rad", form: "Polar" } as const;
+
+    // **(a) 三角キーを使った行**——直交形式でも付く。
+    expect(angleMarkOf(true, deg)).toBe("DEG");
+    expect(angleMarkOf(true, rad)).toBe("RAD");
+    // **(b) 極形式の行**——キーを押していなくても付く(偏角がモードで読まれる)。
+    expect(angleMarkOf(false, degPolar)).toBe("DEG");
+    expect(angleMarkOf(false, radPolar)).toBe("RAD");
+    // **両方**。
+    expect(angleMarkOf(true, degPolar)).toBe("DEG");
+    expect(angleMarkOf(true, radPolar)).toBe("RAD");
+    // **どちらでもない行には付かない**——**モードが答えを変えていない。**
+    expect(angleMarkOf(false, deg)).toBe("");
+    expect(angleMarkOf(false, rad)).toBe("");
   });
 });

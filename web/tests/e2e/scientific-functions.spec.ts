@@ -37,9 +37,14 @@ test("xʸ folds from the right, all the way through the browser", async ({
   await expect(page.getByTestId("display-main")).toHaveText("512");
 });
 
-test("the pending power operator shows in the echo", async ({ page }) => {
+test("the pending power operator shows in the typed line", async ({ page }) => {
   await press(page, ["2", "べき乗"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("2 ^");
+  // **綴りはキーの面のまま**（`spell.rs:79` の `Key::Pow => "xʸ"`）。
+  // **1.2 でこの欄が打鍵の綴りに替わった**ので、**`^` から `xʸ` に変わった**
+  // ——**履歴に残る式と同じ綴りになった**（前は欄と履歴で違っていた）。
+  // **engine の `echo` の `^` は変えていない**——`engine_table.rs` の
+  // `the_echo_shows_the_pending_expression` がいまも固定している。
+  await expect(page.getByTestId("display-echo")).toHaveText("2 xʸ");
 });
 
 test("the inverse trig functions are reachable through Shift", async ({
