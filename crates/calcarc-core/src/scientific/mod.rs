@@ -900,4 +900,36 @@ mod tests {
             Err(CalcError::TrigPole)
         );
     }
+
+    /// **虚部は畳まない**（2026-10-03。`to_rad` の註の規律に対応する番人）。
+    ///
+    /// **`sin(x+iy) = sin x·cosh y + i·cos x·sinh y`** であり、
+    /// **`cosh`・`sinh` は周期を持たない**——**実部を `% 360` で畳むのと同じことを
+    /// 虚部にすると、まったく別の数になる。**
+    ///
+    /// **実測（2026-10-03、mpmath 50 桁）**:
+    /// **`sin(0 + 400j°)` の虚部は `sinh(400°) = 538.1670233`**、
+    /// **畳むと `sinh(40°) = 0.7562402`**——**700 倍以上違う。**
+    /// **`720j` なら `143375.66` が `0`**（720 % 360 = 0）になる。
+    ///
+    /// **盤面から届く**: `4 0 0 j sin` で `538.1670233j` が出る
+    /// （`engine_table.rs` の
+    /// `the_imaginary_part_is_not_folded_by_the_degree_reduction` が画面を撃つ）。
+    #[test]
+    fn the_imaginary_part_is_never_folded() {
+        // **`sinh` の引数は畳まれていない** ——`400°` のままである。
+        let got = sin(Value::new(0.0, 400.0), AngleMode::Deg).expect("有限");
+        close(got.im, (400.0_f64.to_radians()).sinh());
+        // **畳んだ値ではない**（それが入ったら上の `assert_close` が落ちるが、
+        // **何と間違えたのかを名指しで言う**ために、こちらも撃つ）。
+        assert!(
+            (got.im - (40.0_f64.to_radians()).sinh()).abs() > 1.0,
+            "虚部が 360 で畳まれている: {} （畳まない値は {}）",
+            got.im,
+            (400.0_f64.to_radians()).sinh()
+        );
+        // **`cos` も同じ**——あちらは実部に `cosh` が掛かる。
+        let c = cos(Value::new(0.0, 400.0), AngleMode::Deg).expect("有限");
+        close(c.re, (400.0_f64.to_radians()).cosh());
+    }
 }

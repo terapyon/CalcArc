@@ -918,6 +918,25 @@ fn an_angle_that_is_not_a_pole_is_not_refused_however_large() {
     );
 }
 
+/// **虚部は、度の畳みで畳まれない**（2026-10-03。`to_rad` の規律の、画面側の番人）。
+///
+/// **`sin(x+iy) = sin x·cosh y + i·cos x·sinh y`** で、**`cosh`・`sinh` は周期を
+/// 持たない**——**実部を `% 360` で畳むのと同じことを虚部にすると別の数になる。**
+/// **実測**: **畳まなければ `sinh(400°) = 538.1670233`、畳むと
+/// `sinh(40°) = 0.7562402`**（**700 倍以上**）。
+///
+/// **この入力は盤面から届く**（`4 0 0 j sin` の 5 打鍵）。**だから画面でも撃つ**
+/// ——`scientific/mod.rs` の `the_imaginary_part_is_never_folded` が
+/// 値そのものを、ここが**利用者が見る綴り**を固定する。
+#[test]
+fn the_imaginary_part_is_not_folded_by_the_degree_reduction() {
+    assert_eq!(main_of(&["4", "0", "0", "j", "sin"]), "538.1670233j");
+    assert_eq!(main_of(&["4", "0", "0", "j", "cos"]), "538.1679524");
+    // **`720j` は、畳むと 0 になる角である**（720 % 360 = 0）
+    // ——**畳んでいないので、桁の大きな数が出る。**
+    assert_eq!(main_of(&["7", "2", "0", "j", "sin"]), "143,375.6566j");
+}
+
 /// **何周しても同じ角なら、同じ答えである**（2026-10-03 の計測。台帳
 /// `docs/superpowers/sdd/2026-10-03-trig-large-args.md` §3・§4）。
 ///
