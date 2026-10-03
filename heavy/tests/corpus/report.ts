@@ -1702,7 +1702,7 @@ function renderUiHealth(health: UiHealth): string[] {
       "  `heavy/heavy-ui-run.json` は在るが、押下が 0 回である。盤面を叩く",
       "  テストが 1 本も走らなかった走行(一部だけを走らせた場合を含む)か、",
       "  押下の記録が外れているかで、**どちらも盤面については何も確かめて",
-      "  いない。** 指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      `  いない。** 指摘の内訳: ${describeUiFindings(health.kinds)}。`,
       "  **これは盤面の主張が崩れたという意味ではない**——崩れる前に、",
       "  叩いていない。",
     ];
@@ -1712,7 +1712,7 @@ function renderUiHealth(health: UiHealth): string[] {
       `  **盤面を通る走行——失敗している(指摘 ${countUiFindings(health.kinds)} 件)。**`,
       `  最後に走った \`pnpm heavy:ui\` は ${health.presses} 回キーを押し、`,
       `  ${health.typed} 件のケースを打鍵したが、主張が通っていない。`,
-      "  指摘の内訳: " + describeUiFindings(health.kinds) + "。",
+      `  指摘の内訳: ${describeUiFindings(health.kinds)}。`,
       "  **この報告書の緑は、その失敗を打ち消さない。**",
     ];
   }
