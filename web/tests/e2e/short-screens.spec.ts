@@ -1,4 +1,6 @@
-import { PROMISED_URLS } from "../promised-urls";
+import { screenName } from "../../src/ui/screenName";
+import { PROMISED_URLS, type PromisedUrl } from "../promised-urls";
+import { EXPECTED_MANUALS } from "../unit/manuals";
 import { expect, type Page, test } from "./fixtures";
 import {
   LANDSCAPE_TAB_VIEWPORTS,
@@ -88,17 +90,57 @@ async function sweepEverything(page: Page, query: string) {
   let checked = 0;
   const problems: string[] = [];
   const skipped: string[] = [];
-  const ready = async () => {
-    await expect(page.locator("main button").first()).toBeVisible();
+  /**
+   * **その画面が、掃ける状態になるまで待つ。**
+   *
+   * **★ 「`main` の最初のボタンが見える」では足りない**（2026-10-03、CI の赤で
+   * 分かった。走行 37088331044、`375×667` で `checked` が 425／床 428）。
+   * **この巡回は hash だけで画面を移る**ので、**切り替わる前の画面のボタンで
+   * この条件が通る。** **実測（画面の切り替えを 300ms 遅らせて固定した）**:
+   * **`#finance` から `#manual` へ移った直後、`<h1>` は「金融計算」のまま、
+   * `main` のボタンは金融の 37 本**で、**そのまま掃くと金融をもう 1 度数えた**
+   * （**床は「以上」なので、この向きでは緑のまま間違える**）。
+   * **CI が赤くなったのは逆の向き**——**ボタンが見えた時点では金融、
+   * `sweep()` が走る時点ではマニュアル（冊はまだ別チャンクの中）**で、
+   * **マニュアルの 3 本が数えられなかった。**
+   *
+   * **だから 2 つ待つ**:
+   * **① その画面に居ること**——**`<h1>` がその画面の名前になるまで**
+   * （名前は `screenName(route)`。**前の画面のボタンでは通らない**）。
+   * **② その画面の中身が届いていること**——**電卓の面は `main` のボタン、
+   * `#manual` は冊を選ぶボタン**（**`ManualPage.tsx` が `virtual:manuals` を
+   * 動的 import で取るので、`<h1>` が出たあとに届く**）。
+   * **冊の数は `EXPECTED_MANUALS` から取る**——**ここに `3` と書かない。**
+   * **`aria-pressed` を持つのは冊だけ**である（①で画面を固定しているので、
+   * 金融のモード行とは混ざらない）。
+   */
+  const ready = async (route: PromisedUrl) => {
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: screenName(route),
+        exact: true,
+      }),
+      `${route.hash} の画面に切り替わらない`,
+    ).toBeVisible();
+    if (route.page === "manual") {
+      await expect(
+        page.locator("main button[aria-pressed]"),
+        `${route.hash} の冊を選ぶボタンが届かない`,
+      ).toHaveCount(EXPECTED_MANUALS.length);
+    } else {
+      await expect(page.locator("main button").first()).toBeVisible();
+    }
     if (query !== "") {
       await expect(
         page.getByRole("button", { name: "再読み込み" }),
       ).toBeVisible();
     }
   };
-  for (const { hash } of PROMISED_URLS) {
+  for (const url of PROMISED_URLS) {
+    const { hash } = url;
     await page.goto(`/${query}${hash}`);
-    await ready();
+    await ready(url);
     const found = await page.evaluate(sweep);
     checked += found.checked;
     problems.push(...found.problems.map((p) => `${hash} ${p}`));
@@ -107,7 +149,10 @@ async function sweepEverything(page: Page, query: string) {
   // 金融は 6 モードで盤面が変わる。**`#finance` の既定(ローン)だけを見ると、
   // 複利の面を見張っていない**(finance-layout.spec.ts と同じ理由)。
   await page.goto(`/${query}#finance`);
-  await ready();
+  const finance = PROMISED_URLS.find((url) => url.hash === "#finance");
+  // **0 件で緑にしない。** 約束の表から引けなければ、下の待ちは何も言わない。
+  expect(finance, "#finance が約束の表に無い").toBeDefined();
+  if (finance !== undefined) await ready(finance);
   const modes = page
     .getByRole("group", { name: "計算の種類" })
     .getByRole("button");
