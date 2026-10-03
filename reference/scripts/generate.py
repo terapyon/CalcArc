@@ -79,7 +79,43 @@ def build_complex() -> dict:
     return _envelope(entries)
 
 
+def check_angle_inputs_are_exact() -> None:
+    """**角度を引数に取る関数の大きな入力は、f64 が厳密に持てる値だけにする。**
+
+    **参照は `mp.mpf(str(x))`＝十進の綴りを読み、Rust は f64 の値を持つ。**
+    **その 2 つが違えば、両者は別の角を計算している**ので、**突き合わせの差は
+    engine の精度ではなく「入力の読み方の違い」になる**——**「engine が悪い」
+    ように見える赤が、永久に残る。**
+
+    **閾値と範囲の理由は `cases.py` の `ANGLE_EXACTNESS_FLOOR` と
+    `ANGLE_TAKING_FNS` の註にある**（実測で決めた）。
+
+    **ここで止めるのは、CI が `scripts/generate.py` を回しているからである**
+    （`.github/workflows/ci.yml` の `Python reference` のジョブ)。**pytest ではなく
+    生成器に置くと、新しいケースを足したその場で止まる。**
+    """
+    broken = [
+        (name, x, mode)
+        for name, x, mode in cases.UNARY_INPUTS
+        if name in cases.ANGLE_TAKING_FNS
+        and abs(x) >= cases.ANGLE_EXACTNESS_FLOOR
+        and mpmath.mpf(str(x)) != mpmath.mpf(x)
+    ]
+    if broken:
+        lines = "\n".join(
+            f"  {name}/{mode}/{x!r} — f64 が持つのは {mpmath.mpf(x)}" for name, x, mode in broken
+        )
+        raise AssertionError(
+            "角度の入力が f64 で厳密でない（参照と Rust が別の角を計算する）:\n"
+            f"{lines}\n"
+            f"|x| >= {cases.ANGLE_EXACTNESS_FLOOR:g} の {sorted(cases.ANGLE_TAKING_FNS)} は、"
+            "打った十進を f64 が厳密に持つ値だけを使うこと"
+            "（理由は cases.py の ANGLE_EXACTNESS_FLOOR の註）。"
+        )
+
+
 def build_scientific() -> dict:
+    check_angle_inputs_are_exact()
     entries = []
     for name, x, mode in cases.UNARY_INPUTS:
         fn = getattr(scientific_ref, name)
