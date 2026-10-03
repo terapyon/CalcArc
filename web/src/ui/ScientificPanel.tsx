@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AngleMode, DisplayForm } from "../calc";
 import { type Calc, initCalc, type KeyToken, type Step } from "../calc";
 import { clearAll, type HistoryEntry, pushEntry, removeAt } from "../history";
 import { Display } from "./Display/Display";
@@ -137,8 +138,42 @@ const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
  * ここで `${carry} ` を足すと式が `"2 "` になって空でなくなり、
  * **`pushEntry` がその行を捨てられなくなる**（`web/src/history/index.ts`）。
  */
+/**
+ * **角度モードを読むキー**（1.2、入力経歴の設計書 §4.1.2）。
+ *
+ * **core の `engine/mod.rs` で `state.angle` を読む腕は、この 6 つだけ**である
+ * （2026-10-03 に `grep` で数えた）。**ほかに読むのは表示の 3 か所で、
+ * どれも極形式の綴り**——そちらは `display.form` が答える。
+ */
+const ANGLE_KEYS: ReadonlySet<KeyToken> = new Set([
+  "sin",
+  "cos",
+  "tan",
+  "asin",
+  "acos",
+  "atan",
+]);
+
 export function lineOf(carry: string | null, spelled: string): string {
   return carry !== null && spelled !== "" ? `${carry} ${spelled}` : spelled;
+}
+
+/**
+ * **その行に付ける角度の印**（1.2、入力経歴の設計書 §4.1.2）。
+ *
+ * **出すのは「モードで描いた行」**——**(a) 三角キーを使った行**か、
+ * **(b) 答えを極形式で見せている行**。**「モードが答えを変えた行」ではない**:
+ * 極形式の `3 + 4 =` は `7 ∠ 0` で、**θ = 0 ならどのモードでも同じ答え**だが、
+ * **印は付く**（保守的に出す。偽の精密さを避ける）。
+ *
+ * **ふだんは出ない**——四則だけで使う人には一生出ない。
+ */
+export function angleMarkOf(
+  usedAngleKey: boolean,
+  display: { angle: AngleMode; form: DisplayForm },
+): string {
+  if (!usedAngleKey && display.form !== "Polar") return "";
+  return display.angle === "Deg" ? "DEG" : "RAD";
 }
 
 /**
@@ -390,6 +425,17 @@ export function ScientificPanel() {
    * ——**消えるのは `AC` と、次のキーで新しい行に替わるとき**だけである。
    */
   const [trail, setTrail] = useState("");
+  /**
+   * **その行に付ける角度の印**（`"DEG"` / `"RAD"` / 付けないときは `""`）。
+   * **モードで描いた行にだけ付く**（設計書 §4.1.2）。
+   */
+  const [trailAngle, setTrailAngle] = useState("");
+  /**
+   * **この区間は三角キーを使ったか**（1.2、入力経歴の設計書 §4.1.2 の (a)）。
+   * **`=` と `AC` で戻す。**
+   */
+  const usedAngleRef = useRef(false);
+  const pendingUsedAngleRef = useRef(false);
   const carryAtDecisionRef = useRef<string | null>(null);
   const decidedRef = useRef<boolean>(false);
   /**
@@ -482,6 +528,9 @@ export function ScientificPanel() {
     if (ready && previous && !(inError && token !== "ac")) {
       // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
       // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
+      if (ANGLE_KEYS.has(token)) {
+        usedAngleRef.current = true;
+      }
       if (!decidedRef.current && CARRIED_VALUE_TOKENS.has(token)) {
         decidedRef.current = true;
         carryAtDecisionRef.current = previous.display.answerOnScreen
@@ -497,8 +546,10 @@ export function ScientificPanel() {
         keysRef.current = [];
         // **前置値を区間と一緒に渡してから、未決に戻す。**
         pendingCarryRef.current = carryAtDecisionRef.current;
+        pendingUsedAngleRef.current = usedAngleRef.current;
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
+        usedAngleRef.current = false;
       } else if (token === "ac") {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
@@ -511,10 +562,12 @@ export function ScientificPanel() {
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
         pendingCarryRef.current = null;
+        pendingUsedAngleRef.current = false;
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
         // あとに来る二項演算子は前回の続きではない。
         carryAtDecisionRef.current = null;
         decidedRef.current = false;
+        usedAngleRef.current = false;
       }
     }
     // 状態は不変値なので、直前の状態から次を作るだけでよい。**更新関数を
@@ -576,6 +629,7 @@ export function ScientificPanel() {
     // 表示に出る行。** **規則を 2 か所に書かない。**
     const expression = lineOf(carried, spelled);
     setTrail(expression);
+    setTrailAngle(angleMarkOf(pendingUsedAngleRef.current, step.display));
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -731,7 +785,11 @@ export function ScientificPanel() {
         />
       ) : (
         <>
-          <Display display={step.display} trail={trail} />
+          <Display
+            display={step.display}
+            trail={trail}
+            trailAngle={trailAngle}
+          />
           <Keypad
             sections={SCIENTIFIC_SECTIONS}
             onPress={press}

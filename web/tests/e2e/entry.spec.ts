@@ -83,6 +83,31 @@ test("the typed trail is not announced on every key", async ({ page }) => {
   );
 });
 
+test("the trail marks the lines that the angle mode drew", async ({ page }) => {
+  // **印を出すのは「モードで描いた行」**（1.2、入力経歴の設計書 §4.1.2）。
+  // **(a) その行が三角キーを使ったか、(b) その行の答えを極形式で見せているか。**
+  // **「モードが答えを変えた場所」ではない**——極形式の `3 + 4 =` は `7 ∠ 0` で、
+  // θ = 0 なのでどのモードでも同じ答えだが、印は付く（保守的に出る）。
+  await press(page, ["3", "0", "サイン", "計算する"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin");
+  await expect(page.getByTestId("display-main")).toHaveText("0.5");
+
+  // **四則だけの行には出ない。**
+  await press(page, ["全消去", "3", "足す", "4", "計算する"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4");
+
+  // **極形式に切り替えた次の行には出る**（答えの見え方がモードに依るので）。
+  await press(page, [
+    "全消去",
+    "極形式と直交形式を切り替え",
+    "3",
+    "足す",
+    "4",
+    "計算する",
+  ]);
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 3 + 4");
+});
+
 test("the typed trail folds nothing, unlike the engine's echo", async ({
   page,
 }) => {
