@@ -12,6 +12,7 @@ function state(overrides: Partial<DisplayState> = {}): DisplayState {
     notation: "Normal",
     pendingOp: null,
     pendingDepth: 0,
+    answerOnScreen: true,
     error: null,
     ...overrides,
   };

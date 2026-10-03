@@ -24,6 +24,41 @@ fn echo_of(keys: &[&str]) -> String {
     run(keys).echo
 }
 
+/// 打ったあと、画面の値が前の答えのままか(1.2、入力経歴)。
+fn answer_on_screen_after(keys: &[&str]) -> bool {
+    run(keys).answer_on_screen
+}
+
+/// **画面の値が前の答えのままか**(1.2、入力経歴の設計書 §4)。
+///
+/// **web はこれを読んで、履歴と経歴の式に前の答えを前置するかを決める**
+/// ——**キー列から推測しない。** **推測していた版は、`DEL` で消えた数字を
+/// 「新しい計算の始まり」と読み、式が答えを生まない行を 364 件作っていた**
+/// (`engine_values.rs` の読み直しが 2026-10-03 に見つけた)。
+#[test]
+fn the_screen_says_whether_the_answer_is_still_there() {
+    // 何も打っていないときも真(画面の `0` がその「答え」)。
+    assert!(answer_on_screen_after(&[]));
+    // `=` の直後。
+    assert!(answer_on_screen_after(&["3", "3", "eq"]));
+    // 数字を打つと偽。
+    assert!(!answer_on_screen_after(&["3", "3", "eq", "3"]));
+    // **`DEL` で消すと真に戻る**(engine は前の答えに戻る——`main` も `33`)。
+    assert!(answer_on_screen_after(&["3", "3", "eq", "3", "del"]));
+    assert_eq!(main_of(&["3", "3", "eq", "3", "del"]), "33");
+    // **無音キーを挟んでも同じ**(364 件のうち 12 件がこの形だった)。
+    assert!(answer_on_screen_after(&["3", "3", "eq", "del", "3", "del"]));
+    assert!(answer_on_screen_after(&["3", "3", "eq", "3", "del", "eng"]));
+    // **小数点は `DEL` で `0` が残る**ので偽のまま(壊れない理由)。
+    assert!(!answer_on_screen_after(&["3", "3", "eq", "dot", "del"]));
+    // 演算子を押したら偽(保留が立つ)。
+    assert!(!answer_on_screen_after(&["3", "3", "eq", "add"]));
+    // 後置関数のあとは偽(手元の値が在る)。
+    assert!(!answer_on_screen_after(&["3", "3", "eq", "sqrt"]));
+    // エラー中は偽(次に押せるのは `AC` だけ)。
+    assert!(!answer_on_screen_after(&["1", "div", "0", "eq"]));
+}
+
 /// `keys` を打ったあと、`key` が押せない(拒まれる)こと。**押しても状態も表示も変わらない**
 /// (0.9.2 設計書 §3.4)。
 fn refused_after(keys: &[&str], key: &str) {
