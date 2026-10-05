@@ -133,18 +133,6 @@ const CARRIED_VALUE_TOKENS: ReadonlySet<KeyToken> = new Set([
 ]);
 
 /**
- * **行を 1 つ作る**（1.2、入力経歴の設計書 §2）。
- *
- * **履歴の 1 件も、表示に出る経歴も、ここから派生する**——**`carry`（決めた時点で
- * 画面に出ていた値）と `spelled`（その区間の綴り）を繋ぐ規則を 1 か所に置く。**
- * **2 か所に書くと、片方だけ直る日が来る**（利用者が CSS で指摘した「二重化」と
- * 同じ形。2026-10-03）。
- *
- * **綴りが空なら carry も付けない**——`=` の 2 度押しは空の列を綴るので、
- * ここで `${carry} ` を足すと式が `"2 "` になって空でなくなり、
- * **`pushEntry` がその行を捨てられなくなる**（`web/src/history/index.ts`）。
- */
-/**
  * **角度モードを読むキー**（1.2、入力経歴の設計書 §4.1.2）。
  *
  * **core の `engine/mod.rs` で `state.angle` を読む腕は、この 6 つだけ**である
@@ -159,10 +147,6 @@ const ANGLE_KEYS: ReadonlySet<KeyToken> = new Set([
   "acos",
   "atan",
 ]);
-
-export function lineOf(carry: string | null, spelled: string): string {
-  return carry !== null && spelled !== "" ? `${carry} ${spelled}` : spelled;
-}
 
 /**
  * **その計算を描いた角度のモード。** **行の印と履歴の件は、どちらもここから出る**
@@ -230,7 +214,7 @@ export function angleMarkOf(
  * **`=` で閉じた行の綴り。** **押した `=` までを見せ、答えは足さない**
  * （利用者の裁定 2026-10-03）。
  *
- * **初稿は `30 sin × 2 ＝ 1` まで出す形だった**（利用者の最初の例がその形）
+ * **初稿は `30 sin × 2 ＝ 1` まで出す形だった**（利用者の最初の例がその形。当時の綴りで、1.2.1 から `sin(30) × 2 =`）
  * ——**実装の途中で「答えは出さず `=` まで」に変わった。** **理由は、
  * 答えの欄（`display-main`）と役割が重なるから**である。
  *
@@ -451,12 +435,18 @@ export function ScientificPanel() {
   // 置くのは、打鍵のたびに再描画を起こす理由が無いからである——`step` の
   // 更新だけで画面は動く。
   const keysRef = useRef<KeyToken[]>([]);
+  // **`keysRef` の鏡**（関数表記の設計書 §4.1）。`keysRef[i]` を押す直前の
+  // `display.main`。**web は値を選ばず全キーぶん写す**——どのキーで使うかは core が決める。
+  // **`keysRef` を触る 5 か所のどれにも、同じ形で隣に置く**（離すと片方だけ直る日が来る）。
+  const screensRef = useRef<string[]>([]);
 
   // **`eq` の直後、次の `step` が確定してから綴る。** `press` の
   // `setStep` 更新関数の中で綴る(=副作用を起こす)と、直下のコメントと
   // 同じ理由でここも正しい置き場所ではなくなる——ここに「まだ綴っていない
   // キー列」を一時的に置き、下の effect が `step` の確定を待って処理する。
   const pendingSpellRef = useRef<KeyToken[] | null>(null);
+  // `pendingSpellRef` と対になる画面の列（`screensRef` の `=` 版）。
+  const pendingScreensRef = useRef<string[] | null>(null);
 
   // **連鎖(chained `=`)の左辺として使う、直前の `=` の答。**(Fix round 3
   // finding 11)`3 + j4 = × 2 =` は engine の `current` を積み増して
@@ -619,12 +609,15 @@ export function ScientificPanel() {
           : null;
       }
       keysRef.current.push(token);
+      screensRef.current.push(previous.display.main);
       if (token === "eq") {
         // **`eq` を積んだあとの列をそのまま持たせ、ここで空にする。**
         // これが `=` の 2 度押しを止める——2 度目は積む前が空の列なので、
         // 綴りも `""` になり `pushEntry` が積まない(ブリーフ「組み立て方」2)。
         pendingSpellRef.current = keysRef.current;
         keysRef.current = [];
+        pendingScreensRef.current = screensRef.current;
+        screensRef.current = [];
         // **前置値を区間と一緒に渡してから、未決に戻す。**
         pendingCarryRef.current = carryAtDecisionRef.current;
         pendingTrigAnglesRef.current = trigAnglesRef.current;
@@ -635,6 +628,7 @@ export function ScientificPanel() {
         // **`ac` は履歴を消さない**(設計書 §6)。消えるのは貯めている
         // キー列だけ——次の計算を「打った通り」に綴るためである。
         keysRef.current = [];
+        screensRef.current = [];
         // **`pendingSpellRef` も一緒に捨てる**(Fix round 3 finding)。
         // ここを空にしないと、`eq` の直後・下の effect が `step` の
         // 確定を待っているあいだに `ac` を押した場合、まだ消費されて
@@ -642,6 +636,7 @@ export function ScientificPanel() {
         // 変化(次の計算の完了)にこの古い列が消費されて、`ac` で捨てた
         // はずの計算が履歴に積まれてしまう。
         pendingSpellRef.current = null;
+        pendingScreensRef.current = null;
         pendingCarryRef.current = null;
         pendingTrigAnglesRef.current = [];
         // **連鎖の左辺も一緒に捨てる**(Fix round 3 finding 11)。`AC` の
@@ -667,18 +662,23 @@ export function ScientificPanel() {
   useEffect(() => {
     if (!step) return;
     const pendingKeys = pendingSpellRef.current;
+    const pendingScreens = pendingScreensRef.current;
     const live = calcRef.current;
     if (pendingKeys === null) {
       // **打っている最中の行。** **`=` を押していないあいだは、貯めている列を綴る。**
       // **`=` の直後はここに来ない**（下で閉じた行を作る）ので、**その行は次のキーまで残る。**
       if (live) {
         setTrail(
-          lineOf(carryAtDecisionRef.current, live.spell(keysRef.current)),
+          live.spell(
+            keysRef.current,
+            carryAtDecisionRef.current,
+            screensRef.current,
+          ),
         );
         // **印も毎回決め直す。** **置き忘れると 2 つの形で狂う**
         // （2026-10-03 に実測。**閉じた行だけを撃っていたので緑だった**）:
-        // **打鍵中の `30 sin` に印が付かない**（三角キーを使った行なのに）、
-        // **そして前の行の印が残る**（`DEG 30 sin =` の次に `3 + 4` を打つと
+        // **打鍵中の `sin(30)` に印が付かない**（三角キーを使った行なのに）、
+        // **そして前の行の印が残る**（`DEG sin(30) =` の次に `3 + 4` を打つと
         // `DEG 3 + 4` になった）。**生きている行は `trigAnglesRef`**
         // ——`pendingTrigAnglesRef` は `=` が閉じた行のぶんである。
         setTrailAngle(angleMarkOf(trigAnglesRef.current, step.display));
@@ -686,15 +686,18 @@ export function ScientificPanel() {
       return;
     }
     pendingSpellRef.current = null;
+    pendingScreensRef.current = null;
     const ready = calcRef.current;
     if (!ready) return;
     // **綴るのは設定に関わらず毎回**——「呼ばれていないから記録しなかった」
     // と「呼ばれた結果を記録しなかった」を区別できる形にする
     // (Task 10 ブリーフ ★ Step 0)。判断は綴った後に効く。
-    const spelled = ready.spell(pendingKeys);
-    // **連鎖なら直前の答を左辺として前に足す**(Fix round 3 finding 11)。
+    // **前の答えを行の頭に置くのは core の `spell_line` である**(1.2.1)——`carried` を
+    // 最初の語として積み、**綴りが空なら頭も付けない**(`=` の 2 度押しが行を作らない)。
+    // **web は置く値を渡すだけ**で、文字列を前に足さない。
     //
-    // **決めたのは engine である**(2026-10-03 に替えた)——**区間の中で最初に
+    // **置く値の出どころ**: `pendingCarryRef` は `=` の時点で `carryAtDecisionRef` から
+    // 写したもの。**決めたのは engine である**(2026-10-03 に替えた)——**区間の中で最初に
     // 「画面の値を使うキー」を押したとき、その直前の `display.answerOnScreen`** を
     // `press` が写している。**キー列から推測しない。**
     //
@@ -706,16 +709,9 @@ export function ScientificPanel() {
     // **`answerOnScreen` は無音キーで変わらない**ので、`3 = ENG × 2 =` のような列も
     // そのまま連鎖になる。
     const carried = pendingCarryRef.current;
-    // **綴りが空なら左辺も付けない。** `=` の 2 度押しは空の列を綴るので
-    // `spelled` が `""` になり、`pushEntry` がその行を捨てる——という約束
-    // (`web/src/history/index.ts`)に乗っている。ここで `${carried} ` を
-    // 前に足すと式が `"2 "`(末尾の空白 1 つ)になって空でなくなり、
-    // **2 度押しが行を作ってしまう**。`eq` は前回の答を読むキーなので
-    // `CARRIED_VALUE_TOKENS` に居り(`finish`、mod.rs:195)、この 1 条件が
-    // 無いと集合を engine から導いた途端にその行が生まれる。
     // **同じ builder から 2 つを派生させる**（設計書 §2）——**履歴の 1 件と、
     // 表示に出る行。** **規則を 2 か所に書かない。**
-    const expression = lineOf(carried, spelled);
+    const expression = ready.spell(pendingKeys, carried, pendingScreens ?? []);
     // **画面の行は `=` まで見せる**（答えは足さない。裁定 2026-10-03）。
     // **履歴に積む `expression` は変えない**——**あちらは式と答えを
     // 別の欄で見せている**ので、式に `=` を足す理由が無い。

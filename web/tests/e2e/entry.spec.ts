@@ -65,13 +65,13 @@ test("the echo line shows what was typed, and keeps it after =", async ({
 test("the typed trail is not announced on every key", async ({ page }) => {
   // **読み上げは `off` のまま**（1.2、入力経歴の設計書 §4.2 の裁定）。
   // **打鍵ごとに式全体を読み上げると、読み上げが追いつかない**
-  // ——`30` → `30 sin` → `30 sin ×` → `30 sin × 2` で 4 回、前の内容ごと読み直す。
+  // ——`30` → `sin(30)` → `sin(30) ×` → `sin(30) × 2` で 4 回、前の内容ごと読み直す。
   // **答えの欄（`display-main`）は `polite` のまま。**
   // **jsdom では見えない**ので、ここで実ブラウザに当てる。
   await press(page, ["3", "0", "サイン"]);
   // **印が頭に付く**（三角キーを使った行。この本の主題ではないが、
   // **綴りを厳密一致で撃っているので印も書く**）。
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin");
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG sin(30)");
   // **属性そのものが付いていない**（付いていない ＝ `off`）。
   // **`polite` を足したら赤くなる形**で撃つ。
   expect(
@@ -92,15 +92,15 @@ test("the trail marks the lines that the angle mode drew", async ({ page }) => {
   // **「モードが答えを変えた場所」ではない**——極形式の `3 + 4 =` は `7 ∠ 0` で、
   // θ = 0 なのでどのモードでも同じ答えだが、印は付く（保守的に出る）。
   // **★ 打っている最中の行も、閉じた行と同じ規則で撃つ**（2026-10-03）。
-  // **穴が 2 つ在った**——**打鍵中は印を付けておらず**（`30 sin` のまま）、
+  // **穴が 2 つ在った**——**打鍵中は印を付けておらず**（`sin(30)` のまま）、
   // **前の行の印が残っていた**（三角の行の次に `3 + 4` を打つと `DEG 3 + 4`）。
   // **閉じた行だけを見ていたので、どちらも緑を通り抜けていた。**
   const echo = page.getByTestId("display-echo");
 
   await press(page, ["3", "0", "サイン"]);
-  await expect(echo).toHaveText("DEG 30 sin");
+  await expect(echo).toHaveText("DEG sin(30)");
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("DEG 30 sin =");
+  await expect(echo).toHaveText("DEG sin(30) =");
   await expect(page.getByTestId("display-main")).toHaveText("0.5");
 
   // **四則だけの行には出ない——前の行の印も残らない。**
@@ -120,12 +120,49 @@ test("the typed trail folds nothing, unlike the engine's echo", async ({
   page,
 }) => {
   // **利用者の例**（2026-10-03）: 「**`30 sin × 2 =` と打ったら
-  // `30 sin × 2 = 1` と残る**」。**engine の `echo` は `0.5 × 2` と畳む。**
+  // `30 sin × 2 = 1` と残る**」（当時の綴り。1.2.1 から `sin(30) × 2 =`）。**engine の `echo` は `0.5 × 2` と畳む。**
   await press(page, ["3", "0", "サイン", "掛ける", "2"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2");
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG sin(30) × 2");
   await press(page, ["計算する"]);
-  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin × 2 =");
+  await expect(page.getByTestId("display-echo")).toHaveText(
+    "DEG sin(30) × 2 =",
+  );
   await expect(page.getByTestId("display-main")).toHaveText("1");
+});
+
+test("a function right after an operator writes the screen value in the trail", async ({
+  page,
+}) => {
+  // **関数表記の設計書 §5.4**: 本番の経路が画面の列を core に添えていること。
+  // **添え忘れると行に `…` が出る**（`spell(keys)` は列が無ければ `…` を書く）。
+  // **`x²` は `2 × 3` ではなく、押した時点の画面の値 6 にかかる**（裁定 1）——
+  // **web が画面を積んでいなければ、`6²` と書けない。** 実 wasm で撃つ。
+  await press(page, ["2", "掛ける", "3", "足す", "2乗", "計算する"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("2 × 3 + 6² =");
+});
+
+test("既知の欠陥を固定したもの。直したら期待値を「0 × 3 =」に替える: ( ) DEL DEL × 3 = の行", async ({
+  page,
+}) => {
+  // **既知の欠陥を固定したもの。直したら期待値を「0 × 3 =」に替える**
+  // （1.2.0 から出荷済み。監視役の裁定 2026-10-05）。
+  // **前置の判定が `)` で固まる**——`ScientificPanel` の `press` は `)` を押した時点で
+  // 「前の答えを頭に置くか」を決め（そのときの `answerOnScreen` は偽）、`DEL` がその `)` を
+  // 消しても未決に戻らない。engine は `( ) DEL DEL` で `answer_on_screen` が真に戻り、
+  // `×` は画面の 0 を左辺に取る（答えは 0）。だから行は頭の `0` を落として `× 3 =` になる。
+  // **core 側の数（`engine_values.rs` の `frozen_carry` = 54）は web の判定の写しを読む**
+  // ので、web だけ直しても赤くならない——**実 wasm で web そのものを撃つのはここ**である。
+  await press(page, [
+    "開き括弧",
+    "閉じ括弧",
+    "1文字消去",
+    "1文字消去",
+    "掛ける",
+    "3",
+    "計算する",
+  ]);
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await expect(page.getByTestId("display-echo")).toHaveText("× 3 =");
 });
 
 test("the line stops at the equals sign and never carries the answer", async ({
@@ -140,7 +177,7 @@ test("the line stops at the equals sign and never carries the answer", async ({
 
   // **① `=` で終わる**（等値で）。
   await press(page, ["3", "0", "サイン", "掛ける", "2", "計算する"]);
-  await expect(echo).toHaveText("DEG 30 sin × 2 =");
+  await expect(echo).toHaveText("DEG sin(30) × 2 =");
   await expect(page.getByTestId("display-main")).toHaveText("1");
 
   // **② 行の中に答えが現れない。** **`1` のような 1 文字では弱い**ので、
@@ -162,7 +199,7 @@ test("the mark names the mode that drew the line, not the mode at the equals", a
   // **レビュー役が見つけた欠陥**（2026-10-03、条件 B1）。**`=` の瞬間のモードを
   // 読んでいたので、行のあいだに【DRG】を押すと印が嘘になった。**
   //
-  // **`30 sin` を DEG で計算してから RAD に切り替え、`× 2 =`**:
+  // **`sin(30)` を DEG で計算してから RAD に切り替え、`× 2 =`**:
   // **答えは 1**（`sin 30° = 0.5` で計算済み——**切り替えは画面の数を変えない**）、
   // **状況の行は RAD**（いまのモードだから正しい）、
   // **しかし行の印は DEG でなければならない**——**その `sin` を描いたのは DEG である。**
@@ -177,12 +214,12 @@ test("the mark names the mode that drew the line, not the mode at the equals", a
     "2",
   ]);
   // **打鍵中から DEG である**（切り替えても、既に描かれた `sin` は DEG のまま）。
-  await expect(echo).toHaveText("DEG 30 sin × 2");
+  await expect(echo).toHaveText("DEG sin(30) × 2");
   // **状況の行は、いまのモードを出す**——**2 つは別のことを言っている。**
   await expect(page.getByTestId("display-angle")).toHaveText("RAD");
 
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("DEG 30 sin × 2 =");
+  await expect(echo).toHaveText("DEG sin(30) × 2 =");
   await expect(page.getByTestId("display-main")).toHaveText("1");
 });
 
@@ -190,7 +227,7 @@ test("a line that used both modes names both, in the order they were used", asyn
   page,
 }) => {
   // **裁定 2026-10-03**（監視役経由）。**「最初の 1 つ」は偽だった**
-  // ——**`30 sin 【DRG】 + 30 sin =` の行に `DEG` とだけ出すと、後半の `sin`
+  // ——**`sin(30) 【DRG】 + sin(30) =` の行に `DEG` とだけ出すと、後半の `sin`
   // について嘘になる。** **「印を出さない」も採れない**: **「印の無い行は
   // モードに依らない」を約束している**（設計書 §4.1.2、(iv) が 3 案に
   // 勝った理由の 4 つ目）。**残るのは両方書くことだけ**で、
@@ -207,11 +244,11 @@ test("a line that used both modes names both, in the order they were used", asyn
     "0",
     "サイン",
   ]);
-  await expect(echo).toHaveText("DEG/RAD 30 sin + 30 sin");
+  await expect(echo).toHaveText("DEG/RAD sin(30) + sin(30)");
   await press(page, ["計算する"]);
-  await expect(echo).toHaveText("DEG/RAD 30 sin + 30 sin =");
+  await expect(echo).toHaveText("DEG/RAD sin(30) + sin(30) =");
 
   // **同じモードを 2 回使った行は、1 つに畳む。**
   await press(page, ["全消去", "3", "0", "サイン", "足す", "6", "0", "サイン"]);
-  await expect(echo).toHaveText("RAD 30 sin + 60 sin");
+  await expect(echo).toHaveText("RAD sin(30) + sin(60)");
 });

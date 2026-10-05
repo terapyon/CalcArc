@@ -3,7 +3,7 @@
 //! このファイルの各行が仕様そのものである。挙動を変えるときは
 //! まずここを変えること。
 
-use calcarc_core::engine::{refuses, spell::spell};
+use calcarc_core::engine::{refuses, spell::spell_line};
 use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 
 /// キー列を打鍵した結果の表示を返す。
@@ -28,24 +28,31 @@ fn echo_of(keys: &[&str]) -> String {
 /// **web が記録する列の綴り**(1.2、入力経歴の設計書 §1.2.1)。
 ///
 /// **engine が拒んだキーは積まない**——`ScientificPanel` の `press` がそうしている
-/// (`Step.refused` を読む)。**だから `1 ( 2 + 3 )` の綴りは `( 2 + 3 )` ではなく
+/// (`Step.refused` を読む)。**だから `1 ( 2 + 3 )` の綴りは `(2 + 3)` ではなく
 /// `12 + 3` である**: 値の上に `(` は押せないので、**あの打鍵は起こりえない。**
 ///
-/// **前置はここでは撃たない**——**前の答えを頭に足すのは web の仕事**で
+/// **画面の列も積む**(1.2.1、関数の書き方の設計書 §2.7.1)——web は押した瞬間の
+/// `main` を打鍵の列と同じ長さの列に積み、関数が演算子の直後に押されたときは core が
+/// その値を書く。
+///
+/// **前置はここでは撃たない**——**前の答えを頭に足すかを決めるのは web**で
 /// (`carryAtDecisionRef`)、**`engine_table` が持っているのはキー列と engine の出力だけ**
 /// である。**綴りと答えを別々に撃つ。**
 fn spell_of(keys: &[&str]) -> String {
     let mut state = EngineState::initial();
     let mut recorded: Vec<Key> = Vec::new();
+    let mut screens: Vec<String> = Vec::new();
     for token in keys {
         let key = Key::from_token(token).unwrap_or_else(|| panic!("unknown key: {token}"));
         if refuses(&state, key) {
             continue;
         }
+        screens.push(render(&state).main);
         recorded.push(key);
         state = reduce(&state, key).0;
     }
-    spell(&recorded)
+    let screens: Vec<&str> = screens.iter().map(String::as_str).collect();
+    spell_line(None, &recorded, &screens)
 }
 
 /// **`=` のあとも、打った式の綴りは残る**(1.2、入力経歴)。
@@ -56,8 +63,12 @@ fn spell_of(keys: &[&str]) -> String {
 fn the_spelling_survives_the_equals() {
     // **打った通りが残る**(利用者の要望 2026-10-01「`=` で消えるのはやめたい」)。
     assert_eq!(spell_of(&["3", "add", "4", "eq"]), "3 + 4");
-    // **後置関数も、畳まずに残る**(`echo` は `0.5 × 2` と畳む)。
-    assert_eq!(spell_of(&["3", "0", "sin", "mul", "2", "eq"]), "30 sin × 2");
+    // **後置関数も、値に畳まずに残る**(`echo` は `0.5 × 2` と畳む)。書き方は数学の慣例
+    // (1.2.1。キーは後置で押すが、綴りは `sin(30)`)。
+    assert_eq!(
+        spell_of(&["3", "0", "sin", "mul", "2", "eq"]),
+        "sin(30) × 2"
+    );
     // **`=` のあとの区間は、その区間だけを綴る**(web は `=` で列を切る)。
     assert_eq!(spell_of(&["mul", "3", "eq"]), "× 3");
     // **その区間の答えは、前の計算から続く**(前置は web が足す)。
@@ -1463,6 +1474,16 @@ fn an_operator_right_after_an_open_paren_takes_zero_as_its_left_operand() {
     // (`engine_values.rs`)が決める行を必要としたので、いまの振る舞いをそのまま仕様として
     // 書いた(2026-09-13)。
     assert_eq!(main_of(&["lparen", "add", "3", "rparen", "eq"]), "3");
+}
+
+#[test]
+fn an_empty_group_is_zero() {
+    // **中身の無い `(` は 0 である**——`( )` も、閉じ忘れの `(` が `=` に当たるときも。
+    // 関数の書き方(1.2.1、設計書 `2026-10-04-function-notation-design.md` §5.3.2 の規則 2)の
+    // 読み手が綴り `()`・`3 + (` を 0 と読むので、その読み方を engine の振る舞いとして表に
+    // 置いた(**表が仕様書**。振る舞いは前からこうで、行を足しただけ)。
+    assert_eq!(main_of(&["lparen", "rparen", "eq"]), "0");
+    assert_eq!(main_of(&["3", "add", "lparen", "eq"]), "3");
 }
 
 #[test]

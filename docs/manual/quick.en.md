@@ -104,9 +104,9 @@ It works like an ordinary calculator.
 - Functions such as 【sin】 and 【√】 apply at once to the number on the display
   (with the angle unit at "DEG", 【3】 【0】 【sin】 gives 0.5)
 - When there is no answer, the display shows "Math ERROR". Then only 【AC】 works
-- The line above the answer keeps the keys you pressed, in the form the
-  calculator received them (【3】 【0】 【sin】 【×】 【2】 【=】 shows
-  "DEG 30 sin × 2 ="). The answer stays in the answer field
+- The line above the answer keeps the keys you pressed, as an expression, with functions
+  written in front (【3】 【0】 【sin】 【×】 【2】 【=】 shows
+  "DEG sin(30) × 2 ="). The answer stays in the answer field
 
 ### Convert, Scale, and Finance
 

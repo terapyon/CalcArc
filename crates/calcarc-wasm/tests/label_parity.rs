@@ -3,6 +3,16 @@
 //! `token_parity.rs` と同じ形——**Rust から TypeScript のソースをテキストで
 //! 読む**。ここが無いと、盤面のラベルだけ変えたときに **core が古い綴りを
 //! 出したまま緑になる**(計画 §A-3 / Task 3)。
+//!
+//! **2026-10-05 に綴りが数学の書き方に変わった**(設計
+//! `docs/superpowers/specs/2026-10-04-function-notation-design.md`)。単独のキーは
+//! `sin(…)`・`…²`・`1/…` のように綴られ、盤面のラベル(`sin`・`x²`・`1/x`)と
+//! 等しくなくなった。そこで**等しさの代わりに、ラベルから導いた形**と比べる:
+//! 前置の関数(`PREFIX_KEYS`)は `{ラベル}(…)`、記号のキー(`SYMBOL_KEYS`)は
+//! 下の表、**それ以外は従来どおり等しさ**。**番人の目的は変わらない**——
+//! ラベルだけ変えても、綴りだけ変えても赤くなる。
+//! **どちらに属するかは「キー」で決め、ラベルでは決めない**(ラベルを `SIN` に
+//! 変えても sin キーのままで、赤くなる)。
 
 use calcarc_core::{Key, engine::spell::spell};
 
@@ -49,6 +59,25 @@ const VALUE_KEYS: [&str; 13] = [
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "dot", "zeros3", "exp",
 ];
 
+/// **前置で綴るキー。** core は `name(…)` と書く(`spell.rs`)。期待値は
+/// `format!("{label}(…)")`。**集合は core の出力から取った**(この番人を
+/// 旧い等しさのまま走らせ、`(…)` で終わる綴りを出したキーを数えた): 9 個。
+const PREFIX_KEYS: [&str; 9] = [
+    "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log10", "sqrt",
+];
+
+/// **記号で綴るキー。** 盤面のラベル → core が書く綴りの表。
+/// **表に無いラベルは食い違いとして報告する**(飛ばさない)。
+const SYMBOL_KEYS: [&str; 6] = ["sqr", "n_fact", "recip", "exp_e", "neg", "pow"];
+const SYMBOL_SPELLING: [(&str, &str); 6] = [
+    ("x²", "…²"),
+    ("n!", "…!"),
+    ("1/x", "1/…"),
+    ("eˣ", "e^…"),
+    ("+/−", "−…"),
+    ("xʸ", "^"),
+];
+
 /// `scientific.ts` から `token` と `label` の対を抜く。
 ///
 /// TS のパースではなく「`token: "..."` の直後に来る `label: "..."`」という
@@ -84,6 +113,8 @@ fn labels_in_scientific(src: &str) -> Vec<(String, String)> {
     pairs
 }
 
+/// 盤面のラベルと core の綴りの対応を見る。**前置の関数は `{ラベル}(…)`、
+/// 記号のキーは表、ほかは等しさ**(冒頭の註)。目的は 2026-10-05 の前と同じ。
 #[test]
 fn every_board_label_matches_what_core_spells() {
     let src = include_str!("../../../web/src/ui/Keypad/scientific.ts");
@@ -121,8 +152,27 @@ fn every_board_label_matches_what_core_spells() {
         // `spell` 本体の固定の字面を持つはずなので、空になったのなら
         // それは食い違いとして報告する対象である。
         let spelled = spell(&[key]);
-        if spelled != label {
-            wrong.push(format!("{token}: 盤面は {label:?}、core は {spelled:?}"));
+        // **キーで分ける。** ラベルで分けると、ラベルを変えたとき
+        // 別の分岐に落ちて見逃す。
+        let expected = if PREFIX_KEYS.contains(&token.as_str()) {
+            format!("{label}(…)")
+        } else if SYMBOL_KEYS.contains(&token.as_str()) {
+            match SYMBOL_SPELLING.iter().find(|(l, _)| *l == label) {
+                Some((_, form)) => (*form).to_owned(),
+                None => {
+                    wrong.push(format!(
+                        "{token}: 盤面のラベル {label:?} は記号の表に無い(core は {spelled:?})"
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            label.clone()
+        };
+        if spelled != expected {
+            wrong.push(format!(
+                "{token}: 盤面は {label:?}(期待する綴り {expected:?})、core は {spelled:?}"
+            ));
         }
     }
 
