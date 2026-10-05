@@ -664,3 +664,35 @@ fn an_empty_spelling_takes_no_answer_in_front() {
     // 列が空でなければ付く。
     assert_eq!(spell_after(&["3", "eq"], &["mul", "2"]), "3 × 2");
 }
+
+#[test]
+fn an_empty_group_has_no_value_so_the_screen_is_written() {
+    // **監視役の裁定(2026-10-05)**——設計書の外で決めた端。中身の無い組 `( )` は
+    // 「綴りに値が無い」と同じに扱い、関数は押す直前の画面の値(engine がかけた値)を書く。
+    // 組の `( )` は書かない。
+    rows(&[
+        (&["lparen", "rparen", "sin"], "sin(0)"),
+        (&["lparen", "rparen", "sqr"], "0²"),
+        (&["3", "add", "lparen", "rparen", "sin"], "3 + sin(0)"),
+    ]);
+}
+
+#[test]
+fn a_function_on_an_unmatched_closing_paren_is_pinned_not_specified() {
+    // **web からは届かない**——`( 3 +/− DEL )` の `)` は対応する `(` を持たず、engine は
+    // SyntaxError にし、web はエラー中に `AC` 以外を列に積まない。**出力は仕様ではない**
+    // (その `)` 1 語を「そのほか」として畳む)。黙って変わらないように、いまの印字を留める。
+    rows(&[
+        (&["lparen", "3", "neg", "del", "rparen", "sin"], "−3 sin())"),
+        (&["lparen", "3", "neg", "del", "rparen", "sqr"], "−3 ())²"),
+    ]);
+}
+
+#[test]
+fn a_negative_or_exponent_screen_value_is_wrapped() {
+    // 設計書 §2.7.3。`+` の直後の画面は `1e40`。
+    rows(&[(
+        &["1", "exp", "2", "0", "sqr", "add", "sqr"],
+        "(1e20)² + (1e40)²",
+    )]);
+}

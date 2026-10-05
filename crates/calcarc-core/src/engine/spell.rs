@@ -268,6 +268,8 @@ fn render(parts: &[Part]) -> String {
 /// - 末尾が `)` → **対応する `(` まで**(深さを数える)。種類は組
 /// - 末尾が値の語 → その 1 語
 /// - 末尾が二項演算子・`(`・空 → **無し**(呼び出し側が画面の値を補う)
+/// - 中身の無い組 `( )` は組として返す——**呼び出し側(`apply_function`)が捨てて、
+///   無しと同じに扱う**(監視役の裁定 2026-10-05)
 ///
 /// **対応する `(` が無い `)`**(DEL で `(` を消したあとの開いていない `)`。engine は
 /// SyntaxError にし、web はそのあとの関数を押させない)は、その `)` 1 語を「そのほか」
@@ -302,7 +304,17 @@ fn operand(parts: &[Part]) -> Option<(usize, Kind)> {
 /// **畳むのは確定した語だけ**——呼び出し側は先に `commit_into` を済ませている
 /// (`apply_unary` が入力中の数を確定してから関数をかけるのと同じ)。
 fn apply_function(parts: &mut Vec<Part>, form: Form, screen: Option<&str>) {
-    let (start, kind) = match operand(parts) {
+    // **中身の無い組 `( )` は「綴りに値が無い」と同じ**(監視役の裁定 2026-10-05、
+    // 設計書 §2.2)。engine はそのとき画面の値(0)にかけるので、`( )` を捨てて画面を書く
+    // ——`( ) sin` は `sin(0)`。
+    let found = match operand(parts) {
+        Some((start, Kind::Group)) if parts.len() - start == 2 => {
+            parts.truncate(start);
+            None
+        }
+        found => found,
+    };
+    let (start, kind) = match found {
         Some(found) => found,
         None => {
             let value = screen.map_or_else(
@@ -604,6 +616,19 @@ fn walk(mut parts: Vec<Part>, keys: &[Key], screens: &[&str]) -> Vec<Part> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plain_number_is_digits_optionally_grouped_by_three() {
+        // 設計書 §2.1 の 2 つの形: `^[0-9]+(\.[0-9]+)?$` と `^[0-9]{1,3}(,[0-9]{3})*(\.[0-9]+)?$`。
+        for text in ["3", "0.5", "3,333", "1,234,000.5"] {
+            assert!(is_plain_number(text), "{text} は原子");
+        }
+        for text in [
+            "1e20", "12,34", "1.", ".5", "-3", "1,2345", "", ",333", "3,333,",
+        ] {
+            assert!(!is_plain_number(text), "{text} は原子ではない");
+        }
+    }
 
     #[test]
     fn the_binary_glyphs_are_the_ones_commit_glyph_writes() {
