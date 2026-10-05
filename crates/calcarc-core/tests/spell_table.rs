@@ -674,6 +674,10 @@ fn an_empty_group_has_no_value_so_the_screen_is_written() {
         (&["lparen", "rparen", "sin"], "sin(0)"),
         (&["lparen", "rparen", "sqr"], "0²"),
         (&["3", "add", "lparen", "rparen", "sin"], "3 + sin(0)"),
+        // **入れ子でも同じ**(監視役の裁定 2026-10-05、最終審査の指摘)——中に値の語が
+        // 1 つも無い組は、何重でも「綴りに値が無い」。
+        (&["lparen", "lparen", "rparen", "rparen", "sin"], "sin(0)"),
+        (&["lparen", "lparen", "rparen", "rparen", "sqr"], "0²"),
     ]);
 }
 

@@ -152,7 +152,7 @@ engine の表示の負号は ASCII の `-` である（`engine_table.rs:379` の
 
 - **中身の無い組 `( )`**（**設計書の外で決めた端。監視役の裁定 2026-10-05**）→ **3 つ目と同じ
   「かかる値が綴りに無い」に扱う**。`( )` は書かず、押す直前の画面の値を書く: `( ) sin` → `sin(0)`、
-  `( ) x²` → `0²`、`3 + ( ) sin` → `3 + sin(0)`（spell_table の `an_empty_group_has_no_value_so_the_screen_is_written`）
+  `( ) x²` → `0²`、`3 + ( ) sin` → `3 + sin(0)`。**入れ子も同じ**——中に値の語が 1 つも無い組（`( ( ) )`）は「かかる値が綴りに無い」: `( ( ) ) sin` → `sin(0)`、`( ( ) ) x²` → `0²`（最終審査の指摘、監視役の裁定 2026-10-05）（spell_table の `an_empty_group_has_no_value_so_the_screen_is_written`）
 
 かかった範囲を、**1 つの「そのほか」の語に畳む**。
 
