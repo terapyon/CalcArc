@@ -62,16 +62,18 @@
    変異として入れ**、`3 + DEL 4` で A′ が赤くなること（綴り `34` / 表示 `4`）を印字で撮る。
    変異は一時コミットの上で入れて再編集で戻す。probe はコミットしない（終わったら scratchpad に戻す）。
    **結果を設計書 §5.2 の末尾に「実装後の再実測」として書き足す。**
-7. 段の検査: `cargo test -p calcarc-core`（全部）、fmt、clippy。
+7. **`engine_values.rs` の `keys_of_spelling` が `(3`・`4)` のように括弧の付いた語を `(` `3` に切り出すようにする**
+   （読み方の規則は変えない）。**括弧の空白を無くすと、既存の 2 本
+   （`every_sequence_closed_by_equals_matches_an_independent_evaluator`・
+   `spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer`）が赤くなる——その赤を撮ってから直す。**
+   （計画の事前点検で Task 2 から移した。Task 1 を緑で閉じるため。）
+8. 段の検査: `cargo test -p calcarc-core`（全部）、fmt、clippy。
 
 ## Task 2: 読み直しの網（`SIGN_NET` と読み手）・`PAREN_LENGTH` の註
 
 **設計書の §5.3（5.3.1〜5.3.3）と §6 の engine_values の行を読むこと。**
 
-1. `keys_of_spelling` が `(3`・`4)` のように括弧の付いた語を `(` `3` に切り出すようにする（読み方の規則は変えない）。
-   既存の 2 本（`every_sequence_closed_by_equals_matches_an_independent_evaluator`・
-   `spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer`）が緑に戻ること。**Task 1 のあとは
-   この 2 本が赤いはず**（括弧の空白が無くなったため）——**最初にその赤を撮る。**
+1. （`keys_of_spelling` の括弧の切り出しは Task 1 の 7 に移した。）
 2. `SIGN_NET`（`3 + − × ( ) = DEL +/− x²`、長さ 7）と、文字列を慣例で読む読み手（設計書 §5.3.2 の字句・文法・
    省略の規則 3 つ。規則ごとに engine_table の行を名指しする註）。網の歩き方は既存の `walk` の前置の判定
    （`=` で区間を切る・画面の値を使うキーで前置を決める）を流用し、**web と同じく各キーの前の画面 `main` を
