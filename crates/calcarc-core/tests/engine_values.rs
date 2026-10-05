@@ -17,7 +17,10 @@
 //! **評価器は engine に寄せていない**——`Typed` は Task 4 のまま、綴りを語に分けて打ち直した
 //! キーを読むだけで、この不変条件のために規則を 1 つも足していない。
 
-use calcarc_core::engine::{refuses, spell::spell};
+use calcarc_core::engine::{
+    refuses,
+    spell::{spell, spell_line},
+};
 use calcarc_core::numeric::format::format_real;
 use calcarc_core::{CalcError, DisplayState, EngineState, Key, reduce, render};
 
@@ -488,6 +491,31 @@ const PAREN_NET: [Key; 6] = [
 /// 782,703 回)。予算の 15 秒に収まるので、`× ( ( 3 ) DEL + 3 =` の形に届く 9 を下げない。
 const PAREN_LENGTH: usize = 9;
 
+/// **符号と 2 乗の網**(1.2.1、関数の書き方の設計書 §5.3)。**後置関数の綴りを読み直す
+/// ただ 1 つの網**——`NET` と `PAREN_NET` は数字・`+ − × ÷`・括弧だけで、関数の綴りを
+/// 1 度も読まない。**`+/−` と `x²` を既存の網に足すと大きくなりすぎる**
+/// (`PAREN_NET` は 7.5 倍。設計書 §5.3.1 の表)ので、3 本目として足した。
+///
+/// **`÷` を入れない**ので値はいつも整数で、**画面の値に丸めが入らない**
+/// (`1e10` 以上の指数表記だけは読めない。`sign_spelling_reads_back` が数えて飛ばす)。
+/// **`=` を入れる**ので、`=` をまたぐ前置(設計書 §2.5)も網に入る。
+/// **綴りは `Typed` ではなく `read_by_convention` が読む**(下の註)。
+const SIGN_NET: [Key; 10] = [
+    Key::Digit(3),
+    Key::Add,
+    Key::Sub,
+    Key::Mul,
+    Key::LParen,
+    Key::RParen,
+    Key::Eq,
+    Key::Del,
+    Key::Neg,
+    Key::Sqr,
+];
+
+/// `SIGN_NET` の列の長さの上限(最後の `=` を含む)。
+const SIGN_LENGTH: usize = 7;
+
 /// **行の頭に置く値と、その判定**(2026-10-03)。**web の `carryAtDecisionRef` と
 /// `decidedRef` の写し**である——**決めた時点で画面に出ていた値**を持つ。
 #[derive(Clone, Copy)]
@@ -533,6 +561,8 @@ struct Counts {
     /// **形ごとの件数**(2026-10-03 の数え上げ)。**鳴った形は穴の標本にすぎない**ので、
     /// **全件を形に畳んで数える**([[count-before-you-fix]])。
     shapes: std::collections::BTreeMap<String, usize>,
+    /// **既知の欠陥として除いた行**(`SIGN_NET` だけが数える。`frozen_carry_shape` の註)。
+    frozen_carry: usize,
 }
 
 /// engine の答え `shown` と、`=` で閉じた評価器 `closed` を比べる。値ならその表示、エラーなら
@@ -842,6 +872,484 @@ fn walk_from_the_start(net: &Net) -> Counts {
         &mut counts,
     );
     counts
+}
+
+/// 読み手の語(設計書 §5.3.2 の字句)。
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Word {
+    Num(Q),
+    /// 二項の `+`。
+    Plus,
+    /// **二項の `−`**——空白で区切った 1 語のとき。
+    Minus,
+    Times,
+    /// **単項の `−`**——次の数や `(` に空白なしで付くとき。
+    Negate,
+    Open,
+    Close,
+    Square,
+}
+
+/// 読めなかった理由。
+#[derive(Debug)]
+enum Unread {
+    /// **指数表記の値**(`1e10` 以上の画面の値・前置の答え)。**丸めた値なので読み直せない**
+    /// ——`format_real` は 10 桁で丸める。**数えて飛ばす**(`Counts::rounded_away`)。
+    Exponent,
+    /// **慣例では読めない綴り**(`…`・対応の無い `)`・二項演算子が 2 つ続く、など)。
+    /// **食い違いとして数える。**
+    Malformed(String),
+}
+
+/// 画面の値の綴り `[0-9]+ ("," [0-9]{3})* ("." [0-9]+)?` に `-` が付きうるもの(設計書
+/// §5.3.2 の字句)。`,` は桁区切り(条件 2)で、剥いでから `Q::from_decimal` に渡す。
+fn number_of(text: &str) -> Option<Q> {
+    let unsigned = text.strip_prefix('-').unwrap_or(text);
+    let whole = unsigned.split('.').next().unwrap_or("");
+    let mut groups = whole.split(',');
+    let first = groups.next().unwrap_or("");
+    let grouped = whole.contains(',');
+    let first_ok = !first.is_empty()
+        && first.bytes().all(|b| b.is_ascii_digit())
+        && (!grouped || first.len() <= 3);
+    if !first_ok || !groups.all(|g| g.len() == 3 && g.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    Q::from_decimal(text)
+}
+
+/// 綴りを語に割る(設計書 §5.3.2 の字句)。**単項か二項かは文字列の段でしか見分けられない**
+/// ので、ここで決める——**二項の `−` は空白で区切った 1 語**(`)` の直前を含む)、
+/// **単項の `−` は次の数や `(` に空白なしで付く**(§2.3・§2.6)。**ASCII の `-` は画面の値と前置の答えの負号だけ**(§2.1)
+/// なので、数の一部として読む。
+fn words_of(line: &str) -> Result<Vec<Word>, Unread> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut words = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let word = match chars[i] {
+            ' ' => None,
+            '(' => Some(Word::Open),
+            ')' => Some(Word::Close),
+            '²' => Some(Word::Square),
+            '+' => Some(Word::Plus),
+            '×' => Some(Word::Times),
+            // **`)` の前も二項である**——括弧の内側に空白を入れない(§2.6)ので、
+            // `(3 −)` の `−` は `)` に空白なしで付く。単項は数か `(` に付くときだけ。
+            '−' => Some(
+                if chars
+                    .get(i + 1)
+                    .is_some_and(|next| next.is_ascii_digit() || *next == '(')
+                {
+                    Word::Negate
+                } else {
+                    Word::Minus
+                },
+            ),
+            '-' | '0'..='9' => {
+                let start = i;
+                i += 1;
+                while i < chars.len()
+                    && (chars[i].is_ascii_digit()
+                        || matches!(chars[i], ',' | '.' | 'e')
+                        || (chars[i] == '-' && chars[i - 1] == 'e'))
+                {
+                    i += 1;
+                }
+                let text: String = chars[start..i].iter().collect();
+                if text.contains('e') {
+                    return Err(Unread::Exponent);
+                }
+                let value =
+                    number_of(&text).ok_or_else(|| Unread::Malformed(format!("数 {text:?}")))?;
+                words.push(Word::Num(value));
+                continue;
+            }
+            other => return Err(Unread::Malformed(format!("字 {other:?}"))),
+        };
+        words.extend(word);
+        i += 1;
+    }
+    Ok(words)
+}
+
+/// **綴りを数学の慣例で読む小さな再帰下降**(設計書 §5.3.2)。有理数(`Q`)で評価する。
+///
+/// 独立: 別手順。**engine は演算子スタックで打鍵のたびに畳む**が、ここは**綴りの文字列**を
+/// 字句から読み、**文法の段**(`+ −` の式・`×` の項・単項の `−`・後置の `²`)で評価する。
+/// **キーには打ち直さない**——**`Typed` を使わない理由**: 綴りの `−` は単項(`−3`)と
+/// 二項(`2 − 3`)の両方に使われ、`keys_of_spelling` は「二項演算子が 2 つ続く」で
+/// panic する(押し直しとして前を捨てる並びを拒むため)ので `2 − −3` を打ち直せない。
+/// 単項か二項かは文字列の段でしか見分けられない。
+///
+/// ```text
+/// 式   = 項 (二項 項?)*                  ← 項の省略は規則 1
+/// 項   = 単項 ("×" 単項?)*               ← 同上
+/// 単項 = "−" 単項 | 後置                 ← `²` は前置の `−` より強い(`−3²` は −9)
+/// 後置 = 一次 "²"*
+/// 一次 = 数 | "(" 中身 ")"? | "(" 中身 行末
+/// 中身 = 空 | 二項 式 | 式               ← 空は規則 2、先頭の二項は規則 3
+/// ```
+///
+/// **省略の規則 3 つは engine の振る舞い**で、`Typed` の対応する腕と同じ engine_table の行を
+/// 名指しする(各規則の註)。
+struct Reader {
+    words: Vec<Word>,
+    at: usize,
+}
+
+impl Reader {
+    fn peek(&self) -> Option<Word> {
+        self.words.get(self.at).copied()
+    }
+
+    /// 二項演算子のあとに項が無い(行末か `)` の直前)。
+    fn operand_missing(&self) -> bool {
+        matches!(self.peek(), None | Some(Word::Close))
+    }
+
+    /// `式`。`first` は、もう読んだ最初の単項の値(規則 3 の 0)。
+    fn expr(&mut self, first: Option<Q>) -> Result<Q, String> {
+        let mut sum = self.term(first)?;
+        while let Some(op @ (Word::Plus | Word::Minus)) = self.peek() {
+            self.at += 1;
+            // **規則 1**: 項が無ければ、右辺は**この段でそれまでに積んだ値**(式の累計)。
+            // engine_table: `equals_after_an_operator_repeats_the_operand`(`3 + =` → 6)・
+            // `the_echo_shows_the_pending_expression`(`2 × 3 +` が「6 +」)——`Typed` の
+            // `implied` と同じ行。**`implied` のように前へ遡って区間を探さない**——遡る範囲
+            // (押した演算子より優先順位が低くない演算だけで結ばれた直前の項)は、
+            // 再帰下降では**その段の累計そのもの**である。累計は `(` の中から始まるので、
+            // `(` より前へは戻らない。
+            let right = if self.operand_missing() {
+                sum
+            } else {
+                self.term(None)?
+            };
+            sum = if op == Word::Plus {
+                sum.add(right)
+            } else {
+                sum.sub(right)
+            };
+        }
+        Ok(sum)
+    }
+
+    /// `項`。
+    fn term(&mut self, first: Option<Q>) -> Result<Q, String> {
+        let mut product = match first {
+            Some(value) => value,
+            None => self.unary()?,
+        };
+        while self.peek() == Some(Word::Times) {
+            self.at += 1;
+            // **規則 1**(項の段): 右辺は項の累計(`2 + 3 × =` の右辺は 3。上と同じ行)。
+            let right = if self.operand_missing() {
+                product
+            } else {
+                self.unary()?
+            };
+            product = product.mul(right);
+        }
+        Ok(product)
+    }
+
+    /// `単項`。
+    fn unary(&mut self) -> Result<Q, String> {
+        if self.peek() == Some(Word::Negate) {
+            self.at += 1;
+            return Ok(Q::int(0).sub(self.unary()?));
+        }
+        let mut value = self.primary()?;
+        while self.peek() == Some(Word::Square) {
+            self.at += 1;
+            value = value.mul(value);
+        }
+        Ok(value)
+    }
+
+    /// `一次`。
+    fn primary(&mut self) -> Result<Q, String> {
+        match self.peek() {
+            Some(Word::Num(value)) => {
+                self.at += 1;
+                Ok(value)
+            }
+            Some(Word::Open) => {
+                self.at += 1;
+                let inside = match self.peek() {
+                    // **規則 2**: 中身が空の `(` は 0(`( )` も、閉じ忘れの `(` が行末に
+                    // 来るときも)。engine_table: `an_empty_group_is_zero`(`( ) =` → 0、
+                    // `3 + ( =` → 3)。`Typed` では `fill_the_right_operand` の `(` の腕。
+                    None | Some(Word::Close) => Q::int(0),
+                    // **規則 3**: `(` の直後の二項演算子は 0 を左辺にする。engine_table:
+                    // `an_operator_right_after_an_open_paren_takes_zero_as_its_left_operand`
+                    // (`( + 3 ) =` → 3)。`Typed` では `press` の `Some(Tok::Open)` の腕。
+                    // **`( −` は二項として読む**(空白で区切られる)。単項と読んでも値は同じ。
+                    Some(Word::Plus | Word::Minus | Word::Times) => self.expr(Some(Q::int(0)))?,
+                    _ => self.expr(None)?,
+                };
+                match self.peek() {
+                    Some(Word::Close) => self.at += 1,
+                    // **行末の閉じ忘れの `(` は閉じる**(engine_table:
+                    // `equals_closes_unclosed_parentheses`。`Typed` の `=` の腕)。
+                    None => {}
+                    other => return Err(format!("`(` の中身のあとに {other:?}")),
+                }
+                Ok(inside)
+            }
+            other => Err(format!("値の位置に {other:?}")),
+        }
+    }
+}
+
+/// 綴り 1 行を慣例で読んだ値。
+fn read_by_convention(line: &str) -> Result<Q, Unread> {
+    let mut reader = Reader {
+        words: words_of(line)?,
+        at: 0,
+    };
+    let value = reader.expr(None).map_err(Unread::Malformed)?;
+    match reader.peek() {
+        None => Ok(value),
+        Some(rest) => Err(Unread::Malformed(format!("読み残し {rest:?}"))),
+    }
+}
+
+/// **`SIGN_NET` の読み直し**(設計書 §5.3)。`trail + =` について、web が記録する行
+/// ——前置の値 `carry`・区間 `segment`・各キーの前の画面 `screens`——を `spell_line` で綴り、
+/// **`read_by_convention` が読んだ値**が engine の答え `shown` と一致する。
+#[allow(clippy::too_many_arguments)]
+fn sign_spelling_reads_back(
+    state: &EngineState,
+    shown: &DisplayState,
+    trail: &[Key],
+    segment: &[Key],
+    screens: &[String],
+    carry: Option<&str>,
+    decided: Option<bool>,
+    counts: &mut Counts,
+) {
+    // エラー中の web は `AC` 以外を積まない(`spelling_reads_back` の註と同じ)。
+    // **`=` そのものを拒むなら、web はその `=` を積まず、行ができない。**
+    if state.error.is_some() || refuses(state, Key::Eq) {
+        return;
+    }
+    // **前置はまだ決めていなければ、この `=` で決める**——web の `CARRIED_VALUE_TOKENS` に
+    // `eq` が居る(`ScientificPanel` の `press`)。
+    let before = render(state);
+    let head = match decided {
+        Some(true) => carry,
+        Some(false) => None,
+        None if before.answer_on_screen => Some(before.main.as_str()),
+        None => None,
+    };
+    let screens: Vec<&str> = screens.iter().map(String::as_str).collect();
+    let spelled = spell_line(head, segment, &screens);
+    if spelled.is_empty() {
+        return;
+    }
+    let read = match read_by_convention(&spelled) {
+        Err(Unread::Exponent) => {
+            counts.rounded_away += 1;
+            return;
+        }
+        other => other,
+    };
+    let agreed = match (&shown.error, &read) {
+        (None, Ok(value)) => shown.main == format_real(value.to_f64()),
+        _ => false,
+    };
+    if agreed {
+        counts.spellings += 1;
+        if head.is_some() {
+            counts.prefixed += 1;
+        }
+    } else if frozen_carry_shape(segment) {
+        // **食い違った行だけを除く**——直れば一致して数が 0 に落ち、下の `assert_eq!` が赤くなる。
+        counts.frozen_carry += 1;
+    } else {
+        counts.mismatches += 1;
+        let shape: Vec<&str> = segment.iter().map(|k| k.token()).collect();
+        *counts.shapes.entry(shape.join(" ")).or_insert(0) += 1;
+        if counts.samples.len() < 12 {
+            let tokens: Vec<&str> = trail.iter().map(|k| k.token()).collect();
+            let what = match &read {
+                Ok(value) => format_real(value.to_f64()),
+                Err(Unread::Malformed(why)) => format!("読めない({why})"),
+                Err(Unread::Exponent) => "指数表記".to_string(),
+            };
+            counts.samples.push(format!(
+                "{tokens:?} 行={spelled:?} engine={:?} 読み={what}",
+                shown.main
+            ));
+        }
+    }
+}
+
+/// **既知の欠陥の形**: 区間が `( ) DEL DEL` で始まり(頭の何も消さない `DEL` は飛ばす)、
+/// (何も消さない `DEL` を挟んで)二項演算子が続く。**記録した区間のキー列で判定する**——綴りの文字列は見ない。
+///
+/// - **原因**: web の `decidedRef`(`ScientificPanel` の `press`)は `)` で前置の判定を
+///   固める(`)` は `CARRIED_VALUE_TOKENS` に居り、その時点の `answerOnScreen` は偽)。
+///   **その `)` を `DEL` が消しても、判定は未決に戻らない。** engine のほうは `( ) DEL DEL` で
+///   `answer_on_screen` が真に戻り、続く演算子は画面の値を左辺に取る。
+/// - **再現**: `( ) DEL DEL × 3 =` は行が `× 3`、engine の答えは 0(echo は `0 × 3`)。
+///   `5 =` のあとでも同じ(区間は `=` で切れるので、同じ形になる)。
+///   **行が答えを生まない**——慣例では行頭の `×` を読めない。
+/// - **既存の 2 本の網が黙っていた理由**: `Typed` は行頭の演算子の左辺に `base`(ここでは 0)を
+///   入れる(`press` の `None` の腕)。それが画面の 0 とたまたま同じなので、一致してしまう。
+///
+/// **直しは別の枝で、小さな設計を付けて行う**(監視役の裁定 2026-10-05)。
+/// **読み手は緩めない**(行頭の演算子を読む規則は設計書 §5.3.2 に無い)。直れば、この形は
+/// 一致して `frozen_carry` が 0 に落ち、テストが赤くなる——**そのときこの除外を消す。**
+fn frozen_carry_shape(segment: &[Key]) -> bool {
+    // **前後の `DEL` は何も消さない**(区間の頭の `DEL`、組を消し終えたあとの `DEL`)
+    // ——web はそれも積むので、区間の頭と演算子の前で読み飛ばす(2026-10-05 の実測で
+    // 54 件のうち 3 件ずつがこの形)。
+    let start = segment.iter().take_while(|k| **k == Key::Del).count();
+    match &segment[start..] {
+        [Key::LParen, Key::RParen, Key::Del, Key::Del, rest @ ..] => {
+            let mut after = rest.iter().skip_while(|k| **k == Key::Del);
+            matches!(after.next(), Some(Key::Add | Key::Sub | Key::Mul))
+        }
+        _ => false,
+    }
+}
+
+/// `SIGN_NET` を歩く。**前置の判定は `walk` と同じ**(`=` で区間を切る・区間で最初に
+/// 画面の値を使うキーで決める・拒まれたキーは web が積まない)。違いは 2 つ:
+/// **`+/−` と `x²` も画面の値を使うキー**(web の `CARRIED_VALUE_TOKENS` の後置関数。
+/// `walk` の網には無いので、あちらには出てこない)と、**各キーの前の画面 `main` を
+/// `screens` に積む**(web が `spell_line` に添える列。設計書 §2.7.1)。
+/// **値の照合(`Typed`)はしない**——`Typed` は `+/−` と `x²` を持たない。
+#[allow(clippy::too_many_arguments)]
+fn walk_signs(
+    state: &EngineState,
+    trail: &mut Vec<Key>,
+    segment: &mut Vec<Key>,
+    screens: &mut Vec<String>,
+    carry: Option<&str>,
+    decided: Option<bool>,
+    counts: &mut Counts,
+) {
+    let (_, shown) = reduce(state, Key::Eq);
+    counts.values += 1;
+    sign_spelling_reads_back(
+        state, &shown, trail, segment, screens, carry, decided, counts,
+    );
+    // **エラーは `AC` でしか解けない**(網に無い)ので、その先の行は 1 本もできない。
+    if trail.len() + 1 >= SIGN_LENGTH || state.error.is_some() {
+        return;
+    }
+    for &key in &SIGN_NET {
+        let web_records = !refuses(state, key);
+        let (next, _) = reduce(state, key);
+        trail.push(key);
+        let uses_the_screen_value = matches!(
+            key,
+            Key::Add | Key::Sub | Key::Mul | Key::Eq | Key::RParen | Key::Neg | Key::Sqr
+        );
+        let before = render(state);
+        let decide = web_records && decided.is_none() && uses_the_screen_value;
+        let next_decided = if decide {
+            Some(before.answer_on_screen)
+        } else {
+            decided
+        };
+        let next_carry: Option<String> = if decide && before.answer_on_screen {
+            Some(before.main.clone())
+        } else {
+            carry.map(str::to_string)
+        };
+        if key == Key::Eq && web_records {
+            // **`=` で区間を切る**(web と同じ)。次の区間は空、前置は未決に戻る。
+            let saved_keys = std::mem::take(segment);
+            let saved_screens = std::mem::take(screens);
+            walk_signs(&next, trail, segment, screens, None, None, counts);
+            *segment = saved_keys;
+            *screens = saved_screens;
+        } else {
+            if web_records {
+                segment.push(key);
+                screens.push(before.main.clone());
+            }
+            walk_signs(
+                &next,
+                trail,
+                segment,
+                screens,
+                next_carry.as_deref(),
+                next_decided,
+                counts,
+            );
+            if web_records {
+                segment.pop();
+                screens.pop();
+            }
+        }
+        trail.pop();
+    }
+}
+
+#[test]
+fn sign_and_square_spellings_read_back_by_convention() {
+    let mut counts = Counts::default();
+    walk_signs(
+        &EngineState::initial(),
+        &mut Vec::new(),
+        &mut Vec::new(),
+        &mut Vec::new(),
+        None,
+        None,
+        &mut counts,
+    );
+    println!(
+        "比べた回数: 節 {} / 慣例での読み直し {} (うち頭に値を前置した行 {}) / 指数表記で飛ばした {} / 既知の欠陥で除いた {} / 一致しなかった {}",
+        counts.values,
+        counts.spellings,
+        counts.prefixed,
+        counts.rounded_away,
+        counts.frozen_carry,
+        counts.mismatches
+    );
+    for sample in &counts.samples {
+        println!("不一致: {sample}");
+    }
+    for (shape, n) in &counts.shapes {
+        println!("形: {n:>4} 件  {shape}");
+    }
+    // **比べた回数の下限**(0 本で緑にしない)。網羅は決定的なので下限は実測値そのもの
+    // (2026-10-05、SIGN_LENGTH = 7、debug)。節の数は設計書 §5.3.1 の engine だけの
+    // 見積り(1,111,111)と同じ——この網は枝を刈らない(エラーは `AC` でしか解けず、
+    // 網に `÷` が無いのでエラーにならない)。
+    assert!(
+        counts.values >= 1_111_111,
+        "歩いた節は {} 個(2026-10-05 の実測 1,111,111 個)",
+        counts.values
+    );
+    assert!(
+        counts.spellings >= 967_199,
+        "慣例で読み直したのは {} 回(2026-10-05 の実測 967,199 回)",
+        counts.spellings
+    );
+    // **前置した行の下限**——前置が `=` をまたぐ行を 1 本も読まないまま緑にしない。
+    assert!(
+        counts.prefixed >= 714_205,
+        "頭に値を前置して読み直したのは {} 回(2026-10-05 の実測 714,205 回)",
+        counts.prefixed
+    );
+    // **既知の欠陥はちょうどの数で固定する**(`>=` にしない。監視役の裁定 2026-10-05)。
+    // **前置の判定が直れば 0 に落ちて赤くなる**——そのとき `frozen_carry_shape` を消す。
+    assert_eq!(
+        counts.frozen_carry, 54,
+        "既知の欠陥(`( ) DEL DEL` のあとの演算子)で除いた行が {} 件(2026-10-05 の実測 54 件)",
+        counts.frozen_carry
+    );
+    assert_eq!(
+        counts.mismatches, 0,
+        "慣例で読んだ値が engine の答えと違う行が {} 件(形は上の印字)",
+        counts.mismatches
+    );
 }
 
 #[test]
