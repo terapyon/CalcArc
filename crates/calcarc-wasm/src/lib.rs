@@ -142,12 +142,27 @@ pub fn max_entry_len() -> u32 {
 
 /// キー列を式の文字列に綴る。
 ///
-/// **失敗しない**ので `Outcome` を使わない——知らないトークンは飛ばす。
-/// 計算は `calcarc-core` の `engine::spell` が持つ(ここには置かない)。
+/// **失敗しない**ので `Outcome` を使わない——知らないトークンは、その画面と一緒に飛ばす
+/// (長さを揃える)。`carry` は前の答え(無ければ `None`)、`screens[i]` は `tokens[i]` を
+/// 押す直前の `display.main`。`screens` が短ければ足りない分は「無い」として渡し、
+/// core が `…` を書く。**panic しない。**
+/// 計算は `calcarc-core` の `engine::spell_line` が持つ(ここには置かない)。
 #[wasm_bindgen]
-pub fn spell_keys(tokens: Vec<String>) -> String {
-    let keys: Vec<Key> = tokens.iter().filter_map(|t| Key::from_token(t)).collect();
-    calcarc_core::engine::spell(&keys)
+pub fn spell_keys(tokens: Vec<String>, carry: Option<String>, screens: Vec<String>) -> String {
+    let mut keys: Vec<Key> = Vec::new();
+    let mut kept: Vec<&str> = Vec::new();
+    for (i, t) in tokens.iter().enumerate() {
+        if let Some(k) = Key::from_token(t) {
+            keys.push(k);
+            // 足りない画面は、そこで列を打ち切る(以降は core が `…` を書く)。
+            if kept.len() == keys.len() - 1 {
+                if let Some(sc) = screens.get(i) {
+                    kept.push(sc.as_str());
+                }
+            }
+        }
+    }
+    calcarc_core::engine::spell_line(carry.as_deref(), &keys, &kept)
 }
 
 /// count × dimensions × dtype を計算する。純関数で、状態を持たない。

@@ -895,13 +895,41 @@ fn the_conversion_family_answers_in_two_shapes() {
 
 #[wasm_bindgen_test]
 fn spell_keys_joins_the_way_the_table_says() {
-    let out = calcarc_wasm::spell_keys(vec!["3".into(), "0".into(), "sin".into()]);
+    let out = calcarc_wasm::spell_keys(
+        vec!["3".into(), "0".into(), "sin".into()],
+        None,
+        vec!["0".into(), "3".into(), "30".into()],
+    );
     assert_eq!(out, "30 sin");
 }
 
 #[wasm_bindgen_test]
 fn spell_keys_ignores_tokens_it_does_not_know() {
     // **境界は例外を投げない。** 知らないトークンは黙って飛ばす。
-    let out = calcarc_wasm::spell_keys(vec!["3".into(), "nonsense".into(), "sin".into()]);
+    let out = calcarc_wasm::spell_keys(
+        vec!["3".into(), "nonsense".into(), "sin".into()],
+        None,
+        vec!["0".into(), "3".into(), "3".into()],
+    );
     assert_eq!(out, "3 sin");
+}
+
+#[wasm_bindgen_test]
+fn spell_keys_does_not_panic_when_screens_are_missing_or_short() {
+    // **列が無い・短いときも例外を投げない。** 足りない画面は core が `…` と書く。
+    let none = calcarc_wasm::spell_keys(vec!["3".into(), "sin".into()], None, vec![]);
+    assert!(!none.is_empty());
+    let short = calcarc_wasm::spell_keys(
+        vec!["3".into(), "+".into(), "sin".into()],
+        Some("1".into()),
+        vec!["1".into()],
+    );
+    assert!(!short.is_empty());
+    // 知らないトークンの画面も一緒に飛ばす(長さが揃ったまま)。
+    let skipped = calcarc_wasm::spell_keys(
+        vec!["nonsense".into(), "3".into(), "sin".into()],
+        None,
+        vec!["X".into(), "0".into(), "3".into()],
+    );
+    assert_eq!(skipped, "3 sin");
 }

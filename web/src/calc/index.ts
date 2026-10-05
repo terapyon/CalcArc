@@ -34,7 +34,7 @@ export interface Calc {
   /** 計算コアのバージョン。 */
   version(): string;
   /** キー列を式の文字列に綴る。**失敗しない。** */
-  spell(keys: KeyToken[]): string;
+  spell(keys: KeyToken[], carry: string | null, screens: string[]): string;
   /**
    * 入力欄に打ち込める最大文字数(`calcarc_core::MAX_ENTRY_LEN`)。
    *
@@ -59,7 +59,8 @@ export function initCalc(): Promise<Calc> {
         dispatch: (state: EngineState, key: KeyToken) =>
           asStep(reduce(state, key)),
         version: () => core_version(),
-        spell: (keys: KeyToken[]) => spell_keys(keys as string[]),
+        spell: (keys: KeyToken[], carry: string | null, screens: string[]) =>
+          spell_keys(keys as string[], carry ?? undefined, screens),
         maxEntryLen: () => max_entry_len(),
       }),
     )

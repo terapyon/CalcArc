@@ -18,7 +18,6 @@ import {
   angleMarkOf,
   angleThatDrewIt,
   closedLineOf,
-  lineOf,
   ScientificPanel,
 } from "./ScientificPanel";
 
@@ -49,6 +48,13 @@ let spellCallCount = 0;
  * を見るには、閉じた綴りだけを数える必要がある**（列の末尾が `eq`）。
  */
 let closingSpellCount = 0;
+/**
+ * **偽 `spell` が受け取った `screens` の長さが `keys` と違った回数**（設計書 §5.4）。
+ * 本番の経路は画面の列を `keys` と同じ長さで添える（足りないと core が `…` を書く）。
+ * **0 でなければ web が列を添え忘れた。**
+ */
+let screensMismatchCount = 0;
+let spellCallsWithScreens = 0;
 
 /**
  * **偽 `spell` が字面を持つ非数字キー。**
@@ -59,8 +65,9 @@ let closingSpellCount = 0;
  * H-4 の検査は「連鎖の左辺が補われたか」を記録された式そのもので見るが、
  * この 2 つが綴りに出ないと式が `""` になり、`pushEntry` が行ごと捨てて
  * **直っていても壊れていても緑になる**(偽物が寛容すぎて何も測れない)。
- * 字面は本物(`crates/calcarc-core/src/engine/spell.rs` の `commit_glyph`)に
- * 合わせてある。
+ * **字面は本物の字面ではなく、行が空にならないための印**である（本物が変わっても
+ * この偽物は追わない）。**偽物の出力に対する主張**（`"31 √"` `"34 +/−"` ほか）**は
+ * 偽物のままで正しいので、本物に合わせて変えない。**
  */
 const FAKE_GLYPHS: Partial<Record<KeyToken, string>> = {
   sqrt: "\u221a",
@@ -239,15 +246,21 @@ function fakeCalc(): Calc {
     // 打鍵ごとに違う、空でない文字列を返せば足りる。数字だけを空白で
     // つないで返す: 演算子・`eq`・`ac` は式に混ざらないので、
     // 「`=` の 2 度押しは何も綴らない」(空の列 → 空文字列)も再現できる。
-    spell: (keys: KeyToken[]) => {
+    spell: (keys: KeyToken[], carry: string | null, screens: string[]) => {
       spellCallCount += 1;
+      spellCallsWithScreens += 1;
+      if (screens.length !== keys.length) {
+        screensMismatchCount += 1;
+      }
       if (keys.at(-1) === "eq") {
         closingSpellCount += 1;
       }
-      return keys
+      const spelled = keys
         .map((key) => (/^[0-9]$/.test(key) ? key : FAKE_GLYPHS[key]))
         .filter((part): part is string => part !== undefined)
         .join(" ");
+      // 偽物の上の約束: 綴りが空なら前置しない（本物の規則は core の `spell_line`）。
+      return carry !== null && spelled !== "" ? `${carry} ${spelled}` : spelled;
     },
     // **本物の `MAX_ENTRY_LEN`(12)と同じ値。** Fix round 3 finding の
     // テスト(13 文字は呼び戻せない・12 文字は呼び戻せる)が実物の境界と
@@ -384,7 +397,20 @@ describe("履歴", () => {
     // いるので、成功する実装に戻す。
     vi.mocked(initCalc).mockImplementation(() => Promise.resolve(fakeCalc()));
     spellCallCount = 0;
+    screensMismatchCount = 0;
+    spellCallsWithScreens = 0;
     closingSpellCount = 0;
+  });
+
+  it("hands core a screen for every key, on the live line and the closed one", async () => {
+    // 設計書 §5.4。本番の経路が列を添え忘れると core が `…` を書く。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    for (const name of ["2", "掛ける", "3", "計算する", "4", "全消去", "5"]) {
+      await userEvent.click(screen.getByRole("button", { name }));
+    }
+    expect(spellCallsWithScreens).toBeGreaterThan(0);
+    expect(screensMismatchCount).toBe(0);
   });
 
   it("records one entry when = is pressed", async () => {
@@ -398,6 +424,8 @@ describe("履歴", () => {
     // いないから空」と「呼ばれた結果が空」を区別できないと、この段の
     // 否定形は何も主張しない(Task 10 ブリーフ ★ Step 0)。
     expect(spellCallCount).toBeGreaterThan(0);
+    // **画面の列は `keys` と同じ長さで渡っている**（設計書 §5.4）。
+    expect(screensMismatchCount).toBe(0);
 
     await userEvent.click(
       screen.getByRole("button", { name: "第2面に切り替え" }),
@@ -1384,26 +1412,17 @@ describe("履歴", () => {
 });
 
 /**
- * **行を組み立てる 2 つの規則を、直に撃つ。**
+ * **行を組み立てる規則を、直に撃つ。**（前置の規則は core に移ったので `lineOf` は無い）
  *
  * **盤面を通す本（上）は「打ったらこう出る」を見るが、組み合わせを全部は
  * 回れない**——**`angleMarkOf` は 2 つの入力（三角キーを使ったか・極形式か）の
  * 4 通り × 2 つのモードで 8 通り在る。** **E2E はそのうち 3 通りを
  * 実ブラウザで撃っている**（`tests/e2e/entry.spec.ts`）。**残りはここが数える。**
  *
- * **この 2 つを `export` しているのはここで撃つためである**——
+ * **`export` しているのはここで撃つためである**——
  * **export したまま誰も呼ばなければ、それは死んだ口である。**
  */
 describe("行の組み立て", () => {
-  it("前置する値が無ければ、綴りだけが行になる", () => {
-    expect(lineOf(null, "3 + 4")).toBe("3 + 4");
-    expect(lineOf("21", "× 3")).toBe("21 × 3");
-    // **綴りが空なら前置しない**——`=` の 2 度押しが行を作らないための 1 条件
-    // （`""` でなく `"2 "` になると `pushEntry` が捨てない）。
-    expect(lineOf("2", "")).toBe("");
-    expect(lineOf(null, "")).toBe("");
-  });
-
   it("`=` で閉じた行は記号までで、答えは入らない", () => {
     // **利用者の裁定 2026-10-03。** **答えの欄と役割が重なるので落とした。**
     expect(closedLineOf("30 sin × 2")).toBe("30 sin × 2 =");
