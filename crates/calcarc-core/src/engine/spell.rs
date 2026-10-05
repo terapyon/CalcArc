@@ -88,14 +88,23 @@ enum Kind {
 struct Part {
     text: String,
     kind: Kind,
+    /// **`1/x` で畳んだ語か**(設計書 §2.4、監視役の裁定 2026-10-05)。`render` が `^` と
+    /// `÷` の右でこの語を包むために読む。**字面の `1/` を探さない**——畳んだ側が印を付ける。
+    reciprocal: bool,
 }
 
 impl Part {
-    fn mark(text: &str) -> Part {
+    /// 印の無い語(`1/x` で畳んだのではない語)。
+    fn new(text: impl Into<String>, kind: Kind) -> Part {
         Part {
-            text: text.to_string(),
-            kind: Kind::Mark,
+            text: text.into(),
+            kind,
+            reciprocal: false,
         }
+    }
+
+    fn mark(text: &str) -> Part {
+        Part::new(text, Kind::Mark)
     }
 
     /// その語が値でない語 `text`(`(`・`)`・二項演算子)か。
@@ -111,23 +120,18 @@ impl Part {
     /// ——指数・60 進の段・虚部のどれかを持てば原子ではない。`3.` も `0.5` も原子。
     fn entry(buffer: &Buffer) -> Part {
         let atom = buffer.exponent.is_none() && buffer.sexagesimal.is_empty() && !buffer.imaginary;
-        Part {
-            text: buffer.text(),
-            kind: if atom { Kind::Atom } else { Kind::Other },
-        }
+        Part::new(buffer.text(), if atom { Kind::Atom } else { Kind::Other })
     }
 
     /// **文字列でしか来ない値**(前の答えと画面の値)を語にする。原子かどうかは
     /// 表示の文字列で決めるしかない(§2.1)。
     fn shown(text: &str) -> Part {
-        Part {
-            text: text.to_string(),
-            kind: if is_plain_number(text) {
-                Kind::Atom
-            } else {
-                Kind::Other
-            },
-        }
+        let kind = if is_plain_number(text) {
+            Kind::Atom
+        } else {
+            Kind::Other
+        };
+        Part::new(text, kind)
     }
 }
 
@@ -244,15 +248,21 @@ fn function_form(key: Key) -> Option<Form> {
 /// - **`^` の左の包み**(§2.4): 次の語が `^` で、この語が「そのほか」なら `(…)` で包む。
 ///   **語に焼き込まない**——押し直しで `^` が消えれば包みも消える(`3 +/− xʸ +` は
 ///   `−3 +`)。組は `)` の語で終わるので包まれない(`(2 + 3) ^ 2`)。
+/// - **`^` と `÷` の右の包み**(§2.4、監視役の裁定 2026-10-05): 前の語が `^` か `÷` で、
+///   この語が `1/x` で畳んだ語なら `(…)` で包む——`2 ^ (1/2)`・`3 ÷ (1/2)`。包まないと
+///   慣例で `(2 ^ 1)/2`・`(3 ÷ 1)/2` と読める。`×`・`−`・`+`・`nPr`・`nCr` の右と、左には
+///   付けない。**同じ理由で語に焼き込まない**(`3 ÷ × 2 1/x` は `3 × 1/2`)。
 fn render(parts: &[Part]) -> String {
     let mut line = String::new();
     for (i, part) in parts.iter().enumerate() {
-        let after_open = i > 0 && parts[i - 1].is("(");
+        let previous = i.checked_sub(1).and_then(|j| parts.get(j));
+        let after_open = previous.is_some_and(|p| p.is("("));
         if i > 0 && !after_open && !part.is(")") {
             line.push(' ');
         }
         let before_power = parts.get(i + 1).is_some_and(|next| next.is("^"));
-        if part.kind == Kind::Other && before_power {
+        let after_tight = previous.is_some_and(|p| p.is("^") || p.is("÷"));
+        if (part.kind == Kind::Other && before_power) || (part.reciprocal && after_tight) {
             line.push('(');
             line.push_str(&part.text);
             line.push(')');
@@ -317,13 +327,7 @@ fn apply_function(parts: &mut Vec<Part>, form: Form, screen: Option<&str>) {
     let (start, kind) = match found {
         Some(found) => found,
         None => {
-            let value = screen.map_or_else(
-                || Part {
-                    text: "…".to_string(),
-                    kind: Kind::Atom,
-                },
-                Part::shown,
-            );
+            let value = screen.map_or_else(|| Part::new("…", Kind::Atom), Part::shown);
             let kind = value.kind;
             parts.push(value);
             (parts.len() - 1, kind)
@@ -349,6 +353,7 @@ fn apply_function(parts: &mut Vec<Part>, form: Form, screen: Option<&str>) {
     parts.push(Part {
         text,
         kind: Kind::Other,
+        reciprocal: matches!(form, Form::Before("1/")),
     });
 }
 
@@ -548,17 +553,11 @@ fn walk(mut parts: Vec<Part>, keys: &[Key], screens: &[&str]) -> Vec<Part> {
             }
             Key::Pi => {
                 current = None;
-                parts.push(Part {
-                    text: "π".to_string(),
-                    kind: Kind::Atom,
-                });
+                parts.push(Part::new("π", Kind::Atom));
             }
             Key::E => {
                 current = None;
-                parts.push(Part {
-                    text: "e".to_string(),
-                    kind: Kind::Atom,
-                });
+                parts.push(Part::new("e", Kind::Atom));
             }
             Key::AngleToggle | Key::EngToggle | Key::PolarToggle => {
                 // 表示だけを変える。バッファにも `parts` にも触れない。
