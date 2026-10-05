@@ -566,6 +566,11 @@ fn agree(shown: &DisplayState, closed: &Typed, what: &dyn Fn() -> String) {
 /// 2 つ続く(評価器は押し直しとして前を捨てる)。これを許すと、綴りに余計な語が残っても
 /// 読み直した値は変わらず、不変条件がその取りこぼしに黙る。**評価器の規則は変えていない**
 /// ——ここは綴りの語の並びを見るだけである。
+///
+/// **括弧は語から切り出す**(1.2.1、関数の書き方の設計書 §2.6・§5.3.2)。綴りは括弧の
+/// 内側に空白を入れなくなった(`(3 + 4)`)ので、空白で割った語の頭の `(` と尻の `)` を
+/// 1 つずつ別の語にする(`(3` → `(` と `3`、`4)` → `4` と `)`、`()` → `(` と `)`)。
+/// **読み方の規則は変えていない**——切り出したあとの並びは、空白があった頃の語の並びと同じである。
 fn keys_of_spelling(spelled: &str) -> Vec<Key> {
     fn is_number(word: &str) -> bool {
         !word.is_empty() && word.bytes().all(|b| b.is_ascii_digit())
@@ -573,9 +578,26 @@ fn keys_of_spelling(spelled: &str) -> Vec<Key> {
     fn is_binary(word: &str) -> bool {
         matches!(word, "+" | "−" | "×" | "÷")
     }
+    /// 空白で割った 1 語から、頭の `(` と尻の `)` を切り出す。
+    fn split_brackets(word: &str) -> Vec<&str> {
+        let body = word.trim_start_matches('(');
+        let opens = word.len() - body.len();
+        let middle = body.trim_end_matches(')');
+        let closes = body.len() - middle.len();
+        let mut pieces = vec!["("; opens];
+        if !middle.is_empty() {
+            pieces.push(middle);
+        }
+        pieces.extend(std::iter::repeat_n(")", closes));
+        pieces
+    }
     let mut keys = Vec::new();
     let mut previous: Option<&str> = None;
-    for word in spelled.split(' ').filter(|w| !w.is_empty()) {
+    for word in spelled
+        .split(' ')
+        .filter(|w| !w.is_empty())
+        .flat_map(split_brackets)
+    {
         let dropped = match previous {
             Some(p) if is_number(word) => is_number(p) || p == ")",
             Some(p) if word == "(" => is_number(p) || p == ")",

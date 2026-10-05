@@ -1,22 +1,36 @@
 //! キー列を、履歴に残す式の文字列に綴る。
 //!
-//! **打った順に、キーのラベルをそのまま並べる。** 構文木を組まない
-//! ——組めばそれは計算であり、参照実装に同じ手順を書くことになって
-//! 照合の意味が消える(設計書 `2026-09-03-history-design.md` §4a)。
-//! **ただし演算子の直後の演算子は訂正なので、最後の 1 つだけを残す**
+//! **キーは後置で押すが、式は数学の慣例で書く**(1.2.1、設計書
+//! `2026-10-04-function-notation-design.md`。利用者の裁定 2026-10-04)。
+//! `3 0 sin` は `sin(30)`、`( 2 + 3 ) x²` は `(2 + 3)²`、`3 +/−` は `−3`、`xʸ` は `^`。
+//! 括弧の内側には空白を入れない(`(2 + 3)`、裁定 2)。
+//!
+//! **構文木は組まない**——組めばそれは計算であり、参照実装に同じ手順を書くことに
+//! なって照合の意味が消える(設計書 `2026-09-03-history-design.md` §4a)。語の列
+//! (`parts`)を打った順に積み、**後置関数を押したら、末尾から 1 つの値**(閉じた組
+//! なら対応する `(` まで)**を抜いて 1 語に畳む**だけである(`top_open` と同じ、末尾から
+//! 読み飛ばす形)。**語には種類を持たせる**(原子・組・そのほか。§2.1)——綴りの
+//! 文字列から種類を推し量らない(推測は過去に同じ欠陥を 4 回入れた形である)。
+//! **かかる値が綴りに無い**(演算子・`(` の直後、空の区間)ときは、**押す直前に
+//! 画面に出ていた値**を 1 語として補う(裁定 1)——engine が実際にかけた値であり、
+//! 綴りの側で優先順位を真似ない。
+//! **演算子の直後の演算子は訂正なので、最後の 1 つだけを残す**
 //! (0.9.2 設計書 §9 の 9。engine の押し直しと同じ意味)。
 //!
-//! 独立: 不可能。**綴りは「盤面のキーが何と書いてあるか」という取り決め**
-//! であって数学的な事実ではないので、別手順で同じ文字列に到達する道が無い。
+//! 独立: 不可能。**綴りは「式をどう書くか」という取り決め**であって数学的な
+//! 事実ではないので、別手順で同じ文字列に到達する道が無い。
 //! **番人は `tests/spell_table.rs` の表**であり、そこでは入力中の数の綴りを
 //! **engine を実際に走らせた `render(...).main` と 1 文字ずつ突き合わせる。**
+//! (取り決めのうち「慣例どおりに読めば engine の答えになる」という数学の側の主張は、
+//! `tests/engine_values.rs` の読み直しが独立に確かめる。)
 //!
 //! **番人はもう 1 つある**——`tests/spell_differential.rs` が、長さ 5 までの
-//! 全列と入力に寄せた乱択で「入力中は綴りの最後の語が engine の表示と一致する」
-//! (不変条件 A)を確かめる。**写しの残り(キーの振り分け)を見るのはこちら**である。
-//! A が見るのは最後の語だけなので、途中の語に取り残されたずれには構造的に
-//! 黙る(設計書 `2026-09-10-independent-verification-gaps-design.md` §2.4)。
-//! 過去の欠陥版 4 つで赤くなることを実測した(同 §2.6)。
+//! 全列と入力に寄せた乱択で「入力中は綴りが engine の表示で終わり、その直前は
+//! 空白か `(` か行頭である」(不変条件 A′。設計書 §5.2)を確かめる。**写しの残り
+//! (キーの振り分け)を見るのはこちら**である。A′ が見るのは末尾だけなので、
+//! 途中の語に取り残されたずれには構造的に黙る(設計書
+//! `2026-09-10-independent-verification-gaps-design.md` §2.4)。
+//! 過去の欠陥版 4 つで赤くなることを実測した(同 §2.6、A′ では 2026-10-05)。
 //!
 //! # 数の部分は真似ない。`Buffer` そのものを歩かせる
 //!
@@ -34,13 +48,14 @@
 //! `Buffer::text()` で綴る。** `text()` の docstring が
 //! 「入力中に表示する文字列。打鍵した通りに見せる。」と言っているとおり、
 //! これは §4a の「打った通り」を **engine 自身の実装で**述べたものである。
+//! **原子かどうかも `Buffer` から取る**(指数・60 進・虚部を持つか)。
 //! 演算子・関数・括弧など、バッファを通らないものは従来どおりここで
-//! 組み立てる(`commit_glyph`)。
+//! 組み立てる(`commit_glyph`・`function_form`)。
 //!
-//! **その帰結**: 指数の符号は綴りに出る(`1.5e-3`)。**仮数の符号は出ない**
-//! ——`+/−` は指数入力中でなければ `Buffer` ではなく呼び出し側
-//! (`apply_unary`)が確定値に掛けるので、`Buffer` は符号を知らない。
-//! この非対称は engine の分担そのままであり、直さない。
+//! **その帰結**: 指数の符号は綴りの数の中に出る(`1.5e-3`)。**仮数の符号は
+//! `Buffer` に無い**——`+/−` は指数入力中でなければ `Buffer` ではなく呼び出し側
+//! (`apply_unary`)が確定値に掛けるので、綴りでも確定した語に `−` を付けて畳む
+//! (`−3`)。この非対称は engine の分担そのままである。
 //!
 //! **どのキーがバッファに届き、どのキーがバッファを確定・破棄するか**は
 //! `engine/mod.rs` の `apply()` と `commit_entry` の呼び出し元をそのまま
@@ -49,57 +64,137 @@
 use super::key::Key;
 use super::state::{Backspace, Buffer};
 
+/// 語の種類(設計書 §2.1)。**綴りの文字列から推し量らない**——数の語は `Buffer`
+/// から、関数を畳んだ語は畳んだ側が決める。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// **原子**: 符号の無い普通の数(`Buffer` が指数・60 進・虚部を持たない)と定数 `π`・`e`。
+    /// 記号を付けても括弧が要らない。
+    Atom,
+    /// **組**: `(` から対応する `)` までの語の並び。**1 語としては積まない**
+    /// ——`(` と `)` は 1 語ずつのまま(`top_open` と DEL の規則が語を数えるため。§2.6)。
+    /// 後置関数が末尾から範囲を探したときに、その範囲の種類としてだけ現れる(`operand`)。
+    Group,
+    /// **そのほか**: 上のどれでもない値。負の数・指数表記・60 進・複素・関数を畳んだ結果。
+    /// 記号を付けるときと `^` の左に来たときは括弧で包む。
+    Other,
+    /// `(`・`)`・二項演算子。**値ではない**ので上の 3 つのどれでもない
+    /// (設計書 §4.1 は「種類は持たせても使わない」と書く。値と取り違えないための印)。
+    Mark,
+}
+
+/// 綴りの 1 語。
+#[derive(Debug, Clone)]
+struct Part {
+    text: String,
+    kind: Kind,
+}
+
+impl Part {
+    fn mark(text: &str) -> Part {
+        Part {
+            text: text.to_string(),
+            kind: Kind::Mark,
+        }
+    }
+
+    /// その語が値でない語 `text`(`(`・`)`・二項演算子)か。
+    fn is(&self, text: &str) -> bool {
+        self.kind == Kind::Mark && self.text == text
+    }
+
+    fn is_binary(&self) -> bool {
+        self.kind == Kind::Mark && BINARY_GLYPHS.contains(&self.text.as_str())
+    }
+
+    /// 打ちかけの数を語にする。**原子かどうかは `Buffer` の中身で決める**(§2.1)
+    /// ——指数・60 進の段・虚部のどれかを持てば原子ではない。`3.` も `0.5` も原子。
+    fn entry(buffer: &Buffer) -> Part {
+        let atom = buffer.exponent.is_none() && buffer.sexagesimal.is_empty() && !buffer.imaginary;
+        Part {
+            text: buffer.text(),
+            kind: if atom { Kind::Atom } else { Kind::Other },
+        }
+    }
+
+    /// **文字列でしか来ない値**(前の答えと画面の値)を語にする。原子かどうかは
+    /// 表示の文字列で決めるしかない(§2.1)。
+    fn shown(text: &str) -> Part {
+        Part {
+            text: text.to_string(),
+            kind: if is_plain_number(text) {
+                Kind::Atom
+            } else {
+                Kind::Other
+            },
+        }
+    }
+}
+
+/// 表示の文字列が「符号の無い普通の数」か(設計書 §2.1)。
+/// `^[0-9]+(\.[0-9]+)?$` か `^[0-9]{1,3}(,[0-9]{3})*(\.[0-9]+)?$` に合うもの。
+///
+/// **桁区切りの `,` を含めるのは監視役の裁定**(設計書 §0.4 の条件 2)——画面は整数部を
+/// 3 桁ごとに区切る(`numeric/format.rs` の `group_integer_part`)ので、含めないと
+/// `1234 × 1000 =` のあとの `x²` が `(1,234,000)²` になる。
+/// **負の数(ASCII の `-`)・指数表記・極形式・60 進は合わない**ので原子ではない。
+fn is_plain_number(text: &str) -> bool {
+    fn digits(s: &str) -> bool {
+        !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
+    }
+    let (whole, fraction) = match text.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (text, None),
+    };
+    if fraction.is_some_and(|f| !digits(f)) {
+        return false;
+    }
+    if digits(whole) {
+        return true;
+    }
+    let mut groups = whole.split(',');
+    let first_ok = groups.next().is_some_and(|g| digits(g) && g.len() <= 3);
+    first_ok && groups.all(|g| digits(g) && g.len() == 3)
+}
+
 /// 開いている `Buffer` を `parts` へ流し込み、閉じる。`commit_entry`
 /// (`engine/mod.rs`)と同じ——バッファが無ければ何もしない。
 ///
 /// **`value()` は呼ばない。** 綴りは打鍵の記録であって計算ではないので、
 /// 溢れも構文エラーもここでは起きない(engine 側だけが状態をエラーに
 /// する)。流し込むのは `text()` ——engine が入力中に見せていた姿である。
-fn commit_into(current: &mut Option<Buffer>, parts: &mut Vec<String>) {
+fn commit_into(current: &mut Option<Buffer>, parts: &mut Vec<Part>) {
     if let Some(buffer) = current.take() {
-        parts.push(buffer.text());
+        parts.push(Part::entry(&buffer));
     }
 }
 
-/// `Buffer` を確定させたあと、固定の語を 1 つだけ足すキーの綴り。
+/// `Buffer` を確定させたあと、値でない語を 1 つだけ足すキー(二項演算子と `)`)の字面。
 ///
 /// ここに来るのは、`apply()`(`engine/mod.rs`)で `commit_entry` を呼ぶ
-/// キー(二項演算子・`)`・後置関数)のうち、専用の分岐を持たないもの
-/// だけである。`Eq` は綴りに何も足さない(列を閉じるだけ)。
+/// キーのうち、専用の分岐を持たず、後置関数でもないものだけである。`Eq` は綴りに
+/// 何も足さない(列を閉じるだけ)。
 ///
 /// **`Buffer` に届くキー(数字・`.`・`000`・`Exp`・`j`・`°'"`)はここに
 /// 載らない。** それらの綴りは `Buffer::text()` が持っており、固定の
-/// 字面を持たない。
+/// 字面を持たない。後置関数は `function_form` が持つ。
 fn commit_glyph(key: Key) -> Option<&'static str> {
     Some(match key {
         Key::Add => "+",
         Key::Sub => "−",
         Key::Mul => "×",
         Key::Div => "÷",
-        Key::Pow => "xʸ",
+        // **`xʸ` は `^` と書く**(設計書 §2.4)。engine の `echo` も `2 ^` と書く。
+        Key::Pow => "^",
         Key::Npr => "nPr",
         Key::Ncr => "nCr",
-        Key::NFact => "n!",
         Key::RParen => ")",
-        Key::Sqrt => "√",
-        Key::Sqr => "x²",
-        Key::Sin => "sin",
-        Key::Cos => "cos",
-        Key::Tan => "tan",
-        Key::Neg => "+/−",
-        Key::Ln => "ln",
-        Key::Log10 => "log",
-        Key::ExpE => "eˣ",
-        Key::Recip => "1/x",
-        Key::Asin => "asin",
-        Key::Acos => "acos",
-        Key::Atan => "atan",
         _ => return None,
     })
 }
 
-/// 二項演算子の字面。**押し直しの判定にだけ使う**(`spell` の `_` の腕)。
-const BINARY_GLYPHS: [&str; 7] = ["+", "−", "×", "÷", "xʸ", "nPr", "nCr"];
+/// 二項演算子の字面。押し直しの判定・`top_open`・`^` の左の包みが読む。
+const BINARY_GLYPHS: [&str; 7] = ["+", "−", "×", "÷", "^", "nPr", "nCr"];
 
 fn is_binary(key: Key) -> bool {
     matches!(
@@ -108,33 +203,203 @@ fn is_binary(key: Key) -> bool {
     )
 }
 
+/// 後置関数の書き方(設計書 §2.3)。
+#[derive(Debug, Clone, Copy)]
+enum Form {
+    /// `f(…)`。組ならその括弧を自分の括弧に使う(二重にしない)。
+    Call(&'static str),
+    /// 値の後ろに記号(`²`・`!`)。原子と組はそのまま、そのほかは包む。
+    After(&'static str),
+    /// 値の前に記号(`e^`・`1/`・`−`)。包み方は `After` と同じ。
+    Before(&'static str),
+}
+
+/// 後置関数のキーの書き方。**`+/−` は仮数の符号のときだけここを通る**(指数の符号は
+/// `Buffer` の中で効く。`spell` の `Key::Neg` の腕)。
+fn function_form(key: Key) -> Option<Form> {
+    Some(match key {
+        Key::Sqrt => Form::Call("√"),
+        Key::Sin => Form::Call("sin"),
+        Key::Cos => Form::Call("cos"),
+        Key::Tan => Form::Call("tan"),
+        Key::Asin => Form::Call("asin"),
+        Key::Acos => Form::Call("acos"),
+        Key::Atan => Form::Call("atan"),
+        Key::Ln => Form::Call("ln"),
+        Key::Log10 => Form::Call("log"),
+        Key::Sqr => Form::After("²"),
+        Key::NFact => Form::After("!"),
+        Key::ExpE => Form::Before("e^"),
+        Key::Recip => Form::Before("1/"),
+        Key::Neg => Form::Before("−"),
+        _ => return None,
+    })
+}
+
+/// **語の列を 1 行の字面にする。字面を作る関数はこれ 1 つ**(設計書 §4.1、条件 3)
+/// ——行全体を繋ぐときも、組を 1 語に畳むときもここを呼ぶ。別々に書くと、畳むほうが
+/// `^` の左の包みを忘れて `( 3 +/− xʸ 2 ) sin` を `sin(−3 ^ 2)` と書きうる。
+///
+/// - **空白**: 語のあいだに 1 つ。ただし `(` の後ろと `)` の前には入れない(§2.6)。
+/// - **`^` の左の包み**(§2.4): 次の語が `^` で、この語が「そのほか」なら `(…)` で包む。
+///   **語に焼き込まない**——押し直しで `^` が消えれば包みも消える(`3 +/− xʸ +` は
+///   `−3 +`)。組は `)` の語で終わるので包まれない(`(2 + 3) ^ 2`)。
+fn render(parts: &[Part]) -> String {
+    let mut line = String::new();
+    for (i, part) in parts.iter().enumerate() {
+        let after_open = i > 0 && parts[i - 1].is("(");
+        if i > 0 && !after_open && !part.is(")") {
+            line.push(' ');
+        }
+        let before_power = parts.get(i + 1).is_some_and(|next| next.is("^"));
+        if part.kind == Kind::Other && before_power {
+            line.push('(');
+            line.push_str(&part.text);
+            line.push(')');
+        } else {
+            line.push_str(&part.text);
+        }
+    }
+    line
+}
+
+/// **後置関数がかかる範囲**(設計書 §2.2): 末尾から 1 つ。範囲の始まりと種類を返す。
+///
+/// - 末尾が `)` → **対応する `(` まで**(深さを数える)。種類は組
+/// - 末尾が値の語 → その 1 語
+/// - 末尾が二項演算子・`(`・空 → **無し**(呼び出し側が画面の値を補う)
+///
+/// **対応する `(` が無い `)`**(DEL で `(` を消したあとの開いていない `)`。engine は
+/// SyntaxError にし、web はそのあとの関数を押させない)は、その `)` 1 語を「そのほか」
+/// として扱う——何も捨てず、panic しない。
+fn operand(parts: &[Part]) -> Option<(usize, Kind)> {
+    let last_index = parts.len().checked_sub(1)?;
+    let last = &parts[last_index];
+    if last.is(")") {
+        let mut depth = 0usize;
+        for (i, part) in parts.iter().enumerate().rev() {
+            if part.is(")") {
+                depth += 1;
+            } else if part.is("(") {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((i, Kind::Group));
+                }
+            }
+        }
+        return Some((last_index, Kind::Other));
+    }
+    match last.kind {
+        Kind::Mark => None,
+        kind => Some((last_index, kind)),
+    }
+}
+
+/// 後置関数を押した。§2.2 の範囲を `parts` から抜き、§2.3 の 1 語(そのほか)に畳んで
+/// 積み直す。**範囲が無ければ、押す直前の画面の値**(`screen`。列が無ければ `…`)を
+/// 1 語として積んでから畳む(§2.7)。
+///
+/// **畳むのは確定した語だけ**——呼び出し側は先に `commit_into` を済ませている
+/// (`apply_unary` が入力中の数を確定してから関数をかけるのと同じ)。
+fn apply_function(parts: &mut Vec<Part>, form: Form, screen: Option<&str>) {
+    let (start, kind) = match operand(parts) {
+        Some(found) => found,
+        None => {
+            let value = screen.map_or_else(
+                || Part {
+                    text: "…".to_string(),
+                    kind: Kind::Atom,
+                },
+                Part::shown,
+            );
+            let kind = value.kind;
+            parts.push(value);
+            (parts.len() - 1, kind)
+        }
+    };
+    let range = parts.split_off(start);
+    let whole = render(&range);
+    // 関数の括弧の中身。**組ならその括弧を使う**(二重にしない)。
+    let inside = match kind {
+        Kind::Group => render(&range[1..range.len() - 1]),
+        _ => whole.clone(),
+    };
+    // 記号を付けるときの姿。原子と組はそのまま、そのほかは包む(§2.3)。
+    let wrapped = match kind {
+        Kind::Atom | Kind::Group => whole,
+        Kind::Other | Kind::Mark => format!("({whole})"),
+    };
+    let text = match form {
+        Form::Call(name) => format!("{name}({inside})"),
+        Form::After(mark) => format!("{wrapped}{mark}"),
+        Form::Before(mark) => format!("{mark}{wrapped}"),
+    };
+    parts.push(Part {
+        text,
+        kind: Kind::Other,
+    });
+}
+
 /// 綴りの語の列で、保留のいちばん上が閉じていない `(` なら、その位置。**1 つの計算の中では**
 /// engine の演算子スタックの先頭が `(` であることと同じ——末尾から、閉じた組・数・後置関数・定数を
 /// 飛ばし、最初に当たるのが二項演算子なら無し、閉じていない `(` ならそれ。
+/// **畳んだ語(`sin(2 + 3)`)は値の語**なので、`(` とも `)` とも数えない(§4.1)。
 ///
 /// **`=` をまたぐと同じではない。** `spell` は `=` の印を `parts` に残さない(`Key::Eq` の腕は
 /// バッファを流し込むだけ)ので、`( 3 = DEL` では前の計算の `(` を消すが、engine のスタックは
 /// `=` で空になっていて何も消さない(旧規則の「末尾の `(` だけ」も `( = DEL` で同じ隙間を
 /// 持っていた)。web は `=` で打鍵の列を切る(`ScientificPanel.tsx` の `press`)ので、この形は
 /// 履歴の綴りに届かない。
-fn top_open(parts: &[String]) -> Option<usize> {
+fn top_open(parts: &[Part]) -> Option<usize> {
     let mut depth = 0usize;
     for (i, part) in parts.iter().enumerate().rev() {
-        match part.as_str() {
-            ")" => depth += 1,
-            "(" if depth > 0 => depth -= 1,
-            "(" => return Some(i),
-            p if depth == 0 && BINARY_GLYPHS.contains(&p) => return None,
-            _ => {}
+        if part.is(")") {
+            depth += 1;
+        } else if part.is("(") {
+            if depth == 0 {
+                return Some(i);
+            }
+            depth -= 1;
+        } else if depth == 0 && part.is_binary() {
+            return None;
         }
     }
     None
 }
 
-/// キー列を式の文字列に綴る。
+/// キー列を式の文字列に綴る。**画面の列を添えない形**——`spell_line(None, keys, &[])`。
+///
+/// 画面の値が要る場所(演算子や `(` の直後の関数)には `…` を書く(設計書 §2.7.1)。
+/// 本番の経路(web)は `spell_line` に画面の列を添える。
+pub fn spell(keys: &[Key]) -> String {
+    spell_line(None, keys, &[])
+}
+
+/// 履歴・経歴の 1 行を綴る。
+///
+/// - `carry`: **行の頭に置く前の答え**(`=` のあとに続けた区間。設計書 §2.5)。
+///   最初の語として積んでから歩くので、`3 =` のあとの `sin` は `sin(3)` になる。
+///   原子かどうかは表示の文字列で決める(§2.1)。**綴りが空なら頭も付けない**
+///   ——空の式の行は履歴に積まれない(web の `lineOf` が持っていた約束を core に移した)。
+/// - `screens`: `screens[i]` は `keys[i]` を押す**直前の**画面(`display.main`)。
+///   関数がかかる値が綴りに無いときだけ読む(§2.7.4)。**足りなければ `…` を書く。
+///   panic しない。**
+pub fn spell_line(carry: Option<&str>, keys: &[Key], screens: &[&str]) -> String {
+    let head = carry.filter(|text| !text.is_empty());
+    let Some(head) = head else {
+        return render(&walk(Vec::new(), keys, screens));
+    };
+    // **「綴りが空」は前の答えを除いた区間の綴りで決める**(`lineOf` と同じ)。
+    if walk(Vec::new(), keys, screens).is_empty() {
+        return String::new();
+    }
+    render(&walk(vec![Part::shown(head)], keys, screens))
+}
+
+/// キー列を語の列にする。`parts` は最初の語(前の答え)を持って来ることがある。
 ///
 /// **`ac` は列を空にする**(`engine/mod.rs` の `next.cleared()` と同じ
-/// ——入力中のバッファも一緒に捨てる)。
+/// ——入力中のバッファも、前の答えも一緒に捨てる)。
 ///
 /// **開く・確定する・捨てるの 3 通り**(`apply()` を読んで分けた):
 /// - **開く/伸ばす**(バッファを作る・書き足す): 数字・`.`・`000`・
@@ -154,16 +419,16 @@ fn top_open(parts: &[String]) -> Option<usize> {
 /// **`del` は `Buffer::backspace` を呼ぶ**(`delete_one` と同じ)。
 /// バッファが無ければ、**保留のいちばん上の、閉じていない `(`** を消す
 /// (`delete_one` が演算子スタックの先頭の `(` を抜くのと同じ `(`)——
-/// **その `(` のあとに値や閉じた組があっても消す**(`2 × ( π DEL + 1` は
-/// 「2 × π + 1」、`2 × ( ( 3 ) DEL + 1` は「2 × ( 3 ) + 1」)。演算子は消えず、
-/// 演算子が保留されていれば何も消さない(`3 + ( 4 ) DEL` は「3 + ( 4 )」のまま)。
+/// **その `(` のあとに値があっても消す**(`2 × ( π DEL + 1` は
+/// 「2 × π + 1」。閉じた組の直後の DEL は先に下の 0 段目が `)` を取り消す)。演算子は消えず、
+/// 演算子が保留されていれば何も消さない(`3 + ( 4 ) DEL` は「3 + (4)」のまま)。
 /// 以前は末尾の `(` しか消さず、値の下の `(` が綴りに残って履歴の式が答えを
 /// 生まなかった(0.9.2 設計書 §10 の既知の穴。利用者の裁定 2026-09-16、同 §9 の 12
-/// ——綴りを engine に合わせ、engine は変えない)。
+/// ——綴りを engine に合わせ、engine は変えない)。**畳んだ関数は取り消せない**
+/// (engine の DEL も手元の値に何もしない)。
 ///
 /// どの分岐も空の列に来ては何も起きない(**panic しない**)。
-pub fn spell(keys: &[Key]) -> String {
-    let mut parts: Vec<String> = Vec::new();
+fn walk(mut parts: Vec<Part>, keys: &[Key], screens: &[&str]) -> Vec<Part> {
     let mut current: Option<Buffer> = None;
     // 押し直しの判定に使う: 直前に積んだ語が二項演算子で、そのあと `=` で計算が閉じて
     // いないか。`=` は綴りに何も足さないので、語の並びだけでは「閉じた」ことが見えない
@@ -177,9 +442,13 @@ pub fn spell(keys: &[Key]) -> String {
     // **`open_operator` も控える。** engine が `operator_pending` を戻すのと同じ理由で、
     // ここを戻さないと**押し直しの訂正が効かなくなる**——`33 × ( × ) DEL ×` の綴りが
     // 「33 × ( × ×」と演算子 2 つになった(2026-09-17 に実際に落ちた)。
+    // **関数で畳むと `parts` は縮む**が、後置関数は下の後判定でこの控えを空にするので、
+    // 畳んだあとに古い長さへ切り詰めることは起きない(設計書 §4.1。spell_table の
+    // `( 2 + 3 ) sin DEL` が固定する)。
     let mut closed: Vec<(usize, Option<Buffer>, bool)> = Vec::new();
 
-    for &key in keys {
+    for (i, &key) in keys.iter().enumerate() {
+        let screen = screens.get(i).copied();
         match key {
             Key::Ac => {
                 parts.clear();
@@ -245,14 +514,14 @@ pub fn spell(keys: &[Key]) -> String {
             }
             Key::Neg => {
                 // `+/−` は 2 つの階層で働く(設計書 §2)。指数入力中は
-                // 指数の符号——`text()` が `e-` を出すので綴りに現れる。
+                // 指数の符号——`text()` が `e-` を出すので綴りの数の中に現れる。
                 // そうでなければ確定値の符号で、`Buffer` は関与しない
-                // (`apply_unary` が掛ける)ので、キーの字面を足す。
+                // (`apply_unary` が掛ける)ので、確定した語に `−` を付けて畳む。
                 let signed_exponent = current.as_mut().is_some_and(Buffer::toggle_exponent_sign);
                 if !signed_exponent {
                     commit_into(&mut current, &mut parts);
-                    if let Some(text) = commit_glyph(key) {
-                        parts.push(text.to_string());
+                    if let Some(form) = function_form(key) {
+                        apply_function(&mut parts, form, screen);
                     }
                 }
             }
@@ -263,15 +532,21 @@ pub fn spell(keys: &[Key]) -> String {
                 // キーを渡さない。`spell` 自身は公開関数で拒否を知らない
                 // ので、分岐は残す(上の註参照)。
                 current = None;
-                parts.push("(".to_string());
+                parts.push(Part::mark("("));
             }
             Key::Pi => {
                 current = None;
-                parts.push("π".to_string());
+                parts.push(Part {
+                    text: "π".to_string(),
+                    kind: Kind::Atom,
+                });
             }
             Key::E => {
                 current = None;
-                parts.push("e".to_string());
+                parts.push(Part {
+                    text: "e".to_string(),
+                    kind: Kind::Atom,
+                });
             }
             Key::AngleToggle | Key::EngToggle | Key::PolarToggle => {
                 // 表示だけを変える。バッファにも `parts` にも触れない。
@@ -287,21 +562,21 @@ pub fn spell(keys: &[Key]) -> String {
                     closed.push((parts.len(), current.clone(), open_operator));
                 }
                 commit_into(&mut current, &mut parts);
-                // 演算子の直後の演算子は訂正(engine の `push_binop`)。綴りも最後の 1 つ
-                // だけを残す(0.9.2 設計書 §9 の 9)。バッファがあれば上の行が数を流し込む
-                // ので、ここで末尾が演算子なのは「演算子の直後から動いていない」ときだけ。
-                // `=` は綴りに何も足さないので、`open_operator` フラグで「演算子がまだ開いている」
-                // かどうかを判定する(engine の `finish` が演算子を消費したかどうか)。
-                if is_binary(key)
-                    && open_operator
-                    && parts
-                        .last()
-                        .is_some_and(|part| BINARY_GLYPHS.contains(&part.as_str()))
-                {
-                    parts.pop();
-                }
-                if let Some(text) = commit_glyph(key) {
-                    parts.push(text.to_string());
+                if let Some(form) = function_form(key) {
+                    apply_function(&mut parts, form, screen);
+                } else {
+                    // 演算子の直後の演算子は訂正(engine の `push_binop`)。綴りも最後の 1 つ
+                    // だけを残す(0.9.2 設計書 §9 の 9)。バッファがあれば上の行が数を流し込む
+                    // ので、ここで末尾が演算子なのは「演算子の直後から動いていない」ときだけ。
+                    // `=` は綴りに何も足さないので、`open_operator` フラグで「演算子がまだ開いて
+                    // いる」かどうかを判定する(engine の `finish` が演算子を消費したかどうか)。
+                    if is_binary(key) && open_operator && parts.last().is_some_and(Part::is_binary)
+                    {
+                        parts.pop();
+                    }
+                    if let Some(text) = commit_glyph(key) {
+                        parts.push(Part::mark(text));
+                    }
                 }
                 // 後置関数と `)` は二項ではないので、フラグを false にする。
                 open_operator = is_binary(key);
@@ -323,7 +598,7 @@ pub fn spell(keys: &[Key]) -> String {
         }
     }
     commit_into(&mut current, &mut parts);
-    parts.join(" ")
+    parts
 }
 
 #[cfg(test)]

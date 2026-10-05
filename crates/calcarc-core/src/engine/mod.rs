@@ -5,7 +5,7 @@ pub mod state;
 
 pub use display::{DisplayState, render};
 pub use key::Key;
-pub use spell::spell;
+pub use spell::{spell, spell_line};
 pub use state::{EngineState, MAX_ENTRY_LEN};
 
 use crate::scientific;
