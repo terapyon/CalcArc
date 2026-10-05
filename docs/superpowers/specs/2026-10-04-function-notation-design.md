@@ -626,6 +626,7 @@ engine の `echo` の期待値（`engine_table.rs:153` の `"3 + ( 4"` など。
 | `crates/calcarc-core/tests/engine_values.rs` | `keys_of_spelling`（`:569`）、`SIGN_NET` と読み手を足す。**`PAREN_LENGTH` の註（`:487-488`）を書き直す** | §5.3。**註は監視役の裁定**: 1.2.1 で触るときに**同じ日の実測**で書き直し（**測り方も添える**——`cargo test -p calcarc-core --test engine_values -- <名前>` を 1 本ずつ、debug）、**予算のほうを言い直す。網は狭めない。** 伸びた原因は負荷ではなく**比べる列が増えた**こと（値 2,015,539／読み直し 2,002,863）。**値が増えたのは `be8e736`（2026-09-17、0.9.3 の D-2）**で、10-03 の `98809f6` が増やしたのは `NET` の読み直しの回数だけである。**レビュー役の所見「10-03 から 2.35〜2.56 倍」は誤りで、2026-10-05 に削除された行と旧い版の実走で直した**（§5.3.1） |
 | `crates/calcarc-core/tests/spell_differential.rs` | `check`（`:35-49`）を A′ に、ファイル頭の註 | §5.2 |
 | `crates/calcarc-wasm/src/lib.rs` | `spell_keys`（`:148`）の引数 | §2.7.1 |
+| `crates/calcarc-wasm/tests/label_parity.rs` | `every_board_label_matches_what_core_spells`（比較を「等しい」から「ラベルから導いた形」へ。前置 9 キーは `{ラベル}(…)`、記号 6 キーは表、ほかは等しさ） | **§6 の grep は、このファイルを取りこぼした。** 盤面のラベルと綴りを直接比べていて、「数のあとに関数名が続く」文字列が無く、grep の網に掛からなかった。**赤くなって初めて見つかった**（15 キー）。2026-10-05 に監視役の裁定で直した |
 | `crates/calcarc-wasm/tests/web.rs` | `:899` `:906` | `"30 sin"`・`"3 sin"`。引数が増える |
 | `web/src/calc/index.ts` | `:37` `:62` の `spell` の型 | 引数が増える |
 | `web/src/ui/ScientificPanel.tsx` | `press`（`:599-650`）で画面を積む、`lineOf`（`:163`）、`:676`、`:694-718` | §2.5・§2.7 |
