@@ -33,7 +33,15 @@ export interface Calc {
   dispatch(state: EngineState, key: KeyToken): Step;
   /** 計算コアのバージョン。 */
   version(): string;
-  /** キー列を式の文字列に綴る。**失敗しない。** */
+  /**
+   * キー列を式の文字列に綴る。**失敗しない。** 綴りの規則は core の `spell_line` が持つ。
+   *
+   * - `carry`: 行の頭に置く前の答えの表示（`=` のあとに続けた区間）。`null` なら置かない。
+   *   **綴りが空なら core は頭も付けない。**
+   * - `screens`: `screens[i]` は `keys[i]` を押す**直前の**画面（`display.main`）。
+   *   **`keys` と同じ長さで渡す。** 関数がかかる値が綴りに無いとき core がそこを読み、
+   *   **足りない位置では `…` を書く**（例外は投げない）。
+   */
   spell(keys: KeyToken[], carry: string | null, screens: string[]): string;
   /**
    * 入力欄に打ち込める最大文字数(`calcarc_core::MAX_ENTRY_LEN`)。

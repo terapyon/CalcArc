@@ -925,11 +925,12 @@ fn spell_keys_does_not_panic_when_screens_are_missing_or_short() {
         vec!["0".into(), "3".into()],
     );
     assert_eq!(short, "3 + sin(…)");
-    // 知らないトークンの画面も一緒に飛ばす(長さが揃ったまま)。
+    // 知らないトークンの画面も一緒に飛ばす(長さが揃ったまま)。**`sin` は画面の値を読む
+    // 位置に置く**——`+` の直後なので、ずれれば `X` を書いて `3 + sin(X)` になる。
     let skipped = calcarc_wasm::spell_keys(
-        vec!["nonsense".into(), "3".into(), "sin".into()],
+        vec!["3".into(), "add".into(), "nonsense".into(), "sin".into()],
         None,
-        vec!["X".into(), "0".into(), "3".into()],
+        vec!["0".into(), "3".into(), "X".into(), "3".into()],
     );
-    assert_eq!(skipped, "sin(3)");
+    assert_eq!(skipped, "3 + sin(3)");
 }
