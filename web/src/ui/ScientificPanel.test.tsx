@@ -88,11 +88,29 @@ function fakeCalc(): Calc {
     answerOnScreen: true,
     error: null,
   };
+  /**
+   * **`del` が戻る先**（1.2.1、前置の判定を DEL で未決に戻す）。**括弧だけ**を
+   * 1 打鍵ぶん取り消す——**本物の DEL も、括弧は押す前の姿に戻す**
+   * （`( ) DEL DEL` は `[0 -] [0 A]`。設計書 §2.2 の表）。
+   * **ほかのキーの後の `del` は何もしない**——演算子は本物も消さない
+   * （`del_does_not_remove_an_operator`）。偽物を本物より寛容にしないため、
+   * 取り消せる形を必要な分だけに絞る。
+   */
+  const undoTo = new WeakMap<EngineState, Step>();
+  /** **`stepOf` が作った Step を state から引く**（`del` で戻る先を覚えるため）。 */
+  const steps = new WeakMap<EngineState, Step>();
   /** 表示を 1 つの state に結び付けて返す。state は毎回新しい物である。 */
   function stepOf(display: DisplayState, refused: KeyToken[] = []): Step {
     const state = {} as EngineState;
     displays.set(state, display);
-    return { state, display, refused };
+    const step = { state, display, refused };
+    steps.set(state, step);
+    return step;
+  }
+  /** `before` から `del` で戻れる 1 歩を作る。 */
+  function undoable(before: Step, after: Step): Step {
+    undoTo.set(after.state, before);
+    return after;
   }
   return {
     initial: () => stepOf(base),
@@ -130,6 +148,27 @@ function fakeCalc(): Calc {
       }
       // 数字は主表示に積む。**「打った物は保存しない」を測るのに要る**
       // ——打鍵が表示に出ない偽物では、保存されていないことも言えない。
+      if (key === "del") {
+        return undoTo.get(state) ?? stepOf(from);
+      }
+      // **括弧は「保留あり」の姿にする**（本物の `answer_on_screen` は開いた組・手元の値が
+      // あると偽）。`(` は画面を 0 にし、`)` は組を閉じた値を手元に持つ。
+      if (key === "lparen" || key === "rparen") {
+        const before = steps.get(state) ?? stepOf(from);
+        const depth =
+          key === "lparen"
+            ? from.pendingDepth + 1
+            : Math.max(0, from.pendingDepth - 1);
+        return undoable(
+          before,
+          stepOf({
+            ...from,
+            main: key === "lparen" ? "0" : from.main,
+            pendingDepth: depth,
+            answerOnScreen: false,
+          }),
+        );
+      }
       if (/^[0-9]$/.test(key)) {
         return stepOf(
           {
@@ -1009,6 +1048,34 @@ describe("履歴", () => {
     expect(
       screen.getByRole("button", { name: "0 2 = 2 を入力に入れる" }),
     ).toBeInTheDocument();
+  });
+
+  it("returns the carry to undecided when DEL brings the answer back to the screen", async () => {
+    // **1.2.1、前置の判定を DEL で未決に戻す**（`2026-10-05-carry-decision-del-design.md` §2.1）。
+    // **`)` は「画面の値を使うキー」**なので、そこで前置を決める——直前の画面は `(` が
+    // 出した 0 で答えではない（偽物の `(` も `answerOnScreen: false`）ので「前置しない」。
+    // **`DEL DEL` が `)` と `(` を取り消すと、`dispatch` が返す Step の `answerOnScreen` は
+    // 真に戻る**（偽物の `del` は括弧を押す前の Step に戻す）。**そこで未決に戻らないと**、
+    // 続く `×` は決め直さず、行は頭の 0 を落とす（1.2.0 の欠陥。本物では `× 3 =`）。
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys([
+      "開き括弧",
+      "閉じ括弧",
+      "1文字消去",
+      "1文字消去",
+      "掛ける",
+      "3",
+      "計算する",
+    ]);
+    expect(closingSpellCount).toBe(1);
+
+    await openHistory();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    // **偽 `spell` は数字と `(` だけを綴る**（`)` と `del` は字面を持たない）ので、区間は
+    // `( 3`。**`×` が決め直して画面の 0 を前置すれば `0 ( 3`**、決め直さなければ `( 3` である。
+    expect(screen.getByText("0 ( 3")).toBeInTheDocument();
+    expect(screen.queryByText("( 3")).not.toBeInTheDocument();
   });
 
   it("still prefixes a chain when the answer was checked in ENG notation first", async () => {

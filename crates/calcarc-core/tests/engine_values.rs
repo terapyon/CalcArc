@@ -599,8 +599,13 @@ struct Counts {
     /// **形ごとの件数**(2026-10-03 の数え上げ)。**鳴った形は穴の標本にすぎない**ので、
     /// **全件を形に畳んで数える**([[count-before-you-fix]])。
     shapes: std::collections::BTreeMap<String, usize>,
-    /// **既知の欠陥として除いた行**(`SIGN_NET` だけが数える。`frozen_carry_shape` の註)。
-    frozen_carry: usize,
+    /// **DEL のあと `answer_on_screen` が真になった回数**(1.2.1、前置の判定を DEL で
+    /// 未決に戻す設計書 §3.3)。**web はそのとき判定を未決に戻す**ので、**その区間の綴りは
+    /// 空でなければならない**——ここで綴りを作って確かめた回数である。
+    del_resets: usize,
+    /// **そのうち、区間の綴りが空でなかった回数**。**0 であること**——破れれば、未決に
+    /// 戻すと前置の要る行から前置が消える。
+    del_reset_leftovers: usize,
 }
 
 /// engine の答え `shown` と、`=` で閉じた評価器 `closed` を比べる。値ならその表示、エラーなら
@@ -848,7 +853,14 @@ fn walk(
         // ずれない(前の `=` の答えを覚えておく形だと、`33 = ( DEL +` に `33` を
         // 前置してしまい、engine の 0 と食い違った。170 件)。
         let decide = web_records && prefix.decided.is_none() && uses_the_screen_value;
-        let next_decided = if decide {
+        // **DEL のあと engine が「区間の始まり」と同じ姿に戻ったら、判定を未決に戻す**
+        // (1.2.1、`2026-10-05-carry-decision-del-design.md` §2.1。web の `press` の写し)。
+        // **読むのは `render(&next).answer_on_screen`**——キー列から推測しない。
+        // **エラー中は偽**(`answer_on_screen` の定義)なので、H-3 の門は別に書かない。
+        let undecide = key == Key::Del && web_records && render(&next).answer_on_screen;
+        let next_decided = if undecide {
+            None
+        } else if decide {
             Some(render(state).answer_on_screen)
         } else {
             prefix.decided
@@ -862,7 +874,14 @@ fn walk(
             }
             None
         };
-        let next_value = if closing {
+        if undecide {
+            // **§3.3 の不変条件**: そのとき区間の綴りは空(`segment` は DEL を積んだあと)。
+            counts.del_resets += 1;
+            if !spell(segment).is_empty() {
+                counts.del_reset_leftovers += 1;
+            }
+        }
+        let next_value = if closing || undecide {
             None
         } else if decide && next_decided == Some(true) {
             // **この押下の直前の表示と、評価器が持っている厳密な値。**
@@ -1209,9 +1228,6 @@ fn sign_spelling_reads_back(
         if head.is_some() {
             counts.prefixed += 1;
         }
-    } else if frozen_carry_shape(segment) {
-        // **食い違った行だけを除く**——直れば一致して数が 0 に落ち、下の `assert_eq!` が赤くなる。
-        counts.frozen_carry += 1;
     } else {
         counts.mismatches += 1;
         let shape: Vec<&str> = segment.iter().map(|k| k.token()).collect();
@@ -1228,41 +1244,6 @@ fn sign_spelling_reads_back(
                 shown.main
             ));
         }
-    }
-}
-
-/// **既知の欠陥の形**: 区間が `( ) DEL DEL` で始まり(頭の何も消さない `DEL` は飛ばす)、
-/// (何も消さない `DEL` を挟んで)二項演算子が続く。**記録した区間のキー列で判定する**——綴りの文字列は見ない。
-///
-/// - **原因**: web の `decidedRef`(`ScientificPanel` の `press`)は `)` で前置の判定を
-///   固める(`)` は `CARRIED_VALUE_TOKENS` に居り、その時点の `answerOnScreen` は偽)。
-///   **その `)` を `DEL` が消しても、判定は未決に戻らない。** engine のほうは `( ) DEL DEL` で
-///   `answer_on_screen` が真に戻り、続く演算子は画面の値を左辺に取る。
-/// - **再現**: `( ) DEL DEL × 3 =` は行が `× 3`、engine の答えは 0(echo は `0 × 3`)。
-///   `5 =` のあとでも同じ(区間は `=` で切れるので、同じ形になる)。
-///   **行が答えを生まない**——慣例では行頭の `×` を読めない。
-/// - **既存の 2 本の網が黙っていた理由**: `Typed` は行頭の演算子の左辺に `base`(ここでは 0)を
-///   入れる(`press` の `None` の腕)。それが画面の 0 とたまたま同じなので、一致してしまう。
-///
-/// **直しは別の枝で、小さな設計を付けて行う**(監視役の裁定 2026-10-05)。
-/// **読み手は緩めない**(行頭の演算子を読む規則は設計書 §5.3.2 に無い)。
-/// **web だけを直してもこのテストは赤くならない**——ここが読むのは web の前置の判定の
-/// **写し**(`walk_signs` の `decided`)であって web そのものではなく、`walk` にも
-/// もう 1 つ写しがある。**直す枝は `ScientificPanel.tsx`・`walk_signs`・`walk` の 3 つを
-/// 同じコミットで変える。** そうすればこの形は一致して `frozen_carry` が 0 に落ち、下の
-/// `assert_eq!` が赤くなる——**そのときこの除外を消す。** web の側の欠陥そのものは
-/// E2E(`entry.spec.ts` の既知の欠陥の固定)が実 wasm で留めている。
-fn frozen_carry_shape(segment: &[Key]) -> bool {
-    // **前後の `DEL` は何も消さない**(区間の頭の `DEL`、組を消し終えたあとの `DEL`)
-    // ——web はそれも積むので、区間の頭と演算子の前で読み飛ばす(2026-10-05 の実測で
-    // 54 件のうち 3 件ずつがこの形)。
-    let start = segment.iter().take_while(|k| **k == Key::Del).count();
-    match &segment[start..] {
-        [Key::LParen, Key::RParen, Key::Del, Key::Del, rest @ ..] => {
-            let mut after = rest.iter().skip_while(|k| **k == Key::Del);
-            matches!(after.next(), Some(Key::Add | Key::Sub | Key::Mul))
-        }
-        _ => false,
     }
 }
 
@@ -1301,12 +1282,21 @@ fn walk_signs(
         );
         let before = render(state);
         let decide = web_records && decided.is_none() && uses_the_screen_value;
-        let next_decided = if decide {
+        // **DEL のあと engine が「区間の始まり」と同じ姿に戻ったら、判定を未決に戻す**
+        // (1.2.1、`2026-10-05-carry-decision-del-design.md` §2.1。web の `press` と `walk` の写し)。
+        // **読むのは `render(&next).answer_on_screen`**——キー列から推測しない。
+        // **1.2.0 はここが無く、`( ) DEL DEL` のあとの演算子で 54 行が答えを生まなかった。**
+        let undecide = key == Key::Del && web_records && render(&next).answer_on_screen;
+        let next_decided = if undecide {
+            None
+        } else if decide {
             Some(before.answer_on_screen)
         } else {
             decided
         };
-        let next_carry: Option<String> = if decide && before.answer_on_screen {
+        let next_carry: Option<String> = if undecide {
+            None
+        } else if decide && before.answer_on_screen {
             Some(before.main.clone())
         } else {
             carry.map(str::to_string)
@@ -1322,6 +1312,15 @@ fn walk_signs(
             if web_records {
                 segment.push(key);
                 screens.push(before.main.clone());
+            }
+            if undecide {
+                // **§3.3 の不変条件**: そのとき区間の綴りは空(`segment` は DEL を積んだあと)。
+                // **前置は付けずに綴る**——空でないなら、前置が付くかどうかに関わらず語が残っている。
+                counts.del_resets += 1;
+                let shown: Vec<&str> = screens.iter().map(String::as_str).collect();
+                if !spell_line(None, segment, &shown).is_empty() {
+                    counts.del_reset_leftovers += 1;
+                }
             }
             walk_signs(
                 &next,
@@ -1354,13 +1353,14 @@ fn sign_and_square_spellings_read_back_by_convention() {
         &mut counts,
     );
     println!(
-        "比べた回数: 節 {} / 慣例での読み直し {} (うち頭に値を前置した行 {}) / 指数表記で飛ばした {} / 既知の欠陥で除いた {} / 一致しなかった {}",
+        "比べた回数: 節 {} / 慣例での読み直し {} (うち頭に値を前置した行 {}) / 指数表記で飛ばした {} / 一致しなかった {} / DEL のあと答えが画面に戻った {} (うち区間の綴りが残った {})",
         counts.values,
         counts.spellings,
         counts.prefixed,
         counts.rounded_away,
-        counts.frozen_carry,
-        counts.mismatches
+        counts.mismatches,
+        counts.del_resets,
+        counts.del_reset_leftovers
     );
     for sample in &counts.samples {
         println!("不一致: {sample}");
@@ -1377,25 +1377,34 @@ fn sign_and_square_spellings_read_back_by_convention() {
         "歩いた節は {} 個(2026-10-05 の実測 1,111,111 個)",
         counts.values
     );
+    // **★ 1.2.1 の DEL の規則(前置の判定を DEL で未決に戻す設計書)で、慣例での読み直しは
+    // 967,199 → 967,253(+54)、前置は 714,205 → 714,295(+90)に上がった。** +54 は
+    // それまで「既知の欠陥」として除いていた `( ) DEL DEL` のあとの演算子の行で、いまは `0` を
+    // 前置して一致する。前置の +90 はその 54 と、もともと一致していた行のうち未決に戻って
+    // 画面の値を前置するようになった 36 である(綴りの数は動かず、前置の内数だけが動く)。
     assert!(
-        counts.spellings >= 967_199,
-        "慣例で読み直したのは {} 回(2026-10-05 の実測 967,199 回)",
+        counts.spellings >= 967_253,
+        "慣例で読み直したのは {} 回(2026-10-05 の実測 967,253 回。DEL の規則の前は 967,199 回)",
         counts.spellings
     );
     // **前置した行の下限**——前置が `=` をまたぐ行を 1 本も読まないまま緑にしない。
     assert!(
-        counts.prefixed >= 714_205,
-        "頭に値を前置して読み直したのは {} 回(2026-10-05 の実測 714,205 回)",
+        counts.prefixed >= 714_295,
+        "頭に値を前置して読み直したのは {} 回(2026-10-05 の実測 714,295 回。DEL の規則の前は 714,205 回)",
         counts.prefixed
     );
-    // **既知の欠陥はちょうどの数で固定する**(`>=` にしない。監視役の裁定 2026-10-05)。
-    // **読むのは `walk_signs` が持つ web の前置の判定の写し**(`walk` にもう 1 つ)なので、
-    // web だけ直しても数は動かない。**直す枝は `ScientificPanel.tsx`・`walk_signs`・`walk` を
-    // 同じコミットで変える**——そこで 0 に落ちて赤くなり、`frozen_carry_shape` を消す。
+    // **DEL の規則の不変条件**(設計書 §3.3): **DEL のあと `answer_on_screen` が真なら、区間の
+    // 綴りは空。** 未決に戻すのが正しいのは、そのとき行に前置を使う語が残っていないからである。
+    // **比べた回数の下限**は 2026-10-05 の実測(0 回で緑にしない)。
+    assert!(
+        counts.del_resets >= 18_200,
+        "DEL のあと答えが画面に戻ったのは {} 回(2026-10-05 の実測 18,200 回)",
+        counts.del_resets
+    );
     assert_eq!(
-        counts.frozen_carry, 54,
-        "既知の欠陥(`( ) DEL DEL` のあとの演算子)で除いた行が {} 件(2026-10-05 の実測 54 件)",
-        counts.frozen_carry
+        counts.del_reset_leftovers, 0,
+        "DEL のあと答えが画面に戻ったのに、区間の綴りが残っていたのが {} 回",
+        counts.del_reset_leftovers
     );
     assert_eq!(
         counts.mismatches, 0,
@@ -1411,8 +1420,14 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
         length: LENGTH,
     });
     println!(
-        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {}",
-        counts.values, counts.spellings, counts.prefixed, counts.rounded_away, counts.mismatches
+        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {} / DEL のあと答えが画面に戻った {} (うち区間の綴りが残った {})",
+        counts.values,
+        counts.spellings,
+        counts.prefixed,
+        counts.rounded_away,
+        counts.mismatches,
+        counts.del_resets,
+        counts.del_reset_leftovers
     );
     for sample in &counts.samples {
         println!("不一致: {sample}");
@@ -1454,10 +1469,30 @@ fn every_sequence_closed_by_equals_matches_an_independent_evaluator() {
     );
     // **頭に値を前置した行の下限**(2026-10-03)。**除外条件が強すぎると、前置する行を
     // 1 本も比べないまま緑になる**([[tests-can-assert-nothing]])ので、**その回数そのものを撃つ。**
+    //
+    // **★ 2026-10-05 に 555,020 → 555,096(+76)に上げた**(前置の判定を DEL で未決に戻す
+    // 設計書 §3 の 5)。**`( ) DEL DEL` の形が `NET` にも在り**、直す前は `)` で「前置しない」と
+    // 固まったまま `Typed` の 0 補い(行頭の演算子の左辺に `base` = 0)で一致していた行が、
+    // 未決に戻ってから `0` を前置して一致する。**綴りの数(919,493)は動かない**——
+    // 内数の前置だけが動く。
+    // **この床が `walk` の写しの番人である**: `walk` から DEL の規則を外すと 555,020 に戻り、
+    // ここが赤くなる(2026-10-05 に変異で確かめた。不一致は 0 のまま——0 補いが黙らせる)。
     assert!(
-        counts.prefixed >= 555_020,
-        "頭に値を前置して読み直したのは {} 回(2026-10-03 の実測 555,020 回)",
+        counts.prefixed >= 555_096,
+        "頭に値を前置して読み直したのは {} 回(2026-10-05 の実測 555,096 回。DEL の規則の前は 555,020 回)",
         counts.prefixed
+    );
+    // **DEL の規則の不変条件**(設計書 §3.3。`walk_signs` と同じ): DEL のあと
+    // `answer_on_screen` が真なら、区間の綴りは空。下限は 2026-10-05 の実測。
+    assert!(
+        counts.del_resets >= 18_539,
+        "DEL のあと答えが画面に戻ったのは {} 回(2026-10-05 の実測 18,539 回)",
+        counts.del_resets
+    );
+    assert_eq!(
+        counts.del_reset_leftovers, 0,
+        "DEL のあと答えが画面に戻ったのに、区間の綴りが残っていたのが {} 回",
+        counts.del_reset_leftovers
     );
     // **行が engine の答えを生むこと。** **飛ばすのは「表示が丸めた行」だけ**(上の註)。
     assert_eq!(
@@ -1474,8 +1509,14 @@ fn spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer() {
         length: PAREN_LENGTH,
     });
     println!(
-        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {}",
-        counts.values, counts.spellings, counts.prefixed, counts.rounded_away, counts.mismatches
+        "比べた回数: 値 {} / 綴りの読み直し {} (うち頭に値を前置した行 {}) / 丸めで飛ばした {} / 一致しなかった {} / DEL のあと答えが画面に戻った {} (うち区間の綴りが残った {})",
+        counts.values,
+        counts.spellings,
+        counts.prefixed,
+        counts.rounded_away,
+        counts.mismatches,
+        counts.del_resets,
+        counts.del_reset_leftovers
     );
     for sample in counts.samples.iter().take(4) {
         println!("不一致: {sample}");
@@ -1498,10 +1539,26 @@ fn spellings_in_a_paren_heavy_net_read_back_to_the_engines_answer() {
     // **括弧網には `=` が無い**(上の `PAREN_NET`)ので、**前置される値はいつも画面の 0**で、
     // **評価器の既定の左辺と同じ**になる——**前置をやめても不一致は 0 のままである。**
     // **つまり下の「不一致 0」は、この網では前置について何も言っていない。**
+    // **★ 2026-10-05 に 1,124,996 → 1,127,184(+2,188)に上げた**(前置の判定を DEL で
+    // 未決に戻す設計書 §3 の 5)。**`( ) DEL DEL` のように組を消し切った区間**が、直す前は
+    // `)` で「前置しない」と固まり、直した後は次の演算子で画面の 0 を前置する。綴りの数は動かない。
+    // **`walk` から DEL の規則を外すと 1,124,996 に戻り、ここも赤くなる**(2026-10-05 の変異。
+    // `NET` の床と並ぶ、`walk` の写しの番人)。
     assert!(
-        counts.prefixed >= 1_124_996,
-        "頭に値を前置して読み直したのは {} 回(2026-10-03 の実測 1,124,996 回)",
+        counts.prefixed >= 1_127_184,
+        "頭に値を前置して読み直したのは {} 回(2026-10-05 の実測 1,127,184 回。DEL の規則の前は 1,124,996 回)",
         counts.prefixed
+    );
+    // **DEL の規則の不変条件**(設計書 §3.3)。下限は 2026-10-05 の実測。
+    assert!(
+        counts.del_resets >= 9_153,
+        "DEL のあと答えが画面に戻ったのは {} 回(2026-10-05 の実測 9,153 回)",
+        counts.del_resets
+    );
+    assert_eq!(
+        counts.del_reset_leftovers, 0,
+        "DEL のあと答えが画面に戻ったのに、区間の綴りが残っていたのが {} 回",
+        counts.del_reset_leftovers
     );
     assert_eq!(
         counts.mismatches, 0,

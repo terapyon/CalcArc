@@ -474,6 +474,7 @@ export function ScientificPanel() {
    * 押したとき、その直前の `display.answerOnScreen` が真なら、そのときの
    * `display.main` をここに写す。** **偽なら `null`**（前置しない）。
    * **`decidedRef` が真になるまでが未決**で、**`=` と `AC` で未決に戻す。**
+   * **DEL のあと `answerOnScreen` が真になったときも未決に戻す**（1.2.1。`press` の註）。
    *
    * **前置するのは「その押下が使う値」であって「前回の答え」ではない**
    * （2026-10-03 に替えた）——**`33 = ( DEL +` は画面が 0 に戻っている**ので、
@@ -593,7 +594,9 @@ export function ScientificPanel() {
     // 積むと engine は数を捨てずに元のまま、綴りだけが「2 (」になり、履歴の式が嘘になる。
     if (previous?.refused.includes(token)) return;
     const inError = previous !== null && previous.display.error !== null;
-    if (ready && previous && !(inError && token !== "ac")) {
+    // **engine に届き、列に積むキーか**（H-3 の門）。下の DEL の規則も同じ門の内側で読む。
+    const recorded = !!ready && !!previous && !(inError && token !== "ac");
+    if (ready && previous && recorded) {
       // **区間の中で最初に「画面の値を使うキー」を押した瞬間に決める**
       // ——**読むのは engine が前の Step に載せた `answerOnScreen`**（この押下の直前の姿）。
       // **三角キーを押すたびに、そのときのモードを積む**（畳むのは綴る側）。
@@ -653,6 +656,19 @@ export function ScientificPanel() {
     // 呼ぶ問題もここでは起きない(`dispatch` を呼ぶのは 1 度きり)。
     const next =
       ready && previous ? ready.dispatch(previous.state, token) : previous;
+    // **DEL のあと engine が「区間の始まり」と同じ姿に戻ったら、前置の判定を未決に戻す**
+    // （1.2.1、`2026-10-05-carry-decision-del-design.md` §2.1）。**読むのは `dispatch` が
+    // 返した次の Step の `answerOnScreen`**——**キー列から推測しない**、effect でも読まない
+    // （H-5 の族を踏まない）。**列に積んだ DEL だけ**（上の `recorded` の門。エラー中の DEL は
+    // 列にも判定にも触らない）。**真とは保留が何も無いこと**なので、行には前置を使う語が
+    // 残っていない（`engine_values.rs` の `walk_signs` が数えて見張る不変条件）。
+    // **1.2.0 の欠陥**: `( ) DEL DEL × 3 =` は `)` で「前置しない」と固まり、行が `× 3` に
+    // なっていた（engine は画面の 0 を左辺に取る）。**写しは `engine_values.rs` の `walk` と
+    // `walk_signs` に在る**——**3 か所を一緒に変える。**
+    if (recorded && token === "del" && next?.display.answerOnScreen) {
+      decidedRef.current = false;
+      carryAtDecisionRef.current = null;
+    }
     stepRef.current = next;
     setStep(next);
   }, []);
