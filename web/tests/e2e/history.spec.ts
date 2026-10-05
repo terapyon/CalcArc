@@ -276,8 +276,8 @@ test("a chain continued by a postfix function or the sign key records the carrie
   await press(page, ["計算する"]);
 
   await press(page, ["第2面に切り替え", "履歴"]);
-  await expect(page.getByText("4 √")).toBeVisible();
-  await expect(page.getByText("7 +/−")).toBeVisible();
+  await expect(page.getByText("√(4)", { exact: true })).toBeVisible();
+  await expect(page.getByText("−7", { exact: true })).toBeVisible();
   // 直す前はこの 2 行の式が「√」と「+/−」だけだった。
   await expect(page.getByText("√", { exact: true })).toHaveCount(0);
   await expect(page.getByText("+/−", { exact: true })).toHaveCount(0);
@@ -456,7 +456,7 @@ test("the history entry names the mode that drew it, on the real WASM core", asy
 
   const entry = page.getByTestId("history-entry").first();
   // **式は打ったキーのまま**（印は履歴には出ない——**モードは専用の欄が持つ**）。
-  await expect(entry).toContainText("30 sin × 2");
+  await expect(entry).toContainText("sin(30) × 2");
   // **その `sin` を描いたのは DEG である。**
   await expect(entry).toContainText("Deg");
 });

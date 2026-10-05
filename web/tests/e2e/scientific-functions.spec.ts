@@ -39,12 +39,12 @@ test("xʸ folds from the right, all the way through the browser", async ({
 
 test("the pending power operator shows in the typed line", async ({ page }) => {
   await press(page, ["2", "べき乗"]);
-  // **綴りはキーの面のまま**（`spell.rs:79` の `Key::Pow => "xʸ"`）。
-  // **1.2 でこの欄が打鍵の綴りに替わった**ので、**`^` から `xʸ` に変わった**
-  // ——**履歴に残る式と同じ綴りになった**（前は欄と履歴で違っていた）。
+  // **綴りは数学の書き方**（関数表記の設計書 §2.3: `xʸ` は `^` と書く）。
+  // **1.2 でこの欄が打鍵の綴りに替わって `xʸ` になり、1.2.1 で `^` に戻った**
+  // ——**履歴に残る式と同じ綴りである**。
   // **engine の `echo` の `^` は変えていない**——`engine_table.rs` の
   // `the_echo_shows_the_pending_expression` がいまも固定している。
-  await expect(page.getByTestId("display-echo")).toHaveText("2 xʸ");
+  await expect(page.getByTestId("display-echo")).toHaveText("2 ^");
 });
 
 test("the inverse trig functions are reachable through Shift", async ({
