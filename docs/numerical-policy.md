@@ -786,7 +786,10 @@ engine の意味論を教えることになる。それは CONTRIBUTING の「�
   - **厳密な 0 で割るとゼロ除算になる。** `1 ÷ ( 0.1 + 0.2 − 0.3 ) =` と
     `0.1 + 0.2 = − 0.3 = 1/x` は `DivisionByZero`（1.2.3 より前は `1.801439851e16`
     ——f64 の残り `5.551115123e-17` で割っていた）。番人は `engine_table.rs` の
-    `dividing_by_an_exact_decimal_zero_is_an_error`。
+    `dividing_by_an_exact_decimal_zero_is_an_error`。**割り算だけではない**——厳密な 0 の
+    `ln` `log` と、厳密な 0 の負の `xʸ`（`( 0.1 + 0.2 − 0.3 ) xʸ 1 +/− =`）も、同じ理由で
+    `DomainError` になる（以前は `-37.42994775`・`-16.25561977`・`1.801439851e16`）。番人は
+    `ln_log_and_a_negative_power_of_an_exact_decimal_zero_are_errors`。
   - **印が持てないもの**（√・ln・log・eˣ・xʸ・n!・nPr・nCr・逆三角関数の答え、π²、
     `i128` に収まらない数、虚部のある数の積・商）は、今までどおり **f64 が持っている数に
     対する答え**を返す。`2 √ x² − 2 =` は `4.440892099e-16` のままである。

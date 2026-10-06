@@ -2073,3 +2073,19 @@ fn dividing_by_an_exact_decimal_zero_is_an_error() {
     assert_eq!(reciprocal.main, "Math ERROR");
     assert_eq!(reciprocal.error, Some(CalcError::DivisionByZero));
 }
+
+/// 割り算だけではない。`0.1 + 0.2 − 0.3` は厳密な 0 なので、`ln` `log` と負の `xʸ` も
+/// 0 の定義域外になる。**種別まで見る**(以前は `ln` が `-37.4…`、`xʸ` が `1.801439851e16`)。
+#[test]
+fn ln_log_and_a_negative_power_of_an_exact_decimal_zero_are_errors() {
+    use calcarc_core::CalcError;
+    let zero = [
+        "lparen", "0", "dot", "1", "add", "0", "dot", "2", "sub", "0", "dot", "3", "rparen",
+    ];
+    for tail in [&["ln"][..], &["log10"][..], &["pow", "1", "neg", "eq"][..]] {
+        let keys: Vec<&str> = zero.iter().chain(tail.iter()).copied().collect();
+        let shown = run(&keys);
+        assert_eq!(shown.main, "Math ERROR", "{tail:?}");
+        assert_eq!(shown.error, Some(CalcError::DomainError), "{tail:?}");
+    }
+}
