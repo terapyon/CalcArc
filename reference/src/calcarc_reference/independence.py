@@ -106,6 +106,10 @@ SCOPE: dict[str, tuple[str, str]] = {
         "expects",
         "組合せの誤入力の期待値。宣言はモジュールに在る",
     ),
+    "src/calcarc_reference/corpus_rad_pi.py": (
+        "expects",
+        "RAD × π の倍数の表示の期待値。mpmath で直接評価し、0 と極は定義から有理数で決める",
+    ),
     "src/calcarc_reference/corpus_complex.py": (
         "expects",
         "複素の式木を評価して期待値にする（corpus_eval とは別経路）",
