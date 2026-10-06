@@ -29,7 +29,7 @@ pub struct DisplayState {
     ///
     /// **何も打っていないときも真**である(画面の `0` がその「答え」)。
     ///
-    /// **導出である**——`EngineState` には何も足していない(`STATE_SCHEMA` は 8 のまま)。
+    /// **導出である**——`EngineState` には何も足していない(足したとき `STATE_SCHEMA` を上げなかった。9 は 1.2.3 の印で上げた別件)。
     /// **web はこれを読んで、履歴と経歴の式に前の答えを前置するかを決める**
     /// ——**キー列から推測しない**(あの推測が、`DEL` で消えた数字を「新しい計算の始まり」と
     /// 読み、式が答えを生まない行を作っていた。364 件。`engine_values.rs` の読み直しが見つけた)。
@@ -48,7 +48,7 @@ pub fn render(state: &EngineState) -> DisplayState {
     let polar_overflow = state.error.is_none()
         && state.buffer.is_none()
         && state.form == DisplayForm::Polar
-        && try_format_polar(state.current, state.angle).is_none();
+        && try_format_polar(state.current.value, state.angle).is_none();
 
     let error = state.error.or(if polar_overflow {
         Some(CalcError::Overflow)
@@ -70,9 +70,9 @@ pub fn render(state: &EngineState) -> DisplayState {
         text
     } else {
         match state.form {
-            DisplayForm::Rect => format_rect_notated(state.current, state.notation),
+            DisplayForm::Rect => format_rect_notated(state.current.value, state.notation),
             DisplayForm::Polar => {
-                try_format_polar_notated(state.current, state.angle, state.notation)
+                try_format_polar_notated(state.current.value, state.angle, state.notation)
                     .unwrap_or_else(|| ERROR_TEXT.to_string())
             }
         }
@@ -127,10 +127,10 @@ pub fn render(state: &EngineState) -> DisplayState {
 /// 複素数は 60 進にしない。時間にも角度にも読めないためで、`is_real()` で
 /// 弾く（S-1 が関数を実数に閉じたのと同じ線引きである）。
 fn sexagesimal_view_of(state: &EngineState) -> Option<String> {
-    if !state.sexagesimal_view || !state.current.is_real() {
+    if !state.sexagesimal_view || !state.current.value.is_real() {
         return None;
     }
-    format_sexagesimal(state.current.re)
+    format_sexagesimal(state.current.value.re)
 }
 
 /// 実数 1 つを記法に従って文字列にする。
@@ -192,7 +192,7 @@ fn echo_of(state: &EngineState) -> String {
                     // echo も main と同じ画面に出る。ENG が main に掛かって
                     // いるのに echo だけ通常表記だと、表記が食い違って見える
                     // (設計書 §6。修正: 最終レビューで発覚)。
-                    parts.push(format_rect_notated(*value, state.notation));
+                    parts.push(format_rect_notated(value.value, state.notation));
                 }
                 parts.push(op_symbol(*op).to_string());
             }
@@ -202,7 +202,7 @@ fn echo_of(state: &EngineState) -> String {
     }
     // まだ演算子が来ていないオペランドと、入力中の値。
     for value in operands {
-        parts.push(format_rect_notated(*value, state.notation));
+        parts.push(format_rect_notated(value.value, state.notation));
     }
     if let Some(buffer) = &state.buffer {
         parts.push(buffer.text());
@@ -233,7 +233,7 @@ mod tests {
         // 有限で engine の状態はエラーではないが、表示できない以上、
         // 表示された DisplayState は自己矛盾してはいけない。
         let mut state = EngineState::initial();
-        state.current = Value::new(f64::MAX, f64::MAX);
+        state.current = crate::engine::Held::bare(Value::new(f64::MAX, f64::MAX));
         state.form = DisplayForm::Polar;
 
         let shown = render(&state);

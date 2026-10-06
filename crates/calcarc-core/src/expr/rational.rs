@@ -45,6 +45,11 @@ fn make(num: i128, den: i128) -> CalcResult<Rational> {
 }
 
 impl Rational {
+    /// 0。engine の印(`engine::exact`)が初期値・`AC`・`(` の 0 に付ける。
+    pub const ZERO: Rational = Rational { num: 0, den: 1 };
+    /// 1。`π` キーの印 `1 × π` に使う。
+    pub const ONE: Rational = Rational { num: 1, den: 1 };
+
     pub fn from_i128(value: i128) -> CalcResult<Rational> {
         make(value, 1)
     }
