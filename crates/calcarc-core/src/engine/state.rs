@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::exact::Held;
 use crate::{AngleMode, CalcError, CalcResult, Value};
 
 /// 状態のスキーマ版。永続化を始めた後に不整合を検出するために持つ。
@@ -13,9 +14,11 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 ///    `on_hand`(§3.3)が入った。
 /// 8: 閉じた組を開き直すための `closed_groups`(0.9.3 設計書 §4.2)が入った。
 ///    **`)` ごとに積み、DEL で 1 つ降ろす列**である。
+/// 9: `current`・`operands`・`ReplaceBase`・`ClosedGroup` の値が `Held`(値＋厳密な
+///    正体の印)になった(1.2.2 設計書 §3.2・§6.3)。印の有理数は文字列 `"num/den"`。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 8;
+pub const STATE_SCHEMA: u32 = 9;
 
 /// 入力欄に打ち込める最大文字数。
 ///
@@ -127,9 +130,9 @@ pub enum OpToken {
 /// 結合方向はいまのコードがそのまま担う——押し直しのための計算の規則を別に持たない。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReplaceBase {
-    pub operands: Vec<Value>,
+    pub operands: Vec<Held>,
     pub operators: Vec<OpToken>,
-    pub current: Value,
+    pub current: Held,
 }
 
 /// `)` を押す直前の状態(0.9.3 設計書 §4.2)。
@@ -146,8 +149,8 @@ pub struct ReplaceBase {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClosedGroup {
     pub buffer: Option<Buffer>,
-    pub current: Value,
-    pub operands: Vec<Value>,
+    pub current: Held,
+    pub operands: Vec<Held>,
     pub operators: Vec<OpToken>,
     pub operator_pending: bool,
     pub on_hand: bool,
@@ -445,10 +448,10 @@ pub struct EngineState {
     pub schema: u32,
     /// 入力中の数値。None なら `current` が表示される。
     pub buffer: Option<Buffer>,
-    /// 確定している現在値。
-    pub current: Value,
+    /// 確定している現在値。**印(`Held::exact`)を添えて持つ**(1.2.2 設計書 §3.2)。
+    pub current: Held,
     /// 保留中の被演算数。
-    pub operands: Vec<Value>,
+    pub operands: Vec<Held>,
     /// 保留中の演算子と開き括弧。
     pub operators: Vec<OpToken>,
     pub angle: AngleMode,
@@ -500,7 +503,7 @@ impl EngineState {
         EngineState {
             schema: STATE_SCHEMA,
             buffer: None,
-            current: Value::ZERO,
+            current: Held::ZERO,
             operands: Vec::new(),
             operators: Vec::new(),
             angle: AngleMode::Deg,

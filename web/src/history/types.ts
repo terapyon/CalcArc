@@ -34,6 +34,13 @@ export interface HistoryEntry {
    * 表示の文言を変えた日に静かに壊れる。
    */
   error: boolean;
+  /**
+   * **`=` の行に付けた角度の印**（`"DEG"` / `"RAD"` / 付けなかった行は `""`）。1.2.2 から。
+   * **呼び戻した行が同じ印を出すために残す**（`2026-10-06-recall-trail-design.md` §2.2 案 a）
+   * ——**`angle` からは「印を付けなかった」を復元できない**（`angle` は常に入っている）。
+   * **持たない件（1.2.2 より前）は、呼び戻す側が `angle` の大文字で補う。**
+   */
+  mark?: string;
 }
 
 export const HISTORY_KEY = "calcarc.history";

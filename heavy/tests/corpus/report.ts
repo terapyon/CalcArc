@@ -712,7 +712,7 @@ export function areaOfShard(shardName: string): Area {
     // 「複素数を検証した」件数が別の領域の数字に混ざる。
     return "complex";
   }
-  if (/^(display|entry|errors)-/.test(stem)) {
+  if (/^(display|entry|errors|rad-pi-display)-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
     // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
     // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
@@ -727,6 +727,10 @@ export function areaOfShard(shardName: string): Area {
     // **エラー種別**で、`main` は全種別で同じ "Math ERROR" である
     // (設計書 §5)——値の一致件数に混ぜると、値を一度も比べていない
     // 30 件が「値がどれだけ合っているか」の分母に紛れ込む。
+    //
+    // `rad-pi-display-` も同じ理由でここに入る（2026-10-06）。**値ではなく
+    // 表示の文字列を厳密一致で比べる**——そうしないと `1.224646799e-16` と `0` を
+    // 見分けられない（真値 0 の行は値ケースだと abs 5e-10 で両方緑になる）。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {
@@ -2731,6 +2735,12 @@ export const ERRORS_SHARD = "errors-000.json";
 /** 組合せの誤入力のシャード（2026-08-30）。**エラー経路は `errors` と同じ枠。** */
 export const COMBINATORICS_ERRORS_SHARD = "combinatorics-display-000.json";
 
+/**
+ * RAD × π の倍数のシャード（2026-10-06、1.2.2）。**極の行（`TrigPole`）を持つ。**
+ * **エラー経路は `errors` と同じ枠**——三角関数の極は科学計算の定義域エラーである。
+ */
+export const RAD_PI_SHARD = "rad-pi-display-000.json";
+
 /** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
 export const ENTRY_SHARD = "entry-000.json";
 
@@ -2792,7 +2802,8 @@ function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
   const stem = shardStem(shardName);
   if (
     stem === shardStem(ERRORS_SHARD) ||
-    stem === shardStem(COMBINATORICS_ERRORS_SHARD)
+    stem === shardStem(COMBINATORICS_ERRORS_SHARD) ||
+    stem === shardStem(RAD_PI_SHARD)
   ) {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。

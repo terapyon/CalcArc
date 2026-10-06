@@ -92,6 +92,11 @@ SCOPE: dict[str, tuple[str, str]] = {
         "expects",
         "複素除算の境界の golden。宣言はモジュールに在る",
     ),
+    "src/calcarc_reference/rational_round.py": (
+        "expects",
+        "i128 の分数を正しく丸めた f64 の golden。Rust は u128 の長除算と自前の丸め、"
+        "こちらは bigint の真の除算（`float(Fraction)`）",
+    ),
     # ------------------------------------------------------- 重量級コーパスの生成
     "src/calcarc_reference/corpus_calls.py": (
         "expects",
@@ -100,6 +105,10 @@ SCOPE: dict[str, tuple[str, str]] = {
     "src/calcarc_reference/corpus_combinatorics.py": (
         "expects",
         "組合せの誤入力の期待値。宣言はモジュールに在る",
+    ),
+    "src/calcarc_reference/corpus_rad_pi.py": (
+        "expects",
+        "RAD × π の倍数の表示の期待値。mpmath で直接評価し、0 と極は定義から有理数で決める",
     ),
     "src/calcarc_reference/corpus_complex.py": (
         "expects",

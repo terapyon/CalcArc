@@ -59,6 +59,7 @@ export const ALL_SHARDS = [
   "finance-start-000.json (calls)",
   "combinatorics-display-000.json (displays)",
   "complex-display-000.json (displays)",
+  "rad-pi-display-000.json (displays)",
   "display-000.json (displays)",
   "entry-000.json (displays)",
   "errors-000.json (displays)",
@@ -123,6 +124,12 @@ export const MUTATIONS = [
       // 桁を跨がない)で跨ぐ。2000 件中 572 件(28.6%)、下限はその約 12%
       // 下。
       "operator-correction-000.json (values)",
+      // **`rad-pi-display-000.json` も反応する(2026-10-06、手元のネイティブ
+      // 実行で実測。`heavy:power` はまだ回していない)。** 表示の文字列を比べる
+      // シャードなので、10 桁の答え(`0.8660254038`・`-0.9510565163` など)は
+      // 9 桁に落ちれば文字列が変わる。`0`・`±1`・`±0.5` と極の行は変わらない。
+      // 296 件中 164 件(55.4%)、下限はその約 12% 下。
+      "rad-pi-display-000.json (displays)",
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
@@ -137,6 +144,7 @@ export const MUTATIONS = [
       "complex-display-000.json (displays)": 0.083,
       "display-000.json (displays)": 0.103,
       "operator-correction-000.json (values)": 0.25,
+      "rad-pi-display-000.json (displays)": 0.49,
     },
   },
   {
@@ -679,6 +687,22 @@ export const MUTATIONS = [
   },
 
   // **ここから演算子の押し直しの変異(設計書 §3.8、外部監査 F1)。**
+  {
+    id: "rad-pi-table-off",
+    what: "RAD で π の倍数を表から引くのをやめる(1.2.2 の直しを外す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "(Some(mark), AngleMode::Rad) if mark.pi => pi_turn(mark.q),",
+    to: "(Some(mark), AngleMode::Rad) if mark.pi && false => pi_turn(mark.q),",
+    // **`rad-pi-display-000.json` だけが反応するはず。** 他の 21 枚に、RAD で
+    // π を三角関数に渡すキー列は 1 本も無い(2026-10-06 に全シャードのキー列を
+    // 数えて 0 本)。外すと f64 の π で計算する 1.2.2 までの答えに戻り、
+    // 0 になるはずの行が `1.224646799e-16` などに、極の行が有限の巨大値になる。
+    // **296 件中 44 件(14.9%)が赤**(2026-10-06、手元のネイティブ実行で実測。
+    // 1.2.2 の前の core `afa9991` で回しても同じ 44 件)。残りは √ を含む値と
+    // 表に載らない角で、f64 の π でも 10 桁が変わらない。下限はその約 12% 下。
+    expectShards: ["rad-pi-display-000.json (displays)"],
+    minRate: { "rad-pi-display-000.json (displays)": 0.13 },
+  },
   {
     id: "operator-correction-revert",
     what: "演算子の押し直しを、演算子スタックの末尾の差し替えに戻す(修正前の F1)",

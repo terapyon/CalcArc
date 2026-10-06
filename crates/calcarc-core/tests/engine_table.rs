@@ -1009,12 +1009,12 @@ fn degree_quadrant_angles_are_exact() {
 
 /// **表に載らない角は、いままでどおり**（上の直しの対照）。
 ///
-/// **真の値が無理数の角**（`30°` の `sin` は `0.4999999999999994`）と、
-/// **90 の倍数でない角**（`180.0000001`）。**どちらも表を引かない。**
+/// **90 の倍数でない角**（`180.0000001`）は表を引かない。
+/// **`30°` は 1.2.2 で表に入った**（設計書 §4.1）——直す前の生は `0.49999999999999994`
+/// で、表示の 10 桁では `0.5` に隠れていた。**いまは表の 0.5 そのもの**で、
+/// 生の違いは `degree_thirty_and_forty_five_are_exact` の `30 sin − 0.5 =` が見る。
 #[test]
 fn angles_outside_the_quadrant_table_keep_their_rounding() {
-    // 表示は 10 桁なので `0.4999999999999994` は `0.5` に見える——
-    // **直っているのではなく、丸めで隠れている**（設計書 §1）。
     assert_eq!(main_of(&["3", "0", "sin"]), "0.5");
     assert_eq!(
         main_of(&[
@@ -1772,4 +1772,320 @@ fn refused_keys_lists_every_key_that_refuses_in_key_all_order() {
             Key::E,
         ]
     );
+}
+
+// ---- 打った数と π を厳密に持つ(1.2.2 設計書 §9。段階 1) ----
+//
+// **「今」の列は `afa9991` の印字**(設計書 §9)。行の註に「今」の表示を残す
+// ——**直す前の印字は、この行が何を変えたかの一次資料である。**
+
+/// RAD で打鍵する(先頭に `DEG/RAD` を 1 回押す)。
+fn rad_main_of(keys: &[&str]) -> String {
+    let mut pressed = vec!["angle_toggle"];
+    pressed.extend_from_slice(keys);
+    main_of(&pressed)
+}
+
+/// **π キーから四則だけで作った角は、本当の π の倍数として表を引く**(§4.1・§4.2)。
+#[test]
+fn radian_multiples_of_pi_are_exact() {
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "sin"]), "0");
+    // 今 `-1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "tan"]), "0");
+    // 今 `6.123233996e-17`。
+    assert_eq!(rad_main_of(&["pi", "div", "2", "eq", "cos"]), "0");
+    // **3 通りの打ち方が同じ答え**(今は 3 つとも `-2.449293598e-16`)。
+    assert_eq!(rad_main_of(&["pi", "mul", "2", "eq", "sin"]), "0");
+    assert_eq!(rad_main_of(&["2", "mul", "pi", "eq", "sin"]), "0");
+    assert_eq!(rad_main_of(&["pi", "add", "pi", "eq", "sin"]), "0");
+    // 今 `-2.231912181e-10`。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "zeros3", "zeros3", "eq", "sin"]),
+        "0"
+    );
+    // **生の厳密さを表示で見る形**——`0.49999999999999994` は 10 桁の表示では
+    // `0.5` に隠れるので、0.5 を引いて残りを見る。今 `-5.551115123e-17`。
+    assert_eq!(
+        rad_main_of(&["pi", "div", "6", "eq", "sin", "sub", "0", "dot", "5", "eq"]),
+        "0"
+    );
+}
+
+/// **RAD の tan の極は TrigPole**(§4.3、利用者の裁定 10-06)。DEG と揃う。
+#[test]
+fn radian_tan_poles_are_errors() {
+    // 今 `1.633123935e16`。
+    assert_eq!(rad_main_of(&["pi", "div", "2", "eq", "tan"]), "Math ERROR");
+    // 今 `5.443746451e15`。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "3", "div", "2", "eq", "tan"]),
+        "Math ERROR"
+    );
+    // **表の 0 は本当の 0 なので、割ると DivisionByZero**。今 `8.165619677e15`。
+    assert_eq!(
+        rad_main_of(&["1", "div", "lparen", "pi", "sin", "rparen", "eq"]),
+        "Math ERROR"
+    );
+}
+
+/// **DEG の 30°・45° の倍数も表から**(§4.1)。**印が無いと直らない形**も。
+#[test]
+fn degree_thirty_and_forty_five_are_exact() {
+    // 今 `-5.551115123e-17`。
+    assert_eq!(
+        main_of(&["3", "0", "sin", "sub", "0", "dot", "5", "eq"]),
+        "0"
+    );
+    // **f64 の差は `90.00000000000001`**——印(打った十進の差 = 90)で表を引く。
+    // 今 `-1.60812265e-16`。
+    assert_eq!(
+        main_of(&[
+            "1", "2", "8", "dot", "0", "5", "sub", "3", "8", "dot", "0", "5", "eq", "cos"
+        ]),
+        "0"
+    );
+    // **印の剰余が 90 なので極**。今 `-6.218431164e15`。
+    assert_eq!(
+        main_of(&[
+            "1", "2", "8", "dot", "0", "5", "sub", "3", "8", "dot", "0", "5", "eq", "tan"
+        ]),
+        "Math ERROR"
+    );
+}
+
+/// **0 は k に中立**(§3.4、条件 1)。4 列とも `π sin` と同じ答え。
+#[test]
+fn a_leading_zero_does_not_hide_pi() {
+    // 今は 3 列とも `1.224646799e-16`(`π sin` と同じ)。
+    assert_eq!(rad_main_of(&["add", "pi", "eq", "sin"]), "0");
+    assert_eq!(rad_main_of(&["lparen", "add", "pi", "rparen", "sin"]), "0");
+    assert_eq!(rad_main_of(&["0", "add", "pi", "eq", "sin"]), "0");
+}
+
+/// **印は `re` の正体**(§3.1・§4.4、条件 2)。虚部があっても表を引く。
+#[test]
+fn the_table_reaches_complex_arguments_through_the_real_mark() {
+    // 今 `1.224646799e-16-1e-300j`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "add", "1", "exp", "3", "0", "0", "neg", "j", "eq", "sin"
+        ]),
+        "-1e-300j"
+    );
+    // 今 `-1.60812265e-16-1.745329252e-302j`。
+    assert_eq!(
+        main_of(&[
+            "1", "2", "8", "dot", "0", "5", "sub", "3", "8", "dot", "0", "5", "add", "1", "exp",
+            "3", "0", "0", "neg", "j", "eq", "cos"
+        ]),
+        "-1.745329252e-302j"
+    );
+}
+
+/// **RAD の極の判定は `im == 0` に限る**(§4.3、レビュー役の注記 2)。
+/// `tan(π/2 + εj)` は有限の商を返す(DEG の `is_tan_pole` と同じ)。
+#[test]
+fn a_complex_argument_at_a_radian_pole_is_not_a_pole() {
+    // 真の値は `tan(π/2 + εj) = j·coth ε ≈ j/ε`。今 `1.633123935e16+2.667093788e-268j`
+    // (実部は f64 の π/2 が作っていた幻)。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "div", "2", "add", "1", "exp", "3", "0", "0", "neg", "j", "eq", "tan"
+        ]),
+        "1e300j"
+    );
+}
+
+/// **複素の引数では、表の答えに k=0 の印を付けない**(§4.2、レビュー役の注記 1)。
+///
+/// `j cos` は `cosh 1 = 1.543…`——表の `cos 0 = 1` に `cosh y` が掛かっている。
+/// **印を付けると「答えの実部は 1」と嘘をつき**、`− 1 =` の印が `(0, k=0)` になって、
+/// 次の `sin` が表の 0 を引く。**正しくは `sin(0.5430806348) = 0.516775835`**。
+#[test]
+fn a_table_answer_for_a_complex_argument_is_not_marked() {
+    assert_eq!(
+        rad_main_of(&["j", "cos", "sub", "1", "eq", "sin"]),
+        "0.516775835"
+    );
+}
+
+/// **変わらないことを留める行**(§9 の対照)。
+#[test]
+fn what_the_mark_must_not_change() {
+    // **打った近似値は π ではない**(12 文字。§2)。
+    assert_eq!(
+        rad_main_of(&[
+            "3", "dot", "1", "4", "1", "5", "9", "2", "6", "5", "3", "5", "sin"
+        ]),
+        "8.979318434e-11"
+    );
+    // (a) の反例(§2)。
+    assert_eq!(
+        rad_main_of(&[
+            "3", "2", "9", "9", "3", "dot", "0", "0", "6", "0", "4", "8", "sin"
+        ]),
+        "-5.670172748e-12"
+    );
+    // k=2 で印が落ちる。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "pi", "eq", "sin"]),
+        "-0.430301217"
+    );
+    // **15° は表に無い**(§4.1)——`π ÷ 12` は畳んだ角の f64 の答え。**表示では表と
+    // 見分けられない**(sin 15° の 10 桁も `0.2588190451`)ので、表に載らないことは
+    // `exact.rs` の `pi_over_twelve_is_folded_not_tabled` が `Turn` で見る。
+    assert_eq!(
+        rad_main_of(&["pi", "div", "1", "2", "eq", "sin"]),
+        "0.2588190451"
+    );
+    // 表に載らない角(畳んでから `f64(r) × π`。表示は変わらない)。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "7", "div", "5", "eq", "sin"]),
+        "-0.9510565163"
+    );
+    // 極の近くの打った数(§4.3)。**12 文字(`1.5707963267`)**——入力は 12 文字までなので、
+    // 13 文字目を打っても落ちる(中間審査の注記 1。以前の行は `…679` と 13 打鍵だった)。
+    assert_eq!(
+        rad_main_of(&[
+            "1", "dot", "5", "7", "0", "7", "9", "6", "3", "2", "6", "7", "tan"
+        ]),
+        "1.053778575e10"
+    );
+    // **i128 の溢れで印が落ちる。エラーにはならない**(§3.4)。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "exp", "4", "0", "eq", "sin"]),
+        "0.9995496644"
+    );
+    // 対になる行: 10^30 は収まるので表を引く。今 `0.8720506314`。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "exp", "3", "0", "eq", "sin"]),
+        "0"
+    );
+}
+
+/// **0 は k に中立**——**商でも**(中間審査の条件 1)。`0 ÷ π` は `(0, k=0)` で、
+/// 次の `+ π` と合成できる。`0 × π` と同じ答えになる。
+#[test]
+fn zero_over_pi_stays_neutral() {
+    assert_eq!(
+        rad_main_of(&["0", "mul", "pi", "eq", "add", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 今 `1.224646799e-16`(`0 ÷ π` で印が落ちていた)。
+    assert_eq!(
+        rad_main_of(&["0", "div", "pi", "eq", "add", "pi", "eq", "sin"]),
+        "0"
+    );
+}
+
+/// **印は状態の操作を越える**(DEL・押し直し・閉じた組の開き直し)。
+#[test]
+fn the_mark_survives_del_reentry_and_reopened_groups() {
+    // 打ちかけの数の DEL。今 `-2.449293598e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "3", "del", "2", "eq", "sin"]),
+        "0"
+    );
+    // 演算子の押し直し。今 `6.123233996e-17`。
+    assert_eq!(rad_main_of(&["pi", "mul", "div", "2", "eq", "cos"]), "0");
+    // **閉じた組を開き直しても印が残る**(`closed_groups` が `Held` を戻す)。
+    assert_eq!(
+        rad_main_of(&["lparen", "pi", "mul", "2", "rparen", "del", "rparen", "sin"]),
+        "0"
+    );
+    assert_eq!(
+        rad_main_of(&[
+            "lparen", "pi", "mul", "2", "rparen", "del", "mul", "3", "rparen", "sin"
+        ]),
+        "0"
+    );
+}
+
+/// **表に載らない k=1 の角は、`(−1, 1]` に畳んでから `f64(r) × π`**(§4.2)。
+///
+/// **f64 の `re` は、巨大な倍数では真の角から ulp の分だけ外れている**——畳めば外れない。
+/// **期待値は mpmath 40 桁の真値の 10 桁**: `cos(10000001π/7) = 0.222520933956…`、
+/// `sin(10^20 π/7) = 0.781831482468…`。**f64 の `re` の答えは `0.2225209338`・
+/// `-0.9966699115`**(Python の `math` で同じ順に計算した値)。
+#[test]
+fn angles_off_the_table_are_folded_before_the_f64() {
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "1", "0", "0", "0", "0", "0", "0", "1", "div", "7", "eq", "cos"
+        ]),
+        "0.222520934"
+    );
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "exp", "2", "0", "div", "7", "eq", "sin"]),
+        "0.7818314825"
+    );
+}
+
+// ---- 打った数と π を厳密に持つ(1.2.2 設計書 §9。段階 2) ----
+//
+// **k=0 の印がある値の `re` は、印を正しく丸めた f64**(§5.1)。四則が「打った数に
+// 対する答え」になる。
+
+/// **近い数の差**(near_subtraction)。f64 で引くと、打った十進の丸めの残りが前に出る。
+#[test]
+fn decimal_arithmetic_is_exact_in_the_typed_decimals() {
+    // 今 `0.0009999992326`。
+    assert_eq!(
+        main_of(&[
+            "4", "5", "4", "8", "3", "9", "9", "dot", "3", "9", "5", "sub", "4", "5", "4", "8",
+            "3", "9", "9", "dot", "3", "9", "4", "eq"
+        ]),
+        "0.001"
+    );
+}
+
+/// **丸めの残りが積もらない**——`0.1 + 0.2` の印は `3/10` なので、`0.3` を引けば 0。
+#[test]
+fn decimal_rounding_does_not_accumulate() {
+    // 今 `5.551115123e-17`。
+    assert_eq!(
+        main_of(&[
+            "0", "dot", "1", "add", "0", "dot", "2", "eq", "sub", "0", "dot", "3", "eq"
+        ]),
+        "0"
+    );
+}
+
+/// **厳密な 0 で割ると DivisionByZero**(段階 2 で利用者から見える変化。Task 3 のレビュー)。
+///
+/// `0.1 + 0.2 − 0.3` の `re` は印 `0` を丸めた f64 の `0` ちょうどなので、`1 ÷` と
+/// `1/x` はゼロ除算になる。**種別まで見る**(`Math ERROR` の表示はどのエラーでも同じ)。
+#[test]
+fn dividing_by_an_exact_decimal_zero_is_an_error() {
+    use calcarc_core::CalcError;
+    // 今 `1.801439851e16`(f64 の残り `5.551115123e-17` で割っていた。`b2661cb` の印字)。
+    let divided = run(&[
+        "1", "div", "lparen", "0", "dot", "1", "add", "0", "dot", "2", "sub", "0", "dot", "3",
+        "rparen", "eq",
+    ]);
+    assert_eq!(divided.main, "Math ERROR");
+    assert_eq!(divided.error, Some(CalcError::DivisionByZero));
+    // 今 `1.801439851e16`(同じ)。
+    let reciprocal = run(&[
+        "0", "dot", "1", "add", "0", "dot", "2", "eq", "sub", "0", "dot", "3", "eq", "recip",
+    ]);
+    assert_eq!(reciprocal.main, "Math ERROR");
+    assert_eq!(reciprocal.error, Some(CalcError::DivisionByZero));
+}
+
+/// 割り算だけではない。`0.1 + 0.2 − 0.3` は厳密な 0 なので、`ln` `log` と負の `xʸ` も
+/// 0 の定義域外になる。**種別まで見る**(以前は `ln` が `-37.4…`、`xʸ` が `1.801439851e16`)。
+#[test]
+fn ln_log_and_a_negative_power_of_an_exact_decimal_zero_are_errors() {
+    use calcarc_core::CalcError;
+    let zero = [
+        "lparen", "0", "dot", "1", "add", "0", "dot", "2", "sub", "0", "dot", "3", "rparen",
+    ];
+    for tail in [&["ln"][..], &["log10"][..], &["pow", "1", "neg", "eq"][..]] {
+        let keys: Vec<&str> = zero.iter().chain(tail.iter()).copied().collect();
+        let shown = run(&keys);
+        assert_eq!(shown.main, "Math ERROR", "{tail:?}");
+        assert_eq!(shown.error, Some(CalcError::DomainError), "{tail:?}");
+    }
 }

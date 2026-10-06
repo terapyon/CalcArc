@@ -1,15 +1,17 @@
 pub mod display;
+pub mod exact;
 pub mod key;
 pub mod spell;
 pub mod state;
 
 pub use display::{DisplayState, render};
+pub use exact::{Exact, Held};
 pub use key::Key;
 pub use spell::{spell, spell_line};
 pub use state::{EngineState, MAX_ENTRY_LEN};
 
-use crate::scientific;
-use crate::{CalcError, CalcResult, Value};
+use crate::scientific::{self, Turn};
+use crate::{AngleMode, CalcError, CalcResult, Value};
 use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBase};
 
 /// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
@@ -257,16 +259,22 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     (next, shown)
 }
 
-fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
-    match op {
-        BinOp::Add => lhs.checked_add(rhs),
-        BinOp::Sub => lhs.checked_sub(rhs),
-        BinOp::Mul => lhs.checked_mul(rhs),
-        BinOp::Div => lhs.checked_div(rhs),
-        BinOp::Pow => scientific::pow(lhs, rhs),
-        BinOp::Npr => scientific::npr(lhs, rhs),
-        BinOp::Ncr => scientific::ncr(lhs, rhs),
-    }
+/// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.2 設計書 §3.4)。
+/// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
+/// §5.1。`Held::settled`)。
+fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
+    let (a, b) = (lhs.value, rhs.value);
+    let (value, exact) = match op {
+        BinOp::Add => (a.checked_add(b)?, exact::add(lhs, rhs)),
+        BinOp::Sub => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
+        BinOp::Mul => (a.checked_mul(b)?, exact::mul(lhs, rhs)),
+        BinOp::Div => (a.checked_div(b)?, exact::div(lhs, rhs)),
+        // xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
+        BinOp::Pow => (scientific::pow(a, b)?, None),
+        BinOp::Npr => (scientific::npr(a, b)?, None),
+        BinOp::Ncr => (scientific::ncr(a, b)?, None),
+    };
+    Ok(Held::settled(value, exact))
 }
 
 /// 入力中のバッファを確定して `current` に移す。
@@ -275,7 +283,10 @@ fn apply_binop(op: BinOp, lhs: Value, rhs: Value) -> CalcResult<Value> {
 /// (設計書 §2: 打鍵の途中はエラーにしない)。
 fn commit_entry(state: &mut EngineState) -> CalcResult<()> {
     if let Some(buffer) = state.buffer.take() {
-        state.current = buffer.value()?;
+        // 打った十進そのもの(1.2.2 設計書 §3.3)。i128 に収まらなければ印なし。
+        // **`buffer.value()` はエラー(f64 の溢れ)を出すために先に読む**——値は印が
+        // あれば印の丸めに置き換わる(段階 2、§5.1。60 進の裁定は `Held::settled`)。
+        state.current = Held::settled(buffer.value()?, exact::of_buffer(&buffer));
     }
     Ok(())
 }
@@ -434,7 +445,8 @@ fn delete_one(state: &mut EngineState) {
 /// `3 (` のような打鍵は意味を持たないため、暗黙の乗算にはしない。
 fn open_paren(state: &mut EngineState) {
     state.buffer = None;
-    state.current = Value::ZERO;
+    // 0 にも印を付ける(1.2.2 設計書 §3.3、条件 1)。`( + π ) sin` が `π sin` と揃う。
+    state.current = Held::ZERO;
     state.operators.push(OpToken::OpenParen);
 }
 
@@ -481,12 +493,36 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
 /// 後置関数の遷移。入力中の値を確定してから、その値に即座に適用する。
 ///
 /// 式には積まれない。`30` `sin` は打鍵した瞬間に 0.5 になる（設計書 D6）。
-fn apply_unary<F>(state: &mut EngineState, f: F) -> CalcResult<()>
+///
+/// **印の規則 `mark` は呼び出し側がキーごとに渡す**(1.2.2 設計書 §3.4「書き方」)。
+/// 値の閉包 `f` は印を見ない——`f` の中に印の規則を書かない。`mark` は**掛ける前の**
+/// 値(印つき)を受け取る。
+fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Option<Exact>) -> CalcResult<()>
 where
     F: FnOnce(Value) -> CalcResult<Value>,
 {
     commit_entry(state)?;
-    state.current = f(state.current)?;
+    let before = state.current;
+    state.current = Held::settled(f(before.value)?, mark(before));
+    Ok(())
+}
+
+/// 三角関数の遷移(1.2.2 設計書 §4)。`apply_unary` と同じく入力中の値を確定して掛ける。
+///
+/// **`apply_unary` の `mark: fn(Held)` には角度モードが入らない**——三角関数の印は、
+/// 引数の印と角度モードから決めた**角の正体** `Turn` で決まる。そこで正体を 1 度だけ
+/// 決め(`exact::turn`)、**値の計算と印の計算の両方に同じ正体を渡す**。印の規則は
+/// 今までどおりキーごとの関数(`exact::sin`・`cos`・`tan`)である。
+fn apply_trig(
+    state: &mut EngineState,
+    f: fn(Value, AngleMode, Option<Turn>) -> CalcResult<Value>,
+    mark: fn(Held, Option<Turn>) -> Option<Exact>,
+) -> CalcResult<()> {
+    commit_entry(state)?;
+    let mode = state.angle;
+    let before = state.current;
+    let turn = exact::turn(before, mode);
+    state.current = Held::settled(f(before.value, mode, turn)?, mark(before, turn));
     Ok(())
 }
 
@@ -541,12 +577,12 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Pow => push_binop(state, BinOp::Pow)?,
         Key::Npr => push_binop(state, BinOp::Npr)?,
         Key::Ncr => push_binop(state, BinOp::Ncr)?,
-        Key::NFact => apply_unary(state, scientific::factorial)?,
+        Key::NFact => apply_unary(state, scientific::factorial, exact::dropped)?,
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
-        Key::Sqrt => apply_unary(state, scientific::sqrt)?,
-        Key::Sqr => apply_unary(state, scientific::sqr)?,
+        Key::Sqrt => apply_unary(state, scientific::sqrt, exact::dropped)?,
+        Key::Sqr => apply_unary(state, scientific::sqr, exact::sqr)?,
         Key::Neg => {
             // +/− は 2 つの階層で働く(設計書 §2)。指数入力中は指数の符号、
             // それ以外は確定値の符号。専用の符号キーを増やさずに済む。
@@ -555,48 +591,41 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
                 .as_mut()
                 .is_some_and(Buffer::toggle_exponent_sign);
             if !signed_exponent {
-                apply_unary(state, |v| Ok(scientific::neg(v)))?;
+                apply_unary(state, |v| Ok(scientific::neg(v)), exact::neg)?;
             }
         }
-        Key::Sin => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::sin(v, mode))?;
-        }
-        Key::Cos => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::cos(v, mode))?;
-        }
-        Key::Tan => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::tan(v, mode))?;
-        }
-        Key::Ln => apply_unary(state, scientific::ln)?,
-        Key::Log10 => apply_unary(state, scientific::log10)?,
-        Key::ExpE => apply_unary(state, scientific::exp_e)?,
-        Key::Recip => apply_unary(state, scientific::recip)?,
+        Key::Sin => apply_trig(state, scientific::sin_at, exact::sin)?,
+        Key::Cos => apply_trig(state, scientific::cos_at, exact::cos)?,
+        Key::Tan => apply_trig(state, scientific::tan_at, exact::tan)?,
+        Key::Ln => apply_unary(state, scientific::ln, exact::dropped)?,
+        Key::Log10 => apply_unary(state, scientific::log10, exact::dropped)?,
+        Key::ExpE => apply_unary(state, scientific::exp_e, exact::dropped)?,
+        Key::Recip => apply_unary(state, scientific::recip, exact::recip)?,
         Key::Asin => {
             let mode = state.angle;
-            apply_unary(state, |v| scientific::asin(v, mode))?;
+            apply_unary(state, |v| scientific::asin(v, mode), exact::dropped)?;
         }
         Key::Acos => {
             let mode = state.angle;
-            apply_unary(state, |v| scientific::acos(v, mode))?;
+            apply_unary(state, |v| scientific::acos(v, mode), exact::dropped)?;
         }
         Key::Atan => {
             let mode = state.angle;
-            apply_unary(state, |v| scientific::atan(v, mode))?;
+            apply_unary(state, |v| scientific::atan(v, mode), exact::dropped)?;
         }
         Key::Pi => {
             // `buffer` はここでは常に `None` のはず——打ちかけの数があれば `refuses`
             // がこのキーを止める(0.9.2 設計書 §3.2、外部監査 F5)。`state.buffer = None`
             // は防御的な初期化として残し、値そのものを置く。
             state.buffer = None;
-            state.current = Value::real(std::f64::consts::PI);
+            // 印は `1 × π`(1.2.2 設計書 §3.3)。`re` は今までどおり。
+            state.current = Held::PI;
         }
         Key::E => {
             // π と同じ(上のコメント参照)。
             state.buffer = None;
-            state.current = Value::real(std::f64::consts::E);
+            // e は印なし(§3.3)。
+            state.current = Held::bare(Value::real(std::f64::consts::E));
         }
         Key::AngleToggle => {
             // 保持している値は変えない。表示と以後の三角関数にだけ効く。
@@ -670,6 +699,6 @@ mod tests {
         // (どんな状態でも落ちる関数を見て緑になっていない)。
         let mut state = state_after(&["lparen", "3", "add", "4"]);
         assert_eq!(close_paren(&mut state), Ok(()));
-        assert_eq!(state.current, Value::real(7.0));
+        assert_eq!(state.current.value, Value::real(7.0));
     }
 }

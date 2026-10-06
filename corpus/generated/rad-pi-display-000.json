@@ -1,0 +1,6098 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(pi*2)",
+      "id": "rpi-000000",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(2*pi)",
+      "id": "rpi-000001",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "mul",
+        "pi",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(-(pi*2))",
+      "id": "rpi-000002",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(pi*2)",
+      "id": "rpi-000003",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(2*pi)",
+      "id": "rpi-000004",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "mul",
+        "pi",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(-(pi*2))",
+      "id": "rpi-000005",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(pi*2)",
+      "id": "rpi-000006",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(2*pi)",
+      "id": "rpi-000007",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "mul",
+        "pi",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(-(pi*2))",
+      "id": "rpi-000008",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(pi*13/6)",
+      "id": "rpi-000009",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(13*pi/6)",
+      "id": "rpi-000010",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin((pi*13)/6)",
+      "id": "rpi-000011",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(-(pi*13/6))",
+      "id": "rpi-000012",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(pi*13/6)",
+      "id": "rpi-000013",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(13*pi/6)",
+      "id": "rpi-000014",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos((pi*13)/6)",
+      "id": "rpi-000015",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(-(pi*13/6))",
+      "id": "rpi-000016",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(pi*13/6)",
+      "id": "rpi-000017",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(13*pi/6)",
+      "id": "rpi-000018",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan((pi*13)/6)",
+      "id": "rpi-000019",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(-(pi*13/6))",
+      "id": "rpi-000020",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(pi*9/4)",
+      "id": "rpi-000021",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(9*pi/4)",
+      "id": "rpi-000022",
+      "keys": [
+        "angle_toggle",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin((pi*9)/4)",
+      "id": "rpi-000023",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "9",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(-(pi*9/4))",
+      "id": "rpi-000024",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(pi*9/4)",
+      "id": "rpi-000025",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(9*pi/4)",
+      "id": "rpi-000026",
+      "keys": [
+        "angle_toggle",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos((pi*9)/4)",
+      "id": "rpi-000027",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "9",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(-(pi*9/4))",
+      "id": "rpi-000028",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(pi*9/4)",
+      "id": "rpi-000029",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(9*pi/4)",
+      "id": "rpi-000030",
+      "keys": [
+        "angle_toggle",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan((pi*9)/4)",
+      "id": "rpi-000031",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "9",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(-(pi*9/4))",
+      "id": "rpi-000032",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "9",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(pi*7/3)",
+      "id": "rpi-000033",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(7*pi/3)",
+      "id": "rpi-000034",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin((pi*7)/3)",
+      "id": "rpi-000035",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(-(pi*7/3))",
+      "id": "rpi-000036",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(pi*7/3)",
+      "id": "rpi-000037",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(7*pi/3)",
+      "id": "rpi-000038",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos((pi*7)/3)",
+      "id": "rpi-000039",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(-(pi*7/3))",
+      "id": "rpi-000040",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(pi*7/3)",
+      "id": "rpi-000041",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(7*pi/3)",
+      "id": "rpi-000042",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan((pi*7)/3)",
+      "id": "rpi-000043",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(-(pi*7/3))",
+      "id": "rpi-000044",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(pi*5/2)",
+      "id": "rpi-000045",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(5*pi/2)",
+      "id": "rpi-000046",
+      "keys": [
+        "angle_toggle",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin((pi*5)/2)",
+      "id": "rpi-000047",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "5",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(-(pi*5/2))",
+      "id": "rpi-000048",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(pi*5/2)",
+      "id": "rpi-000049",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(5*pi/2)",
+      "id": "rpi-000050",
+      "keys": [
+        "angle_toggle",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos((pi*5)/2)",
+      "id": "rpi-000051",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "5",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(-(pi*5/2))",
+      "id": "rpi-000052",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(pi*5/2)",
+      "id": "rpi-000053",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(5*pi/2)",
+      "id": "rpi-000054",
+      "keys": [
+        "angle_toggle",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan((pi*5)/2)",
+      "id": "rpi-000055",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "5",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(-(pi*5/2))",
+      "id": "rpi-000056",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(pi*8/3)",
+      "id": "rpi-000057",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(8*pi/3)",
+      "id": "rpi-000058",
+      "keys": [
+        "angle_toggle",
+        "8",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin((pi*8)/3)",
+      "id": "rpi-000059",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "8",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(-(pi*8/3))",
+      "id": "rpi-000060",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(pi*8/3)",
+      "id": "rpi-000061",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(8*pi/3)",
+      "id": "rpi-000062",
+      "keys": [
+        "angle_toggle",
+        "8",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos((pi*8)/3)",
+      "id": "rpi-000063",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "8",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(-(pi*8/3))",
+      "id": "rpi-000064",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(pi*8/3)",
+      "id": "rpi-000065",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(8*pi/3)",
+      "id": "rpi-000066",
+      "keys": [
+        "angle_toggle",
+        "8",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan((pi*8)/3)",
+      "id": "rpi-000067",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "8",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(-(pi*8/3))",
+      "id": "rpi-000068",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(pi*11/4)",
+      "id": "rpi-000069",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(11*pi/4)",
+      "id": "rpi-000070",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin((pi*11)/4)",
+      "id": "rpi-000071",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(-(pi*11/4))",
+      "id": "rpi-000072",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(pi*11/4)",
+      "id": "rpi-000073",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(11*pi/4)",
+      "id": "rpi-000074",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos((pi*11)/4)",
+      "id": "rpi-000075",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(-(pi*11/4))",
+      "id": "rpi-000076",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(pi*11/4)",
+      "id": "rpi-000077",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(11*pi/4)",
+      "id": "rpi-000078",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan((pi*11)/4)",
+      "id": "rpi-000079",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(-(pi*11/4))",
+      "id": "rpi-000080",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(pi*17/6)",
+      "id": "rpi-000081",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(17*pi/6)",
+      "id": "rpi-000082",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin((pi*17)/6)",
+      "id": "rpi-000083",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(-(pi*17/6))",
+      "id": "rpi-000084",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(pi*17/6)",
+      "id": "rpi-000085",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(17*pi/6)",
+      "id": "rpi-000086",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos((pi*17)/6)",
+      "id": "rpi-000087",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(-(pi*17/6))",
+      "id": "rpi-000088",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(pi*17/6)",
+      "id": "rpi-000089",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(17*pi/6)",
+      "id": "rpi-000090",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan((pi*17)/6)",
+      "id": "rpi-000091",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(-(pi*17/6))",
+      "id": "rpi-000092",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(pi*3)",
+      "id": "rpi-000093",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(3*pi)",
+      "id": "rpi-000094",
+      "keys": [
+        "angle_toggle",
+        "3",
+        "mul",
+        "pi",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(-(pi*3))",
+      "id": "rpi-000095",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(pi*3)",
+      "id": "rpi-000096",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(3*pi)",
+      "id": "rpi-000097",
+      "keys": [
+        "angle_toggle",
+        "3",
+        "mul",
+        "pi",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(-(pi*3))",
+      "id": "rpi-000098",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(pi*3)",
+      "id": "rpi-000099",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(3*pi)",
+      "id": "rpi-000100",
+      "keys": [
+        "angle_toggle",
+        "3",
+        "mul",
+        "pi",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(-(pi*3))",
+      "id": "rpi-000101",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(pi*19/6)",
+      "id": "rpi-000102",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(19*pi/6)",
+      "id": "rpi-000103",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin((pi*19)/6)",
+      "id": "rpi-000104",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(-(pi*19/6))",
+      "id": "rpi-000105",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(pi*19/6)",
+      "id": "rpi-000106",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(19*pi/6)",
+      "id": "rpi-000107",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos((pi*19)/6)",
+      "id": "rpi-000108",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(-(pi*19/6))",
+      "id": "rpi-000109",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(pi*19/6)",
+      "id": "rpi-000110",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(19*pi/6)",
+      "id": "rpi-000111",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "9",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan((pi*19)/6)",
+      "id": "rpi-000112",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(-(pi*19/6))",
+      "id": "rpi-000113",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "9",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(pi*13/4)",
+      "id": "rpi-000114",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(13*pi/4)",
+      "id": "rpi-000115",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin((pi*13)/4)",
+      "id": "rpi-000116",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(-(pi*13/4))",
+      "id": "rpi-000117",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(pi*13/4)",
+      "id": "rpi-000118",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(13*pi/4)",
+      "id": "rpi-000119",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos((pi*13)/4)",
+      "id": "rpi-000120",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(-(pi*13/4))",
+      "id": "rpi-000121",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(pi*13/4)",
+      "id": "rpi-000122",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(13*pi/4)",
+      "id": "rpi-000123",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan((pi*13)/4)",
+      "id": "rpi-000124",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(-(pi*13/4))",
+      "id": "rpi-000125",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(pi*10/3)",
+      "id": "rpi-000126",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(10*pi/3)",
+      "id": "rpi-000127",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "0",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin((pi*10)/3)",
+      "id": "rpi-000128",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(-(pi*10/3))",
+      "id": "rpi-000129",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(pi*10/3)",
+      "id": "rpi-000130",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(10*pi/3)",
+      "id": "rpi-000131",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "0",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos((pi*10)/3)",
+      "id": "rpi-000132",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(-(pi*10/3))",
+      "id": "rpi-000133",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(pi*10/3)",
+      "id": "rpi-000134",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(10*pi/3)",
+      "id": "rpi-000135",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "0",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan((pi*10)/3)",
+      "id": "rpi-000136",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(-(pi*10/3))",
+      "id": "rpi-000137",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(pi*7/2)",
+      "id": "rpi-000138",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(7*pi/2)",
+      "id": "rpi-000139",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin((pi*7)/2)",
+      "id": "rpi-000140",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(-(pi*7/2))",
+      "id": "rpi-000141",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(pi*7/2)",
+      "id": "rpi-000142",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(7*pi/2)",
+      "id": "rpi-000143",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos((pi*7)/2)",
+      "id": "rpi-000144",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(-(pi*7/2))",
+      "id": "rpi-000145",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(pi*7/2)",
+      "id": "rpi-000146",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(7*pi/2)",
+      "id": "rpi-000147",
+      "keys": [
+        "angle_toggle",
+        "7",
+        "mul",
+        "pi",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan((pi*7)/2)",
+      "id": "rpi-000148",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "7",
+        "rparen",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(-(pi*7/2))",
+      "id": "rpi-000149",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "2",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(pi*11/3)",
+      "id": "rpi-000150",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(11*pi/3)",
+      "id": "rpi-000151",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin((pi*11)/3)",
+      "id": "rpi-000152",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(-(pi*11/3))",
+      "id": "rpi-000153",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(pi*11/3)",
+      "id": "rpi-000154",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(11*pi/3)",
+      "id": "rpi-000155",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos((pi*11)/3)",
+      "id": "rpi-000156",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(-(pi*11/3))",
+      "id": "rpi-000157",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(pi*11/3)",
+      "id": "rpi-000158",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(11*pi/3)",
+      "id": "rpi-000159",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "1",
+        "mul",
+        "pi",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan((pi*11)/3)",
+      "id": "rpi-000160",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "rparen",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(-(pi*11/3))",
+      "id": "rpi-000161",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(pi*15/4)",
+      "id": "rpi-000162",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(15*pi/4)",
+      "id": "rpi-000163",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin((pi*15)/4)",
+      "id": "rpi-000164",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(-(pi*15/4))",
+      "id": "rpi-000165",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(pi*15/4)",
+      "id": "rpi-000166",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(15*pi/4)",
+      "id": "rpi-000167",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos((pi*15)/4)",
+      "id": "rpi-000168",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(-(pi*15/4))",
+      "id": "rpi-000169",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(pi*15/4)",
+      "id": "rpi-000170",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(15*pi/4)",
+      "id": "rpi-000171",
+      "keys": [
+        "angle_toggle",
+        "1",
+        "5",
+        "mul",
+        "pi",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan((pi*15)/4)",
+      "id": "rpi-000172",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "rparen",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(-(pi*15/4))",
+      "id": "rpi-000173",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(pi*23/6)",
+      "id": "rpi-000174",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(23*pi/6)",
+      "id": "rpi-000175",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin((pi*23)/6)",
+      "id": "rpi-000176",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(-(pi*23/6))",
+      "id": "rpi-000177",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(pi*23/6)",
+      "id": "rpi-000178",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(23*pi/6)",
+      "id": "rpi-000179",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos((pi*23)/6)",
+      "id": "rpi-000180",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(-(pi*23/6))",
+      "id": "rpi-000181",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(pi*23/6)",
+      "id": "rpi-000182",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(23*pi/6)",
+      "id": "rpi-000183",
+      "keys": [
+        "angle_toggle",
+        "2",
+        "3",
+        "mul",
+        "pi",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan((pi*23)/6)",
+      "id": "rpi-000184",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "rparen",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(-(pi*23/6))",
+      "id": "rpi-000185",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "3",
+        "div",
+        "6",
+        "eq",
+        "neg",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(pi*2000)",
+      "id": "rpi-000186",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(pi*2000)",
+      "id": "rpi-000187",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(pi*2000)",
+      "id": "rpi-000188",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(pi*12001/6)",
+      "id": "rpi-000189",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(pi*12001/6)",
+      "id": "rpi-000190",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(pi*12001/6)",
+      "id": "rpi-000191",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(pi*8001/4)",
+      "id": "rpi-000192",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(pi*8001/4)",
+      "id": "rpi-000193",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(pi*8001/4)",
+      "id": "rpi-000194",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "1",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(pi*6001/3)",
+      "id": "rpi-000195",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(pi*6001/3)",
+      "id": "rpi-000196",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(pi*6001/3)",
+      "id": "rpi-000197",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(pi*4001/2)",
+      "id": "rpi-000198",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(pi*4001/2)",
+      "id": "rpi-000199",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(pi*4001/2)",
+      "id": "rpi-000200",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(pi*6002/3)",
+      "id": "rpi-000201",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "2",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(pi*6002/3)",
+      "id": "rpi-000202",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "2",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(pi*6002/3)",
+      "id": "rpi-000203",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "2",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(pi*8003/4)",
+      "id": "rpi-000204",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(pi*8003/4)",
+      "id": "rpi-000205",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(pi*8003/4)",
+      "id": "rpi-000206",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "3",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(pi*12005/6)",
+      "id": "rpi-000207",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "5",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(pi*12005/6)",
+      "id": "rpi-000208",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "5",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(pi*12005/6)",
+      "id": "rpi-000209",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "5",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(pi*2001)",
+      "id": "rpi-000210",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(pi*2001)",
+      "id": "rpi-000211",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(pi*2001)",
+      "id": "rpi-000212",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(pi*12007/6)",
+      "id": "rpi-000213",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(pi*12007/6)",
+      "id": "rpi-000214",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(pi*12007/6)",
+      "id": "rpi-000215",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "0",
+        "7",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(pi*8005/4)",
+      "id": "rpi-000216",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(pi*8005/4)",
+      "id": "rpi-000217",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(pi*8005/4)",
+      "id": "rpi-000218",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "5",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(pi*6004/3)",
+      "id": "rpi-000219",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "4",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(pi*6004/3)",
+      "id": "rpi-000220",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "4",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(pi*6004/3)",
+      "id": "rpi-000221",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "4",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(pi*4003/2)",
+      "id": "rpi-000222",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "3",
+        "div",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(pi*4003/2)",
+      "id": "rpi-000223",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "3",
+        "div",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(pi*4003/2)",
+      "id": "rpi-000224",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "0",
+        "0",
+        "3",
+        "div",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(pi*6005/3)",
+      "id": "rpi-000225",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "5",
+        "div",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(pi*6005/3)",
+      "id": "rpi-000226",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "5",
+        "div",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(pi*6005/3)",
+      "id": "rpi-000227",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "6",
+        "0",
+        "0",
+        "5",
+        "div",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(pi*8007/4)",
+      "id": "rpi-000228",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "7",
+        "div",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(pi*8007/4)",
+      "id": "rpi-000229",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "7",
+        "div",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(pi*8007/4)",
+      "id": "rpi-000230",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "8",
+        "0",
+        "0",
+        "7",
+        "div",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(pi*12011/6)",
+      "id": "rpi-000231",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "1",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(pi*12011/6)",
+      "id": "rpi-000232",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "1",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(pi*12011/6)",
+      "id": "rpi-000233",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "2",
+        "0",
+        "1",
+        "1",
+        "div",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2588190451"
+      },
+      "expr": "sin(pi*1/12)",
+      "id": "rpi-000234",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9659258263"
+      },
+      "expr": "cos(pi*1/12)",
+      "id": "rpi-000235",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2679491924"
+      },
+      "expr": "tan(pi*1/12)",
+      "id": "rpi-000236",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2588190451"
+      },
+      "expr": "sin(pi*24001/12)",
+      "id": "rpi-000237",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9659258263"
+      },
+      "expr": "cos(pi*24001/12)",
+      "id": "rpi-000238",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2679491924"
+      },
+      "expr": "tan(pi*24001/12)",
+      "id": "rpi-000239",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "1",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9659258263"
+      },
+      "expr": "sin(pi*5/12)",
+      "id": "rpi-000240",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2588190451"
+      },
+      "expr": "cos(pi*5/12)",
+      "id": "rpi-000241",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "3.732050808"
+      },
+      "expr": "tan(pi*5/12)",
+      "id": "rpi-000242",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9659258263"
+      },
+      "expr": "sin(pi*24005/12)",
+      "id": "rpi-000243",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.2588190451"
+      },
+      "expr": "cos(pi*24005/12)",
+      "id": "rpi-000244",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "3.732050808"
+      },
+      "expr": "tan(pi*24005/12)",
+      "id": "rpi-000245",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "4",
+        "0",
+        "0",
+        "5",
+        "div",
+        "1",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.3826834324"
+      },
+      "expr": "sin(pi*1/8)",
+      "id": "rpi-000246",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9238795325"
+      },
+      "expr": "cos(pi*1/8)",
+      "id": "rpi-000247",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.4142135624"
+      },
+      "expr": "tan(pi*1/8)",
+      "id": "rpi-000248",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.3826834324"
+      },
+      "expr": "sin(pi*16001/8)",
+      "id": "rpi-000249",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9238795325"
+      },
+      "expr": "cos(pi*16001/8)",
+      "id": "rpi-000250",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.4142135624"
+      },
+      "expr": "tan(pi*16001/8)",
+      "id": "rpi-000251",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "1",
+        "div",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9238795325"
+      },
+      "expr": "sin(pi*3/8)",
+      "id": "rpi-000252",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.3826834324"
+      },
+      "expr": "cos(pi*3/8)",
+      "id": "rpi-000253",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "2.414213562"
+      },
+      "expr": "tan(pi*3/8)",
+      "id": "rpi-000254",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.9238795325"
+      },
+      "expr": "sin(pi*16003/8)",
+      "id": "rpi-000255",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.3826834324"
+      },
+      "expr": "cos(pi*16003/8)",
+      "id": "rpi-000256",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "2.414213562"
+      },
+      "expr": "tan(pi*16003/8)",
+      "id": "rpi-000257",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "6",
+        "0",
+        "0",
+        "3",
+        "div",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5877852523"
+      },
+      "expr": "sin(pi*1/5)",
+      "id": "rpi-000258",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8090169944"
+      },
+      "expr": "cos(pi*1/5)",
+      "id": "rpi-000259",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.726542528"
+      },
+      "expr": "tan(pi*1/5)",
+      "id": "rpi-000260",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.5877852523"
+      },
+      "expr": "sin(pi*10001/5)",
+      "id": "rpi-000261",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.8090169944"
+      },
+      "expr": "cos(pi*10001/5)",
+      "id": "rpi-000262",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.726542528"
+      },
+      "expr": "tan(pi*10001/5)",
+      "id": "rpi-000263",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "1",
+        "div",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.9510565163"
+      },
+      "expr": "sin(pi*7/5)",
+      "id": "rpi-000264",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.3090169944"
+      },
+      "expr": "cos(pi*7/5)",
+      "id": "rpi-000265",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "3.077683537"
+      },
+      "expr": "tan(pi*7/5)",
+      "id": "rpi-000266",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.9510565163"
+      },
+      "expr": "sin(pi*10007/5)",
+      "id": "rpi-000267",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.3090169944"
+      },
+      "expr": "cos(pi*10007/5)",
+      "id": "rpi-000268",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "3.077683537"
+      },
+      "expr": "tan(pi*10007/5)",
+      "id": "rpi-000269",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "0",
+        "0",
+        "0",
+        "7",
+        "div",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7818314825"
+      },
+      "expr": "sin(pi*2/7)",
+      "id": "rpi-000270",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.6234898019"
+      },
+      "expr": "cos(pi*2/7)",
+      "id": "rpi-000271",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.253960338"
+      },
+      "expr": "tan(pi*2/7)",
+      "id": "rpi-000272",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.7818314825"
+      },
+      "expr": "sin(pi*14002/7)",
+      "id": "rpi-000273",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "4",
+        "0",
+        "0",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.6234898019"
+      },
+      "expr": "cos(pi*14002/7)",
+      "id": "rpi-000274",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "4",
+        "0",
+        "0",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "1.253960338"
+      },
+      "expr": "tan(pi*14002/7)",
+      "id": "rpi-000275",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "4",
+        "0",
+        "0",
+        "2",
+        "div",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.984807753"
+      },
+      "expr": "sin(pi*4/9)",
+      "id": "rpi-000276",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.1736481777"
+      },
+      "expr": "cos(pi*4/9)",
+      "id": "rpi-000277",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "5.67128182"
+      },
+      "expr": "tan(pi*4/9)",
+      "id": "rpi-000278",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.984807753"
+      },
+      "expr": "sin(pi*18004/9)",
+      "id": "rpi-000279",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "8",
+        "0",
+        "0",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0.1736481777"
+      },
+      "expr": "cos(pi*18004/9)",
+      "id": "rpi-000280",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "8",
+        "0",
+        "0",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "5.67128182"
+      },
+      "expr": "tan(pi*18004/9)",
+      "id": "rpi-000281",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "1",
+        "8",
+        "0",
+        "0",
+        "4",
+        "div",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(+ pi)",
+      "id": "rpi-000282",
+      "keys": [
+        "angle_toggle",
+        "add",
+        "pi",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(+ pi)",
+      "id": "rpi-000283",
+      "keys": [
+        "angle_toggle",
+        "add",
+        "pi",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(+ pi)",
+      "id": "rpi-000284",
+      "keys": [
+        "angle_toggle",
+        "add",
+        "pi",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(( + pi ))",
+      "id": "rpi-000285",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "add",
+        "pi",
+        "rparen",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(( + pi ))",
+      "id": "rpi-000286",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "add",
+        "pi",
+        "rparen",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(( + pi ))",
+      "id": "rpi-000287",
+      "keys": [
+        "angle_toggle",
+        "lparen",
+        "add",
+        "pi",
+        "rparen",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(0 + pi)",
+      "id": "rpi-000288",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "add",
+        "pi",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(0 + pi)",
+      "id": "rpi-000289",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "add",
+        "pi",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(0 + pi)",
+      "id": "rpi-000290",
+      "keys": [
+        "angle_toggle",
+        "0",
+        "add",
+        "pi",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1e-300j"
+      },
+      "expr": "sin(pi + 1e-300j)",
+      "id": "rpi-000291",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "0",
+        "0",
+        "neg",
+        "j",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(pi + 1e-300j)",
+      "id": "rpi-000292",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "0",
+        "0",
+        "neg",
+        "j",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "8.979318434e-11"
+      },
+      "expr": "sin(3.1415926535)",
+      "id": "rpi-000293",
+      "keys": [
+        "angle_toggle",
+        "3",
+        "dot",
+        "1",
+        "4",
+        "1",
+        "5",
+        "9",
+        "2",
+        "6",
+        "5",
+        "3",
+        "5",
+        "sin",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-5.670172748e-12"
+      },
+      "expr": "sin(32993.006048)",
+      "id": "rpi-000294",
+      "keys": [
+        "angle_toggle",
+        "3",
+        "2",
+        "9",
+        "9",
+        "3",
+        "dot",
+        "0",
+        "0",
+        "6",
+        "0",
+        "4",
+        "8",
+        "sin",
+        "eq"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    },
+    {
+      "expect": {
+        "main": "-0.430301217"
+      },
+      "expr": "sin(pi*pi)",
+      "id": "rpi-000295",
+      "keys": [
+        "angle_toggle",
+        "pi",
+        "mul",
+        "pi",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Rad"
+    }
+  ],
+  "generated_by": "mpmath 1.3.0 (50 dps)\u3002RAD \u3067 \u03c0 \u306e\u6709\u7406\u6570\u500d\u3092\u4e09\u89d2\u95a2\u6570\u306b\u6e21\u3057\u305f\u7b54\u3048\u3092\u3001mpmath \u306e 50 \u6841\u306e \u03c0 \u3067\u76f4\u63a5\u8a55\u4fa1\u3057\u305f\u30020 \u3068\u6975\uff08tan \u306e\u3001cos \u304c 0 \u306b\u306a\u308b\u89d2\uff09\u306f\u6570\u5024\u3067\u306f\u306a\u304f\u4e09\u89d2\u95a2\u6570\u306e\u5b9a\u7fa9\u304b\u3089\u6709\u7406\u6570\u3067\u6c7a\u3081\u305f\u2014\u201450 \u6841\u306e \u03c0 \u306e\u6b8b\u308a\u306f 0 \u306b\u306a\u3089\u306a\u3044\u306e\u3067\u3001\u6570\u5024\u3067\u6c7a\u3081\u308b\u3068\u53c2\u7167\u306e\u5074\u306e\u4e38\u3081\u3092\u671f\u5f85\u306b\u5199\u3059\u3002engine \u306e\u8868\uff08scientific::table_row\uff09\u3082\u5370\u306e\u4f1d\u308f\u308a\u65b9\uff08engine/exact.rs\uff09\u3082\u8aad\u3093\u3067\u3044\u306a\u3044\u3002\u5bfe\u7167\u306e\u884c\uff08\u6253\u3063\u305f 3.1415926535\u30fb32993.006048\uff09\u306f\u3001\u96fb\u5353\u304c\u6301\u3064 f64\uff08Python \u306e float()\uff09\u306b\u5bfe\u3059\u308b\u7b54\u3048\u3067\u3042\u308b\u3002",
+  "schema": 1
+}

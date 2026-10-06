@@ -53,7 +53,7 @@ fn negated(x: f64) -> f64 {
 ///
 /// **順を変えただけで、答えは変わらない**——**`sin` と `cos` は実部について
 /// 360° 周期**であり、**`%` は IEEE の `fmod` で厳密**だからである
-/// （`quadrant_exact` が `x % 360.0` で象限を決めているのと同じ理由）。
+/// （`turn_of` が `x % 360.0` で表の位置を決めているのと同じ理由）。
 ///
 /// **変わるのは精度である。** **`x * (π/180)` を先に計算すると、`x` が大きいほど
 /// 下の桁が落ちる**——**掛けた結果を f64 に入れる時点で、角度の情報が ulp の
@@ -64,8 +64,10 @@ fn negated(x: f64) -> f64 {
 /// **虚部は畳めない。** **あちらは `cosh`・`sinh` に入り、周期を持たない**
 /// ——`sin(x+iy) = sin x·cosh y + i·cos x·sinh y`。**畳むのは実部だけである。**
 ///
-/// **RAD は触らない。** **変換が無いので落ちる桁も無く、実測で 1e18 まで
-/// 10 桁一致する**（`f64::sin` 自身が引数を正しく縮約している）。
+/// **RAD の f64 はここでは畳まない。** **変換が無いので落ちる桁も無く、実測で
+/// 1e18 まで 10 桁一致する**（`f64::sin` 自身が引数を正しく縮約している）。
+/// **RAD で畳むのは、π の有理数倍だと「分かっている」角だけ**で、それは印の
+/// 剰余で畳む（`Turn::Folded`。1.2.2 設計書 §4.2）——f64 の `re` を畳むのではない。
 fn to_rad(v: Value, mode: AngleMode) -> Value {
     let re = if mode == AngleMode::Deg {
         v.re % 360.0
@@ -75,71 +77,198 @@ fn to_rad(v: Value, mode: AngleMode) -> Value {
     Value::new(mode.radians_of(re), mode.radians_of(v.im))
 }
 
-/// 度数法の 90° ごとの角の、**厳密な** `(sin x, cos x)`。表に無い角は `None`。
+/// 角の実部の**正体**（1.2.2 設計書 §4.1）。`sin x`・`cos x` をどこから取るか。
 ///
-/// **`180` は f64 で厳密に表せる**——**ずれを持ち込んでいるのは `to_rad`** である
-/// （`f64` の π は本当の π より小さく、`sin(180°)` が `1.2246467991473532e-16` に
-/// なっていた）。**利用者が打ったのは「180 度」そのもの**なので、**答えも厳密に返す。**
-///
-/// **`% 360` は IEEE の `fmod` で厳密**なので、**周回した角でも象限は正確に決まる**
-/// （`540 % 360 = 180`、`(1e10 + 180) % 360 = 100`）。
-/// **`-360` は `-0.0` になるが `-0.0 == 0.0` は真**なので表に着く
-/// ——**符号で分けてはならない。**
-///
-/// **表は `|r|` の 4 行**で、**`sin` は奇関数なので `r` の符号を掛ける**。
-/// `cos` は偶関数なので `|r|` だけで決まる。
-///
-/// **RAD には広げない。** あちらは**入力そのものが厳密でない**ので、
-/// 厳密な答えを返すと嘘になる（1.0.0 の設計書 §3.1）。
-fn quadrant_exact(x: f64) -> Option<(f64, f64)> {
-    let r = x % 360.0;
-    let a = r.abs();
-    let (sin_at_a, cos_at_a) = if a == 0.0 {
-        (0.0, 1.0)
-    } else if a == 90.0 {
-        (1.0, 0.0)
-    } else if a == 180.0 {
-        (0.0, -1.0)
-    } else if a == 270.0 {
-        (-1.0, 0.0)
-    } else {
-        return None;
-    };
-    let sine = if r < 0.0 { -sin_at_a } else { sin_at_a };
-    Some((sine, cos_at_a))
+/// **`None` は「正体が分からない」**——今までどおり f64 の `re` の `sin`・`cos`。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Turn {
+    /// **表の 16 の位置**のどれか。**15° 単位の `0..24`**（RAD では π/12 単位）で、
+    /// 載るのは 30° か 45° の倍数（`t % 2 == 0 || t % 3 == 0`）だけ。
+    /// **15° は載らない**——sin 15° は表に無い（§4.1「`12r` が整数、では広すぎる」）。
+    /// 作るのは `Turn::table` だけで、載らない位置は作らない——**`Position` の欄は
+    /// private なので、このモジュールの外からは `Turn::table` を通らずに作れない**
+    /// (`Turn::Table(Position(1))` のような載らない位置は型の段で起きない)。
+    Table(Position),
+    /// **表に載らない、π の有理数倍の角**。`r = q mod 2` を `(−1, 1]` に畳んでから
+    /// `f64(r) × π`（ラジアン）。**巨大な倍数でも真の角から外れない**（§4.2）。
+    Folded(f64),
 }
 
-/// `sin x` と `cos x`——**表に在ればそこから、無ければ f64 から**。
+/// 表に載る位置(15° 単位の `0..24` のうち、30° か 45° の倍数)。**欄は private**——
+/// 作る道は `Turn::table` だけである。読むのは `get`。
 ///
-/// **1 つの経路である。** **実数は `im == 0` の特別な場合**で、
-/// **別の分岐を持たない**（設計書 §3.2、裁定 (a)）。**実数だけ表を引くと、
-/// `im == 0` と `im == 1e-300` の間に段差が生まれる**
-/// ——`sin(180° + 1e-300j)` の実部は `sin x · cosh y` で、
-/// **`cosh(1.7e-302)` は `1.0`** だから**虚部を足しても実部は動かない。**
-fn circular(v: Value, mode: AngleMode, z: Value) -> (f64, f64) {
-    if mode == AngleMode::Deg {
-        if let Some(exact) = quadrant_exact(v.re) {
-            return exact;
+/// ```
+/// use calcarc_core::scientific::Turn;
+/// // 30° は載る、15° は載らない。
+/// assert!(matches!(Turn::table(2), Some(Turn::Table(p)) if p.get() == 2));
+/// assert_eq!(Turn::table(1), None);
+/// ```
+///
+/// **外から載らない位置を作ろうとすると、型の段で止まる**(この例は通ってはならない):
+/// (`E0423` は読む人のための印で、番人ではない——stable の rustdoc はエラー番号を照合しない。
+/// `E0603` に書き換えても緑のままだった、2026-10-06 実測。)
+///
+/// ```compile_fail,E0423
+/// use calcarc_core::scientific::{Position, Turn};
+/// let _ = Turn::Table(Position(1));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position(u8);
+
+impl Position {
+    /// 15° 単位の位置(RAD では π/12 単位)。
+    pub fn get(self) -> u8 {
+        self.0
+    }
+}
+
+impl Turn {
+    /// 15° 単位の位置 `t`（`0..24` に畳む）。**表に載らなければ `None`**。
+    pub fn table(t: i128) -> Option<Turn> {
+        let t = t.rem_euclid(24);
+        if t % 2 == 0 || t % 3 == 0 {
+            u8::try_from(t).ok().map(|p| Turn::Table(Position(p)))
+        } else {
+            None
         }
     }
-    (z.re.sin(), z.re.cos())
 }
 
+/// 表の値 1 つ。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Entry {
+    /// **厳密な f64 で持てる値**（0・±1/2・±1）。`(分子, 分母)`。
+    /// engine はこれに k=0 の印を付ける（§3.3）。
+    Exact(i8, i8),
+    /// **√ を含む値**。正しく丸めた f64 定数で、印は付かない。
+    Rounded(f64),
+}
+
+impl Entry {
+    pub fn f64(self) -> f64 {
+        match self {
+            Entry::Exact(n, d) => f64::from(n) / f64::from(d),
+            Entry::Rounded(x) => x,
+        }
+    }
+}
+
+/// 表の 1 行。`tan` が `None` なら極。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Row {
+    pub sin: Entry,
+    pub cos: Entry,
+    pub tan: Option<Entry>,
+}
+
+// **√ の定数は、正しく丸めた f64 の literal**（1.2.2 設計書 §4.2。mpmath 50 桁を
+// f64 に丸めて確かめた値。レビュー役の値と一致）。**計算で作らない**——`1.0 / 3f64.sqrt()`
+// は丸めを 2 回通り、1 ulp 外れる（`0.5773502691896258`。単体テストが見る）。
+const HALF_SQRT3: f64 = 0.866_025_403_784_438_6;
+// **√2/2 は `std` の `FRAC_1_SQRT_2`**（設計書 §4.2 の literal `0.7071067811865476` と同じ値）。
+// **literal で書くと clippy の `approx_constant` を `allow` で黙らせることになる**——
+// あの lint は「std に在る定数を手で写すな」という番人なので、黙らせずに std を使う。
+const HALF_SQRT2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+const SQRT3: f64 = 1.732_050_807_568_877_2;
+const INV_SQRT3: f64 = 0.577_350_269_189_625_7;
+
+/// **表の 16 の位置**（1.2.2 設計書 §4.2）。`t` は 15° 単位。
+///
+/// **`tan` も表から返す**——**sin/cos の商にしない**（商は丸めを 2 回通る）。
+/// **90°・270° の `tan` は極**（`None`）。
+pub fn table_row(position: Position) -> Option<Row> {
+    use Entry::{Exact as E, Rounded as R};
+    let row = |sin, cos, tan| Some(Row { sin, cos, tan });
+    match position.0 {
+        0 => row(E(0, 1), E(1, 1), Some(E(0, 1))),
+        2 => row(E(1, 2), R(HALF_SQRT3), Some(R(INV_SQRT3))),
+        3 => row(R(HALF_SQRT2), R(HALF_SQRT2), Some(E(1, 1))),
+        4 => row(R(HALF_SQRT3), E(1, 2), Some(R(SQRT3))),
+        6 => row(E(1, 1), E(0, 1), None),
+        8 => row(R(HALF_SQRT3), E(-1, 2), Some(R(-SQRT3))),
+        9 => row(R(HALF_SQRT2), R(-HALF_SQRT2), Some(E(-1, 1))),
+        10 => row(E(1, 2), R(-HALF_SQRT3), Some(R(-INV_SQRT3))),
+        12 => row(E(0, 1), E(-1, 1), Some(E(0, 1))),
+        14 => row(E(-1, 2), R(-HALF_SQRT3), Some(R(INV_SQRT3))),
+        15 => row(R(-HALF_SQRT2), R(-HALF_SQRT2), Some(E(1, 1))),
+        16 => row(R(-HALF_SQRT3), E(-1, 2), Some(R(SQRT3))),
+        18 => row(E(-1, 1), E(0, 1), None),
+        20 => row(R(-HALF_SQRT3), E(1, 2), Some(R(-SQRT3))),
+        21 => row(R(-HALF_SQRT2), R(HALF_SQRT2), Some(E(-1, 1))),
+        22 => row(E(-1, 2), R(HALF_SQRT3), Some(R(-INV_SQRT3))),
+        _ => None,
+    }
+}
+
+/// **印の無い値**の角の正体。**度数法で、f64 そのものが 30° か 45° の倍数なら表**
+/// （1.2.2 設計書 §4.1）。**RAD の f64 は表に載らない**。
+///
+/// **整数は f64 で厳密に持てる**ので、**利用者が打ったのは「30 度」そのもの**である
+/// ——1.0.0 §3.1 の「入力が厳密なら、答えも厳密に」に入る。1.0.0 の `quadrant_exact`
+/// （90 の倍数だけ）を広げたもの。
+///
+/// **`% 360` は IEEE の `fmod` で厳密**なので、**周回した角でも位置は正確に決まる**
+/// （`540 % 360 = 180`、`(1e10 + 180) % 360 = 100`）。**`-360` は `-0.0` になるが、
+/// 位置は `rem_euclid` で 0 に着く**——符号で分けない。
+pub fn turn_of(v: Value, mode: AngleMode) -> Option<Turn> {
+    if mode != AngleMode::Deg {
+        return None;
+    }
+    let r = v.re % 360.0;
+    if r.fract() != 0.0 || r % 15.0 != 0.0 {
+        return None;
+    }
+    // `r` は `(−360, 360)` の 15 の倍数なので、`r / 15` は `(−24, 24)` の整数で厳密。
+    let t = (r / 15.0) as i128;
+    Turn::table(t)
+}
+
+/// `sin x` と `cos x`——**角の正体が分かれば表か畳んだ角から、無ければ f64 から**。
+///
+/// **1 つの経路である。** **実数は `im == 0` の特別な場合**で、
+/// **別の分岐を持たない**（1.0.0 設計書 §3.2、裁定 (a)。1.2.2 設計書 §4.4）。
+/// **実数だけ表を引くと、`im == 0` と `im == 1e-300` の間に段差が生まれる**
+/// ——`sin(180° + 1e-300j)` の実部は `sin x · cosh y` で、
+/// **`cosh(1.7e-302)` は `1.0`** だから**虚部を足しても実部は動かない。**
+fn circular(z: Value, turn: Option<Turn>) -> (f64, f64) {
+    match turn {
+        Some(Turn::Table(t)) => match table_row(t) {
+            Some(row) => (row.sin.f64(), row.cos.f64()),
+            None => (z.re.sin(), z.re.cos()),
+        },
+        Some(Turn::Folded(x)) => (x.sin(), x.cos()),
+        None => (z.re.sin(), z.re.cos()),
+    }
+}
+
+/// `sin`。**角の正体は f64 の規則で決める**（`turn_of`）。印を知らない入口で、
+/// golden（`golden.rs`）が呼ぶ。engine は印から決めた正体で `sin_at` を呼ぶ。
 pub fn sin(v: Value, mode: AngleMode) -> CalcResult<Value> {
+    sin_at(v, mode, turn_of(v, mode))
+}
+
+/// `sin`。**角の実部の正体 `turn` を呼び出し側が渡す**（engine が印から決める。
+/// 1.2.2 設計書 §4）。
+pub fn sin_at(v: Value, mode: AngleMode, turn: Option<Turn>) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    let (sine, cosine) = circular(v, mode, z);
+    let (sine, cosine) = circular(z, turn);
     Value::new(sine * z.im.cosh(), cosine * z.im.sinh()).finalize()
 }
 
 pub fn cos(v: Value, mode: AngleMode) -> CalcResult<Value> {
+    cos_at(v, mode, turn_of(v, mode))
+}
+
+/// `cos`。`sin_at` と同じく、正体は呼び出し側が渡す。
+pub fn cos_at(v: Value, mode: AngleMode, turn: Option<Turn>) -> CalcResult<Value> {
     let z = to_rad(v, mode);
-    let (sine, cosine) = circular(v, mode, z);
+    let (sine, cosine) = circular(z, turn);
     // `sine` が 0 の行では `-0.0 * sinh y` が `-0.0` になりうる。
     // **`finalize` が均す**ので値は在るべき所に来る（`without_negative_zero`）。
     Value::new(cosine * z.im.cosh(), -sine * z.im.sinh()).finalize()
 }
 
-/// tan は sin / cos として求める。
+/// tan。
 ///
 /// Deg モードの実数引数については、極（90 + 180n 度）を先に検出する。
 /// f64 の tan(PI/2) は無限大ではなく 1.633e16 という有限値を返すため、
@@ -148,7 +277,26 @@ pub fn tan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     if is_tan_pole(v, mode) {
         return Err(CalcError::TrigPole);
     }
-    sin(v, mode)?.checked_div(cos(v, mode)?)
+    tan_at(v, mode, turn_of(v, mode))
+}
+
+/// tan。**実数の引数で角が表に載れば、表から返す**（1.2.2 設計書 §4.2——sin/cos の
+/// 商にしない）。**表の極（90°・270°、RAD では π/2・3π/2）は `TrigPole`**（§4.3）。
+///
+/// **表と極を引くのは `im == 0` のときだけ**（§4.3、レビュー役の注記 2）。
+/// DEG の `is_tan_pole` が実数の引数だけを極と見るのと同じで、`tan(π/2 + εj)` は
+/// 有限の商を返す。**複素の引数は sin/cos の商**（その sin x・cos x は表から）。
+pub fn tan_at(v: Value, mode: AngleMode, turn: Option<Turn>) -> CalcResult<Value> {
+    if v.im == 0.0
+        && let Some(Turn::Table(t)) = turn
+        && let Some(row) = table_row(t)
+    {
+        return match row.tan {
+            Some(entry) => Value::real(entry.f64()).finalize(),
+            None => Err(CalcError::TrigPole),
+        };
+    }
+    sin_at(v, mode, turn)?.checked_div(cos_at(v, mode, turn)?)
 }
 
 /// Deg モードの**実数**引数が tan の極（90 + 180n 度）に載っているか。
@@ -179,7 +327,7 @@ pub fn tan(v: Value, mode: AngleMode) -> CalcResult<Value> {
 ///
 /// **`a % 180.0 == 90.0` は大きさで化けない。** **`%` は IEEE の `fmod` で
 /// 厳密**であり、**`a` がどれだけ大きくても剰余はその角の剰余そのもの**である
-/// （`quadrant_exact` が `x % 360.0` で象限を決めているのと同じ理由）。
+/// （`turn_of` が `x % 360.0` で表の位置を決めているのと同じ理由）。
 /// **引き算を剰余の外から中へ動かしただけで、述語の意味は変わらない**
 /// ——**`a = 90 + 180n` ⟺ `a % 180 == 90`**。
 /// **`a >= 90.0` の判定も要らなくなった**: `a < 90` では `a % 180 == a` なので、
@@ -521,7 +669,7 @@ mod tests {
             assert_eq!((sine.re, sine.im), (s, 0.0), "sin({deg}°)");
             assert_eq!((cosine.re, cosine.im), (c, 0.0), "cos({deg}°)");
         }
-        // `tan` は `sin / cos` のまま。0°・180° では `0 / ±1`。
+        // `tan` も表から(1.2.2 設計書 §4.2)。0°・180° では 0。
         assert_eq!(
             tan(Value::real(180.0), AngleMode::Deg).expect("有限").re,
             0.0
@@ -574,10 +722,14 @@ mod tests {
     }
 
     #[test]
-    fn radian_mode_keeps_the_answer_for_the_f64_pi() {
-        // **RAD は触らない**（設計書 §3.1）。**【π】で入るのは本当の π ではない**
-        // ので、**その `sin` は厳密に `1.2246467991473532e-16`** である
-        // ——**0 を返すのは「入力が厳密な π だった」という嘘**になる。
+    fn an_unmarked_radian_f64_keeps_its_own_answer() {
+        // **印の無い RAD の f64 は表を引かない**（1.2.2 設計書 §4.1、§7.2）。
+        // **RAD に表を広げるのは、入力が π の有理数倍だと「分かっている」ときだけ**
+        // ——π キーから四則だけで作った値（印が k=1）で、それは engine が印から
+        // `Turn` を作って `sin_at` に渡す。**この入口（`sin`）は印を知らない**ので、
+        // `f64` の π は π ではなく、その `sin` は厳密に `1.2246467991473532e-16`
+        // である（打った `3.1415926535` も同じ理由で π ではない）。
+        // **1.0.0 の線引き「入力が厳密なら、答えも厳密に」は変えていない。**
         assert_eq!(
             sin(Value::real(PI), AngleMode::Rad).expect("有限").re,
             1.224_646_799_147_353_2e-16
@@ -586,11 +738,11 @@ mod tests {
             cos(Value::real(PI / 2.0), AngleMode::Rad).expect("有限").re,
             6.123_233_995_736_766e-17
         );
-        // **★ 上の 2 行だけでは、表を RAD に広げても赤くならない**
-        // （2026-09-29、実行役が変異させて確かめた——**`π` は 90 の倍数ではない**ので、
-        // 広げても表が発火しない）。**RAD で「数として 90 の倍数」を撃つ**のが番人である:
+        // **★ 上の 2 行だけでは、`turn_of` を RAD に広げても赤くならない**
+        // （2026-09-29、実行役が変異させて確かめた——**`π` は 30 の倍数ではない**ので、
+        // 広げても表が発火しない）。**RAD で「数として 30・45 の倍数」を撃つ**のが番人:
         // **`180` ラジアンは `-0.8011526357338304`**、**`90` ラジアンの `cos` は
-        // `-0.4480736161291701`**。**表を引いたら 0 や ±1 になって赤くなる。**
+        // `-0.4480736161291701`**、**`30` ラジアンは `-0.9880316240928618`**。
         assert_eq!(
             sin(Value::real(180.0), AngleMode::Rad).expect("有限").re,
             -0.801_152_635_733_830_4
@@ -599,13 +751,106 @@ mod tests {
             cos(Value::real(90.0), AngleMode::Rad).expect("有限").re,
             -0.448_073_616_129_170_1
         );
+        assert_eq!(
+            sin(Value::real(30.0), AngleMode::Rad).expect("有限").re,
+            -0.988_031_624_092_861_8
+        );
     }
 
     #[test]
-    fn the_quadrant_table_and_the_pole_guard_agree() {
+    fn the_root_constants_are_the_rounded_values() {
+        // **設計書 §4.2 の literal**。1 回の丸めで作れるものは計算と一致する
+        // (√ は正しく丸め、÷ 2 は厳密)。
+        // `HALF_SQRT2` は std の定数そのもの（clippy の `approx_constant` を黙らせないため）。
+        // **それが 1 回の丸めで作った √2 ÷ 2 と一致すること**を見る（÷ 2 は厳密）。
+        assert_eq!(2_f64.sqrt() / 2.0, HALF_SQRT2);
+        assert_eq!(3_f64.sqrt(), SQRT3);
+        assert_eq!(3_f64.sqrt() / 2.0, HALF_SQRT3);
+        assert_eq!((1.0_f64 / 3.0).sqrt(), INV_SQRT3);
+        // **`1 / √3` を商で作ると丸めを 2 回通り、1 ulp 外れる**(`0.5773502691896258`)
+        // ——だから literal で持つ。
+        assert_ne!(1.0 / 3_f64.sqrt(), INV_SQRT3);
+    }
+
+    #[test]
+    fn degree_thirty_and_forty_five_come_from_the_table() {
+        // **`assert_eq!` で撃つ**——主張は「近い」ではなく「表の値そのもの」。
+        // 直す前の `30 sin` は `0.49999999999999994`。
+        for (deg, s, c) in [
+            (30.0, 0.5, HALF_SQRT3),
+            (45.0, HALF_SQRT2, HALF_SQRT2),
+            (60.0, HALF_SQRT3, 0.5),
+            (120.0, HALF_SQRT3, -0.5),
+            (135.0, HALF_SQRT2, -HALF_SQRT2),
+            (150.0, 0.5, -HALF_SQRT3),
+            (210.0, -0.5, -HALF_SQRT3),
+            (225.0, -HALF_SQRT2, -HALF_SQRT2),
+            (240.0, -HALF_SQRT3, -0.5),
+            (300.0, -HALF_SQRT3, 0.5),
+            (315.0, -HALF_SQRT2, HALF_SQRT2),
+            (330.0, -0.5, HALF_SQRT3),
+            (-30.0, -0.5, HALF_SQRT3),
+            (390.0, 0.5, HALF_SQRT3),
+        ] {
+            let sine = sin(Value::real(deg), AngleMode::Deg).expect("有限");
+            let cosine = cos(Value::real(deg), AngleMode::Deg).expect("有限");
+            assert_eq!((sine.re, sine.im), (s, 0.0), "sin({deg}°)");
+            assert_eq!((cosine.re, cosine.im), (c, 0.0), "cos({deg}°)");
+        }
+        // **tan も表から**(商にしない)。
+        for (deg, t) in [
+            (30.0, INV_SQRT3),
+            (45.0, 1.0),
+            (60.0, SQRT3),
+            (120.0, -SQRT3),
+            (135.0, -1.0),
+            (150.0, -INV_SQRT3),
+            (225.0, 1.0),
+            (-45.0, -1.0),
+        ] {
+            assert_eq!(
+                tan(Value::real(deg), AngleMode::Deg).expect("有限").re,
+                t,
+                "tan({deg}°)"
+            );
+        }
+        // **15° は表に無い**(§4.1)。
+        assert_eq!(turn_of(Value::real(15.0), AngleMode::Deg), None);
+        assert_eq!(turn_of(Value::real(30.5), AngleMode::Deg), None);
+    }
+
+    #[test]
+    fn the_table_has_sixteen_positions() {
+        let positions: Vec<Position> = (0..24)
+            .filter_map(|t| match Turn::table(t) {
+                Some(Turn::Table(p)) => Some(p),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            positions.iter().map(|p| p.get()).collect::<Vec<u8>>(),
+            vec![0, 2, 3, 4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 22]
+        );
+        for p in positions {
+            let row = table_row(p).expect("載る位置には行が在る");
+            // sin² + cos² = 1 の、表の上での確かめ(丸めた定数どうしなので近さで見る)。
+            close(row.sin.f64().powi(2) + row.cos.f64().powi(2), 1.0);
+            if let Some(t) = row.tan {
+                close(t.f64() * row.cos.f64(), row.sin.f64());
+            } else {
+                assert_eq!(row.cos, Entry::Exact(0, 1), "極は cos が 0 の位置だけ");
+            }
+        }
+        // 負の位置も畳む。
+        assert_eq!(Turn::table(-6), Some(Turn::Table(Position(18))));
+        assert_eq!(Turn::table(1), None);
+    }
+
+    #[test]
+    fn the_table_and_the_pole_guard_agree() {
         // **同じ条件が 2 か所に在る**（表と `is_tan_pole`）。**片方だけ直した日に
         // 赤くなる番人**である（レビュー役 calcarc-1e の注記）。
-        // **`cos` が厳密に 0 になる角** ⇔ **極**。
+        // **表の極（`tan` が `None`）** ⇔ **`is_tan_pole`**。
         //
         // **刻みは `i as f64 * 0.5` で作る**——`x += 0.5` の累算だと
         // **格子そのものがずれる**（`retry-biases-the-sample` の族）。
@@ -613,7 +858,10 @@ mod tests {
         let mut poles = 0_usize;
         for i in -720..=720 {
             let x = f64::from(i) * 0.5;
-            let from_table = quadrant_exact(x).is_some_and(|(_, c)| c == 0.0);
+            let from_table = match turn_of(Value::real(x), AngleMode::Deg) {
+                Some(Turn::Table(t)) => table_row(t).is_some_and(|row| row.tan.is_none()),
+                _ => false,
+            };
             let from_guard = is_tan_pole(Value::real(x), AngleMode::Deg);
             assert_eq!(from_table, from_guard, "{x}° で表と極の判定が食い違う");
             compared += 1;
@@ -626,6 +874,25 @@ mod tests {
         assert_eq!(compared, 1441);
         // **−360〜360 の極は ±90・±270 の 4 点。**
         assert_eq!(poles, 4);
+    }
+
+    #[test]
+    fn a_folded_turn_is_used_as_the_real_angle() {
+        // **`Turn::Folded` は実部の角そのもの**(ラジアン)。f64 の `re` は読まない。
+        let x = 0.4 * PI;
+        let s = sin_at(Value::real(1e300), AngleMode::Rad, Some(Turn::Folded(x))).expect("有限");
+        assert_eq!(s.re, x.sin());
+    }
+
+    #[test]
+    fn a_table_pole_needs_a_real_argument() {
+        // **レビュー役の注記 2**: 極は `im == 0` に限る。複素は有限の商。
+        let pole = Some(Turn::Table(Position(6)));
+        assert_eq!(
+            tan_at(Value::real(PI / 2.0), AngleMode::Rad, pole),
+            Err(CalcError::TrigPole)
+        );
+        assert!(tan_at(Value::new(PI / 2.0, 1e-8), AngleMode::Rad, pole).is_ok());
     }
 
     #[test]

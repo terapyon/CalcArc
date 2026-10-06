@@ -1566,3 +1566,129 @@ describe("行の組み立て", () => {
     }
   });
 });
+
+/**
+ * **呼び戻した直後の経歴の行**（1.2.2、`2026-10-06-recall-trail-design.md` §4.1）。
+ * **偽の calc の上**——偽 `spell` は数字（と `FAKE_GLYPHS`）だけを綴るので、
+ * **「今の規則の行」はその綴り**（`1 5` など）であり、閉じた行とは必ず違う。
+ */
+describe("呼び戻した行", () => {
+  beforeEach(() => {
+    vi.mocked(initCalc).mockImplementation(() => Promise.resolve(fakeCalc()));
+  });
+
+  const seed = (entries: object[]) =>
+    window.localStorage.setItem("calcarc.history", JSON.stringify(entries));
+  const line = () => screen.getByTestId("display-entry-active");
+
+  async function recallFirst(name: string): Promise<void> {
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await openHistory();
+    await userEvent.click(screen.getByRole("button", { name }));
+  }
+
+  it("shows the recalled expression as a closed line, with the entry's mark", async () => {
+    seed([
+      {
+        expression: "sin(30) × 2",
+        answer: "1",
+        angle: "Deg",
+        error: false,
+        mark: "DEG",
+      },
+    ]);
+    await recallFirst("sin(30) × 2 = 1 を入力に入れる");
+    expect(line()).toHaveTextContent(/^DEG sin\(30\) × 2 =$/);
+    expect(screen.getByTestId("display-main")).toHaveTextContent("1");
+  });
+
+  it("shows no mark when the entry recorded none", async () => {
+    seed([
+      {
+        expression: "3 + 4",
+        answer: "7",
+        angle: "Deg",
+        error: false,
+        mark: "",
+      },
+    ]);
+    await recallFirst("3 + 4 = 7 を入力に入れる");
+    expect(line()).toHaveTextContent(/^3 \+ 4 =$/);
+  });
+
+  it("names the entry's own angle when an older entry carries no mark", async () => {
+    // **`Rad` を選ぶ**——いまのモード（`Deg`）を読む取り違えを見分けるため。
+    seed([{ expression: "30 sin", answer: "0.5", angle: "Rad", error: false }]);
+    await recallFirst("30 sin = 0.5 を入力に入れる");
+    expect(line()).toHaveTextContent(/^RAD 30 sin =$/);
+  });
+
+  it.each([
+    ["a digit", "5", /^1 5$/],
+    ["an operator", "足す", /^1$/],
+    ["DEL", "1文字消去", /^1$/],
+    ["the angle toggle", "角度の単位を切り替え", /^1$/],
+  ])(
+    "replaces the recalled line with today's spelled line on %s",
+    async (_label, key, expected) => {
+      seed([
+        {
+          expression: "3 − 2",
+          answer: "1",
+          angle: "Deg",
+          error: false,
+          mark: "",
+        },
+      ]);
+      await recallFirst("3 − 2 = 1 を入力に入れる");
+      expect(line()).toHaveTextContent(/^3 − 2 =$/);
+      await pressKeys([key]);
+      expect(line()).toHaveTextContent(expected);
+    },
+  );
+
+  it("keeps the recalled line when the next key is one the engine refuses", async () => {
+    // **注記 1**: 押せなかったキーは何もしなかったのと同じである。偽 `dispatch` は
+    // 数字の後の `(` を拒む——盤面では押せないので、キーボードから打つ。
+    // **★ この検査は `press` の中で ref を消す位置を見張らない**（2026-10-06 に変異で実測:
+    // 早期 return の前に消しても緑）。**押せなかったキーは `setStep` を呼ばないので
+    // effect が走らず、消えた ref を誰も読まない**——次に押せたキーがどのみち消す。
+    // **見張るのは外から見える約束（行が残る）だけである。**
+    seed([
+      {
+        expression: "3 − 2",
+        answer: "1",
+        angle: "Deg",
+        error: false,
+        mark: "",
+      },
+    ]);
+    await recallFirst("3 − 2 = 1 を入力に入れる");
+    expect(screen.getByRole("button", { name: "開き括弧" })).toBeDisabled();
+    fireEvent.keyDown(window, { key: "(" });
+    // 押せたキーで替わることを同じ形で見せておく（拒否が何も起こさなかったことの対照）。
+    expect(line()).toHaveTextContent(/^3 − 2 =$/);
+    await pressKeys(["5"]);
+    expect(line()).toHaveTextContent(/^1 5$/);
+  });
+
+  it("stores the mark the = line showed, empty when it showed none", async () => {
+    render(<ScientificPanel />);
+    await screen.findByText("DEG");
+    await pressKeys([
+      "3",
+      "サイン",
+      "計算する",
+      "全消去",
+      "2",
+      "足す",
+      "3",
+      "計算する",
+    ]);
+    const stored = JSON.parse(
+      window.localStorage.getItem("calcarc.history") as string,
+    ) as { mark?: string }[];
+    expect(stored.map((e) => e.mark)).toEqual(["", "DEG"]);
+  });
+});

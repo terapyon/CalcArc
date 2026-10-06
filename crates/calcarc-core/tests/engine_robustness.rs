@@ -17,7 +17,7 @@ use proptest::test_runner::TestCaseError;
 mod invariants {
     use calcarc_core::engine::display::ERROR_TEXT;
     use calcarc_core::engine::state::{BinOp, Buffer, OpToken};
-    use calcarc_core::{DisplayState, EngineState, Key, Value, reduce, render};
+    use calcarc_core::{DisplayState, EngineState, Key, reduce, render};
 
     /// 検査対象の 1 手。
     pub struct Step<'a> {
@@ -187,11 +187,11 @@ mod invariants {
     /// 表向きは実数の `0` になるが、`÷` を押すと戻り先に残っていた `3j` へ
     /// 戻って積み直すので、`j` を経ずに虚数へ出る。
     fn all_real(state: &EngineState) -> bool {
-        state.current.im == 0.0
-            && state.operands.iter().all(|v| v.im == 0.0)
+        state.current.value.im == 0.0
+            && state.operands.iter().all(|v| v.value.im == 0.0)
             && state.buffer.as_ref().is_none_or(|b| !b.imaginary)
             && state.replace_base.as_ref().is_none_or(|base| {
-                base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
+                base.current.value.im == 0.0 && base.operands.iter().all(|v| v.value.im == 0.0)
             })
             // **`closed_groups` も見る**(0.9.3 設計書 §4.2)。**`replace_base` と同じ形の
             // 隠れ場所である**——`)` を押す直前の状態を積むので、**畳んだ結果が実数でも、
@@ -200,14 +200,14 @@ mod invariants {
             // **この節を書かずに走らせたら、網羅列挙がその列で落ちた**(2026-09-17)
             // ——**invariant が新しい隠れ場所を見つけた**ので、隠れ場所のほうを足した。
             && state.closed_groups.iter().all(|group| {
-                group.current.im == 0.0
-                    && group.operands.iter().all(|v| v.im == 0.0)
+                group.current.value.im == 0.0
+                    && group.operands.iter().all(|v| v.value.im == 0.0)
                     && group.buffer.as_ref().is_none_or(|b| !b.imaginary)
                     // **控えた `replace_base` も見る**——積みの中の、さらに奥の隠れ場所。
                     // **`replace_base` を `ClosedGroup` に足した日に、ここも要る**ことが
                     // 網羅列挙で分かった(2026-09-17、2 度目の I3)。
                     && group.replace_base.as_ref().is_none_or(|base| {
-                        base.current.im == 0.0 && base.operands.iter().all(|v| v.im == 0.0)
+                        base.current.value.im == 0.0 && base.operands.iter().all(|v| v.value.im == 0.0)
                     })
             })
     }
@@ -242,7 +242,7 @@ mod invariants {
         if !all_real(after) {
             return Err(format!(
                 "I3: a real-only state produced im={} after {}",
-                after.current.im,
+                after.current.value.im,
                 step.key.token()
             ));
         }
@@ -379,7 +379,7 @@ mod invariants {
     /// **戻す値そのものの正しさは、`engine_table.rs` の
     /// `del_on_a_fresh_paren_returns_to_the_operator_before_it` が固定する**
     /// ——ここは値の仕様ではなく、実装との一致を見る。
-    fn current_after_del(before: &EngineState) -> Value {
+    fn current_after_del(before: &EngineState) -> calcarc_core::engine::Held {
         let restores = before.buffer.is_none()
             && !before.on_hand
             && matches!(before.operators.last(), Some(OpToken::OpenParen))
@@ -1083,7 +1083,7 @@ fn the_weighted_search_still_reaches_deep_states() {
 fn a_state_with_the_wrong_schema_is_discarded() {
     let mut stale = EngineState::initial();
     stale.schema = STATE_SCHEMA + 1;
-    stale.current = calcarc_core::Value::real(999.0);
+    stale.current = calcarc_core::engine::Held::bare(calcarc_core::Value::real(999.0));
 
     // 例外にせず、初期状態から再開する（設計書 §5）。
     let (next, shown) = reduce(&stale, Key::from_token("3").unwrap());

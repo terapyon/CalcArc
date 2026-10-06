@@ -32,6 +32,7 @@ import sympy as sp
 from calcarc_reference import (
     corpus_combinatorics,
     corpus_complex,
+    corpus_rad_pi,
     corpus_science,
     eng_ref,
     real_ref,
@@ -3044,6 +3045,11 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
         "operator-correction-000.json",
         build_operator_correction_shard(seed=20260916, count=count),
     )
+    # **RAD で π の有理数倍を三角関数に渡す 1 枚**（1.2.2、設計書
+    # `2026-10-06-exact-pi-decimal-design.md` §8.3）。**乱択も `count` も持たない**
+    # 固定の格子。**最後に足す**（上と同じ理由で、書き出しの順を動かさない）。
+    # `SCIENCE_SHARDS` には入れない——9 領域のモデルに RAD × π の軸が無い。
+    yield "rad-pi-display-000.json", corpus_rad_pi.build_shard()
 
 
 #: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。
