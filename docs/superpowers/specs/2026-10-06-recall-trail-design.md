@@ -5,6 +5,11 @@
 
 **この文書は実装しない。**
 
+**裁定（2026-10-06）**: **利用者——入れる。** **監視役——§2.2 の角度の印は案 a（件に `mark` の欄を足す。持たない古い件は
+`angle` の大文字）、§6 の 2 の DRG でも呼び戻した行を消す。** **審査（レビュー役）: 承認、阻止 0・条件 0。**
+**注記 1**: `press` の頭で `recalledLineRef` を `null` にする位置は、**押せないキー（`refused`）の早期 return の後**
+——押せなかったキーは何もしなかったのと同じなので、呼び戻した行も消さない。
+
 ---
 
 ## 1. いまの姿（`afa9991`、2026-10-06）
@@ -59,7 +64,7 @@
 
 **1 つの ref で閉じる**: `recalledLineRef: { line: string; mark: string } | null`。
 
-1. **`press` の先頭で、どのキーでも `recalledLineRef.current = null`**（呼び戻しの連打の `ac` と数字も消す）。
+1. **`press` の、押せないキー（`refused`）の早期 return の後で、どのキーでも `recalledLineRef.current = null`**（呼び戻しの連打の `ac` と数字も消す。押せなかったキーは消さない——注記 1）。
 2. **`recall` は、連打を終えた後に**（`for (const key of keys) press(key);` の次の行で）
    `recalledLineRef.current = { line: closedLineOf(entry.expression), mark }` を置く。
 3. **effect の「`=` の行が保留されていない」枝**（打っている最中の行を作る所）の先頭で、
