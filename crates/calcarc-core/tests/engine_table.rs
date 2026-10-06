@@ -2051,3 +2051,25 @@ fn decimal_rounding_does_not_accumulate() {
         "0"
     );
 }
+
+/// **厳密な 0 で割ると DivisionByZero**(段階 2 で利用者から見える変化。Task 3 のレビュー)。
+///
+/// `0.1 + 0.2 − 0.3` の `re` は印 `0` を丸めた f64 の `0` ちょうどなので、`1 ÷` と
+/// `1/x` はゼロ除算になる。**種別まで見る**(`Math ERROR` の表示はどのエラーでも同じ)。
+#[test]
+fn dividing_by_an_exact_decimal_zero_is_an_error() {
+    use calcarc_core::CalcError;
+    // 今 `1.801439851e16`(f64 の残り `5.551115123e-17` で割っていた。`b2661cb` の印字)。
+    let divided = run(&[
+        "1", "div", "lparen", "0", "dot", "1", "add", "0", "dot", "2", "sub", "0", "dot", "3",
+        "rparen", "eq",
+    ]);
+    assert_eq!(divided.main, "Math ERROR");
+    assert_eq!(divided.error, Some(CalcError::DivisionByZero));
+    // 今 `1.801439851e16`(同じ)。
+    let reciprocal = run(&[
+        "0", "dot", "1", "add", "0", "dot", "2", "eq", "sub", "0", "dot", "3", "eq", "recip",
+    ]);
+    assert_eq!(reciprocal.main, "Math ERROR");
+    assert_eq!(reciprocal.error, Some(CalcError::DivisionByZero));
+}

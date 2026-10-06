@@ -2,6 +2,7 @@
 2 進の値で確かめる（Rust の側は `tests/rational_to_f64_golden.rs` が照合する）。"""
 
 import math
+import sys
 from fractions import Fraction
 
 from calcarc_reference import rational_round
@@ -42,7 +43,13 @@ def test_the_tie_families_are_ties():
 
 
 def test_no_row_is_subnormal_and_ids_are_unique():
+    """**非正規化数の行は無い**——生成器の assert とは別に、ここで値域そのものを見る。
+    i128 の分数の絶対値は 0 か `2^-128 ≤ |x| ≤ 2^127` で、f64 の正規化数の内側に在る。"""
     cases = rational_round.build_cases()
+    for case in cases:
+        x = Fraction(int(case["input"]["num"]), int(case["input"]["den"]))  # type: ignore[index]
+        assert x == 0 or Fraction(1, 1 << 128) <= abs(x) <= (1 << 127), case["id"]
+        assert x == 0 or abs(float(x)) >= sys.float_info.min, case["id"]
     ids = [c["id"] for c in cases]
     assert len(set(ids)) == len(ids)
     families = {c["family"] for c in cases}

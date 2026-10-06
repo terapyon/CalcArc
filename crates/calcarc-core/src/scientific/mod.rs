@@ -106,7 +106,7 @@ pub enum Turn {
 ///
 /// **外から載らない位置を作ろうとすると、型の段で止まる**(この例は通ってはならない):
 ///
-/// ```compile_fail
+/// ```compile_fail,E0423
 /// use calcarc_core::scientific::{Position, Turn};
 /// let _ = Turn::Table(Position(1));
 /// ```
