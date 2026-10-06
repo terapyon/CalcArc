@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::state::Buffer;
-use crate::expr::rational::Rational;
+use crate::expr::rational::{Rational, ratio_to_f64};
 use crate::scientific::{self, Entry, Row, Turn, table_row};
 use crate::{AngleMode, Value};
 
@@ -113,6 +113,32 @@ impl Held {
     /// 印の無い値(`e` キーなど)。
     pub fn bare(value: Value) -> Held {
         Held { value, exact: None }
+    }
+
+    /// 計算した値に印を添える。**k=0 の印があれば、`re` を印を正しく丸めた f64 に
+    /// 置き換える**(段階 2、設計書 §5.1)。虚部はそのまま。
+    ///
+    /// - **k=1 の値は `re` を変えない**——π を含む値は正しく丸められない(§5.1)。
+    /// - **印が無ければ(落ちた・初めから無い)`value` のまま**——今の f64 の道。
+    ///
+    /// **これで「`re` は印を正しく丸めた値」という不変が 1 つになる**(§11.2 の未決 2)。
+    /// 四則の各段で `re` を印から作り直すので、印が落ちない限り、最後の段の `re` は
+    /// 式全体を 1 回で丸めた値そのものになる(§5.2)。
+    ///
+    /// **60 進の入力も同じ規則に入れる**(実行役の裁定)。`Buffer::value` は度・分・秒を
+    /// f64 で足すので、`0°7'11"` は `0.11972222222222223` になり、印 `431/3600` を正しく
+    /// 丸めた `0.11972222222222222` と 1 ulp ずれる。**例外を残すと「`re` は印の丸め」が
+    /// 60 進だけ偽になり**、DEG の三角関数は印を、四則は f64 の和を読む二重の正体ができる。
+    /// 同じ規則にしても 10 桁の表示は動かない(1 ulp の差)。
+    pub fn settled(value: Value, exact: Option<Exact>) -> Held {
+        let value = match exact {
+            Some(mark) if !mark.pi => Value {
+                re: mark.q.to_f64(),
+                im: value.im,
+            },
+            _ => value,
+        };
+        Held { value, exact }
     }
 }
 
@@ -231,13 +257,20 @@ pub fn mul(a: Held, b: Held) -> Option<Exact> {
 }
 
 /// `a ÷ b`。`qb ≠ 0` で k の差が 0 か 1 なら `(qa/qb, ka−kb)`。`π ÷ π` は `(1, 0)`、
-/// `1 ÷ π` は落とす。**`0 ÷ π` も落とす**(差が −1。設計書は ± でしか 0 を中立にして
-/// いない——決めていない場合は落とす、という実行役の裁定)。
+/// `1 ÷ π` は落とす。
+///
+/// **`0 ÷ π` は `(0, k=0)`**——**0 は k に中立**(§3.4、条件 1)なので、k の差が −1 でも
+/// 答えは 0 である。以前は「決めていない場合は落とす」として落としていたが、それは
+/// 条件 1 と矛盾した(RAD `0 × π = + π = sin` は 0、`0 ÷ π = + π = sin` は
+/// `1.224646799e-16`。中間審査の条件 1 で直した)。
 pub fn div(a: Held, b: Held) -> Option<Exact> {
     if !both_real(a, b) {
         return None;
     }
     let (a, b) = (a.exact?, b.exact?);
+    if a.q.is_zero() && !b.q.is_zero() {
+        return Some(Exact::ZERO);
+    }
     if b.q.is_zero() || (!a.pi && b.pi) {
         return None;
     }
@@ -322,8 +355,10 @@ fn pi_turn(q: Rational) -> Option<Turn> {
         return Some(table);
     }
     // 表に載らない(π/12 の奇数倍を含む)。`(−1, 1]` に畳んでから `f64(r) × π`。
+    // **`f64(r)` は正しく丸める**(`ratio_to_f64`、段階 2)。`folded as f64 / d as f64` は
+    // `d > 2^53` で変換と除算の 2 度丸めになり、1 ulp 外れうる。
     let folded = if r > d { r - 2 * d } else { r };
-    let x = folded as f64 / d as f64;
+    let x = ratio_to_f64(folded, d)?;
     Some(Turn::Folded(x * std::f64::consts::PI))
 }
 
@@ -503,6 +538,42 @@ mod tests {
     }
 
     #[test]
+    fn sexagesimal_entry_takes_the_rounded_mark_not_the_f64_sum() {
+        // **60 進も「`re` は印の丸め」に入れる**(`Held::settled` の裁定)。`0°7'11"` の
+        // 印は 431/3600。f64 で度・分・秒を足すと `0.11972222222222223`(1 ulp 上)。
+        let held = state_after(&["0", "dms", "7", "dms", "1", "1", "eq"]).current;
+        assert_eq!(held.exact, q(431, 3600, false));
+        assert_eq!(held.value.re, 0.11972222222222222);
+        let f64_sum = 0.0 + 7.0 / 60.0 + 11.0 / 3600.0;
+        assert_eq!(f64_sum, 0.11972222222222223, "比べる相手が 1 ulp 違うこと");
+        assert_ne!(held.value.re, f64_sum);
+    }
+
+    #[test]
+    fn the_re_is_the_rounded_mark_for_k_zero_only() {
+        // 段階 2(§5.1)。`4548399.395 − 4548399.394` の印は 1/1000、`re` は f64 の 0.001。
+        let held = state_after(&[
+            "4", "5", "4", "8", "3", "9", "9", "dot", "3", "9", "5", "sub", "4", "5", "4", "8",
+            "3", "9", "9", "dot", "3", "9", "4", "eq",
+        ])
+        .current;
+        assert_eq!(held.exact, q(1, 1000, false));
+        assert_eq!(held.value.re, 0.001);
+        // **k=1 は `re` を変えない**——`π × 2` は f64 の `2π` のまま。
+        let held = state_after(&["pi", "mul", "2", "eq"]).current;
+        assert_eq!(held.value.re, std::f64::consts::PI * 2.0);
+        // 印が落ちた値も f64 のまま(`1 EXP 30 × 1 EXP 30`)。
+        let held = state_after(&["1", "exp", "3", "0", "mul", "1", "exp", "3", "0", "eq"]).current;
+        assert_eq!(held.value.re, 1e30 * 1e30);
+        // 虚部は残る。
+        let held = state_after(&[
+            "0", "dot", "1", "add", "0", "dot", "2", "add", "3", "j", "eq",
+        ])
+        .current;
+        assert_eq!(held.value, Value::new(0.3, 3.0));
+    }
+
+    #[test]
     fn imaginary_entry_marks_its_zero_real_part() {
         assert_eq!(mark(&["j", "eq"]), q(0, 1, false));
         assert_eq!(mark(&["j", "3", "eq"]), q(0, 1, false));
@@ -566,8 +637,8 @@ mod tests {
         assert_eq!(mark(&["pi", "div", "pi", "eq"]), q(1, 1, false));
         assert_eq!(mark(&["1", "div", "3", "eq"]), q(1, 3, false));
         assert_eq!(mark(&["1", "div", "pi", "eq"]), None);
-        // 設計書が決めていない場合 → 落とす(実行役の裁定)。
-        assert_eq!(mark(&["0", "div", "pi", "eq"]), None);
+        // **0 は k に中立**(中間審査の条件 1)。`0 ÷ π` は `(0, k=0)`。
+        assert_eq!(mark(&["0", "div", "pi", "eq"]), Some(Exact::ZERO));
     }
 
     #[test]
@@ -654,6 +725,16 @@ mod tests {
         assert_eq!(rad(&["pi", "mul", "7", "div", "5", "eq", "sin"]), None);
         // 15° は表に無い(§4.1)。
         assert_eq!(mark(&["1", "5", "sin"]), None);
+    }
+
+    #[test]
+    fn pi_over_twelve_is_folded_not_tabled() {
+        // **15°(π/12)は表に無い**(§4.1)。答えの表示は表の値と同じ 10 桁になるので、
+        // 載らないことは角の正体で見る。
+        let held = state_after(&["angle_toggle", "pi", "div", "1", "2", "eq"]).current;
+        assert!(matches!(turn(held, AngleMode::Rad), Some(Turn::Folded(_))));
+        let held = state_after(&["angle_toggle", "pi", "div", "6", "eq"]).current;
+        assert!(matches!(turn(held, AngleMode::Rad), Some(Turn::Table(p)) if p.get() == 2));
     }
 
     #[test]

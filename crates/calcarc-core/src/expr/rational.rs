@@ -122,6 +122,93 @@ impl Rational {
     pub fn parts(&self) -> (i128, i128) {
         (self.num, self.den)
     }
+
+    /// **正しく丸めた f64**(1.2.3 設計書 §5.3)。真の値にいちばん近い f64、同点は偶数へ。
+    ///
+    /// 分母は不変として正なので `ratio_to_f64` は必ず値を返す。**`None` の腕は来ないが、
+    /// panic しない約束のために NaN を置く**(`unwrap` は使わない)。
+    pub fn to_f64(self) -> f64 {
+        ratio_to_f64(self.num, self.den).unwrap_or(f64::NAN)
+    }
+}
+
+/// 2^53。これ以下の整数は f64 が厳密に持てる。
+const EXACT_INT: u128 = 1 << 53;
+
+/// **`num / den` を正しく丸めた f64**(1.2.3 設計書 §5.3、§11.2 の未決 2)。最近接、同点は
+/// 偶数へ(IEEE 754 の既定)。`den == 0` なら `None`。**panic しない。**
+///
+/// - **分子と分母の絶対値がどちらも 2^53 以下なら、除算 1 回**——2 つとも f64 に厳密に
+///   入り、IEEE の除算は厳密な 2 数の商を正しく丸める。
+/// - **それより大きいときは u128 の長除算**で、商の上位 54 ビット(53 ビット＋丸めの 1 ビット)
+///   と sticky(それより下が 0 でないか)を作ってから丸める。`as f64` を 2 回通す道
+///   (`num as f64 / den as f64`)は、変換と除算で **2 度丸める**ので 1 ulp 外れうる。
+///
+/// **値域**: 絶対値は `1/2^127` から `2^127` まで(`i128::MIN` も符号を外して受け取る)。
+/// **非正規化数にも溢れにも届かない**——どちらも f64 の正規化数の内側に収まる
+/// (2^-1022 ≪ 2^-127、2^127 ≪ 2^1024)。だから丸めは 53 ビットの仮数だけで決まる。
+pub fn ratio_to_f64(num: i128, den: i128) -> Option<f64> {
+    let magnitude = round_unsigned(num.unsigned_abs(), den.unsigned_abs())?;
+    // **0 は符号を持たない**(`0 / −5` は `+0.0`。Python の `float(Fraction(0, -5))` と同じ)。
+    Some(if num != 0 && (num < 0) != (den < 0) {
+        -magnitude
+    } else {
+        magnitude
+    })
+}
+
+/// `a / b`(`b ≠ 0`)を正しく丸める。符号は呼び手が付ける。
+fn round_unsigned(a: u128, b: u128) -> Option<f64> {
+    if b == 0 {
+        return None;
+    }
+    if a == 0 {
+        return Some(0.0);
+    }
+    if a <= EXACT_INT && b <= EXACT_INT {
+        return Some(a as f64 / b as f64);
+    }
+    // 商を `m × 2^exp`(m は 54 ビット: 2^53 ≤ m < 2^54)と sticky にする。
+    let whole = a / b;
+    let mut rest = a % b;
+    let (mut m, mut exp, sticky): (u128, i32, bool);
+    if whole >= EXACT_INT << 1 {
+        // 整数部だけで 55 ビット以上ある。上位 54 ビットを取り、捨てた下位と余りが sticky。
+        let shift = (u128::BITS - whole.leading_zeros()) - 54;
+        m = whole >> shift;
+        sticky = whole & ((1 << shift) - 1) != 0 || rest != 0;
+        exp = i32::try_from(shift).ok()?;
+    } else {
+        // 整数部が 54 ビットに満たない。小数部の桁を 1 ビットずつ足していく。
+        // **`rest < b ≤ 2^127` なので `rest << 1` は u128 に収まる。**
+        m = whole;
+        exp = 0;
+        while m < EXACT_INT {
+            rest <<= 1;
+            m <<= 1;
+            if rest >= b {
+                rest -= b;
+                m |= 1;
+            }
+            exp -= 1;
+        }
+        sticky = rest != 0;
+    }
+    // 最下位の 1 ビットが丸めのビット。上の 53 ビットが仮数。
+    let round = m & 1 == 1;
+    m >>= 1;
+    exp += 1;
+    if round && (sticky || m & 1 == 1) {
+        m += 1;
+        if m == EXACT_INT {
+            // 繰り上がりで 54 ビットになった(仮数がすべて 1 だった)。
+            m >>= 1;
+            exp += 1;
+        }
+    }
+    // `m < 2^53` は f64 に厳密に入り、2^exp との積も厳密(値は正規化数の内側)。
+    let biased = u64::try_from(exp + 1023).ok()?;
+    Some(m as f64 * f64::from_bits(biased << 52))
 }
 
 #[cfg(test)]
@@ -210,6 +297,80 @@ mod tests {
                 .checked_div(Rational::from_i128(0).unwrap()),
             Err(CalcError::DivisionByZero)
         );
+    }
+
+    // ---- 正しく丸めた f64(1.2.3 設計書 §5.3) ----
+    //
+    // **期待値は手で構成した 2 進の値**——言語をまたぐ照合は
+    // `tests/rational_to_f64_golden.rs`(Python の `float(Fraction)`)が持つ。
+
+    const P53: i128 = 1 << 53;
+
+    #[test]
+    fn small_ratios_take_one_division() {
+        assert_eq!(ratio_to_f64(1, 3), Some(1.0 / 3.0));
+        assert_eq!(ratio_to_f64(1, 1000), Some(0.001));
+        assert_eq!(ratio_to_f64(P53, 1), Some(9007199254740992.0));
+        assert_eq!(ratio_to_f64(0, 7), Some(0.0));
+    }
+
+    #[test]
+    fn a_zero_denominator_is_none_not_a_panic() {
+        assert_eq!(ratio_to_f64(1, 0), None);
+        assert_eq!(ratio_to_f64(0, 0), None);
+        assert_eq!(ratio_to_f64(i128::MIN, 0), None);
+    }
+
+    #[test]
+    fn ties_go_to_even_above_two_to_the_53() {
+        // 2^53 + 1 は 2^53 と 2^53 + 2 のちょうど中間 → 偶数の 2^53。
+        assert_eq!(ratio_to_f64(P53 + 1, 1), Some(9007199254740992.0));
+        // 2^53 + 3 は 2^53 + 2 と 2^53 + 4 の中間 → 偶数の 2^53 + 4。
+        assert_eq!(ratio_to_f64(P53 + 3, 1), Some(9007199254740996.0));
+        // 中間より上なら上へ(sticky が効く)。
+        assert_eq!(ratio_to_f64((P53 + 1) * 4 + 1, 4), Some(9007199254740994.0));
+        // 中間より下なら下へ。
+        assert_eq!(ratio_to_f64((P53 + 1) * 4 - 1, 4), Some(9007199254740992.0));
+    }
+
+    #[test]
+    fn unreduced_large_ratios_round_like_their_reduced_form() {
+        // 長除算の道(分子・分母とも 2^53 超)と除算 1 回の道が同じ答えになる。
+        let k = 1_i128 << 70;
+        assert_eq!(ratio_to_f64(k, 3 * k), Some(1.0 / 3.0));
+        assert_eq!(ratio_to_f64(7 * k, 10 * k), Some(0.7));
+        // 同点も長除算の道で偶数へ。
+        assert_eq!(ratio_to_f64((P53 + 1) * k, k), Some(9007199254740992.0));
+        assert_eq!(ratio_to_f64((P53 + 3) * k, k), Some(9007199254740996.0));
+    }
+
+    #[test]
+    fn the_ends_of_i128() {
+        let two_127 = 2.0_f64.powi(127);
+        // 2^127 − 1 は 2^127 に丸まる(繰り上がりで仮数が 54 ビットになる道)。
+        assert_eq!(ratio_to_f64(i128::MAX, 1), Some(two_127));
+        assert_eq!(ratio_to_f64(1, i128::MAX), Some(1.0 / two_127));
+        // `i128::MIN` も符号を外して受け取る。
+        assert_eq!(ratio_to_f64(i128::MIN, 1), Some(-two_127));
+        assert_eq!(ratio_to_f64(i128::MIN, -1), Some(two_127));
+        assert_eq!(ratio_to_f64(i128::MIN, i128::MIN), Some(1.0));
+        assert_eq!(ratio_to_f64(i128::MAX, i128::MAX - 1), Some(1.0));
+    }
+
+    #[test]
+    fn signs_follow_the_quotient() {
+        assert_eq!(ratio_to_f64(-1, 3), Some(-1.0 / 3.0));
+        assert_eq!(ratio_to_f64(1, -3), Some(-1.0 / 3.0));
+        assert_eq!(ratio_to_f64(-1, -3), Some(1.0 / 3.0));
+        // 0 は `+0.0`(`-0.0` は `==` では見分けられないのでビットで見る)。
+        assert_eq!(ratio_to_f64(0, -5).map(f64::to_bits), Some(0));
+        assert_eq!(ratio_to_f64(-(P53 + 3), 1), Some(-9007199254740996.0));
+    }
+
+    #[test]
+    fn to_f64_reads_the_reduced_fraction() {
+        assert_eq!(Rational::from_ratio(1, 1000).unwrap().to_f64(), 0.001);
+        assert_eq!(Rational::from_ratio(3, 10).unwrap().to_f64(), 0.3);
     }
 
     #[test]

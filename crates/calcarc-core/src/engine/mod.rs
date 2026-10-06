@@ -260,7 +260,8 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 }
 
 /// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.3 設計書 §3.4)。
-/// 値の計算は印を見ない——`re` は印が入る前と 1 ビットも変わらない。
+/// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
+/// §5.1。`Held::settled`)。
 fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
     let (a, b) = (lhs.value, rhs.value);
     let (value, exact) = match op {
@@ -273,7 +274,7 @@ fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
         BinOp::Npr => (scientific::npr(a, b)?, None),
         BinOp::Ncr => (scientific::ncr(a, b)?, None),
     };
-    Ok(Held { value, exact })
+    Ok(Held::settled(value, exact))
 }
 
 /// 入力中のバッファを確定して `current` に移す。
@@ -282,11 +283,10 @@ fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
 /// (設計書 §2: 打鍵の途中はエラーにしない)。
 fn commit_entry(state: &mut EngineState) -> CalcResult<()> {
     if let Some(buffer) = state.buffer.take() {
-        state.current = Held {
-            value: buffer.value()?,
-            // 打った十進そのもの(1.2.3 設計書 §3.3)。i128 に収まらなければ印なし。
-            exact: exact::of_buffer(&buffer),
-        };
+        // 打った十進そのもの(1.2.3 設計書 §3.3)。i128 に収まらなければ印なし。
+        // **`buffer.value()` はエラー(f64 の溢れ)を出すために先に読む**——値は印が
+        // あれば印の丸めに置き換わる(段階 2、§5.1。60 進の裁定は `Held::settled`)。
+        state.current = Held::settled(buffer.value()?, exact::of_buffer(&buffer));
     }
     Ok(())
 }
@@ -503,10 +503,7 @@ where
 {
     commit_entry(state)?;
     let before = state.current;
-    state.current = Held {
-        value: f(before.value)?,
-        exact: mark(before),
-    };
+    state.current = Held::settled(f(before.value)?, mark(before));
     Ok(())
 }
 
@@ -525,10 +522,7 @@ fn apply_trig(
     let mode = state.angle;
     let before = state.current;
     let turn = exact::turn(before, mode);
-    state.current = Held {
-        value: f(before.value, mode, turn)?,
-        exact: mark(before, turn),
-    };
+    state.current = Held::settled(f(before.value, mode, turn)?, mark(before, turn));
     Ok(())
 }
 

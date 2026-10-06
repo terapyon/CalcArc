@@ -25,6 +25,7 @@ from calcarc_reference import (
     llm_ref,
     loan_boundary,
     loan_ref,
+    rational_round,
     scientific_ref,
     sexagesimal_ref,
     transfer_ref,
@@ -437,6 +438,19 @@ def build_complex_div_boundary() -> dict:
     }
 
 
+def build_rational_to_f64() -> dict:
+    """「i128 の分数 → 正しく丸めた f64」の golden(1.2.3 設計書 §5.3・§8.2)。
+
+    **`tolerance` を持たない**——正しい丸めの答えは 1 つしかない。期待はビット列で、
+    Rust はビットで比べる。
+    """
+    return {
+        "schema": SCHEMA,
+        "generated_by": _provenance(),
+        "cases": rational_round.build_cases(),
+    }
+
+
 def _envelope(entries: list[dict]) -> dict:
     return {
         "schema": SCHEMA,
@@ -471,6 +485,7 @@ def main() -> None:
     write("finance.json", build_finance())
     write("loan_boundary.json", build_loan_boundary())
     write("complex_div_boundary.json", build_complex_div_boundary())
+    write("rational_to_f64.json", build_rational_to_f64())
 
 
 if __name__ == "__main__":

@@ -85,11 +85,39 @@ pub enum Turn {
     /// **表の 16 の位置**のどれか。**15° 単位の `0..24`**（RAD では π/12 単位）で、
     /// 載るのは 30° か 45° の倍数（`t % 2 == 0 || t % 3 == 0`）だけ。
     /// **15° は載らない**——sin 15° は表に無い（§4.1「`12r` が整数、では広すぎる」）。
-    /// 作るのは `Turn::table` だけで、載らない位置は作らない。
-    Table(u8),
+    /// 作るのは `Turn::table` だけで、載らない位置は作らない——**`Position` の欄は
+    /// private なので、このモジュールの外からは `Turn::table` を通らずに作れない**
+    /// (`Turn::Table(Position(1))` のような載らない位置は型の段で起きない)。
+    Table(Position),
     /// **表に載らない、π の有理数倍の角**。`r = q mod 2` を `(−1, 1]` に畳んでから
     /// `f64(r) × π`（ラジアン）。**巨大な倍数でも真の角から外れない**（§4.2）。
     Folded(f64),
+}
+
+/// 表に載る位置(15° 単位の `0..24` のうち、30° か 45° の倍数)。**欄は private**——
+/// 作る道は `Turn::table` だけである。読むのは `get`。
+///
+/// ```
+/// use calcarc_core::scientific::Turn;
+/// // 30° は載る、15° は載らない。
+/// assert!(matches!(Turn::table(2), Some(Turn::Table(p)) if p.get() == 2));
+/// assert_eq!(Turn::table(1), None);
+/// ```
+///
+/// **外から載らない位置を作ろうとすると、型の段で止まる**(この例は通ってはならない):
+///
+/// ```compile_fail
+/// use calcarc_core::scientific::{Position, Turn};
+/// let _ = Turn::Table(Position(1));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position(u8);
+
+impl Position {
+    /// 15° 単位の位置(RAD では π/12 単位)。
+    pub fn get(self) -> u8 {
+        self.0
+    }
 }
 
 impl Turn {
@@ -97,7 +125,7 @@ impl Turn {
     pub fn table(t: i128) -> Option<Turn> {
         let t = t.rem_euclid(24);
         if t % 2 == 0 || t % 3 == 0 {
-            u8::try_from(t).ok().map(Turn::Table)
+            u8::try_from(t).ok().map(|p| Turn::Table(Position(p)))
         } else {
             None
         }
@@ -145,10 +173,10 @@ const INV_SQRT3: f64 = 0.577_350_269_189_625_7;
 ///
 /// **`tan` も表から返す**——**sin/cos の商にしない**（商は丸めを 2 回通る）。
 /// **90°・270° の `tan` は極**（`None`）。
-pub fn table_row(turn: u8) -> Option<Row> {
+pub fn table_row(position: Position) -> Option<Row> {
     use Entry::{Exact as E, Rounded as R};
     let row = |sin, cos, tan| Some(Row { sin, cos, tan });
-    match turn {
+    match position.0 {
         0 => row(E(0, 1), E(1, 1), Some(E(0, 1))),
         2 => row(E(1, 2), R(HALF_SQRT3), Some(R(INV_SQRT3))),
         3 => row(R(HALF_SQRT2), R(HALF_SQRT2), Some(E(1, 1))),
@@ -788,14 +816,14 @@ mod tests {
 
     #[test]
     fn the_table_has_sixteen_positions() {
-        let positions: Vec<u8> = (0..24)
+        let positions: Vec<Position> = (0..24)
             .filter_map(|t| match Turn::table(t) {
                 Some(Turn::Table(p)) => Some(p),
                 _ => None,
             })
             .collect();
         assert_eq!(
-            positions,
+            positions.iter().map(|p| p.get()).collect::<Vec<u8>>(),
             vec![0, 2, 3, 4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 22]
         );
         for p in positions {
@@ -809,7 +837,7 @@ mod tests {
             }
         }
         // 負の位置も畳む。
-        assert_eq!(Turn::table(-6), Some(Turn::Table(18)));
+        assert_eq!(Turn::table(-6), Some(Turn::Table(Position(18))));
         assert_eq!(Turn::table(1), None);
     }
 
@@ -854,7 +882,7 @@ mod tests {
     #[test]
     fn a_table_pole_needs_a_real_argument() {
         // **レビュー役の注記 2**: 極は `im == 0` に限る。複素は有限の商。
-        let pole = Some(Turn::Table(6));
+        let pole = Some(Turn::Table(Position(6)));
         assert_eq!(
             tan_at(Value::real(PI / 2.0), AngleMode::Rad, pole),
             Err(CalcError::TrigPole)
