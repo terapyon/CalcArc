@@ -165,9 +165,10 @@ pub struct Row {
 // f64 に丸めて確かめた値。レビュー役の値と一致）。**計算で作らない**——`1.0 / 3f64.sqrt()`
 // は丸めを 2 回通り、1 ulp 外れる（`0.5773502691896258`。単体テストが見る）。
 const HALF_SQRT3: f64 = 0.866_025_403_784_438_6;
-// 設計書の literal をそのまま書く。`std` の `FRAC_1_SQRT_2` と同値(単体テストが見る)。
-#[allow(clippy::approx_constant)]
-const HALF_SQRT2: f64 = 0.707_106_781_186_547_6;
+// **√2/2 は `std` の `FRAC_1_SQRT_2`**（設計書 §4.2 の literal `0.7071067811865476` と同じ値）。
+// **literal で書くと clippy の `approx_constant` を `allow` で黙らせることになる**——
+// あの lint は「std に在る定数を手で写すな」という番人なので、黙らせずに std を使う。
+const HALF_SQRT2: f64 = std::f64::consts::FRAC_1_SQRT_2;
 const SQRT3: f64 = 1.732_050_807_568_877_2;
 const INV_SQRT3: f64 = 0.577_350_269_189_625_7;
 
@@ -760,7 +761,9 @@ mod tests {
     fn the_root_constants_are_the_rounded_values() {
         // **設計書 §4.2 の literal**。1 回の丸めで作れるものは計算と一致する
         // (√ は正しく丸め、÷ 2 は厳密)。
-        assert_eq!(HALF_SQRT2, std::f64::consts::FRAC_1_SQRT_2);
+        // `HALF_SQRT2` は std の定数そのもの（clippy の `approx_constant` を黙らせないため）。
+        // **それが 1 回の丸めで作った √2 ÷ 2 と一致すること**を見る（÷ 2 は厳密）。
+        assert_eq!(2_f64.sqrt() / 2.0, HALF_SQRT2);
         assert_eq!(3_f64.sqrt(), SQRT3);
         assert_eq!(3_f64.sqrt() / 2.0, HALF_SQRT3);
         assert_eq!((1.0_f64 / 3.0).sqrt(), INV_SQRT3);
