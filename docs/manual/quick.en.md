@@ -138,10 +138,13 @@ Besides arithmetic and parentheses, it has 【sin】 【cos】 【tan】, 【ln�
 【√】 【x²】 【xʸ】 【1/x】 【eˣ】. Press 【Shift】 to switch some keys to their
 second function (【asin】 【acos】 【atan】 【n!】 【nPr】 【nCr】 and others).
 
-**In radians, 【sin】, 【cos】 and 【tan】 do not reach 0 where the mathematics
-says 0**: 【π】【sin】 shows 1.224646799e-16, a number extremely close to zero.
-**Read it as 0.** **In degrees they do reach 0** — 【1】【8】【0】【sin】 is 0
-(the detailed manual's 「既知の計算制限」 has the table).
+**The 【π】 key and the numbers you type are taken as their true values. A
+step such as 【√】 in the middle of a calculation turns them into close
+approximations.** 【π】【sin】 is 0 in radians, 【3】【0】【sin】 is exactly 0.5 in
+degrees, and 【0】【.】【1】【+】【0】【.】【2】【=】【−】【0】【.】【3】【=】 is 0.
+**After a step such as 【√】, an answer that should be 0 can show a number
+extremely close to zero instead**: read it as 0 (the detailed manual's
+「既知の計算制限」 has the tables).
 
 **【nCr】 and 【nPr】 are sometimes refused when used on the answer of another
 calculation** (for example 【(】【2】【9】【nCr】【4】【)】【nCr】【2】【=】 gives

@@ -126,7 +126,11 @@ The main points:
   uses exact integers, Finance uses a deterministic approximation
 - **Scientific** holds every value as a complex number. Real numbers are complex numbers
   with zero imaginary part. Display uses 10 significant digits, and rounding is
-  round-half-to-even
+  round-half-to-even. **Typed numbers and π also carry their true value** (a rational
+  times π^k, from 1.2.3): the four operations return the correctly rounded answer for
+  the typed decimals (while numerator and denominator fit in `i128`), and the
+  trigonometric functions return multiples of π/6 and π/4 built from the π key, and
+  multiples of 30° and 45°, exactly from a table
 - **Data Scale holds its internal values as exact integers (`u128`).** Rounding happens
   only at display time
 - **Finance returns a deterministic approximation.** Matching the exact figures of any
