@@ -15,7 +15,7 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 /// 8: 閉じた組を開き直すための `closed_groups`(0.9.3 設計書 §4.2)が入った。
 ///    **`)` ごとに積み、DEL で 1 つ降ろす列**である。
 /// 9: `current`・`operands`・`ReplaceBase`・`ClosedGroup` の値が `Held`(値＋厳密な
-///    正体の印)になった(1.2.3 設計書 §3.2・§6.3)。印の有理数は文字列 `"num/den"`。
+///    正体の印)になった(1.2.2 設計書 §3.2・§6.3)。印の有理数は文字列 `"num/den"`。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
 pub const STATE_SCHEMA: u32 = 9;
@@ -448,7 +448,7 @@ pub struct EngineState {
     pub schema: u32,
     /// 入力中の数値。None なら `current` が表示される。
     pub buffer: Option<Buffer>,
-    /// 確定している現在値。**印(`Held::exact`)を添えて持つ**(1.2.3 設計書 §3.2)。
+    /// 確定している現在値。**印(`Held::exact`)を添えて持つ**(1.2.2 設計書 §3.2)。
     pub current: Held,
     /// 保留中の被演算数。
     pub operands: Vec<Held>,

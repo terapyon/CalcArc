@@ -127,7 +127,7 @@ The main points:
 - **Scientific** holds every value as a complex number. Real numbers are complex numbers
   with zero imaginary part. Display uses 10 significant digits, and rounding is
   round-half-to-even. **Typed numbers and π also carry their true value** (a rational
-  times π^k, from 1.2.3): the four operations return the correctly rounded answer for
+  times π^k, from 1.2.2): the four operations return the correctly rounded answer for
   the typed decimals (while numerator and denominator fit in `i128`), and the
   trigonometric functions return multiples of π/6 and π/4 built from the π key, and
   multiples of 30° and 45°, exactly from a table

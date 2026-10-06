@@ -67,7 +67,7 @@ fn negated(x: f64) -> f64 {
 /// **RAD の f64 はここでは畳まない。** **変換が無いので落ちる桁も無く、実測で
 /// 1e18 まで 10 桁一致する**（`f64::sin` 自身が引数を正しく縮約している）。
 /// **RAD で畳むのは、π の有理数倍だと「分かっている」角だけ**で、それは印の
-/// 剰余で畳む（`Turn::Folded`。1.2.3 設計書 §4.2）——f64 の `re` を畳むのではない。
+/// 剰余で畳む（`Turn::Folded`。1.2.2 設計書 §4.2）——f64 の `re` を畳むのではない。
 fn to_rad(v: Value, mode: AngleMode) -> Value {
     let re = if mode == AngleMode::Deg {
         v.re % 360.0
@@ -77,7 +77,7 @@ fn to_rad(v: Value, mode: AngleMode) -> Value {
     Value::new(mode.radians_of(re), mode.radians_of(v.im))
 }
 
-/// 角の実部の**正体**（1.2.3 設計書 §4.1）。`sin x`・`cos x` をどこから取るか。
+/// 角の実部の**正体**（1.2.2 設計書 §4.1）。`sin x`・`cos x` をどこから取るか。
 ///
 /// **`None` は「正体が分からない」**——今までどおり f64 の `re` の `sin`・`cos`。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -161,7 +161,7 @@ pub struct Row {
     pub tan: Option<Entry>,
 }
 
-// **√ の定数は、正しく丸めた f64 の literal**（1.2.3 設計書 §4.2。mpmath 50 桁を
+// **√ の定数は、正しく丸めた f64 の literal**（1.2.2 設計書 §4.2。mpmath 50 桁を
 // f64 に丸めて確かめた値。レビュー役の値と一致）。**計算で作らない**——`1.0 / 3f64.sqrt()`
 // は丸めを 2 回通り、1 ulp 外れる（`0.5773502691896258`。単体テストが見る）。
 const HALF_SQRT3: f64 = 0.866_025_403_784_438_6;
@@ -171,7 +171,7 @@ const HALF_SQRT2: f64 = 0.707_106_781_186_547_6;
 const SQRT3: f64 = 1.732_050_807_568_877_2;
 const INV_SQRT3: f64 = 0.577_350_269_189_625_7;
 
-/// **表の 16 の位置**（1.2.3 設計書 §4.2）。`t` は 15° 単位。
+/// **表の 16 の位置**（1.2.2 設計書 §4.2）。`t` は 15° 単位。
 ///
 /// **`tan` も表から返す**——**sin/cos の商にしない**（商は丸めを 2 回通る）。
 /// **90°・270° の `tan` は極**（`None`）。
@@ -200,7 +200,7 @@ pub fn table_row(position: Position) -> Option<Row> {
 }
 
 /// **印の無い値**の角の正体。**度数法で、f64 そのものが 30° か 45° の倍数なら表**
-/// （1.2.3 設計書 §4.1）。**RAD の f64 は表に載らない**。
+/// （1.2.2 設計書 §4.1）。**RAD の f64 は表に載らない**。
 ///
 /// **整数は f64 で厳密に持てる**ので、**利用者が打ったのは「30 度」そのもの**である
 /// ——1.0.0 §3.1 の「入力が厳密なら、答えも厳密に」に入る。1.0.0 の `quadrant_exact`
@@ -225,7 +225,7 @@ pub fn turn_of(v: Value, mode: AngleMode) -> Option<Turn> {
 /// `sin x` と `cos x`——**角の正体が分かれば表か畳んだ角から、無ければ f64 から**。
 ///
 /// **1 つの経路である。** **実数は `im == 0` の特別な場合**で、
-/// **別の分岐を持たない**（1.0.0 設計書 §3.2、裁定 (a)。1.2.3 設計書 §4.4）。
+/// **別の分岐を持たない**（1.0.0 設計書 §3.2、裁定 (a)。1.2.2 設計書 §4.4）。
 /// **実数だけ表を引くと、`im == 0` と `im == 1e-300` の間に段差が生まれる**
 /// ——`sin(180° + 1e-300j)` の実部は `sin x · cosh y` で、
 /// **`cosh(1.7e-302)` は `1.0`** だから**虚部を足しても実部は動かない。**
@@ -247,7 +247,7 @@ pub fn sin(v: Value, mode: AngleMode) -> CalcResult<Value> {
 }
 
 /// `sin`。**角の実部の正体 `turn` を呼び出し側が渡す**（engine が印から決める。
-/// 1.2.3 設計書 §4）。
+/// 1.2.2 設計書 §4）。
 pub fn sin_at(v: Value, mode: AngleMode, turn: Option<Turn>) -> CalcResult<Value> {
     let z = to_rad(v, mode);
     let (sine, cosine) = circular(z, turn);
@@ -279,7 +279,7 @@ pub fn tan(v: Value, mode: AngleMode) -> CalcResult<Value> {
     tan_at(v, mode, turn_of(v, mode))
 }
 
-/// tan。**実数の引数で角が表に載れば、表から返す**（1.2.3 設計書 §4.2——sin/cos の
+/// tan。**実数の引数で角が表に載れば、表から返す**（1.2.2 設計書 §4.2——sin/cos の
 /// 商にしない）。**表の極（90°・270°、RAD では π/2・3π/2）は `TrigPole`**（§4.3）。
 ///
 /// **表と極を引くのは `im == 0` のときだけ**（§4.3、レビュー役の注記 2）。
@@ -668,7 +668,7 @@ mod tests {
             assert_eq!((sine.re, sine.im), (s, 0.0), "sin({deg}°)");
             assert_eq!((cosine.re, cosine.im), (c, 0.0), "cos({deg}°)");
         }
-        // `tan` も表から(1.2.3 設計書 §4.2)。0°・180° では 0。
+        // `tan` も表から(1.2.2 設計書 §4.2)。0°・180° では 0。
         assert_eq!(
             tan(Value::real(180.0), AngleMode::Deg).expect("有限").re,
             0.0
@@ -722,7 +722,7 @@ mod tests {
 
     #[test]
     fn an_unmarked_radian_f64_keeps_its_own_answer() {
-        // **印の無い RAD の f64 は表を引かない**（1.2.3 設計書 §4.1、§7.2）。
+        // **印の無い RAD の f64 は表を引かない**（1.2.2 設計書 §4.1、§7.2）。
         // **RAD に表を広げるのは、入力が π の有理数倍だと「分かっている」ときだけ**
         // ——π キーから四則だけで作った値（印が k=1）で、それは engine が印から
         // `Turn` を作って `sin_at` に渡す。**この入口（`sin`）は印を知らない**ので、

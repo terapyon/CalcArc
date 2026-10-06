@@ -2736,7 +2736,7 @@ export const ERRORS_SHARD = "errors-000.json";
 export const COMBINATORICS_ERRORS_SHARD = "combinatorics-display-000.json";
 
 /**
- * RAD × π の倍数のシャード（2026-10-06、1.2.3）。**極の行（`TrigPole`）を持つ。**
+ * RAD × π の倍数のシャード（2026-10-06、1.2.2）。**極の行（`TrigPole`）を持つ。**
  * **エラー経路は `errors` と同じ枠**——三角関数の極は科学計算の定義域エラーである。
  */
 export const RAD_PI_SHARD = "rad-pi-display-000.json";

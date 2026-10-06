@@ -259,7 +259,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
     (next, shown)
 }
 
-/// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.3 設計書 §3.4)。
+/// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.2 設計書 §3.4)。
 /// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
 /// §5.1。`Held::settled`)。
 fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
@@ -283,7 +283,7 @@ fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
 /// (設計書 §2: 打鍵の途中はエラーにしない)。
 fn commit_entry(state: &mut EngineState) -> CalcResult<()> {
     if let Some(buffer) = state.buffer.take() {
-        // 打った十進そのもの(1.2.3 設計書 §3.3)。i128 に収まらなければ印なし。
+        // 打った十進そのもの(1.2.2 設計書 §3.3)。i128 に収まらなければ印なし。
         // **`buffer.value()` はエラー(f64 の溢れ)を出すために先に読む**——値は印が
         // あれば印の丸めに置き換わる(段階 2、§5.1。60 進の裁定は `Held::settled`)。
         state.current = Held::settled(buffer.value()?, exact::of_buffer(&buffer));
@@ -445,7 +445,7 @@ fn delete_one(state: &mut EngineState) {
 /// `3 (` のような打鍵は意味を持たないため、暗黙の乗算にはしない。
 fn open_paren(state: &mut EngineState) {
     state.buffer = None;
-    // 0 にも印を付ける(1.2.3 設計書 §3.3、条件 1)。`( + π ) sin` が `π sin` と揃う。
+    // 0 にも印を付ける(1.2.2 設計書 §3.3、条件 1)。`( + π ) sin` が `π sin` と揃う。
     state.current = Held::ZERO;
     state.operators.push(OpToken::OpenParen);
 }
@@ -494,7 +494,7 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
 ///
 /// 式には積まれない。`30` `sin` は打鍵した瞬間に 0.5 になる（設計書 D6）。
 ///
-/// **印の規則 `mark` は呼び出し側がキーごとに渡す**(1.2.3 設計書 §3.4「書き方」)。
+/// **印の規則 `mark` は呼び出し側がキーごとに渡す**(1.2.2 設計書 §3.4「書き方」)。
 /// 値の閉包 `f` は印を見ない——`f` の中に印の規則を書かない。`mark` は**掛ける前の**
 /// 値(印つき)を受け取る。
 fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Option<Exact>) -> CalcResult<()>
@@ -507,7 +507,7 @@ where
     Ok(())
 }
 
-/// 三角関数の遷移(1.2.3 設計書 §4)。`apply_unary` と同じく入力中の値を確定して掛ける。
+/// 三角関数の遷移(1.2.2 設計書 §4)。`apply_unary` と同じく入力中の値を確定して掛ける。
 ///
 /// **`apply_unary` の `mark: fn(Held)` には角度モードが入らない**——三角関数の印は、
 /// 引数の印と角度モードから決めた**角の正体** `Turn` で決まる。そこで正体を 1 度だけ
@@ -618,7 +618,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
             // がこのキーを止める(0.9.2 設計書 §3.2、外部監査 F5)。`state.buffer = None`
             // は防御的な初期化として残し、値そのものを置く。
             state.buffer = None;
-            // 印は `1 × π`(1.2.3 設計書 §3.3)。`re` は今までどおり。
+            // 印は `1 × π`(1.2.2 設計書 §3.3)。`re` は今までどおり。
             state.current = Held::PI;
         }
         Key::E => {

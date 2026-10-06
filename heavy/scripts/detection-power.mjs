@@ -689,7 +689,7 @@ export const MUTATIONS = [
   // **ここから演算子の押し直しの変異(設計書 §3.8、外部監査 F1)。**
   {
     id: "rad-pi-table-off",
-    what: "RAD で π の倍数を表から引くのをやめる(1.2.3 の直しを外す)",
+    what: "RAD で π の倍数を表から引くのをやめる(1.2.2 の直しを外す)",
     file: "crates/calcarc-core/src/engine/exact.rs",
     from: "(Some(mark), AngleMode::Rad) if mark.pi => pi_turn(mark.q),",
     to: "(Some(mark), AngleMode::Rad) if mark.pi && false => pi_turn(mark.q),",
@@ -698,7 +698,7 @@ export const MUTATIONS = [
     // 数えて 0 本)。外すと f64 の π で計算する 1.2.2 までの答えに戻り、
     // 0 になるはずの行が `1.224646799e-16` などに、極の行が有限の巨大値になる。
     // **296 件中 44 件(14.9%)が赤**(2026-10-06、手元のネイティブ実行で実測。
-    // 1.2.3 の前の core `afa9991` で回しても同じ 44 件)。残りは √ を含む値と
+    // 1.2.2 の前の core `afa9991` で回しても同じ 44 件)。残りは √ を含む値と
     // 表に載らない角で、f64 の π でも 10 桁が変わらない。下限はその約 12% 下。
     expectShards: ["rad-pi-display-000.json (displays)"],
     minRate: { "rad-pi-display-000.json (displays)": 0.13 },

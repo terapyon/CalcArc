@@ -439,7 +439,7 @@ def build_complex_div_boundary() -> dict:
 
 
 def build_rational_to_f64() -> dict:
-    """「i128 の分数 → 正しく丸めた f64」の golden(1.2.3 設計書 §5.3・§8.2)。
+    """「i128 の分数 → 正しく丸めた f64」の golden(1.2.2 設計書 §5.3・§8.2)。
 
     **`tolerance` を持たない**——正しい丸めの答えは 1 つしかない。期待はビット列で、
     Rust はビットで比べる。
