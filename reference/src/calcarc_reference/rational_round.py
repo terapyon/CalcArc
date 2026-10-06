@@ -79,8 +79,10 @@ def _named_rows() -> list[tuple[str, int, int]]:
             rows.append(("tie_neighbour", (P53 + 1) * k + 1, k))
             rows.append(("tie_neighbour", (P53 + 1) * k - 1, k))
             rows.append(("tie_neighbour", (P53 + 3) * k - 1, k))
-    # 分母が奇数の同点（2 の冪で割らない）。(2M+1)/2 を 3 倍した形。
-    for m in (P53, P53 + 1, 3 * P53 // 2 + 7):
+    # 分母が 2 の冪でない同点。(2M+1)/2 を 3 倍した形。**M は 2^52 以上 2^53 未満**
+    # ——そこでは ulp が 1 なので、半整数がちょうど同点になる（2^53 以上では ulp が 2 で、
+    # 半整数は同点ではない。最初の版はそこを踏んでいて、丸めを壊しても赤くならなかった）。
+    for m in (P53 // 2, P53 // 2 + 1, P53 // 2 + 12345, P53 - 2, P53 - 1):
         rows.append(("tie_odd_den", (2 * m + 1) * 3, 6))
     # 小数部から仮数を作る道（整数部が 54 ビットに満たない、分母が大きい）。
     for num, den in [

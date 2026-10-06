@@ -738,6 +738,28 @@ mod tests {
     }
 
     #[test]
+    fn the_fold_rounds_its_fraction_once() {
+        // **`f64(r)` は正しく丸める**(段階 2)。分母が 2^53 を超えると、`n as f64 / d as f64`
+        // は変換と除算で 2 度丸め、この分数では 1 ulp 下(`0.6082601208004513`)に落ちる。
+        // 正しく丸めた値は `0.6082601208004514`(Python の `float(Fraction(n, d))`)。
+        // **盤面からは打てない分母**(12 文字の入力では届かない)なので、`pi_turn` を直に呼ぶ。
+        let (n, d) = (
+            322_740_770_792_394_276_848_i128,
+            530_596_630_875_089_193_213_i128,
+        );
+        let twice = n as f64 / d as f64;
+        assert_eq!(
+            twice, 0.6082601208004513,
+            "比べる相手が 2 度丸めの値であること"
+        );
+        let q = Rational::from_ratio(n, d).unwrap();
+        assert_eq!(
+            pi_turn(q),
+            Some(Turn::Folded(0.6082601208004514 * std::f64::consts::PI))
+        );
+    }
+
+    #[test]
     fn typed_numbers_in_radians_reach_the_table_only_at_zero() {
         // **RAD で印が k=0 なら q = 0 のときだけ**(§4.1)。
         assert_eq!(rad(&["0", "sin"]), q(0, 1, false));
