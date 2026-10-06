@@ -513,6 +513,13 @@ export function ScientificPanel() {
    * 写さないと effect が読む前に消える**（2026-10-03 に実装で踏んだ）。
    */
   const pendingCarryRef = useRef<string | null>(null);
+  /**
+   * **呼び戻した件の行**（1.2.2、`2026-10-06-recall-trail-design.md` §3）。
+   * **`recall` が連打の後に置き、`press` がどのキーでも消し、下の effect が読むだけ。**
+   * **書くのはイベント処理だけ**——effect は写さない（H-5 の族を踏まない）。
+   * **置く位置は連打の後**: 前に置くと連打の `press` が消す（変異 2）。
+   */
+  const recalledLineRef = useRef<{ line: string; mark: string } | null>(null);
 
   // **engine の状態そのもの。`press` の門番はここから読む。**(H-3 / H-5)
   //
@@ -593,6 +600,11 @@ export function ScientificPanel() {
     // 盤面では押せないが、キーボード(`useKeyboard`)は同じ `press` を通るので、ここで止まる。
     // 積むと engine は数を捨てずに元のまま、綴りだけが「2 (」になり、履歴の式が嘘になる。
     if (previous?.refused.includes(token)) return;
+    // **呼び戻した行は、次のキーで今の規則の行に替える**（どのキーでも。DRG も——裁定 2026-10-06）。
+    // **押せなかったキーの後に置く**（注記 1）——押せなかったキーは何もしなかったのと同じである。
+    // **この位置は外からは見えない**（押せなかったキーは `setStep` を呼ばず、effect が走らない）
+    // ので番人は無い——**意図を揃えるために置く**（`ScientificPanel.test.tsx` の「呼び戻した行」）。
+    recalledLineRef.current = null;
     const inError = previous !== null && previous.display.error !== null;
     // **engine に届き、列に積むキーか**（H-3 の門）。下の DEL の規則も同じ門の内側で読む。
     const recorded = !!ready && !!previous && !(inError && token !== "ac");
@@ -683,6 +695,13 @@ export function ScientificPanel() {
     if (pendingKeys === null) {
       // **打っている最中の行。** **`=` を押していないあいだは、貯めている列を綴る。**
       // **`=` の直後はここに来ない**（下で閉じた行を作る）ので、**その行は次のキーまで残る。**
+      // **呼び戻した直後は、その件の式を閉じた行で出す**（`spell` を呼ばない）。
+      const recalled = recalledLineRef.current;
+      if (recalled !== null) {
+        setTrail(recalled.line);
+        setTrailAngle(recalled.mark);
+        return;
+      }
       if (live) {
         setTrail(
           live.spell(
@@ -732,7 +751,9 @@ export function ScientificPanel() {
     // **履歴に積む `expression` は変えない**——**あちらは式と答えを
     // 別の欄で見せている**ので、式に `=` を足す理由が無い。
     setTrail(closedLineOf(expression));
-    setTrailAngle(angleMarkOf(pendingTrigAnglesRef.current, step.display));
+    // **同じ値を件の `mark` にも残す**（呼び戻した行が同じ印を出すため。§2.2 案 a）。
+    const mark = angleMarkOf(pendingTrigAnglesRef.current, step.display);
+    setTrailAngle(mark);
     // **「次の連鎖のために答えを控える」行は消した**（2026-10-03）。
     // **前置する値は `press` が決めた時点で写している**ので、
     // **`=` のあとに答えを覚えておく必要が無くなった**
@@ -753,6 +774,7 @@ export function ScientificPanel() {
       // **出荷済みの欠陥で、レビュー役が盤面で見つけた**）。
       angle: angleThatDrewIt(pendingTrigAnglesRef.current, step.display),
       error: step.display.error !== null,
+      mark,
     };
     const updated = pushEntry(entriesRef.current, entry);
     entriesRef.current = updated;
@@ -787,6 +809,12 @@ export function ScientificPanel() {
       if (keys === null) return;
       press("ac");
       for (const key of keys) press(key);
+      // **連打の後に置く**——連打の `press` が消すので、前に置くと残らない（設計書 §3）。
+      // **`mark` を持たない件（1.2.2 より前）は `angle` の大文字**（保守的に出す。§2.2 案 a）。
+      recalledLineRef.current = {
+        line: closedLineOf(entry.expression),
+        mark: entry.mark ?? entry.angle.toUpperCase(),
+      };
       setShowingHistory(false);
     },
     [press],

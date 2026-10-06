@@ -505,3 +505,84 @@ test("a history entry that used both modes keeps both, and survives a reload", a
     "Deg/Rad",
   );
 });
+
+/**
+ * **呼び戻した直後の経歴の行は、その件の式を閉じた行で出す**
+ * （1.2.2、`2026-10-06-recall-trail-design.md` §2・§4.2）。
+ *
+ * **1.2.1 までは答えの数字だけだった**（`sin(30) × 2 = 1` を呼び戻すと行は `1`）
+ * ——呼び戻しは `ac` と数字の連打であり、行は effect が最後の列を綴るからである。
+ * **次のキーで今の規則の行に替わる**（呼び戻した数字から綴り直す）。
+ */
+const openHistory = async (page: Page) => {
+  await page
+    .getByRole("button", { name: "第2面に切り替え", exact: true })
+    .click();
+  await page.getByRole("button", { name: "履歴", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "履歴" })).toBeVisible();
+};
+
+test("a recalled entry shows its expression as a closed line until the next key", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await press(page, ["3", "0", "サイン", "掛ける", "2", "計算する"]);
+  await expect(page.getByTestId("display-main")).toHaveText("1");
+  // 別の行にしておく——呼び戻しが前の行を残しただけで緑にならないように。
+  await press(page, ["全消去", "5"]);
+
+  await openHistory(page);
+  await page
+    .getByRole("button", { name: "sin(30) × 2 = 1 を入力に入れる" })
+    .click();
+  await expect(page.getByTestId("display-echo")).toHaveText(
+    "DEG sin(30) × 2 =",
+  );
+  await expect(page.getByTestId("display-main")).toHaveText("1");
+
+  // **次のキーで、呼び戻した数字からの今の行に替わる。**
+  await press(page, ["足す"]);
+  await expect(page.getByTestId("display-echo")).toHaveText("1 +");
+});
+
+test("a recalled entry without a trig key shows no angle mark", async ({
+  page,
+}) => {
+  // **件が `mark` を持つので、印の無い行は印の無いまま戻る**（設計書 §2.2 案 a）。
+  await page.goto("/");
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+  await press(page, ["3", "足す", "4", "計算する"]);
+  await expect(page.getByTestId("display-main")).toHaveText("7");
+  await press(page, ["全消去"]);
+
+  await openHistory(page);
+  await page.getByRole("button", { name: "3 + 4 = 7 を入力に入れる" }).click();
+  await expect(page.getByTestId("display-echo")).toHaveText("3 + 4 =");
+  await expect(page.getByTestId("display-main")).toHaveText("7");
+});
+
+test("a recalled entry from before 1.2.2 keeps its old spelling and names its angle", async ({
+  page,
+}) => {
+  // **古い綴り・`mark` の無い件**（1.2.1 より前に積まれた形）。**移し替えはしない**
+  // （§2.1）。**印は `angle` の大文字**（§2.2 案 a の後半）。
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "calcarc.history",
+      JSON.stringify([
+        { expression: "30 sin", answer: "0.5", angle: "Deg", error: false },
+      ]),
+    );
+  });
+  await page.reload();
+  await expect(page.getByTestId("display-main")).toHaveText("0");
+
+  await openHistory(page);
+  await page
+    .getByRole("button", { name: "30 sin = 0.5 を入力に入れる" })
+    .click();
+  await expect(page.getByTestId("display-echo")).toHaveText("DEG 30 sin =");
+  await expect(page.getByTestId("display-main")).toHaveText("0.5");
+});

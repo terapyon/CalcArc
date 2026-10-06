@@ -25,6 +25,7 @@ function isAllowed<T>(allowed: readonly T[], value: unknown): value is T {
 /**
  * 1 件を検証する。**4 つの欄すべてが揃って初めて有効**——
  * 欠けている欄が 1 つでもあれば `null`(呼び出し側が読み飛ばす)。
+ * **任意の `mark` は数に入れない**(下の註)。
  */
 function parseEntry(value: unknown): HistoryEntry | null {
   if (typeof value !== "object" || value === null) return null;
@@ -33,12 +34,16 @@ function parseEntry(value: unknown): HistoryEntry | null {
   if (typeof v.answer !== "string") return null;
   if (!isAllowed(ALLOWED.angle, v.angle)) return null;
   if (typeof v.error !== "boolean") return null;
-  return {
+  const entry: HistoryEntry = {
     expression: v.expression,
     answer: v.answer,
     angle: v.angle,
     error: v.error,
   };
+  // **`mark` は任意の欄**（1.2.2）。**文字列のときだけ取り込み、それ以外は欄ごと省く**
+  // ——件は落とさない（古い件は持っていないのが正しい姿である）。
+  if (typeof v.mark === "string") entry.mark = v.mark;
+  return entry;
 }
 
 function parse(raw: string): HistoryEntry[] {

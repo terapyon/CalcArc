@@ -138,6 +138,32 @@ describe("履歴の読み書き", () => {
     ]);
   });
 
+  it("reads the optional mark, and an entry without it", () => {
+    // **`mark` は 1.2.2 から**（`2026-10-06-recall-trail-design.md` §2.2 案 a）。
+    // **空の印も印である**——`3 + 4 =` は印を付けなかったことを `""` で残す。
+    const raw = JSON.stringify([
+      { expression: "1", answer: "1", angle: "Deg", error: false, mark: "DEG" },
+      { expression: "2", answer: "2", angle: "Deg", error: false, mark: "" },
+      { expression: "3", answer: "3", angle: "Deg", error: false },
+    ]);
+    const read = readHistory(fakeStorage(raw));
+    expect(read.map((e) => e.mark)).toEqual(["DEG", "", undefined]);
+    // **持たない件は欄ごと無い**（`undefined` の欄ではない）。`toEqual` は
+    // 2 つを区別しないので、鍵で見る。
+    expect(Object.keys(read[2] as HistoryEntry)).not.toContain("mark");
+  });
+
+  it("keeps the entry but omits a mark that is not a string", () => {
+    // **件は落とさない**——`mark` は任意の欄であり、古い件は持っていないのが正しい姿である。
+    const raw = JSON.stringify([
+      { expression: "1", answer: "1", angle: "Deg", error: false, mark: 1 },
+      { expression: "2", answer: "2", angle: "Deg", error: false, mark: null },
+    ]);
+    const read = readHistory(fakeStorage(raw));
+    expect(read).toHaveLength(2);
+    for (const e of read) expect(Object.keys(e)).not.toContain("mark");
+  });
+
   it("never writes more than the limit", () => {
     const s = fakeStorage();
     writeHistory(
