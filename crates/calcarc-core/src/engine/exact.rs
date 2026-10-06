@@ -15,22 +15,42 @@
 use serde::{Deserialize, Serialize};
 
 use super::state::Buffer;
-use crate::Value;
 use crate::expr::rational::Rational;
+use crate::scientific::{self, Entry, Row, Turn, table_row};
+use crate::{AngleMode, Value};
 
 /// `re` の厳密な正体。`re == q × π^k`(虚部は問わない)。
 ///
 /// **`(0, k=1)` は持たない**——`0·π = 0·π⁰` なので `(0, k=0)` に正規化する(§3.4)。
-/// 作るときは `Exact::of` を通す。
+/// **欄は private で、作る道は `Exact::of` と直列化の読みの 2 つだけ**であり、
+/// **どちらも正規化を通る**(読みは `ExactWire` から `Exact::of` へ)。
+/// **境界の向こうから `(0, k=1)` が来ても、`(0, k=0)` になってから engine に入る**
+/// ——`common_k` は「q が 0 の側は相手の k に合わせる」ので、正規化されていない印でも
+/// 和は壊れないが、**等値(`Held` の `PartialEq`)と表の引き方が k を見る**。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "ExactWire")]
 pub struct Exact {
     /// **WASM 境界では文字列 `"num/den"` で渡す**(§6.1)。i128 を BigInt のまま
     /// JS へ出すと、JSON を経た写しなどで別の型に化けたとき `reduce_key` が
     /// 黙って初期状態に戻る。型の段で起きなくする。
-    #[serde(with = "rational_text")]
-    pub q: Rational,
+    #[serde(serialize_with = "rational_text::serialize")]
+    q: Rational,
     /// k = 1 なら true。
-    pub pi: bool,
+    pi: bool,
+}
+
+/// 直列化の読み口。**読んだ値は `Exact::of` を通してから `Exact` になる**。
+#[derive(Deserialize)]
+struct ExactWire {
+    #[serde(with = "rational_text")]
+    q: Rational,
+    pi: bool,
+}
+
+impl From<ExactWire> for Exact {
+    fn from(wire: ExactWire) -> Exact {
+        Exact::of(wire.q, wire.pi)
+    }
 }
 
 impl Exact {
@@ -51,6 +71,16 @@ impl Exact {
             q,
             pi: pi && !q.is_zero(),
         }
+    }
+
+    /// 有理数の部分 `q`。
+    pub fn q(self) -> Rational {
+        self.q
+    }
+
+    /// k = 1 か。
+    pub fn pi(self) -> bool {
+        self.pi
     }
 }
 
@@ -245,10 +275,114 @@ pub fn recip(a: Held) -> Option<Exact> {
 }
 
 /// 印を落とす。`√`・`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
-/// (§3.4、§11.2 の未決 3・4)。**三角関数もこの段では落とす**——表の答えに印を付けるのは
-/// 次の段(§4)である。
+/// (§3.4、§11.2 の未決 3・4)。
 pub fn dropped(_: Held) -> Option<Exact> {
     None
+}
+
+// ---- 三角関数(§4) ----
+
+/// **角の実部の正体**を印から決める(§4.1)。**印で決まらなければ、印の無い値と
+/// 同じ規則**(`scientific::turn_of`。DEG で f64 が 30° か 45° の倍数なら表)。
+///
+/// - **RAD で印が k=1**: `r = q mod 2`。表に載れば `Table`、載らなければ `(−1, 1]` に
+///   畳んで `Folded(f64(r) × π)`。
+/// - **RAD で印が k=0**: **q = 0 のときだけ**表(0)。**打った `3.1415926535` も
+///   `32993.006048` も表に載らない**——π ではないので、f64 の答えが正しい答えである。
+/// - **DEG で印が k=0**: `r = q mod 360` が 30 か 45 の倍数なら表。
+/// - **DEG で印が k=1**(`π` を度で読む)は表に載らない(π° は無理数の角)。f64 の規則へ。
+///
+/// **RAD は 1.0.0 で「触らない」とした**(入力そのものが厳密でないので、厳密な答えを
+/// 返すと嘘になる)。**1.2.3 で RAD に広げるのは、入力が π の有理数倍だと「分かっている」
+/// ときだけ**——π キーから四則だけで作った値(印が k=1)。**1.0.0 の線引き「入力が厳密なら、
+/// 答えも厳密に」は変えていない。** 変えたのは「厳密な入力」の数え方で、π キーの印が
+/// そこに入った(設計書 §7.2)。
+pub fn turn(arg: Held, mode: AngleMode) -> Option<Turn> {
+    let from_mark = match (arg.exact, mode) {
+        (Some(mark), AngleMode::Rad) if mark.pi => pi_turn(mark.q),
+        (Some(mark), AngleMode::Rad) if mark.q.is_zero() => Turn::table(0),
+        (Some(_), AngleMode::Rad) => return None,
+        (Some(mark), AngleMode::Deg) if !mark.pi => degree_turn(mark.q),
+        _ => None,
+    };
+    from_mark.or_else(|| scientific::turn_of(arg.value, mode))
+}
+
+/// `q × π` の角(RAD)。`r = q mod 2`。
+///
+/// **q = n/d は既約なので、`r` が π/12 の倍数 ⟺ `d` が 12 を割る**
+/// (`gcd(n mod 2d, d) = gcd(n, d) = 1`)。だから `12r` を作らずに判定でき、溢れない。
+/// **`2d` が i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
+fn pi_turn(q: Rational) -> Option<Turn> {
+    let (n, d) = q.parts();
+    let r = n.rem_euclid(d.checked_mul(2)?);
+    if 12 % d == 0
+        && let Some(table) = Turn::table(r * (12 / d))
+    {
+        return Some(table);
+    }
+    // 表に載らない(π/12 の奇数倍を含む)。`(−1, 1]` に畳んでから `f64(r) × π`。
+    let folded = if r > d { r - 2 * d } else { r };
+    let x = folded as f64 / d as f64;
+    Some(Turn::Folded(x * std::f64::consts::PI))
+}
+
+/// `q` 度の角(DEG)。`r = q mod 360`。**30 か 45 の倍数は整数だけ**なので、
+/// 分母が 1 でなければ表に載らない。
+fn degree_turn(q: Rational) -> Option<Turn> {
+    let (n, d) = q.parts();
+    if d != 1 {
+        return None;
+    }
+    let r = n.rem_euclid(360);
+    if r % 15 == 0 {
+        Turn::table(r / 15)
+    } else {
+        None
+    }
+}
+
+/// 表の答えの印(§3.3・§4.2)。**0・±1/2・±1 なら k=0、√ を含めば印なし。**
+///
+/// **k=0 の印を付けるのは引数の虚部が 0 のときだけ**(レビュー役の注記 1)。
+/// 複素の引数では表の値に `cosh y` が掛かるので、答えの実部は表の値にならない。
+/// **ただし表の値が 0 なら、複素でも答えの実部は `0 × cosh y = 0`** なので
+/// `(0, k=0)` を付ける(`sin` の注記どおり。`cos` の 0 も同じ理由で同じ扱い)。
+fn table_answer(arg: Held, entry: Entry) -> Option<Exact> {
+    match entry {
+        Entry::Exact(n, d) if arg.value.im == 0.0 || n == 0 => Some(Exact::of(
+            Rational::from_ratio(i128::from(n), i128::from(d)).ok()?,
+            false,
+        )),
+        _ => None,
+    }
+}
+
+/// 表の行。`turn` が表の位置でなければ `None`。
+fn row_of(turn: Option<Turn>) -> Option<Row> {
+    match turn {
+        Some(Turn::Table(t)) => table_row(t),
+        _ => None,
+    }
+}
+
+/// `sin` の答えの印。答えの実部は `sin x · cosh y`。
+pub fn sin(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+    table_answer(arg, row_of(turn)?.sin)
+}
+
+/// `cos` の答えの印。答えの実部は `cos x · cosh y`。
+pub fn cos(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+    table_answer(arg, row_of(turn)?.cos)
+}
+
+/// `tan` の答えの印。**表から返すのは実数の引数だけ**(複素は sin/cos の商で、
+/// 実部は表の値にならない)ので、**虚部が 0 でなければ印なし**。
+pub fn tan(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+    if arg.value.im != 0.0 {
+        return None;
+    }
+    table_answer(arg, row_of(turn)?.tan?)
 }
 
 /// `Rational` を `"num/den"` の文字列で直列化する(§6.1)。
@@ -466,12 +600,112 @@ mod tests {
             &["0", "dot", "5", "asin"],
             &["0", "dot", "5", "acos"],
             &["1", "atan"],
-            // 三角関数の表はこの段では無い(次の段が足す)。
-            &["3", "0", "sin"],
-            &["6", "0", "cos"],
-            &["4", "5", "tan"],
         ] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
+        }
+    }
+
+    #[test]
+    fn the_implied_operand_carries_its_mark() {
+        // `2 × =` は `2 × 2`(暗黙の被演算数)。印も `2 × 2` の印になる。
+        assert_eq!(mark(&["2", "mul", "eq"]), q(4, 1, false));
+        // `π × =` は `π × π`——k=2 で落ちる。
+        assert_eq!(mark(&["pi", "mul", "eq"]), None);
+    }
+
+    // ---- 三角関数の答えの印(§3.3・§4.2) ----
+
+    /// RAD で打鍵する。
+    fn rad(tokens: &[&str]) -> Option<Exact> {
+        let mut pressed = vec!["angle_toggle"];
+        pressed.extend_from_slice(tokens);
+        mark(&pressed)
+    }
+
+    #[test]
+    fn table_answers_of_zero_half_and_one_are_marked() {
+        assert_eq!(mark(&["3", "0", "sin"]), q(1, 2, false));
+        assert_eq!(mark(&["6", "0", "cos"]), q(1, 2, false));
+        assert_eq!(mark(&["4", "5", "tan"]), q(1, 1, false));
+        assert_eq!(mark(&["1", "8", "0", "cos"]), q(-1, 1, false));
+        assert_eq!(rad(&["pi", "sin"]), q(0, 1, false));
+        assert_eq!(rad(&["pi", "div", "6", "eq", "sin"]), q(1, 2, false));
+        assert_eq!(
+            rad(&["pi", "mul", "3", "div", "4", "eq", "tan"]),
+            q(-1, 1, false)
+        );
+        // **印の無い DEG の f64 でも、30° の倍数なら表**(§4.1)。答えは表の 1/2 なので
+        // 印が付く(引数の印は `e` で落ちている)。
+        assert_eq!(mark(&["e", "sub", "e", "add", "3", "0", "eq"]), None);
+        assert_eq!(
+            mark(&["e", "sub", "e", "add", "3", "0", "eq", "sin"]),
+            q(1, 2, false)
+        );
+        assert_eq!(mark(&["1", "5", "0", "sin"]), q(1, 2, false));
+    }
+
+    #[test]
+    fn table_answers_with_a_root_are_not_marked() {
+        assert_eq!(mark(&["4", "5", "sin"]), None);
+        assert_eq!(mark(&["3", "0", "cos"]), None);
+        assert_eq!(mark(&["6", "0", "tan"]), None);
+        assert_eq!(rad(&["pi", "div", "4", "eq", "cos"]), None);
+        // 表に載らない角も印なし(`π × 7 ÷ 5`)。
+        assert_eq!(rad(&["pi", "mul", "7", "div", "5", "eq", "sin"]), None);
+        // 15° は表に無い(§4.1)。
+        assert_eq!(mark(&["1", "5", "sin"]), None);
+    }
+
+    #[test]
+    fn typed_numbers_in_radians_reach_the_table_only_at_zero() {
+        // **RAD で印が k=0 なら q = 0 のときだけ**(§4.1)。
+        assert_eq!(rad(&["0", "sin"]), q(0, 1, false));
+        assert_eq!(rad(&["0", "cos"]), q(1, 1, false));
+        assert_eq!(rad(&["1", "8", "0", "sin"]), None);
+        assert_eq!(
+            rad(&[
+                "3", "dot", "1", "4", "1", "5", "9", "2", "6", "5", "3", "5", "sin"
+            ]),
+            None
+        );
+    }
+
+    #[test]
+    fn a_complex_argument_marks_only_a_zero_table_answer() {
+        // **レビュー役の注記 1**: 複素の引数では、答えの実部は表の値 × `cosh y`。
+        // `j cos` の実部は `cosh 1`(1 ではない)。
+        assert_eq!(rad(&["j", "cos"]), None);
+        assert_eq!(rad(&["pi", "add", "j", "eq", "cos"]), None);
+        // **ただし表の値が 0 なら、実部は 0**(`0 × cosh y`)。
+        assert_eq!(rad(&["j", "sin"]), q(0, 1, false));
+        assert_eq!(rad(&["pi", "add", "j", "eq", "sin"]), q(0, 1, false));
+        assert_eq!(
+            rad(&["pi", "div", "2", "add", "j", "eq", "cos"]),
+            q(0, 1, false)
+        );
+        // tan の複素は商なので印なし。
+        assert_eq!(rad(&["pi", "add", "j", "eq", "tan"]), None);
+    }
+
+    #[test]
+    fn the_answer_mark_is_true_of_the_answer() {
+        // **印は `re` の正体**——付けた印の値と答えの `re` が一致する。
+        for tokens in [
+            &["3", "0", "sin"][..],
+            &["1", "5", "0", "sin"],
+            &["2", "1", "0", "sin"],
+            &["1", "2", "0", "cos"],
+            &["2", "2", "5", "tan"],
+            &["angle_toggle", "pi", "mul", "5", "div", "6", "eq", "sin"],
+            &["angle_toggle", "pi", "mul", "5", "div", "3", "eq", "cos"],
+            &["angle_toggle", "pi", "add", "j", "eq", "sin"],
+        ] {
+            let held = state_after(tokens).current;
+            let mark = held.exact.expect("印が付く");
+            let (num, den) = mark.q().parts();
+            assert!(!mark.pi(), "{tokens:?}");
+            let want = num as f64 / den as f64;
+            assert_eq!(held.value.re, want, "{tokens:?}");
         }
     }
 
@@ -571,6 +805,21 @@ mod tests {
         assert!(json.contains(r#""q":"2/1""#), "{json}");
         let back: EngineState = serde_json::from_str(&json).unwrap();
         assert_eq!(back, state);
+    }
+
+    #[test]
+    fn a_zero_times_pi_from_outside_is_normalized() {
+        // **`Exact::of` を通らない道は無い**——直列化の読みも正規化する。
+        let held: Held =
+            serde_json::from_str(r#"{"value":{"re":0.0,"im":0.0},"exact":{"q":"0/1","pi":true}}"#)
+                .unwrap();
+        assert_eq!(held.exact, Some(Exact::ZERO));
+        assert!(!held.exact.unwrap().pi());
+        // 0 でない k=1 はそのまま。
+        let held: Held =
+            serde_json::from_str(r#"{"value":{"re":0.0,"im":0.0},"exact":{"q":"1/2","pi":true}}"#)
+                .unwrap();
+        assert_eq!(held.exact, q(1, 2, true));
     }
 
     #[test]

@@ -10,8 +10,8 @@ pub use key::Key;
 pub use spell::{spell, spell_line};
 pub use state::{EngineState, MAX_ENTRY_LEN};
 
-use crate::scientific;
-use crate::{CalcError, CalcResult, Value};
+use crate::scientific::{self, Turn};
+use crate::{AngleMode, CalcError, CalcResult, Value};
 use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBase};
 
 /// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
@@ -510,6 +510,28 @@ where
     Ok(())
 }
 
+/// 三角関数の遷移(1.2.3 設計書 §4)。`apply_unary` と同じく入力中の値を確定して掛ける。
+///
+/// **`apply_unary` の `mark: fn(Held)` には角度モードが入らない**——三角関数の印は、
+/// 引数の印と角度モードから決めた**角の正体** `Turn` で決まる。そこで正体を 1 度だけ
+/// 決め(`exact::turn`)、**値の計算と印の計算の両方に同じ正体を渡す**。印の規則は
+/// 今までどおりキーごとの関数(`exact::sin`・`cos`・`tan`)である。
+fn apply_trig(
+    state: &mut EngineState,
+    f: fn(Value, AngleMode, Option<Turn>) -> CalcResult<Value>,
+    mark: fn(Held, Option<Turn>) -> Option<Exact>,
+) -> CalcResult<()> {
+    commit_entry(state)?;
+    let mode = state.angle;
+    let before = state.current;
+    let turn = exact::turn(before, mode);
+    state.current = Held {
+        value: f(before.value, mode, turn)?,
+        exact: mark(before, turn),
+    };
+    Ok(())
+}
+
 /// キー 1 つ分の遷移。Err を返した場合、呼び出し側がエラー状態にする。
 fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
     match key {
@@ -578,19 +600,9 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
                 apply_unary(state, |v| Ok(scientific::neg(v)), exact::neg)?;
             }
         }
-        Key::Sin => {
-            let mode = state.angle;
-            // 表の答えに印を付けるのは次の段(設計書 §4)。この段では落とす。
-            apply_unary(state, |v| scientific::sin(v, mode), exact::dropped)?;
-        }
-        Key::Cos => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::cos(v, mode), exact::dropped)?;
-        }
-        Key::Tan => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::tan(v, mode), exact::dropped)?;
-        }
+        Key::Sin => apply_trig(state, scientific::sin_at, exact::sin)?,
+        Key::Cos => apply_trig(state, scientific::cos_at, exact::cos)?,
+        Key::Tan => apply_trig(state, scientific::tan_at, exact::tan)?,
         Key::Ln => apply_unary(state, scientific::ln, exact::dropped)?,
         Key::Log10 => apply_unary(state, scientific::log10, exact::dropped)?,
         Key::ExpE => apply_unary(state, scientific::exp_e, exact::dropped)?,
