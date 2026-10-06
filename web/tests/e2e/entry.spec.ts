@@ -141,17 +141,17 @@ test("a function right after an operator writes the screen value in the trail", 
   await expect(page.getByTestId("display-echo")).toHaveText("2 × 3 + 6² =");
 });
 
-test("既知の欠陥を固定したもの。直したら期待値を「0 × 3 =」に替える: ( ) DEL DEL × 3 = の行", async ({
+test("DEL that empties the line returns the carry to undecided: ( ) DEL DEL × 3 = writes 0 × 3 =", async ({
   page,
 }) => {
-  // **既知の欠陥を固定したもの。直したら期待値を「0 × 3 =」に替える**
-  // （1.2.0 から出荷済み。監視役の裁定 2026-10-05）。
-  // **前置の判定が `)` で固まる**——`ScientificPanel` の `press` は `)` を押した時点で
+  // **前置の判定を DEL で未決に戻す**（1.2.1、`2026-10-05-carry-decision-del-design.md`）。
+  // **1.2.0 では欠陥だった**——`ScientificPanel` の `press` は `)` を押した時点で
   // 「前の答えを頭に置くか」を決め（そのときの `answerOnScreen` は偽）、`DEL` がその `)` を
-  // 消しても未決に戻らない。engine は `( ) DEL DEL` で `answer_on_screen` が真に戻り、
-  // `×` は画面の 0 を左辺に取る（答えは 0）。だから行は頭の `0` を落として `× 3 =` になる。
-  // **core 側の数（`engine_values.rs` の `frozen_carry` = 54）は web の判定の写しを読む**
-  // ので、web だけ直しても赤くならない——**実 wasm で web そのものを撃つのはここ**である。
+  // 消しても未決に戻らなかった。engine は `( ) DEL DEL` で `answer_on_screen` が真に戻り、
+  // `×` は画面の 0 を左辺に取る（答えは 0）ので、行は頭の `0` を落として `× 3 =` になっていた。
+  // **いまは DEL のあと `answerOnScreen` が真なら未決に戻し**、`×` が決め直して `0` を置く。
+  // **core 側の網（`engine_values.rs` の `SIGN_NET`）は web の判定の写しを読む**
+  // ので、web だけ戻しても赤くならない——**実 wasm で web そのものを撃つのはここ**である。
   await press(page, [
     "開き括弧",
     "閉じ括弧",
@@ -162,7 +162,7 @@ test("既知の欠陥を固定したもの。直したら期待値を「0 × 3 =
     "計算する",
   ]);
   await expect(page.getByTestId("display-main")).toHaveText("0");
-  await expect(page.getByTestId("display-echo")).toHaveText("× 3 =");
+  await expect(page.getByTestId("display-echo")).toHaveText("0 × 3 =");
 });
 
 test("the line stops at the equals sign and never carries the answer", async ({
