@@ -83,3 +83,19 @@ fn reduce_key_does_not_silently_reset_a_marked_state() {
     let step = press(step, &["angle_toggle"]);
     assert_eq!(main_text(&step), "6.283185307");
 }
+
+#[wasm_bindgen_test]
+fn a_state_after_sqrt_comes_back_with_its_root() {
+    // **√ の印(1.2.3 設計書 §3.4)**。`root` の有理数も文字列 `"num/den"` で渡る。
+    for keys in [&["2", "sqrt"][..], &["2", "sqrt", "neg"]] {
+        let step = press(calcarc_wasm::initial_state(), keys);
+        let back: EngineState = serde_wasm_bindgen::from_value(get(&step, "state"))
+            .unwrap_or_else(|e| panic!("{keys:?} の状態が戻らない: {e}"));
+        let expected = native(keys);
+        // **root が付いていることを先に言う**——両方 None なら往復は何も確かめない。
+        assert!(expected.current.root.is_some(), "{keys:?}");
+        assert_eq!(back, expected, "{keys:?}");
+        let r = get(&get(&get(&get(&step, "state"), "current"), "root"), "r");
+        assert_eq!(r.as_string().as_deref(), Some("2/1"), "{keys:?}");
+    }
+}

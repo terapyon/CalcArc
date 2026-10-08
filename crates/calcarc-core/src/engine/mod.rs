@@ -264,11 +264,21 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 /// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.2 設計書 §3.4)。
 /// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
 /// §5.1。`Held::settled`)。
+///
+/// **`+`・`−` は、桁落ちする √ の和・差を先に書き換える**(1.2.3 設計書 §3.3、
+/// `exact::cancel`)。√a と √b を同時に読めるのはこの段だけである。書き換えなければ
+/// 今の f64 の和と印。
 fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
     let (a, b) = (lhs.value, rhs.value);
     let (value, marks) = match op {
-        BinOp::Add => (a.checked_add(b)?, exact::add(lhs, rhs)),
-        BinOp::Sub => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
+        BinOp::Add => match exact::cancel(lhs, rhs, false) {
+            Some(rewritten) => rewritten,
+            None => (a.checked_add(b)?, exact::add(lhs, rhs)),
+        },
+        BinOp::Sub => match exact::cancel(lhs, rhs, true) {
+            Some(rewritten) => rewritten,
+            None => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
+        },
         BinOp::Mul => (a.checked_mul(b)?, exact::mul(lhs, rhs)),
         BinOp::Div => (a.checked_div(b)?, exact::div(lhs, rhs)),
         // xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
@@ -646,7 +656,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
-        Key::Sqrt => apply_unary(state, scientific::sqrt, exact::dropped)?,
+        Key::Sqrt => apply_unary(state, scientific::sqrt, exact::sqrt)?,
         Key::Sqr => apply_unary(state, scientific::sqr, exact::sqr)?,
         Key::Neg => {
             // +/− は 2 つの階層で働く(設計書 §2)。指数入力中は指数の符号、

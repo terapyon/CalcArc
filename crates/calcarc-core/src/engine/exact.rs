@@ -88,8 +88,9 @@ impl Exact {
 ///
 /// **`Exact` に種類を足さず、`Held` に別の欄として持つ**——√ の印が意味を持つのは
 /// 「√ の直後」と「桁落ちする ± の 1 段」だけなので、読む所を閉じ込める(§3.1)。
-/// **欄は private**。作る道は `exact.rs` の中の `√` の印の関数(1.2.3 の Task 3)と、
+/// **欄は private**。作る道は `√` の印の関数 `exact::sqrt`(`r` は正の印 `q` そのもの)と、
 /// 直列化の読みの 2 つだけである。**読みは `r > 0` でなければ拒む**(`RootWire`)。
+/// `+/−` は `c` の符号だけを変えて運ぶ(`exact::neg`。`r` は触らない)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RootWire")]
 pub struct Root {
@@ -143,8 +144,8 @@ impl Marks {
         root: None,
     };
 
-    /// `Exact` の印だけを持つ。**root は持たない**——root を作る・運ぶ腕は §3.2 の 3 つ
-    /// (`√`・`+/−`・`x²`)だけで、ほかの腕は全部ここを通る。
+    /// `Exact` の印だけを持つ。**root は持たない**——root を作る・運ぶ腕は §3.2 の 2 つ
+    /// (`√`・`+/−`)だけで、ほかの腕は全部ここを通る(`x²` は root を読んで `Exact` を返す)。
     fn exact(exact: Option<Exact>) -> Marks {
         Marks { exact, root: None }
     }
@@ -378,8 +379,18 @@ fn div_mark(a: Held, b: Held) -> Option<Exact> {
 }
 
 /// `+/−`。`(−q, k)`。**虚部があっても保つ**(`re` の符号反転は `re` だけで決まる)。
+/// **root も `(−c, r)` にして運ぶ**(1.2.3 設計書 §3.2)——`−√a + √b` を書き換えるため。
+/// root を持つ値は `exact` が `None` なので、2 つの欄が両方 `Some` になることはない。
 pub fn neg(a: Held) -> Marks {
-    Marks::exact(neg_mark(a))
+    Marks {
+        exact: neg_mark(a),
+        root: a.root.and_then(|root| {
+            Some(Root {
+                c: Rational::ZERO.checked_sub(root.c).ok()?,
+                r: root.r,
+            })
+        }),
+    }
 }
 
 fn neg_mark(a: Held) -> Option<Exact> {
@@ -387,7 +398,8 @@ fn neg_mark(a: Held) -> Option<Exact> {
     Some(Exact::of(Rational::ZERO.checked_sub(a.q).ok()?, a.pi))
 }
 
-/// `x²`。k=0 なら `(q², 0)`。k=1 なら落とす。
+/// `x²`。k=0 なら `(q², 0)`。k=1 なら落とす。**root `(c, r)` なら `(c²·r, 0)`**——√ を
+/// 2 乗すると有理数に戻る(1.2.3 設計書 §3.2。`2 √ x² − 2 =` が 0 になる)。
 pub fn sqr(a: Held) -> Marks {
     Marks::exact(sqr_mark(a))
 }
@@ -396,11 +408,83 @@ fn sqr_mark(a: Held) -> Option<Exact> {
     if a.value.im != 0.0 {
         return None;
     }
-    let a = a.exact?;
-    if a.pi {
+    let (_, square) = signed_square(a)?;
+    Some(Exact::of(square, false))
+}
+
+/// 実数の項を「符号と 2 乗」で読む(1.2.3 設計書 §3.3)。root `(c, r)` なら `(c < 0, c²·r)`、
+/// k=0 の印 `q` なら `(q < 0, q²)`。k=1・印なし・溢れは `None`。**虚部は見ない**
+/// (呼び手が見る)。
+fn signed_square(a: Held) -> Option<(bool, Rational)> {
+    match (a.root, a.exact) {
+        (Some(root), _) => Some((
+            root.c.is_negative(),
+            root.c.checked_mul(root.c).ok()?.checked_mul(root.r).ok()?,
+        )),
+        (None, Some(mark)) if !mark.pi => {
+            Some((mark.q.is_negative(), mark.q.checked_mul(mark.q).ok()?))
+        }
+        _ => None,
+    }
+}
+
+/// **桁落ちする `a ± b` の書き換え**(1.2.3 設計書 §3.3)。書き換えないなら `None`
+/// (呼び手は今の f64 の和と `add`・`sub` の印に戻る)。`subtract` は `−` のとき true。
+///
+/// 各項を「符号と 2 乗」で読み、`−` なら右の符号を反転する。**どちらかが root で、
+/// 符号が逆で、大きさが 2 倍以内(`A²/4 ≤ B² ≤ 4A²`、2 乗の有理数で比べる)のときだけ**、
+/// 答えを `(A² − B²) ÷ (|A| + |B|)` に左の項の符号を付けた値にする。分子は有理数で厳密、
+/// 分母は正の数の和で桁落ちしない。**分子が 0 なら答えは `(0, k=0)`**。
+///
+/// - **2 倍の門**: 桁落ちしない引き算(`667 ÷ 833 = − 334 √ =`)を書き換えると丸めが
+///   1 回増えるだけなので、門の外は今の f64 のまま(§3.3 の試作の実測)。
+/// - **両方が k=0 の印なら書き換えない**——そちらは `sub` の印が厳密に引く。
+/// - **i128 が溢れたら書き換えない**(§3.5)。
+pub fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
+    if !both_real(a, b) || (a.root.is_none() && b.root.is_none()) {
         return None;
     }
-    Some(Exact::of(a.q.checked_mul(a.q).ok()?, false))
+    let ((a_negative, a_square), (b_negative, b_square)) = (signed_square(a)?, signed_square(b)?);
+    let four = Rational::from_i128(4).ok()?;
+    let below = b_square
+        .checked_mul(four)
+        .ok()?
+        .checked_sub(a_square)
+        .ok()?;
+    let above = a_square
+        .checked_mul(four)
+        .ok()?
+        .checked_sub(b_square)
+        .ok()?;
+    if a_negative == (b_negative != subtract) || below.is_negative() || above.is_negative() {
+        return None;
+    }
+    let numerator = a_square.checked_sub(b_square).ok()?;
+    let magnitude = numerator.to_f64() / (a.value.re.abs() + b.value.re.abs());
+    // 符号は左の項(`a.value.re` の符号は `a_negative` と同じ。0 の項は門を通らない)。
+    // 分子が 0 なら印 `(0, k=0)` が `Held::settled` で `re` を `+0.0` にする。
+    Some((
+        Value::real(magnitude.copysign(a.value.re)),
+        Marks::exact(numerator.is_zero().then_some(Exact::ZERO)),
+    ))
+}
+
+/// `√`。**k=0 の印 `q > 0` なら root `(1, q)`**(1.2.3 設計書 §3.2)。**`Root` を作る
+/// 唯一の関数**である。`q = 0` なら `(0, k=0)`(√0 は 0)。k=1・負・印なしは落とす
+/// (負の引数は値の計算が `DomainError` にする。複素の引数も同じ)。
+pub fn sqrt(a: Held) -> Marks {
+    match a.exact {
+        Some(mark) if mark.pi || mark.q.is_negative() => Marks::NONE,
+        Some(mark) if mark.q.is_zero() => Marks::exact(Some(Exact::ZERO)),
+        Some(mark) => Marks {
+            exact: None,
+            root: Some(Root {
+                c: Rational::ONE,
+                r: mark.q,
+            }),
+        },
+        None => Marks::NONE,
+    }
 }
 
 /// `1/x`。k=0 で q ≠ 0 なら `(1/q, 0)`。k=1 なら落とす。
@@ -419,7 +503,7 @@ fn recip_mark(a: Held) -> Option<Exact> {
     Some(Exact::of(Rational::ONE.checked_div(a.q).ok()?, false))
 }
 
-/// 印を落とす。`√`・`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
+/// 印を落とす。`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
 /// (§3.4、§11.2 の未決 3・4)。
 pub fn dropped(_: Held) -> Marks {
     Marks::NONE
@@ -1116,18 +1200,83 @@ mod tests {
         assert_eq!(held.exact, q(1, 2, false));
     }
 
+    fn root_of(tokens: &[&str]) -> Option<(Rational, Rational)> {
+        state_after(tokens)
+            .current
+            .root
+            .map(|root| (root.c, root.r))
+    }
+
+    fn r(num: i128, den: i128) -> Rational {
+        Rational::from_ratio(num, den).unwrap()
+    }
+
     #[test]
-    fn no_key_makes_a_root_yet() {
-        // **この段では root を作る道が無い**(作るのは 1.2.3 の Task 3 の `√`)。
-        // `Marks` に揃えただけで、どの腕も root を返さない。
+    fn only_sqrt_makes_a_root_and_only_neg_carries_it() {
+        // **作るのは `√` だけ**(§3.2)。印 k=0 の `q > 0` から `(1, q)`。
+        assert_eq!(root_of(&["9", "sqrt"]), Some((r(1, 1), r(9, 1))));
+        assert_eq!(
+            root_of(&["0", "dot", "5", "sqrt"]),
+            Some((r(1, 1), r(1, 2)))
+        );
+        // **`+/−` は `(−c, r)` にして運ぶ。**
+        assert_eq!(root_of(&["2", "sqrt", "neg"]), Some((r(-1, 1), r(2, 1))));
+        assert_eq!(
+            root_of(&["2", "sqrt", "neg", "neg"]),
+            Some((r(1, 1), r(2, 1)))
+        );
+        // **不変: root が `Some` なら `exact` は `None`**(√ の答えは一般に無理数)。
+        for tokens in [&["9", "sqrt"][..], &["2", "sqrt", "neg"]] {
+            assert_eq!(mark(tokens), None, "{tokens:?}");
+        }
+        // **ほかはすべて root を落とす**: 印の無い・k=1 の・0 の引数、×・÷・関数・桁落ち
+        // しない差、`=` の答え。
         for tokens in [
-            &["9", "sqrt"][..],
-            &["2", "sqrt", "neg"],
+            &["0", "sqrt"][..],
+            &["pi", "sqrt"],
+            &["1", "exp", "4", "0", "sqrt"],
+            &["2", "sqrt", "mul", "2", "eq"],
+            &["2", "sqrt", "div", "2", "eq"],
+            &["2", "sqrt", "sin"],
+            &["2", "sqrt", "recip"],
             &["2", "sqrt", "sqr"],
+            &["2", "sqrt", "add", "1", "eq"],
             &["2", "sqrt", "sub", "1", "eq"],
         ] {
-            assert_eq!(state_after(tokens).current.root, None, "{tokens:?}");
+            assert_eq!(root_of(tokens), None, "{tokens:?}");
         }
+    }
+
+    #[test]
+    fn the_square_of_a_root_is_its_rational_mark() {
+        // `x²` は root `(c, r)` を印 `(c²·r, k=0)` にする(§3.2)。`re` も印の丸めになる。
+        assert_eq!(mark(&["2", "sqrt", "sqr"]), q(2, 1, false));
+        assert_eq!(mark(&["2", "sqrt", "neg", "sqr"]), q(2, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "sqrt", "sqr"]), q(1, 2, false));
+        assert_eq!(state_after(&["2", "sqrt", "sqr"]).current.value.re, 2.0);
+        // **√0 は印 `(0, k=0)`**(root は `r > 0` だけ)。
+        assert_eq!(mark(&["0", "sqrt"]), q(0, 1, false));
+    }
+
+    #[test]
+    fn a_cancelling_difference_of_roots_is_exact_at_zero() {
+        // 分子 `A² − B²` が 0 なら答えは `(0, k=0)`(§3.3)。`√4 − 2` は門の内側で符号が逆。
+        for tokens in [
+            &["4", "sqrt", "sub", "2", "eq"][..],
+            &["2", "sqrt", "sub", "2", "sqrt", "eq"],
+            &["2", "sqrt", "neg", "add", "2", "sqrt", "eq"],
+        ] {
+            let state = state_after(tokens);
+            assert_eq!(state.current.exact, q(0, 1, false), "{tokens:?}");
+            assert_eq!(
+                state.current.value.re.to_bits(),
+                0.0_f64.to_bits(),
+                "{tokens:?}"
+            );
+        }
+        // 書き換えた答えには印も root も付かない(一般に無理数)。
+        let state = state_after(&["5", "sqrt", "sub", "2", "eq"]);
+        assert_eq!((state.current.exact, state.current.root), (None, None));
     }
 
     #[test]
