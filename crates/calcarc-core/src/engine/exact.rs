@@ -1297,6 +1297,88 @@ mod tests {
     }
 
     #[test]
+    fn the_gate_factor_is_two_on_both_sides() {
+        // **門の幅そのものの番人**(§3.3)。上の番人は門を外したときしか鳴らない——
+        // 係数 4(大きさで 2 倍)を 2 にも 8 にも動かしても緑のままだった。そこで
+        // 門の境目の両側に 1 組ずつ置く。**どの件も、書き換えた f64 と素の f64 の差が
+        // 1 ulp 以上ある**(下の `assert_ne!`)ので、どちらの道を通ったかが生のビットで分かる。
+        // - 上の境目(B² ≤ 4A²): `√399 − 10` は 399/100 = 3.99 で内側(書き換える)、
+        //   `√401 − 10` は 4.01 で外側(書き換えない)。
+        // - 下の境目(A²/4 ≤ B²): `26 − √170` は 676/170 ≈ 3.98 で内側、
+        //   `26 − √167` は ≈ 4.05 で外側。
+        // 係数を 2 に狭めると内側の 2 件が素の f64 になって赤、8 に広げると外側の 2 件が
+        // 書き換わって赤(2026-10-08 に両方向の変異で確認)。
+        let root_first = |radicand: &[&'static str], n: &[&'static str]| {
+            let mut keys: Vec<&'static str> = radicand.to_vec();
+            keys.extend(["sqrt", "sub"]);
+            keys.extend(n);
+            keys.push("eq");
+            state_after(&keys).current.value.re
+        };
+        let root_second = |n: &[&'static str], radicand: &[&'static str]| {
+            let mut keys: Vec<&'static str> = n.to_vec();
+            keys.push("sub");
+            keys.extend(radicand);
+            keys.extend(["sqrt", "eq"]);
+            state_after(&keys).current.value.re
+        };
+        // (表示, 答え, A², B², |A| + |B|, 素の f64, 門の内側か)
+        let cases = [
+            (
+                "√399 − 10",
+                root_first(&["3", "9", "9"], &["1", "0"]),
+                399.0,
+                100.0,
+                399.0_f64.sqrt() + 10.0,
+                399.0_f64.sqrt() - 10.0,
+                true,
+            ),
+            (
+                "√401 − 10",
+                root_first(&["4", "0", "1"], &["1", "0"]),
+                401.0,
+                100.0,
+                401.0_f64.sqrt() + 10.0,
+                401.0_f64.sqrt() - 10.0,
+                false,
+            ),
+            (
+                "26 − √170",
+                root_second(&["2", "6"], &["1", "7", "0"]),
+                676.0,
+                170.0,
+                26.0 + 170.0_f64.sqrt(),
+                26.0 - 170.0_f64.sqrt(),
+                true,
+            ),
+            (
+                "26 − √167",
+                root_second(&["2", "6"], &["1", "6", "7"]),
+                676.0,
+                167.0,
+                26.0 + 167.0_f64.sqrt(),
+                26.0 - 167.0_f64.sqrt(),
+                false,
+            ),
+        ];
+        // 最初の 1 件で止めない——どの側が鳴ったかを全部印字する。
+        let mut wrong: Vec<String> = Vec::new();
+        for (label, shown, a_square, b_square, sum, plain, inside) in cases {
+            let rewritten: f64 = (a_square - b_square) / sum;
+            assert_ne!(
+                rewritten.to_bits(),
+                plain.to_bits(),
+                "{label}: not a witness"
+            );
+            let want = if inside { rewritten } else { plain };
+            if shown.to_bits() != want.to_bits() {
+                wrong.push(format!("{label}: inside={inside}, shown {shown:e}"));
+            }
+        }
+        assert_eq!(wrong, Vec::<String>::new());
+    }
+
+    #[test]
     fn a_root_crosses_serde_as_text_and_refuses_a_non_positive_radicand() {
         let text = r#"{"value":{"re":1.0,"im":0.0},"exact":null,"root":{"c":"2/4","r":"3/1"}}"#;
         let held: Held = serde_json::from_str(text).unwrap();
