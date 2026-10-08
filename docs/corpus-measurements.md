@@ -3230,6 +3230,8 @@ reference 7 段  sync --locked / ruff check / ruff format --check / mypy /
 **`cancellation` にも分布の pin を置いた**——`severe` **571** /
 `near_tolerance` **1,429** / `mild` **1**。
 
+（**追記 2026-10-08**: 1.2.3 から `near_tolerance` は「素朴な引き算の誤差 u/r が許容に迫る」を意味する。上の数は改名前の測定のまま。）
+
 **【訂正】「同じ形の番人」ではない。** 変異で測ったら違った:
 
 | 動かしたもの | 落ちるもの |

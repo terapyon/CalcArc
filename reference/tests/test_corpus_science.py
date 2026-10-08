@@ -913,7 +913,7 @@ def test_the_overflow_neighbourhood_is_covered_without_the_error_shard() -> None
     assert combinatorics["unmet_real_cells"] == ["combinatorics/path=domain"]
 
 
-def test_the_cancellation_cuts_are_the_shards_own_tolerance() -> None:
+def test_the_cancellation_cut_is_within_a_decade_of_the_declared_tolerance() -> None:
     """**切れ目が私の作った数でないことを、実物で見る。**
 
     **2026-10-08 に許容を 5e-10 へ締めたので、理由を u/r に替えた。** それまで
@@ -921,9 +921,10 @@ def test_the_cancellation_cuts_are_the_shards_own_tolerance() -> None:
     ここは等しさを見ていた。**今の切れ目 `CANCELLATION_NEAR_CUT` は「近さの比が
     r の 2 数を f64 で素朴に引いたときの相対誤差 u/r（u = 2^-53）が、許容に迫る
     近さ」である。** だから**シャードが書き出している許容との関係**を見る——
-    u/r が許容の 1/10 より大きく、許容以下。**この関係を満たす組は
-    (許容 5e-10, 切れ目 1e-6) だけ**で、許容を 1e-6 に戻しても、切れ目を 1e-5・
-    1e-7 に動かしても偽になる。
+    u/r が許容の 1/10 より大きく、許容以下。**許容 ∈ [u/CUT, 10·u/CUT)**
+    （切れ目 1e-6 なら [1.1e-10, 1.1e-9)）。許容を 1e-6 に戻す・切れ目を 1e-5・
+    1e-7 に動かすと偽になる（2e-10・1e-9 のような小さな動きは見ない。
+    (1e-9, 1e-6) や (5e-10, 5e-7) も満たす）。
     """
     declared = json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))[
         "tolerance"

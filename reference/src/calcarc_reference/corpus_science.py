@@ -176,7 +176,7 @@ CANCELLATION_FULL_LOSS = 10.0**-DISPLAY_SIGNIFICANT_DIGITS
 #: `CANCELLATION_TOLERANCE_REL` という名前で、シャードの `tolerance.rel`（当時 1e-6）の
 #: **写し**だった。**許容と同じ数である必要はもう無い**——数は 1e-6 のまま、
 #: 帯の分布（571 / 1,429 / 2）も動かない。**許容との関係はテストが見る**
-#: （`test_the_cancellation_cuts_are_the_shards_own_tolerance`。
+#: （`test_the_cancellation_cut_is_within_a_decade_of_the_declared_tolerance`。
 #: `rel / 10 < u / CUT <= rel`——u/r が許容の 1/10 から 1 倍のあいだに在ること）。
 CANCELLATION_NEAR_CUT = 1e-6
 
