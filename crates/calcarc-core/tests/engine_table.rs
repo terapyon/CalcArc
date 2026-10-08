@@ -2186,3 +2186,14 @@ fn a_fractional_degree_angle_is_folded_from_its_mark() {
         "-0.00003569991653"
     );
 }
+
+/// **F3 の剰余は切り捨て**(§2.2): 小さい負の角は 0 の近くに留まる。ユークリッドの剰余は
+/// `−1e-7` を `360 − 1e-7` に写し、360 の ulp で丸めるので、答えが 7 桁目から崩れる
+/// (`-0.000000001745329459`)。
+#[test]
+fn a_small_negative_fractional_degree_stays_near_zero() {
+    assert_eq!(
+        main_of(&["0", "dot", "0", "0", "0", "0", "0", "0", "1", "neg", "sin"]),
+        "-0.000000001745329252"
+    );
+}
