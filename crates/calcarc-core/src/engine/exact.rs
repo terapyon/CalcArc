@@ -437,6 +437,13 @@ pub fn dropped(_: Held) -> Marks {
 /// - **DEG で印が k=0**: `r = q mod 360` が 30 か 45 の倍数なら表。
 /// - **DEG で印が k=1**(`π` を度で読む)は表に載らない(π° は無理数の角)。f64 の規則へ。
 ///
+/// **どちらでも決まらなければ、DEG で印が k=0・分母 ≠ 1 のときだけ印のまま畳む**
+/// (1.2.3 設計書 §2.1、`degree_fold`)。**順は「印が表 → f64 が表 → 畳む」で、
+/// 畳みを先に当ててはならない**(台帳の条件 1)——`30 + 1e-15` の印は表に載らないが、
+/// f64 の和は 30 ちょうどなので f64 の規則が表を引き、`sin − 0.5` は `0` になる。
+/// 畳みを先にすると `-5.551115123e-17` に後退する(engine_table の
+/// `an_angle_whose_f64_is_on_the_table_is_not_folded` が見張る)。
+///
 /// **RAD は 1.0.0 で「触らない」とした**(入力そのものが厳密でないので、厳密な答えを
 /// 返すと嘘になる)。**1.2.2 で RAD に広げるのは、入力が π の有理数倍だと「分かっている」
 /// ときだけ**——π キーから四則だけで作った値(印が k=1)。**1.0.0 の線引き「入力が厳密なら、
@@ -450,7 +457,12 @@ pub fn turn(arg: Held, mode: AngleMode) -> Option<Turn> {
         (Some(mark), AngleMode::Deg) if !mark.pi => degree_turn(mark.q),
         _ => None,
     };
-    from_mark.or_else(|| scientific::turn_of(arg.value, mode))
+    from_mark
+        .or_else(|| scientific::turn_of(arg.value, mode))
+        .or_else(|| match (arg.exact, mode) {
+            (Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),
+            _ => None,
+        })
 }
 
 /// `q × π` の角(RAD)。`r = q mod 2`。
@@ -487,6 +499,25 @@ fn degree_turn(q: Rational) -> Option<Turn> {
     } else {
         None
     }
+}
+
+/// **表に載らない分数の度**(1.2.3 設計書 §2.2)。`r = n mod 360d`(**切り捨ての剰余**。
+/// 符号は `n` と同じで、`to_rad` の `re % 360.0`(IEEE の `fmod`)と同じ向き。
+/// `(−180, 180]` には寄せない)を正しく丸めた f64 にしてから、ラジアンにする。
+///
+/// - **分母が 1(整数の角)は畳まない**——整数は f64 で厳密なので、`to_rad` の
+///   `re % 360.0` が既に厳密である。畳み直すと丸めの向きが変わるだけで、
+///   遠ざかる値が出る(試作の実測。§2.1)。
+/// - **`360d` が i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
+///
+/// **極にはならない**——分母 ≠ 1 の角はちょうど 90° にならない(§2.3)。
+fn degree_fold(q: Rational) -> Option<Turn> {
+    let (n, d) = q.parts();
+    if d == 1 {
+        return None;
+    }
+    let r = n.checked_rem(d.checked_mul(360)?)?;
+    Some(Turn::Folded(ratio_to_f64(r, d)?.to_radians()))
 }
 
 /// 表の答えの印(§3.3・§4.2)。**0・±1/2・±1 なら k=0、√ を含めば印なし。**
