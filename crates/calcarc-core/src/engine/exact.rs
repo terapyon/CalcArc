@@ -466,9 +466,13 @@ pub(super) fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)>
     // `a_rewritten_difference_keeps_the_sign_of_the_larger_side`)。`a.value.re` の符号は
     // `a_negative` と同じで、0 の項は門を通らないので `signum` は ±1。
     // 分子が 0 なら印 `(0, k=0)` が `Held::settled` で `re` を `+0.0` にする。
+    // **ほかの二項演算と同じく `finalize` を通す**(−0.0 を残さない。商が下に溢れたとき。
+    // `a_rewritten_quotient_never_leaves_a_negative_zero`)。有限でなければ書き換えない。
     let quotient = numerator.to_f64() / (a.value.re.abs() + b.value.re.abs());
     Some((
-        Value::real(quotient * a.value.re.signum()),
+        Value::real(quotient * a.value.re.signum())
+            .finalize()
+            .ok()?,
         Marks::exact(numerator.is_zero().then_some(Exact::ZERO)),
     ))
 }
@@ -1436,6 +1440,30 @@ mod tests {
             }
         }
         assert_eq!(wrong, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_rewritten_quotient_never_leaves_a_negative_zero() {
+        // `cancel` の答えも、ほかの二項演算と同じく `finalize` を通す(−0.0 を +0.0 に)。
+        // **キー列では作れない**: 分子は 0 でなければ |m/d| ≥ 1/d ≈ 6e-39(i128)、分母は
+        // |A| + |B| ≲ 2.6e19(A² が i128 に収まる)なので、商は f64 の最小の正の数に届かない。
+        // そこで値を印と食い違わせた `Held` を直接渡し、商を下に溢れさせる。
+        // A² = 1(正)、B² = (1 + 10⁻¹⁸)²(負)、分子 ≈ −2e-18、分母 ≈ 1e308 → 商は −0.0。
+        let a = Held {
+            value: Value::real(1e308),
+            exact: None,
+            root: Some(Root {
+                c: Rational::ONE,
+                r: Rational::ONE,
+            }),
+        };
+        let b = Held {
+            value: Value::real(-1.0),
+            exact: q(-1_000_000_000_000_000_001, 1_000_000_000_000_000_000, false),
+            root: None,
+        };
+        let (value, _) = cancel(a, b, false).unwrap();
+        assert_eq!(value.re.to_bits(), 0.0_f64.to_bits(), "{:e}", value.re);
     }
 
     #[test]
