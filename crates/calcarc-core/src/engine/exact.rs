@@ -433,7 +433,7 @@ fn signed_square(a: Held) -> Option<(bool, Rational)> {
 ///
 /// 各項を「符号と 2 乗」で読み、`−` なら右の符号を反転する。**どちらかが root で、
 /// 符号が逆で、大きさが 2 倍以内(`A²/4 ≤ B² ≤ 4A²`、2 乗の有理数で比べる)のときだけ**、
-/// 答えを `(A² − B²) ÷ (|A| + |B|)` に左の項の符号を付けた値にする。分子は有理数で厳密、
+/// 答えを `(A² − B²) ÷ (|A| + |B|)` に左の項の符号を掛けた値にする。分子は有理数で厳密、
 /// 分母は正の数の和で桁落ちしない。**分子が 0 なら答えは `(0, k=0)`**。
 ///
 /// - **2 倍の門**: 桁落ちしない引き算(`667 ÷ 833 = − 334 √ =`)を書き換えると丸めが
@@ -460,11 +460,15 @@ pub fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
         return None;
     }
     let numerator = a_square.checked_sub(b_square).ok()?;
-    let magnitude = numerator.to_f64() / (a.value.re.abs() + b.value.re.abs());
-    // 符号は左の項(`a.value.re` の符号は `a_negative` と同じ。0 の項は門を通らない)。
+    // `a + b' = s·(|A| − |B|) = s·(A² − B²) ÷ (|A| + |B|)`(`s` は左の項の符号)。**分子の
+    // 符号も残す**——右の項のほうが大きければ答えの符号は `s` の逆である(`copysign` で
+    // `s` を付けると `√2 − √3` が正に化ける。engine_table の
+    // `a_rewritten_difference_keeps_the_sign_of_the_larger_side`)。`a.value.re` の符号は
+    // `a_negative` と同じで、0 の項は門を通らないので `signum` は ±1。
     // 分子が 0 なら印 `(0, k=0)` が `Held::settled` で `re` を `+0.0` にする。
+    let quotient = numerator.to_f64() / (a.value.re.abs() + b.value.re.abs());
     Some((
-        Value::real(magnitude.copysign(a.value.re)),
+        Value::real(quotient * a.value.re.signum()),
         Marks::exact(numerator.is_zero().then_some(Exact::ZERO)),
     ))
 }

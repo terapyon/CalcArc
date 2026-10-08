@@ -2244,3 +2244,19 @@ fn a_negated_root_plus_a_close_root_is_rewritten() {
 fn the_square_of_a_root_is_rational_again() {
     assert_eq!(main_of(&["2", "sqrt", "sqr", "sub", "2", "eq"]), "0");
 }
+
+/// **F1 の符号**: 右の項のほうが大きい差も書き換える(門は `A²/4 ≤ B² ≤ 4A²` で、
+/// 向きを問わない)。答えの符号は左の項の符号と**分子 `A² − B²` の符号の積**である。
+/// 左の符号だけを付けると、`√2 − √3` が `+0.3178372452` に化ける。
+#[test]
+fn a_rewritten_difference_keeps_the_sign_of_the_larger_side() {
+    assert_eq!(
+        main_of(&["2", "sqrt", "sub", "3", "sqrt", "eq"]),
+        "-0.3178372452"
+    );
+    assert_eq!(main_of(&["1", "sub", "2", "sqrt", "eq"]), "-0.4142135624");
+    assert_eq!(
+        main_of(&["2", "sqrt", "neg", "add", "3", "sqrt", "eq"]),
+        "0.3178372452"
+    );
+}
