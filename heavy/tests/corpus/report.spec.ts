@@ -744,12 +744,17 @@ test("the real corpus and its overrides carry no development history either", ()
       fileURLToPath(new URL("../../../corpus/overrides.json", import.meta.url)),
       "utf-8",
     ),
-  ) as { overrides: Record<string, { reason: string }> };
+  ) as { schema: number; overrides: Record<string, { reason: string }> };
+  // **0 件は 1.2.3 で意図した状態（typed-001490 は F3 で直った）。上書きが
+  // 戻れば、下の語の検査が働く。** だから件数の下限は置かず、ファイルを
+  // 期待した形で読めたことだけを見る——読み損ねて空になったのではない。
+  expect(overrides.schema, "overrides.json の schema").toBe(1);
+  expect(typeof overrides.overrides, "overrides.json の overrides").toBe(
+    "object",
+  );
+  expect(Array.isArray(overrides.overrides)).toBe(false);
+  expect(overrides.overrides).not.toBeNull();
   const reasons = Object.entries(overrides.overrides);
-  expect(
-    reasons.length,
-    "no override was read, so this test asserted nothing",
-  ).toBeGreaterThan(0);
   for (const [id, { reason }] of reasons) {
     expect(reason, `${id} の理由`).not.toContain("意図した安全マージン");
     expect(reason, `${id} の理由`).not.toContain("下の数字とは一致しない");

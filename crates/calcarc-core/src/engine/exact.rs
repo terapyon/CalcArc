@@ -7,7 +7,7 @@
 //!
 //! **印の計算で i128 が溢れたら、印を捨てるだけでエラーにしない**(§3.4)。`re` は印と
 //! 無関係に計算しているので、答えは今の f64 の道に戻る。だからこのファイルの関数は
-//! どれも `Option<Exact>` を返し、`CalcResult` を返さない。
+//! どれも印(`Marks`。中身は `Option`)を返し、`CalcResult` を返さない。
 //!
 //! **伝わり方の規則はキー(演算)ごとに 1 つの関数**として書き、engine の `apply` が
 //! 後置関数の腕ごとに `Value` の計算と並べて呼ぶ(§3.4「書き方」)。
@@ -84,6 +84,73 @@ impl Exact {
     }
 }
 
+/// √ の印(1.2.3 設計書 §3.1)。`re == c × √r`、`r > 0`。
+///
+/// **`Exact` に種類を足さず、`Held` に別の欄として持つ**——√ の印が意味を持つのは
+/// 「√ の直後」と「桁落ちする ± の 1 段」だけなので、読む所を閉じ込める(§3.1)。
+/// **欄は private**。作る道は `√` の印の関数 `exact::sqrt`(`r` は正の印 `q` そのもの)と、
+/// 直列化の読みの 2 つだけである。**読みは `r > 0` でなければ拒む**(`RootWire`)。
+/// `+/−` は `c` の符号だけを変えて運ぶ(`exact::neg`。`r` は触らない)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "RootWire")]
+pub struct Root {
+    /// `Exact` の `q` と同じく、**WASM 境界では文字列 `"num/den"` で渡す**(§3.4)。
+    #[serde(serialize_with = "rational_text::serialize")]
+    c: Rational,
+    #[serde(serialize_with = "rational_text::serialize")]
+    r: Rational,
+}
+
+/// 直列化の読み口。**`r > 0` の不変を境界の向こうから来た値にも課す**——
+/// `Exact` の読みが `Exact::of` を通るのと同じ扱い。
+#[derive(Deserialize)]
+struct RootWire {
+    #[serde(with = "rational_text")]
+    c: Rational,
+    #[serde(with = "rational_text")]
+    r: Rational,
+}
+
+impl TryFrom<RootWire> for Root {
+    type Error = &'static str;
+
+    fn try_from(wire: RootWire) -> Result<Root, Self::Error> {
+        if !wire.r.is_negative() && !wire.r.is_zero() {
+            Ok(Root {
+                c: wire.c,
+                r: wire.r,
+            })
+        } else {
+            Err("expected r > 0")
+        }
+    }
+}
+
+/// 印の計算の戻り値(1.2.3 設計書 §3.1、条件 1)。`Held` の印の欄 2 つを 1 つにまとめる。
+///
+/// **印の関数(`add`・`neg`・`sin` など)はどれもこれを返し、`Held::settled` が受け取る。**
+/// 運び方をこの 1 つにそろえるので、root を作る・運ぶ腕が増えても遷移は増えない。
+/// **欄は private**——外からは `Marks::NONE` しか作れない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Marks {
+    exact: Option<Exact>,
+    root: Option<Root>,
+}
+
+impl Marks {
+    /// 印なし。落とす腕(`dropped`、`xʸ`・`nPr`・`nCr`)が返す。
+    pub const NONE: Marks = Marks {
+        exact: None,
+        root: None,
+    };
+
+    /// `Exact` の印だけを持つ。**root は持たない**——root を作る・運ぶ腕は §3.2 の 2 つ
+    /// (`√`・`+/−`)だけで、ほかの腕は全部ここを通る(`x²` は root を読んで `Exact` を返す)。
+    fn exact(exact: Option<Exact>) -> Marks {
+        Marks { exact, root: None }
+    }
+}
+
 /// engine が持つ値。`Value` に印を添えたもの(§3.2)。
 ///
 /// **`Copy`**——`Value` が `Copy` なので、engine の書き方を変えずに済む。
@@ -93,6 +160,10 @@ impl Exact {
 pub struct Held {
     pub value: Value,
     pub exact: Option<Exact>,
+    /// √ の印(1.2.3 設計書 §3.1)。**`Some` のとき `exact` は `None`**。
+    /// **欠けた状態(9 の形)も読める**(`#[serde(default)]`、§3.4)。
+    #[serde(default)]
+    pub root: Option<Root>,
 }
 
 impl Held {
@@ -100,6 +171,7 @@ impl Held {
     pub const ZERO: Held = Held {
         value: Value::ZERO,
         exact: Some(Exact::ZERO),
+        root: None,
     };
     /// `π` キー(§3.3)。`re` は今までどおり `f64::consts::PI`。
     pub const PI: Held = Held {
@@ -108,11 +180,16 @@ impl Held {
             im: 0.0,
         },
         exact: Some(Exact::PI),
+        root: None,
     };
 
     /// 印の無い値(`e` キーなど)。
     pub fn bare(value: Value) -> Held {
-        Held { value, exact: None }
+        Held {
+            value,
+            exact: None,
+            root: None,
+        }
     }
 
     /// 計算した値に印を添える。**k=0 の印があれば、`re` を印を正しく丸めた f64 に
@@ -130,7 +207,11 @@ impl Held {
     /// 丸めた `0.11972222222222222` と 1 ulp ずれる。**例外を残すと「`re` は印の丸め」が
     /// 60 進だけ偽になり**、DEG の三角関数は印を、四則は f64 の和を読む二重の正体ができる。
     /// 同じ規則にしても 10 桁の表示は動かない(1 ulp の差)。
-    pub fn settled(value: Value, exact: Option<Exact>) -> Held {
+    ///
+    /// **root には丸め直しが及ばない**(1.2.3 設計書 §3.1)——√ の答えを正しく丸める手段が
+    /// 無いので、root を持つ値の `re` は √ の f64 のままである。
+    pub fn settled(value: Value, marks: Marks) -> Held {
+        let Marks { exact, root } = marks;
         let value = match exact {
             Some(mark) if !mark.pi => Value {
                 re: mark.q.to_f64(),
@@ -138,7 +219,7 @@ impl Held {
             },
             _ => value,
         };
-        Held { value, exact }
+        Held { value, exact, root }
     }
 }
 
@@ -148,7 +229,11 @@ impl Held {
 /// - 虚数の入力は `re` が 0 なので `(0, k=0)`。
 /// - **i128 に収まらなければ印なし**(`1 EXP 40`、`1 EXP 30 +/−` の小さい側も同じ:
 ///   分母の 10^40 が収まらない)。
-pub fn of_buffer(buffer: &Buffer) -> Option<Exact> {
+pub fn of_buffer(buffer: &Buffer) -> Marks {
+    Marks::exact(buffer_mark(buffer))
+}
+
+fn buffer_mark(buffer: &Buffer) -> Option<Exact> {
     if buffer.imaginary {
         return Some(Exact::ZERO);
     }
@@ -225,14 +310,22 @@ fn common_k(a: Exact, b: Exact) -> Option<bool> {
 }
 
 /// `a + b`。**複素数が混ざっても `re` どうしで合成する**(条件 2)。
-pub fn add(a: Held, b: Held) -> Option<Exact> {
+pub fn add(a: Held, b: Held) -> Marks {
+    Marks::exact(add_mark(a, b))
+}
+
+fn add_mark(a: Held, b: Held) -> Option<Exact> {
     let (a, b) = (a.exact?, b.exact?);
     let k = common_k(a, b)?;
     Some(Exact::of(a.q.checked_add(b.q).ok()?, k))
 }
 
 /// `a − b`。`add` と同じ規則。
-pub fn sub(a: Held, b: Held) -> Option<Exact> {
+pub fn sub(a: Held, b: Held) -> Marks {
+    Marks::exact(sub_mark(a, b))
+}
+
+fn sub_mark(a: Held, b: Held) -> Option<Exact> {
     let (a, b) = (a.exact?, b.exact?);
     let k = common_k(a, b)?;
     Some(Exact::of(a.q.checked_sub(b.q).ok()?, k))
@@ -245,7 +338,11 @@ fn both_real(a: Held, b: Held) -> bool {
 }
 
 /// `a × b`。k の和が 1 以下なら `(qa·qb, ka+kb)`。2 なら落とす(`π × π`)。
-pub fn mul(a: Held, b: Held) -> Option<Exact> {
+pub fn mul(a: Held, b: Held) -> Marks {
+    Marks::exact(mul_mark(a, b))
+}
+
+fn mul_mark(a: Held, b: Held) -> Option<Exact> {
     if !both_real(a, b) {
         return None;
     }
@@ -263,7 +360,11 @@ pub fn mul(a: Held, b: Held) -> Option<Exact> {
 /// 答えは 0 である。以前は「決めていない場合は落とす」として落としていたが、それは
 /// 条件 1 と矛盾した(RAD `0 × π = + π = sin` は 0、`0 ÷ π = + π = sin` は
 /// `1.224646799e-16`。中間審査の条件 1 で直した)。
-pub fn div(a: Held, b: Held) -> Option<Exact> {
+pub fn div(a: Held, b: Held) -> Marks {
+    Marks::exact(div_mark(a, b))
+}
+
+fn div_mark(a: Held, b: Held) -> Option<Exact> {
     if !both_real(a, b) {
         return None;
     }
@@ -278,25 +379,128 @@ pub fn div(a: Held, b: Held) -> Option<Exact> {
 }
 
 /// `+/−`。`(−q, k)`。**虚部があっても保つ**(`re` の符号反転は `re` だけで決まる)。
-pub fn neg(a: Held) -> Option<Exact> {
+/// **root も `(−c, r)` にして運ぶ**(1.2.3 設計書 §3.2)——`−√a + √b` を書き換えるため。
+/// root を持つ値は `exact` が `None` なので、2 つの欄が両方 `Some` になることはない。
+pub fn neg(a: Held) -> Marks {
+    Marks {
+        exact: neg_mark(a),
+        root: a.root.and_then(|root| {
+            Some(Root {
+                c: Rational::ZERO.checked_sub(root.c).ok()?,
+                r: root.r,
+            })
+        }),
+    }
+}
+
+fn neg_mark(a: Held) -> Option<Exact> {
     let a = a.exact?;
     Some(Exact::of(Rational::ZERO.checked_sub(a.q).ok()?, a.pi))
 }
 
-/// `x²`。k=0 なら `(q², 0)`。k=1 なら落とす。
-pub fn sqr(a: Held) -> Option<Exact> {
+/// `x²`。k=0 なら `(q², 0)`。k=1 なら落とす。**root `(c, r)` なら `(c²·r, 0)`**——√ を
+/// 2 乗すると有理数に戻る(1.2.3 設計書 §3.2。`2 √ x² − 2 =` が 0 になる)。
+pub fn sqr(a: Held) -> Marks {
+    Marks::exact(sqr_mark(a))
+}
+
+fn sqr_mark(a: Held) -> Option<Exact> {
     if a.value.im != 0.0 {
         return None;
     }
-    let a = a.exact?;
-    if a.pi {
+    let (_, square) = signed_square(a)?;
+    Some(Exact::of(square, false))
+}
+
+/// 実数の項を「符号と 2 乗」で読む(1.2.3 設計書 §3.3)。root `(c, r)` なら `(c < 0, c²·r)`、
+/// k=0 の印 `q` なら `(q < 0, q²)`。k=1・印なし・溢れは `None`。**虚部は見ない**
+/// (呼び手が見る)。
+fn signed_square(a: Held) -> Option<(bool, Rational)> {
+    match (a.root, a.exact) {
+        (Some(root), _) => Some((
+            root.c.is_negative(),
+            root.c.checked_mul(root.c).ok()?.checked_mul(root.r).ok()?,
+        )),
+        (None, Some(mark)) if !mark.pi => {
+            Some((mark.q.is_negative(), mark.q.checked_mul(mark.q).ok()?))
+        }
+        _ => None,
+    }
+}
+
+/// **桁落ちする `a ± b` の書き換え**(1.2.3 設計書 §3.3)。書き換えないなら `None`
+/// (呼び手は今の f64 の和と `add`・`sub` の印に戻る)。`subtract` は `−` のとき true。
+///
+/// 各項を「符号と 2 乗」で読み、`−` なら右の符号を反転する。**どちらかが root で、
+/// 符号が逆で、大きさが 2 倍以内(`A²/4 ≤ B² ≤ 4A²`、2 乗の有理数で比べる)のときだけ**、
+/// 答えを `(A² − B²) ÷ (|A| + |B|)` に左の項の符号を掛けた値にする。分子は有理数で厳密、
+/// 分母は正の数の和で桁落ちしない。**分子が 0 なら答えは `(0, k=0)`**。
+///
+/// - **2 倍の門**: 桁落ちしない引き算(`667 ÷ 833 = − 334 √ =`)を書き換えると丸めが
+///   1 回増えるだけなので、門の外は今の f64 のまま(§3.3 の試作の実測)。
+/// - **両方が k=0 の印なら書き換えない**——そちらは `sub` の印が厳密に引く。
+/// - **i128 が溢れたら書き換えない**(§3.5)。
+pub(super) fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
+    if !both_real(a, b) || (a.root.is_none() && b.root.is_none()) {
         return None;
     }
-    Some(Exact::of(a.q.checked_mul(a.q).ok()?, false))
+    let ((a_negative, a_square), (b_negative, b_square)) = (signed_square(a)?, signed_square(b)?);
+    let four = Rational::from_i128(4).ok()?;
+    let below = b_square
+        .checked_mul(four)
+        .ok()?
+        .checked_sub(a_square)
+        .ok()?;
+    let above = a_square
+        .checked_mul(four)
+        .ok()?
+        .checked_sub(b_square)
+        .ok()?;
+    if a_negative == (b_negative != subtract) || below.is_negative() || above.is_negative() {
+        return None;
+    }
+    let numerator = a_square.checked_sub(b_square).ok()?;
+    // `a + b' = s·(|A| − |B|) = s·(A² − B²) ÷ (|A| + |B|)`(`s` は左の項の符号)。**分子の
+    // 符号も残す**——右の項のほうが大きければ答えの符号は `s` の逆である(`copysign` で
+    // `s` を付けると `√2 − √3` が正に化ける。engine_table の
+    // `a_rewritten_difference_keeps_the_sign_of_the_larger_side`)。`a.value.re` の符号は
+    // `a_negative` と同じで、0 の項は門を通らないので `signum` は ±1。
+    // 分子が 0 なら印 `(0, k=0)` が `Held::settled` で `re` を `+0.0` にする。
+    // **ほかの二項演算と同じく `finalize` を通す**(−0.0 を残さない。商が下に溢れたとき。
+    // `a_rewritten_quotient_never_leaves_a_negative_zero`)。有限でなければ書き換えない。
+    let quotient = numerator.to_f64() / (a.value.re.abs() + b.value.re.abs());
+    Some((
+        Value::real(quotient * a.value.re.signum())
+            .finalize()
+            .ok()?,
+        Marks::exact(numerator.is_zero().then_some(Exact::ZERO)),
+    ))
+}
+
+/// `√`。**k=0 の印 `q > 0` なら root `(1, q)`**(1.2.3 設計書 §3.2)。**`Root` を作る
+/// 唯一の関数**である。`q = 0` なら `(0, k=0)`(√0 は 0)。k=1・負・印なしは落とす
+/// (負の引数は値の計算が `DomainError` にする。複素の引数も同じ)。
+pub(super) fn sqrt(a: Held) -> Marks {
+    match a.exact {
+        Some(mark) if mark.pi || mark.q.is_negative() => Marks::NONE,
+        Some(mark) if mark.q.is_zero() => Marks::exact(Some(Exact::ZERO)),
+        Some(mark) => Marks {
+            exact: None,
+            root: Some(Root {
+                c: Rational::ONE,
+                r: mark.q,
+            }),
+        },
+        None => Marks::NONE,
+    }
 }
 
 /// `1/x`。k=0 で q ≠ 0 なら `(1/q, 0)`。k=1 なら落とす。
-pub fn recip(a: Held) -> Option<Exact> {
+pub fn recip(a: Held) -> Marks {
+    Marks::exact(recip_mark(a))
+}
+
+fn recip_mark(a: Held) -> Option<Exact> {
     if a.value.im != 0.0 {
         return None;
     }
@@ -307,10 +511,10 @@ pub fn recip(a: Held) -> Option<Exact> {
     Some(Exact::of(Rational::ONE.checked_div(a.q).ok()?, false))
 }
 
-/// 印を落とす。`√`・`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
+/// 印を落とす。`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
 /// (§3.4、§11.2 の未決 3・4)。
-pub fn dropped(_: Held) -> Option<Exact> {
-    None
+pub fn dropped(_: Held) -> Marks {
+    Marks::NONE
 }
 
 // ---- 三角関数(§4) ----
@@ -325,6 +529,13 @@ pub fn dropped(_: Held) -> Option<Exact> {
 /// - **DEG で印が k=0**: `r = q mod 360` が 30 か 45 の倍数なら表。
 /// - **DEG で印が k=1**(`π` を度で読む)は表に載らない(π° は無理数の角)。f64 の規則へ。
 ///
+/// **どちらでも決まらなければ、DEG で印が k=0・分母 ≠ 1 のときだけ印のまま畳む**
+/// (1.2.3 設計書 §2.1、`degree_fold`)。**順は「印が表 → f64 が表 → 畳む」で、
+/// 畳みを先に当ててはならない**(台帳の条件 1)——`30 + 1e-15` の印は表に載らないが、
+/// f64 の和は 30 ちょうどなので f64 の規則が表を引き、`sin − 0.5` は `0` になる。
+/// 畳みを先にすると `-5.551115123e-17` に後退する(engine_table の
+/// `an_angle_whose_f64_is_on_the_table_is_not_folded` が見張る)。
+///
 /// **RAD は 1.0.0 で「触らない」とした**(入力そのものが厳密でないので、厳密な答えを
 /// 返すと嘘になる)。**1.2.2 で RAD に広げるのは、入力が π の有理数倍だと「分かっている」
 /// ときだけ**——π キーから四則だけで作った値(印が k=1)。**1.0.0 の線引き「入力が厳密なら、
@@ -338,7 +549,12 @@ pub fn turn(arg: Held, mode: AngleMode) -> Option<Turn> {
         (Some(mark), AngleMode::Deg) if !mark.pi => degree_turn(mark.q),
         _ => None,
     };
-    from_mark.or_else(|| scientific::turn_of(arg.value, mode))
+    from_mark
+        .or_else(|| scientific::turn_of(arg.value, mode))
+        .or_else(|| match (arg.exact, mode) {
+            (Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),
+            _ => None,
+        })
 }
 
 /// `q × π` の角(RAD)。`r = q mod 2`。
@@ -377,6 +593,37 @@ fn degree_turn(q: Rational) -> Option<Turn> {
     }
 }
 
+/// **表に載らない分数の度**(1.2.3 設計書 §2.2)。`r = n mod 360d` を正しく丸めた f64 に
+/// してから、ラジアンにする。`(−180, 180]` には寄せない。
+///
+/// **剰余は切り捨て(符号は `n` と同じ)でなければならない。** 理由は、**小さい負の角は
+/// 0 の近くに留まり、360 の隣へ動いてはならない**からである。ユークリッドの剰余は
+/// `−ε` を `360 − ε` に写し、それを f64 にした丸めは 360 の ulp(5.7e-14)で効く。
+/// `sin` の答えは ε 級なので、相対で崩れる(実測: `0.0000001 +/− sin` は切り捨てで
+/// `-0.000000001745329252`、ユークリッドで `-0.000000001745329459`。engine_table の
+/// `a_small_negative_fractional_degree_stays_near_zero` が見張る)。
+/// `to_rad` の `re % 360.0`(IEEE の `fmod`)と向きがそろうのは、その結果である。
+///
+/// - **分母が 1(整数の角)は畳まない**——**`|q| ≤ 2^53` の整数は f64 で厳密**なので、
+///   `to_rad` の `re % 360.0` が既に厳密である。**2^53 を超える整数は f64 で厳密ではなく、
+///   別の角や表に着地する**(既知の欠陥。台帳 `rust-review-backlog.md` §6)。
+/// - **`360d` が i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
+///
+/// **有理数の角はちょうど 90° にはならない**(分母 ≠ 1。§2.3)。ただし `r/d` を f64 に
+/// 丸めた値が 90.0 ちょうどに着地することはありうる——**`|q| > 2^53` のときだけ**
+/// (整数部が 2^53 を超えると、90 からの小数のずれが丸めで消える)。そのとき tan は
+/// 極の表を引かず、f64 の `tan` の大きな有限値を返す。**これは既知の欠陥である**
+/// (台帳 `rust-review-backlog.md` §6)——`1 EXP 17 + 170 + 1 EXP 16 +/− = tan` は
+/// `1.633123935e16` と出るが、真値は約 `-5.73e17`(符号まで逆)。
+fn degree_fold(q: Rational) -> Option<Turn> {
+    let (n, d) = q.parts();
+    if d == 1 {
+        return None;
+    }
+    let r = n.checked_rem(d.checked_mul(360)?)?;
+    Some(Turn::Folded(ratio_to_f64(r, d)?.to_radians()))
+}
+
 /// 表の答えの印(§3.3・§4.2)。**0・±1/2・±1 なら k=0、√ を含めば印なし。**
 ///
 /// **k=0 の印を付けるのは引数の虚部が 0 のときだけ**(レビュー役の注記 1)。
@@ -402,18 +649,30 @@ fn row_of(turn: Option<Turn>) -> Option<Row> {
 }
 
 /// `sin` の答えの印。答えの実部は `sin x · cosh y`。
-pub fn sin(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+pub fn sin(arg: Held, turn: Option<Turn>) -> Marks {
+    Marks::exact(sin_mark(arg, turn))
+}
+
+fn sin_mark(arg: Held, turn: Option<Turn>) -> Option<Exact> {
     table_answer(arg, row_of(turn)?.sin)
 }
 
 /// `cos` の答えの印。答えの実部は `cos x · cosh y`。
-pub fn cos(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+pub fn cos(arg: Held, turn: Option<Turn>) -> Marks {
+    Marks::exact(cos_mark(arg, turn))
+}
+
+fn cos_mark(arg: Held, turn: Option<Turn>) -> Option<Exact> {
     table_answer(arg, row_of(turn)?.cos)
 }
 
 /// `tan` の答えの印。**表から返すのは実数の引数だけ**(複素は sin/cos の商で、
 /// 実部は表の値にならない)ので、**虚部が 0 でなければ印なし**。
-pub fn tan(arg: Held, turn: Option<Turn>) -> Option<Exact> {
+pub fn tan(arg: Held, turn: Option<Turn>) -> Marks {
+    Marks::exact(tan_mark(arg, turn))
+}
+
+fn tan_mark(arg: Held, turn: Option<Turn>) -> Option<Exact> {
     if arg.value.im != 0.0 {
         return None;
     }
@@ -934,6 +1193,296 @@ mod tests {
         for bad in ["1/0", "1", "a/2", "1/2/3"] {
             let text =
                 format!(r#"{{"value":{{"re":0.5,"im":0.0}},"exact":{{"q":"{bad}","pi":false}}}}"#);
+            assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
+        }
+    }
+
+    // ---- √ の印(1.2.3 設計書 §3.1・§3.4) ----
+
+    #[test]
+    fn a_held_without_a_root_reads_as_no_root() {
+        // **9 の形(`root` の欄が無い)も読める**(`#[serde(default)]`)。
+        let held: Held =
+            serde_json::from_str(r#"{"value":{"re":0.5,"im":0.0},"exact":{"q":"1/2","pi":false}}"#)
+                .unwrap();
+        assert_eq!(held.root, None);
+        assert_eq!(held.exact, q(1, 2, false));
+    }
+
+    fn root_of(tokens: &[&str]) -> Option<(Rational, Rational)> {
+        state_after(tokens)
+            .current
+            .root
+            .map(|root| (root.c, root.r))
+    }
+
+    fn r(num: i128, den: i128) -> Rational {
+        Rational::from_ratio(num, den).unwrap()
+    }
+
+    #[test]
+    fn only_sqrt_makes_a_root_and_only_neg_carries_it() {
+        // **作るのは `√` だけ**(§3.2)。印 k=0 の `q > 0` から `(1, q)`。
+        assert_eq!(root_of(&["9", "sqrt"]), Some((r(1, 1), r(9, 1))));
+        assert_eq!(
+            root_of(&["0", "dot", "5", "sqrt"]),
+            Some((r(1, 1), r(1, 2)))
+        );
+        // **`+/−` は `(−c, r)` にして運ぶ。**
+        assert_eq!(root_of(&["2", "sqrt", "neg"]), Some((r(-1, 1), r(2, 1))));
+        assert_eq!(
+            root_of(&["2", "sqrt", "neg", "neg"]),
+            Some((r(1, 1), r(2, 1)))
+        );
+        // **不変: root が `Some` なら `exact` は `None`**(√ の答えは一般に無理数)。
+        for tokens in [&["9", "sqrt"][..], &["2", "sqrt", "neg"]] {
+            assert_eq!(mark(tokens), None, "{tokens:?}");
+        }
+        // **ほかはすべて root を落とす**: 印の無い・k=1 の・0 の引数、×・÷・関数・桁落ち
+        // しない差、`=` の答え。
+        for tokens in [
+            &["0", "sqrt"][..],
+            &["pi", "sqrt"],
+            &["1", "exp", "4", "0", "sqrt"],
+            &["2", "sqrt", "mul", "2", "eq"],
+            &["2", "sqrt", "div", "2", "eq"],
+            &["2", "sqrt", "sin"],
+            &["2", "sqrt", "recip"],
+            &["2", "sqrt", "sqr"],
+            &["2", "sqrt", "add", "1", "eq"],
+            &["2", "sqrt", "sub", "1", "eq"],
+        ] {
+            assert_eq!(root_of(tokens), None, "{tokens:?}");
+        }
+    }
+
+    #[test]
+    fn the_square_of_a_root_is_its_rational_mark() {
+        // `x²` は root `(c, r)` を印 `(c²·r, k=0)` にする(§3.2)。`re` も印の丸めになる。
+        assert_eq!(mark(&["2", "sqrt", "sqr"]), q(2, 1, false));
+        assert_eq!(mark(&["2", "sqrt", "neg", "sqr"]), q(2, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "sqrt", "sqr"]), q(1, 2, false));
+        assert_eq!(state_after(&["2", "sqrt", "sqr"]).current.value.re, 2.0);
+        // **√0 は印 `(0, k=0)`**(root は `r > 0` だけ)。
+        assert_eq!(mark(&["0", "sqrt"]), q(0, 1, false));
+    }
+
+    #[test]
+    fn a_cancelling_difference_of_roots_is_exact_at_zero() {
+        // 分子 `A² − B²` が 0 なら答えは `(0, k=0)`(§3.3)。`√4 − 2` は門の内側で符号が逆。
+        for tokens in [
+            &["4", "sqrt", "sub", "2", "eq"][..],
+            &["2", "sqrt", "sub", "2", "sqrt", "eq"],
+            &["2", "sqrt", "neg", "add", "2", "sqrt", "eq"],
+        ] {
+            let state = state_after(tokens);
+            assert_eq!(state.current.exact, q(0, 1, false), "{tokens:?}");
+            assert_eq!(
+                state.current.value.re.to_bits(),
+                0.0_f64.to_bits(),
+                "{tokens:?}"
+            );
+        }
+        // 書き換えた答えには印も root も付かない(一般に無理数)。
+        let state = state_after(&["5", "sqrt", "sub", "2", "eq"]);
+        assert_eq!((state.current.exact, state.current.root), (None, None));
+    }
+
+    #[test]
+    fn outside_the_gate_the_difference_is_the_plain_f64_one() {
+        // **2 倍の門の番人**(§3.3)。`667/833 − √334` は A² が B² の 1/4 より小さいので
+        // 書き換えない——生の f64 は、印の丸め `667/833` と `√334` の f64 の差そのもの。
+        // 門を外すと書き換えの丸めが 1 回増えて 1 ulp 動き、真値から遠ざかる
+        // (相対 1.4e-17 → 1.9e-16)。10 桁の表示は動かないので engine_table では見えない。
+        let state = state_after(&[
+            "6", "6", "7", "div", "8", "3", "3", "eq", "sub", "3", "3", "4", "sqrt", "eq",
+        ]);
+        let plain = r(667, 833).to_f64() - 334.0_f64.sqrt();
+        assert_eq!(state.current.value.re.to_bits(), plain.to_bits());
+    }
+
+    #[test]
+    fn the_gate_factor_is_two_on_both_sides() {
+        // **門の幅そのものの番人**(§3.3)。上の番人は門を外したときしか鳴らない——
+        // 係数 4(大きさで 2 倍)を 2 にも 8 にも動かしても緑のままだった。**どの件も、
+        // 書き換えた f64 と素の f64 の差が 1 ulp 以上ある**(下の `assert_ne!`)ので、
+        // どちらの道を通ったかが生のビットで分かる。
+        //
+        // **門は 2 本の不等式**(`below = 4B² − A² ≥ 0` と `above = 4A² − B² ≥ 0`。A は左の項、
+        // B は右の項)で、**係数も比較もそれぞれ別に動きうる**ので、それぞれの境目に置く。
+        // - `below` の境目(A² ≤ 4B²): `√399 − 10`(4·100 − 399 = 1)と `26 − √170`
+        //   (4·170 − 676 = 4)が内側、`√401 − 10`(−1)と `26 − √167`(−8)が外側。
+        // - `above` の境目(B² ≤ 4A²): 上の鏡像。`10 − √399`(4·100 − 399 = 1)と
+        //   `√170 − 26`(4)が内側、`10 − √401`(−1)と `√167 − 26`(−8)が外側。
+        // - **等号**(門は `≤` で、境目ちょうどは内側): `√2 − √0.5` は `below = 0`、
+        //   `√0.5 − √2` は `above = 0` で、どちらも書き換える。すぐ外の
+        //   `√2 − √0.4999`(`below` = −0.0004)と `√0.4999 − √2`(`above` = −0.0004)は書き換えない。
+        // 片方の係数を 2 に狭めるとその側の内側が素の f64 になって赤、8 に広げるとその側の
+        // 外側が書き換わって赤。片方の比較を `<` にすると、その側の等号の件が赤
+        // (2026-10-08、片側ずつの変異で確認)。
+        let fold = |keys: &[&str]| state_after(keys).current.value.re;
+        // (表示, 答え, 分子 A² − B² の f64, |A| + |B|, 素の f64, 門の内側か)
+        // 分子は engine と同じく**有理数で引いてから** f64 にする(`0.4999` は f64 で引くと丸めが乗る)。
+        let (s2, s05, s04999) = (2.0_f64.sqrt(), 0.5_f64.sqrt(), 0.4999_f64.sqrt());
+        let cases = [
+            (
+                "√399 − 10",
+                fold(&["3", "9", "9", "sqrt", "sub", "1", "0", "eq"]),
+                299.0,
+                399.0_f64.sqrt() + 10.0,
+                399.0_f64.sqrt() - 10.0,
+                true,
+            ),
+            (
+                "√401 − 10",
+                fold(&["4", "0", "1", "sqrt", "sub", "1", "0", "eq"]),
+                301.0,
+                401.0_f64.sqrt() + 10.0,
+                401.0_f64.sqrt() - 10.0,
+                false,
+            ),
+            (
+                "26 − √170",
+                fold(&["2", "6", "sub", "1", "7", "0", "sqrt", "eq"]),
+                506.0,
+                26.0 + 170.0_f64.sqrt(),
+                26.0 - 170.0_f64.sqrt(),
+                true,
+            ),
+            (
+                "26 − √167",
+                fold(&["2", "6", "sub", "1", "6", "7", "sqrt", "eq"]),
+                509.0,
+                26.0 + 167.0_f64.sqrt(),
+                26.0 - 167.0_f64.sqrt(),
+                false,
+            ),
+            (
+                "10 − √399",
+                fold(&["1", "0", "sub", "3", "9", "9", "sqrt", "eq"]),
+                -299.0,
+                10.0 + 399.0_f64.sqrt(),
+                10.0 - 399.0_f64.sqrt(),
+                true,
+            ),
+            (
+                "10 − √401",
+                fold(&["1", "0", "sub", "4", "0", "1", "sqrt", "eq"]),
+                -301.0,
+                10.0 + 401.0_f64.sqrt(),
+                10.0 - 401.0_f64.sqrt(),
+                false,
+            ),
+            (
+                "√170 − 26",
+                fold(&["1", "7", "0", "sqrt", "sub", "2", "6", "eq"]),
+                -506.0,
+                170.0_f64.sqrt() + 26.0,
+                170.0_f64.sqrt() - 26.0,
+                true,
+            ),
+            (
+                "√167 − 26",
+                fold(&["1", "6", "7", "sqrt", "sub", "2", "6", "eq"]),
+                -509.0,
+                167.0_f64.sqrt() + 26.0,
+                167.0_f64.sqrt() - 26.0,
+                false,
+            ),
+            (
+                "√2 − √0.5",
+                fold(&["2", "sqrt", "sub", "0", "dot", "5", "sqrt", "eq"]),
+                1.5,
+                s2 + s05,
+                s2 - s05,
+                true,
+            ),
+            (
+                "√0.5 − √2",
+                fold(&["0", "dot", "5", "sqrt", "sub", "2", "sqrt", "eq"]),
+                -1.5,
+                s05 + s2,
+                s05 - s2,
+                true,
+            ),
+            (
+                "√2 − √0.4999",
+                fold(&[
+                    "2", "sqrt", "sub", "0", "dot", "4", "9", "9", "9", "sqrt", "eq",
+                ]),
+                r(15001, 10000).to_f64(),
+                s2 + s04999,
+                s2 - s04999,
+                false,
+            ),
+            (
+                "√0.4999 − √2",
+                fold(&[
+                    "0", "dot", "4", "9", "9", "9", "sqrt", "sub", "2", "sqrt", "eq",
+                ]),
+                -r(15001, 10000).to_f64(),
+                s04999 + s2,
+                s04999 - s2,
+                false,
+            ),
+        ];
+        // 最初の 1 件で止めない——どの側が鳴ったかを全部印字する。
+        let mut wrong: Vec<String> = Vec::new();
+        for (label, shown, numerator, sum, plain, inside) in cases {
+            let rewritten: f64 = numerator / sum;
+            assert_ne!(
+                rewritten.to_bits(),
+                plain.to_bits(),
+                "{label}: not a witness"
+            );
+            let want = if inside { rewritten } else { plain };
+            if shown.to_bits() != want.to_bits() {
+                wrong.push(format!("{label}: inside={inside}, shown {shown:e}"));
+            }
+        }
+        assert_eq!(wrong, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_rewritten_quotient_never_leaves_a_negative_zero() {
+        // `cancel` の答えも、ほかの二項演算と同じく `finalize` を通す(−0.0 を +0.0 に)。
+        // **キー列では作れない**: 分子は 0 でなければ |m/d| ≥ 1/d ≈ 6e-39(i128)、分母は
+        // |A| + |B| ≲ 2.6e19(A² が i128 に収まる)なので、商は f64 の最小の正の数に届かない。
+        // そこで値を印と食い違わせた `Held` を直接渡し、商を下に溢れさせる。
+        // A² = 1(正)、B² = (1 + 10⁻¹⁸)²(負)、分子 ≈ −2e-18、分母 ≈ 1e308 → 商は −0.0。
+        let a = Held {
+            value: Value::real(1e308),
+            exact: None,
+            root: Some(Root {
+                c: Rational::ONE,
+                r: Rational::ONE,
+            }),
+        };
+        let b = Held {
+            value: Value::real(-1.0),
+            exact: q(-1_000_000_000_000_000_001, 1_000_000_000_000_000_000, false),
+            root: None,
+        };
+        let (value, _) = cancel(a, b, false).unwrap();
+        assert_eq!(value.re.to_bits(), 0.0_f64.to_bits(), "{:e}", value.re);
+    }
+
+    #[test]
+    fn a_root_crosses_serde_as_text_and_refuses_a_non_positive_radicand() {
+        let text = r#"{"value":{"re":1.0,"im":0.0},"exact":null,"root":{"c":"2/4","r":"3/1"}}"#;
+        let held: Held = serde_json::from_str(text).unwrap();
+        let root = held.root.unwrap();
+        assert_eq!(root.c, Rational::from_ratio(1, 2).unwrap());
+        assert_eq!(root.r, Rational::from_ratio(3, 1).unwrap());
+        let json = serde_json::to_string(&held).unwrap();
+        assert!(json.contains(r#""root":{"c":"1/2","r":"3/1"}"#), "{json}");
+        let back: Held = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, held);
+        // **`r > 0` でなければ拒む**(`RootWire`)。読めない文字列も拒む。
+        for bad in ["0/1", "-2/1", "1/0", "a/2"] {
+            let text = format!(
+                r#"{{"value":{{"re":1.0,"im":0.0}},"exact":null,"root":{{"c":"1/1","r":"{bad}"}}}}"#
+            );
             assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
         }
     }

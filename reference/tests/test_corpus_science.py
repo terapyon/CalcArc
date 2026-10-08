@@ -913,17 +913,24 @@ def test_the_overflow_neighbourhood_is_covered_without_the_error_shard() -> None
     assert combinatorics["unmet_real_cells"] == ["combinatorics/path=domain"]
 
 
-def test_the_cancellation_cuts_are_the_shards_own_tolerance() -> None:
+def test_the_cancellation_cut_is_within_a_decade_of_the_declared_tolerance() -> None:
     """**切れ目が私の作った数でないことを、実物で見る。**
 
-    `corpus_science` は生成器を import しないので、`CANCELLATION_TOLERANCE_*`
-    は**写し**である。**写しは片方だけ直した日にずれる**ので、
-    **シャードが `tolerance` として書き出している数と突き合わせる。**
+    **2026-10-08 に許容を 5e-10 へ締めたので、理由を u/r に替えた。** それまで
+    `CANCELLATION_TOLERANCE_REL` はシャードの `tolerance.rel` の**写し**で、
+    ここは等しさを見ていた。**今の切れ目 `CANCELLATION_NEAR_CUT` は「近さの比が
+    r の 2 数を f64 で素朴に引いたときの相対誤差 u/r（u = 2^-53）が、許容に迫る
+    近さ」である。** だから**シャードが書き出している許容との関係**を見る——
+    u/r が許容の 1/10 より大きく、許容以下。**許容 ∈ [u/CUT, 10·u/CUT)**
+    （切れ目 1e-6 なら [1.1e-10, 1.1e-9)）。許容を 1e-6 に戻す・切れ目を 1e-5・
+    1e-7 に動かすと偽になる（2e-10・1e-9 のような小さな動きは見ない。
+    (1e-9, 1e-6) や (5e-10, 5e-7) も満たす）。
     """
     declared = json.loads((CORPUS / "cancellation-000.json").read_text(encoding="utf-8"))[
         "tolerance"
     ]
-    assert declared["rel"] == corpus_science.CANCELLATION_TOLERANCE_REL
+    naive = 2.0**-53 / corpus_science.CANCELLATION_NEAR_CUT
+    assert declared["rel"] / 10 < naive <= declared["rel"]
     # **`abs` は借りない。** あれは生成器のコメントが「表示分解能」と書いている
     # **絶対量**で、**無次元の比と比べてよい数ではない**（2026-08-30 のレビュー
     # 指摘。**同じ日に 2 度目の「借りた数の量が違う」**）。
@@ -941,16 +948,17 @@ def test_the_cancellation_bands_are_pinned_against_the_real_shard() -> None:
 
     | 動かしたもの | 落ちるもの |
     |---|---|
-    | `CANCELLATION_TOLERANCE_REL` `1e-6 → 1e-5` | **写しの一致テストだけ**。このテストは落ちない |
+    | `CANCELLATION_NEAR_CUT` `1e-6 → 1e-5` | **切れ目の関係のテストだけ**。このテストは落ちない |
     | `CANCELLATION_FULL_LOSS` `→ 1e-12` | 写しの一致と、**記録と観測の突合** |
 
     **このテストは、保存された `levels` を数える。** だから**切れ目を動かしても、
     再生成するまで動かない。** **守っているのは「再生成後の分布」であって、
     切れ目そのものではない。**
 
-    **切れ目を守っているのは 2 つ**——**写しの一致**（`rel` はシャードの宣言と、
-    `FULL_LOSS` は有効数字 10 桁と）と、**記録と観測の突合**（木とキーで別々に
-    比を計算するので、片方だけ動かせば鳴る）。
+    **切れ目を守っているのは 2 つ**——**数との関係**（`NEAR_CUT` はシャードの許容と
+    u/r の関係で、`FULL_LOSS` は有効数字 10 桁と。**2026-10-08 に許容を 5e-10 へ
+    締めたので、`NEAR_CUT` の理由を u/r に替えた**——それまでは許容の写しの一致）と、
+    **記録と観測の突合**（木とキーで別々に比を計算するので、片方だけ動かせば鳴る）。
 
     **ここが要るのは、その 2 つが見ない側**である——**分布が偏っても、
     切れ目が同じなら上の 2 つは緑**であり、**帯が 1 つ空になったことは

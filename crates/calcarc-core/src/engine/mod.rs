@@ -10,8 +10,10 @@ pub use key::Key;
 pub use spell::{spell, spell_line};
 pub use state::{EngineState, MAX_ENTRY_LEN};
 
+use crate::expr::rational::{Rational, ratio_to_f64};
 use crate::scientific::{self, Turn};
 use crate::{AngleMode, CalcError, CalcResult, Value};
+use exact::Marks;
 use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBase};
 
 /// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
@@ -262,19 +264,29 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 /// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.2 設計書 §3.4)。
 /// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
 /// §5.1。`Held::settled`)。
+///
+/// **`+`・`−` は、桁落ちする √ の和・差を先に書き換える**(1.2.3 設計書 §3.3、
+/// `exact::cancel`)。√a と √b を同時に読めるのはこの段だけである。書き換えなければ
+/// 今の f64 の和と印。
 fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
     let (a, b) = (lhs.value, rhs.value);
-    let (value, exact) = match op {
-        BinOp::Add => (a.checked_add(b)?, exact::add(lhs, rhs)),
-        BinOp::Sub => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
+    let (value, marks) = match op {
+        BinOp::Add => match exact::cancel(lhs, rhs, false) {
+            Some(rewritten) => rewritten,
+            None => (a.checked_add(b)?, exact::add(lhs, rhs)),
+        },
+        BinOp::Sub => match exact::cancel(lhs, rhs, true) {
+            Some(rewritten) => rewritten,
+            None => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
+        },
         BinOp::Mul => (a.checked_mul(b)?, exact::mul(lhs, rhs)),
         BinOp::Div => (a.checked_div(b)?, exact::div(lhs, rhs)),
         // xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
-        BinOp::Pow => (scientific::pow(a, b)?, None),
-        BinOp::Npr => (scientific::npr(a, b)?, None),
-        BinOp::Ncr => (scientific::ncr(a, b)?, None),
+        BinOp::Pow => (scientific::pow(a, b)?, Marks::NONE),
+        BinOp::Npr => (scientific::npr(a, b)?, Marks::NONE),
+        BinOp::Ncr => (scientific::ncr(a, b)?, Marks::NONE),
     };
-    Ok(Held::settled(value, exact))
+    Ok(Held::settled(value, marks))
 }
 
 /// 入力中のバッファを確定して `current` に移す。
@@ -497,7 +509,7 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
 /// **印の規則 `mark` は呼び出し側がキーごとに渡す**(1.2.2 設計書 §3.4「書き方」)。
 /// 値の閉包 `f` は印を見ない——`f` の中に印の規則を書かない。`mark` は**掛ける前の**
 /// 値(印つき)を受け取る。
-fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Option<Exact>) -> CalcResult<()>
+fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Marks) -> CalcResult<()>
 where
     F: FnOnce(Value) -> CalcResult<Value>,
 {
@@ -516,7 +528,7 @@ where
 fn apply_trig(
     state: &mut EngineState,
     f: fn(Value, AngleMode, Option<Turn>) -> CalcResult<Value>,
-    mark: fn(Held, Option<Turn>) -> Option<Exact>,
+    mark: fn(Held, Option<Turn>) -> Marks,
 ) -> CalcResult<()> {
     commit_entry(state)?;
     let mode = state.angle;
@@ -524,6 +536,69 @@ fn apply_trig(
     let turn = exact::turn(before, mode);
     state.current = Held::settled(f(before.value, mode, turn)?, mark(before, turn));
     Ok(())
+}
+
+/// 対数の底(`apply_log`)。
+#[derive(Debug, Clone, Copy)]
+enum LogBase {
+    E,
+    Ten,
+}
+
+/// 対数の遷移(1.2.3 設計書 §1.1)。`apply_unary` と同じく入力中の値を確定して掛ける。
+///
+/// **`apply_unary` の `f` は `Value` しか受け取らない**——1 に近い引数で `log1p` を選ぶには
+/// 印を見る必要がある。`apply_unary` を広げると印を読まないほかの後置関数の呼び方まで
+/// 変わるので、`apply_trig` と同じく専用の遷移を 1 つ置く。順は:
+///
+/// 1. **今の `scientific::ln`・`log10` を先に呼ぶ**——定義域の誤り(`x ≤ 0`・複素)は
+///    今と同じ道で出る。
+/// 2. 引数が 1 の近くなら(`ln_near_one`)、その値で置き換える。`log` は `× LOG10_E`。
+/// 3. **印は落とす**(`ln` の答えは一般に無理数。§3.4 の `dropped`)。
+///
+/// **`1 ln` の答え 0 にも `(0, k=0)` の印を付けない**(§1.4 の注記。実行役の判断)——
+/// `0 eˣ`・`1 √`・RAD の `1 atan`(π/4)など、ほかの「落とす」関数の厳密な点にも
+/// 印を付けていない。`ln` の 1 点だけに付けると「落とす関数は印を落とす」が崩れる。
+fn apply_log(state: &mut EngineState, base: LogBase) -> CalcResult<()> {
+    commit_entry(state)?;
+    let before = state.current;
+    let value = match base {
+        LogBase::E => scientific::ln(before.value)?,
+        LogBase::Ten => scientific::log10(before.value)?,
+    };
+    let value = match (ln_near_one(before), base) {
+        (Some(ln), LogBase::E) => Value::real(ln).finalize()?,
+        (Some(ln), LogBase::Ten) => Value::real(ln * std::f64::consts::LOG10_E).finalize()?,
+        (None, _) => value,
+    };
+    state.current = Held::settled(value, exact::dropped(before));
+    Ok(())
+}
+
+/// **1 に近い引数の自然対数**を `log1p(q − 1)` で取る(1.2.3 設計書 §1.2・§1.3)。
+/// 印が k=0 で、虚部が 0 で、**`1/2 ≤ q ≤ 3/2`** のときだけ `Some`。
+///
+/// - **`q − 1` は有理数で引いてから f64 にする**(`ratio_to_f64`、正しく丸める)。
+///   f64 で `q − 1.0` と引くと、引く前の丸め(相対 1.1e-16)が答え(1e-7 級)に対して
+///   増幅され、直しの意味が無くなる(§1.3。単体テストがビット一致を見張る)。
+/// - **範囲を 1 の近くに絞る**——桁落ちが起きるのは 1 の近くだけで、常に `log1p` を
+///   使うと 1 から遠い引数で遠ざかる値が出る(試作の実測。§1.2)。
+/// - **引き算が溢れたら `None`**——今の f64 の答えに戻る。エラーにはしない(§1.4)。
+///   範囲の内側では `|n − d| ≤ d` なので溢れないが、判定より先に引くのでここを通る。
+fn ln_near_one(arg: Held) -> Option<f64> {
+    if arg.value.im != 0.0 {
+        return None;
+    }
+    let mark = arg.exact?;
+    if mark.pi() {
+        return None;
+    }
+    let (m, d) = mark.q().checked_sub(Rational::ONE).ok()?.parts();
+    // `q − 1 = m/d`(d > 0)。`|q − 1| ≤ 1/2` ⟺ `2|m| ≤ d` ⟺ `|m| ≤ ⌊d/2⌋`(`|m|` は整数)。
+    if m.unsigned_abs() > d.unsigned_abs() / 2 {
+        return None;
+    }
+    Some(ratio_to_f64(m, d)?.ln_1p())
 }
 
 /// キー 1 つ分の遷移。Err を返した場合、呼び出し側がエラー状態にする。
@@ -581,7 +656,7 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Eq => finish(state)?,
         Key::LParen => open_paren(state),
         Key::RParen => close_paren(state)?,
-        Key::Sqrt => apply_unary(state, scientific::sqrt, exact::dropped)?,
+        Key::Sqrt => apply_unary(state, scientific::sqrt, exact::sqrt)?,
         Key::Sqr => apply_unary(state, scientific::sqr, exact::sqr)?,
         Key::Neg => {
             // +/− は 2 つの階層で働く(設計書 §2)。指数入力中は指数の符号、
@@ -597,8 +672,8 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Sin => apply_trig(state, scientific::sin_at, exact::sin)?,
         Key::Cos => apply_trig(state, scientific::cos_at, exact::cos)?,
         Key::Tan => apply_trig(state, scientific::tan_at, exact::tan)?,
-        Key::Ln => apply_unary(state, scientific::ln, exact::dropped)?,
-        Key::Log10 => apply_unary(state, scientific::log10, exact::dropped)?,
+        Key::Ln => apply_log(state, LogBase::E)?,
+        Key::Log10 => apply_log(state, LogBase::Ten)?,
         Key::ExpE => apply_unary(state, scientific::exp_e, exact::dropped)?,
         Key::Recip => apply_unary(state, scientific::recip, exact::recip)?,
         Key::Asin => {
@@ -691,6 +766,63 @@ mod tests {
         // DivisionByZero——**開いている組が無くても、割り算のほうが先に失敗する。**
         let mut state = state_after(&["3", "div", "0"]);
         assert_eq!(close_paren(&mut state), Err(CalcError::DivisionByZero));
+    }
+
+    /// **F2 の番人**(1.2.3 設計書 §1.3、条件 2): `1.000000117 ln` の生の値は、
+    /// **`117e-9` を正しく丸めた f64 の `ln_1p` とビット一致する**。
+    ///
+    /// `q − 1` を有理数で引いてから f64 にしていることを見張る——f64 で
+    /// `1.000000117 − 1.0` と引くと、引く前の丸めが残って一致しない(下の対照)。
+    /// **`1.17e-7` のリテラルは Rust の解析が正しく丸める。**
+    #[test]
+    fn ln_near_one_is_log1p_of_the_rationally_subtracted_decimal() {
+        let tokens = [
+            "1", "dot", "0", "0", "0", "0", "0", "0", "1", "1", "7", "ln",
+        ];
+        let state = state_after(&tokens);
+        assert_eq!(state.error, None);
+        let re = state.current.value.re;
+        assert_eq!(re.to_bits(), 1.17e-7_f64.ln_1p().to_bits());
+        // **対照**: f64 で引いた道と、f64 の `ln` は、どちらも別のビットになる
+        // (この単体テストが「どの道でも同じ値」を見て緑になっていない)。
+        assert_ne!(re.to_bits(), (1.000000117_f64 - 1.0).ln_1p().to_bits());
+        assert_ne!(re.to_bits(), 1.000000117_f64.ln().to_bits());
+    }
+
+    /// **F2 の範囲の番人**(1.2.3 設計書 §1.2): `1/2 ≤ q ≤ 3/2` の外では、生の値は今の
+    /// f64 の `ln`・`log10` のビットのまま。**10 桁の表示はどちらの道でも同じ**なので、
+    /// engine_table の対照(`3 ln`・`0.4 ln`)はこの範囲を見張れない。ここで生の値を見る。
+    ///
+    /// 標本は上側(`3`)と下側(`0.3`・`0.4`)で、**`log1p(q − 1)` の道ならビットが変わる
+    /// もの**だけを選んだ(下の対照で主張する)。
+    #[test]
+    fn ln_and_log_away_from_one_keep_the_f64_bits() {
+        let cases: [(&[&str], f64, f64); 3] = [
+            (&["3"], 3.0, 2.0),
+            (&["0", "dot", "3"], 0.3, -0.7),
+            (&["0", "dot", "4"], 0.4, -0.6),
+        ];
+        let mut compared = 0;
+        for (typed, x, x_minus_one) in cases {
+            for (key, f64_way, log1p_way) in [
+                ("ln", x.ln(), x_minus_one.ln_1p()),
+                (
+                    "log10",
+                    x.log10(),
+                    x_minus_one.ln_1p() * std::f64::consts::LOG10_E,
+                ),
+            ] {
+                if f64_way.to_bits() == log1p_way.to_bits() {
+                    continue;
+                }
+                let tokens: Vec<&str> = typed.iter().copied().chain([key]).collect();
+                let re = state_after(&tokens).current.value.re;
+                assert_eq!(re.to_bits(), f64_way.to_bits(), "{tokens:?}");
+                compared += 1;
+            }
+        }
+        // **何も比べずに緑にならない**: 上側と下側の両方を ln・log10 で比べた。
+        assert_eq!(compared, 5);
     }
 
     #[test]

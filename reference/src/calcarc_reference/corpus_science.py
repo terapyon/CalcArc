@@ -120,8 +120,10 @@ INVERSE_TRIG_BANDS = ("inside", "boundary", "outside")
 #: **★ 同じ日に、`overflow_near` では切れ目を引くことを受け入れながら、
 #: ここでは「引けない」と書いていた。基準が非対称だった。**
 #:
-#: **切れ目はシャード自身が宣言している許容から引く**——下の
-#: `CANCELLATION_TOLERANCE_*`。**私が作った数ではない。**
+#: **切れ目は数から引く**——下の `CANCELLATION_FULL_LOSS`（表示の有効数字）と
+#: `CANCELLATION_NEAR_CUT`（素朴な引き算の誤差 u/r）。**私が作った数ではない。**
+#: （**2026-10-08 に許容を 5e-10 へ締めたので、理由を u/r に替えた**。それまでは
+#: 「シャードが宣言している許容」から引いていた。）
 CANCELLATION_BANDS = ("mild", "near_tolerance", "severe")
 
 #: **表示の有効数字**（`docs/numerical-policy.md`「有効数字 10 桁」）。
@@ -137,7 +139,8 @@ DISPLAY_SIGNIFICANT_DIGITS = 10
 #: **【訂正 2026-08-30・3 度目】ここには `abs 5e-10` を使っていた。次元が合わない。**
 #: シャードが宣言する `tolerance` の `abs` は、生成器のコメントが
 #: **「表示分解能」**と書いているとおり**結果の絶対誤差の単位を持つ数**である。
-#: **比と比べてよい数ではなかった。** `rel 1e-6` のほうは比なので整合する。
+#: **比と比べてよい数ではなかった。** `rel 1e-6` のほうは比なので整合する
+#: （**2026-10-08 に許容が 5e-10 になったので、上の切れ目は許容から切り離した**）。
 #:
 #: **これは同じ日に 2 度目の「借りた数の量が違う」である**——1 度目は
 #: `numerical-policy.md` の `1e-6` が Loan の月額の話だった件
@@ -149,31 +152,40 @@ DISPLAY_SIGNIFICANT_DIGITS = 10
 #: - `CANCELLATION_FULL_LOSS` = `10 ** -DISPLAY_SIGNIFICANT_DIGITS` = `1e-10`。
 #:   **電卓が表示する有効数字は 10 桁**（`docs/numerical-policy.md`）なので、
 #:   **比がここを下回ると、表示できる桁が 1 つも残らない**
-#: - `CANCELLATION_TOLERANCE_REL` = `1e-6`。**シャードが宣言している相対許容**
-#:   ——**ここを下回ると、合否を決めているのは相対許容のほうになる**
+#: - `CANCELLATION_NEAR_CUT` = `1e-6`。**近さの比が r の 2 数を f64 でそのまま
+#:   引くと、相対誤差はおよそ u/r**（u = 2^-53 ≈ 1.11e-16）。r = 1e-6 で
+#:   約 1.11e-10——**シャードの許容 5e-10 の約 1/5**。**ここを下回ると、素朴な
+#:   引き算の誤差が許容に迫るか越える**（√ の差の書き換え F1・1 に近い ln の
+#:   log1p F2 が要るのはこの帯である）。**上なら許容の 1/5 未満に収まる**
 #:
 #: **実データ**（2026-08-30 実測、2,001 件）:
 #:
 #: ```
 #: r < 1e-10            severe            571 件   表示できる桁が残らない
-#: 1e-10 <= r < 1e-6    near_tolerance  1,429 件   相対許容が合否を決める帯
-#: r >= 1e-6            mild                1 件   許容の中に収まる
+#: 1e-10 <= r < 1e-6    near_tolerance  1,429 件   素朴な引き算が許容に迫る帯
+#: r >= 1e-6            mild                1 件   素朴でも許容の 1/5 未満
 #: ```
 #:
 #: **`mild` は最初 0 件だった**——**このシャードは「桁がほとんど落ちない
 #: 引き算」を 1 件も作っていなかった。対照が無かった。**
 CANCELLATION_FULL_LOSS = 10.0**-DISPLAY_SIGNIFICANT_DIGITS
 
-#: **シャードが `tolerance.rel` として宣言している数の写し。**
-#: **一致はテストが見る**（`test_the_cancellation_cuts_are_the_shards_own_tolerance`）。
-CANCELLATION_TOLERANCE_REL = 1e-6
+#: **素朴な引き算の誤差 u/r が、シャードの許容に迫る近さ。**
+#:
+#: **2026-10-08 に許容を 5e-10 へ締めたので、理由を u/r に替えた。** 1.2.2 までは
+#: `CANCELLATION_TOLERANCE_REL` という名前で、シャードの `tolerance.rel`（当時 1e-6）の
+#: **写し**だった。**許容と同じ数である必要はもう無い**——数は 1e-6 のまま、
+#: 帯の分布（571 / 1,429 / 2）も動かない。**許容との関係はテストが見る**
+#: （`test_the_cancellation_cut_is_within_a_decade_of_the_declared_tolerance`。
+#: `rel / 10 < u / CUT <= rel`——u/r が許容の 1/10 から 1 倍のあいだに在ること）。
+CANCELLATION_NEAR_CUT = 1e-6
 
 
 def cancellation_band(ratio: float) -> str:
-    """**近さの比 → 帯。** 切れ目はシャードが宣言している許容そのもの。"""
+    """**近さの比 → 帯。** 切れ目は表示の有効数字と、素朴な引き算の誤差 u/r。"""
     if ratio < CANCELLATION_FULL_LOSS:
         return "severe"
-    return "near_tolerance" if ratio < CANCELLATION_TOLERANCE_REL else "mild"
+    return "near_tolerance" if ratio < CANCELLATION_NEAR_CUT else "mild"
 
 
 #: 相殺の形。**生成器が名指ししている 4 つ**（`CANCELLATION_SHAPES`）。

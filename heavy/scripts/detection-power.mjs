@@ -76,6 +76,8 @@ export const ALL_SHARDS = [
  * そのシャードの総件数)。率で持つのは、コーパスが増えても表を書き換えず
  * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
  * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
+ * 床が未設定の期待シャードは 1 件以上で見る（1.2.3 の 3 本と display-digits の
+ * cancellation。GitHub の heavy:power の後に床を置く）。
  *
  * 値は 2026-08-19（Task 7）に `pnpm heavy:power` を実走して確定した。
  * 反応件数は 2026-08-17 の走行（設計書 §4.6）と 1 件も違わなかった——
@@ -89,6 +91,14 @@ export const MUTATIONS = [
     file: "crates/calcarc-core/src/numeric/format.rs",
     from: "pub const DISPLAY_DIGITS: usize = 10;",
     to: "pub const DISPLAY_DIGITS: usize = 9;",
+    // **1.2.3 から値シャードすべてが反応する見込み(2026-10-08)。**
+    // `cancellation-000.json` の `tolerance.rel` を 1e-6 から 5e-10 に締めた
+    // (設計書 2026-10-08-precision-fixes §5.2)ので、下の「反応しない理由」は
+    // もう成り立たない。試作の表示から計算して 2,002 件中 586 件が 5e-10 を
+    // 超える(設計書 §5.2)。**`heavy:power` はまだ回していない——床は走行で
+    // 測ってから置く。** 床が無いシャードは `verdictFor` が「1 件以上」で見る。
+    //
+    // 以下は 1.2.2 までの記録(締める前):
     // **値シャードすべて、ではない。** 値シャードは 9 枚あり、反応するのは
     // 8 枚。`cancellation-000.json` だけが反応しない。名前ではなく実測で書く。
     //
@@ -130,6 +140,8 @@ export const MUTATIONS = [
       // 9 桁に落ちれば文字列が変わる。`0`・`±1`・`±0.5` と極の行は変わらない。
       // 296 件中 164 件(55.4%)、下限はその約 12% 下。
       "rad-pi-display-000.json (displays)",
+      // **`cancellation-000.json` も反応する見込み(2026-10-08、上の註)。** 床は未設定。
+      "cancellation-000.json (values)",
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
@@ -720,6 +732,50 @@ export const MUTATIONS = [
     // 裏づけている。
     expectShards: ["operator-correction-000.json (values)"],
     minRate: { "operator-correction-000.json (values)": 0.2 },
+  },
+
+  // **ここから 1.2.3 の 3 つの直しを外す変異(設計書 2026-10-08-precision-fixes
+  // §5.4)。** 期待するシャードは、手元のネイティブ実行で各変異を当てて
+  // 表示を読み直した相対誤差が 5e-10 を超えた件を数えたもの(2026-10-08)。
+  // 数は設計書 §5.2 の試作の数と同じだった。**`heavy:power` はまだ回していない
+  // ——床は GitHub の走行で測ってから置く。** 床が無いあいだ、`verdictFor` は
+  // 「期待したシャードだけが反応し、各 1 件以上」を見る。
+  {
+    id: "f1-rationalize-off",
+    what: "√ の和・差の書き換えをやめる(1.2.3 の F1 を外す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "    if !both_real(a, b) || (a.root.is_none() && b.root.is_none()) {",
+    to: "    if true || !both_real(a, b) || (a.root.is_none() && b.root.is_none()) {",
+    // `exact::cancel` の門を常に閉じる。`apply_binop` は `None` の枝(f64 の
+    // 和・差と印)に落ち、1.2.2 までの答えに戻る。
+    // **2,002 件中 532 件が真値の 10 桁と違い、521 件が 5e-10 を超える**
+    // (2026-10-08、ネイティブ)。他の 21 枚は 1 件も動かない。
+    expectShards: ["cancellation-000.json (values)"],
+  },
+  {
+    id: "f2-log1p-off",
+    what: "1 に近い ln・log を log1p で取るのをやめる(1.2.3 の F2 を外す)",
+    file: "crates/calcarc-core/src/engine/mod.rs",
+    from: "    let value = match (ln_near_one(before), base) {",
+    to: "    let value = match (ln_near_one(before).filter(|_| false), base) {",
+    // `ln_near_one` を呼んだまま答えを捨てる(関数を未使用にしない)。
+    // `apply_log` は f64 の `ln`・`log10` に戻る。
+    // **10 桁が違うのは 223 件、5e-10 を超えるのは 42 件**(2026-10-08、
+    // ネイティブ)——残りの 181 件は許容の網では見えず、Rust の
+    // `corpus_ten_digits.rs` が見る(設計書 §5.3)。
+    expectShards: ["cancellation-000.json (values)"],
+  },
+  {
+    id: "f3-degree-fold-off",
+    what: "DEG で表に載らない角を印のまま畳むのをやめる(1.2.3 の F3 を外す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "            (Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),",
+    to: "            (Some(mark), AngleMode::Deg) if !mark.pi && false => degree_fold(mark.q),",
+    // 畳む腕だけを止める(表から引く `degree_turn` は残る)。f64 の角に戻る。
+    // **typed の 1 件が 5e-10 を超える**(2026-10-08、ネイティブ。設計書
+    // §5.3 の試作では 1.2.2 まで上書きしていた typed-001490)。cancellation にも
+    // 10 桁の違いが 1 件出るが、相対誤差は 5e-10 の内側で、反応しない。
+    expectShards: ["typed-000.json (values)"],
   },
 ];
 

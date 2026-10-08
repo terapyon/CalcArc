@@ -51,3 +51,29 @@ fn a_round_tripped_marked_state_keeps_its_display() {
     assert_eq!(shown.main, "6.283185307");
     assert_eq!(render(&next).main, "6.283185307");
 }
+
+#[test]
+fn a_state_after_sqrt_comes_back_with_its_root() {
+    // **√ の印(1.2.3 設計書 §3.4)**。`root` の 2 つの有理数も文字列 `"num/den"` で渡る。
+    for keys in [&["2", "sqrt"][..], &["2", "sqrt", "neg"]] {
+        let state = state_after(keys);
+        // **root が付いていることを先に言う**——両方 None なら往復は何も確かめない。
+        assert!(state.current.root.is_some(), "{keys:?}");
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(
+            json["current"]["root"]["r"],
+            serde_json::json!("2/1"),
+            "{keys:?}"
+        );
+        let back: EngineState = serde_json::from_value(json).unwrap();
+        assert_eq!(back, state, "{keys:?}");
+    }
+    // 往復した root が書き換えに効く(`−` の後の √ と桁落ちする差)。
+    let state = state_after(&["9", "3", "1", "3", "3", "2", "3", "7", "3", "sqrt", "sub"]);
+    let back: EngineState = serde_json::from_value(serde_json::to_value(&state).unwrap()).unwrap();
+    let mut next = back;
+    for key in ["9", "3", "1", "3", "3", "2", "3", "7", "2", "sqrt", "eq"] {
+        next = reduce(&next, Key::from_token(key).expect("unknown key")).0;
+    }
+    assert_eq!(render(&next).main, "0.00001638391382");
+}

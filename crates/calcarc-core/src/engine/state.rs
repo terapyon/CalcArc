@@ -16,9 +16,11 @@ use crate::{AngleMode, CalcError, CalcResult, Value};
 ///    **`)` ごとに積み、DEL で 1 つ降ろす列**である。
 /// 9: `current`・`operands`・`ReplaceBase`・`ClosedGroup` の値が `Held`(値＋厳密な
 ///    正体の印)になった(1.2.2 設計書 §3.2・§6.3)。印の有理数は文字列 `"num/den"`。
+/// 10: `Held` に √ の印 `root`(`re == c × √r`)が入った(1.2.3 設計書 §3.1・§3.4)。
+///    `#[serde(default)]` なので 9 の形の `Held` も読めるが、**形が変わったので上げる**。
 /// 形を変えたら上げる——上げないと、旧い形の状態が届いたときの初期化が
 /// serde の解析失敗という事故として起き、意図した挙動と区別できなくなる。
-pub const STATE_SCHEMA: u32 = 9;
+pub const STATE_SCHEMA: u32 = 10;
 
 /// 入力欄に打ち込める最大文字数。
 ///
