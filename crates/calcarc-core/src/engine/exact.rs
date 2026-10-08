@@ -440,7 +440,7 @@ fn signed_square(a: Held) -> Option<(bool, Rational)> {
 ///   1 回増えるだけなので、門の外は今の f64 のまま(§3.3 の試作の実測)。
 /// - **両方が k=0 の印なら書き換えない**——そちらは `sub` の印が厳密に引く。
 /// - **i128 が溢れたら書き換えない**(§3.5)。
-pub fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
+pub(super) fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
     if !both_real(a, b) || (a.root.is_none() && b.root.is_none()) {
         return None;
     }
@@ -476,7 +476,7 @@ pub fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)> {
 /// `√`。**k=0 の印 `q > 0` なら root `(1, q)`**(1.2.3 設計書 §3.2)。**`Root` を作る
 /// 唯一の関数**である。`q = 0` なら `(0, k=0)`(√0 は 0)。k=1・負・印なしは落とす
 /// (負の引数は値の計算が `DomainError` にする。複素の引数も同じ)。
-pub fn sqrt(a: Held) -> Marks {
+pub(super) fn sqrt(a: Held) -> Marks {
     match a.exact {
         Some(mark) if mark.pi || mark.q.is_negative() => Marks::NONE,
         Some(mark) if mark.q.is_zero() => Marks::exact(Some(Exact::ZERO)),
