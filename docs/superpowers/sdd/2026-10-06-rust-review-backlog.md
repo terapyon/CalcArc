@@ -133,4 +133,5 @@
 
 ## 1.2.3 の床（heavy:power）
 
-- **【未消化 2026-10-08】** GitHub での 1.2.3 の初回 `heavy:power` の後に、`f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`・`display-digits/cancellation` の床（minRate）を置く。期待シャードは native の数から（F1 canc 521・F2 canc 42・F3 typed 1）。**その走行で確かめる**（試作・native の数は実装の数ではない）。設計書 `../specs/2026-10-08-precision-fixes-design.md` §5.2 から指される。
+- ~~**【未消化 2026-10-08】** GitHub での 1.2.3 の初回 `heavy:power` の後に、`f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`・`display-digits/cancellation` の床（minRate）を置く。期待シャードは native の数から（F1 canc 521・F2 canc 42・F3 typed 1）。**その走行で確かめる**（試作・native の数は実装の数ではない）。設計書 `../specs/2026-10-08-precision-fixes-design.md` §5.2 から指される。~~
+  **【消化 2026-10-09】** Heavy corpus の手動走行 `37769606857`（`f023930`、`heavy:power` を含む。緑）で 4 本とも native の数どおり（F1 521・F2 42・F3 1・display-digits/cancellation 585、すべて「期待どおり」）。床は既存と同じく約 12% 下: F1 `0.229`（459 件）・F2 `0.018`（37 件）・display-digits/cancellation `0.257`（515 件）。F3 は 1 件なので `minRate` を置かず `verdictFor` の「1 件以上」に委ねる（`periods-for-binary-search` と同じ）。
