@@ -12,6 +12,7 @@ pub use state::{EngineState, MAX_ENTRY_LEN};
 
 use crate::scientific::{self, Turn};
 use crate::{AngleMode, CalcError, CalcResult, Value};
+use exact::Marks;
 use state::{Backspace, BinOp, Buffer, ClosedGroup, Notation, OpToken, ReplaceBase};
 
 /// このキーを押すと、画面の数(打ちかけの数・手元の値)を**黙って捨てる**か
@@ -264,17 +265,17 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 /// §5.1。`Held::settled`)。
 fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
     let (a, b) = (lhs.value, rhs.value);
-    let (value, exact) = match op {
+    let (value, marks) = match op {
         BinOp::Add => (a.checked_add(b)?, exact::add(lhs, rhs)),
         BinOp::Sub => (a.checked_sub(b)?, exact::sub(lhs, rhs)),
         BinOp::Mul => (a.checked_mul(b)?, exact::mul(lhs, rhs)),
         BinOp::Div => (a.checked_div(b)?, exact::div(lhs, rhs)),
         // xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
-        BinOp::Pow => (scientific::pow(a, b)?, None),
-        BinOp::Npr => (scientific::npr(a, b)?, None),
-        BinOp::Ncr => (scientific::ncr(a, b)?, None),
+        BinOp::Pow => (scientific::pow(a, b)?, Marks::NONE),
+        BinOp::Npr => (scientific::npr(a, b)?, Marks::NONE),
+        BinOp::Ncr => (scientific::ncr(a, b)?, Marks::NONE),
     };
-    Ok(Held::settled(value, exact))
+    Ok(Held::settled(value, marks))
 }
 
 /// 入力中のバッファを確定して `current` に移す。
@@ -497,7 +498,7 @@ fn close_paren(state: &mut EngineState) -> CalcResult<()> {
 /// **印の規則 `mark` は呼び出し側がキーごとに渡す**(1.2.2 設計書 §3.4「書き方」)。
 /// 値の閉包 `f` は印を見ない——`f` の中に印の規則を書かない。`mark` は**掛ける前の**
 /// 値(印つき)を受け取る。
-fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Option<Exact>) -> CalcResult<()>
+fn apply_unary<F>(state: &mut EngineState, f: F, mark: fn(Held) -> Marks) -> CalcResult<()>
 where
     F: FnOnce(Value) -> CalcResult<Value>,
 {
@@ -516,7 +517,7 @@ where
 fn apply_trig(
     state: &mut EngineState,
     f: fn(Value, AngleMode, Option<Turn>) -> CalcResult<Value>,
-    mark: fn(Held, Option<Turn>) -> Option<Exact>,
+    mark: fn(Held, Option<Turn>) -> Marks,
 ) -> CalcResult<()> {
     commit_entry(state)?;
     let mode = state.angle;
