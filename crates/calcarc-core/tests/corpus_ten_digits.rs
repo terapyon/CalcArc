@@ -78,6 +78,7 @@ fn every_value_case_shows_the_true_values_ten_digits() {
     let mut mismatched: Vec<String> = Vec::new();
     let mut mismatched_ids: BTreeSet<String> = BTreeSet::new();
     let mut shards: BTreeSet<String> = BTreeSet::new();
+    let mut seen_ids: BTreeSet<String> = BTreeSet::new();
 
     for path in corpus_files() {
         let text = fs::read_to_string(&path)
@@ -130,6 +131,7 @@ fn every_value_case_shows_the_true_values_ten_digits() {
             );
 
             compared += 1;
+            seen_ids.insert(id.to_string());
             shards.insert(file_name.clone());
             if shown != expected {
                 mismatched.push(format!("{id}: shown {shown:?}, true {expected:?}"));
@@ -149,7 +151,13 @@ fn every_value_case_shows_the_true_values_ten_digits() {
 
     let known: BTreeSet<String> = KNOWN_MISMATCHES.iter().map(|s| s.to_string()).collect();
     let unexpected: Vec<&String> = mismatched_ids.difference(&known).collect();
-    let now_matching: Vec<&String> = known.difference(&mismatched_ids).collect();
+    // 許可リストの名前がコーパスに無い(シャードの再生成で id が振り直された等)のと、
+    // 在って一致するようになったのとは、直し方が違うので分けて言う。どちらも赤。
+    let missing: Vec<&String> = known.difference(&seen_ids).collect();
+    let now_matching: Vec<&String> = known
+        .difference(&mismatched_ids)
+        .filter(|id| seen_ids.contains(*id))
+        .collect();
     assert!(
         unexpected.is_empty(),
         "{} value cases do not show the true value's 10 digits (first: {:?})",
@@ -161,6 +169,11 @@ fn every_value_case_shows_the_true_values_ten_digits() {
                 .any(|k| line.starts_with(&format!("{k}:"))))
             .take(5)
             .collect::<Vec<_>>()
+    );
+    assert!(
+        missing.is_empty(),
+        "allow-listed cases are missing from the corpus — check whether the shard was \
+         regenerated, then update KNOWN_MISMATCHES: {missing:?}"
     );
     assert!(
         now_matching.is_empty(),
