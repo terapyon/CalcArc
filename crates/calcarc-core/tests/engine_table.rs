@@ -2089,3 +2089,52 @@ fn ln_log_and_a_negative_power_of_an_exact_decimal_zero_are_errors() {
         assert_eq!(shown.error, Some(CalcError::DomainError), "{tail:?}");
     }
 }
+
+// ---- 残っている誤差の 3 族(1.2.3 設計書 §4)の、今も後も変わらない行 ----
+//
+// **直しの前から緑で、直しの後も緑でなければならない行**である。赤から緑になる行は、
+// 直しのタスクの頭で足す(計画「監視役の順からの変更」)。
+
+/// **F3 の条件 1**: 畳むのは「印が表 → f64 が表 → どちらでもない」の最後だけ(§2.1)。
+///
+/// `30 + 1e-15` の印は表に載らないが、**f64 は 30 ちょうど**なので表を引いて `sin` は
+/// `1/2`、`− 0.5` は 0 になる。**畳みを先にする実装は `-5.551115123e-17` を返す**
+/// ——この行は今を赤くする行ではなく、その実装を赤くする行である。
+#[test]
+fn an_angle_whose_f64_is_on_the_table_is_not_folded() {
+    assert_eq!(
+        main_of(&[
+            "3", "0", "add", "1", "exp", "1", "5", "neg", "eq", "sin", "sub", "0", "dot", "5", "eq"
+        ]),
+        "0"
+    );
+}
+
+/// **F3 の対照**: f64 が 90 ちょうどなら、印が表に載らなくても tan の極(§2.3)。
+#[test]
+fn an_angle_whose_f64_is_a_pole_stays_a_pole() {
+    use calcarc_core::CalcError;
+    let shown = run(&["9", "0", "add", "1", "exp", "1", "5", "neg", "eq", "tan"]);
+    assert_eq!(shown.main, "Math ERROR");
+    assert_eq!(shown.error, Some(CalcError::TrigPole));
+}
+
+/// **F2 の対照**: 1 から遠い引数の `ln` は変わらない(`log1p` を使うのは `1/2 ≤ q ≤ 3/2`
+/// だけ。§1.2)。`0.4` はその範囲の外の下側、`3` は上側。
+#[test]
+fn ln_away_from_one_does_not_change() {
+    assert_eq!(main_of(&["3", "ln"]), "1.098612289");
+    assert_eq!(main_of(&["0", "dot", "4", "ln"]), "-0.9162907319");
+}
+
+/// **F1 の対照**: 桁落ちしない √ の差は書き換えない(2 倍の門。§3.3)。
+#[test]
+fn a_root_difference_without_cancellation_does_not_change() {
+    assert_eq!(
+        main_of(&[
+            "6", "6", "7", "div", "8", "3", "3", "eq", "sub", "3", "3", "4", "sqrt", "eq"
+        ]),
+        "-17.47494659"
+    );
+    assert_eq!(main_of(&["2", "sqrt", "sub", "1", "eq"]), "0.4142135624");
+}
