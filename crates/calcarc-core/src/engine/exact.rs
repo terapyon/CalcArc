@@ -1284,6 +1284,19 @@ mod tests {
     }
 
     #[test]
+    fn outside_the_gate_the_difference_is_the_plain_f64_one() {
+        // **2 倍の門の番人**(§3.3)。`667/833 − √334` は A² が B² の 1/4 より小さいので
+        // 書き換えない——生の f64 は、印の丸め `667/833` と `√334` の f64 の差そのもの。
+        // 門を外すと書き換えの丸めが 1 回増えて 1 ulp 動き、真値から遠ざかる
+        // (相対 1.4e-17 → 1.9e-16)。10 桁の表示は動かないので engine_table では見えない。
+        let state = state_after(&[
+            "6", "6", "7", "div", "8", "3", "3", "eq", "sub", "3", "3", "4", "sqrt", "eq",
+        ]);
+        let plain = r(667, 833).to_f64() - 334.0_f64.sqrt();
+        assert_eq!(state.current.value.re.to_bits(), plain.to_bits());
+    }
+
+    #[test]
     fn a_root_crosses_serde_as_text_and_refuses_a_non_positive_radicand() {
         let text = r#"{"value":{"re":1.0,"im":0.0},"exact":null,"root":{"c":"2/4","r":"3/1"}}"#;
         let held: Held = serde_json::from_str(text).unwrap();
