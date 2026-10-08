@@ -257,7 +257,7 @@ impl Marks { pub const NONE: Marks = …; }
 
 `f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`。**あわせて既存の `display-digits` の表に `cancellation-000.json (values)` を足す**（§5.2。締めると反応するようになるので、足し忘れると `heavy:power` が「反応したシャードの集合が期待と違う」で落ちる）。どれも **cancellation か typed だけ**が赤くなる見込み（上の数）。**`heavy:power` は GitHub で回す**（台帳と同じ。この作業台では長い走行をしない）。**床は、実装後の走行で測ってから置く**（試作の数は実装の数ではない）。
 
-**【実装時の註 2026-10-08】** display-digits/cancellation を含め、床は GitHub の `heavy:power` の後に置く（それまでは 1 件以上で見る）。追跡は `docs/superpowers/sdd/2026-10-06-rust-review-backlog.md` の「1.2.3 の床」。
+**【実装時の註 2026-10-08】** display-digits/cancellation を含め、床は GitHub の `heavy:power` の後に置く（それまでは 1 件以上で見る）。追跡は `docs/superpowers/sdd/2026-10-06-rust-review-backlog.md` の「1.2.3 の床」。**【追記 2026-10-09】床を置いた**——走行 `37769606857` で F1 521・F2 42・F3 1・display-digits/cancellation 585（`detection-power.mjs` の註と台帳）。
 
 ### §5.5 golden と重量級の各層——1 ビットと 10 桁
 
