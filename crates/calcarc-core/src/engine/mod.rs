@@ -779,6 +779,42 @@ mod tests {
         assert_ne!(re.to_bits(), 1.000000117_f64.ln().to_bits());
     }
 
+    /// **F2 の範囲の番人**(1.2.3 設計書 §1.2): `1/2 ≤ q ≤ 3/2` の外では、生の値は今の
+    /// f64 の `ln`・`log10` のビットのまま。**10 桁の表示はどちらの道でも同じ**なので、
+    /// engine_table の対照(`3 ln`・`0.4 ln`)はこの範囲を見張れない。ここで生の値を見る。
+    ///
+    /// 標本は上側(`3`)と下側(`0.3`・`0.4`)で、**`log1p(q − 1)` の道ならビットが変わる
+    /// もの**だけを選んだ(下の対照で主張する)。
+    #[test]
+    fn ln_and_log_away_from_one_keep_the_f64_bits() {
+        let cases: [(&[&str], f64, f64); 3] = [
+            (&["3"], 3.0, 2.0),
+            (&["0", "dot", "3"], 0.3, -0.7),
+            (&["0", "dot", "4"], 0.4, -0.6),
+        ];
+        let mut compared = 0;
+        for (typed, x, x_minus_one) in cases {
+            for (key, f64_way, log1p_way) in [
+                ("ln", x.ln(), x_minus_one.ln_1p()),
+                (
+                    "log10",
+                    x.log10(),
+                    x_minus_one.ln_1p() * std::f64::consts::LOG10_E,
+                ),
+            ] {
+                if f64_way.to_bits() == log1p_way.to_bits() {
+                    continue;
+                }
+                let tokens: Vec<&str> = typed.iter().copied().chain([key]).collect();
+                let re = state_after(&tokens).current.value.re;
+                assert_eq!(re.to_bits(), f64_way.to_bits(), "{tokens:?}");
+                compared += 1;
+            }
+        }
+        // **何も比べずに緑にならない**: 上側と下側の両方を ln・log10 で比べた。
+        assert_eq!(compared, 5);
+    }
+
     #[test]
     fn close_paren_succeeds_while_a_group_is_open() {
         // **対照**——上の 2 つが「開いている組が無いから」落ちていることを言う
