@@ -3237,6 +3237,8 @@ reference 7 段  sync --locked / ruff check / ruff format --check / mypy /
 | `CANCELLATION_TOLERANCE_REL` `1e-6 → 1e-5` | **写しの一致テストだけ。分布 pin は落ちない** |
 | `CANCELLATION_FULL_LOSS` `→ 1e-12` | 写しの一致と、**記録と観測の突合** |
 
+（**追記 2026-10-08**: `CANCELLATION_TOLERANCE_REL` は 1.2.3 で `CANCELLATION_NEAR_CUT` に改名した。許容を 5e-10 へ締めたので、切れ目 1e-6 の理由は「許容の写し」から「素朴な引き算の誤差 u/r が許容に迫る近さ」に替わった。上の表は改名前の測定である。）
+
 **分布 pin は保存された `levels` を数える**ので、**切れ目を動かしても
 再生成するまで動かない。守っているのは「再生成後の分布」であって、
 切れ目そのものではない。**
