@@ -1,0 +1,6077 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "main": "0.6018150232"
+      },
+      "expr": "sin(359e19 + 677)",
+      "group": "large-integer",
+      "id": "dfold-000000",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "7",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.79863551"
+      },
+      "expr": "cos(359e19 + 677)",
+      "group": "large-integer",
+      "id": "dfold-000001",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "7",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7535540501"
+      },
+      "expr": "tan(359e19 + 677)",
+      "group": "large-integer",
+      "id": "dfold-000002",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "7",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.6018150232"
+      },
+      "expr": "sin(852e20 + 337)",
+      "group": "large-integer",
+      "id": "dfold-000003",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "3",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.79863551"
+      },
+      "expr": "cos(852e20 + 337)",
+      "group": "large-integer",
+      "id": "dfold-000004",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "3",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7535540501"
+      },
+      "expr": "tan(852e20 + 337)",
+      "group": "large-integer",
+      "id": "dfold-000005",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "3",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.2588190451"
+      },
+      "expr": "sin(412e21 + 365)",
+      "group": "large-integer",
+      "id": "dfold-000006",
+      "keys": [
+        "4",
+        "1",
+        "2",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "6",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9659258263"
+      },
+      "expr": "cos(412e21 + 365)",
+      "group": "large-integer",
+      "id": "dfold-000007",
+      "keys": [
+        "4",
+        "1",
+        "2",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "6",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.2679491924"
+      },
+      "expr": "tan(412e21 + 365)",
+      "group": "large-integer",
+      "id": "dfold-000008",
+      "keys": [
+        "4",
+        "1",
+        "2",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "6",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.4848096202"
+      },
+      "expr": "sin(260e26 + 971)",
+      "group": "large-integer",
+      "id": "dfold-000009",
+      "keys": [
+        "2",
+        "6",
+        "0",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "9",
+        "7",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8746197071"
+      },
+      "expr": "cos(260e26 + 971)",
+      "group": "large-integer",
+      "id": "dfold-000010",
+      "keys": [
+        "2",
+        "6",
+        "0",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "9",
+        "7",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5543090515"
+      },
+      "expr": "tan(260e26 + 971)",
+      "group": "large-integer",
+      "id": "dfold-000011",
+      "keys": [
+        "2",
+        "6",
+        "0",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "9",
+        "7",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.3746065934"
+      },
+      "expr": "sin(178e18 + 402)",
+      "group": "large-integer",
+      "id": "dfold-000012",
+      "keys": [
+        "1",
+        "7",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "4",
+        "0",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9271838546"
+      },
+      "expr": "cos(178e18 + 402)",
+      "group": "large-integer",
+      "id": "dfold-000013",
+      "keys": [
+        "1",
+        "7",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "4",
+        "0",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.4040262258"
+      },
+      "expr": "tan(178e18 + 402)",
+      "group": "large-integer",
+      "id": "dfold-000014",
+      "keys": [
+        "1",
+        "7",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "4",
+        "0",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.0348994967"
+      },
+      "expr": "sin(783e23 + 2)",
+      "group": "large-integer",
+      "id": "dfold-000015",
+      "keys": [
+        "7",
+        "8",
+        "3",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.999390827"
+      },
+      "expr": "cos(783e23 + 2)",
+      "group": "large-integer",
+      "id": "dfold-000016",
+      "keys": [
+        "7",
+        "8",
+        "3",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.03492076949"
+      },
+      "expr": "tan(783e23 + 2)",
+      "group": "large-integer",
+      "id": "dfold-000017",
+      "keys": [
+        "7",
+        "8",
+        "3",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.4226182617"
+      },
+      "expr": "sin(805e25 + 525)",
+      "group": "large-integer",
+      "id": "dfold-000018",
+      "keys": [
+        "8",
+        "0",
+        "5",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "2",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.906307787"
+      },
+      "expr": "cos(805e25 + 525)",
+      "group": "large-integer",
+      "id": "dfold-000019",
+      "keys": [
+        "8",
+        "0",
+        "5",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "2",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.4663076582"
+      },
+      "expr": "tan(805e25 + 525)",
+      "group": "large-integer",
+      "id": "dfold-000020",
+      "keys": [
+        "8",
+        "0",
+        "5",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "2",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9612616959"
+      },
+      "expr": "sin(620e28 + 174)",
+      "group": "large-integer",
+      "id": "dfold-000021",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "8",
+        "add",
+        "1",
+        "7",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.2756373558"
+      },
+      "expr": "cos(620e28 + 174)",
+      "group": "large-integer",
+      "id": "dfold-000022",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "8",
+        "add",
+        "1",
+        "7",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "3.487414444"
+      },
+      "expr": "tan(620e28 + 174)",
+      "group": "large-integer",
+      "id": "dfold-000023",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "8",
+        "add",
+        "1",
+        "7",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.2923717047"
+      },
+      "expr": "sin(197e21 + 297)",
+      "group": "large-integer",
+      "id": "dfold-000024",
+      "keys": [
+        "1",
+        "9",
+        "7",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "2",
+        "9",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.956304756"
+      },
+      "expr": "cos(197e21 + 297)",
+      "group": "large-integer",
+      "id": "dfold-000025",
+      "keys": [
+        "1",
+        "9",
+        "7",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "2",
+        "9",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.3057306815"
+      },
+      "expr": "tan(197e21 + 297)",
+      "group": "large-integer",
+      "id": "dfold-000026",
+      "keys": [
+        "1",
+        "9",
+        "7",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "2",
+        "9",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.4226182617"
+      },
+      "expr": "sin(307e17 + 775)",
+      "group": "large-integer",
+      "id": "dfold-000027",
+      "keys": [
+        "3",
+        "0",
+        "7",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "7",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.906307787"
+      },
+      "expr": "cos(307e17 + 775)",
+      "group": "large-integer",
+      "id": "dfold-000028",
+      "keys": [
+        "3",
+        "0",
+        "7",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "7",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.4663076582"
+      },
+      "expr": "tan(307e17 + 775)",
+      "group": "large-integer",
+      "id": "dfold-000029",
+      "keys": [
+        "3",
+        "0",
+        "7",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "7",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.3420201433"
+      },
+      "expr": "sin(95e26 + 60)",
+      "group": "large-integer",
+      "id": "dfold-000030",
+      "keys": [
+        "9",
+        "5",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.9396926208"
+      },
+      "expr": "cos(95e26 + 60)",
+      "group": "large-integer",
+      "id": "dfold-000031",
+      "keys": [
+        "9",
+        "5",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.3639702343"
+      },
+      "expr": "tan(95e26 + 60)",
+      "group": "large-integer",
+      "id": "dfold-000032",
+      "keys": [
+        "9",
+        "5",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8090169944"
+      },
+      "expr": "sin(88e20 + 326)",
+      "group": "large-integer",
+      "id": "dfold-000033",
+      "keys": [
+        "8",
+        "8",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "2",
+        "6",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5877852523"
+      },
+      "expr": "cos(88e20 + 326)",
+      "group": "large-integer",
+      "id": "dfold-000034",
+      "keys": [
+        "8",
+        "8",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "2",
+        "6",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.37638192"
+      },
+      "expr": "tan(88e20 + 326)",
+      "group": "large-integer",
+      "id": "dfold-000035",
+      "keys": [
+        "8",
+        "8",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "3",
+        "2",
+        "6",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.6946583705"
+      },
+      "expr": "sin(904e29 + 904)",
+      "group": "large-integer",
+      "id": "dfold-000036",
+      "keys": [
+        "9",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "9",
+        "0",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7193398003"
+      },
+      "expr": "cos(904e29 + 904)",
+      "group": "large-integer",
+      "id": "dfold-000037",
+      "keys": [
+        "9",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "9",
+        "0",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.9656887748"
+      },
+      "expr": "tan(904e29 + 904)",
+      "group": "large-integer",
+      "id": "dfold-000038",
+      "keys": [
+        "9",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "9",
+        "0",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7547095802"
+      },
+      "expr": "sin(404e20 + 689)",
+      "group": "large-integer",
+      "id": "dfold-000039",
+      "keys": [
+        "4",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "6",
+        "8",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.656059029"
+      },
+      "expr": "cos(404e20 + 689)",
+      "group": "large-integer",
+      "id": "dfold-000040",
+      "keys": [
+        "4",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "6",
+        "8",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.150368407"
+      },
+      "expr": "tan(404e20 + 689)",
+      "group": "large-integer",
+      "id": "dfold-000041",
+      "keys": [
+        "4",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "6",
+        "8",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9961946981"
+      },
+      "expr": "sin(60e23 + 395)",
+      "group": "large-integer",
+      "id": "dfold-000042",
+      "keys": [
+        "6",
+        "0",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "3",
+        "9",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.08715574275"
+      },
+      "expr": "cos(60e23 + 395)",
+      "group": "large-integer",
+      "id": "dfold-000043",
+      "keys": [
+        "6",
+        "0",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "3",
+        "9",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-11.4300523"
+      },
+      "expr": "tan(60e23 + 395)",
+      "group": "large-integer",
+      "id": "dfold-000044",
+      "keys": [
+        "6",
+        "0",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "3",
+        "9",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.08715574275"
+      },
+      "expr": "sin(140e29 + 755)",
+      "group": "large-integer",
+      "id": "dfold-000045",
+      "keys": [
+        "1",
+        "4",
+        "0",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "7",
+        "5",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.9961946981"
+      },
+      "expr": "cos(140e29 + 755)",
+      "group": "large-integer",
+      "id": "dfold-000046",
+      "keys": [
+        "1",
+        "4",
+        "0",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "7",
+        "5",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.08748866353"
+      },
+      "expr": "tan(140e29 + 755)",
+      "group": "large-integer",
+      "id": "dfold-000047",
+      "keys": [
+        "1",
+        "4",
+        "0",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "7",
+        "5",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(504e21 + 0)",
+      "group": "large-table",
+      "id": "dfold-000048",
+      "keys": [
+        "5",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(504e21 + 0)",
+      "group": "large-table",
+      "id": "dfold-000049",
+      "keys": [
+        "5",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(504e21 + 0)",
+      "group": "large-table",
+      "id": "dfold-000050",
+      "keys": [
+        "5",
+        "0",
+        "4",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(508e21 + 350)",
+      "group": "large-table",
+      "id": "dfold-000051",
+      "keys": [
+        "5",
+        "0",
+        "8",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(508e21 + 350)",
+      "group": "large-table",
+      "id": "dfold-000052",
+      "keys": [
+        "5",
+        "0",
+        "8",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(508e21 + 350)",
+      "group": "large-table",
+      "id": "dfold-000053",
+      "keys": [
+        "5",
+        "0",
+        "8",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(286e16 + 245)",
+      "group": "large-table",
+      "id": "dfold-000054",
+      "keys": [
+        "2",
+        "8",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "4",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(286e16 + 245)",
+      "group": "large-table",
+      "id": "dfold-000055",
+      "keys": [
+        "2",
+        "8",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "4",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(286e16 + 245)",
+      "group": "large-table",
+      "id": "dfold-000056",
+      "keys": [
+        "2",
+        "8",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "4",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(41e21 + 100)",
+      "group": "large-table",
+      "id": "dfold-000057",
+      "keys": [
+        "4",
+        "1",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "1",
+        "0",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(41e21 + 100)",
+      "group": "large-table",
+      "id": "dfold-000058",
+      "keys": [
+        "4",
+        "1",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "1",
+        "0",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(41e21 + 100)",
+      "group": "large-table",
+      "id": "dfold-000059",
+      "keys": [
+        "4",
+        "1",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "1",
+        "0",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(492e16 + 210)",
+      "group": "large-table",
+      "id": "dfold-000060",
+      "keys": [
+        "4",
+        "9",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(492e16 + 210)",
+      "group": "large-table",
+      "id": "dfold-000061",
+      "keys": [
+        "4",
+        "9",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(492e16 + 210)",
+      "group": "large-table",
+      "id": "dfold-000062",
+      "keys": [
+        "4",
+        "9",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "sin(706e16 + 80)",
+      "group": "large-table",
+      "id": "dfold-000063",
+      "keys": [
+        "7",
+        "0",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(706e16 + 80)",
+      "group": "large-table",
+      "id": "dfold-000064",
+      "keys": [
+        "7",
+        "0",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(706e16 + 80)",
+      "group": "large-table",
+      "id": "dfold-000065",
+      "keys": [
+        "7",
+        "0",
+        "6",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "sin(723e29 + 15)",
+      "group": "large-table",
+      "id": "dfold-000066",
+      "keys": [
+        "7",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "1",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(723e29 + 15)",
+      "group": "large-table",
+      "id": "dfold-000067",
+      "keys": [
+        "7",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "1",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(723e29 + 15)",
+      "group": "large-table",
+      "id": "dfold-000068",
+      "keys": [
+        "7",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "9",
+        "add",
+        "1",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "sin(781e26 + 350)",
+      "group": "large-table",
+      "id": "dfold-000069",
+      "keys": [
+        "7",
+        "8",
+        "1",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(781e26 + 350)",
+      "group": "large-table",
+      "id": "dfold-000070",
+      "keys": [
+        "7",
+        "8",
+        "1",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(781e26 + 350)",
+      "group": "large-table",
+      "id": "dfold-000071",
+      "keys": [
+        "7",
+        "8",
+        "1",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "sin(354e19 + 60)",
+      "group": "large-table",
+      "id": "dfold-000072",
+      "keys": [
+        "3",
+        "5",
+        "4",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(354e19 + 60)",
+      "group": "large-table",
+      "id": "dfold-000073",
+      "keys": [
+        "3",
+        "5",
+        "4",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "tan(354e19 + 60)",
+      "group": "large-table",
+      "id": "dfold-000074",
+      "keys": [
+        "3",
+        "5",
+        "4",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "6",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(972e26 + 210)",
+      "group": "large-table",
+      "id": "dfold-000075",
+      "keys": [
+        "9",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "cos(972e26 + 210)",
+      "group": "large-table",
+      "id": "dfold-000076",
+      "keys": [
+        "9",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5773502692"
+      },
+      "expr": "tan(972e26 + 210)",
+      "group": "large-table",
+      "id": "dfold-000077",
+      "keys": [
+        "9",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "6",
+        "add",
+        "2",
+        "1",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(620e24 + 145)",
+      "group": "large-table",
+      "id": "dfold-000078",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "1",
+        "4",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "cos(620e24 + 145)",
+      "group": "large-table",
+      "id": "dfold-000079",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "1",
+        "4",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "tan(620e24 + 145)",
+      "group": "large-table",
+      "id": "dfold-000080",
+      "keys": [
+        "6",
+        "2",
+        "0",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "1",
+        "4",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(880e18 + 80)",
+      "group": "large-table",
+      "id": "dfold-000081",
+      "keys": [
+        "8",
+        "8",
+        "0",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "cos(880e18 + 80)",
+      "group": "large-table",
+      "id": "dfold-000082",
+      "keys": [
+        "8",
+        "8",
+        "0",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.732050808"
+      },
+      "expr": "tan(880e18 + 80)",
+      "group": "large-table",
+      "id": "dfold-000083",
+      "keys": [
+        "8",
+        "8",
+        "0",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "8",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(484e30 + 110)",
+      "group": "large-table",
+      "id": "dfold-000084",
+      "keys": [
+        "4",
+        "8",
+        "4",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0"
+      },
+      "expr": "cos(484e30 + 110)",
+      "group": "large-table",
+      "id": "dfold-000085",
+      "keys": [
+        "4",
+        "8",
+        "4",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "error": "TrigPole",
+        "main": "Math ERROR"
+      },
+      "expr": "tan(484e30 + 110)",
+      "group": "large-table",
+      "id": "dfold-000086",
+      "keys": [
+        "4",
+        "8",
+        "4",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8660254038"
+      },
+      "expr": "sin(27e16 + 300)",
+      "group": "large-table",
+      "id": "dfold-000087",
+      "keys": [
+        "2",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "0",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5"
+      },
+      "expr": "cos(27e16 + 300)",
+      "group": "large-table",
+      "id": "dfold-000088",
+      "keys": [
+        "2",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "0",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.732050808"
+      },
+      "expr": "tan(27e16 + 300)",
+      "group": "large-table",
+      "id": "dfold-000089",
+      "keys": [
+        "2",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "0",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7071067812"
+      },
+      "expr": "sin(236e30 + 115)",
+      "group": "large-table",
+      "id": "dfold-000090",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7071067812"
+      },
+      "expr": "cos(236e30 + 115)",
+      "group": "large-table",
+      "id": "dfold-000091",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "tan(236e30 + 115)",
+      "group": "large-table",
+      "id": "dfold-000092",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "1",
+        "1",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5"
+      },
+      "expr": "sin(248e18 + 10)",
+      "group": "large-table",
+      "id": "dfold-000093",
+      "keys": [
+        "2",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8660254038"
+      },
+      "expr": "cos(248e18 + 10)",
+      "group": "large-table",
+      "id": "dfold-000094",
+      "keys": [
+        "2",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5773502692"
+      },
+      "expr": "tan(248e18 + 10)",
+      "group": "large-table",
+      "id": "dfold-000095",
+      "keys": [
+        "2",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.4710118812"
+      },
+      "expr": "sin(417e16 + 808.1)",
+      "group": "large-fraction",
+      "id": "dfold-000096",
+      "keys": [
+        "4",
+        "1",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "8",
+        "dot",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.882126866"
+      },
+      "expr": "cos(417e16 + 808.1)",
+      "group": "large-fraction",
+      "id": "dfold-000097",
+      "keys": [
+        "4",
+        "1",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "8",
+        "dot",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5339502733"
+      },
+      "expr": "tan(417e16 + 808.1)",
+      "group": "large-fraction",
+      "id": "dfold-000098",
+      "keys": [
+        "4",
+        "1",
+        "7",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "8",
+        "0",
+        "8",
+        "dot",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.07523978671"
+      },
+      "expr": "sin(995e16 + 575.685)",
+      "group": "large-fraction",
+      "id": "dfold-000099",
+      "keys": [
+        "9",
+        "9",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "5",
+        "7",
+        "5",
+        "dot",
+        "6",
+        "8",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.99716547"
+      },
+      "expr": "cos(995e16 + 575.685)",
+      "group": "large-fraction",
+      "id": "dfold-000100",
+      "keys": [
+        "9",
+        "9",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "5",
+        "7",
+        "5",
+        "dot",
+        "6",
+        "8",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.07545366238"
+      },
+      "expr": "tan(995e16 + 575.685)",
+      "group": "large-fraction",
+      "id": "dfold-000101",
+      "keys": [
+        "9",
+        "9",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "5",
+        "7",
+        "5",
+        "dot",
+        "6",
+        "8",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8358073614"
+      },
+      "expr": "sin(71e19 + 403.3)",
+      "group": "large-fraction",
+      "id": "dfold-000102",
+      "keys": [
+        "7",
+        "1",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "4",
+        "0",
+        "3",
+        "dot",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.549022818"
+      },
+      "expr": "cos(71e19 + 403.3)",
+      "group": "large-fraction",
+      "id": "dfold-000103",
+      "keys": [
+        "7",
+        "1",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "4",
+        "0",
+        "3",
+        "dot",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.522354507"
+      },
+      "expr": "tan(71e19 + 403.3)",
+      "group": "large-fraction",
+      "id": "dfold-000104",
+      "keys": [
+        "7",
+        "1",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "4",
+        "0",
+        "3",
+        "dot",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.4884537253"
+      },
+      "expr": "sin(236e24 + 909.239)",
+      "group": "large-fraction",
+      "id": "dfold-000105",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "9",
+        "0",
+        "9",
+        "dot",
+        "2",
+        "3",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8725897995"
+      },
+      "expr": "cos(236e24 + 909.239)",
+      "group": "large-fraction",
+      "id": "dfold-000106",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "9",
+        "0",
+        "9",
+        "dot",
+        "2",
+        "3",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5597747367"
+      },
+      "expr": "tan(236e24 + 909.239)",
+      "group": "large-fraction",
+      "id": "dfold-000107",
+      "keys": [
+        "2",
+        "3",
+        "6",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "9",
+        "0",
+        "9",
+        "dot",
+        "2",
+        "3",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.3530829749"
+      },
+      "expr": "sin(77e25 + 559.324)",
+      "group": "large-fraction",
+      "id": "dfold-000108",
+      "keys": [
+        "7",
+        "7",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "5",
+        "9",
+        "dot",
+        "3",
+        "2",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.935592012"
+      },
+      "expr": "cos(77e25 + 559.324)",
+      "group": "large-fraction",
+      "id": "dfold-000109",
+      "keys": [
+        "7",
+        "7",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "5",
+        "9",
+        "dot",
+        "3",
+        "2",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.377389899"
+      },
+      "expr": "tan(77e25 + 559.324)",
+      "group": "large-fraction",
+      "id": "dfold-000110",
+      "keys": [
+        "7",
+        "7",
+        "exp",
+        "2",
+        "5",
+        "add",
+        "5",
+        "5",
+        "9",
+        "dot",
+        "3",
+        "2",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.2271782459"
+      },
+      "expr": "sin(448e17 + 753.131)",
+      "group": "large-fraction",
+      "id": "dfold-000111",
+      "keys": [
+        "4",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "5",
+        "3",
+        "dot",
+        "1",
+        "3",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9738531946"
+      },
+      "expr": "cos(448e17 + 753.131)",
+      "group": "large-fraction",
+      "id": "dfold-000112",
+      "keys": [
+        "4",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "5",
+        "3",
+        "dot",
+        "1",
+        "3",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.2332777129"
+      },
+      "expr": "tan(448e17 + 753.131)",
+      "group": "large-fraction",
+      "id": "dfold-000113",
+      "keys": [
+        "4",
+        "4",
+        "8",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "5",
+        "3",
+        "dot",
+        "1",
+        "3",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.7458248931"
+      },
+      "expr": "sin(86e30 + 351.77)",
+      "group": "large-fraction",
+      "id": "dfold-000114",
+      "keys": [
+        "8",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "3",
+        "5",
+        "1",
+        "dot",
+        "7",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.6661420486"
+      },
+      "expr": "cos(86e30 + 351.77)",
+      "group": "large-fraction",
+      "id": "dfold-000115",
+      "keys": [
+        "8",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "3",
+        "5",
+        "1",
+        "dot",
+        "7",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.119618398"
+      },
+      "expr": "tan(86e30 + 351.77)",
+      "group": "large-fraction",
+      "id": "dfold-000116",
+      "keys": [
+        "8",
+        "6",
+        "exp",
+        "3",
+        "0",
+        "add",
+        "3",
+        "5",
+        "1",
+        "dot",
+        "7",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.3271849138"
+      },
+      "expr": "sin(65e20 + 719.098)",
+      "group": "large-fraction",
+      "id": "dfold-000117",
+      "keys": [
+        "6",
+        "5",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "9",
+        "dot",
+        "0",
+        "9",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9449603336"
+      },
+      "expr": "cos(65e20 + 719.098)",
+      "group": "large-fraction",
+      "id": "dfold-000118",
+      "keys": [
+        "6",
+        "5",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "9",
+        "dot",
+        "0",
+        "9",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.3462419556"
+      },
+      "expr": "tan(65e20 + 719.098)",
+      "group": "large-fraction",
+      "id": "dfold-000119",
+      "keys": [
+        "6",
+        "5",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "9",
+        "dot",
+        "0",
+        "9",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.7739507438"
+      },
+      "expr": "sin(91e22 + 850.71)",
+      "group": "large-fraction",
+      "id": "dfold-000120",
+      "keys": [
+        "9",
+        "1",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "8",
+        "5",
+        "0",
+        "dot",
+        "7",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.6332458024"
+      },
+      "expr": "cos(91e22 + 850.71)",
+      "group": "large-fraction",
+      "id": "dfold-000121",
+      "keys": [
+        "9",
+        "1",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "8",
+        "5",
+        "0",
+        "dot",
+        "7",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.222196406"
+      },
+      "expr": "tan(91e22 + 850.71)",
+      "group": "large-fraction",
+      "id": "dfold-000122",
+      "keys": [
+        "9",
+        "1",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "8",
+        "5",
+        "0",
+        "dot",
+        "7",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8068572197"
+      },
+      "expr": "sin(889e21 + 73.79)",
+      "group": "large-fraction",
+      "id": "dfold-000123",
+      "keys": [
+        "8",
+        "8",
+        "9",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "7",
+        "3",
+        "dot",
+        "7",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5907464998"
+      },
+      "expr": "cos(889e21 + 73.79)",
+      "group": "large-fraction",
+      "id": "dfold-000124",
+      "keys": [
+        "8",
+        "8",
+        "9",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "7",
+        "3",
+        "dot",
+        "7",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.365826492"
+      },
+      "expr": "tan(889e21 + 73.79)",
+      "group": "large-fraction",
+      "id": "dfold-000125",
+      "keys": [
+        "8",
+        "8",
+        "9",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "7",
+        "3",
+        "dot",
+        "7",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.8842388583"
+      },
+      "expr": "sin(416e21 + 582.158)",
+      "group": "large-fraction",
+      "id": "dfold-000126",
+      "keys": [
+        "4",
+        "1",
+        "6",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "5",
+        "8",
+        "2",
+        "dot",
+        "1",
+        "5",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.4670349467"
+      },
+      "expr": "cos(416e21 + 582.158)",
+      "group": "large-fraction",
+      "id": "dfold-000127",
+      "keys": [
+        "4",
+        "1",
+        "6",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "5",
+        "8",
+        "2",
+        "dot",
+        "1",
+        "5",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.893303412"
+      },
+      "expr": "tan(416e21 + 582.158)",
+      "group": "large-fraction",
+      "id": "dfold-000128",
+      "keys": [
+        "4",
+        "1",
+        "6",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "5",
+        "8",
+        "2",
+        "dot",
+        "1",
+        "5",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.2672383761"
+      },
+      "expr": "sin(421e23 + 724.5)",
+      "group": "large-fraction",
+      "id": "dfold-000129",
+      "keys": [
+        "4",
+        "2",
+        "1",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "7",
+        "2",
+        "4",
+        "dot",
+        "5",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9636304532"
+      },
+      "expr": "cos(421e23 + 724.5)",
+      "group": "large-fraction",
+      "id": "dfold-000130",
+      "keys": [
+        "4",
+        "2",
+        "1",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "7",
+        "2",
+        "4",
+        "dot",
+        "5",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.2773245441"
+      },
+      "expr": "tan(421e23 + 724.5)",
+      "group": "large-fraction",
+      "id": "dfold-000131",
+      "keys": [
+        "4",
+        "2",
+        "1",
+        "exp",
+        "2",
+        "3",
+        "add",
+        "7",
+        "2",
+        "4",
+        "dot",
+        "5",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9793288556"
+      },
+      "expr": "sin(852e24 + 41.67)",
+      "group": "large-fraction",
+      "id": "dfold-000132",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "4",
+        "1",
+        "dot",
+        "6",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.2022745477"
+      },
+      "expr": "cos(852e24 + 41.67)",
+      "group": "large-fraction",
+      "id": "dfold-000133",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "4",
+        "1",
+        "dot",
+        "6",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-4.841582229"
+      },
+      "expr": "tan(852e24 + 41.67)",
+      "group": "large-fraction",
+      "id": "dfold-000134",
+      "keys": [
+        "8",
+        "5",
+        "2",
+        "exp",
+        "2",
+        "4",
+        "add",
+        "4",
+        "1",
+        "dot",
+        "6",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.4786918579"
+      },
+      "expr": "sin(961e20 + 711.4)",
+      "group": "large-fraction",
+      "id": "dfold-000135",
+      "keys": [
+        "9",
+        "6",
+        "1",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "1",
+        "dot",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8779829754"
+      },
+      "expr": "cos(961e20 + 711.4)",
+      "group": "large-fraction",
+      "id": "dfold-000136",
+      "keys": [
+        "9",
+        "6",
+        "1",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "1",
+        "dot",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.5452176994"
+      },
+      "expr": "tan(961e20 + 711.4)",
+      "group": "large-fraction",
+      "id": "dfold-000137",
+      "keys": [
+        "9",
+        "6",
+        "1",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "7",
+        "1",
+        "1",
+        "dot",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.8405666035"
+      },
+      "expr": "sin(372e22 + 542.8)",
+      "group": "large-fraction",
+      "id": "dfold-000138",
+      "keys": [
+        "3",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "5",
+        "4",
+        "2",
+        "dot",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.5417082103"
+      },
+      "expr": "cos(372e22 + 542.8)",
+      "group": "large-fraction",
+      "id": "dfold-000139",
+      "keys": [
+        "3",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "5",
+        "4",
+        "2",
+        "dot",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.551696259"
+      },
+      "expr": "tan(372e22 + 542.8)",
+      "group": "large-fraction",
+      "id": "dfold-000140",
+      "keys": [
+        "3",
+        "7",
+        "2",
+        "exp",
+        "2",
+        "2",
+        "add",
+        "5",
+        "4",
+        "2",
+        "dot",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.9999073368"
+      },
+      "expr": "sin(190e21 + 889.22)",
+      "group": "large-fraction",
+      "id": "dfold-000141",
+      "keys": [
+        "1",
+        "9",
+        "0",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "8",
+        "8",
+        "9",
+        "dot",
+        "2",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.01361314767"
+      },
+      "expr": "cos(190e21 + 889.22)",
+      "group": "large-fraction",
+      "id": "dfold-000142",
+      "keys": [
+        "1",
+        "9",
+        "0",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "8",
+        "8",
+        "9",
+        "dot",
+        "2",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "73.45158967"
+      },
+      "expr": "tan(190e21 + 889.22)",
+      "group": "large-fraction",
+      "id": "dfold-000143",
+      "keys": [
+        "1",
+        "9",
+        "0",
+        "exp",
+        "2",
+        "1",
+        "add",
+        "8",
+        "8",
+        "9",
+        "dot",
+        "2",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(100e19 + 350 + 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000144",
+      "keys": [
+        "1",
+        "0",
+        "0",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.745329252e-14"
+      },
+      "expr": "cos(100e19 + 350 + 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000145",
+      "keys": [
+        "1",
+        "0",
+        "0",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-5.729577951e13"
+      },
+      "expr": "tan(100e19 + 350 + 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000146",
+      "keys": [
+        "1",
+        "0",
+        "0",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(862e20 + 290 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000147",
+      "keys": [
+        "8",
+        "6",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "2",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000001745329252"
+      },
+      "expr": "cos(862e20 + 290 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000148",
+      "keys": [
+        "8",
+        "6",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "2",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-572,957.7951"
+      },
+      "expr": "tan(862e20 + 290 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000149",
+      "keys": [
+        "8",
+        "6",
+        "2",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "2",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(615e17 + 330 - 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000150",
+      "keys": [
+        "6",
+        "1",
+        "5",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "3",
+        "3",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.00000001745329252"
+      },
+      "expr": "cos(615e17 + 330 - 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000151",
+      "keys": [
+        "6",
+        "1",
+        "5",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "3",
+        "3",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "57,295,779.51"
+      },
+      "expr": "tan(615e17 + 330 - 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000152",
+      "keys": [
+        "6",
+        "1",
+        "5",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "3",
+        "3",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9999999998"
+      },
+      "expr": "sin(746e17 + 190 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000153",
+      "keys": [
+        "7",
+        "4",
+        "6",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.00001745329252"
+      },
+      "expr": "cos(746e17 + 190 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000154",
+      "keys": [
+        "7",
+        "4",
+        "6",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-57,295.77951"
+      },
+      "expr": "tan(746e17 + 190 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000155",
+      "keys": [
+        "7",
+        "4",
+        "6",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(428e18 + 310 - 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000156",
+      "keys": [
+        "4",
+        "2",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "3",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-16"
+      },
+      "expr": "cos(428e18 + 310 - 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000157",
+      "keys": [
+        "4",
+        "2",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "3",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "5.729577951e15"
+      },
+      "expr": "tan(428e18 + 310 - 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000158",
+      "keys": [
+        "4",
+        "2",
+        "8",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "3",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(487e19 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000159",
+      "keys": [
+        "4",
+        "8",
+        "7",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-12"
+      },
+      "expr": "cos(487e19 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000160",
+      "keys": [
+        "4",
+        "8",
+        "7",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "5.729577951e11"
+      },
+      "expr": "tan(487e19 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000161",
+      "keys": [
+        "4",
+        "8",
+        "7",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.9999999998"
+      },
+      "expr": "sin(944e18 + 10 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000162",
+      "keys": [
+        "9",
+        "4",
+        "4",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00001745329252"
+      },
+      "expr": "cos(944e18 + 10 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000163",
+      "keys": [
+        "9",
+        "4",
+        "4",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-57,295.77951"
+      },
+      "expr": "tan(944e18 + 10 + 1e-3)",
+      "group": "large-near-quarter",
+      "id": "dfold-000164",
+      "keys": [
+        "9",
+        "4",
+        "4",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "1",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "3",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(839e17 + 70 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000165",
+      "keys": [
+        "8",
+        "3",
+        "9",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000001745329252"
+      },
+      "expr": "cos(839e17 + 70 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000166",
+      "keys": [
+        "8",
+        "3",
+        "9",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-572,957.7951"
+      },
+      "expr": "tan(839e17 + 70 + 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000167",
+      "keys": [
+        "8",
+        "3",
+        "9",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(685e16 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000168",
+      "keys": [
+        "6",
+        "8",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-12"
+      },
+      "expr": "cos(685e16 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000169",
+      "keys": [
+        "6",
+        "8",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "5.729577951e11"
+      },
+      "expr": "tan(685e16 + 350 - 1e-10)",
+      "group": "large-near-quarter",
+      "id": "dfold-000170",
+      "keys": [
+        "6",
+        "8",
+        "5",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "3",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "0",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(542e16 + 250 + 1e-9)",
+      "group": "large-near-quarter",
+      "id": "dfold-000171",
+      "keys": [
+        "5",
+        "4",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "9",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-11"
+      },
+      "expr": "cos(542e16 + 250 + 1e-9)",
+      "group": "large-near-quarter",
+      "id": "dfold-000172",
+      "keys": [
+        "5",
+        "4",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "9",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-5.729577951e10"
+      },
+      "expr": "tan(542e16 + 250 + 1e-9)",
+      "group": "large-near-quarter",
+      "id": "dfold-000173",
+      "keys": [
+        "5",
+        "4",
+        "2",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "2",
+        "5",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "9",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(209e18 + 70 + 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000174",
+      "keys": [
+        "2",
+        "0",
+        "9",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.00000001745329252"
+      },
+      "expr": "cos(209e18 + 70 + 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000175",
+      "keys": [
+        "2",
+        "0",
+        "9",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-57,295,779.51"
+      },
+      "expr": "tan(209e18 + 70 + 1e-6)",
+      "group": "large-near-quarter",
+      "id": "dfold-000176",
+      "keys": [
+        "2",
+        "0",
+        "9",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "7",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "6",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000001745329252"
+      },
+      "expr": "sin(718e19 + 200 - 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000177",
+      "keys": [
+        "7",
+        "1",
+        "8",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(718e19 + 200 - 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000178",
+      "keys": [
+        "7",
+        "1",
+        "8",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000001745329252"
+      },
+      "expr": "tan(718e19 + 200 - 1e-4)",
+      "group": "large-near-quarter",
+      "id": "dfold-000179",
+      "keys": [
+        "7",
+        "1",
+        "8",
+        "exp",
+        "1",
+        "9",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "4",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000001745329252"
+      },
+      "expr": "sin(223e18 + 200 - 1e-5)",
+      "group": "large-near-quarter",
+      "id": "dfold-000180",
+      "keys": [
+        "2",
+        "2",
+        "3",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "5",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(223e18 + 200 - 1e-5)",
+      "group": "large-near-quarter",
+      "id": "dfold-000181",
+      "keys": [
+        "2",
+        "2",
+        "3",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "5",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000001745329252"
+      },
+      "expr": "tan(223e18 + 200 - 1e-5)",
+      "group": "large-near-quarter",
+      "id": "dfold-000182",
+      "keys": [
+        "2",
+        "2",
+        "3",
+        "exp",
+        "1",
+        "8",
+        "add",
+        "2",
+        "0",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "5",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(823e20 + 50 - 1e-8)",
+      "group": "large-near-quarter",
+      "id": "dfold-000183",
+      "keys": [
+        "8",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "8",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1.745329252e-10"
+      },
+      "expr": "cos(823e20 + 50 - 1e-8)",
+      "group": "large-near-quarter",
+      "id": "dfold-000184",
+      "keys": [
+        "8",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "8",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "5,729,577,951"
+      },
+      "expr": "tan(823e20 + 50 - 1e-8)",
+      "group": "large-near-quarter",
+      "id": "dfold-000185",
+      "keys": [
+        "8",
+        "2",
+        "3",
+        "exp",
+        "2",
+        "0",
+        "add",
+        "5",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "8",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(873e16 + 90 + 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000186",
+      "keys": [
+        "8",
+        "7",
+        "3",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-16"
+      },
+      "expr": "cos(873e16 + 90 + 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000187",
+      "keys": [
+        "8",
+        "7",
+        "3",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-5.729577951e15"
+      },
+      "expr": "tan(873e16 + 90 + 1e-14)",
+      "group": "large-near-quarter",
+      "id": "dfold-000188",
+      "keys": [
+        "8",
+        "7",
+        "3",
+        "exp",
+        "1",
+        "6",
+        "add",
+        "9",
+        "0",
+        "add",
+        "1",
+        "exp",
+        "1",
+        "4",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "sin(871e17 + 110 - 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000189",
+      "keys": [
+        "8",
+        "7",
+        "1",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1.745329252e-14"
+      },
+      "expr": "cos(871e17 + 110 - 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000190",
+      "keys": [
+        "8",
+        "7",
+        "1",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "5.729577951e13"
+      },
+      "expr": "tan(871e17 + 110 - 1e-12)",
+      "group": "large-near-quarter",
+      "id": "dfold-000191",
+      "keys": [
+        "8",
+        "7",
+        "1",
+        "exp",
+        "1",
+        "7",
+        "add",
+        "1",
+        "1",
+        "0",
+        "sub",
+        "1",
+        "exp",
+        "1",
+        "2",
+        "neg",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000005235987756"
+      },
+      "expr": "sin(719.99997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000192",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(719.99997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000193",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000005235987756"
+      },
+      "expr": "tan(719.99997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000194",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000001047197551"
+      },
+      "expr": "sin(719.999994)",
+      "group": "small-near-quarter",
+      "id": "dfold-000195",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(719.999994)",
+      "group": "small-near-quarter",
+      "id": "dfold-000196",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.0000001047197551"
+      },
+      "expr": "tan(719.999994)",
+      "group": "small-near-quarter",
+      "id": "dfold-000197",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000005235987756"
+      },
+      "expr": "sin(719.999997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000198",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(719.999997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000199",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000005235987756"
+      },
+      "expr": "tan(719.999997)",
+      "group": "small-near-quarter",
+      "id": "dfold-000200",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "7",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000001221730476"
+      },
+      "expr": "sin(359.9999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000201",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(359.9999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000202",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000001221730476"
+      },
+      "expr": "tan(359.9999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000203",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.9999999999"
+      },
+      "expr": "sin(269.9992)",
+      "group": "small-near-quarter",
+      "id": "dfold-000204",
+      "keys": [
+        "2",
+        "6",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "2",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00001396263402"
+      },
+      "expr": "cos(269.9992)",
+      "group": "small-near-quarter",
+      "id": "dfold-000205",
+      "keys": [
+        "2",
+        "6",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "2",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "71,619.72439"
+      },
+      "expr": "tan(269.9992)",
+      "group": "small-near-quarter",
+      "id": "dfold-000206",
+      "keys": [
+        "2",
+        "6",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "2",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000001221730476"
+      },
+      "expr": "sin(719.99999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000207",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(719.99999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000208",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000001221730476"
+      },
+      "expr": "tan(719.99999993)",
+      "group": "small-near-quarter",
+      "id": "dfold-000209",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000000006981317008"
+      },
+      "expr": "sin(360.0000004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000210",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(360.0000004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000211",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000000006981317008"
+      },
+      "expr": "tan(360.0000004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000212",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(449.99998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000213",
+      "keys": [
+        "4",
+        "4",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.0000003490658504"
+      },
+      "expr": "cos(449.99998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000214",
+      "keys": [
+        "4",
+        "4",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "2,864,788.976"
+      },
+      "expr": "tan(449.99998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000215",
+      "keys": [
+        "4",
+        "4",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "sin(89.9999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000216",
+      "keys": [
+        "8",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000001745329252"
+      },
+      "expr": "cos(89.9999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000217",
+      "keys": [
+        "8",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "572,957.7951"
+      },
+      "expr": "tan(89.9999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000218",
+      "keys": [
+        "8",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000003490658504"
+      },
+      "expr": "sin(359.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000219",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(359.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000220",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000003490658504"
+      },
+      "expr": "tan(359.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000221",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000005235987756"
+      },
+      "expr": "sin(540.0003)",
+      "group": "small-near-quarter",
+      "id": "dfold-000222",
+      "keys": [
+        "5",
+        "4",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "3",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(540.0003)",
+      "group": "small-near-quarter",
+      "id": "dfold-000223",
+      "keys": [
+        "5",
+        "4",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "3",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000005235987756"
+      },
+      "expr": "tan(540.0003)",
+      "group": "small-near-quarter",
+      "id": "dfold-000224",
+      "keys": [
+        "5",
+        "4",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "3",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000001745329252"
+      },
+      "expr": "sin(359.999999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000225",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(359.999999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000226",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.00000001745329252"
+      },
+      "expr": "tan(359.999999)",
+      "group": "small-near-quarter",
+      "id": "dfold-000227",
+      "keys": [
+        "3",
+        "5",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000006981317008"
+      },
+      "expr": "sin(180.0004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000228",
+      "keys": [
+        "1",
+        "8",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-1"
+      },
+      "expr": "cos(180.0004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000229",
+      "keys": [
+        "1",
+        "8",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000006981317008"
+      },
+      "expr": "tan(180.0004)",
+      "group": "small-near-quarter",
+      "id": "dfold-000230",
+      "keys": [
+        "1",
+        "8",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "4",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000000001570796327"
+      },
+      "expr": "sin(360.00000009)",
+      "group": "small-near-quarter",
+      "id": "dfold-000231",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "9",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(360.00000009)",
+      "group": "small-near-quarter",
+      "id": "dfold-000232",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "9",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.000000001570796327"
+      },
+      "expr": "tan(360.00000009)",
+      "group": "small-near-quarter",
+      "id": "dfold-000233",
+      "keys": [
+        "3",
+        "6",
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "9",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000003490658504"
+      },
+      "expr": "sin(719.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000234",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(719.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000235",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "-0.000000003490658504"
+      },
+      "expr": "tan(719.9999998)",
+      "group": "small-near-quarter",
+      "id": "dfold-000236",
+      "keys": [
+        "7",
+        "1",
+        "9",
+        "dot",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "9",
+        "8",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.00000001745329252"
+      },
+      "expr": "sin(0.000001)",
+      "group": "small-near-quarter",
+      "id": "dfold-000237",
+      "keys": [
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "sin"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "1"
+      },
+      "expr": "cos(0.000001)",
+      "group": "small-near-quarter",
+      "id": "dfold-000238",
+      "keys": [
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "cos"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    },
+    {
+      "expect": {
+        "main": "0.00000001745329252"
+      },
+      "expr": "tan(0.000001)",
+      "group": "small-near-quarter",
+      "id": "dfold-000239",
+      "keys": [
+        "0",
+        "dot",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "1",
+        "eq",
+        "tan"
+      ],
+      "kind": "display",
+      "mode": "Deg"
+    }
+  ],
+  "generated_by": "mpmath 1.3.0 (50 dps)\u3002DEG \u3067\u5927\u304d\u306a\u89d2\u3068 90\u00b0 \u306e\u500d\u6570\u306e\u8fd1\u304f\u306e\u89d2\u3092\u4e09\u89d2\u95a2\u6570\u306b\u6e21\u3057\u305f\u7b54\u3048\u3092\u3001Fraction \u3067 q mod 360 \u3092\u53b3\u5bc6\u306b\u53d6\u308a\u3001mpmath \u306e 50 \u6841\u3067\u89d2\u5168\u4f53\u3092\u76f4\u63a5\u8a55\u4fa1\u3057\u305f\u30020 \u3068\u6975\uff08tan \u306e\u3001cos \u304c 0 \u306b\u306a\u308b\u89d2\uff09\u306f\u6570\u5024\u3067\u306f\u306a\u304f\u4e09\u89d2\u95a2\u6570\u306e\u5b9a\u7fa9\u304b\u3089\u6709\u7406\u6570\u3067\u6c7a\u3081\u305f\u3002\u771f\u5024\u304c 10 \u6841\u306e\u4e38\u3081\u306e\u5883\u76ee\u304b\u3089\u76f8\u5bfe 1e-12 \u672a\u6e80\u306e\u89d2\u306f\u3001\u5f15\u304d\u76f4\u3055\u305a\u306b\u6368\u3066\u305f\u3002engine \u306e\u7573\u307f\u65b9\uff08engine/exact.rs\uff09\u3082\u4e09\u89d2\u95a2\u6570\uff08scientific/mod.rs\uff09\u3082\u5199\u3057\u3066\u3044\u306a\u3044\u3002",
+  "schema": 1
+}

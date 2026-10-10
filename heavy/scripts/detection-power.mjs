@@ -60,6 +60,7 @@ export const ALL_SHARDS = [
   "combinatorics-display-000.json (displays)",
   "complex-display-000.json (displays)",
   "rad-pi-display-000.json (displays)",
+  "deg-fold-display-000.json (displays)",
   "display-000.json (displays)",
   "entry-000.json (displays)",
   "errors-000.json (displays)",
@@ -76,9 +77,15 @@ export const ALL_SHARDS = [
  * そのシャードの総件数)。率で持つのは、コーパスが増えても表を書き換えず
  * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
  * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
- * 床が未設定の期待シャードは 1 件以上で見る（今は `precedence-collapse` の
- * `entry-000.json`・`periods-for-binary-search`・`f3-degree-fold-off` の 3 つ。
- * どれも実測が 1 件で、率の下限に載らない）。
+ * 床が未設定の期待シャードは 1 件以上で見る。理由は 2 つある:
+ * - **実測が 1 件で、率の下限に載らない**——`precedence-collapse` の
+ *   `entry-000.json`、`periods-for-binary-search`、`f3-degree-fold-off` の
+ *   `typed-000.json`。
+ * - **GitHub の `heavy:power` をまだ回していない**（1.2.4、2026-10-10）——
+ *   `deg-fold-display-000.json` を期待する 3 本（`display-digits`・
+ *   `f3-degree-fold-off`・`deg-quarter-off`）。手元のネイティブ実行の数は各変異の
+ *   註にある。床は走行の数の約 12% 下に置く（設計書 2026-10-10 §4.4。追跡は
+ *   台帳 `rust-review-backlog.md`）。
  *
  * 値は 2026-08-19（Task 7）に `pnpm heavy:power` を実走して確定した。
  * 反応件数は 2026-08-17 の走行（設計書 §4.6）と 1 件も違わなかった——
@@ -144,6 +151,12 @@ export const MUTATIONS = [
       "rad-pi-display-000.json (displays)",
       // **`cancellation-000.json` も反応する(1.2.3 で許容を締めてから。上の註)。**
       "cancellation-000.json (values)",
+      // **`deg-fold-display-000.json` も反応する(2026-10-10、手元のネイティブ実行で
+      // 実測。`heavy:power` はまだ回していない)。** 表示の文字列を比べるので、10 桁の
+      // 答えは 9 桁に落ちれば変わる。`0`・`±0.5`・`±1`・`Math ERROR` の行と、
+      // 9 桁目で丸めても文字列が同じになる行は変わらない。**240 件中 171 件。**
+      // 床はまだ置かない(先頭の註)。
+      "deg-fold-display-000.json (displays)",
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
@@ -775,21 +788,57 @@ export const MUTATIONS = [
   },
   {
     id: "f3-degree-fold-off",
-    what: "DEG で表に載らない角を印のまま畳むのをやめる(1.2.3 の F3 を外す)",
+    what: "DEG で表に載らない角を印のまま畳むのをやめる(1.2.3 の F3 と 1.2.4 の畳みを外す)",
     file: "crates/calcarc-core/src/engine/exact.rs",
-    from: "            (Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),",
-    to: "            (Some(mark), AngleMode::Deg) if !mark.pi && false => degree_fold(mark.q),",
-    // 畳む腕だけを止める(表から引く `degree_turn` は残る)。f64 の角に戻る。
-    // **typed の 1 件が 5e-10 を超える**(2026-10-08、ネイティブ。設計書
-    // §5.3 の試作では 1.2.2 まで上書きしていた typed-001490)。cancellation にも
-    // 10 桁の違いが 1 件出るが、相対誤差は 5e-10 の内側で、反応しない。
-    // 走行 `37769606857` でも 1 件(2,006 件中)。
+    from: "    let k = r.checked_add(d.checked_mul(45)?)?.div_euclid(quarter);",
+    to: "    let k = r.checked_add(d.checked_mul(45).filter(|_| false)?)?.div_euclid(quarter);",
+    // **照準を 1.2.4 で直した(2026-10-10)。** 1.2.3 の `from`
+    // (`turn` の腕 `… if !mark.pi => degree_fold(mark.q),`)は、畳みが
+    // `degree_turn` に入って消えた。いまは `degree_turn` の中で、**表の段と
+    // 2^53 以下の整数の門を過ぎたあと**、畳みの段の最初の行で `None` を返させる。
+    // f64 の角(`turn_of`)に戻る。`d.checked_mul(45)` を呼んだまま答えを捨てる
+    // (`f2-log1p-off` と同じ形)。
     //
-    // **`minRate` はここでは置かない**(`periods-for-binary-search` と同じ理由)。
-    // 1 件は 3 桁の率の下限に載らない。`verdictFor` の `Math.max(1, …)` が
-    // 「1 件以上」を保証するので、それに委ねる——**この変異の床は 1 件で、
-    // 0 件になれば赤い**(`caught-nothing`。走行が非ゼロで終われば `measurement-failed`)。
-    expectShards: ["typed-000.json (values)"],
+    // **設計書 §4.4 の例(`let quarter = d.checked_mul(90)?;` に `.filter`)は
+    // 採らなかった。** その行は表の段より前に在り、**印の表まで止める**——
+    // 手元のネイティブ実行で、新しいシャードの「表に載る大きな角」の群が
+    // 48 件中 48 件赤くなった(この行では 0 件)。止めたいのは畳みだけである。
+    //
+    // **反応(2026-10-10、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // - `typed-000.json`: **1 件が 5e-10 を超える**(1.2.3 の照準と同じ数。
+    //   2026-10-08 のネイティブと走行 `37769606857` でも 1 件)。
+    // - `deg-fold-display-000.json`: **240 件中 168 件**(大きな整数 48・大きな
+    //   分数 48・大きな角で 90° の倍数の近く 48・小さな角で 90° の倍数の近く 24。
+    //   表に載る大きな角は 0)。
+    // 手元で測った他の 18 枚(値 10・同値 2・表示 6)は 1 件も動かない。呼び出しの
+    // 3 枚(金融・データの尺度)は engine の三角関数を通らないので測っていない。
+    //
+    // **`minRate` はここでは置かない。** typed は 1 件で率の下限に載らない
+    // (`periods-for-binary-search` と同じ理由。`verdictFor` の `Math.max(1, …)`
+    // が「1 件以上」を保証する)。新しいシャードの床は先頭の註のとおり、
+    // `heavy:power` を回してから置く。
+    expectShards: ["typed-000.json (values)", "deg-fold-display-000.json (displays)"],
+    minRate: {},
+  },
+  {
+    id: "deg-quarter-off",
+    what: "DEG で畳んだ角を 90° 単位で回すのをやめ、畳んだ角全体を f64 にする(1.2.3 の畳み方に戻す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "        quarter: u8::try_from(k % 4).ok()?,\n        radians: x.to_radians(),",
+    to: "        quarter: 0,\n        radians: ratio_to_f64(r, d)?.to_radians(),",
+    // `degree_turn` の最後の `Turn::Folded` だけを変える。表の段・整数の門・
+    // ずれが ±30°・±45° のときの表は残る。角全体 `r/d`(`[0, 360)`)を f64 に
+    // 丸めてから `sin`・`cos` を取るので、90° の倍数の近くで答えが相対で崩れる
+    // (設計書 2026-10-10 §1.1 の (c))。
+    //
+    // **反応(2026-10-10、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // `deg-fold-display-000.json` だけが **240 件中 39 件**(大きな角で 90° の倍数の
+    // 近く 21・小さな角で 90° の倍数の近く 18。大きな整数・大きな分数・表に載る
+    // 大きな角は 0——90° の倍数から遠い角は、角全体を f64 にしても 10 桁が
+    // 変わらない)。手元で測った他の 19 枚(値 11・同値 2・表示 6)は 1 件も
+    // 動かない。呼び出しの 3 枚は engine の三角関数を通らないので測っていない。
+    // 床は先頭の註のとおり、まだ置かない。
+    expectShards: ["deg-fold-display-000.json (displays)"],
     minRate: {},
   },
 ];
