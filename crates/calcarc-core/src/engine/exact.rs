@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::state::Buffer;
-use crate::expr::rational::{Rational, ratio_to_f64};
+use crate::expr::rational::{EXACT_INT, Rational, ratio_to_f64};
 use crate::scientific::{self, Entry, Row, Turn, table_row};
 use crate::{AngleMode, Value};
 
@@ -526,15 +526,9 @@ pub fn dropped(_: Held) -> Marks {
 ///   畳んで `Folded(f64(r) × π)`。
 /// - **RAD で印が k=0**: **q = 0 のときだけ**表(0)。**打った `3.1415926535` も
 ///   `32993.006048` も表に載らない**——π ではないので、f64 の答えが正しい答えである。
-/// - **DEG で印が k=0**: `r = q mod 360` が 30 か 45 の倍数なら表。
+/// - **DEG で印が k=0**: 表か、90° の倍数とずれに分けて畳む(`degree_turn`)。
+///   f64 が `q` を厳密に持つ整数だけは、印で決めずに f64 の規則へ渡す。
 /// - **DEG で印が k=1**(`π` を度で読む)は表に載らない(π° は無理数の角)。f64 の規則へ。
-///
-/// **どちらでも決まらなければ、DEG で印が k=0・分母 ≠ 1 のときだけ印のまま畳む**
-/// (1.2.3 設計書 §2.1、`degree_fold`)。**順は「印が表 → f64 が表 → 畳む」で、
-/// 畳みを先に当ててはならない**(台帳の条件 1)——`30 + 1e-15` の印は表に載らないが、
-/// f64 の和は 30 ちょうどなので f64 の規則が表を引き、`sin − 0.5` は `0` になる。
-/// 畳みを先にすると `-5.551115123e-17` に後退する(engine_table の
-/// `an_angle_whose_f64_is_on_the_table_is_not_folded` が見張る)。
 ///
 /// **RAD は 1.0.0 で「触らない」とした**(入力そのものが厳密でないので、厳密な答えを
 /// 返すと嘘になる)。**1.2.2 で RAD に広げるのは、入力が π の有理数倍だと「分かっている」
@@ -549,12 +543,7 @@ pub fn turn(arg: Held, mode: AngleMode) -> Option<Turn> {
         (Some(mark), AngleMode::Deg) if !mark.pi => degree_turn(mark.q),
         _ => None,
     };
-    from_mark
-        .or_else(|| scientific::turn_of(arg.value, mode))
-        .or_else(|| match (arg.exact, mode) {
-            (Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),
-            _ => None,
-        })
+    from_mark.or_else(|| scientific::turn_of(arg.value, mode))
 }
 
 /// `q × π` の角(RAD)。`r = q mod 2`。
@@ -575,53 +564,57 @@ fn pi_turn(q: Rational) -> Option<Turn> {
     // `d > 2^53` で変換と除算の 2 度丸めになり、1 ulp 外れうる。
     let folded = if r > d { r - 2 * d } else { r };
     let x = ratio_to_f64(folded, d)?;
-    Some(Turn::Folded(x * std::f64::consts::PI))
+    Some(Turn::Folded {
+        quarter: 0,
+        radians: x * std::f64::consts::PI,
+    })
 }
 
-/// `q` 度の角(DEG)。`r = q mod 360`。**30 か 45 の倍数は整数だけ**なので、
-/// 分母が 1 でなければ表に載らない。
+/// `q` 度の角(DEG)。`r = q mod 360`(ユークリッドの剰余、`[0, 360)`)。
+///
+/// 1. **`r` が 30 か 45 の倍数なら表**。分母 ≠ 1 なら `r` は整数でないので載らない。
+/// 2. **`|q| ≤ 2^53` の整数は `None`**(f64 の規則へ)。f64 は `q` を厳密に持つので、
+///    `to_rad` の `re % 360` が既に厳密である。
+/// 3. **それ以外は、いちばん近い 90° の倍数 `90k` と、ずれ `δ = r − 90k`
+///    (`[−45, 45)`、有理数)に分ける。** `δ` を正しく丸めた f64 `x` が ±30 か ±45
+///    ちょうどなら表(位置 `6k ± 2`・`6k ± 3`)、そうでなければ
+///    `Folded { quarter: k mod 4, radians: x° }`。
+///
+/// **角全体ではなく、ずれだけを f64 にする**理由: 90° の倍数の近くでは `sin`・`cos` の
+/// どちらかが `δ` に比例して小さく、角全体を f64 にした丸め(180 の ulp と π の丸め)が
+/// その答えに対して相対で効く。ずれは小さいほど細かく丸まるので、相対で崩れない。
+/// 同じ理由で、分母 ≠ 1 の角から極は出ない(`δ` は 0 にならない)。
+///
+/// 表に吸うのは `x` が ±30・±45 に丸まったときだけである。そこでは表の `1/2`・`√` の
+/// 値のほうが、丸めた角の `sin` より真値に近い。0 の近くでは、ずれの `sin` のほうが
+/// 表の 0 より近い。
+///
+/// i128 が溢れたら `None`(印を捨てて f64 の道へ)。
 fn degree_turn(q: Rational) -> Option<Turn> {
     let (n, d) = q.parts();
-    if d != 1 {
-        return None;
-    }
-    let r = n.rem_euclid(360);
-    if r % 15 == 0 {
-        Turn::table(r / 15)
-    } else {
-        None
-    }
-}
-
-/// **表に載らない分数の度**(1.2.3 設計書 §2.2)。`r = n mod 360d` を正しく丸めた f64 に
-/// してから、ラジアンにする。`(−180, 180]` には寄せない。
-///
-/// **剰余は切り捨て(符号は `n` と同じ)でなければならない。** 理由は、**小さい負の角は
-/// 0 の近くに留まり、360 の隣へ動いてはならない**からである。ユークリッドの剰余は
-/// `−ε` を `360 − ε` に写し、それを f64 にした丸めは 360 の ulp(5.7e-14)で効く。
-/// `sin` の答えは ε 級なので、相対で崩れる(実測: `0.0000001 +/− sin` は切り捨てで
-/// `-0.000000001745329252`、ユークリッドで `-0.000000001745329459`。engine_table の
-/// `a_small_negative_fractional_degree_stays_near_zero` が見張る)。
-/// `to_rad` の `re % 360.0`(IEEE の `fmod`)と向きがそろうのは、その結果である。
-///
-/// - **分母が 1(整数の角)は畳まない**——**`|q| ≤ 2^53` の整数は f64 で厳密**なので、
-///   `to_rad` の `re % 360.0` が既に厳密である。**2^53 を超える整数は f64 で厳密ではなく、
-///   別の角や表に着地する**(既知の欠陥。台帳 `rust-review-backlog.md` §6)。
-/// - **`360d` が i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
-///
-/// **有理数の角はちょうど 90° にはならない**(分母 ≠ 1。§2.3)。ただし `r/d` を f64 に
-/// 丸めた値が 90.0 ちょうどに着地することはありうる——**`|q| > 2^53` のときだけ**
-/// (整数部が 2^53 を超えると、90 からの小数のずれが丸めで消える)。そのとき tan は
-/// 極の表を引かず、f64 の `tan` の大きな有限値を返す。**これは既知の欠陥である**
-/// (台帳 `rust-review-backlog.md` §6)——`1 EXP 17 + 170 + 1 EXP 16 +/− = tan` は
-/// `1.633123935e16` と出るが、真値は約 `-5.73e17`(符号まで逆)。
-fn degree_fold(q: Rational) -> Option<Turn> {
-    let (n, d) = q.parts();
+    let quarter = d.checked_mul(90)?;
+    let r = n.rem_euclid(quarter.checked_mul(4)?);
     if d == 1 {
-        return None;
+        if r % 15 == 0 {
+            if let Some(table) = Turn::table(r / 15) {
+                return Some(table);
+            }
+        }
+        if n.unsigned_abs() <= EXACT_INT {
+            return None;
+        }
     }
-    let r = n.checked_rem(d.checked_mul(360)?)?;
-    Some(Turn::Folded(ratio_to_f64(r, d)?.to_radians()))
+    let k = r.checked_add(d.checked_mul(45)?)?.div_euclid(quarter);
+    let x = ratio_to_f64(r.checked_sub(k.checked_mul(quarter)?)?, d)?;
+    if x.abs() == 30.0 || x.abs() == 45.0 {
+        if let Some(table) = Turn::table(6 * k + (x / 15.0) as i128) {
+            return Some(table);
+        }
+    }
+    Some(Turn::Folded {
+        quarter: u8::try_from(k % 4).ok()?,
+        radians: x.to_radians(),
+    })
 }
 
 /// 表の答えの印(§3.3・§4.2)。**0・±1/2・±1 なら k=0、√ を含めば印なし。**
@@ -991,7 +984,10 @@ mod tests {
         // **15°(π/12)は表に無い**(§4.1)。答えの表示は表の値と同じ 10 桁になるので、
         // 載らないことは角の正体で見る。
         let held = state_after(&["angle_toggle", "pi", "div", "1", "2", "eq"]).current;
-        assert!(matches!(turn(held, AngleMode::Rad), Some(Turn::Folded(_))));
+        assert!(matches!(
+            turn(held, AngleMode::Rad),
+            Some(Turn::Folded { .. })
+        ));
         let held = state_after(&["angle_toggle", "pi", "div", "6", "eq"]).current;
         assert!(matches!(turn(held, AngleMode::Rad), Some(Turn::Table(p)) if p.get() == 2));
     }
@@ -1014,7 +1010,10 @@ mod tests {
         let q = Rational::from_ratio(n, d).unwrap();
         assert_eq!(
             pi_turn(q),
-            Some(Turn::Folded(0.6082601208004514 * std::f64::consts::PI))
+            Some(Turn::Folded {
+                quarter: 0,
+                radians: 0.6082601208004514 * std::f64::consts::PI
+            })
         );
     }
 

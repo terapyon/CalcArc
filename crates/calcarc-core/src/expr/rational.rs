@@ -133,7 +133,7 @@ impl Rational {
 }
 
 /// 2^53。これ以下の整数は f64 が厳密に持てる。
-const EXACT_INT: u128 = 1 << 53;
+pub(crate) const EXACT_INT: u128 = 1 << 53;
 
 /// **`num / den` を正しく丸めた f64**(1.2.2 設計書 §5.3、§11.2 の未決 2)。最近接、同点は
 /// 偶数へ(IEEE 754 の既定)。`den == 0` なら `None`。**panic しない。**
