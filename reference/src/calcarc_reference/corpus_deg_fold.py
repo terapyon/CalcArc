@@ -326,7 +326,10 @@ def _take(
 
 
 def groups() -> dict[str, tuple[list[Candidate], int]]:
-    """5 群の角（各 16）と、境目に近くて捨てた数。"""
+    """5 群の角（各 16）と、境目に近くて捨てた数。
+
+    独立: 別手順（群の作り方は設計書 §4.3 から。engine のコードは写していない）
+    """
     return {
         "large-integer": _take([_large_integer] * PER_GROUP, SEEDS["large-integer"]),
         "large-table": _take([_large_table(r) for r in TABLE_RESIDUES], SEEDS["large-table"]),

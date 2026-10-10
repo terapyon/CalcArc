@@ -298,7 +298,7 @@ Deg で印が k=0（`q = n/d`、既約）のとき:
 | 変異 | 何を壊すか | 期待シャード | 乱択での反応（表示。**試作の数で、シャードの数ではない**） |
 |---|---|---|---|
 | **新 `deg-quarter-off`** | 回転をやめ、畳んだ角全体（`r/d`）をラジアンにする（1.2.3 の畳み方に戻す） | `deg-fold-display-000.json (displays)` だけ | 大きな角の極の近く 215 / 324、小さな角の 90° の倍数の近く 372 / 672。大きな整数・分数は 0 |
-| **既存 `f3-degree-fold-off` の照準を直す** | 畳み全体を止める（`degree_turn` の畳みの段の入口。例えば `let quarter = d.checked_mul(90)?;` に `.filter(\|_\| false)` を足す） | `typed-000.json (values)`（1 件。今と同じ）と `deg-fold-display-000.json (displays)` | 大きな整数・分数・極の近く・小さな角のほとんど |
+| **既存 `f3-degree-fold-off` の照準を直す** | 畳み全体を止める（`degree_turn` の、表の段と整数の門の後の `let k = r.checked_add(d.checked_mul(45)?)?.div_euclid(quarter);` の `d.checked_mul(45)` に `.filter(\|_\| false)` を足す。**第 2 版の例 `let quarter = d.checked_mul(90)?;` からの逸脱**——その行は表の段より前に在り、印の表まで止めて「表に載る大きな角」の群が 48 件中 48 件赤くなった） | `typed-000.json (values)`（1 件。今と同じ）と `deg-fold-display-000.json (displays)` | 大きな整数・分数・極の近く・小さな角のほとんど |
 | 既存 `display-digits` | 表示を 9 桁に | 表に `deg-fold-display-000.json (displays)` を足す | 0・±1/2・±1・`Math ERROR` の行以外はほぼ全部 |
 
 - **`f3-degree-fold-off` の今の `from`（`(Some(mark), AngleMode::Deg) if !mark.pi => degree_fold(mark.q),`）は、§3.1 で消える行である。** 照準を直さないと、`heavy:power` は変異を当てられずに落ちる。
