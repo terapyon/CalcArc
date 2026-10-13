@@ -143,4 +143,5 @@
 
 ## 1.2.4 の床（heavy:power）
 
-- **【未消化 2026-10-10】** GitHub での 1.2.4 の初回 `heavy:power` の後に、`deg-fold-display-000.json (displays)` を期待する 3 本（`deg-quarter-off`・`f3-degree-fold-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は `deg-quarter-off` 39・`f3-degree-fold-off` 168（＋ typed 1。typed は 1 件なので床を置かない）・`display-digits` 171（どれも 240 件中）。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-10-large-degree-angles-design.md` §4.4 から指される。
+- **【消化 2026-10-13】** 床を置いた。GitHub の Heavy corpus の手動走行 `38408722486`（`8abb39d`、`heavy:power` を含む）で、3 本の反応は手元のネイティブと 1 件も違わなかった（`deg-quarter-off` 39・`f3-degree-fold-off` 168 ＋ typed 1・`display-digits` 171、変異 25 本すべて期待どおり）。下限は `0.143`・`0.616`・`0.627`（床は 35・148・151 件）。typed は床を置かない。
+- （当初の項）GitHub での 1.2.4 の初回 `heavy:power` の後に、`deg-fold-display-000.json (displays)` を期待する 3 本（`deg-quarter-off`・`f3-degree-fold-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は `deg-quarter-off` 39・`f3-degree-fold-off` 168（＋ typed 1。typed は 1 件なので床を置かない）・`display-digits` 171（どれも 240 件中）。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-10-large-degree-angles-design.md` §4.4 から指される。
