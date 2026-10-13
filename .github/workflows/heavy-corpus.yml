@@ -154,6 +154,14 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+          # uv 本体と Python を固定する(`ci.yml` の Python reference のジョブと同じ綴り)。
+          # 指定しないと action が最新の uv を入れ、その uv が最新の Python を選ぶ
+          # ——走行 38400161178(2026-10-13)では uv 0.13.0 が CPython 3.15.0 を選び、
+          # コーパス 18 枚の `generated_by` の「Python 3.14」が「Python 3.15」に変わって
+          # 下の段が赤くなった(期待値そのものは同じだった)。
+          # 番人は `tools/tests/setup-uv-pins.test.ts`。
+          version: "0.12.3"
+          python-version: "3.14"
 
       - name: Install the reference implementation
         # 種別: 前提を整える
