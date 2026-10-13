@@ -316,7 +316,7 @@ export const CALL_SHARD_PATTERN =
  * 即座に落ちる**(assertShardIsSound が守る)。
  */
 export const DISPLAY_SHARD_PATTERN =
-  /^(display|complex-display|combinatorics-display|rad-pi-display|entry|errors)-\d+\.json$/;
+  /^(display|complex-display|combinatorics-display|rad-pi-display|deg-fold-display|entry|errors)-\d+\.json$/;
 
 /**
  * 表示を主張するケース。`expect.main` は**表示文字列そのもの**。

@@ -712,7 +712,7 @@ export function areaOfShard(shardName: string): Area {
     // 「複素数を検証した」件数が別の領域の数字に混ざる。
     return "complex";
   }
-  if (/^(display|entry|errors|rad-pi-display)-/.test(stem)) {
+  if (/^(display|entry|errors|rad-pi-display|deg-fold-display)-/.test(stem)) {
     // **`scientific` に混ぜない。** このシャードが主張しているのは値ではなく
     // **表示文字列**で、比較も厳密一致である。混ぜると「値がどれだけ合って
     // いるか」の件数に、値を一度も比べていない 2000 件が加わってしまう。
@@ -731,6 +731,9 @@ export function areaOfShard(shardName: string): Area {
     // `rad-pi-display-` も同じ理由でここに入る（2026-10-06）。**値ではなく
     // 表示の文字列を厳密一致で比べる**——そうしないと `1.224646799e-16` と `0` を
     // 見分けられない（真値 0 の行は値ケースだと abs 5e-10 で両方緑になる）。
+    //
+    // `deg-fold-display-` も同じ理由でここに入る（2026-10-10、1.2.4）。DEG の
+    // 大きな角と 90° の倍数の近くの角で、`0` と `-5.551115123e-17` を見分ける。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {
@@ -2741,6 +2744,13 @@ export const COMBINATORICS_ERRORS_SHARD = "combinatorics-display-000.json";
  */
 export const RAD_PI_SHARD = "rad-pi-display-000.json";
 
+/**
+ * DEG の大きな角・90° の倍数の近くの角のシャード（2026-10-10、1.2.4）。
+ * **極の行（`TrigPole`、`q ≡ 90 (mod 180)` の大きな整数の `tan`）を持つ。**
+ * エラー経路は `RAD_PI_SHARD` と同じ理由で `errors` と同じ枠。
+ */
+export const DEG_FOLD_SHARD = "deg-fold-display-000.json";
+
 /** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
 export const ENTRY_SHARD = "entry-000.json";
 
@@ -2803,7 +2813,8 @@ function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
   if (
     stem === shardStem(ERRORS_SHARD) ||
     stem === shardStem(COMBINATORICS_ERRORS_SHARD) ||
-    stem === shardStem(RAD_PI_SHARD)
+    stem === shardStem(RAD_PI_SHARD) ||
+    stem === shardStem(DEG_FOLD_SHARD)
   ) {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。

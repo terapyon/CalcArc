@@ -32,6 +32,7 @@ import sympy as sp
 from calcarc_reference import (
     corpus_combinatorics,
     corpus_complex,
+    corpus_deg_fold,
     corpus_rad_pi,
     corpus_science,
     eng_ref,
@@ -3054,6 +3055,12 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # 固定の格子。**最後に足す**（上と同じ理由で、書き出しの順を動かさない）。
     # `SCIENCE_SHARDS` には入れない——9 領域のモデルに RAD × π の軸が無い。
     yield "rad-pi-display-000.json", corpus_rad_pi.build_shard()
+    # **DEG で大きな角と 90° の倍数の近くの角を三角関数に渡す 1 枚**（1.2.4、設計書
+    # `2026-10-10-large-degree-angles-design.md` §4.3）。**`count` を持たない**——
+    # 5 群 × 16 の角を、群ごとに seed を固定した候補列から取る。**最後に足す**
+    # （上と同じ理由で、書き出しの順を動かさない）。`SCIENCE_SHARDS` には入れない
+    # ——9 領域のモデルに「大きな角・90° の倍数の近く」の軸が無い。
+    yield "deg-fold-display-000.json", corpus_deg_fold.build_shard()
 
 
 #: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。

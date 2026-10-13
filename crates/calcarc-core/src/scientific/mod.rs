@@ -89,9 +89,11 @@ pub enum Turn {
     /// private なので、このモジュールの外からは `Turn::table` を通らずに作れない**
     /// (`Turn::Table(Position(1))` のような載らない位置は型の段で起きない)。
     Table(Position),
-    /// **表に載らない、π の有理数倍の角**。`r = q mod 2` を `(−1, 1]` に畳んでから
-    /// `f64(r) × π`（ラジアン）。**巨大な倍数でも真の角から外れない**（§4.2）。
-    Folded(f64),
+    /// **表に載らない角を、打った数から畳んだもの**。角は `quarter × 90° + radians`。
+    /// RAD の π の有理数倍は `r = q mod 2` を `(−1, 1]` に畳んだ `f64(r) × π`
+    /// （`quarter` は 0）、DEG は 90° の倍数とずれに分けたもの（`engine::exact`）。
+    /// **巨大な角でも真の角から外れない。**
+    Folded { quarter: u8, radians: f64 },
 }
 
 /// 表に載る位置(15° 単位の `0..24` のうち、30° か 45° の倍数)。**欄は private**——
@@ -236,7 +238,15 @@ fn circular(z: Value, turn: Option<Turn>) -> (f64, f64) {
             Some(row) => (row.sin.f64(), row.cos.f64()),
             None => (z.re.sin(), z.re.cos()),
         },
-        Some(Turn::Folded(x)) => (x.sin(), x.cos()),
+        Some(Turn::Folded { quarter, radians }) => {
+            let (s, c) = (radians.sin(), radians.cos());
+            match quarter % 4 {
+                0 => (s, c),
+                1 => (c, -s),
+                2 => (-s, -c),
+                _ => (-c, s),
+            }
+        }
         None => (z.re.sin(), z.re.cos()),
     }
 }
@@ -880,7 +890,15 @@ mod tests {
     fn a_folded_turn_is_used_as_the_real_angle() {
         // **`Turn::Folded` は実部の角そのもの**(ラジアン)。f64 の `re` は読まない。
         let x = 0.4 * PI;
-        let s = sin_at(Value::real(1e300), AngleMode::Rad, Some(Turn::Folded(x))).expect("有限");
+        let s = sin_at(
+            Value::real(1e300),
+            AngleMode::Rad,
+            Some(Turn::Folded {
+                quarter: 0,
+                radians: x,
+            }),
+        )
+        .expect("有限");
         assert_eq!(s.re, x.sin());
     }
 

@@ -364,6 +364,7 @@ jobs:
         with:
           # uv 本体も固定する。指定しないと action が最新を入れ、実行ごとに
           # 変わりうる(依存解決は uv.lock が守るが、uv 自身の挙動は守らない)。
+          # `heavy-corpus.yml` と同じ値にする(番人は `tools/tests/setup-uv-pins.test.ts`)。
           version: "0.12.3"
           python-version: "3.14"
       - run: uv sync --locked

@@ -310,7 +310,7 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names twenty-two shards, and names them once", () => {
+  it("names twenty-three shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
     //
@@ -318,10 +318,12 @@ describe("the verdict looks at the health of the measurement first", () => {
     // **20 枚目は 2026-09-11**（`finance-start-000.json (calls)`、期首の
     // シャード）。**21 枚目は 2026-09-16**（`operator-correction-000.json
     // (values)`、押し直しのシャード）。**22 枚目は 2026-10-06**
-    // （`rad-pi-display-000.json (displays)`、RAD × π の倍数）。枚数を名前で持っているので、1 枚
+    // （`rad-pi-display-000.json (displays)`、RAD × π の倍数）。**23 枚目は
+    // 2026-10-10**（`deg-fold-display-000.json (displays)`、DEG の大きな角と
+    // 90° の倍数の近くの角）。枚数を名前で持っているので、1 枚
     // 消えて別の 1 枚が現れる走行も、枚数が合っているだけでは見逃さない。
-    expect(ALL_SHARDS).toHaveLength(22);
-    expect(new Set(ALL_SHARDS).size).toBe(22);
+    expect(ALL_SHARDS).toHaveLength(23);
+    expect(new Set(ALL_SHARDS).size).toBe(23);
   });
 
   it("expects only shards that this run is supposed to load", () => {
