@@ -179,4 +179,12 @@ SCOPE: dict[str, tuple[str, str]] = {
         "expects",
         "丸めの半端を探索する。Decimal と Fraction で値を作る",
     ),
+    "scripts/ppm_rand.py": (
+        "expects",
+        "1.2.5 の設計の乱択。キー列と SymPy の厳密な式で真値を作る",
+    ),
+    "scripts/ppm_cmp.py": (
+        "tools",
+        "2 本の pitry の印字と乱択の真値を突き合わせて数えるだけ。数を作らない",
+    ),
 }
