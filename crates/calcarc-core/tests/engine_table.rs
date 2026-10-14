@@ -2401,3 +2401,267 @@ fn large_degree_angles_that_do_not_change() {
     assert_eq!(main_of(&["1", "exp", "4", "0", "sin"]), "0.9271838546");
     assert_eq!(main_of(&["1", "exp", "1", "5", "sin"]), "-0.984807753");
 }
+
+// ---- π の逆数・冪・和と、π の √(1.2.5 設計書 §5.1) ----
+//
+// 期待はどれも SymPy の厳密な式の 10 桁(0 と極は式から)。ただし「吸う窓」の 1 行だけは
+// 1.2.4 の規則から導いた値である(行の註)。
+
+/// **π の逆数(k = −1・−2)は、π に戻れば表を引く**(§3.3)。
+#[test]
+fn a_reciprocal_of_pi_reaches_the_table() {
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["1", "div", "pi", "eq", "recip", "sin"]), "0");
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "recip", "recip", "sin"]), "0");
+    // k = −2 を通る。今 `-1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "1", "div", "pi", "eq", "sqr", "mul", "pi", "eq", "recip", "tan"
+        ]),
+        "0"
+    );
+}
+
+/// **`π/2` に戻った角の `tan` は極である**(§7.2 の U3)。今は `1.633123935e16`。
+#[test]
+fn a_reciprocal_of_pi_reaches_the_pole() {
+    use calcarc_core::CalcError;
+    let shown = run(&["angle_toggle", "2", "div", "pi", "eq", "recip", "tan"]);
+    assert_eq!(shown.main, "Math ERROR");
+    assert_eq!(shown.error, Some(CalcError::TrigPole));
+}
+
+/// **π の冪(k = 2・3)は、割って π に戻れば表を引く**(§3.3)。
+#[test]
+fn a_power_of_pi_reaches_the_table() {
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "pi", "eq", "div", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "sqr", "div", "pi", "eq", "sin"]), "0");
+    // k = 3 を通る。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqr", "mul", "pi", "eq", "div", "pi", "eq", "div", "pi", "eq", "sin"
+        ]),
+        "0"
+    );
+}
+
+/// **π と打った数の和は、打った数を引けば π に戻る**(§3.3)。今 `1.224646799e-16`。
+#[test]
+fn a_sum_with_pi_reaches_the_table() {
+    assert_eq!(
+        rad_main_of(&["pi", "add", "1", "eq", "sub", "1", "eq", "sin"]),
+        "0"
+    );
+}
+
+/// **π の冪の √ は、`x²` で π の冪に戻る**(§2.3)。
+#[test]
+fn the_root_of_a_power_of_pi_squares_back() {
+    // 今 `5.665538898e-16`。
+    assert_eq!(rad_main_of(&["pi", "sqrt", "sqr", "sin"]), "0");
+    // 今 `5.665538898e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "2", "eq", "sqrt", "sqr", "div", "2", "eq", "sin"
+        ]),
+        "0"
+    );
+    // √(π⁻¹)。今 `-3.216245299e-16`。
+    assert_eq!(
+        rad_main_of(&["1", "div", "pi", "eq", "sqrt", "sqr", "recip", "sin"]),
+        "0"
+    );
+    // √(π³)。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "pi", "eq", "mul", "pi", "eq", "sqrt", "sqr", "div", "pi", "eq", "div",
+            "pi", "eq", "sin"
+        ]),
+        "0"
+    );
+}
+
+/// **偶数の冪で平方数の √ は、π の冪そのものになる**(§2.3。§7.2 の U1)。
+#[test]
+fn the_root_of_a_square_power_of_pi_is_a_power_of_pi() {
+    // √(π²) = π。今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "sqr", "sqrt", "sin"]), "0");
+    // √(4π²) = 2π。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "2", "mul", "pi", "eq", "sqr", "sqrt", "div", "2", "eq", "sin"
+        ]),
+        "0"
+    );
+    // √√(π⁴) = π。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "sqr", "sqr", "sqrt", "sqrt", "sin"]),
+        "0"
+    );
+    // 1/√(π⁻²) = π。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "sqr", "recip", "sqrt", "recip", "sin"]),
+        "0"
+    );
+    // √(4π²) = 2π。`4 √ × π = sin` は k = 0 の √ が root のままなので変わらない
+    // (対照 `pi_marks_that_do_not_change`)。今 `-2.449293598e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "sqr", "mul", "4", "eq", "sqrt", "sin"]),
+        "0"
+    );
+}
+
+/// **`÷` は割られる側の冪をずらす。割る側の逆数を作らない**(§3.1)。割る側が π³ でも、
+/// 答えが範囲の中なら印は残る。
+#[test]
+fn a_division_shifts_the_dividend() {
+    // π⁴ ÷ π³ = π。今 `-3.216245299e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqr", "sqr", "div", "lparen", "pi", "sqr", "mul", "pi", "rparen", "eq", "sin"
+        ]),
+        "0"
+    );
+    // π³ ÷ π³ × π = π。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqr", "mul", "pi", "eq", "div", "lparen", "pi", "sqr", "mul", "pi", "rparen",
+            "eq", "mul", "pi", "eq", "sin"
+        ]),
+        "0"
+    );
+}
+
+/// **`xʸ 0.5` は `√` と同じ印を持つ**(§3.1)。
+#[test]
+fn a_half_power_is_a_root() {
+    // 今 `4.440892099e-16`。
+    assert_eq!(
+        main_of(&["2", "pow", "0", "dot", "5", "eq", "sqr", "sub", "2", "eq"]),
+        "0"
+    );
+    // 今 `5.665538898e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "0", "dot", "5", "eq", "sqr", "sin"]),
+        "0"
+    );
+    // **2 倍の門の内側**(A² = 2、B² ≈ 2)なので、√ の差の書き換えを通る。
+    // `2 √ − 1.414213562 =` と同じ答え。今 `3.730951104e-10`。
+    assert_eq!(
+        main_of(&[
+            "2", "pow", "0", "dot", "5", "eq", "sub", "1", "dot", "4", "1", "4", "2", "1", "3",
+            "5", "6", "2", "eq"
+        ]),
+        "3.730950488e-10"
+    );
+}
+
+/// **DEG で π を足して引いた角は、直接打った角と同じ答え**(§4.1。§7.2 の U4)。
+/// `150 + 5e-15` は 1.2.4 の「吸う窓」の外で、`-5.551115123e-17` は
+/// `the_table_window_is_half_an_ulp_of_the_offset` と同じ値である(真値は
+/// `-7.557497351e-17`)。今 `0`。
+#[test]
+fn pi_added_and_taken_away_in_degrees_is_the_typed_angle() {
+    assert_eq!(
+        main_of(&[
+            "pi", "add", "1", "5", "0", "add", "5", "exp", "1", "5", "neg", "eq", "sub", "pi",
+            "eq", "sin", "sub", "0", "dot", "5", "eq"
+        ]),
+        "-5.551115123e-17"
+    );
+}
+
+/// **変わらない対照・RAD**(§5.1・§7.1)。
+#[test]
+fn pi_marks_that_do_not_change() {
+    // 和を三角関数に渡しても畳まない。
+    assert_eq!(
+        rad_main_of(&["pi", "add", "1", "eq", "sin"]),
+        "-0.8414709848"
+    );
+    // f64 でも合う所は、表から引いても同じ表示。
+    assert_eq!(
+        rad_main_of(&["6", "div", "pi", "eq", "recip", "sin"]),
+        "0.5"
+    );
+    // root どうしの積は持たない。
+    assert_eq!(
+        rad_main_of(&["pi", "sqrt", "mul", "pi", "sqrt", "eq", "sin"]),
+        "5.665538898e-16"
+    );
+    // k = 5 は範囲外。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqr", "sqr", "mul", "pi", "eq", "div", "pi", "eq", "div", "pi", "eq", "div",
+            "pi", "eq", "div", "pi", "eq", "sin"
+        ]),
+        "1.224646799e-16"
+    );
+    // k = 8 は範囲外。√ で範囲に戻っても印は戻らない。
+    assert_eq!(
+        rad_main_of(&["pi", "sqr", "sqr", "sqr", "sqrt", "sqrt", "sqrt", "sin"]),
+        "1.224646799e-16"
+    );
+    // k = −3 は範囲外。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqr", "recip", "div", "pi", "eq", "mul", "pi", "eq", "mul", "pi", "eq", "mul",
+            "pi", "eq", "mul", "pi", "eq", "sin"
+        ]),
+        "5.665538898e-16"
+    );
+    // 整数の指数の xʸ は範囲外。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "2", "eq", "div", "pi", "eq", "sin"]),
+        "1.224646799e-16"
+    );
+    // 逆三角関数は範囲外。
+    assert_eq!(rad_main_of(&["1", "neg", "acos", "sin"]), "1.224646799e-16");
+    // i128 の溢れは範囲外。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "exp", "4", "0", "eq", "sin"]),
+        "0.9995496644"
+    );
+    // k = 0 の平方数の √ は root のまま(`π x² × 4 = √ sin` と綴りで割れる)。
+    assert_eq!(
+        rad_main_of(&["4", "sqrt", "mul", "pi", "eq", "sin"]),
+        "-2.449293598e-16"
+    );
+}
+
+/// **変わらない対照・√ の差の門と DEG の表**(§5.1)。
+#[test]
+fn roots_and_degree_windows_that_do_not_change() {
+    // x^0.5 は 2 倍の門の**外**(A² = 2、B² = 0.25)では書き換えない。
+    assert_eq!(
+        main_of(&[
+            "2", "pow", "0", "dot", "5", "eq", "sub", "0", "dot", "5", "eq"
+        ]),
+        "0.9142135624"
+    );
+    // x^0.5 と √ は同じ値・同じ印。
+    assert_eq!(
+        main_of(&["3", "pow", "0", "dot", "5", "eq", "sub", "3", "sqrt", "eq"]),
+        "0"
+    );
+    // 門の内側の √ は 1.2.3 のまま(`a_half_power_is_a_root` の 3 行目の相手)。
+    assert_eq!(
+        main_of(&[
+            "2", "sqrt", "sub", "1", "dot", "4", "1", "4", "2", "1", "3", "5", "6", "2", "eq"
+        ]),
+        "3.730950488e-10"
+    );
+    // 1.2.4 の番人(`an_angle_whose_f64_is_on_the_table_is_not_folded`)。
+    assert_eq!(
+        main_of(&[
+            "3", "0", "add", "1", "exp", "1", "5", "neg", "eq", "sin", "sub", "0", "dot", "5", "eq"
+        ]),
+        "0"
+    );
+}
