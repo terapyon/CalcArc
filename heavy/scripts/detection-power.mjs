@@ -61,6 +61,7 @@ export const ALL_SHARDS = [
   "complex-display-000.json (displays)",
   "rad-pi-display-000.json (displays)",
   "deg-fold-display-000.json (displays)",
+  "pi-power-display-000.json (displays)",
   "display-000.json (displays)",
   "entry-000.json (displays)",
   "errors-000.json (displays)",
@@ -77,9 +78,16 @@ export const ALL_SHARDS = [
  * そのシャードの総件数)。率で持つのは、コーパスが増えても表を書き換えず
  * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
  * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
- * 床が未設定の期待シャードは 1 件以上で見る。**実測が 1 件で、率の下限に
- * 載らない**ものだけである——`precedence-collapse` の `entry-000.json`、
- * `periods-for-binary-search`、`f3-degree-fold-off` の `typed-000.json`。
+ * 床が未設定の期待シャードは 1 件以上で見る。理由は 2 つある:
+ * - **実測が 1 件で、率の下限に載らない**——`precedence-collapse` の
+ *   `entry-000.json`、`periods-for-binary-search`、`f3-degree-fold-off` の
+ *   `typed-000.json`。
+ * - **GitHub の `heavy:power` をまだ回していない**(1.2.5、2026-10-14)——
+ *   `pi-power-display-000.json` を期待する 6 本(`display-digits`・
+ *   `rad-pi-table-off`・`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・
+ *   `pi-sqrt-square-off`)。手元のネイティブ実行の数は各変異の註にある。
+ *   床は走行の数の約 12% 下に置く(設計書 2026-10-14 §5.5。追跡は台帳
+ *   `rust-review-backlog.md`)。
  *
  * 値は 2026-08-19（Task 7）に `pnpm heavy:power` を実走して確定した。
  * 反応件数は 2026-08-17 の走行（設計書 §4.6）と 1 件も違わなかった——
@@ -151,6 +159,11 @@ export const MUTATIONS = [
       // 9 桁目で丸めても文字列が同じになる行は変わらない。**240 件中 171 件
       // (71.3%)、下限はその約 12% 下(`0.627`。床は 151 件)。**
       "deg-fold-display-000.json (displays)",
+      // **`pi-power-display-000.json` も反応する(2026-10-14、手元のネイティブ実行で
+      // 実測。`heavy:power` はまだ回していない)。** 表示の文字列を比べるので、10 桁の
+      // 答えは 9 桁に落ちれば変わる。**368 件中 182 件。**
+      // 床はまだ置かない(先頭の註)。
+      "pi-power-display-000.json (displays)",
     ],
     minRate: {
       "angle-mode-000.json (values)": 0.254,
@@ -714,17 +727,28 @@ export const MUTATIONS = [
     id: "rad-pi-table-off",
     what: "RAD で π の倍数を表から引くのをやめる(1.2.2 の直しを外す)",
     file: "crates/calcarc-core/src/engine/exact.rs",
-    from: "(Some(mark), AngleMode::Rad) if mark.pi => pi_turn(mark.q),",
-    to: "(Some(mark), AngleMode::Rad) if mark.pi && false => pi_turn(mark.q),",
-    // **`rad-pi-display-000.json` だけが反応するはず。** 他の 21 枚に、RAD で
-    // π を三角関数に渡すキー列は 1 本も無い(2026-10-06 に全シャードのキー列を
-    // 数えて 0 本)。外すと f64 の π で計算する 1.2.2 までの答えに戻り、
-    // 0 になるはずの行が `1.224646799e-16` などに、極の行が有限の巨大値になる。
-    // **296 件中 44 件(14.9%)が赤**(2026-10-06、手元のネイティブ実行で実測。
-    // 1.2.2 の前の core `afa9991` で回しても同じ 44 件。2026-10-08 の走行
-    // `37769606857` でも 44 件)。残りは √ を含む値と
-    // 表に載らない角で、f64 の π でも 10 桁が変わらない。下限はその約 12% 下。
-    expectShards: ["rad-pi-display-000.json (displays)"],
+    from: "        (Some(Some((1, q))), AngleMode::Rad) => pi_turn(q),",
+    to: "        (Some(Some((1, q))), AngleMode::Rad) => pi_turn(q).filter(|_| false),",
+    // **照準を 1.2.5 で直した(2026-10-14)。** 1.2.4 までの `from`
+    // (`(Some(mark), AngleMode::Rad) if mark.pi => pi_turn(mark.q),`)は、印が
+    // ローラン多項式になって消えた。いまは `Some(Some((1, q)))`(単項 k = 1)の
+    // 腕で、表の引きを `None` にする。f64 の π で計算する 1.2.2 までの答えに戻る
+    // (`pi_turn(q)` を呼んだまま答えを捨てる。`f2-log1p-off` と同じ形)。
+    //
+    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // - `rad-pi-display-000.json`: **296 件中 44 件**(14.9%。1.2.2 から変わらない)。
+    // - `pi-power-display-000.json`: **368 件中 48 件**(k = −1・2・和・√π・√(π²)・
+    //   k = −2〜4 の群が 8 件ずつ。0 と極の行。DEG の群、x^0.5 の 2 群は RAD の表を
+    //   通らないので 0 件)。
+    // 手元で測った他の 19 枚(値 11・同値 2・表示 6)は 1 件も動かない。呼び出しの
+    // 3 枚は engine の三角関数を通らないので測っていない。
+    //
+    // `rad-pi-display-000.json` の下限はその約 12% 下(1.2.2 から)。
+    // 新しいシャードの床は先頭の註のとおり、まだ置かない。
+    expectShards: [
+      "rad-pi-display-000.json (displays)",
+      "pi-power-display-000.json (displays)",
+    ],
     minRate: { "rad-pi-display-000.json (displays)": 0.13 },
   },
   {
@@ -837,6 +861,78 @@ export const MUTATIONS = [
     // 39 件は 16.3%、下限はその約 12% 下(`0.143`。床は 35 件)。
     expectShards: ["deg-fold-display-000.json (displays)"],
     minRate: { "deg-fold-display-000.json (displays)": 0.143 },
+  },
+
+  // **ここから 1.2.5 の π の多項式の印を外す変異(設計書 2026-10-14-pi-power-marks
+  // §5.5)。** 期待するシャードは、手元のネイティブ実行で各変異を当てて、表示を
+  // 比べた全 24 枚のうち反応した枚を数えたもの(2026-10-14)。**設計書は 3 本としたが
+  // 4 本にした**——「`pi ≠ 0` の root を作らない」と「`xʸ 0.5` に印を付けない」は
+  // 別のファイル(`exact.rs` と `engine/mod.rs`)にあり、1 か所の文字列置換では
+  // 作れないので、後者を `pi-half-power-off` に分けた。
+  // **床(`minRate`)はどれも置かない**(先頭の註。`heavy:power` を GitHub で回してから)。
+  {
+    id: "pi-laurent-off",
+    what: "π の印を『k が 0 か 1 の単項』に戻す(1.2.5 のローラン多項式を外す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "        let Marks { exact, root } = marks;",
+    to: "        let Marks { exact, root } = marks;\n        let exact = exact.filter(|m| matches!(m.monomial(), Some((0 | 1, _))));",
+    // `Held::settled` で、k が 0・1 の外の単項と、2 つ以上の項の印を落とす。
+    // π⁻¹・π²・π^4 を通る式と、和が打ち消す式が f64 に戻る。
+    //
+    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // `pi-power-display-000.json` だけが **368 件中 54 件**(k = −1・2・和・√(π²)・
+    // k = −2〜4 の群が 8 件ずつ、DEG の群が 14 件)。√π の群と x^0.5 の 2 群は
+    // 動かない(root の印は `Held::settled` の外)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も
+    // 動かない。呼び出しの 3 枚は測っていない。
+    expectShards: ["pi-power-display-000.json (displays)"],
+    minRate: {},
+  },
+  {
+    id: "pi-root-off",
+    what: "π を含む √ の印(root)を作らない(平方数の √ は残す)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "            r: q,\n            pi: k,\n        }),",
+    to: "            r: q,\n            pi: k,\n        })\n        .filter(|_| k == 0),",
+    // `pi ≠ 0` の root を `None` にする。`√(π n)` が f64 に戻り、そのあとの
+    // `x²` が π の印を取り戻せない。
+    //
+    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // `pi-power-display-000.json` だけが **368 件中 8 件**(√π の群の 0 と極の行。
+    // 綴りが `√` の行も `xʸ 0.5` の行も)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
+    // 呼び出しの 3 枚は測っていない。
+    expectShards: ["pi-power-display-000.json (displays)"],
+    minRate: {},
+  },
+  {
+    id: "pi-half-power-off",
+    what: "`xʸ 0.5` を `√` として扱わない(値も印も今の `xʸ` に戻る)",
+    file: "crates/calcarc-core/src/engine/mod.rs",
+    from: "        BinOp::Pow if exact::is_square_root(lhs, rhs) => {",
+    to: "        BinOp::Pow if false && exact::is_square_root(lhs, rhs) => {",
+    // `x^0.5` の腕に入らない。値は `powf(x, 0.5)` に、印は付かなくなる。
+    //
+    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // `pi-power-display-000.json` だけが **368 件中 22 件**(x^0.5 の `√q` を 2 乗して
+    // q を引く群 16 件中 10 件、`√q − p` の群 16 件中 8 件、√π の群の `xʸ 0.5` 綴りの
+    // 0 と極の行 4 件)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
+    // 呼び出しの 3 枚は測っていない。
+    expectShards: ["pi-power-display-000.json (displays)"],
+    minRate: {},
+  },
+  {
+    id: "pi-sqrt-square-off",
+    what: "偶数の冪の平方数の √ を単項に戻さず root にする(√(π²)=π の戻し=U1 を切る)",
+    file: "crates/calcarc-core/src/engine/exact.rs",
+    from: "    if k != 0 && k % 2 == 0 {",
+    to: "    if k != 0 && k % 2 == 0 && k > 4 {",
+    // `√(s π^k)` で k が 2・4 のとき、単項 `√s π^(k/2)` に戻さず root のままにする。
+    //
+    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // `pi-power-display-000.json` だけが **368 件中 8 件**(√(π²) の群の 0 と極の行)。
+    // 手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
+    // 呼び出しの 3 枚は測っていない。
+    expectShards: ["pi-power-display-000.json (displays)"],
+    minRate: {},
   },
 ];
 
