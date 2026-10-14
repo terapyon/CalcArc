@@ -7,6 +7,8 @@
 //! ```bash
 //! cargo run -p calcarc-core --release --example pitry < keys.txt
 //! ```
+#![deny(clippy::unwrap_used, clippy::expect_used)]
+
 use calcarc_core::{EngineState, Key, reduce, render};
 use std::process::ExitCode;
 

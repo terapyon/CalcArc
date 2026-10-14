@@ -12,7 +12,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use calcarc_core::{EngineState, Key, reduce};
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -50,6 +50,10 @@ fn a_marked_state_comes_back_as_the_same_state() {
     for keys in [
         &["pi", "mul", "2", "eq"][..],
         &["1", "exp", "3", "0", "div", "3", "eq"],
+        // k = −2・k = 4・和(1.2.5 設計書 §2.4)。
+        &["1", "div", "pi", "eq", "sqr"],
+        &["pi", "sqr", "sqr"],
+        &["pi", "add", "1", "eq"],
     ] {
         let step = press(calcarc_wasm::initial_state(), keys);
         let back: EngineState = serde_wasm_bindgen::from_value(get(&step, "state"))
@@ -103,4 +107,30 @@ fn a_state_after_sqrt_comes_back_with_its_root() {
         let r = get(&get(&get(&get(&step, "state"), "current"), "root"), "r");
         assert_eq!(r.as_string().as_deref(), Some("2/1"), "{keys:?}");
     }
+}
+
+#[wasm_bindgen_test]
+fn a_root_with_a_power_of_pi_comes_back_with_its_power() {
+    // `√(π³)` の root は `pi = 3`(1.2.5 設計書 §2.3)。
+    let keys = ["pi", "sqr", "mul", "pi", "eq", "sqrt"];
+    let step = press(calcarc_wasm::initial_state(), &keys);
+    let back: EngineState = serde_wasm_bindgen::from_value(get(&step, "state"))
+        .unwrap_or_else(|e| panic!("{keys:?} の状態が戻らない: {e}"));
+    let expected = native(&keys);
+    assert!(expected.current.root.is_some());
+    assert_eq!(back, expected);
+}
+
+#[wasm_bindgen_test]
+fn a_mark_without_seven_terms_resets_to_the_initial_state() {
+    // **係数が 7 個でない印は読めず、`reduce_key` は初期状態に戻る**(`lib.rs` の
+    // `unwrap_or_else(|_| EngineState::initial())`。1.2.5 設計書 §2.4)。
+    let step = press(calcarc_wasm::initial_state(), &["pi", "mul", "2", "eq"]);
+    let state = get(&step, "state");
+    let terms = get(&get(&get(&state, "current"), "exact"), "terms")
+        .dyn_into::<js_sys::Array>()
+        .expect("terms should be an array");
+    terms.pop();
+    let step = calcarc_wasm::reduce_key(state, "angle_toggle");
+    assert_eq!(main_text(&step), "0");
 }

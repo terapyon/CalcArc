@@ -22,6 +22,10 @@ fn a_marked_state_comes_back_as_the_same_state() {
     for keys in [
         &["pi", "mul", "2", "eq"][..],
         &["1", "exp", "3", "0", "div", "3", "eq"],
+        // k = −2・k = 4・和(1.2.5 設計書 §2.4)。
+        &["1", "div", "pi", "eq", "sqr"],
+        &["pi", "sqr", "sqr"],
+        &["pi", "add", "1", "eq"],
     ] {
         let state = state_after(keys);
         assert!(state.current.exact.is_some(), "{keys:?}");
@@ -85,4 +89,30 @@ fn a_state_after_sqrt_comes_back_with_its_root() {
         next = reduce(&next, Key::from_token(key).expect("unknown key")).0;
     }
     assert_eq!(render(&next).main, "0.00001638391382");
+}
+
+#[test]
+fn a_root_with_a_power_of_pi_comes_back_with_its_power() {
+    // `√(π³)` の root は `pi = 3`(1.2.5 設計書 §2.3)。往復した root が `x²` で π³ に戻る。
+    let state = state_after(&["pi", "sqr", "mul", "pi", "eq", "sqrt"]);
+    assert!(state.current.root.is_some());
+    let json = serde_json::to_value(&state).unwrap();
+    assert_eq!(json["current"]["root"]["pi"], serde_json::json!(3));
+    let back: EngineState = serde_json::from_value(json).unwrap();
+    assert_eq!(back, state);
+    let mut next = back;
+    for key in [
+        "sqr",
+        "div",
+        "pi",
+        "eq",
+        "div",
+        "pi",
+        "eq",
+        "angle_toggle",
+        "sin",
+    ] {
+        next = reduce(&next, Key::from_token(key).expect("unknown key")).0;
+    }
+    assert_eq!(render(&next).main, "0");
 }
