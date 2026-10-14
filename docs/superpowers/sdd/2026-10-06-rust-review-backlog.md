@@ -141,6 +141,14 @@
 - ~~**【未消化 2026-10-08】** GitHub での 1.2.3 の初回 `heavy:power` の後に、`f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`・`display-digits/cancellation` の床（minRate）を置く。期待シャードは native の数から（F1 canc 521・F2 canc 42・F3 typed 1）。**その走行で確かめる**（試作・native の数は実装の数ではない）。設計書 `../specs/2026-10-08-precision-fixes-design.md` §5.2 から指される。~~
   **【消化 2026-10-09】** Heavy corpus の手動走行 `37769606857`（`f023930`、`heavy:power` を含む。緑）で 4 本とも native の数どおり（F1 521・F2 42・F3 1・display-digits/cancellation 585、すべて「期待どおり」）。床は既存と同じく約 12% 下: F1 `0.229`（459 件）・F2 `0.018`（37 件）・display-digits/cancellation `0.257`（515 件）。F3 は 1 件なので `minRate` を置かず `verdictFor` の「1 件以上」に委ねる（`periods-for-binary-search` と同じ）。
 
+## 1.2.5 の床（heavy:power）
+
+- **【未消化 2026-10-14】** GitHub での 1.2.5 の初回 `heavy:power` の後に、`pi-power-display-000.json (displays)` を期待する 6 本（`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・`pi-sqrt-square-off`・`rad-pi-table-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は 368 件中 `pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44 のまま）・`display-digits` 182。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-14-pi-power-marks-design.md` §5.5 から指される。
+
+## MSRV 1.87 の番人（1.2.5 の設計書 §9 から）
+
+- **【未消化 2026-10-14】** `Cargo.toml` は `rust-version = "1.87"` と宣言しているが、CI は 1.87 で build せず、`exact.rs` の `pi_turn` には let チェーン（1.88 から）がすでにある。だから「1.87 で通る」は守る規律であって、破っても赤くならない。番人を置く（CI に 1.87 の build を 1 段足す）か、既存の let チェーンを書き換えて宣言を下げないかを決める。1.2.5 の新しいコードは let チェーンを書いていない。
+
 ## 1.2.4 の床（heavy:power）
 
 - **【消化 2026-10-13】** 床を置いた。GitHub の Heavy corpus の手動走行 `38408722486`（`8abb39d`、`heavy:power` を含む）で、3 本の反応は手元のネイティブと 1 件も違わなかった（`deg-quarter-off` 39・`f3-degree-fold-off` 168 ＋ typed 1・`display-digits` 171、変異 25 本すべて期待どおり）。下限は `0.143`・`0.616`・`0.627`（床は 35・148・151 件）。typed は床を置かない。
