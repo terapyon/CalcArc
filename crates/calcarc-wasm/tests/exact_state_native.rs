@@ -35,9 +35,18 @@ fn a_marked_state_comes_back_as_the_same_state() {
 fn the_mark_crosses_as_a_string() {
     let state = state_after(&["1", "exp", "3", "0", "div", "3", "eq"]);
     let json = serde_json::to_value(&state).unwrap();
+    // 7 つの係数を k = −2, …, 4 の順に並べる。k = 0 は 3 番目。
     assert_eq!(
-        json["current"]["exact"]["q"],
-        serde_json::json!("1000000000000000000000000000000/3")
+        json["current"]["exact"]["terms"],
+        serde_json::json!([
+            "0/1",
+            "0/1",
+            "1000000000000000000000000000000/3",
+            "0/1",
+            "0/1",
+            "0/1",
+            "0/1"
+        ])
     );
 }
 

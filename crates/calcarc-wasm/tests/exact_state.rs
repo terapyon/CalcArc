@@ -68,7 +68,12 @@ fn the_mark_crosses_as_a_string_not_a_bigint() {
         calcarc_wasm::initial_state(),
         &["1", "exp", "3", "0", "div", "3", "eq"],
     );
-    let q = get(&get(&get(&get(&step, "state"), "current"), "exact"), "q");
+    // 7 つの係数を k = −2, …, 4 の順に並べる。k = 0 は 3 番目。
+    let terms = get(
+        &get(&get(&get(&step, "state"), "current"), "exact"),
+        "terms",
+    );
+    let q = js_sys::Reflect::get_u32(&terms, 2).unwrap_or_else(|_| panic!("missing terms[2]"));
     assert_eq!(
         q.as_string().as_deref(),
         Some("1000000000000000000000000000000/3")

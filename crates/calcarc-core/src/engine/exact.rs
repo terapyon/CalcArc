@@ -720,6 +720,16 @@ mod tests {
         Some(Exact::of(Rational::from_ratio(num, den).unwrap(), pi))
     }
 
+    /// 係数を `(k, 分子, 分母)` で並べた印(挙げない k は 0)。**直列化の読みを通して作る**
+    /// ——単項しか作れない `Exact::of` では、和も k ∉ {0, 1} も書けない。
+    fn laurent(terms: &[(i8, i128, i128)]) -> Option<Exact> {
+        let mut text = vec!["0/1".to_string(); 7];
+        for &(k, num, den) in terms {
+            text[usize::try_from(k + 2).unwrap()] = format!("{num}/{den}");
+        }
+        Some(serde_json::from_value(serde_json::json!({ "terms": text })).unwrap())
+    }
+
     // ---- 入口(§3.3) ----
 
     #[test]
@@ -844,7 +854,7 @@ mod tests {
     // ---- 伝わり方(§3.4) ----
 
     #[test]
-    fn sums_combine_when_k_agrees() {
+    fn sums_combine_term_by_term() {
         assert_eq!(mark(&["1", "add", "2", "eq"]), q(3, 1, false));
         assert_eq!(mark(&["pi", "add", "pi", "eq"]), q(2, 1, true));
         assert_eq!(mark(&["pi", "sub", "pi", "eq"]), q(0, 1, false));
@@ -852,9 +862,15 @@ mod tests {
             mark(&["0", "dot", "1", "add", "0", "dot", "2", "eq"]),
             q(3, 10, false)
         );
-        // k が違えば落とす。
-        assert_eq!(mark(&["pi", "add", "1", "eq"]), None);
-        assert_eq!(mark(&["1", "sub", "pi", "eq"]), None);
+        // k が違えば、係数ごとの和として持つ。
+        assert_eq!(
+            mark(&["pi", "add", "1", "eq"]),
+            laurent(&[(0, 1, 1), (1, 1, 1)])
+        );
+        assert_eq!(
+            mark(&["1", "sub", "pi", "eq"]),
+            laurent(&[(0, 1, 1), (1, -1, 1)])
+        );
     }
 
     #[test]
@@ -876,19 +892,19 @@ mod tests {
     }
 
     #[test]
-    fn products_keep_at_most_one_pi() {
+    fn products_multiply_the_polynomials() {
         assert_eq!(mark(&["pi", "mul", "2", "eq"]), q(2, 1, true));
         assert_eq!(mark(&["2", "mul", "pi", "eq"]), q(2, 1, true));
         assert_eq!(mark(&["3", "mul", "4", "eq"]), q(12, 1, false));
-        assert_eq!(mark(&["pi", "mul", "pi", "eq"]), None);
+        assert_eq!(mark(&["pi", "mul", "pi", "eq"]), laurent(&[(2, 1, 1)]));
     }
 
     #[test]
-    fn quotients_keep_k_zero_or_one() {
+    fn quotients_shift_the_dividend() {
         assert_eq!(mark(&["pi", "div", "2", "eq"]), q(1, 2, true));
         assert_eq!(mark(&["pi", "div", "pi", "eq"]), q(1, 1, false));
         assert_eq!(mark(&["1", "div", "3", "eq"]), q(1, 3, false));
-        assert_eq!(mark(&["1", "div", "pi", "eq"]), None);
+        assert_eq!(mark(&["1", "div", "pi", "eq"]), laurent(&[(-1, 1, 1)]));
         // **0 は k に中立**(中間審査の条件 1)。`0 ÷ π` は `(0, k=0)`。
         assert_eq!(mark(&["0", "div", "pi", "eq"]), Some(Exact::ZERO));
     }
@@ -902,11 +918,11 @@ mod tests {
     }
 
     #[test]
-    fn square_and_reciprocal_keep_only_k_zero() {
+    fn squares_and_reciprocals_move_the_power() {
         assert_eq!(mark(&["1", "dot", "5", "sqr"]), q(9, 4, false));
         assert_eq!(mark(&["4", "recip"]), q(1, 4, false));
-        assert_eq!(mark(&["pi", "sqr"]), None);
-        assert_eq!(mark(&["pi", "recip"]), None);
+        assert_eq!(mark(&["pi", "sqr"]), laurent(&[(2, 1, 1)]));
+        assert_eq!(mark(&["pi", "recip"]), laurent(&[(-1, 1, 1)]));
     }
 
     #[test]
@@ -932,8 +948,8 @@ mod tests {
     fn the_implied_operand_carries_its_mark() {
         // `2 × =` は `2 × 2`(暗黙の被演算数)。印も `2 × 2` の印になる。
         assert_eq!(mark(&["2", "mul", "eq"]), q(4, 1, false));
-        // `π × =` は `π × π`——k=2 で落ちる。
-        assert_eq!(mark(&["pi", "mul", "eq"]), None);
+        // `π × =` は `π × π`。
+        assert_eq!(mark(&["pi", "mul", "eq"]), laurent(&[(2, 1, 1)]));
     }
 
     // ---- 三角関数の答えの印(§3.3・§4.2) ----
@@ -1133,7 +1149,10 @@ mod tests {
     fn deleting_a_fresh_paren_restores_the_operand_with_its_mark() {
         let state = state_after(&["pi", "mul", "lparen", "del"]);
         assert_eq!(state.current, Held::PI);
-        assert_eq!(mark(&["pi", "mul", "lparen", "del", "eq"]), None);
+        assert_eq!(
+            mark(&["pi", "mul", "lparen", "del", "eq"]),
+            laurent(&[(2, 1, 1)])
+        );
         assert_eq!(mark(&["pi", "div", "lparen", "del", "eq"]), q(1, 1, false));
     }
 
@@ -1163,47 +1182,68 @@ mod tests {
     fn the_mark_crosses_serde_as_text() {
         let state = state_after(&["pi", "mul", "2", "div", "3"]);
         let json = serde_json::to_string(&state).unwrap();
-        assert!(json.contains(r#""q":"2/1""#), "{json}");
+        assert!(
+            json.contains(r#""terms":["0/1","0/1","0/1","2/1","0/1","0/1","0/1"]"#),
+            "{json}"
+        );
         let back: EngineState = serde_json::from_str(&json).unwrap();
         assert_eq!(back, state);
     }
 
+    /// `exact` の欄を `"terms"` の 7 つの文字列で書いた `Held` の JSON。
+    fn held_with_terms(terms: &[&str]) -> String {
+        let terms = terms
+            .iter()
+            .map(|t| format!("\"{t}\""))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(r#"{{"value":{{"re":0.5,"im":0.0}},"exact":{{"terms":[{terms}]}}}}"#)
+    }
+
     #[test]
-    fn a_zero_times_pi_from_outside_is_normalized() {
-        // **`Exact::of` を通らない道は無い**——直列化の読みも正規化する。
-        let held: Held =
-            serde_json::from_str(r#"{"value":{"re":0.0,"im":0.0},"exact":{"q":"0/1","pi":true}}"#)
-                .unwrap();
+    fn a_mark_from_outside_reads_its_seven_terms() {
+        // 全部 0 は 0 の印。0 の書き方は 1 通りしか無い。
+        let zero = ["0/1"; 7];
+        let held: Held = serde_json::from_str(&held_with_terms(&zero)).unwrap();
         assert_eq!(held.exact, Some(Exact::ZERO));
-        assert!(!held.exact.unwrap().pi());
-        // 0 でない k=1 はそのまま。
-        let held: Held =
-            serde_json::from_str(r#"{"value":{"re":0.0,"im":0.0},"exact":{"q":"1/2","pi":true}}"#)
-                .unwrap();
+        // 位置が k を決める(k = −2, …, 4 の順)。
+        let held: Held = serde_json::from_str(&held_with_terms(&[
+            "0/1", "0/1", "0/1", "1/2", "0/1", "0/1", "0/1",
+        ]))
+        .unwrap();
         assert_eq!(held.exact, q(1, 2, true));
     }
 
     #[test]
     fn a_mark_from_outside_is_reduced_or_refused() {
-        let held: Held =
-            serde_json::from_str(r#"{"value":{"re":0.5,"im":0.0},"exact":{"q":"2/4","pi":false}}"#)
-                .unwrap();
+        let held: Held = serde_json::from_str(&held_with_terms(&[
+            "0/1", "0/1", "2/4", "0/1", "0/1", "0/1", "0/1",
+        ]))
+        .unwrap();
         assert_eq!(held.exact, q(1, 2, false));
         for bad in ["1/0", "1", "a/2", "1/2/3"] {
-            let text =
-                format!(r#"{{"value":{{"re":0.5,"im":0.0}},"exact":{{"q":"{bad}","pi":false}}}}"#);
+            let text = held_with_terms(&["0/1", "0/1", bad, "0/1", "0/1", "0/1", "0/1"]);
             assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
         }
+        // **係数はちょうど 7 個**。
+        for count in [6, 8] {
+            let text = held_with_terms(&vec!["0/1"; count]);
+            assert!(serde_json::from_str::<Held>(&text).is_err(), "{count}");
+        }
+        // 1 項と 1 ビットの形(`STATE_SCHEMA` 10)は読まない。
+        let old = r#"{"value":{"re":0.5,"im":0.0},"exact":{"q":"1/2","pi":false}}"#;
+        assert!(serde_json::from_str::<Held>(old).is_err());
     }
 
     // ---- √ の印(1.2.3 設計書 §3.1・§3.4) ----
 
     #[test]
     fn a_held_without_a_root_reads_as_no_root() {
-        // **9 の形(`root` の欄が無い)も読める**(`#[serde(default)]`)。
-        let held: Held =
-            serde_json::from_str(r#"{"value":{"re":0.5,"im":0.0},"exact":{"q":"1/2","pi":false}}"#)
-                .unwrap();
+        // **`root` の欄が無い形も読める**(`#[serde(default)]`)。
+        let held: Held = serde_json::from_str(&held_with_terms(&[
+            "0/1", "0/1", "1/2", "0/1", "0/1", "0/1", "0/1",
+        ]))
+        .unwrap();
         assert_eq!(held.root, None);
         assert_eq!(held.exact, q(1, 2, false));
     }
@@ -1219,10 +1259,20 @@ mod tests {
         Rational::from_ratio(num, den).unwrap()
     }
 
+    /// root を直列化の形で読む(`pi` の欄まで見る)。
+    fn root_json(tokens: &[&str]) -> serde_json::Value {
+        serde_json::to_value(state_after(tokens).current.root).unwrap()
+    }
+
     #[test]
     fn only_sqrt_makes_a_root_and_only_neg_carries_it() {
         // **作るのは `√` だけ**(§3.2)。印 k=0 の `q > 0` から `(1, q)`。
         assert_eq!(root_of(&["9", "sqrt"]), Some((r(1, 1), r(9, 1))));
+        // 単項の π の冪も root にする(√ の中の冪を `pi` に持つ)。
+        assert_eq!(
+            root_json(&["pi", "sqrt"]),
+            serde_json::json!({ "c": "1/1", "r": "1/1", "pi": 1 })
+        );
         assert_eq!(
             root_of(&["0", "dot", "5", "sqrt"]),
             Some((r(1, 1), r(1, 2)))
@@ -1237,11 +1287,10 @@ mod tests {
         for tokens in [&["9", "sqrt"][..], &["2", "sqrt", "neg"]] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
         }
-        // **ほかはすべて root を落とす**: 印の無い・k=1 の・0 の引数、×・÷・関数・桁落ち
+        // **ほかはすべて root を落とす**: 印の無い・0 の引数、×・÷・関数・桁落ち
         // しない差、`=` の答え。
         for tokens in [
             &["0", "sqrt"][..],
-            &["pi", "sqrt"],
             &["1", "exp", "4", "0", "sqrt"],
             &["2", "sqrt", "mul", "2", "eq"],
             &["2", "sqrt", "div", "2", "eq"],
@@ -1468,19 +1517,30 @@ mod tests {
 
     #[test]
     fn a_root_crosses_serde_as_text_and_refuses_a_non_positive_radicand() {
-        let text = r#"{"value":{"re":1.0,"im":0.0},"exact":null,"root":{"c":"2/4","r":"3/1"}}"#;
+        let text =
+            r#"{"value":{"re":1.0,"im":0.0},"exact":null,"root":{"c":"2/4","r":"3/1","pi":3}}"#;
         let held: Held = serde_json::from_str(text).unwrap();
         let root = held.root.unwrap();
         assert_eq!(root.c, Rational::from_ratio(1, 2).unwrap());
         assert_eq!(root.r, Rational::from_ratio(3, 1).unwrap());
         let json = serde_json::to_string(&held).unwrap();
-        assert!(json.contains(r#""root":{"c":"1/2","r":"3/1"}"#), "{json}");
+        assert!(
+            json.contains(r#""root":{"c":"1/2","r":"3/1","pi":3}"#),
+            "{json}"
+        );
         let back: Held = serde_json::from_str(&json).unwrap();
         assert_eq!(back, held);
         // **`r > 0` でなければ拒む**(`RootWire`)。読めない文字列も拒む。
         for bad in ["0/1", "-2/1", "1/0", "a/2"] {
             let text = format!(
-                r#"{{"value":{{"re":1.0,"im":0.0}},"exact":null,"root":{{"c":"1/1","r":"{bad}"}}}}"#
+                r#"{{"value":{{"re":1.0,"im":0.0}},"exact":null,"root":{{"c":"1/1","r":"{bad}","pi":0}}}}"#
+            );
+            assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
+        }
+        // **`pi` は必ず書き、−2〜4 でなければ拒む。**
+        for bad in [r#""#, r#","pi":5"#, r#","pi":-3"#] {
+            let text = format!(
+                r#"{{"value":{{"re":1.0,"im":0.0}},"exact":null,"root":{{"c":"1/1","r":"2/1"{bad}}}}}"#
             );
             assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
         }
