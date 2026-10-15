@@ -139,7 +139,7 @@ Besides arithmetic and parentheses, it has 【sin】 【cos】 【tan】, 【ln�
 second function (【asin】 【acos】 【atan】 【n!】 【nPr】 【nCr】 and others).
 
 **The 【π】 key and the numbers you type are taken as their true values. A
-step such as 【√】 in the middle of a calculation turns them into close
+step such as 【√】 in the middle of a calculation can turn them into close
 approximations.** 【π】【sin】 is 0 in radians, 【3】【0】【sin】 is exactly 0.5 in
 degrees, and 【0】【.】【1】【+】【0】【.】【2】【=】【−】【0】【.】【3】【=】 is 0.
 **After a step such as 【√】, an answer that should be 0 can show a number

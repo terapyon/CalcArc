@@ -58,6 +58,10 @@ random: lines 19331 / base_wrong 319 / new_wrong 201 / wrong->right 118 / RIGHT-
 corpus: cases 25339 / raw_changed 0 / display_changed 0
 ```
 
+実装の枝の先端で手順 4 の `corpus` を回すと `cases 25707 / raw_changed 297 / display_changed 80` と出る。
+増えた 368 件は新しい層 `pi-power-display-000.json` で、動いた件は全部そこにある（e231550 との既知の 80 件。
+その 1 枚を除いた 23 枚では `cases 25339 / raw_changed 0 / display_changed 0`）。
+
 ## 真値の作り方
 
 `ppm_rand.py` のモジュールの docstring に書いた。要点:
