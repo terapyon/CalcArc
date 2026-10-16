@@ -111,6 +111,11 @@ SCOPE: dict[str, tuple[str, str]] = {
         "DEG の大きな角・90° の倍数の近くの角の表示の期待値。Fraction の剰余と mpmath で"
         "直接評価し、0 と極は定義から有理数で決める",
     ),
+    "src/calcarc_reference/corpus_pi_power.py": (
+        "expects",
+        "π の冪・和・√ を含む式の表示の期待値。キー列を SymPy の厳密な式に読み、"
+        "0 と極は厳密な値から決め、それ以外は N(式, 50) の 50 桁を 10 桁にする",
+    ),
     "src/calcarc_reference/corpus_rad_pi.py": (
         "expects",
         "RAD × π の倍数の表示の期待値。mpmath で直接評価し、0 と極は定義から有理数で決める",
@@ -178,5 +183,13 @@ SCOPE: dict[str, tuple[str, str]] = {
     "scripts/find_convert_half_way.py": (
         "expects",
         "丸めの半端を探索する。Decimal と Fraction で値を作る",
+    ),
+    "scripts/ppm_rand.py": (
+        "expects",
+        "1.2.5 の設計の乱択。キー列と SymPy の厳密な式で真値を作る",
+    ),
+    "scripts/ppm_cmp.py": (
+        "tools",
+        "2 本の pitry の印字と乱択の真値を突き合わせて数えるだけ。数を作らない",
     ),
 }

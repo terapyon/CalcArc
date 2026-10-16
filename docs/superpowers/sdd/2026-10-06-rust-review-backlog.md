@@ -10,6 +10,14 @@
 
 ## 1. MSRV と let チェーン
 
+- **【消化 2026-10-16】** `rust-version` を **`1.88`** に上げ、`ci.yml` に `Rust MSRV` の段を足した（利用者の裁定 10-16「このブランチで上げておきましょう」、`feat/pi-power-marks`）。
+  - **数え直した（`4e5376b3`）**: let チェーンは下の表と同じ 4 か所・5 行で、1.2.5 で増えていない。座標は `exact.rs:670`・`scientific/mod.rs:301-302`・`engine/mod.rs:451`・`tests/engine_values.rs:356`。
+  - **1.87.0 で実測した**: `cargo +1.87.0 check --workspace --all-targets` は `E0658`（`` `let` expressions in this position are unstable ``）で落ちた。ライブラリの 4 行（`engine/mod.rs:451`・`exact.rs:670`・`scientific/mod.rs:301`・`:302`）で落ちるので、`engine_values.rs` までは届かない。
+  - **1.88.0 では通る**: `cargo +1.88.0 check --workspace --all-targets` と `cargo +1.88.0 check -p calcarc-wasm --target wasm32-unknown-unknown` がどちらも緑。`Cargo.lock` の依存で `rust-version` がいちばん高いのは `wasip2` 1.0.4 の `1.87.0` で、1.88 を超える crate は無い。
+  - **番人**: `ci.yml` の `msrv` ジョブ（`dtolnay/rust-toolchain` を既存と同じ SHA で、`toolchain: 1.88.0`）が上の 2 つを `cargo +1.88.0` で回す。`+` を付けるのは、`rust-toolchain.toml` の `channel = "stable"` が rustup の既定より優先されるからである（手元の `rustup show active-toolchain` は「overridden by …/rust-toolchain.toml」）。宣言とジョブの版がずれないことは `tools/tests/msrv-pin.test.ts` が見る（`toolchain:`・`+` の 2 行・`rust-version` の 3 か所。変異 4 本で赤を確かめた）。
+  - **clippy が 5 か所で赤くなったので、let チェーンに畳んだ**: clippy の `collapsible_if` は `rust-version` を読み、1.88 からは「入れ子の `if` と `if let`」を 1 つの let チェーンに畳めと言う。`exact.rs` の 3 か所（`sqrt` 1・`degree_turn` 2）、`tests/engine_robustness.rs:388`、`calcarc-wasm/src/lib.rs:158`。答えは動かない（手元のネイティブで、コーパス 25,707 件と乱択 19,331 行の生の値・表示がどちらも 0 件の変化）。
+  - **変異 `pi-sqrt-square-off` の照準を直した**: `sqrt` の条件が 3 行の let チェーンになったので、`from` を `&& k % 2 == 0` の行にした。壊し方は同じ。手元で変異 29 本を `pi-power-display-000.json` と `deg-fold-display-000.json` に当て直し、反応したのは 7 本・3 本で、数は走行 `38831984567`（pi-power。報告書で確かめた）と `38408722486`（deg-fold）と同じだった。期待に無い反応は 0 本。
+- （当初の項。以下は 2026-10-06 の座標）
 - **`Cargo.toml` の `rust-version = "1.87"`**（`6a6edef`、2026-08-12「Declare the floor the code already stands on」）に対して、
   **let チェーン（`if … && let …`。Rust 1.88 で安定化）を 5 行で使っている**:
 
@@ -140,6 +148,16 @@
 
 - ~~**【未消化 2026-10-08】** GitHub での 1.2.3 の初回 `heavy:power` の後に、`f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`・`display-digits/cancellation` の床（minRate）を置く。期待シャードは native の数から（F1 canc 521・F2 canc 42・F3 typed 1）。**その走行で確かめる**（試作・native の数は実装の数ではない）。設計書 `../specs/2026-10-08-precision-fixes-design.md` §5.2 から指される。~~
   **【消化 2026-10-09】** Heavy corpus の手動走行 `37769606857`（`f023930`、`heavy:power` を含む。緑）で 4 本とも native の数どおり（F1 521・F2 42・F3 1・display-digits/cancellation 585、すべて「期待どおり」）。床は既存と同じく約 12% 下: F1 `0.229`（459 件）・F2 `0.018`（37 件）・display-digits/cancellation `0.257`（515 件）。F3 は 1 件なので `minRate` を置かず `verdictFor` の「1 件以上」に委ねる（`periods-for-binary-search` と同じ）。
+
+## 1.2.5 の床（heavy:power）
+
+- **【消化 2026-10-16】** 床を置いた。GitHub の Heavy corpus の手動走行 `38831984567`（`84e9dedd`、`heavy:power` を含む）で、6 本の反応は手元のネイティブと 1 件も違わなかった（368 件中 `display-digits` 182・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44）・`pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8）。下限は `0.435`・`0.114`・`0.129`・`0.019`・`0.052`・`0.019`（床は 161・42・48・7・20・7 件）。**その走行は赤だった**——`f1-rationalize-off` が期待に無い `pi-power-display-000.json` でも 8 件反応した（`xʸ 0.5` が 1.2.5 から F1 の門を通るので、`√q − p` の群 half-power-diff の 16 件中 8 件。手元のネイティブでも同じ 8 件）。期待に足し、同じ大きさの 2 本と同じく床 `0.019`（7 件）を置いた。既存の変異 29 本を手元で全部この層に当て、反応するのに期待に無いのはこの 1 本だけだった。
+- （当初の項）GitHub での 1.2.5 の初回 `heavy:power` の後に、`pi-power-display-000.json (displays)` を期待する 6 本（`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・`pi-sqrt-square-off`・`rad-pi-table-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は 368 件中 `pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44 のまま）・`display-digits` 182。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-14-pi-power-marks-design.md` §5.5 から指される。
+
+## MSRV 1.87 の番人（1.2.5 の設計書 §9 から）
+
+- **【消化 2026-10-16】** §1 で `rust-version` を 1.88 に上げ、`Rust MSRV` の段を置いた。
+- （当初の項） `Cargo.toml` は `rust-version = "1.87"` と宣言しているが、CI は 1.87 で build せず、`exact.rs` の `pi_turn` には let チェーン（1.88 から）がすでにある。だから「1.87 で通る」は守る規律であって、破っても赤くならない。番人を置く（CI に 1.87 の build を 1 段足す）か、既存の let チェーンを書き換えて宣言を下げないかを決める。1.2.5 の新しいコードは let チェーンを書いていない。
 
 ## 1.2.4 の床（heavy:power）
 

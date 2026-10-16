@@ -385,10 +385,8 @@ mod invariants {
             && matches!(before.operators.last(), Some(OpToken::OpenParen))
             && before.operators.len() >= 2
             && matches!(before.operators[before.operators.len() - 2], OpToken::Op(_));
-        if restores {
-            if let Some(&operand) = before.operands.last() {
-                return operand;
-            }
+        if restores && let Some(&operand) = before.operands.last() {
+            return operand;
         }
         before.current
     }

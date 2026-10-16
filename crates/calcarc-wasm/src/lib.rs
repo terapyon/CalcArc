@@ -155,10 +155,10 @@ pub fn spell_keys(tokens: Vec<String>, carry: Option<String>, screens: Vec<Strin
         if let Some(k) = Key::from_token(t) {
             keys.push(k);
             // 足りない画面は、そこで列を打ち切る(以降は core が `…` を書く)。
-            if kept.len() == keys.len() - 1 {
-                if let Some(sc) = screens.get(i) {
-                    kept.push(sc.as_str());
-                }
+            if kept.len() == keys.len() - 1
+                && let Some(sc) = screens.get(i)
+            {
+                kept.push(sc.as_str());
             }
         }
     }

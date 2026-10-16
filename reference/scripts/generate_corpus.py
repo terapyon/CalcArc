@@ -33,6 +33,7 @@ from calcarc_reference import (
     corpus_combinatorics,
     corpus_complex,
     corpus_deg_fold,
+    corpus_pi_power,
     corpus_rad_pi,
     corpus_science,
     eng_ref,
@@ -3061,6 +3062,12 @@ def _shards(count: int) -> Iterator[tuple[str, dict]]:
     # （上と同じ理由で、書き出しの順を動かさない）。`SCIENCE_SHARDS` には入れない
     # ——9 領域のモデルに「大きな角・90° の倍数の近く」の軸が無い。
     yield "deg-fold-display-000.json", corpus_deg_fold.build_shard()
+    # **π の冪・和・√ を印で持つ式を三角関数に渡す 1 枚**（1.2.5、設計書
+    # `2026-10-14-pi-power-marks-design.md` §5.4）。**`count` を持たない**——9 群を、
+    # 群ごとに seed を固定した候補列から取る。**最後に足す**（上と同じ理由で、
+    # 書き出しの順を動かさない）。`SCIENCE_SHARDS` には入れない——9 領域のモデルに
+    # 「π の冪・和・√」の軸が無い。
+    yield "pi-power-display-000.json", corpus_pi_power.build_shard()
 
 
 #: 科学計算の試験空間モデルが数える 9 領域（設計書 §14.2）。

@@ -262,7 +262,7 @@ pub fn reduce(state: &EngineState, key: Key) -> (EngineState, DisplayState) {
 }
 
 /// 二項演算 1 つ。**値の計算と印の計算を演算ごとに並べる**(1.2.2 設計書 §3.4)。
-/// 値の計算は印を見ない。**k=0 の印が残れば `re` は印の丸めに置き換わる**(段階 2、
+/// 値の計算は印を見ない。**π を含まない有理数の印が残れば `re` は印の丸めに置き換わる**(段階 2、
 /// §5.1。`Held::settled`)。
 ///
 /// **`+`・`−` は、桁落ちする √ の和・差を先に書き換える**(1.2.3 設計書 §3.3、
@@ -281,7 +281,13 @@ fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
         },
         BinOp::Mul => (a.checked_mul(b)?, exact::mul(lhs, rhs)),
         BinOp::Div => (a.checked_div(b)?, exact::div(lhs, rhs)),
-        // xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
+        // **指数がちょうど 1/2 の xʸ は `√` と同じ**(1.2.5 設計書 §3.1)——値も `√` で計算し、
+        // 印も `√` の印にする。定義域の誤り(負の底)は今の `pow` を先に呼んで出す。
+        BinOp::Pow if exact::is_square_root(lhs, rhs) => {
+            scientific::pow(a, b)?;
+            (scientific::sqrt(a)?, exact::sqrt(lhs))
+        }
+        // ほかの xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
         BinOp::Pow => (scientific::pow(a, b)?, Marks::NONE),
         BinOp::Npr => (scientific::npr(a, b)?, Marks::NONE),
         BinOp::Ncr => (scientific::ncr(a, b)?, Marks::NONE),
@@ -576,7 +582,7 @@ fn apply_log(state: &mut EngineState, base: LogBase) -> CalcResult<()> {
 }
 
 /// **1 に近い引数の自然対数**を `log1p(q − 1)` で取る(1.2.3 設計書 §1.2・§1.3)。
-/// 印が k=0 で、虚部が 0 で、**`1/2 ≤ q ≤ 3/2`** のときだけ `Some`。
+/// 印が π を含まない有理数 `q` で、虚部が 0 で、**`1/2 ≤ q ≤ 3/2`** のときだけ `Some`。
 ///
 /// - **`q − 1` は有理数で引いてから f64 にする**(`ratio_to_f64`、正しく丸める)。
 ///   f64 で `q − 1.0` と引くと、引く前の丸め(相対 1.1e-16)が答え(1e-7 級)に対して
@@ -589,11 +595,8 @@ fn ln_near_one(arg: Held) -> Option<f64> {
     if arg.value.im != 0.0 {
         return None;
     }
-    let mark = arg.exact?;
-    if mark.pi() {
-        return None;
-    }
-    let (m, d) = mark.q().checked_sub(Rational::ONE).ok()?.parts();
+    let q = arg.exact?.rational()?;
+    let (m, d) = q.checked_sub(Rational::ONE).ok()?.parts();
     // `q − 1 = m/d`(d > 0)。`|q − 1| ≤ 1/2` ⟺ `2|m| ≤ d` ⟺ `|m| ≤ ⌊d/2⌋`(`|m|` は整数)。
     if m.unsigned_abs() > d.unsigned_abs() / 2 {
         return None;
