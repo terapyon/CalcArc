@@ -10,6 +10,14 @@
 
 ## 1. MSRV と let チェーン
 
+- **【消化 2026-10-16】** `rust-version` を **`1.88`** に上げ、`ci.yml` に `Rust MSRV` の段を足した（利用者の裁定 10-16「このブランチで上げておきましょう」、`feat/pi-power-marks`）。
+  - **数え直した（`4e5376b3`）**: let チェーンは下の表と同じ 4 か所・5 行で、1.2.5 で増えていない。座標は `exact.rs:670`・`scientific/mod.rs:301-302`・`engine/mod.rs:451`・`tests/engine_values.rs:356`。
+  - **1.87.0 で実測した**: `cargo +1.87.0 check --workspace --all-targets` は `E0658`（`` `let` expressions in this position are unstable ``）で落ちた。ライブラリの 4 行（`engine/mod.rs:451`・`exact.rs:670`・`scientific/mod.rs:301`・`:302`）で落ちるので、`engine_values.rs` までは届かない。
+  - **1.88.0 では通る**: `cargo +1.88.0 check --workspace --all-targets` と `cargo +1.88.0 check -p calcarc-wasm --target wasm32-unknown-unknown` がどちらも緑。`Cargo.lock` の依存で `rust-version` がいちばん高いのは `wasip2` 1.0.4 の `1.87.0` で、1.88 を超える crate は無い。
+  - **番人**: `ci.yml` の `msrv` ジョブ（`dtolnay/rust-toolchain` を既存と同じ SHA で、`toolchain: 1.88.0`）が上の 2 つを `cargo +1.88.0` で回す。`+` を付けるのは、`rust-toolchain.toml` の `channel = "stable"` が rustup の既定より優先されるからである（手元の `rustup show active-toolchain` は「overridden by …/rust-toolchain.toml」）。宣言とジョブの版がずれないことは `tools/tests/msrv-pin.test.ts` が見る（`toolchain:`・`+` の 2 行・`rust-version` の 3 か所。変異 4 本で赤を確かめた）。
+  - **clippy が 5 か所で赤くなったので、let チェーンに畳んだ**: clippy の `collapsible_if` は `rust-version` を読み、1.88 からは「入れ子の `if` と `if let`」を 1 つの let チェーンに畳めと言う。`exact.rs` の 3 か所（`sqrt` 1・`degree_turn` 2）、`tests/engine_robustness.rs:388`、`calcarc-wasm/src/lib.rs:158`。答えは動かない（手元のネイティブで、コーパス 25,707 件と乱択 19,331 行の生の値・表示がどちらも 0 件の変化）。
+  - **変異 `pi-sqrt-square-off` の照準を直した**: `sqrt` の条件が 3 行の let チェーンになったので、`from` を `&& k % 2 == 0` の行にした。壊し方は同じ。手元で変異 29 本を `pi-power-display-000.json` と `deg-fold-display-000.json` に当て直し、反応したのは 7 本・3 本で、数は走行 `38831984567`（pi-power。報告書で確かめた）と `38408722486`（deg-fold）と同じだった。期待に無い反応は 0 本。
+- （当初の項。以下は 2026-10-06 の座標）
 - **`Cargo.toml` の `rust-version = "1.87"`**（`6a6edef`、2026-08-12「Declare the floor the code already stands on」）に対して、
   **let チェーン（`if … && let …`。Rust 1.88 で安定化）を 5 行で使っている**:
 
@@ -148,7 +156,8 @@
 
 ## MSRV 1.87 の番人（1.2.5 の設計書 §9 から）
 
-- **【未消化 2026-10-14】** `Cargo.toml` は `rust-version = "1.87"` と宣言しているが、CI は 1.87 で build せず、`exact.rs` の `pi_turn` には let チェーン（1.88 から）がすでにある。だから「1.87 で通る」は守る規律であって、破っても赤くならない。番人を置く（CI に 1.87 の build を 1 段足す）か、既存の let チェーンを書き換えて宣言を下げないかを決める。1.2.5 の新しいコードは let チェーンを書いていない。
+- **【消化 2026-10-16】** §1 で `rust-version` を 1.88 に上げ、`Rust MSRV` の段を置いた。
+- （当初の項） `Cargo.toml` は `rust-version = "1.87"` と宣言しているが、CI は 1.87 で build せず、`exact.rs` の `pi_turn` には let チェーン（1.88 から）がすでにある。だから「1.87 で通る」は守る規律であって、破っても赤くならない。番人を置く（CI に 1.87 の build を 1 段足す）か、既存の let チェーンを書き換えて宣言を下げないかを決める。1.2.5 の新しいコードは let チェーンを書いていない。
 
 ## 1.2.4 の床（heavy:power）
 

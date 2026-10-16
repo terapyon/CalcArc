@@ -7,7 +7,7 @@ edition = "2024"
 version = "1.2.5"
 license = "Apache-2.0"
 repository = "https://github.com/terapyon/CalcArc"
-rust-version = "1.87"
+rust-version = "1.88"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

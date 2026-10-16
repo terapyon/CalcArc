@@ -569,10 +569,11 @@ pub(super) fn sqrt(a: Held) -> Marks {
     if q.is_zero() {
         return Marks::exact(Some(Exact::ZERO));
     }
-    if k != 0 && k % 2 == 0 {
-        if let Some(root) = square_root(q) {
-            return Marks::exact(Exact::term(k / 2, root));
-        }
+    if k != 0
+        && k % 2 == 0
+        && let Some(root) = square_root(q)
+    {
+        return Marks::exact(Exact::term(k / 2, root));
     }
     Marks {
         exact: None,
@@ -707,10 +708,10 @@ fn degree_turn(q: Rational) -> Option<Turn> {
     let quarter = d.checked_mul(90)?;
     let r = n.rem_euclid(quarter.checked_mul(4)?);
     if d == 1 {
-        if r % 15 == 0 {
-            if let Some(table) = Turn::table(r / 15) {
-                return Some(table);
-            }
+        if r % 15 == 0
+            && let Some(table) = Turn::table(r / 15)
+        {
+            return Some(table);
         }
         if n.unsigned_abs() <= EXACT_INT {
             return None;
@@ -718,10 +719,10 @@ fn degree_turn(q: Rational) -> Option<Turn> {
     }
     let k = r.checked_add(d.checked_mul(45)?)?.div_euclid(quarter);
     let x = ratio_to_f64(r.checked_sub(k.checked_mul(quarter)?)?, d)?;
-    if x.abs() == 30.0 || x.abs() == 45.0 {
-        if let Some(table) = Turn::table(6 * k + (x / 15.0) as i128) {
-            return Some(table);
-        }
+    if (x.abs() == 30.0 || x.abs() == 45.0)
+        && let Some(table) = Turn::table(6 * k + (x / 15.0) as i128)
+    {
+        return Some(table);
     }
     Some(Turn::Folded {
         quarter: u8::try_from(k % 4).ok()?,

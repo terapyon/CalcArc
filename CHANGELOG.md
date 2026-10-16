@@ -53,6 +53,8 @@
 - **重量級の表示シャード `pi-power-display-000.json`（368 件）と、変異 4 本を足した**。
   この層を期待する 7 本（新しい 4 本、`display-digits`・`rad-pi-table-off`、1.2.3 の
   `f1-rationalize-off`）に、GitHub の Heavy corpus の走行 `38831984567` の数の約 12% 下の床を置いた
+- **Rust の最低の版（`rust-version`）を 1.87 から 1.88 に上げ、CI に 1.88.0 で `cargo check` する段を足した**。
+  コードはすでに 1.88 からの let チェーンを使っており、1.87 では build できなかった。計算の答えは変わらない
 
 ## 1.2.4 — 2026-10-14
 

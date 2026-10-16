@@ -60,9 +60,13 @@ GitHub ID を書き足す。**その追記を含む Pull Request をもって、
   **宣言の痕跡**（下記）で守り、それがレビューの足場になる。
 - **命名と API 形状の判断は [docs/api-style.md](docs/api-style.md) に従う。**
   基準で説明できない変更提案は「好み」であり、現状維持とする。
-- **MSRV は現行 stable 追従**(`rust-version` はワークスペースで宣言)。
-  上げるときは理由をコミットメッセージに書く。CI に専用ジョブは置かない——
-  追従方針の下では `rust-toolchain.toml` の stable と同義になるため。
+- **MSRV は `Cargo.toml` の `rust-version`**(ワークスペースで宣言。いまは `1.88`)。
+  手元と CI の `Rust core` は `rust-toolchain.toml` の stable で回し、宣言した版では
+  `ci.yml` の `Rust MSRV` が `cargo +1.88.0 check` を回す。**stable だけで回していた
+  あいだに、宣言(1.87)より新しい let チェーンが 4 か所入り、誰も気づかなかった**
+  (2026-10-16 に 1.88 へ上げた)。上げるときは理由をコミットメッセージに書き、
+  `rust-version` と `Rust MSRV` の `toolchain:`・`cargo +<版>` を同時に直す
+  (`tools/tests/msrv-pin.test.ts` がずれを見る)。
 
 ## 参照実装を足すとき
 
