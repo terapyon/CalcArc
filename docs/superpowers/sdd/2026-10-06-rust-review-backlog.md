@@ -143,7 +143,8 @@
 
 ## 1.2.5 の床（heavy:power）
 
-- **【未消化 2026-10-14】** GitHub での 1.2.5 の初回 `heavy:power` の後に、`pi-power-display-000.json (displays)` を期待する 6 本（`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・`pi-sqrt-square-off`・`rad-pi-table-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は 368 件中 `pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44 のまま）・`display-digits` 182。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-14-pi-power-marks-design.md` §5.5 から指される。
+- **【消化 2026-10-16】** 床を置いた。GitHub の Heavy corpus の手動走行 `38831984567`（`84e9dedd`、`heavy:power` を含む）で、6 本の反応は手元のネイティブと 1 件も違わなかった（368 件中 `display-digits` 182・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44）・`pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8）。下限は `0.435`・`0.114`・`0.129`・`0.019`・`0.052`・`0.019`（床は 161・42・48・7・20・7 件）。**その走行は赤だった**——`f1-rationalize-off` が期待に無い `pi-power-display-000.json` でも 8 件反応した（`xʸ 0.5` が 1.2.5 から F1 の門を通るので、`√q − p` の群 half-power-diff の 16 件中 8 件。手元のネイティブでも同じ 8 件）。期待に足し、同じ大きさの 2 本と同じく床 `0.019`（7 件）を置いた。既存の変異 29 本を手元で全部この層に当て、反応するのに期待に無いのはこの 1 本だけだった。
+- （当初の項）GitHub での 1.2.5 の初回 `heavy:power` の後に、`pi-power-display-000.json (displays)` を期待する 6 本（`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・`pi-sqrt-square-off`・`rad-pi-table-off`・`display-digits`）の床（minRate）を置く。手元のネイティブの数は 368 件中 `pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44 のまま）・`display-digits` 182。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-14-pi-power-marks-design.md` §5.5 から指される。
 
 ## MSRV 1.87 の番人（1.2.5 の設計書 §9 から）
 

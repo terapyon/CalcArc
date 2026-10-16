@@ -78,16 +78,9 @@ export const ALL_SHARDS = [
  * そのシャードの総件数)。率で持つのは、コーパスが増えても表を書き換えず
  * 済むようにするため——2000 件で 200、4000 件で 400 なら同じ 10% である。
  * 挙げていないシャードは下限 0(=反応しないはず)を意味する。
- * 床が未設定の期待シャードは 1 件以上で見る。理由は 2 つある:
- * - **実測が 1 件で、率の下限に載らない**——`precedence-collapse` の
- *   `entry-000.json`、`periods-for-binary-search`、`f3-degree-fold-off` の
- *   `typed-000.json`。
- * - **GitHub の `heavy:power` をまだ回していない**(1.2.5、2026-10-14)——
- *   `pi-power-display-000.json` を期待する 6 本(`display-digits`・
- *   `rad-pi-table-off`・`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`・
- *   `pi-sqrt-square-off`)。手元のネイティブ実行の数は各変異の註にある。
- *   床は走行の数の約 12% 下に置く(設計書 2026-10-14 §5.5。追跡は台帳
- *   `rust-review-backlog.md`)。
+ * 床が未設定の期待シャードは 1 件以上で見る。**実測が 1 件で、率の下限に
+ * 載らない**からである——`precedence-collapse` の `entry-000.json`、
+ * `periods-for-binary-search`、`f3-degree-fold-off` の `typed-000.json`。
  *
  * 値は 2026-08-19（Task 7）に `pnpm heavy:power` を実走して確定した。
  * 反応件数は 2026-08-17 の走行（設計書 §4.6）と 1 件も違わなかった——
@@ -160,9 +153,9 @@ export const MUTATIONS = [
       // (71.3%)、下限はその約 12% 下(`0.627`。床は 151 件)。**
       "deg-fold-display-000.json (displays)",
       // **`pi-power-display-000.json` も反応する(2026-10-14、手元のネイティブ実行で
-      // 実測。`heavy:power` はまだ回していない)。** 表示の文字列を比べるので、10 桁の
-      // 答えは 9 桁に落ちれば変わる。**368 件中 182 件。**
-      // 床はまだ置かない(先頭の註)。
+      // 実測。2026-10-16 の走行 `38831984567`(`84e9dedd`、`heavy:power` を含む)
+      // でも 182 件)。** 表示の文字列を比べるので、10 桁の答えは 9 桁に落ちれば変わる。**368 件中 182 件(49.5%)、下限はその約 12% 下
+      // (`0.435`。床は 161 件)。**
       "pi-power-display-000.json (displays)",
     ],
     minRate: {
@@ -181,6 +174,7 @@ export const MUTATIONS = [
       "rad-pi-display-000.json (displays)": 0.49,
       "cancellation-000.json (values)": 0.257,
       "deg-fold-display-000.json (displays)": 0.627,
+      "pi-power-display-000.json (displays)": 0.435,
     },
   },
   {
@@ -735,7 +729,8 @@ export const MUTATIONS = [
     // 腕で、表の引きを `None` にする。f64 の π で計算する 1.2.2 までの答えに戻る
     // (`pi_turn(q)` を呼んだまま答えを捨てる。`f2-log1p-off` と同じ形)。
     //
-    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // **反応(2026-10-14、手元のネイティブ実行。2026-10-16 の走行 `38831984567`
+    // (`84e9dedd`、`heavy:power` を含む)でも同じ 44 件と 48 件)**:
     // - `rad-pi-display-000.json`: **296 件中 44 件**(14.9%。1.2.2 から変わらない)。
     // - `pi-power-display-000.json`: **368 件中 48 件**(k = −1・2・和・√π・√(π²)・
     //   k = −2〜4 の群が 8 件ずつ。0 と極の行。DEG の群、x^0.5 の 2 群は RAD の表を
@@ -744,12 +739,15 @@ export const MUTATIONS = [
     // 3 枚は engine の三角関数を通らないので測っていない。
     //
     // `rad-pi-display-000.json` の下限はその約 12% 下(1.2.2 から)。
-    // 新しいシャードの床は先頭の註のとおり、まだ置かない。
+    // 新しいシャードは 48 件(13.0%)、下限はその約 12% 下(`0.114`。床は 42 件)。
     expectShards: [
       "rad-pi-display-000.json (displays)",
       "pi-power-display-000.json (displays)",
     ],
-    minRate: { "rad-pi-display-000.json (displays)": 0.13 },
+    minRate: {
+      "rad-pi-display-000.json (displays)": 0.13,
+      "pi-power-display-000.json (displays)": 0.114,
+    },
   },
   {
     id: "operator-correction-revert",
@@ -785,10 +783,22 @@ export const MUTATIONS = [
     // `exact::cancel` の門を常に閉じる。`apply_binop` は `None` の枝(f64 の
     // 和・差と印)に落ち、1.2.2 までの答えに戻る。
     // **2,002 件中 532 件が真値の 10 桁と違い、521 件が 5e-10 を超える**
-    // (2026-10-08、ネイティブ)。他の 21 枚は 1 件も動かない。走行 `37769606857`
-    // でも 521 件(26.0%)。下限は `0.229`(床は 459 件)。
-    expectShards: ["cancellation-000.json (values)"],
-    minRate: { "cancellation-000.json (values)": 0.229 },
+    // (2026-10-08、ネイティブ)。走行 `37769606857` でも 521 件(26.0%)。
+    // 下限は `0.229`(床は 459 件)。
+    //
+    // **1.2.5 から `pi-power-display-000.json` も反応する。** `xʸ 0.5` が `√` と
+    // 同じ印を持つようになり、`√q − p` と同じく F1 の門を通るからである。
+    // 368 件中 8 件、どれも `xʸ 0.5` のあとに近い数を引く群(16 件中 8 件)。
+    // 門が閉じると f64 の差に戻り、10 桁の表示が変わる。2026-10-16 の走行
+    // `38831984567`(`84e9dedd`、`heavy:power` を含む)で、期待に無いこの反応が
+    // 赤になった(反応したのはこの 2 枚だけ)。手元のネイティブ実行でも同じ 8 件。
+    // 8 件(2.2%)は `pi-root-off`・`pi-sqrt-square-off` と同じ大きさなので、同じく
+    // 床を置く。下限はその約 12% 下(`0.019`。床は 7 件)。
+    expectShards: ["cancellation-000.json (values)", "pi-power-display-000.json (displays)"],
+    minRate: {
+      "cancellation-000.json (values)": 0.229,
+      "pi-power-display-000.json (displays)": 0.019,
+    },
   },
   {
     id: "f2-log1p-off",
@@ -869,7 +879,9 @@ export const MUTATIONS = [
   // 4 本にした**——「`pi ≠ 0` の root を作らない」と「`xʸ 0.5` に印を付けない」は
   // 別のファイル(`exact.rs` と `engine/mod.rs`)にあり、1 か所の文字列置換では
   // 作れないので、後者を `pi-half-power-off` に分けた。
-  // **床(`minRate`)はどれも置かない**(先頭の註。`heavy:power` を GitHub で回してから)。
+  // 2026-10-16 の走行 `38831984567`(`84e9dedd`、`heavy:power` を含む)で、
+  // 4 本とも手元と同じ数だった。
+  // 下限はどれもその約 12% 下。
   {
     id: "pi-laurent-off",
     what: "π の印を『k が 0 か 1 の単項』に戻す(1.2.5 のローラン多項式を外す)",
@@ -879,13 +891,14 @@ export const MUTATIONS = [
     // `Held::settled` で、k が 0・1 の外の単項と、2 つ以上の項の印を落とす。
     // π⁻¹・π²・π^4 を通る式と、和が打ち消す式が f64 に戻る。
     //
-    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // **反応(2026-10-14、手元のネイティブ実行。走行 `38831984567` でも同じ数)**:
     // `pi-power-display-000.json` だけが **368 件中 54 件**(k = −1・2・和・√(π²)・
     // k = −2〜4 の群が 8 件ずつ、DEG の群が 14 件)。√π の群と x^0.5 の 2 群は
     // 動かない(root の印は `Held::settled` の外)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も
     // 動かない。呼び出しの 3 枚は測っていない。
+    // 54 件(14.7%)、下限 `0.129`(床は 48 件)。
     expectShards: ["pi-power-display-000.json (displays)"],
-    minRate: {},
+    minRate: { "pi-power-display-000.json (displays)": 0.129 },
   },
   {
     id: "pi-root-off",
@@ -896,12 +909,13 @@ export const MUTATIONS = [
     // `pi ≠ 0` の root を `None` にする。`√(π n)` が f64 に戻り、そのあとの
     // `x²` が π の印を取り戻せない。
     //
-    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // **反応(2026-10-14、手元のネイティブ実行。走行 `38831984567` でも同じ数)**:
     // `pi-power-display-000.json` だけが **368 件中 8 件**(√π の群の 0 と極の行。
     // 綴りが `√` の行も `xʸ 0.5` の行も)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
     // 呼び出しの 3 枚は測っていない。
+    // 8 件(2.2%)、下限 `0.019`(床は 7 件)。
     expectShards: ["pi-power-display-000.json (displays)"],
-    minRate: {},
+    minRate: { "pi-power-display-000.json (displays)": 0.019 },
   },
   {
     id: "pi-half-power-off",
@@ -911,13 +925,14 @@ export const MUTATIONS = [
     to: "        BinOp::Pow if false && exact::is_square_root(lhs, rhs) => {",
     // `x^0.5` の腕に入らない。値は `powf(x, 0.5)` に、印は付かなくなる。
     //
-    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // **反応(2026-10-14、手元のネイティブ実行。走行 `38831984567` でも同じ数)**:
     // `pi-power-display-000.json` だけが **368 件中 22 件**(x^0.5 の `√q` を 2 乗して
     // q を引く群 16 件中 10 件、`√q − p` の群 16 件中 8 件、√π の群の `xʸ 0.5` 綴りの
     // 0 と極の行 4 件)。手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
     // 呼び出しの 3 枚は測っていない。
+    // 22 件(6.0%)、下限 `0.052`(床は 20 件)。
     expectShards: ["pi-power-display-000.json (displays)"],
-    minRate: {},
+    minRate: { "pi-power-display-000.json (displays)": 0.052 },
   },
   {
     id: "pi-sqrt-square-off",
@@ -927,12 +942,13 @@ export const MUTATIONS = [
     to: "    if k != 0 && k % 2 == 0 && k > 4 {",
     // `√(s π^k)` で k が 2・4 のとき、単項 `√s π^(k/2)` に戻さず root のままにする。
     //
-    // **反応(2026-10-14、手元のネイティブ実行。`heavy:power` はまだ回していない)**:
+    // **反応(2026-10-14、手元のネイティブ実行。走行 `38831984567` でも同じ数)**:
     // `pi-power-display-000.json` だけが **368 件中 8 件**(√(π²) の群の 0 と極の行)。
     // 手元で測った他の 20 枚(値 11・同値 2・表示 7)は 1 件も動かない。
     // 呼び出しの 3 枚は測っていない。
+    // 8 件(2.2%)、下限 `0.019`(床は 7 件)。
     expectShards: ["pi-power-display-000.json (displays)"],
-    minRate: {},
+    minRate: { "pi-power-display-000.json (displays)": 0.019 },
   },
 ];
 
