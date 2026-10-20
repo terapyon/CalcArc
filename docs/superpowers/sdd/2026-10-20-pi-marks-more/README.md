@@ -39,8 +39,10 @@ B=$OUT/target-base/release/examples/pitry; N=$OUT/target-new/release/examples/pi
 (cd reference && python3 scripts/ppm_cmp.py corpus ../corpus/generated $B $N)
 ```
 
-**手順 1 の印字**（行数、影で置き換えた本数、その行のキー列の順。**`shadowed` の数を毎回見る**——
-0 でない数が増えたら、SymPy の真値がまた揺れている）:
+**手順 1 の印字**（行数、影で置き換えた本数、その行のキー列の順。**`shadowed` の数を毎回見る**）:
+- **`p6-rand.json` の `shadowed` は、走るたびに 1 か 0 になる（バイト列は同じ）。** SymPy がその 1 行を 0 にした回だけ
+  影が置き換えるからである（2026-10-20 に 6 回回して 1・1・0・0・1・1、sha256 は 6 回とも `08ee475e…`）。
+  **見るのは 1 を超えて増えたかどうか**——増えたら、SymPy の真値が別の行でも揺れている。
 
 ```
 p6-rand.json:            ppm-rand.json:
