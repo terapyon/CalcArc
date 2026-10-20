@@ -149,6 +149,10 @@
 - ~~**【未消化 2026-10-08】** GitHub での 1.2.3 の初回 `heavy:power` の後に、`f1-rationalize-off`・`f2-log1p-off`・`f3-degree-fold-off`・`display-digits/cancellation` の床（minRate）を置く。期待シャードは native の数から（F1 canc 521・F2 canc 42・F3 typed 1）。**その走行で確かめる**（試作・native の数は実装の数ではない）。設計書 `../specs/2026-10-08-precision-fixes-design.md` §5.2 から指される。~~
   **【消化 2026-10-09】** Heavy corpus の手動走行 `37769606857`（`f023930`、`heavy:power` を含む。緑）で 4 本とも native の数どおり（F1 521・F2 42・F3 1・display-digits/cancellation 585、すべて「期待どおり」）。床は既存と同じく約 12% 下: F1 `0.229`（459 件）・F2 `0.018`（37 件）・display-digits/cancellation `0.257`（515 件）。F3 は 1 件なので `minRate` を置かず `verdictFor` の「1 件以上」に委ねる（`periods-for-binary-search` と同じ）。
 
+## 1.2.6 の床（heavy:power）
+
+- GitHub での 1.2.6 の初回 `heavy:power` の後に、`pi-marks-more-display-000.json (displays)` を期待する 9 本の床（minRate）を置く。手元のネイティブの数は 509 件中 `display-digits` 250・`rad-pi-table-off` 118・`pi-laurent-off` 24・`pi-root-off` 8・`pi-half-power-off` 2・`pi-int-power-off` 36・`inverse-table-off` 21・`sqrt-square-zero-off` 10・`pi-quarter-off` 64（段 3 `cc011285`。既存の 29 本と新しい 4 本を全部この層に当てて数えた）。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-20-pi-marks-more-design.md` §5.5 から指される。
+
 ## 1.2.5 の床（heavy:power）
 
 - **【消化 2026-10-16】** 床を置いた。GitHub の Heavy corpus の手動走行 `38831984567`（`84e9dedd`、`heavy:power` を含む）で、6 本の反応は手元のネイティブと 1 件も違わなかった（368 件中 `display-digits` 182・`rad-pi-table-off` 48（`rad-pi-display-000.json` は 44）・`pi-laurent-off` 54・`pi-root-off` 8・`pi-half-power-off` 22・`pi-sqrt-square-off` 8）。下限は `0.435`・`0.114`・`0.129`・`0.019`・`0.052`・`0.019`（床は 161・42・48・7・20・7 件）。**その走行は赤だった**——`f1-rationalize-off` が期待に無い `pi-power-display-000.json` でも 8 件反応した（`xʸ 0.5` が 1.2.5 から F1 の門を通るので、`√q − p` の群 half-power-diff の 16 件中 8 件。手元のネイティブでも同じ 8 件）。期待に足し、同じ大きさの 2 本と同じく床 `0.019`（7 件）を置いた。既存の変異 29 本を手元で全部この層に当て、反応するのに期待に無いのはこの 1 本だけだった。
