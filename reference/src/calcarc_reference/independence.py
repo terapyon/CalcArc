@@ -186,7 +186,7 @@ SCOPE: dict[str, tuple[str, str]] = {
     ),
     "scripts/ppm_rand.py": (
         "expects",
-        "1.2.5 の設計の乱択。キー列と SymPy の厳密な式で真値を作る",
+        "1.2.5・1.2.6 の設計の乱択。キー列と SymPy の厳密な式で真値を作る",
     ),
     "scripts/ppm_cmp.py": (
         "tools",
