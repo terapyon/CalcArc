@@ -37,6 +37,7 @@ import json
 import random
 import sys
 
+import mpmath as mp
 import sympy as sp
 
 from calcarc_reference import real_ref
@@ -77,6 +78,9 @@ ROOTS = {
 INVERSE = {"asin": sp.asin, "acos": sp.acos, "atan": sp.atan}
 TRIG = {"sin": sp.sin, "cos": sp.cos, "tan": sp.tan}
 ERR = "Math ERROR"
+# 影の数値の桁数と、記号の値と食い違うとみなす幅（`agrees`）。
+mp.mp.dps = 400
+DISAGREED: list[str] = []
 
 
 def keys_of(token: str) -> tuple[list[str], sp.Expr]:
@@ -94,6 +98,22 @@ def keys_of(token: str) -> tuple[list[str], sp.Expr]:
         keys = [mantissa, "exp", *exponent, "neg"]
         return keys, sp.Rational(int(mantissa), 10 ** int(exponent))
     return [c if c != "." else "dot" for c in token], sp.Rational(token)
+
+
+def shadow(x: sp.Expr) -> mp.mpf:
+    """打つ数の厳密な値を、影の数値（400 桁の mpmath）にする。"""
+    return mp.mpf(str(sp.N(x, 410)))
+
+
+def agrees(n: sp.Expr, m: mp.mpf) -> bool:
+    """記号の値 `n`（`N(v, 50)`）と影の数値 `m` が食い違わないか。
+
+    **SymPy の自動の簡約は誤ることがある**（`sin(asin(acos(1 − 10⁻¹⁵)))` を 0 にする。
+    しかも同じ式が、走るたびに正しい値にもなり、出力のバイト列が変わった。キャッシュを
+    毎回空にしても変わった）。だから同じ手順を mpmath の数値（400 桁）でも 1 段ずつ追い、
+    **食い違えば影の数値を真値にして数える**（`main` が印字する）。捨てると、どの行を
+    捨てるかが走るたびに変わる。"""
+    return abs(mp.mpf(str(n)) - m) <= mp.mpf("1e-40") + mp.mpf("1e-30") * abs(m)
 
 
 def binary(op: str, v: sp.Expr, w: sp.Expr) -> sp.Expr:
@@ -124,6 +144,7 @@ def one_line(rng: random.Random, profile: str = "1.2.5") -> tuple[str, str, str]
     rad = rng.random() < 0.7
     keys = ["angle_toggle"] if rad else []
     k, v = keys_of(start_of(rng, family, profile))
+    m = shadow(v)
     keys += k
     for _ in range(rng.randint(1, 4)):
         r = rng.random()
@@ -135,37 +156,49 @@ def one_line(rng: random.Random, profile: str = "1.2.5") -> tuple[str, str, str]
             k, w = keys_of(rng.choice([*POOL, "pi"]))
             keys += [op, *k, "eq"]
             v = binary(op, v, w)
+            if not v.has(sp.zoo):
+                m = binary(op, m, shadow(w))
         elif op in ("addpi", "subpi", "mulpi", "divpi"):
             keys += [op[:3], "pi", "eq"]
             v = binary(op[:3], v, sp.pi)
+            if not v.has(sp.zoo):
+                m = binary(op[:3], m, mp.pi)
         elif op == "recip":
             keys += ["recip"]
             v = (1 / v) if v != 0 else sp.zoo
+            m = 1 / m if m != 0 else m
         elif op == "sqr":
             keys += ["sqr"]
             v = v**2
+            m = m**2
         elif op == "neg":
             keys += ["neg"]
             v = -v
+            m = -m
         elif op == "powint":
             k, n = keys_of(rng.choice(EXPONENTS))
             keys += ["pow", *k, "eq"]
             v = v**n if v != 0 or n >= 0 else sp.zoo
+            m = m ** int(n) if m != 0 or n >= 0 else m
         elif op in INVERSE:
             x = sp.N(v, 30)
             if op != "atan" and not -1 <= x <= 1:
                 return None
             keys += [op]
             v = INVERSE[op](v) if rad else INVERSE[op](v) * 180 / sp.pi
+            angle = {"asin": mp.asin, "acos": mp.acos, "atan": mp.atan}[op](m)
+            m = angle if rad else angle * 180 / mp.pi
         elif op == "fwd":
             fn = rng.choice(["sin", "cos", "tan"])
             keys += [fn]
             v = TRIG[fn](v if rad else v * sp.pi / 180)
+            m = {"sin": mp.sin, "cos": mp.cos, "tan": mp.tan}[fn](m if rad else m * mp.pi / 180)
         else:
             if sp.N(v, 30) < 0:
                 return None
             keys += ["sqrt"] if op == "sqrt" else ["pow", "0", "dot", "5", "eq"]
             v = sp.sqrt(v)
+            m = mp.sqrt(m)
         if v.has(sp.zoo, sp.nan):
             return None
     if rng.random() < 0.75:
@@ -173,16 +206,21 @@ def one_line(rng: random.Random, profile: str = "1.2.5") -> tuple[str, str, str]
         keys += [fn]
         x = v if rad else v * sp.pi / 180
         v = TRIG[fn](x)
+        m = {"sin": mp.sin, "cos": mp.cos, "tan": mp.tan}[fn](m if rad else m * mp.pi / 180)
         if rng.random() < 0.4:
             k, w = keys_of(rng.choice(["0.5", "1"]))
             keys += ["sub", *k, "eq"]
             v = v - w
+            m = m - shadow(w)
     if v.has(sp.zoo, sp.nan, sp.oo):
         want = ERR
     else:
         n = sp.N(v, 50)
         if not n.is_real:
             return None
+        if not agrees(n, m):
+            DISAGREED.append(" ".join(keys))
+            n = m
         f = float(n)
         if abs(f) > 1e300:
             return None
@@ -199,6 +237,7 @@ def main() -> None:
     with open(out, "w") as f:
         json.dump(rows, f)
     print(len(rows))
+    print("shadowed", len(DISAGREED), *DISAGREED, sep="\n")
 
 
 if __name__ == "__main__":

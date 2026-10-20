@@ -20,15 +20,15 @@
 (cd reference && uv --no-config run python scripts/ppm_rand.py $OUT/p6-rand.json 20261020 20000 1.2.6)
 (cd reference && uv --no-config run python scripts/ppm_rand.py $OUT/ppm-rand.json 20261014 20000)
 sha256sum $OUT/p6-rand.json $OUT/ppm-rand.json
-#   → 56e7da5e2da9b1d7d21cd6cdde4e2f3b6e67f50d4614182ee3ff18cefb7f4c29  p6-rand.json（17,129 行）
+#   → 08ee475eb1369f3c465eebfe93342f80ba481556cead6b3df380bbed7e652f5d  p6-rand.json（17,129 行。印字の shadowed は 1）
 #   → dd21fc817e2b5f36436dc68661cb0b6221e116a066805809841a6935b8d37f82  ppm-rand.json（19,331 行、1.2.5 と同じ）
-#   （2026-10-20、reference/uv.lock の SymPy 1.14.0・CPython 3.14.0）
+#   （2026-10-20、reference/uv.lock の SymPy 1.14.0・CPython 3.14.0。4 回同じ）
 
 # 2. 今の pitry（481cc5db = v1.2.5。作業木を増やさず、git archive で取り出す）
 mkdir -p $OUT/base && git archive 481cc5db | tar -x -C $OUT/base
 (cd $OUT/base && CARGO_TARGET_DIR=$OUT/target-base cargo build -p calcarc-core --release --example pitry)
 
-# 3. 後の pitry（実装の枝の木。設計の段では試作の枝 proto/pi-marks-more = 9fbc1a0d）
+# 3. 後の pitry（実装の枝の木。設計の段では試作の枝 proto/pi-marks-more = 30458186）
 mkdir -p $OUT/new && git archive proto/pi-marks-more | tar -x -C $OUT/new
 (cd $OUT/new && CARGO_TARGET_DIR=$OUT/target-new cargo build -p calcarc-core --release --example pitry)
 
@@ -44,18 +44,18 @@ B=$OUT/target-base/release/examples/pitry; N=$OUT/target-new/release/examples/pi
   `pairs_raw_became_equal` は「今は左右の生の値が違い、後は同じ」組、
   `pairs_*_became_unequal` は逆向き（後退の候補。id を 1 行ずつ印字する）。
 
-## 試作の数（設計書第 1 版、2026-10-20）
+## 試作の数（設計書第 1 版＋追記 1、2026-10-20）
 
-試作は枝 `proto/pi-marks-more`（`9fbc1a0d`。`481cc5db` の上の 1 コミット、push しない）にある。
+試作は枝 `proto/pi-marks-more`（`30458186`。`481cc5db` の上の 2 コミット、push しない。1 つ目の `9fbc1a0d` が第 1 版の 3 族、2 つ目が ±π の近くの畳み）にある。
 **実装の手本ではない**（環境変数で族を切る測定用の書き方）。手順 3 の木をこの枝の作業木に置き換えると、
 次の数が出る（手順 3 は試作の枝を取り出して build する形で書いた）。
 
 ```
-p6-rand:  lines 17129 / base_wrong 333 / new_wrong 220 / wrong->right 113 / RIGHT->WRONG 0
-          wrong->other_wrong 3 / finite->error 28 / display_changed 116 / raw_changed 397
-ppm-rand: lines 19331 / base_wrong 201 / new_wrong 195 / wrong->right 6 / RIGHT->WRONG 0
-          display_changed 6 / raw_changed 12
-corpus:   cases 25707 / raw_changed 56 / display_changed 0
+p6-rand:  lines 17129 / base_wrong 333 / new_wrong 218 / wrong->right 115 / RIGHT->WRONG 0
+          wrong->other_wrong 2 / finite->error 28 / display_changed 117 / raw_changed 403
+ppm-rand: lines 19331 / base_wrong 201 / new_wrong 190 / wrong->right 11 / RIGHT->WRONG 0
+          display_changed 11 / raw_changed 35
+corpus:   cases 25707 / raw_changed 74 / display_changed 0
           pairs 5293 / pairs_raw_became_equal 12（became_unequal は 0）
 ```
 
@@ -66,16 +66,19 @@ pitry は環境変数を引き継ぐ。
 
 | 環境変数 | 切るもの | `wrong->right`（p6-rand） |
 |---|---|---:|
-| （なし） | — | 113 |
-| `PROTO_NO_POWINT` | 整数の指数の `xʸ` 全部 | 80 |
-| `PROTO_NO_ZERO_ANY` | `x⁰` の印を底の印が無くても 1 にする規則 | 112 |
-| `PROTO_NO_POWROOT` | root の底の整数乗（偶数の指数で単項に戻す） | 113 |
-| `PROTO_POWROOT_ODD` | （足す側）root の底の奇数乗も root で運ぶ | 114 |
-| `PROTO_NO_INV` | 逆三角関数の表 | 44 |
-| `PROTO_NO_INVROOT` | 逆三角関数の表のうち root の引数（`0.5 √` など） | 106 |
-| `PROTO_NO_SQ0` | k = 0 の平方数の √ を単項に戻す | 94 |
+| （なし） | — | 115 |
+| `PROTO_NO_PIFOLD` | RAD の角を 90° 単位とずれに分けて畳む直し（±π の近く） | 113 |
+| `PROTO_NO_POWINT` | 整数の指数の `xʸ` 全部 | 82 |
+| `PROTO_NO_ZERO_ANY` | `x⁰` の印を底の印が無くても 1 にする規則 | 114 |
+| `PROTO_NO_POWROOT` | root の底の整数乗（偶数の指数で単項に戻す） | 115 |
+| `PROTO_POWROOT_ODD` | （足す側）root の底の奇数乗も root で運ぶ | 116 |
+| `PROTO_NO_INV` | 逆三角関数の表 | 45 |
+| `PROTO_NO_INVROOT` | 逆三角関数の表のうち root の引数（`0.5 √` など） | 108 |
+| `PROTO_NO_SQ0` | k = 0 の平方数の √ を単項に戻す | 96 |
 
-`ppm-rand`（1.2.5 の組）の 6 本は、6 本とも `PROTO_NO_SQ0` で戻る。
+`ppm-rand`（1.2.5 の組）の 11 本は、6 本が `PROTO_NO_SQ0` で、5 本が `PROTO_NO_PIFOLD` で戻る。
+**4 つ（`PROTO_NO_PIFOLD`・`PROTO_NO_POWINT`・`PROTO_NO_INV`・`PROTO_NO_SQ0`）を全部切ると、2 つの乱択とコーパスの全件で
+`481cc5db` と生の値・表示が同じになる**（自己検査）。
 
 ### k の範囲（設計書 §2.4）
 
@@ -119,3 +122,7 @@ W=$OUT/target-wide/release/examples/pitry
   **SymPy は表に載る値（`asin(1/2)` = π/6、`acos(−√3/2)` = 5π/6 ほか）を記号で返す**ので、
   そのあとの `sin` の 0 も記号の簡約で出る。engine の表とは別の表である（§0）。
 - 途中の `sin`・`cos`・`tan`（族 `inv` の `fwd`）は、逆三角関数に表の値を渡すため。
+- **影の数値**: 同じ手順を mpmath（400 桁）でも 1 段ずつ追い、SymPy の値と食い違えば影の数値を真値にする
+  （印字の `shadowed` が本数とキー列）。SymPy は `sin(asin(acos(1 − 10⁻¹⁵)))` を、走るたびに 0 にしたり
+  正しい値（約 4.47e-8）にしたりして、出力のバイト列が変わった（設計書第 1 版の sha256 `56e7da5e…` は
+  その行が 0 の版である）。1.2.5 の組では `shadowed` は 0 で、バイト列は前と同じ。
