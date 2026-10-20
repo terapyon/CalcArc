@@ -20,9 +20,9 @@
 (cd reference && uv --no-config run python scripts/ppm_rand.py $OUT/p6-rand.json 20261020 20000 1.2.6)
 (cd reference && uv --no-config run python scripts/ppm_rand.py $OUT/ppm-rand.json 20261014 20000)
 sha256sum $OUT/p6-rand.json $OUT/ppm-rand.json
-#   → 08ee475eb1369f3c465eebfe93342f80ba481556cead6b3df380bbed7e652f5d  p6-rand.json（17,129 行。印字の shadowed は 1）
+#   → 08ee475eb1369f3c465eebfe93342f80ba481556cead6b3df380bbed7e652f5d  p6-rand.json（17,129 行）
 #   → dd21fc817e2b5f36436dc68661cb0b6221e116a066805809841a6935b8d37f82  ppm-rand.json（19,331 行、1.2.5 と同じ）
-#   （2026-10-20、reference/uv.lock の SymPy 1.14.0・CPython 3.14.0。4 回同じ）
+#   （2026-10-20、reference/uv.lock の SymPy 1.14.0・CPython 3.14.0。5 回同じ）
 
 # 2. 今の pitry（481cc5db = v1.2.5。作業木を増やさず、git archive で取り出す）
 mkdir -p $OUT/base && git archive 481cc5db | tar -x -C $OUT/base
@@ -39,6 +39,19 @@ B=$OUT/target-base/release/examples/pitry; N=$OUT/target-new/release/examples/pi
 (cd reference && python3 scripts/ppm_cmp.py corpus ../corpus/generated $B $N)
 ```
 
+**手順 1 の印字**（行数、影で置き換えた本数、その行のキー列の順。**`shadowed` の数を毎回見る**——
+0 でない数が増えたら、SymPy の真値がまた揺れている）:
+
+```
+p6-rand.json:            ppm-rand.json:
+17129                    19331
+shadowed                 shadowed
+1                        0
+angle_toggle 1 sub 1 exp 1 5 neg eq acos asin sin
+```
+
+- **sha256 が `08ee475e…` でなければ、まず `shadowed` の行を見る。** 設計書第 1 版の `56e7da5e…` は、
+  影を足す前に、この 1 行の真値を SymPy が 0 にした版である（下の「真値の作り方」）。
 - **`CARGO_TARGET_DIR` は木ごとに分ける。** 共有すると、片方の木の build を他方が読む。
 - 印字の読み方は 1.2.5 の README と同じ。`corpus` の後半は左右を比べるケースで、
   `pairs_raw_became_equal` は「今は左右の生の値が違い、後は同じ」組、
@@ -126,3 +139,82 @@ W=$OUT/target-wide/release/examples/pitry
   （印字の `shadowed` が本数とキー列）。SymPy は `sin(asin(acos(1 − 10⁻¹⁵)))` を、走るたびに 0 にしたり
   正しい値（約 4.47e-8）にしたりして、出力のバイト列が変わった（設計書第 1 版の sha256 `56e7da5e…` は
   その行が 0 の版である）。1.2.5 の組では `shadowed` は 0 で、バイト列は前と同じ。
+
+## 畳みの直しで遠ざかる行（設計書 §2.6、第 2 版）
+
+表に載らない角 `nπ/d`（`d` = 5〜60、12 の約数を除く、既約）の `sin`・`cos`・`tan` 6,540 本を、手順 2・3 の
+2 本の pitry で歩く。**今と後の畳みを Python で写し、pitry とビット一致することを先に数える**
+（`emulation differs` が 0 でなければ、下の分解は pitry の答えの分解ではない）。そのうえで、角の誤差の
+上限（`f64(q)` の丸め・π の f64 の誤差・積の丸め）を今（`q = r`）と後（`q = δ`）で比べ、遠ざかった行の
+実際の角の誤差を比べる。
+
+```bash
+(cd reference && B=$B N=$N uv --no-config run python - <<'EOF'
+import math, os, subprocess, collections
+from fractions import Fraction as F
+import mpmath as mp
+mp.mp.dps = 60
+rows = [(n, d, f) for d in range(5, 61) if 12 % d for n in range(2 * d) if math.gcd(n, d) == 1
+        for f in ("sin", "cos", "tan")]
+inp = "".join(f"angle_toggle pi mul {' '.join(str(n))} eq div {' '.join(str(d))} eq {f}\n" for n, d, f in rows)
+def run(b):
+    out = subprocess.run([b], input=inp, text=True, capture_output=True, check=True).stdout
+    return [float(line.split("\t")[2]) for line in out.splitlines()]
+def angle(q):  # f64(q) × π の値と、真の qπ との差
+    x = float(q) * math.pi
+    return x, mp.mpf(x) - mp.mpf(q.numerator) / q.denominator * mp.pi
+def bound(q):  # 角の誤差の上限: f64(q) の丸め・π の f64 の誤差・積の丸め
+    if q == 0:
+        return mp.mpf(0)
+    upi = abs(mp.mpf(math.pi) - mp.pi) / mp.pi
+    return (mp.mpf(math.ulp(float(abs(q)))) / 2 * mp.pi + abs(mp.mpf(q.numerator) / q.denominator) * mp.pi * upi
+            + mp.mpf(math.ulp(abs(float(q) * math.pi))) / 2)
+pick = lambda sc, f: {"sin": sc[0], "cos": sc[1], "tan": sc[0] / sc[1]}[f]
+c = collections.Counter(); worst = collections.Counter()
+for (n, d, f), vb, vn in zip(rows, run(os.environ["B"]), run(os.environ["N"])):
+    r = F(n, d) % 2
+    r = r - 2 if r > 1 else r
+    k = math.floor(2 * r + F(1, 2)); delta = r - F(k, 2)
+    xo, ao = angle(r); xn, an = angle(delta)
+    so, co, sn, cn = math.sin(xo), math.cos(xo), math.sin(xn), math.cos(xn)
+    c["emulation differs"] += (pick((so, co), f), pick([(sn, cn), (cn, -sn), (-sn, -cn), (-cn, sn)][k % 4], f)) != (vb, vn)
+    c["bound new > old"] += bound(delta) > bound(r)
+    t = getattr(mp, f)(mp.mpf(n) / d * mp.pi); u = math.ulp(abs(float(t)))
+    eb, en = float(abs(vb - t)) / u, float(abs(vn - t)) / u
+    worst[f + " old"] = max(worst[f + " old"], eb); worst[f + " new"] = max(worst[f + " new"], en)
+    c["over 1 ulp old"] += eb > 1; c["over 1 ulp new"] += en > 1
+    if en > eb:
+        c["farther"] += 1; c["farther, |r| <= 1/4"] += abs(r) <= F(1, 4); c["farther, over 1 ulp"] += en > 1
+        c["farther, new angle error larger"] += abs(an) > abs(ao)
+    else:
+        c["closer" if en < eb else "same"] += 1
+print(len(rows), dict(c)); print({k: round(v, 2) for k, v in sorted(worst.items())})
+EOF
+)
+#   → 6540 {'emulation differs': 0, 'bound new > old': 0, 'over 1 ulp old': 2574, 'over 1 ulp new': 556,
+#      'same': 3196, 'farther': 318, 'farther, |r| <= 1/4': 0, 'farther, over 1 ulp': 102,
+#      'farther, new angle error larger': 234, 'closer': 3026}
+#   → {'cos new': 1.47, 'cos old': 55.74, 'sin new': 1.47, 'sin old': 60.28, 'tan new': 3.25, 'tan old': 68.61}
+```
+
+コーパスで生の値が動く 18 件（`rad-pi-display-000.json`）は、同じ 2 本で次のように数える。遠ざかる 2 件は
+`rpi-000272`・`rpi-000275`（どちらも `r = 2/7` の `tan`）。
+
+```bash
+(cd reference && B=$B N=$N uv --no-config run python - <<'EOF'
+import json, math, os, subprocess
+import mpmath as mp
+mp.mp.dps = 60
+cases = json.load(open("../corpus/generated/rad-pi-display-000.json"))["cases"]
+inp = "".join(" ".join(c["keys"]) + "\n" for c in cases)
+run = lambda b: subprocess.run([b], input=inp, text=True, capture_output=True, check=True).stdout.splitlines()
+for c, a, b in zip(cases, run(os.environ["B"]), run(os.environ["N"])):
+    ra, rb = float(a.split("\t")[2]), float(b.split("\t")[2])
+    if ra != rb:
+        t = eval(c["expr"], {"pi": mp.pi, "sin": mp.sin, "cos": mp.cos, "tan": mp.tan})
+        u = math.ulp(abs(float(t)))
+        print(c["id"], c["expr"], "old %.3f new %.3f ulp" % (abs(ra - t) / u, abs(rb - t) / u))
+EOF
+)
+#   → 18 行。new > old は rpi-000272 tan(pi*2/7) と rpi-000275 tan(pi*14002/7)（0.344 → 0.656 ulp）
+```
