@@ -90,8 +90,8 @@ pub enum Turn {
     /// (`Turn::Table(Position(1))` のような載らない位置は型の段で起きない)。
     Table(Position),
     /// **表に載らない角を、打った数から畳んだもの**。角は `quarter × 90° + radians`。
-    /// RAD の π の有理数倍は `r = q mod 2` を `(−1, 1]` に畳んだ `f64(r) × π`
-    /// （`quarter` は 0）、DEG は 90° の倍数とずれに分けたもの（`engine::exact`）。
+    /// RAD の π の有理数倍は π/2 の倍数とずれに、DEG は 90° の倍数とずれに分けたもの
+    /// （どちらも `radians` はずれだけ。`engine::exact`）。
     /// **巨大な角でも真の角から外れない。**
     Folded { quarter: u8, radians: f64 },
 }

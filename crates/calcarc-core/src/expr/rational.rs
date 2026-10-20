@@ -109,6 +109,28 @@ impl Rational {
         self.checked_mul(make(reciprocal.num, reciprocal.den)?)
     }
 
+    /// `selfⁿ`(`n` は負でもよい)。2 乗を重ねる形なので、`|n|` が大きくても段の数は
+    /// 128 以下である。**負の `n` は先に逆数を取る**(`0` の負の冪は `DivisionByZero`)。
+    pub(crate) fn checked_pow(self, n: i128) -> CalcResult<Rational> {
+        let mut base = if n < 0 {
+            Rational::ONE.checked_div(self)?
+        } else {
+            self
+        };
+        let mut rest = n.unsigned_abs();
+        let mut out = Rational::ONE;
+        while rest > 0 {
+            if rest & 1 == 1 {
+                out = out.checked_mul(base)?;
+            }
+            rest >>= 1;
+            if rest > 0 {
+                base = base.checked_mul(base)?;
+            }
+        }
+        Ok(out)
+    }
+
     /// floor して符号なし整数へ。**負は着地できない**——金額も件数も期間も
     /// 符号なしの定義域だからである(numerical-policy)。
     pub fn floor_to_u128(&self) -> CalcResult<u128> {
