@@ -1066,20 +1066,21 @@ mod tests {
     #[test]
     fn the_other_functions_drop_the_mark() {
         for tokens in [
-            &["9", "sqrt"][..],
-            &["2", "ln"],
+            &["2", "ln"][..],
             &["2", "log10"],
             &["2", "exp_e"],
             &["3", "n_fact"],
-            &["2", "pow", "3", "eq"],
             &["5", "n_p_r", "2", "eq"],
             &["5", "n_c_r", "2", "eq"],
-            &["0", "dot", "5", "asin"],
-            &["0", "dot", "5", "acos"],
-            &["1", "atan"],
         ] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
         }
+        // 対照: 平方数の √・整数の指数の `xʸ`・表に載る逆三角関数は印を持つ。
+        assert_eq!(mark(&["9", "sqrt"]), q(3, 1, false));
+        assert_eq!(mark(&["2", "pow", "3", "eq"]), q(8, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "asin"]), q(30, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "acos"]), q(60, 1, false));
+        assert_eq!(mark(&["1", "atan"]), q(45, 1, false));
     }
 
     #[test]
@@ -1148,25 +1149,27 @@ mod tests {
 
     #[test]
     fn the_fold_rounds_its_fraction_once() {
-        // **`f64(r)` は正しく丸める**(段階 2)。分母が 2^53 を超えると、`n as f64 / d as f64`
-        // は変換と除算で 2 度丸め、この分数では 1 ulp 下(`0.6082601208004513`)に落ちる。
-        // 正しく丸めた値は `0.6082601208004514`(Python の `float(Fraction(n, d))`)。
+        // **ずれ `δ = r − 1/2` の f64 は正しく丸める**。`r ≈ 0.608` はいちばん近い 90° 単位が
+        // `π/2`(`quarter: 1`)で、`δ = (2n − d) / 2d`。分母が 2^53 を超えると、
+        // `(2n − d) as f64 / (2d) as f64` は変換と除算で 2 度丸め、この分数では 1 ulp 下
+        // (`0.1082601208004514`)に落ちる。正しく丸めた値は `0.10826012080045141`
+        // (Python の `float(Fraction(2n − d, 2d))`)。
         // **盤面からは打てない分母**(12 文字の入力では届かない)なので、`pi_turn` を直に呼ぶ。
         let (n, d) = (
-            322_740_770_792_394_276_848_i128,
+            322_740_770_792_394_277_885_i128,
             530_596_630_875_089_193_213_i128,
         );
-        let twice = n as f64 / d as f64;
+        let twice = (2 * n - d) as f64 / (2 * d) as f64;
         assert_eq!(
-            twice, 0.6082601208004513,
+            twice, 0.1082601208004514,
             "比べる相手が 2 度丸めの値であること"
         );
         let q = Rational::from_ratio(n, d).unwrap();
         assert_eq!(
             pi_turn(q),
             Some(Turn::Folded {
-                quarter: 0,
-                radians: 0.6082601208004514 * std::f64::consts::PI
+                quarter: 1,
+                radians: 0.10826012080045141 * std::f64::consts::PI
             })
         );
     }
@@ -1352,9 +1355,9 @@ mod tests {
     #[test]
     fn the_root_of_a_power_of_pi_follows_the_table() {
         let root = |c: &str, r: &str, pi: i8| serde_json::json!({ "c": c, "r": r, "pi": pi });
-        // k = 0 は平方数でも root のまま。
-        assert_eq!(root_json(&["4", "sqrt"]), root("1/1", "4/1", 0));
-        // 0 でない偶数の k で平方数なら単項。
+        // 偶数の k(0 を含む)で平方数なら単項。
+        assert_eq!(mark(&["4", "sqrt"]), q(2, 1, false));
+        assert_eq!(root_json(&["4", "sqrt"]), serde_json::Value::Null);
         assert_eq!(mark(&["pi", "sqr", "sqrt"]), q(1, 1, true));
         assert_eq!(root_json(&["pi", "sqr", "sqrt"]), serde_json::Value::Null);
         assert_eq!(mark(&["pi", "sqr", "sqr", "sqrt"]), laurent(&[(2, 1, 1)]));
@@ -1367,6 +1370,7 @@ mod tests {
             q(2, 1, true)
         );
         // 平方数でない偶数の k と、奇数の k は root。
+        assert_eq!(root_json(&["2", "sqrt"]), root("1/1", "2/1", 0));
         assert_eq!(
             root_json(&["pi", "sqr", "mul", "2", "eq", "sqrt"]),
             root("1/1", "2/1", 2)
@@ -1648,8 +1652,10 @@ mod tests {
 
     #[test]
     fn only_sqrt_makes_a_root_and_only_neg_carries_it() {
-        // **作るのは `√` だけ**(§3.2)。印 k=0 の `q > 0` から `(1, q)`。
-        assert_eq!(root_of(&["9", "sqrt"]), Some((r(1, 1), r(9, 1))));
+        // **作るのは `√` だけ**(§3.2)。印 k=0 の、平方数でない `q > 0` から `(1, q)`。
+        assert_eq!(root_of(&["3", "sqrt"]), Some((r(1, 1), r(3, 1))));
+        // 平方数の √ は root ではなく有理数の印になる。
+        assert_eq!(root_of(&["9", "sqrt"]), None);
         // 単項の π の冪も root にする(√ の中の冪を `pi` に持つ)。
         assert_eq!(
             root_json(&["pi", "sqrt"]),
@@ -1666,7 +1672,7 @@ mod tests {
             Some((r(1, 1), r(2, 1)))
         );
         // **不変: root が `Some` なら `exact` は `None`**(√ の答えは一般に無理数)。
-        for tokens in [&["9", "sqrt"][..], &["2", "sqrt", "neg"]] {
+        for tokens in [&["3", "sqrt"][..], &["2", "sqrt", "neg"]] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
         }
         // **ほかはすべて root を落とす**: 印の無い・0 の引数、×・÷・関数・桁落ち

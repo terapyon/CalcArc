@@ -2509,8 +2509,8 @@ fn the_root_of_a_square_power_of_pi_is_a_power_of_pi() {
         rad_main_of(&["pi", "sqr", "recip", "sqrt", "recip", "sin"]),
         "0"
     );
-    // √(4π²) = 2π。`4 √ × π = sin` は k = 0 の √ が root のままなので変わらない
-    // (対照 `pi_marks_that_do_not_change`)。今 `-2.449293598e-16`。
+    // √(4π²) = 2π。`4 √ × π = sin` も同じ 0 になる(`a_square_root_of_a_square_is_rational`)。
+    // 今 `-2.449293598e-16`。
     assert_eq!(
         rad_main_of(&["pi", "sqr", "mul", "4", "eq", "sqrt", "sin"]),
         "0"
@@ -2616,22 +2616,10 @@ fn pi_marks_that_do_not_change() {
         ]),
         "5.665538898e-16"
     );
-    // 整数の指数の xʸ は範囲外。
-    assert_eq!(
-        rad_main_of(&["pi", "pow", "2", "eq", "div", "pi", "eq", "sin"]),
-        "1.224646799e-16"
-    );
-    // 逆三角関数は範囲外。
-    assert_eq!(rad_main_of(&["1", "neg", "acos", "sin"]), "1.224646799e-16");
     // i128 の溢れは範囲外。
     assert_eq!(
         rad_main_of(&["pi", "mul", "1", "exp", "4", "0", "eq", "sin"]),
         "0.9995496644"
-    );
-    // k = 0 の平方数の √ は root のまま(`π x² × 4 = √ sin` と綴りで割れる)。
-    assert_eq!(
-        rad_main_of(&["4", "sqrt", "mul", "pi", "eq", "sin"]),
-        "-2.449293598e-16"
     );
 }
 
@@ -2663,5 +2651,311 @@ fn roots_and_degree_windows_that_do_not_change() {
             "3", "0", "add", "1", "exp", "1", "5", "neg", "eq", "sin", "sub", "0", "dot", "5", "eq"
         ]),
         "0"
+    );
+}
+
+// ---- 整数の指数の xʸ・逆三角関数・平方数の √・RAD の畳み(1.2.6 設計書 §5.1) ----
+//
+// 期待はどれも式の真値の 10 桁(0 と極は式から)。対照の期待は今の表示である。
+
+/// **整数の指数の `xʸ` は、`×` と `1/x` を重ねたのと同じ印を持つ**(§2.1)。
+#[test]
+fn an_integer_power_keeps_the_mark() {
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["pi", "pow", "1", "eq", "sin"]), "0");
+    // `π x² ÷ π = sin` と同じ綴り。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "2", "eq", "div", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "3", "eq", "div", "pi", "sqr", "eq", "sin"]),
+        "0"
+    );
+    // 負の指数。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "pow", "1", "neg", "eq", "mul", "pi", "sqr", "eq", "sin"
+        ]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "2", "neg", "eq", "recip", "sqrt", "sin"]),
+        "0"
+    );
+    // 0 の指数。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "0", "eq", "mul", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 0 の指数は底の印を問わない。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["2", "exp_e", "pow", "0", "eq", "mul", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 和の底。(π + 1)² − 1 − π² = 2π。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "lparen", "pi", "add", "1", "rparen", "pow", "2", "eq", "sub", "1", "eq", "sub", "pi",
+            "sqr", "eq", "div", "2", "eq", "sin"
+        ]),
+        "0"
+    );
+    // root の底の偶数乗。今 `5.665538898e-16`。
+    assert_eq!(rad_main_of(&["pi", "sqrt", "pow", "2", "eq", "sin"]), "0");
+    // 有理数。今 `2.220446049e-16`。
+    assert_eq!(
+        main_of(&[
+            "1", "dot", "1", "pow", "2", "eq", "sub", "1", "dot", "2", "1", "eq"
+        ]),
+        "0"
+    );
+}
+
+/// **RAD の逆三角関数は、表に載る引数なら π の有理数倍の答えを持つ**(§2.2)。
+#[test]
+fn an_inverse_trig_answer_on_the_table_is_a_multiple_of_pi() {
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["1", "neg", "acos", "sin"]), "0");
+    // 今 `-3.216245299e-16`。
+    assert_eq!(
+        rad_main_of(&["0", "dot", "5", "asin", "mul", "6", "eq", "sin"]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["1", "atan", "mul", "4", "eq", "sin"]), "0");
+    // 今 `1.224646799e-16`。
+    assert_eq!(rad_main_of(&["0", "acos", "mul", "2", "eq", "sin"]), "0");
+    // 負の引数の acos は π − 答え。今 `6.432490599e-16`。
+    assert_eq!(
+        rad_main_of(&["0", "dot", "5", "neg", "acos", "mul", "3", "eq", "sin"]),
+        "0"
+    );
+    // root の引数。今 `-3.216245299e-16`。
+    assert_eq!(
+        rad_main_of(&["0", "dot", "5", "sqrt", "asin", "mul", "4", "eq", "sin"]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["3", "sqrt", "atan", "mul", "3", "eq", "sin"]),
+        "0"
+    );
+    // 今 `-3.216245299e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "0", "dot", "7", "5", "sqrt", "acos", "mul", "6", "eq", "sin"
+        ]),
+        "0"
+    );
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "1", "div", "3", "eq", "sqrt", "atan", "mul", "6", "eq", "sin"
+        ]),
+        "0"
+    );
+}
+
+/// **DEG の逆三角関数は、表に載る引数なら度ちょうどの答えを持つ**(§2.2)。
+#[test]
+fn an_inverse_trig_answer_on_the_table_is_exact_in_degrees() {
+    // 今 `3.552713679e-15`。
+    assert_eq!(
+        main_of(&["0", "dot", "5", "asin", "sub", "3", "0", "eq"]),
+        "0"
+    );
+    // 今 `7.105427358e-15`。
+    assert_eq!(
+        main_of(&["0", "dot", "5", "acos", "sub", "6", "0", "eq"]),
+        "0"
+    );
+    // 今 `3.552713679e-15`。
+    assert_eq!(
+        main_of(&["0", "dot", "2", "5", "sqrt", "asin", "sub", "3", "0", "eq"]),
+        "0"
+    );
+}
+
+/// **RAD で逆三角関数の答えが π/2 の奇数倍なら、その `tan` は極である**(§7.2 の U5)。
+/// DEG の `0 acos tan` は前から `Math ERROR`。今はどれも `1.633123935e16`。
+#[test]
+fn an_inverse_trig_answer_at_a_quarter_turn_reaches_the_pole() {
+    use calcarc_core::CalcError;
+    for keys in [
+        &["0", "acos", "tan"][..],
+        &["1", "asin", "tan"],
+        &["1", "atan", "mul", "2", "eq", "tan"],
+    ] {
+        let mut pressed = vec!["angle_toggle"];
+        pressed.extend_from_slice(keys);
+        let shown = run(&pressed);
+        assert_eq!(shown.main, "Math ERROR", "{keys:?}");
+        assert_eq!(shown.error, Some(CalcError::TrigPole), "{keys:?}");
+    }
+}
+
+/// **平方数の √ は有理数である**(§2.3。§7.2 の U3)。
+#[test]
+fn a_square_root_of_a_square_is_rational() {
+    // `π x² × 4 = √ sin` と同じ 0。今 `-2.449293598e-16`。
+    assert_eq!(rad_main_of(&["4", "sqrt", "mul", "pi", "eq", "sin"]), "0");
+    // 今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&["9", "sqrt", "mul", "pi", "eq", "div", "3", "eq", "sin"]),
+        "0"
+    );
+    // `xʸ 0.5` も `√` と同じ。今 `-2.449293598e-16`。
+    assert_eq!(
+        rad_main_of(&["4", "pow", "0", "dot", "5", "eq", "mul", "pi", "eq", "sin"]),
+        "0"
+    );
+    // 両方が有理数になった差を厳密に引く(真値 95.0624998050000001)。今 `95.0624998`。
+    assert_eq!(
+        main_of(&[
+            "0", "dot", "0", "6", "2", "5", "sqrt", "sub", "9", "dot", "9", "9", "9", "9", "9",
+            "9", "9", "9", "eq", "sqr"
+        ]),
+        "95.06249981"
+    );
+}
+
+/// **RAD の角は、いちばん近い 90° 単位とずれに分けて、ずれだけを f64 にする**(§2.6)。
+/// ±π・±π/2 の近くでは、角全体の f64 の丸めが答えに相対で効いていた。
+#[test]
+fn a_radian_angle_folds_to_the_nearest_quarter_turn() {
+    // 真値 `-π × 10⁻¹⁶`。今 `-5.665538898e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "1", "exp", "1", "6", "neg", "eq", "add", "pi", "eq", "sin"
+        ]),
+        "-3.141592654e-16"
+    );
+    // 今 `5.665538898e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "1", "exp", "1", "6", "neg", "eq", "sub", "pi", "eq", "tan"
+        ]),
+        "3.141592654e-16"
+    );
+    // π/2 の近くの `cos`。今 `-3.828568699e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "div", "2", "eq", "add", "lparen", "pi", "mul", "1", "exp", "1", "6", "neg",
+            "rparen", "eq", "cos"
+        ]),
+        "-3.141592654e-16"
+    );
+    // 真値 `1 / (π × 10⁻¹⁶)`。今 `1.978937966e15`。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "div", "2", "eq", "sub", "lparen", "pi", "mul", "1", "exp", "1", "6", "neg",
+            "rparen", "eq", "tan"
+        ]),
+        "3.183098862e15"
+    );
+    // 逆三角関数の答えから作った角。真値 `-π/6 × 10⁻¹⁶`。今 `1.224646799e-16`。
+    assert_eq!(
+        rad_main_of(&[
+            "0", "dot", "5", "asin", "mul", "1", "exp", "1", "6", "neg", "eq", "neg", "sub", "pi",
+            "eq", "tan"
+        ]),
+        "-5.235987756e-17"
+    );
+}
+
+/// **変わらない対照**(§5.1・§7.1)。root どうしの積 `π √ × π √ = sin` は
+/// `pi_marks_that_do_not_change` に在る。
+#[test]
+fn pi_marks_more_that_do_not_change() {
+    // f64 でも合う DEG の逆三角関数。
+    assert_eq!(main_of(&["1", "atan", "sub", "4", "5", "eq"]), "0");
+    assert_eq!(
+        main_of(&["1", "neg", "acos", "sub", "1", "8", "0", "eq"]),
+        "0"
+    );
+    // 逆三角関数の表示は今のまま。
+    assert_eq!(rad_main_of(&["0", "dot", "5", "asin"]), "0.5235987756");
+    assert_eq!(main_of(&["0", "dot", "5", "asin"]), "30");
+    // k = 5 は範囲外。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "pow", "5", "eq", "div", "pi", "eq", "div", "pi", "eq", "div", "pi", "eq", "div",
+            "pi", "eq", "sin"
+        ]),
+        "1.224646799e-16"
+    );
+    // root の奇数乗は落とす。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "sqrt", "pow", "3", "eq", "sqr", "div", "pi", "sqr", "eq", "sin"
+        ]),
+        "1.454732309e-15"
+    );
+    // 整数でない指数は落とす。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "pow", "1", "dot", "5", "eq", "sqr", "div", "pi", "sqr", "eq", "sin"
+        ]),
+        "-3.216245299e-16"
+    );
+    // π を含む指数は落とす。
+    assert_eq!(
+        rad_main_of(&["pi", "pow", "pi", "eq", "sin"]),
+        "-0.9447897059"
+    );
+    // `÷` で落ちた root は逆三角関数に届かない。
+    assert_eq!(
+        rad_main_of(&[
+            "2", "sqrt", "div", "2", "eq", "asin", "mul", "4", "eq", "sin"
+        ]),
+        "-3.216245299e-16"
+    );
+    // `tan` の答え √3 には印が無い。
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "div", "3", "eq", "tan", "atan", "mul", "3", "eq", "sin"
+        ]),
+        "1.224646799e-16"
+    );
+    // 定義域の外。
+    assert_eq!(rad_main_of(&["2", "sqrt", "asin"]), "Math ERROR");
+    // 表に載らない引数。
+    assert_eq!(rad_main_of(&["0", "dot", "3", "asin", "sin"]), "0.3");
+    // 平方数の √ と打った数の差は `cancel` と同じ答え。
+    assert_eq!(
+        main_of(&["1", "dot", "2", "1", "sqrt", "sub", "1", "dot", "1", "eq"]),
+        "0"
+    );
+    // 平方数の √ どうしの和の 2 乗。
+    assert_eq!(
+        main_of(&[
+            "0", "dot", "0", "1", "sqrt", "add", "1", "sqrt", "eq", "sqr"
+        ]),
+        "1.21"
+    );
+    // i128 の溢れ。
+    assert_eq!(
+        rad_main_of(&["2", "pow", "1", "3", "0", "eq"]),
+        "1.361129468e39"
+    );
+    // 0 と 2π の近くは今も合う。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "1", "exp", "1", "6", "neg", "eq", "sin"]),
+        "3.141592654e-16"
+    );
+    assert_eq!(
+        rad_main_of(&[
+            "pi", "mul", "2", "eq", "add", "lparen", "pi", "mul", "1", "exp", "1", "6", "neg",
+            "rparen", "eq", "sin"
+        ]),
+        "3.141592654e-16"
+    );
+    // 表に載らない角の表示は変わらない。
+    assert_eq!(
+        rad_main_of(&["pi", "mul", "5", "eq", "div", "7", "eq", "sin"]),
+        "0.7818314825"
     );
 }
