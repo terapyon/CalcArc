@@ -1628,10 +1628,12 @@ def test_the_summary_line_counts_every_shard_not_just_the_cli_count(
     # 2026-10-10 §4.3）。
     # **24 枚目は 2026-10-14 に増えた**（`pi-power-display-000.json`、設計書
     # 2026-10-14 §5.4）。
+    # **25 枚目は 2026-10-20 に増えた**（`pi-marks-more-display-000.json`、設計書
+    # 2026-10-20 §5.4）。
     # **数を持っているのはここだけではない**——`ALL_SHARDS`（heavy の検出力）と
     # `SCIENCE_SHARDS`、`COVERAGE_REQUIRED_SHARDS`、`DISPLAY_SHARD_PATTERN` が
     # それぞれ一覧を持つ。**足す日には全部が意識的な 1 行になる。**
-    assert len(written) == 24
+    assert len(written) == 25
     # 総件数が CLI の `count` とも finance の件数とも一致しないこと——一致
     # する取り方では、どちらか一方を分母にする退行を捕まえられない。
     assert expected_total not in (cli_count, generate_corpus.FINANCE_COUNT)

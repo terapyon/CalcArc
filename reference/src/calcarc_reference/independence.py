@@ -111,6 +111,12 @@ SCOPE: dict[str, tuple[str, str]] = {
         "DEG の大きな角・90° の倍数の近くの角の表示の期待値。Fraction の剰余と mpmath で"
         "直接評価し、0 と極は定義から有理数で決める",
     ),
+    "src/calcarc_reference/corpus_pi_marks_more.py": (
+        "expects",
+        "整数の指数・逆三角関数・平方数の √・π/2 の倍数の近くの角を含む式の表示の期待値。"
+        "キー列を SymPy の厳密な式に読み、0 と極は厳密な値から決め、それ以外は N(式, 50) の"
+        "50 桁を 10 桁にする。同じキー列を mpmath の 400 桁でも追い、食い違えばそちらを使う",
+    ),
     "src/calcarc_reference/corpus_pi_power.py": (
         "expects",
         "π の冪・和・√ を含む式の表示の期待値。キー列を SymPy の厳密な式に読み、"

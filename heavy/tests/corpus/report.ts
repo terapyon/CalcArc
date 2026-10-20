@@ -713,7 +713,7 @@ export function areaOfShard(shardName: string): Area {
     return "complex";
   }
   if (
-    /^(display|entry|errors|rad-pi-display|deg-fold-display|pi-power-display)-/.test(
+    /^(display|entry|errors|rad-pi-display|deg-fold-display|pi-power-display|pi-marks-more-display)-/.test(
       stem,
     )
   ) {
@@ -741,6 +741,10 @@ export function areaOfShard(shardName: string): Area {
     //
     // `pi-power-display-` も同じ理由でここに入る（2026-10-14、1.2.5）。π の冪・和・√ が
     // 表の位置に着く式で、`0` と `1.224646799e-16` を見分ける。
+    //
+    // `pi-marks-more-display-` も同じ理由でここに入る（2026-10-20、1.2.6）。整数の指数・
+    // 逆三角関数・平方数の √ が表の位置に着く式と、π/2 の倍数のすぐ近くの角で、`0` と
+    // `1.224646799e-16`、`-3.141592654e-16` と `-5.665538898e-16` を見分ける。
     return "display";
   }
   if (/^cancellation-/.test(stem)) {
@@ -2765,6 +2769,13 @@ export const DEG_FOLD_SHARD = "deg-fold-display-000.json";
  */
 export const PI_POWER_SHARD = "pi-power-display-000.json";
 
+/**
+ * 整数の指数・逆三角関数・平方数の √・π/2 の倍数の近くの角のシャード（2026-10-20、1.2.6）。
+ * **極の行（`TrigPole`。`0 acos tan` の形）を持つ。** エラー経路は `RAD_PI_SHARD` と
+ * 同じ理由で `errors` と同じ枠。
+ */
+export const PI_MARKS_MORE_SHARD = "pi-marks-more-display-000.json";
+
 /** 打鍵の途中の表示を持つシャード。`=` を押す前の状態を主張する。 */
 export const ENTRY_SHARD = "entry-000.json";
 
@@ -2829,7 +2840,8 @@ function errorPathOf(shardName: string, kind: string): ErrorPathId | null {
     stem === shardStem(COMBINATORICS_ERRORS_SHARD) ||
     stem === shardStem(RAD_PI_SHARD) ||
     stem === shardStem(DEG_FOLD_SHARD) ||
-    stem === shardStem(PI_POWER_SHARD)
+    stem === shardStem(PI_POWER_SHARD) ||
+    stem === shardStem(PI_MARKS_MORE_SHARD)
   ) {
     // **名前で選ぶ。** 領域で選ぶと `display` に居るこのシャードは
     // 拾えず、科学計算の定義域エラーの枠が常に 0 件になる。
