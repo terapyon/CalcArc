@@ -151,7 +151,8 @@
 
 ## 1.2.6 の床（heavy:power）
 
-- GitHub での 1.2.6 の初回 `heavy:power` の後に、`pi-marks-more-display-000.json (displays)` を期待する 9 本の床（minRate）を置く。手元のネイティブの数は 509 件中 `display-digits` 250・`rad-pi-table-off` 118・`pi-laurent-off` 24・`pi-root-off` 8・`pi-half-power-off` 2・`pi-int-power-off` 36・`inverse-table-off` 21・`sqrt-square-zero-off` 10・`pi-quarter-off` 64（段 3 `cc011285`。既存の 29 本と新しい 4 本を全部この層に当てて数えた）。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-20-pi-marks-more-design.md` §5.5 から指される。
+- **【消化 2026-10-21】** 床を置いた。GitHub の Heavy corpus の手動走行 `39554274768`（`20057953`、`heavy:power` を含む、緑）で、9 本の反応は手元のネイティブと 1 件も違わなかった（509 件中 `display-digits` 250・`rad-pi-table-off` 118・`pi-laurent-off` 24・`pi-root-off` 8・`pi-half-power-off` 2・`pi-int-power-off` 36・`inverse-table-off` 21・`sqrt-square-zero-off` 10・`pi-quarter-off` 64）。下限は `0.432`・`0.204`・`0.041`・`0.013`・`0.003`・`0.062`・`0.036`・`0.017`・`0.11`（床は 220・104・21・7・2・32・19・9・56 件）。全 32 変異が期待どおりだった。
+- （当初の項）GitHub での 1.2.6 の初回 `heavy:power` の後に、`pi-marks-more-display-000.json (displays)` を期待する 9 本の床（minRate）を置く。手元のネイティブの数は 509 件中 `display-digits` 250・`rad-pi-table-off` 118・`pi-laurent-off` 24・`pi-root-off` 8・`pi-half-power-off` 2・`pi-int-power-off` 36・`inverse-table-off` 21・`sqrt-square-zero-off` 10・`pi-quarter-off` 64（段 3 `cc011285`。既存の 29 本と新しい 4 本を全部この層に当てて数えた）。**その走行で確かめる。** 床は既存と同じく約 12% 下。設計書 `../specs/2026-10-20-pi-marks-more-design.md` §5.5 から指される。
 
 ## 1.2.5 の床（heavy:power）
 

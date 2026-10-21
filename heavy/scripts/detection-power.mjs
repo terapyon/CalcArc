@@ -159,8 +159,9 @@ export const MUTATIONS = [
       // (`0.435`。床は 161 件)。**
       "pi-power-display-000.json (displays)",
       // **`pi-marks-more-display-000.json` も反応する(2026-10-20、手元のネイティブ実行で
-      // 実測)。** 表示の文字列を比べるので、10 桁の答えは 9 桁に落ちれば変わる。**509 件中
-      // 250 件(49.1%)。** 床は GitHub の `heavy:power` の後で置く(まだ回していない)。
+      // 実測。2026-10-21 の走行 `39554274768`(`20057953`、`heavy:power` を含む)でも 250 件)。**
+      // 表示の文字列を比べるので、10 桁の答えは 9 桁に落ちれば変わる。**509 件中 250 件(49.1%)、
+      // 下限はその約 12% 下(`0.432`。床は 220 件)。**
       "pi-marks-more-display-000.json (displays)",
     ],
     minRate: {
@@ -180,6 +181,7 @@ export const MUTATIONS = [
       "cancellation-000.json (values)": 0.257,
       "deg-fold-display-000.json (displays)": 0.627,
       "pi-power-display-000.json (displays)": 0.435,
+      "pi-marks-more-display-000.json (displays)": 0.432,
     },
   },
   {
@@ -749,8 +751,9 @@ export const MUTATIONS = [
     // **1.2.6 の `pi-marks-more-display-000.json` も反応する(2026-10-20、手元のネイティブ
     // 実行で実測)。509 件中 118 件**(角を置く群の 0 と極の行が 8 件ずつ(`x⁰` と
     // `xʸ 0.5` の `sin` だけの群は 4 件と 2 件)、逆三角関数の RAD の群 8 件、π/2 の倍数の
-    // 近くの畳み 64 件。逆三角関数の DEG の群は RAD の表を通らないので 0 件)。床は
-    // GitHub の `heavy:power` の後で置く(まだ回していない)。
+    // 近くの畳み 64 件。逆三角関数の DEG の群は RAD の表を通らないので 0 件)。2026-10-21 の
+    // 走行 `39554274768`(`20057953`、`heavy:power` を含む)でも同じ 118 件。23.2%、下限はその約
+    // 12% 下(`0.204`。床は 104 件)。
     expectShards: [
       "rad-pi-display-000.json (displays)",
       "pi-power-display-000.json (displays)",
@@ -759,6 +762,7 @@ export const MUTATIONS = [
     minRate: {
       "rad-pi-display-000.json (displays)": 0.13,
       "pi-power-display-000.json (displays)": 0.114,
+      "pi-marks-more-display-000.json (displays)": 0.204,
     },
   },
   {
@@ -912,12 +916,16 @@ export const MUTATIONS = [
     //
     // **1.2.6 の `pi-marks-more-display-000.json` も反応する(2026-10-20、手元のネイティブ
     // 実行で実測)。509 件中 24 件**(`π xʸ 2`・`π xʸ 1 +/−`・`(π + a)²` の群の 0 と極の
-    // 行が 8 件ずつ。k = 2・−1 と和を通る)。床は GitHub の `heavy:power` の後で置く。
+    // 行が 8 件ずつ。k = 2・−1 と和を通る)。走行 `39554274768` でも同じ数。
+    // 24 件(4.7%)、下限 `0.041`(床は 21 件)。
     expectShards: [
       "pi-power-display-000.json (displays)",
       "pi-marks-more-display-000.json (displays)",
     ],
-    minRate: { "pi-power-display-000.json (displays)": 0.129 },
+    minRate: {
+      "pi-power-display-000.json (displays)": 0.129,
+      "pi-marks-more-display-000.json (displays)": 0.041,
+    },
   },
   {
     id: "pi-root-off",
@@ -936,12 +944,16 @@ export const MUTATIONS = [
     //
     // **1.2.6 の `pi-marks-more-display-000.json` も反応する(2026-10-20、手元のネイティブ
     // 実行で実測)。509 件中 8 件**(`π × m = √ xʸ 2` の群の 0 と極の行。root の偶数乗が
-    // 単項に戻れない)。床は GitHub の `heavy:power` の後で置く。
+    // 単項に戻れない)。走行 `39554274768` でも同じ数。
+    // 8 件(1.6%)、下限 `0.013`(床は 7 件)。
     expectShards: [
       "pi-power-display-000.json (displays)",
       "pi-marks-more-display-000.json (displays)",
     ],
-    minRate: { "pi-power-display-000.json (displays)": 0.019 },
+    minRate: {
+      "pi-power-display-000.json (displays)": 0.019,
+      "pi-marks-more-display-000.json (displays)": 0.013,
+    },
   },
   {
     id: "pi-half-power-off",
@@ -960,12 +972,16 @@ export const MUTATIONS = [
     //
     // **1.2.6 の `pi-marks-more-display-000.json` も反応する(2026-10-20、手元のネイティブ
     // 実行で実測)。509 件中 2 件**(平方数の `xʸ 0.5` の群の 0 の行。`s xʸ 0.5` が有理数に
-    // ならない)。床は GitHub の `heavy:power` の後で置く。
+    // ならない)。走行 `39554274768` でも同じ数。
+    // 2 件(0.4%)、下限 `0.003`(床は 2 件)。
     expectShards: [
       "pi-power-display-000.json (displays)",
       "pi-marks-more-display-000.json (displays)",
     ],
-    minRate: { "pi-power-display-000.json (displays)": 0.052 },
+    minRate: {
+      "pi-power-display-000.json (displays)": 0.052,
+      "pi-marks-more-display-000.json (displays)": 0.003,
+    },
   },
   {
     id: "pi-sqrt-square-off",
@@ -991,8 +1007,8 @@ export const MUTATIONS = [
   // **ここから 1.2.6 の印を外す変異(設計書 2026-10-20-pi-marks-more §5.5)。** 期待する
   // シャードは、手元のネイティブ実行で各変異を当てて、全 25 枚の表示と左右の比較を
   // 数えたもの(2026-10-20)。**4 本とも `pi-marks-more-display-000.json` だけが反応し、
-  // 他の 24 枚は 1 件も動かない。** 床は GitHub の `heavy:power` の後で置く(まだ回して
-  // いない。1.2.3〜1.2.5 と同じ)。
+  // 他の 24 枚は 1 件も動かない。** 2026-10-21 の走行 `39554274768`(`20057953`、`heavy:power` を
+  // 含む)で、4 本とも手元と同じ数だった。下限はどれもその約 12% 下。
   {
     id: "pi-int-power-off",
     what: "整数の指数の `xʸ` に印を付けない(1.2.6 の `exact::pow` を外す)",
@@ -1001,7 +1017,9 @@ export const MUTATIONS = [
     to: "        BinOp::Pow => (scientific::pow(a, b)?, Marks::NONE),",
     // **反応: 509 件中 36 件**(`π xʸ 2`・`π xʸ 1 +/−`・`(π + a)²`・root の偶数乗の群の
     // 0 と極の行が 8 件ずつ、`x⁰` の群 4 件)。
+    // 36 件(7.1%)、下限 `0.062`(床は 32 件)。
     expectShards: ["pi-marks-more-display-000.json (displays)"],
+    minRate: { "pi-marks-more-display-000.json (displays)": 0.062 },
   },
   {
     id: "inverse-table-off",
@@ -1013,7 +1031,9 @@ export const MUTATIONS = [
     // **反応: 509 件中 21 件**(RAD の群 8 件 = 0 と極の行、DEG の群 13 件 = 度を引いて
     // 0 になる 25 行のうち、f64 の度がずれる行。DEG の `tan` の極は、f64 の度でも 90 に
     // 着くので動かない)。
+    // 21 件(4.1%)、下限 `0.036`(床は 19 件)。
     expectShards: ["pi-marks-more-display-000.json (displays)"],
+    minRate: { "pi-marks-more-display-000.json (displays)": 0.036 },
   },
   {
     id: "sqrt-square-zero-off",
@@ -1025,7 +1045,9 @@ export const MUTATIONS = [
     // 残す)。**反応: 509 件中 10 件**(`s √` の群の 0 と極の行 8 件と、`s xʸ 0.5` の群の
     // 0 の行 2 件)。`equivalence-000.json` の `( a ÷ b ) x² √ =` の 12 組は、左右の生の値が
     // 「違う」から「等しい」に動くだけで、表示の比較は 1 組も動かない(設計書 §2.3)。
+    // 10 件(2.0%)、下限 `0.017`(床は 9 件)。
     expectShards: ["pi-marks-more-display-000.json (displays)"],
+    minRate: { "pi-marks-more-display-000.json (displays)": 0.017 },
   },
   {
     id: "pi-quarter-off",
@@ -1038,7 +1060,9 @@ export const MUTATIONS = [
     // **反応: 509 件中 64 件**(π/2 の倍数の近くの畳みの群 96 件のうち 64 件。残る 32 件は
     // f64 の `r` でも 10 桁が合う)。**既存のシャードは 1 件も動かない**——
     // `rad-pi-display-000.json` は生の値だけが 18 件動く(設計書 §2.6)。
+    // 64 件(12.6%)、下限 `0.11`(床は 56 件)。
     expectShards: ["pi-marks-more-display-000.json (displays)"],
+    minRate: { "pi-marks-more-display-000.json (displays)": 0.11 },
   },
 ];
 
