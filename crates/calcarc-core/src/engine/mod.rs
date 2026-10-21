@@ -287,8 +287,9 @@ fn apply_binop(op: BinOp, lhs: Held, rhs: Held) -> CalcResult<Held> {
             scientific::pow(a, b)?;
             (scientific::sqrt(a)?, exact::sqrt(lhs))
         }
-        // ほかの xʸ・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
-        BinOp::Pow => (scientific::pow(a, b)?, Marks::NONE),
+        // 整数の指数の xʸ は `×` と `1/x` を重ねたのと同じ印(1.2.6 設計書 §2.1)。
+        // ほかの指数・nPr・nCr は印を保たない(§3.4、§11.2 の未決 4)。
+        BinOp::Pow => (scientific::pow(a, b)?, exact::pow(lhs, rhs)),
         BinOp::Npr => (scientific::npr(a, b)?, Marks::NONE),
         BinOp::Ncr => (scientific::ncr(a, b)?, Marks::NONE),
     };
@@ -563,8 +564,10 @@ enum LogBase {
 /// 3. **印は落とす**(`ln` の答えは一般に無理数。§3.4 の `dropped`)。
 ///
 /// **`1 ln` の答え 0 にも `(0, k=0)` の印を付けない**(§1.4 の注記。実行役の判断)——
-/// `0 eˣ`・`1 √`・RAD の `1 atan`(π/4)など、ほかの「落とす」関数の厳密な点にも
-/// 印を付けていない。`ln` の 1 点だけに付けると「落とす関数は印を落とす」が崩れる。
+/// 有理数の引数で `ln` の答えが有理数になるのは `1 ln` の 1 点だけで、`eˣ` も `0 eˣ` の
+/// 1 点だけである。逆三角関数は表に載る引数の答えに印を付ける(`exact::inverse`)が、
+/// あちらは表の点が引数 9 つ(`atan` は 7 つ)ある。1 点のための腕は足さない(1.2.6 設計書
+/// §7.1)。
 fn apply_log(state: &mut EngineState, base: LogBase) -> CalcResult<()> {
     commit_entry(state)?;
     let before = state.current;
@@ -578,6 +581,24 @@ fn apply_log(state: &mut EngineState, base: LogBase) -> CalcResult<()> {
         (None, _) => value,
     };
     state.current = Held::settled(value, exact::dropped(before));
+    Ok(())
+}
+
+/// 逆三角関数の遷移(1.2.6 設計書 §2.2)。`apply_unary` と同じく入力中の値を確定して掛ける。
+///
+/// **`apply_unary` の `mark: fn(Held)` には角度モードが入らない**——答えの印は RAD なら
+/// π の倍数、DEG なら度で、モードで形が変わる。`apply_trig` と同じく専用の遷移を 1 つ置く。
+/// 値は今までどおり `scientific::asin`・`acos`・`atan` が先に計算し、定義域の誤りもそこで出る。
+fn apply_inverse(state: &mut EngineState, which: exact::Inverse) -> CalcResult<()> {
+    commit_entry(state)?;
+    let mode = state.angle;
+    let before = state.current;
+    let value = match which {
+        exact::Inverse::Asin => scientific::asin(before.value, mode)?,
+        exact::Inverse::Acos => scientific::acos(before.value, mode)?,
+        exact::Inverse::Atan => scientific::atan(before.value, mode)?,
+    };
+    state.current = Held::settled(value, exact::inverse(before, mode, which));
     Ok(())
 }
 
@@ -679,18 +700,9 @@ fn apply(state: &mut EngineState, key: Key) -> CalcResult<()> {
         Key::Log10 => apply_log(state, LogBase::Ten)?,
         Key::ExpE => apply_unary(state, scientific::exp_e, exact::dropped)?,
         Key::Recip => apply_unary(state, scientific::recip, exact::recip)?,
-        Key::Asin => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::asin(v, mode), exact::dropped)?;
-        }
-        Key::Acos => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::acos(v, mode), exact::dropped)?;
-        }
-        Key::Atan => {
-            let mode = state.angle;
-            apply_unary(state, |v| scientific::atan(v, mode), exact::dropped)?;
-        }
+        Key::Asin => apply_inverse(state, exact::Inverse::Asin)?,
+        Key::Acos => apply_inverse(state, exact::Inverse::Acos)?,
+        Key::Atan => apply_inverse(state, exact::Inverse::Atan)?,
         Key::Pi => {
             // `buffer` はここでは常に `None` のはず——打ちかけの数があれば `refuses`
             // がこのキーを止める(0.9.2 設計書 §3.2、外部監査 F5)。`state.buffer = None`

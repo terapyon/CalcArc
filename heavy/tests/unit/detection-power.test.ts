@@ -310,7 +310,7 @@ describe("the verdict looks at the health of the measurement first", () => {
     expect(v.why).toContain("b (values)");
   });
 
-  it("names twenty-four shards, and names them once", () => {
+  it("names twenty-five shards, and names them once", () => {
     // 既定の一覧そのものを見る。**枚数だけでは 1 枚消えて 1 枚増えた走行を
     // 通してしまう**ので、重複が無いことも一緒に見る。
     //
@@ -321,11 +321,12 @@ describe("the verdict looks at the health of the measurement first", () => {
     // （`rad-pi-display-000.json (displays)`、RAD × π の倍数）。**23 枚目は
     // 2026-10-10**（`deg-fold-display-000.json (displays)`、DEG の大きな角と
     // 90° の倍数の近くの角）。**24 枚目は 2026-10-14**
-    // （`pi-power-display-000.json (displays)`、π の冪・和・√ の印）。枚数を名前で
-    // 持っているので、1 枚消えて別の 1 枚が現れる走行も、枚数が合っているだけでは
-    // 見逃さない。
-    expect(ALL_SHARDS).toHaveLength(24);
-    expect(new Set(ALL_SHARDS).size).toBe(24);
+    // （`pi-power-display-000.json (displays)`、π の冪・和・√ の印）。**25 枚目は
+    // 2026-10-20**（`pi-marks-more-display-000.json (displays)`、整数の指数・逆三角関数・
+    // 平方数の √・π/2 の倍数の近くの角）。枚数を名前で持っているので、1 枚消えて
+    // 別の 1 枚が現れる走行も、枚数が合っているだけでは見逃さない。
+    expect(ALL_SHARDS).toHaveLength(25);
+    expect(new Set(ALL_SHARDS).size).toBe(25);
   });
 
   it("expects only shards that this run is supposed to load", () => {

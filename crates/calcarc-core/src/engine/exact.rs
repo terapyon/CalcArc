@@ -187,7 +187,7 @@ pub struct Marks {
 }
 
 impl Marks {
-    /// 印なし。落とす腕(`dropped`、`xʸ`・`nPr`・`nCr`)が返す。
+    /// 印なし。落とす腕(`dropped`、`nPr`・`nCr`)が返す。
     pub const NONE: Marks = Marks {
         exact: None,
         root: None,
@@ -549,12 +549,13 @@ pub(super) fn cancel(a: Held, b: Held, subtract: bool) -> Option<(Value, Marks)>
     ))
 }
 
-/// `√`(1.2.3 設計書 §3.2、1.2.5 設計書 §2.3)。**`Root` を作る唯一の関数**である。
-/// 引数の印が**単項 `qπᵏ` で `q > 0`** のとき:
+/// `√`(1.2.3 設計書 §3.2、1.2.5 設計書 §2.3、1.2.6 設計書 §2.3)。**`Root` を作る唯一の
+/// 関数**である。引数の印が**単項 `qπᵏ` で `q > 0`** のとき:
 ///
-/// - **k = 0** なら root `(1, q, 0)`。平方数でも root のまま(1.2.3 の root の意味を変えない)。
-/// - **0 でない偶数の k で `q` が平方数**なら単項 `√q·π^(k/2)`(`π x² √` は `π`)。
-/// - それ以外(奇数の k、平方数でない `q`)は root `(1, q, k)`(`π √` は `(1, 1, 1)`)。
+/// - **偶数の k(0 を含む)で `q` が平方数**なら単項 `√q·π^(k/2)`(`4 √` は `2`、
+///   `π x² √` は `π`)。**root は「√ の答えが有理数でないとき」だけ**になる。
+/// - それ以外(奇数の k、平方数でない `q`)は root `(1, q, k)`(`2 √` は `(1, 2, 0)`、
+///   `π √` は `(1, 1, 1)`)。
 ///
 /// `q = 0` なら 0 の印(√0 は 0)。負・和・印なしは落とす(負の引数は値の計算が
 /// `DomainError` にする。複素の引数も同じ)。**k ∈ [−2, 4] の √ は範囲の外へ出ない**——root
@@ -569,8 +570,7 @@ pub(super) fn sqrt(a: Held) -> Marks {
     if q.is_zero() {
         return Marks::exact(Some(Exact::ZERO));
     }
-    if k != 0
-        && k % 2 == 0
+    if k % 2 == 0
         && let Some(root) = square_root(q)
     {
         return Marks::exact(Exact::term(k / 2, root));
@@ -605,6 +605,120 @@ pub(super) fn is_square_root(base: Held, exponent: Held) -> bool {
         && exponent.exact.and_then(Exact::rational) == Rational::from_ratio(1, 2).ok()
 }
 
+/// **指数の印が整数 `n` の `xʸ`**(1.2.6 設計書 §2.1)。`×` と `1/x` を重ねたのと同じ印:
+///
+/// - **`n = 0` なら底の印を問わず `1`**——`x⁰` の値は底によらず 1 ちょうど(`pow` が 1 を
+///   返す)なので、底の印が落ちていても答えの正体は分かっている。
+/// - **単項 `qπᵏ`** なら `qⁿ·π^(kn)`。負の `n` も(`1/x` と同じく単項だけ)。0 の底は
+///   `n > 0` なら 0(`n < 0` は値の計算が先に `DomainError` にする)。
+/// - **和**なら自分との積を `n − 1` 回。`n < 0` は落とす(`1/x` と同じ)。回数の上限は
+///   置かない——和は k の違う項を 2 つ以上持つので、積を重ねるたびに k の幅が広がり、
+///   6 回以内で −2〜4 の外へ出て落ちる。
+/// - **root `(c, r, pi)`** なら、偶数の `n` は単項 `(c²r)^(n/2)·π^(pi·n/2)`(`x²` が root を
+///   単項に戻すのと同じ)、奇数の `n` は落とす(`×` が root を落とすのと同じ。root を作る
+///   のは `√` だけ)。
+///
+/// 整数でない指数(`1/2` は `is_square_root` の腕)・π を含む指数・root の指数・印の無い
+/// 指数、虚部のある底か指数、k が −2〜4 の外へ出る冪、i128 の溢れは落とす。
+pub(super) fn pow(base: Held, exponent: Held) -> Marks {
+    Marks::exact(pow_mark(base, exponent))
+}
+
+fn pow_mark(base: Held, exponent: Held) -> Option<Exact> {
+    if !both_real(base, exponent) {
+        return None;
+    }
+    let (n, d) = exponent.exact?.rational()?.parts();
+    if d != 1 {
+        return None;
+    }
+    if n == 0 {
+        return Some(Exact::of(Rational::ONE, false));
+    }
+    if let Some(root) = base.root {
+        if n % 2 != 0 {
+            return None;
+        }
+        let square = root.c.checked_mul(root.c).ok()?.checked_mul(root.r).ok()?;
+        let k = i128::from(root.pi).checked_mul(n / 2)?;
+        return Exact::term(i8::try_from(k).ok()?, square.checked_pow(n / 2).ok()?);
+    }
+    let mark = base.exact?;
+    if let Some((k, q)) = mark.monomial() {
+        if q.is_zero() {
+            return (n > 0).then_some(Exact::ZERO);
+        }
+        let k = i128::from(k).checked_mul(n)?;
+        return Exact::term(i8::try_from(k).ok()?, q.checked_pow(n).ok()?);
+    }
+    if n < 0 {
+        return None;
+    }
+    let mut out = mark;
+    for _ in 1..n {
+        out = product(out, mark)?;
+    }
+    Some(out)
+}
+
+/// 逆三角関数(`inverse`。engine の `apply_inverse` が選ぶ)。
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Inverse {
+    Asin,
+    Acos,
+    Atan,
+}
+
+/// **逆三角関数の答えの印**(1.2.6 設計書 §2.2)。引数を `signed_square` で「符号と 2 乗」に
+/// 読み(`cancel` と同じ読み方。有理数の印と `pi = 0` の root)、2 乗が表に載れば答えの角を
+/// `t·π/12` で決める。
+///
+/// | | 引数の 2 乗 → `t`(引数が正のとき) |
+/// |---|---|
+/// | `asin` | 0 → 0、1/4 → 2、1/2 → 3、3/4 → 4、1 → 6 |
+/// | `acos` | `6 − asin` |
+/// | `atan` | 0 → 0、1/3 → 2、1 → 3、3 → 4 |
+///
+/// 引数が負なら `asin`・`atan` は `t` の符号を反転し、`acos` は `6 − (−t)`(`π − acos|x|`)。
+///
+/// - **RAD** の印は単項 `(t/12)·π`。`re` は今の f64 のまま(π を含む印は丸め直さない)。
+/// - **DEG** の印は有理数 `15t`(度)。`Held::settled` が `re` を度ちょうどにする。
+///
+/// 表に載らない引数・π を含む印・`pi ≠ 0` の root・和・印なし・虚部のある引数は落とす
+/// (虚部のある引数は値の計算が先に `DomainError` にする)。
+pub(super) fn inverse(arg: Held, mode: AngleMode, which: Inverse) -> Marks {
+    Marks::exact(inverse_mark(arg, mode, which))
+}
+
+fn inverse_mark(arg: Held, mode: AngleMode, which: Inverse) -> Option<Exact> {
+    if arg.value.im != 0.0 {
+        return None;
+    }
+    let (negative, square) = signed_square(arg)?;
+    let t: i128 = match (which, square.parts()) {
+        (Inverse::Atan, (0, _)) => 0,
+        (Inverse::Atan, (1, 3)) => 2,
+        (Inverse::Atan, (1, 1)) => 3,
+        (Inverse::Atan, (3, 1)) => 4,
+        (Inverse::Atan, _) => return None,
+        (_, (0, _)) => 0,
+        (_, (1, 4)) => 2,
+        (_, (1, 2)) => 3,
+        (_, (3, 4)) => 4,
+        (_, (1, 1)) => 6,
+        _ => return None,
+    };
+    let t = if negative { -t } else { t };
+    let t = match which {
+        Inverse::Acos => 6 - t,
+        Inverse::Asin | Inverse::Atan => t,
+    };
+    Some(match mode {
+        AngleMode::Rad => Exact::of(Rational::from_ratio(t, 12).ok()?, true),
+        AngleMode::Deg => Exact::of(Rational::from_i128(15 * t).ok()?, false),
+    })
+}
+
 /// `1/x`。単項 `qπᵏ`(`q ≠ 0`)なら `(1/q)π⁻ᵏ`。k = 3・4 の逆数は範囲の外なので落とす。
 /// 和は落とす。
 pub fn recip(a: Held) -> Marks {
@@ -622,8 +736,7 @@ fn recip_mark(a: Held) -> Option<Exact> {
     Exact::term(k.checked_neg()?, Rational::ONE.checked_div(q).ok()?)
 }
 
-/// 印を落とす。`ln`・`log`・`eˣ`・`xʸ`・`n!`・`nPr`・`nCr`・逆三角関数
-/// (§3.4、§11.2 の未決 3・4)。
+/// 印を落とす。`ln`・`log`・`eˣ`・`n!`・`nPr`・`nCr`(§3.4、§11.2 の未決 3・4)。
 pub fn dropped(_: Held) -> Marks {
     Marks::NONE
 }
@@ -633,8 +746,8 @@ pub fn dropped(_: Held) -> Marks {
 /// **角の実部の正体**を印から決める(§4.1)。**印で決まらなければ、印の無い値と
 /// 同じ規則**(`scientific::turn_of`。DEG で f64 が 30° か 45° の倍数なら表)。
 ///
-/// - **RAD で印が単項 k=1**: `r = q mod 2`。表に載れば `Table`、載らなければ `(−1, 1]` に
-///   畳んで `Folded(f64(r) × π)`。
+/// - **RAD で印が単項 k=1**: `r = q mod 2`。表に載れば `Table`、載らなければ、いちばん
+///   近い π/2 の倍数とずれに分けて畳む(`pi_turn`)。
 /// - **RAD で印が 0**: 表(0)。
 /// - **RAD でそれ以外の印**(0 でない k=0・k ≠ 1 の単項・和)は表を引かない。**打った
 ///   `3.1415926535` も `32993.006048` も表に載らない**——π ではないので、f64 の答えが
@@ -659,26 +772,34 @@ pub fn turn(arg: Held, mode: AngleMode) -> Option<Turn> {
     from_mark.or_else(|| scientific::turn_of(arg.value, mode))
 }
 
-/// `q × π` の角(RAD)。`r = q mod 2`。
+/// `q × π` の角(RAD)。`r = q mod 2`(`[0, 2)`。分子は `n mod 2d`)。
 ///
-/// **q = n/d は既約なので、`r` が π/12 の倍数 ⟺ `d` が 12 を割る**
-/// (`gcd(n mod 2d, d) = gcd(n, d) = 1`)。だから `12r` を作らずに判定でき、溢れない。
-/// **`2d` が i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
+/// 1. **q = n/d は既約なので、`r` が π/12 の倍数 ⟺ `d` が 12 を割る**
+///    (`gcd(n mod 2d, d) = gcd(n, d) = 1`)。だから `12r` を作らずに判定でき、溢れない。
+/// 2. **それ以外は、いちばん近い `k/2`(π/2 の倍数)と、ずれ `δ = r − k/2`
+///    (`[−1/4, 1/4]`、有理数)に分ける**(1.2.6 設計書 §2.6)。`δ` を正しく丸めた f64 に
+///    π を掛け、`Folded { quarter: k mod 4, radians: f64(δ) × π }`。
+///
+/// **角全体ではなく、ずれだけを f64 にする**理由は `degree_turn` と同じ: π/2 の倍数の
+/// 近くでは `sin`・`cos` のどちらかが `δ` に比例して小さく、`r` 全体を f64 にした丸め
+/// (絶対で 2⁻⁵³ ほど)がその答えに対して相対で効く。ずれは小さいほど細かく丸まる。
+/// **`f64(δ)` は正しく丸める**(`ratio_to_f64`)。`(2r − kd) as f64 / (2d) as f64` は
+/// `d > 2^53` で変換と除算の 2 度丸めになり、1 ulp 外れうる。
+///
+/// **`4r` などが i128 に収まらなければ `None`**(印を捨てて f64 の道へ。§3.4)。
 fn pi_turn(q: Rational) -> Option<Turn> {
     let (n, d) = q.parts();
-    let r = n.rem_euclid(d.checked_mul(2)?);
+    let turn = d.checked_mul(2)?;
+    let r = n.rem_euclid(turn);
     if 12 % d == 0
         && let Some(table) = Turn::table(r * (12 / d))
     {
         return Some(table);
     }
-    // 表に載らない(π/12 の奇数倍を含む)。`(−1, 1]` に畳んでから `f64(r) × π`。
-    // **`f64(r)` は正しく丸める**(`ratio_to_f64`、段階 2)。`folded as f64 / d as f64` は
-    // `d > 2^53` で変換と除算の 2 度丸めになり、1 ulp 外れうる。
-    let folded = if r > d { r - 2 * d } else { r };
-    let x = ratio_to_f64(folded, d)?;
+    let k = r.checked_mul(4)?.checked_add(d)?.div_euclid(turn);
+    let x = ratio_to_f64(r.checked_mul(2)?.checked_sub(k.checked_mul(d)?)?, turn)?;
     Some(Turn::Folded {
-        quarter: 0,
+        quarter: u8::try_from(k % 4).ok()?,
         radians: x * std::f64::consts::PI,
     })
 }
@@ -1066,20 +1187,21 @@ mod tests {
     #[test]
     fn the_other_functions_drop_the_mark() {
         for tokens in [
-            &["9", "sqrt"][..],
-            &["2", "ln"],
+            &["2", "ln"][..],
             &["2", "log10"],
             &["2", "exp_e"],
             &["3", "n_fact"],
-            &["2", "pow", "3", "eq"],
             &["5", "n_p_r", "2", "eq"],
             &["5", "n_c_r", "2", "eq"],
-            &["0", "dot", "5", "asin"],
-            &["0", "dot", "5", "acos"],
-            &["1", "atan"],
         ] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
         }
+        // 対照: 平方数の √・整数の指数の `xʸ`・表に載る逆三角関数は印を持つ。
+        assert_eq!(mark(&["9", "sqrt"]), q(3, 1, false));
+        assert_eq!(mark(&["2", "pow", "3", "eq"]), q(8, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "asin"]), q(30, 1, false));
+        assert_eq!(mark(&["0", "dot", "5", "acos"]), q(60, 1, false));
+        assert_eq!(mark(&["1", "atan"]), q(45, 1, false));
     }
 
     #[test]
@@ -1148,25 +1270,27 @@ mod tests {
 
     #[test]
     fn the_fold_rounds_its_fraction_once() {
-        // **`f64(r)` は正しく丸める**(段階 2)。分母が 2^53 を超えると、`n as f64 / d as f64`
-        // は変換と除算で 2 度丸め、この分数では 1 ulp 下(`0.6082601208004513`)に落ちる。
-        // 正しく丸めた値は `0.6082601208004514`(Python の `float(Fraction(n, d))`)。
+        // **ずれ `δ = r − 1/2` の f64 は正しく丸める**。`r ≈ 0.608` はいちばん近い 90° 単位が
+        // `π/2`(`quarter: 1`)で、`δ = (2n − d) / 2d`。分母が 2^53 を超えると、
+        // `(2n − d) as f64 / (2d) as f64` は変換と除算で 2 度丸め、この分数では 1 ulp 下
+        // (`0.1082601208004514`)に落ちる。正しく丸めた値は `0.10826012080045141`
+        // (Python の `float(Fraction(2n − d, 2d))`)。
         // **盤面からは打てない分母**(12 文字の入力では届かない)なので、`pi_turn` を直に呼ぶ。
         let (n, d) = (
-            322_740_770_792_394_276_848_i128,
+            322_740_770_792_394_277_885_i128,
             530_596_630_875_089_193_213_i128,
         );
-        let twice = n as f64 / d as f64;
+        let twice = (2 * n - d) as f64 / (2 * d) as f64;
         assert_eq!(
-            twice, 0.6082601208004513,
+            twice, 0.1082601208004514,
             "比べる相手が 2 度丸めの値であること"
         );
         let q = Rational::from_ratio(n, d).unwrap();
         assert_eq!(
             pi_turn(q),
             Some(Turn::Folded {
-                quarter: 0,
-                radians: 0.6082601208004514 * std::f64::consts::PI
+                quarter: 1,
+                radians: 0.10826012080045141 * std::f64::consts::PI
             })
         );
     }
@@ -1214,6 +1338,9 @@ mod tests {
             &["angle_toggle", "pi", "mul", "5", "div", "6", "eq", "sin"],
             &["angle_toggle", "pi", "mul", "5", "div", "3", "eq", "cos"],
             &["angle_toggle", "pi", "add", "j", "eq", "sin"],
+            &["1", "dot", "1", "pow", "2", "eq"],
+            &["2", "pow", "3", "neg", "eq"],
+            &["0", "dot", "5", "asin"],
         ] {
             let held = state_after(tokens).current;
             let q = held
@@ -1352,9 +1479,9 @@ mod tests {
     #[test]
     fn the_root_of_a_power_of_pi_follows_the_table() {
         let root = |c: &str, r: &str, pi: i8| serde_json::json!({ "c": c, "r": r, "pi": pi });
-        // k = 0 は平方数でも root のまま。
-        assert_eq!(root_json(&["4", "sqrt"]), root("1/1", "4/1", 0));
-        // 0 でない偶数の k で平方数なら単項。
+        // 偶数の k(0 を含む)で平方数なら単項。
+        assert_eq!(mark(&["4", "sqrt"]), q(2, 1, false));
+        assert_eq!(root_json(&["4", "sqrt"]), serde_json::Value::Null);
         assert_eq!(mark(&["pi", "sqr", "sqrt"]), q(1, 1, true));
         assert_eq!(root_json(&["pi", "sqr", "sqrt"]), serde_json::Value::Null);
         assert_eq!(mark(&["pi", "sqr", "sqr", "sqrt"]), laurent(&[(2, 1, 1)]));
@@ -1367,6 +1494,7 @@ mod tests {
             q(2, 1, true)
         );
         // 平方数でない偶数の k と、奇数の k は root。
+        assert_eq!(root_json(&["2", "sqrt"]), root("1/1", "2/1", 0));
         assert_eq!(
             root_json(&["pi", "sqr", "mul", "2", "eq", "sqrt"]),
             root("1/1", "2/1", 2)
@@ -1648,8 +1776,10 @@ mod tests {
 
     #[test]
     fn only_sqrt_makes_a_root_and_only_neg_carries_it() {
-        // **作るのは `√` だけ**(§3.2)。印 k=0 の `q > 0` から `(1, q)`。
-        assert_eq!(root_of(&["9", "sqrt"]), Some((r(1, 1), r(9, 1))));
+        // **作るのは `√` だけ**(§3.2)。印 k=0 の、平方数でない `q > 0` から `(1, q)`。
+        assert_eq!(root_of(&["3", "sqrt"]), Some((r(1, 1), r(3, 1))));
+        // 平方数の √ は root ではなく有理数の印になる。
+        assert_eq!(root_of(&["9", "sqrt"]), None);
         // 単項の π の冪も root にする(√ の中の冪を `pi` に持つ)。
         assert_eq!(
             root_json(&["pi", "sqrt"]),
@@ -1666,7 +1796,7 @@ mod tests {
             Some((r(1, 1), r(2, 1)))
         );
         // **不変: root が `Some` なら `exact` は `None`**(√ の答えは一般に無理数)。
-        for tokens in [&["9", "sqrt"][..], &["2", "sqrt", "neg"]] {
+        for tokens in [&["3", "sqrt"][..], &["2", "sqrt", "neg"]] {
             assert_eq!(mark(tokens), None, "{tokens:?}");
         }
         // **ほかはすべて root を落とす**: 印の無い・0 の引数、×・÷・関数・桁落ち
@@ -1927,5 +2057,286 @@ mod tests {
             );
             assert!(serde_json::from_str::<Held>(&text).is_err(), "{bad}");
         }
+    }
+
+    // ---- 整数の指数の xʸ(1.2.6 設計書 §2.1・§5.2) ----
+
+    #[test]
+    fn an_integer_power_of_a_monomial_moves_k() {
+        assert_eq!(mark(&["pi", "pow", "4", "eq"]), laurent(&[(4, 1, 1)]));
+        assert_eq!(
+            mark(&["pi", "pow", "2", "neg", "eq"]),
+            laurent(&[(-2, 1, 1)])
+        );
+        assert_eq!(
+            mark(&["pi", "recip", "pow", "2", "eq"]),
+            laurent(&[(-2, 1, 1)])
+        );
+        assert_eq!(
+            mark(&["1", "dot", "5", "pow", "3", "neg", "eq"]),
+            q(8, 27, false)
+        );
+        // k が −2〜4 の外へ出る冪は落とす。
+        assert_eq!(mark(&["pi", "pow", "5", "eq"]), None);
+        assert_eq!(mark(&["pi", "pow", "3", "neg", "eq"]), None);
+    }
+
+    #[test]
+    fn a_zero_power_is_one_whatever_the_base() {
+        for tokens in [
+            &["pi", "pow", "0", "eq"][..],
+            &["2", "exp_e", "pow", "0", "eq"],
+            &["0", "pow", "0", "eq"],
+            &["2", "sqrt", "pow", "0", "eq"],
+            &["lparen", "pi", "add", "1", "rparen", "pow", "0", "eq"],
+        ] {
+            assert_eq!(mark(tokens), q(1, 1, false), "{tokens:?}");
+        }
+        // 0 の底の正の冪は 0。
+        assert_eq!(mark(&["0", "pow", "3", "eq"]), q(0, 1, false));
+    }
+
+    #[test]
+    fn a_power_of_a_sum_multiplies_it_out() {
+        let sum = ["lparen", "pi", "add", "1", "rparen", "pow"];
+        let power = |tail: &[&'static str]| mark(&[&sum[..], tail].concat());
+        assert_eq!(
+            power(&["2", "eq"]),
+            laurent(&[(0, 1, 1), (1, 2, 1), (2, 1, 1)])
+        );
+        // k が 4 まで届く冪も残る。
+        assert_eq!(
+            power(&["4", "eq"]),
+            laurent(&[(0, 1, 1), (1, 4, 1), (2, 6, 1), (3, 4, 1), (4, 1, 1)])
+        );
+        // 負の冪と、範囲の外へ出る冪は落とす。
+        assert_eq!(power(&["2", "neg", "eq"]), None);
+        assert_eq!(power(&["5", "eq"]), None);
+    }
+
+    #[test]
+    fn an_even_power_of_a_root_is_a_monomial() {
+        assert_eq!(mark(&["pi", "sqrt", "pow", "2", "eq"]), q(1, 1, true));
+        assert_eq!(mark(&["2", "sqrt", "pow", "4", "eq"]), q(4, 1, false));
+        assert_eq!(
+            mark(&["2", "sqrt", "pow", "2", "neg", "eq"]),
+            q(1, 2, false)
+        );
+        // root は残らない。
+        for tokens in [
+            &["pi", "sqrt", "pow", "2", "eq"][..],
+            &["pi", "sqrt", "pow", "3", "eq"],
+        ] {
+            assert_eq!(root_json(tokens), serde_json::Value::Null, "{tokens:?}");
+        }
+    }
+
+    #[test]
+    fn a_power_drops_the_mark_at_the_i128_bound() {
+        assert_eq!(
+            mark(&["2", "pow", "1", "2", "6", "eq"]),
+            Some(Exact::of(Rational::from_i128(1 << 126).unwrap(), false))
+        );
+        assert_eq!(mark(&["2", "pow", "1", "2", "7", "eq"]), None);
+        // 値は f64 の `pow` のまま。
+        assert_eq!(
+            state_after(&["2", "pow", "1", "2", "7", "eq"])
+                .current
+                .value
+                .re,
+            2f64.powi(127)
+        );
+    }
+
+    /// **印を持たない側の境**(レビュー役の注記 1)。
+    #[test]
+    fn a_power_without_an_integer_exponent_drops_the_mark() {
+        for tokens in [
+            // 整数でない指数・π を含む指数・root の指数。
+            &["pi", "pow", "1", "dot", "5", "eq"][..],
+            &["2", "pow", "1", "dot", "5", "eq"],
+            &["pi", "pow", "pi", "eq"],
+            &["2", "pow", "2", "sqrt", "eq"],
+            // root の奇数乗。
+            &["pi", "sqrt", "pow", "3", "eq"],
+            &["2", "sqrt", "pow", "1", "eq"],
+            // 印の無い底と指数。
+            &["e", "pow", "2", "eq"],
+            &["2", "pow", "e", "eq"],
+        ] {
+            assert_eq!(mark(tokens), None, "{tokens:?}");
+            assert_eq!(root_json(tokens), serde_json::Value::Null, "{tokens:?}");
+        }
+        // 虚部のある底か指数(盤面では値の計算が先に `DomainError` にする)。
+        let two = held(2.0, q(2, 1, false), None);
+        let complex = Held {
+            value: Value { re: 2.0, im: 1.0 },
+            ..two
+        };
+        assert_eq!(pow(complex, two), Marks::NONE);
+        assert_eq!(pow(two, complex), Marks::NONE);
+        assert_eq!(pow(two, two), Marks::exact(q(4, 1, false)));
+    }
+
+    // ---- 逆三角関数(1.2.6 設計書 §2.2・§5.2) ----
+
+    /// 表の全項目。`(引数のキー列, 関数, t)`(答えは `t·π/12`、DEG は `15t` 度)。
+    const INVERSE_TABLE: &[(&[&str], &str, i128)] = &[
+        (&["0"], "asin", 0),
+        (&["0", "dot", "5"], "asin", 2),
+        (&["0", "dot", "5", "neg"], "asin", -2),
+        (&["0", "dot", "5", "sqrt"], "asin", 3),
+        (&["0", "dot", "5", "sqrt", "neg"], "asin", -3),
+        (&["0", "dot", "7", "5", "sqrt"], "asin", 4),
+        (&["0", "dot", "7", "5", "sqrt", "neg"], "asin", -4),
+        (&["1"], "asin", 6),
+        (&["1", "neg"], "asin", -6),
+        (&["0"], "acos", 6),
+        (&["0", "dot", "5"], "acos", 4),
+        (&["0", "dot", "5", "neg"], "acos", 8),
+        (&["0", "dot", "5", "sqrt"], "acos", 3),
+        (&["0", "dot", "5", "sqrt", "neg"], "acos", 9),
+        (&["0", "dot", "7", "5", "sqrt"], "acos", 2),
+        (&["0", "dot", "7", "5", "sqrt", "neg"], "acos", 10),
+        (&["1"], "acos", 0),
+        (&["1", "neg"], "acos", 12),
+        (&["0"], "atan", 0),
+        (&["3", "recip", "sqrt"], "atan", 2),
+        (&["3", "recip", "sqrt", "neg"], "atan", -2),
+        (&["1"], "atan", 3),
+        (&["1", "neg"], "atan", -3),
+        (&["3", "sqrt"], "atan", 4),
+        (&["3", "sqrt", "neg"], "atan", -4),
+    ];
+
+    #[test]
+    fn an_inverse_on_the_table_is_a_multiple_of_pi_in_radians() {
+        for &(arg, f, t) in INVERSE_TABLE {
+            assert_eq!(rad(&[arg, &[f]].concat()), q(t, 12, true), "{arg:?} {f}");
+        }
+    }
+
+    #[test]
+    fn an_inverse_on_the_table_is_exact_in_degrees() {
+        for &(arg, f, t) in INVERSE_TABLE {
+            let held = state_after(&[arg, &[f]].concat()).current;
+            assert_eq!(held.exact, q(15 * t, 1, false), "{arg:?} {f}");
+            // `re` は度ちょうど。
+            assert_eq!(held.value.re, (15 * t) as f64, "{arg:?} {f}");
+        }
+    }
+
+    /// **印を持たない側の境**(レビュー役の注記 1)。
+    #[test]
+    fn an_inverse_off_the_table_drops_the_mark() {
+        for tokens in [
+            // 表に載らない有理数と root。
+            &["0", "dot", "3", "asin"][..],
+            &["0", "dot", "3", "acos"],
+            &["2", "atan"],
+            &["2", "sqrt", "atan"],
+            // `pi ≠ 0` の root。
+            &["pi", "recip", "sqrt", "asin"],
+            &["pi", "sqrt", "atan"],
+            // π を含む印・和の印・印なし。
+            &["pi", "div", "4", "eq", "asin"],
+            &["pi", "sub", "3", "eq", "asin"],
+            &["pi", "sub", "3", "eq", "atan"],
+            &["e", "recip", "asin"],
+        ] {
+            assert_eq!(mark(tokens), None, "{tokens:?}");
+            assert_eq!(rad(tokens), None, "{tokens:?}");
+        }
+    }
+
+    // ---- k = 0 の平方数の √(1.2.6 設計書 §2.3・§5.2) ----
+
+    #[test]
+    fn the_root_of_a_rational_square_is_rational() {
+        assert_eq!(mark(&["4", "sqrt"]), q(2, 1, false));
+        assert_eq!(mark(&["0", "dot", "2", "5", "sqrt"]), q(1, 2, false));
+        assert_eq!(mark(&["2", "dot", "2", "5", "sqrt"]), q(3, 2, false));
+        assert_eq!(mark(&["0", "dot", "0", "1", "sqrt"]), q(1, 10, false));
+        assert_eq!(root_of(&["2", "sqrt"]), Some((r(1, 1), r(2, 1))));
+        assert_eq!(
+            root_of(&["0", "dot", "7", "5", "sqrt"]),
+            Some((r(1, 1), r(3, 4)))
+        );
+    }
+
+    /// **`cancel` は平方数の √ を root で持っても有理数で持っても同じ答え**——`signed_square` が
+    /// 両方を同じ「符号と 2 乗」に読む。**両方が平方数なら書き換えではなく有理数の引き算**に
+    /// なり、答えに印が残る(root で持てば印なし)。値は同じ。
+    #[test]
+    fn cancel_reads_a_rational_square_root_like_its_root() {
+        let rational = |q: i128| held(q as f64, Some(Exact::of(r(q, 1), false)), None);
+        let as_root = |q: i128| {
+            held(
+                q as f64,
+                None,
+                Some(Root {
+                    c: Rational::ONE,
+                    r: r(q * q, 1),
+                    pi: 0,
+                }),
+            )
+        };
+        let sqrt3 = state_after(&["3", "sqrt"]).current;
+        for subtract in [true, false] {
+            assert_eq!(
+                cancel(rational(2), sqrt3, subtract),
+                cancel(as_root(2), sqrt3, subtract)
+            );
+            assert_eq!(
+                cancel(sqrt3, rational(2), subtract),
+                cancel(sqrt3, as_root(2), subtract)
+            );
+        }
+        let pressed = state_after(&["9", "sqrt", "sub", "4", "sqrt", "eq"]).current;
+        assert_eq!(pressed.exact, q(1, 1, false));
+        assert_eq!(cancel(rational(3), rational(2), true), None);
+        let rewritten = cancel(as_root(3), as_root(2), true).unwrap();
+        assert_eq!(rewritten, (Value::real(1.0), Marks::NONE));
+        assert_eq!(pressed.value, rewritten.0);
+    }
+
+    // ---- RAD の角を 90° 単位とずれに分ける(1.2.6 設計書 §2.6・§5.2) ----
+
+    #[test]
+    fn the_fold_splits_off_the_nearest_quarter_turn() {
+        let e = 10_000_000_000_000_000_i128;
+        for (n, d, quarter, radians) in [
+            (e + 1, e, 2, 1e-16),
+            (e - 1, e, 2, -1e-16),
+            (-(e - 1), e, 2, 1e-16),
+            (e / 2 + 1, e, 1, 1e-16),
+            (3 * e / 2 - 1, e, 3, -1e-16),
+            (2 * e - 1, e, 0, -1e-16),
+            (1, e, 0, 1e-16),
+            // ずれの境 ±1/4 の両側。
+            (e / 4 + 1, e, 1, -0.2499999999999999),
+            (e / 4 - 1, e, 0, 0.2499999999999999),
+        ] {
+            assert_eq!(
+                pi_turn(r(n, d)),
+                Some(Turn::Folded {
+                    quarter,
+                    radians: radians * std::f64::consts::PI
+                }),
+                "{n}/{d}"
+            );
+        }
+        // ±1/4 ちょうどは表(π/4 の奇数倍)。
+        assert!(matches!(pi_turn(r(1, 4)), Some(Turn::Table(_))));
+        assert!(matches!(pi_turn(r(-3, 4)), Some(Turn::Table(_))));
+    }
+
+    #[test]
+    fn the_fold_drops_the_mark_when_i128_overflows() {
+        // `2d` が溢れる。
+        assert_eq!(pi_turn(r(1, i128::MAX)), None);
+        // `2d` は収まり、`4r` が溢れる。
+        let d = (1_i128 << 125) + 1;
+        assert_eq!(pi_turn(r((1 << 126) + 1, d)), None);
     }
 }
