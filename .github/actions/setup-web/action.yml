@@ -14,7 +14,12 @@ runs:
         # 最新の 22.x」が入るので、走行ごとに違う node で回りうる。
         # **`web/package.json` と `heavy/package.json` の `engines` と同じ版**
         # にすること——片方だけ動かすと `pnpm install` がここで落ちる。
-        node-version: 24.19.0
+        # 24.22.1 へは 2026-10-21 に上げた。eMudhra/emSign の CA の事故
+        # (https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576)
+        # を受けたセキュリティリリースで、ブロックされた公開鍵を含むチェーンを拒む
+        # (nodejs/node#66871)。クールダウン(リリースから 2 週間)の例外: セキュリティの
+        # 直しなので、uv 0.13.4 と同じく利用者の判断で即日上げた。
+        node-version: 24.22.1
         cache: pnpm
         cache-dependency-path: web/pnpm-lock.yaml
     - run: pnpm install --frozen-lockfile
