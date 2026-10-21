@@ -160,7 +160,11 @@ jobs:
           # コーパス 18 枚の `generated_by` の「Python 3.14」が「Python 3.15」に変わって
           # 下の段が赤くなった(期待値そのものは同じだった)。
           # 番人は `tools/tests/setup-uv-pins.test.ts`。
-          version: "0.12.3"
+          # 0.13.4 へは 2026-10-21 に上げた。0.12.3 は、eMudhra/emSign の CA の事故
+          # (秘密鍵が極端に弱い 8 つの CA)で危殆化したルートを信頼していた
+          # (https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576)。
+          # クールダウン(リリースから 2 週間)の例外: セキュリティの直しなので利用者の判断で即日上げた。
+          version: "0.13.4"
           python-version: "3.14"
 
       - name: Install the reference implementation

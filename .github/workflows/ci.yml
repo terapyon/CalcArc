@@ -390,7 +390,11 @@ jobs:
           # uv 本体も固定する。指定しないと action が最新を入れ、実行ごとに
           # 変わりうる(依存解決は uv.lock が守るが、uv 自身の挙動は守らない)。
           # `heavy-corpus.yml` と同じ値にする(番人は `tools/tests/setup-uv-pins.test.ts`)。
-          version: "0.12.3"
+          # 0.13.4 へは 2026-10-21 に上げた。0.12.3 は、eMudhra/emSign の CA の事故
+          # (秘密鍵が極端に弱い 8 つの CA)で危殆化したルートを信頼していた
+          # (https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576)。
+          # クールダウン(リリースから 2 週間)の例外: セキュリティの直しなので利用者の判断で即日上げた。
+          version: "0.13.4"
           python-version: "3.14"
       - run: uv sync --locked
         working-directory: reference
