@@ -53,6 +53,8 @@
   使う（SymPy の簡約が走るたびに揺れても、生成のバイト列が変わらないように）。既存の 5 本の変異
   （`display-digits`・`rad-pi-table-off`・`pi-laurent-off`・`pi-root-off`・`pi-half-power-off`）もこの層を
   期待する。変異 `pi-sqrt-square-off` の照準を直した。床は GitHub の Heavy corpus の走行の後で置く
+- **CI の参照実装を回す uv を 0.12.3 から 0.13.4 に上げた**（2026-10-21）。0.12.3 は eMudhra/emSign の
+  CA の事故で危殆化したルートを信頼していた。セキュリティの直しなので、利用者の判断でクールダウンを待たずに上げた
 
 ## 1.2.5 — 2026-10-16
 
