@@ -103,6 +103,8 @@
 このプロジェクトはキー列と表示の対応表をテストとして持っているので、
 **その形で届くとそのまま 1 件のテストになる**。テンプレートが聞くようになっている。
 
+**脆弱性は Issue に書かず、[SECURITY.md](SECURITY.md) の窓口から非公開で報告してほしい。**
+
 ## Numerical Policy
 
 数値の扱いは [docs/numerical-policy.md](docs/numerical-policy.md) に定める。要点は次のとおり。

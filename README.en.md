@@ -112,6 +112,8 @@ When reporting a bug, it helps to include **the keys you pressed, in order** (e.
 This project has a table mapping key sequences to display output as its test suite, so
 **a report in that form becomes a test case as-is**. The issue template prompts for this.
 
+**Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in an issue.**
+
 > **Note on language.** The detailed specifications under `docs/` — the numerical
 > policy, the base specification, and the design documents — are written in
 > Japanese only, and there is no plan to translate them. Issues and pull requests
