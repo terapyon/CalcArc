@@ -28,9 +28,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # **秘密に触れる前に、出してよい ref かを別のジョブで決める**(2026-11-21)。
+  #
+  # `deploy` は `environment: production` を持ち、Cloudflare の秘密はその
+  # environment にしか置かない。**environment の承認はジョブが始まる前に
+  # 求められる**ので、ガードを `deploy` の段に置くと、**main に無いタグでも
+  # 承認画面が出て、承認すれば秘密を持った runner が起動してから止まる。**
+  # **このジョブは environment を持たない**——ここで落ちれば、承認も秘密も
+  # 1 度も出てこない。
+  #
+  # **`release.yml` の `version` も同じ 2 つを見る。** それでもここに置くのは、
+  # **手動起動(`workflow_dispatch`)は `release.yml` を通らない**からである
+  # ——main に入っていないコミットにタグを打って `Deploy` を起動すれば、
+  # ここが無い日はそのまま本番へ出た。
+  gate:
+    name: The ref may go to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Guard — deploy runs only from a v* tag
+        # 版数ゲートはタグ名と 6 箇所の版数の一致を見る。ここで見るのは
+        # **そもそもタグから走っているか**だけである——ブランチの先頭を
+        # 配ると、Release に添える証拠がどのリリースのものか言えなくなる。
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "deploy は v* タグからのみ。戻すときは revert を main に積んでパッチ版のタグを打つ(docs/deploy.md)" >&2
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # **タグが main の子孫かを見るのに全履歴が要る**(`release.yml` の `version` と同じ)。
+          fetch-depth: 0
+      - name: The tag must sit on main
+        # **緊急経路で古いタグを配り直すときも通る**——出したことのあるタグは
+        # main の上に在る。
+        run: |
+          set -eu
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "このタグは main の履歴に入っていない(main へマージしてからタグを打つ)" >&2
+            exit 1
+          fi
+          echo "tag $GITHUB_REF_NAME is on main"
+
   deploy:
     name: Build and deploy to Cloudflare Pages
+    needs: gate
     runs-on: ubuntu-latest
+    # **Cloudflare の秘密はこの environment にだけ在る**(2026-11-21)。
+    # 承認者と「`v*` タグだけ」の規則は GitHub の設定が持ち、
+    # リポジトリからは見えない(`docs/deploy.md` の「environment と tag ruleset」)。
+    environment: production
     # **途中で殺されると何が起きるかを先に調べた**(2026-09-05)。下の steps は
     # 3 つの区間に分かれ、**危ないのは ③ だけ**である。
     #
@@ -67,14 +116,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Guard — deploy runs only from a v* tag
-        # 版数ゲートはタグ名と 6 箇所の版数の一致を見る。ここで見るのは
-        # **そもそもタグから走っているか**だけである——ブランチの先頭を
-        # 配ると、Release に添える証拠がどのリリースのものか言えなくなる。
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: |
-          echo "deploy は v* タグからのみ。戻すときは revert を main に積んでパッチ版のタグを打つ(docs/deploy.md)" >&2
-          exit 1
       - name: Say so when the checks were bypassed
         # 緊急経路で配ったことを、走行の一番上に残す。**黙って迂回しない。**
         # **`release.yml` から呼ばれたときは出さない**——あちらは版数・CI・

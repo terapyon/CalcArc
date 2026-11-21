@@ -157,6 +157,48 @@ connect-src 'self' https://open.er-api.com;
 Service Worker・フォント・画像のすべての経路を検証する話になり、為替の
 範囲を超える。ここに書いてあるのは、**やる人が読む場所に残した宿題**である。
 
+## environment と tag ruleset
+
+**Cloudflare の秘密（`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`）は、
+リポジトリ全体の secrets に置かない**（2026-11-21 から）。environment にだけ置く。
+
+| environment | 使うジョブ | 出してよい ref | 承認者 |
+|---|---|---|---|
+| `production` | `deploy.yml` の `deploy` | タグ `v*` だけ | 管理者（必須） |
+| `staging` | `staging.yml` の `deploy` | `main` だけ | 置かない |
+
+**`staging` に承認者を置かない**のは、main への push ごとに走るからである
+——置けば、マージのたびに承認を待って止まる。**staging は本番に届かない**
+（上の「本番枝の名は `main`」）ので、守るのは ref の規則と秘密の置き場で足りる。
+
+**タグ `v*` は tag ruleset で守る**（Settings → Rules → Rulesets、対象
+`refs/tags/v*`。作成・更新・削除を制限し、bypass は管理者だけ）。
+**`production` の「タグ `v*` だけ」は、タグを打てる人を絞ってはじめて意味を持つ**
+——誰でも `v*` を打てるなら、その規則は誰でも通る。
+
+**本番へ出る走行は、秘密に触れる前に 2 つを確かめる**——`deploy.yml` の
+`gate` ジョブ（environment を持たない）が、**タグから走っているか**と
+**そのタグが main の上に在るか**を見る。`release.yml` の `version` も同じ
+2 つを見るが、**手動起動の `Deploy` は `release.yml` を通らない**ので、
+`deploy.yml` にも置いた。**`gate` で落ちれば、承認画面も秘密も出てこない。**
+
+**★ リリースは承認で 1 度止まる。** `production` に承認者が居るので、
+`release.yml` の走行は `Manuals` のあと `Deploy` の手前で承認を待つ。
+**承認するまで本番には出ない**（Actions の走行画面の「Review deployments」）。
+
+### 見張れるものと、見張れないもの
+
+- **見張れる**（`tools/tests/deploy-environment.test.ts`）: 配るジョブが
+  `production` / `staging` を名指していること、`deploy` が `gate` を待つこと、
+  `gate` がタグと main を確かめ、environment も秘密も持たないこと、
+  **Cloudflare の秘密を読むジョブが必ず environment を持つこと**。
+- **見張れない**: environment の承認者と ref の規則、secrets がどこに在るか、
+  tag ruleset。**どれも GitHub の設定であってリポジトリのファイルではない**
+  ので、外されても、ここには赤くなるものが無い。
+  **代わりに守るもの**: `gate` は設定に依らず main に無いタグを落とす。
+  **秘密がリポジトリ全体に戻されたときと、承認者が外されたときは、何も
+  落ちない**——設定を変えるときは、この節の表と照らすこと。
+
 ## ロールバック
 
 **経路が 2 つある。既定は 1 で、2 は検査を迂回する。**
@@ -180,7 +222,9 @@ Service Worker・フォント・画像のすべての経路を検証する話に
   書かなければ、「最新のタグ = 配信物」を読んだ人が実際の配信物を取り違える。
 - ブランチの ref からは起動できない（`v*` タグ以外はガードが落とす）。
   ブランチの先頭を配ると、Release に添える証拠がどのリリースのものか
-  言えなくなるためである。
+  言えなくなるためである。**main に入っていないコミットのタグも落とす**
+  （`gate` ジョブ。上の「environment と tag ruleset」）。
+- **この経路でも `production` の承認を通る。** 起動したら、走行画面で承認する。
 - **この経路で配った版は、マニュアルの PDF を持たない。** PDF は
   `release.yml` の `Manuals` が作って走行の artifact に置き、`Deploy` は
   **`release.yml` から呼ばれたときだけ**それを `dist` に入れる（0.9.3 から。

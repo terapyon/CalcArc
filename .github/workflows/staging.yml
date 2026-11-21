@@ -71,6 +71,11 @@ jobs:
     name: Deploy to staging
     needs: manuals
     runs-on: ubuntu-latest
+    # **Cloudflare の秘密はこの environment にだけ在る**(2026-11-21)。
+    # 「main だけ」の規則は GitHub の設定が持つ(`docs/deploy.md` の
+    # 「environment と tag ruleset」)。**下の `Guard` の段と同じことを、
+    # 秘密の側からも言う。**
+    environment: staging
     # **実績から据え直した**(2026-10-03)。**「初回の走行を測ってから据え直す」と
     # 書いてあった、その実行である**(設計書 §2.4c)。
     #
